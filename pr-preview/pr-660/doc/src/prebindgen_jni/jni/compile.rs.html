@@ -689,7 +689,7 @@
 <a href=#689 id=689 data-nosnippet>689</a>    /// selector spliced into a value form reaches the sum it selects over, and
 <a href=#690 id=690 data-nosnippet>690</a>    /// a payload reaches the sum whose arm binds it. Empty means the value the
 <a href=#691 id=691 data-nosnippet>691</a>    /// site names, which is the common case.
-<a href=#692 id=692 data-nosnippet>692</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) reach: Vec&lt;prebindgen_registry::unfold::PathStep&gt;,
+<a href=#692 id=692 data-nosnippet>692</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) reach: Vec&lt;<span class="kw">crate</span>::unfold::PathStep&gt;,
 <a href=#693 id=693 data-nosnippet>693</a>    <span class="doccomment">/// Whether this value is the whole crossed object rather than a part of it
 <a href=#694 id=694 data-nosnippet>694</a>    /// — the move-or-clone handle a decomposition delivers beside its fields.
 <a href=#695 id=695 data-nosnippet>695</a>    ///
@@ -752,8 +752,8 @@
 <a href=#752 id=752 data-nosnippet>752</a>    }
 <a href=#753 id=753 data-nosnippet>753</a>}
 <a href=#754 id=754 data-nosnippet>754</a>
-<a href=#755 id=755 data-nosnippet>755</a><span class="kw">impl </span>prebindgen_registry::unfold::DecomposedLeaf <span class="kw">for </span>OutWire {
-<a href=#756 id=756 data-nosnippet>756</a>    <span class="kw">fn </span>reach(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[prebindgen_registry::unfold::PathStep] {
+<a href=#755 id=755 data-nosnippet>755</a><span class="kw">impl </span><span class="kw">crate</span>::unfold::DecomposedLeaf <span class="kw">for </span>OutWire {
+<a href=#756 id=756 data-nosnippet>756</a>    <span class="kw">fn </span>reach(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::PathStep] {
 <a href=#757 id=757 data-nosnippet>757</a>        OutWire::reach(<span class="self">self</span>)
 <a href=#758 id=758 data-nosnippet>758</a>    }
 <a href=#759 id=759 data-nosnippet>759</a>
@@ -795,8 +795,8 @@
 <a href=#795 id=795 data-nosnippet>795</a>    /// The shim that lets the sum emitters speak recipes before every plan is one:
 <a href=#796 id=796 data-nosnippet>796</a>    /// what they read of a leaf is exactly what a wire states, so the switch is
 <a href=#797 id=797 data-nosnippet>797</a>    /// per call site rather than all at once.
-<a href=#798 id=798 data-nosnippet>798</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_leaf(leaf: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::UnfoldLeaf) -&gt; <span class="self">Self </span>{
-<a href=#799 id=799 data-nosnippet>799</a>        <span class="kw">use </span>prebindgen_registry::unfold::LeafSource;
+<a href=#798 id=798 data-nosnippet>798</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_leaf(leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldLeaf) -&gt; <span class="self">Self </span>{
+<a href=#799 id=799 data-nosnippet>799</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::LeafSource;
 <a href=#800 id=800 data-nosnippet>800</a>        <span class="self">Self </span>{
 <a href=#801 id=801 data-nosnippet>801</a>            name: leaf.name.clone(),
 <a href=#802 id=802 data-nosnippet>802</a>            out_ty: leaf.out_ty.clone(),
@@ -823,7 +823,7 @@
 <a href=#823 id=823 data-nosnippet>823</a>    }
 <a href=#824 id=824 data-nosnippet>824</a>
 <a href=#825 id=825 data-nosnippet>825</a>    <span class="doccomment">/// A whole plan's leaves in the recipe's vocabulary.
-<a href=#826 id=826 data-nosnippet>826</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_leaves(leaves: <span class="kw-2">&amp;</span>[prebindgen_registry::unfold::UnfoldLeaf]) -&gt; Vec&lt;<span class="self">Self</span>&gt; {
+<a href=#826 id=826 data-nosnippet>826</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_leaves(leaves: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::UnfoldLeaf]) -&gt; Vec&lt;<span class="self">Self</span>&gt; {
 <a href=#827 id=827 data-nosnippet>827</a>        leaves.iter().map(<span class="self">Self</span>::from_leaf).collect()
 <a href=#828 id=828 data-nosnippet>828</a>    }
 <a href=#829 id=829 data-nosnippet>829</a>
@@ -848,7 +848,7 @@
 <a href=#848 id=848 data-nosnippet>848</a>
 <a href=#849 id=849 data-nosnippet>849</a>    <span class="doccomment">/// The steps from the crossed value down to this one, or empty for a value
 <a href=#850 id=850 data-nosnippet>850</a>    /// no reach describes — the selector, or a payload its arm's pattern binds.
-<a href=#851 id=851 data-nosnippet>851</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reach(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[prebindgen_registry::unfold::PathStep] {
+<a href=#851 id=851 data-nosnippet>851</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reach(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::PathStep] {
 <a href=#852 id=852 data-nosnippet>852</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.reach
 <a href=#853 id=853 data-nosnippet>853</a>    }
 <a href=#854 id=854 data-nosnippet>854</a>
@@ -3237,7 +3237,7 @@
 <a href=#3237 id=3237 data-nosnippet>3237</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>freeze_out_wires(
 <a href=#3238 id=3238 data-nosnippet>3238</a>    ext: <span class="kw-2">&amp;</span>Declarations,
 <a href=#3239 id=3239 data-nosnippet>3239</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#3240 id=3240 data-nosnippet>3240</a>    leaves: <span class="kw-2">&amp;</span>[prebindgen_registry::unfold::UnfoldLeaf],
+<a href=#3240 id=3240 data-nosnippet>3240</a>    leaves: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::UnfoldLeaf],
 <a href=#3241 id=3241 data-nosnippet>3241</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;OutWire&gt;, JErr&gt; {
 <a href=#3242 id=3242 data-nosnippet>3242</a>    <span class="kw">let </span><span class="kw-2">mut </span>compiler = prebindgen_registry::recipe::Compiler::resume(
 <a href=#3243 id=3243 data-nosnippet>3243</a>        registry.flat(),
@@ -5057,7 +5057,7 @@
 <a href=#5057 id=5057 data-nosnippet>5057</a>                        <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
 <a href=#5058 id=5058 data-nosnippet>5058</a>                    };
 <a href=#5059 id=5059 data-nosnippet>5059</a>                    <span class="kw">let </span>optional = field.ty.optional_inner().is_some();
-<a href=#5060 id=5060 data-nosnippet>5060</a>                    <span class="kw">let </span><span class="kw-2">mut </span>reach: Vec&lt;prebindgen_registry::unfold::PathStep&gt; =
+<a href=#5060 id=5060 data-nosnippet>5060</a>                    <span class="kw">let </span><span class="kw-2">mut </span>reach: Vec&lt;<span class="kw">crate</span>::unfold::PathStep&gt; =
 <a href=#5061 id=5061 data-nosnippet>5061</a>                        field_path.iter().map(field_step).collect();
 <a href=#5062 id=5062 data-nosnippet>5062</a>                    <span class="kw">if </span>optional {
 <a href=#5063 id=5063 data-nosnippet>5063</a>                        <span class="comment">// An OPTIONAL sum is two selectors, one owning the
@@ -5068,7 +5068,7 @@
 <a href=#5068 id=5068 data-nosnippet>5068</a>                        // group presence gates.
 <a href=#5069 id=5069 data-nosnippet>5069</a>                        </span><span class="kw">let </span><span class="kw-2">mut </span>flag_reach = reach.clone();
 <a href=#5070 id=5070 data-nosnippet>5070</a>                        flag_reach[path.len()] =
-<a href=#5071 id=5071 data-nosnippet>5071</a>                            prebindgen_registry::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
+<a href=#5071 id=5071 data-nosnippet>5071</a>                            <span class="kw">crate</span>::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
 <a href=#5072 id=5072 data-nosnippet>5072</a>                        wires.push(OutWire {
 <a href=#5073 id=5073 data-nosnippet>5073</a>                            name: <span class="macro">format!</span>(<span class="string">"{name}__{}"</span>, <span class="kw">crate</span>::jni::emit::PRESENT_LEAF),
 <a href=#5074 id=5074 data-nosnippet>5074</a>                            out_ty: field.ty.clone(),
@@ -5080,512 +5080,509 @@
 <a href=#5080 id=5080 data-nosnippet>5080</a>                            identity: <span class="bool-val">false</span>,
 <a href=#5081 id=5081 data-nosnippet>5081</a>                            abi: <span class="prelude-val">None</span>,
 <a href=#5082 id=5082 data-nosnippet>5082</a>                        });
-<a href=#5083 id=5083 data-nosnippet>5083</a>                        reach[path.len()] =
-<a href=#5084 id=5084 data-nosnippet>5084</a>                            prebindgen_registry::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
-<a href=#5085 id=5085 data-nosnippet>5085</a>                    }
-<a href=#5086 id=5086 data-nosnippet>5086</a>                    <span class="kw">for </span>wire <span class="kw">in </span><span class="self">self</span>.sum_out_wires(flat, <span class="kw-2">&amp;</span>sum_ident, probe)<span class="question-mark">? </span>{
-<a href=#5087 id=5087 data-nosnippet>5087</a>                        <span class="kw">let </span>groups = <span class="kw">match </span>optional {
-<a href=#5088 id=5088 data-nosnippet>5088</a>                            <span class="bool-val">true </span>=&gt; std::iter::once(<span class="kw">crate</span>::jni::emit::PRESENT_ARM)
-<a href=#5089 id=5089 data-nosnippet>5089</a>                                .chain(wire.groups.iter().copied())
-<a href=#5090 id=5090 data-nosnippet>5090</a>                                .collect(),
-<a href=#5091 id=5091 data-nosnippet>5091</a>                            <span class="bool-val">false </span>=&gt; wire.groups,
-<a href=#5092 id=5092 data-nosnippet>5092</a>                        };
-<a href=#5093 id=5093 data-nosnippet>5093</a>                        wires.push(OutWire {
-<a href=#5094 id=5094 data-nosnippet>5094</a>                            name: <span class="macro">format!</span>(<span class="string">"{name}__{}"</span>, wire.name),
-<a href=#5095 id=5095 data-nosnippet>5095</a>                            reach: reach.clone(),
-<a href=#5096 id=5096 data-nosnippet>5096</a>                            groups,
-<a href=#5097 id=5097 data-nosnippet>5097</a>                            ..wire
-<a href=#5098 id=5098 data-nosnippet>5098</a>                        });
-<a href=#5099 id=5099 data-nosnippet>5099</a>                    }
-<a href=#5100 id=5100 data-nosnippet>5100</a>                    <span class="kw">continue</span>;
-<a href=#5101 id=5101 data-nosnippet>5101</a>                }
-<a href=#5102 id=5102 data-nosnippet>5102</a>                <span class="comment">// A nested `data_class` inlines: its own leaves are reached
-<a href=#5103 id=5103 data-nosnippet>5103</a>                // through this field. An OPTIONAL one contributes a presence
-<a href=#5104 id=5104 data-nosnippet>5104</a>                // flag ahead of them, and its group carries wire defaults when
-<a href=#5105 id=5105 data-nosnippet>5105</a>                // the value is absent — the same shape a sum field's tag gives
-<a href=#5106 id=5106 data-nosnippet>5106</a>                // its groups, with presence in place of an alternative.
-<a href=#5107 id=5107 data-nosnippet>5107</a>                //
-<a href=#5108 id=5108 data-nosnippet>5108</a>                // A `Vec` of them is still refused: a repeated value has no
-<a href=#5109 id=5109 data-nosnippet>5109</a>                // fixed number of leaves to lay side by side, which is a
-<a href=#5110 id=5110 data-nosnippet>5110</a>                // sequence rather than a decomposition.
-<a href=#5111 id=5111 data-nosnippet>5111</a>                </span><span class="kw">crate</span>::jni::classify::TypeKind::DataStruct {
-<a href=#5112 id=5112 data-nosnippet>5112</a>                    st: <span class="kw">_</span>,
-<a href=#5113 id=5113 data-nosnippet>5113</a>                    cfg: <span class="prelude-val">Some</span>(child_cfg),
-<a href=#5114 id=5114 data-nosnippet>5114</a>                } =&gt; {
-<a href=#5115 id=5115 data-nosnippet>5115</a>                    <span class="kw">if </span><span class="macro">matches!</span>(field.ty.kind(), TypeKind::Vec(<span class="kw">_</span>)) {
-<a href=#5116 id=5116 data-nosnippet>5116</a>                        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#5117 id=5117 data-nosnippet>5117</a>                    }
-<a href=#5118 id=5118 data-nosnippet>5118</a>                    <span class="kw">let </span>child = <span class="kw">match </span>probe.unwrapped().kind() {
-<a href=#5119 id=5119 data-nosnippet>5119</a>                        TypeKind::Named { id, .. } =&gt; id.ident()<span class="question-mark">?</span>,
-<a href=#5120 id=5120 data-nosnippet>5120</a>                        <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-<a href=#5121 id=5121 data-nosnippet>5121</a>                    };
-<a href=#5122 id=5122 data-nosnippet>5122</a>                    <span class="kw">let </span>optional = field.ty.optional_inner().is_some();
-<a href=#5123 id=5123 data-nosnippet>5123</a>                    <span class="kw">if </span>optional {
-<a href=#5124 id=5124 data-nosnippet>5124</a>                        <span class="comment">// The flag's own reach ends in the OPTIONAL step it
-<a href=#5125 id=5125 data-nosnippet>5125</a>                        // tests: presence is the gate, and the walk emits a
-<a href=#5126 id=5126 data-nosnippet>5126</a>                        // gate exactly where a segment's selector reaches
-<a href=#5127 id=5127 data-nosnippet>5127</a>                        // through one. The group's leaves then reach on from
-<a href=#5128 id=5128 data-nosnippet>5128</a>                        // the value that gate unwrapped.
-<a href=#5129 id=5129 data-nosnippet>5129</a>                        </span><span class="kw">let </span><span class="kw-2">mut </span>reach: Vec&lt;prebindgen_registry::unfold::PathStep&gt; =
-<a href=#5130 id=5130 data-nosnippet>5130</a>                            field_path.iter().map(field_step).collect();
-<a href=#5131 id=5131 data-nosnippet>5131</a>                        reach[path.len()] =
-<a href=#5132 id=5132 data-nosnippet>5132</a>                            prebindgen_registry::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
-<a href=#5133 id=5133 data-nosnippet>5133</a>                        wires.push(OutWire {
-<a href=#5134 id=5134 data-nosnippet>5134</a>                            name: <span class="macro">format!</span>(<span class="string">"{name}__{}"</span>, <span class="kw">crate</span>::jni::emit::PRESENT_LEAF),
-<a href=#5135 id=5135 data-nosnippet>5135</a>                            out_ty: field.ty.clone(),
-<a href=#5136 id=5136 data-nosnippet>5136</a>                            groups: Vec::new(),
-<a href=#5137 id=5137 data-nosnippet>5137</a>                            through: Vec::new(),
-<a href=#5138 id=5138 data-nosnippet>5138</a>                            from: OutFrom::Present,
-<a href=#5139 id=5139 data-nosnippet>5139</a>                            reach,
-<a href=#5140 id=5140 data-nosnippet>5140</a>                            nullable: <span class="bool-val">false</span>,
-<a href=#5141 id=5141 data-nosnippet>5141</a>                            identity: <span class="bool-val">false</span>,
-<a href=#5142 id=5142 data-nosnippet>5142</a>                            abi: <span class="prelude-val">None</span>,
-<a href=#5143 id=5143 data-nosnippet>5143</a>                        });
-<a href=#5144 id=5144 data-nosnippet>5144</a>                    }
-<a href=#5145 id=5145 data-nosnippet>5145</a>                    <span class="kw">let </span>inlined =
-<a href=#5146 id=5146 data-nosnippet>5146</a>                        <span class="self">self</span>.struct_out_wires_at(flat, <span class="kw-2">&amp;</span>child, <span class="kw-2">&amp;</span>field_path, <span class="kw-2">&amp;</span>name, depth + <span class="number">1</span>)<span class="question-mark">?</span>;
-<a href=#5147 id=5147 data-nosnippet>5147</a>                    <span class="comment">// Which class this boundary reassembles through, recorded
-<a href=#5148 id=5148 data-nosnippet>5148</a>                    // where the flattening happens. `data_class!` named it, so
-<a href=#5149 id=5149 data-nosnippet>5149</a>                    // this stays a declaration read like the rest of the walk.
-<a href=#5150 id=5150 data-nosnippet>5150</a>                    </span><span class="kw">let </span>child_fqn = child_cfg.name_spec.as_ref().map(|spec| <span class="self">self</span>.fqn_of(spec))<span class="question-mark">?</span>;
-<a href=#5151 id=5151 data-nosnippet>5151</a>                    wires.extend(inlined.into_iter().map(|wire| {
-<a href=#5152 id=5152 data-nosnippet>5152</a>                        <span class="kw">let </span><span class="kw-2">mut </span>reach = wire.reach;
-<a href=#5153 id=5153 data-nosnippet>5153</a>                        <span class="kw">if </span>optional {
-<a href=#5154 id=5154 data-nosnippet>5154</a>                            <span class="comment">// The step reaching THIS field is optional for the
-<a href=#5155 id=5155 data-nosnippet>5155</a>                            // child's leaves: they are inside the value the
-<a href=#5156 id=5156 data-nosnippet>5156</a>                            // presence flag tests, so the walk gates them on
-<a href=#5157 id=5157 data-nosnippet>5157</a>                            // it. The flag's own reach stops at the `Option`,
-<a href=#5158 id=5158 data-nosnippet>5158</a>                            // which is the value it tests rather than one
-<a href=#5159 id=5159 data-nosnippet>5159</a>                            // inside it.
-<a href=#5160 id=5160 data-nosnippet>5160</a>                            </span>reach[path.len()] =
-<a href=#5161 id=5161 data-nosnippet>5161</a>                                prebindgen_registry::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
-<a href=#5162 id=5162 data-nosnippet>5162</a>                        }
-<a href=#5163 id=5163 data-nosnippet>5163</a>                        OutWire {
-<a href=#5164 id=5164 data-nosnippet>5164</a>                            reach,
-<a href=#5165 id=5165 data-nosnippet>5165</a>                            <span class="comment">// Under a presence flag the child's leaves are the
-<a href=#5166 id=5166 data-nosnippet>5166</a>                            // one group that flag gates — including a selector
-<a href=#5167 id=5167 data-nosnippet>5167</a>                            // of the child's own, which keeps its own arms one
-<a href=#5168 id=5168 data-nosnippet>5168</a>                            // level further in.
-<a href=#5169 id=5169 data-nosnippet>5169</a>                            </span>groups: <span class="kw">match </span>optional {
-<a href=#5170 id=5170 data-nosnippet>5170</a>                                <span class="bool-val">true </span>=&gt; std::iter::once(<span class="kw">crate</span>::jni::emit::PRESENT_ARM)
-<a href=#5171 id=5171 data-nosnippet>5171</a>                                    .chain(wire.groups.iter().copied())
-<a href=#5172 id=5172 data-nosnippet>5172</a>                                    .collect(),
-<a href=#5173 id=5173 data-nosnippet>5173</a>                                <span class="bool-val">false </span>=&gt; wire.groups.clone(),
-<a href=#5174 id=5174 data-nosnippet>5174</a>                            },
-<a href=#5175 id=5175 data-nosnippet>5175</a>                            through: std::iter::once(child_fqn.clone())
-<a href=#5176 id=5176 data-nosnippet>5176</a>                                .chain(wire.through.iter().cloned())
-<a href=#5177 id=5177 data-nosnippet>5177</a>                                .collect(),
-<a href=#5178 id=5178 data-nosnippet>5178</a>                            ..wire
-<a href=#5179 id=5179 data-nosnippet>5179</a>                        }
-<a href=#5180 id=5180 data-nosnippet>5180</a>                    }));
-<a href=#5181 id=5181 data-nosnippet>5181</a>                    <span class="kw">continue</span>;
-<a href=#5182 id=5182 data-nosnippet>5182</a>                }
-<a href=#5183 id=5183 data-nosnippet>5183</a>                <span class="kw">_ </span>=&gt; {}
-<a href=#5184 id=5184 data-nosnippet>5184</a>            }
-<a href=#5185 id=5185 data-nosnippet>5185</a>
-<a href=#5186 id=5186 data-nosnippet>5186</a>            <span class="comment">// A simple value: the field's own output conversion encodes it, and
-<a href=#5187 id=5187 data-nosnippet>5187</a>            // the foreign `fromParts` forwards it verbatim. Nullability rides
-<a href=#5188 id=5188 data-nosnippet>5188</a>            // that conversion — `Option&lt;Box&lt;String&gt;&gt;` is a `String?` — so the
-<a href=#5189 id=5189 data-nosnippet>5189</a>            // value itself is not path-nullable.
-<a href=#5190 id=5190 data-nosnippet>5190</a>            </span>wires.push(OutWire {
-<a href=#5191 id=5191 data-nosnippet>5191</a>                name,
-<a href=#5192 id=5192 data-nosnippet>5192</a>                out_ty: field.ty.clone(),
-<a href=#5193 id=5193 data-nosnippet>5193</a>                groups: Vec::new(),
-<a href=#5194 id=5194 data-nosnippet>5194</a>                through: Vec::new(),
-<a href=#5195 id=5195 data-nosnippet>5195</a>                from: OutFrom::Place,
-<a href=#5196 id=5196 data-nosnippet>5196</a>                reach: field_path.iter().map(field_step).collect(),
-<a href=#5197 id=5197 data-nosnippet>5197</a>                nullable: <span class="bool-val">false</span>,
-<a href=#5198 id=5198 data-nosnippet>5198</a>                identity: <span class="bool-val">false</span>,
-<a href=#5199 id=5199 data-nosnippet>5199</a>                abi: <span class="prelude-val">None</span>,
-<a href=#5200 id=5200 data-nosnippet>5200</a>            });
-<a href=#5201 id=5201 data-nosnippet>5201</a>        }
-<a href=#5202 id=5202 data-nosnippet>5202</a>        <span class="prelude-val">Some</span>(wires)
-<a href=#5203 id=5203 data-nosnippet>5203</a>    }
-<a href=#5204 id=5204 data-nosnippet>5204</a>
-<a href=#5205 id=5205 data-nosnippet>5205</a>    <span class="doccomment">/// The values a `sealed_class` hands out: the selector, then one group of
-<a href=#5206 id=5206 data-nosnippet>5206</a>    /// slots per alternative, laid beside the others.
-<a href=#5207 id=5207 data-nosnippet>5207</a>    ///
-<a href=#5208 id=5208 data-nosnippet>5208</a>    /// Model and declaration only — no conversion is read. That is what lets
-<a href=#5209 id=5209 data-nosnippet>5209</a>    /// one answer serve on both sides of `resolve`: the leaf synthesis feeding
-<a href=#5210 id=5210 data-nosnippet>5210</a>    /// `Decompositions` runs before it, the recipe composes after it, and a fact
-<a href=#5211 id=5211 data-nosnippet>5211</a>    /// derived twice is a fact that can differ.
-<a href=#5212 id=5212 data-nosnippet>5212</a>    ///
-<a href=#5213 id=5213 data-nosnippet>5213</a>    /// `None` for a type the model does not hold as a data-carrying enum, or
-<a href=#5214 id=5214 data-nosnippet>5214</a>    /// one no `sealed_class!` declares — neither has a decomposition to state.
-<a href=#5215 id=5215 data-nosnippet>5215</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>sum_out_wires(
-<a href=#5216 id=5216 data-nosnippet>5216</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#5217 id=5217 data-nosnippet>5217</a>        flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
-<a href=#5218 id=5218 data-nosnippet>5218</a>        ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#5219 id=5219 data-nosnippet>5219</a>        sum_ty: <span class="kw-2">&amp;</span>TypeRef,
-<a href=#5220 id=5220 data-nosnippet>5220</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;OutWire&gt;&gt; {
-<a href=#5221 id=5221 data-nosnippet>5221</a>        <span class="kw">let </span>prebindgen_registry::flat::Type::Variant(sum) = flat.declared_type(ident)<span class="question-mark">? </span><span class="kw">else </span>{
-<a href=#5222 id=5222 data-nosnippet>5222</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#5223 id=5223 data-nosnippet>5223</a>        };
-<a href=#5224 id=5224 data-nosnippet>5224</a>        <span class="kw">let </span>cfg = <span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>TypeKey::from_ident(ident))<span class="question-mark">?</span>.sum()<span class="question-mark">?</span>;
-<a href=#5225 id=5225 data-nosnippet>5225</a>
-<a href=#5226 id=5226 data-nosnippet>5226</a>        <span class="comment">// The selector rides ahead of the groups it chooses between, and
-<a href=#5227 id=5227 data-nosnippet>5227</a>        // carries **which sum** it selects over — nothing converts it, so
-<a href=#5228 id=5228 data-nosnippet>5228</a>        // naming the sum is the only use its type has, and it is the one an
-<a href=#5229 id=5229 data-nosnippet>5229</a>        // emitter needs: which enum to match over.
-<a href=#5230 id=5230 data-nosnippet>5230</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>wires = <span class="macro">vec!</span>[OutWire {
-<a href=#5231 id=5231 data-nosnippet>5231</a>            name: <span class="kw">crate</span>::jni::emit::SUM_TAG_LEAF.to_string(),
-<a href=#5232 id=5232 data-nosnippet>5232</a>            out_ty: sum_ty.clone(),
-<a href=#5233 id=5233 data-nosnippet>5233</a>            groups: Vec::new(),
-<a href=#5234 id=5234 data-nosnippet>5234</a>            through: Vec::new(),
-<a href=#5235 id=5235 data-nosnippet>5235</a>            from: OutFrom::Tag,
-<a href=#5236 id=5236 data-nosnippet>5236</a>            nullable: <span class="bool-val">false</span>,
-<a href=#5237 id=5237 data-nosnippet>5237</a>            identity: <span class="bool-val">false</span>,
-<a href=#5238 id=5238 data-nosnippet>5238</a>            reach: Vec::new(),
-<a href=#5239 id=5239 data-nosnippet>5239</a>            abi: <span class="prelude-val">None</span>,
-<a href=#5240 id=5240 data-nosnippet>5240</a>        }];
-<a href=#5241 id=5241 data-nosnippet>5241</a>        <span class="kw">for </span>alt <span class="kw">in </span><span class="kw-2">&amp;</span>sum.alternatives {
-<a href=#5242 id=5242 data-nosnippet>5242</a>            <span class="kw">let </span>kotlin = <span class="self">self</span>.sum_variant_class_name(cfg, <span class="kw-2">&amp;</span>alt.name);
-<a href=#5243 id=5243 data-nosnippet>5243</a>            <span class="kw">for </span>field <span class="kw">in </span><span class="kw-2">&amp;</span>alt.fields {
-<a href=#5244 id=5244 data-nosnippet>5244</a>                <span class="kw">let </span>member = field.member();
-<a href=#5245 id=5245 data-nosnippet>5245</a>                wires.push(OutWire {
-<a href=#5246 id=5246 data-nosnippet>5246</a>                    name: <span class="kw">crate</span>::jni::struct_plan::sum_slot_fragment(
-<a href=#5247 id=5247 data-nosnippet>5247</a>                        <span class="kw-2">&amp;</span>kotlin,
-<a href=#5248 id=5248 data-nosnippet>5248</a>                        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::struct_plan::sum_field_prop_name(<span class="kw-2">&amp;</span>member),
-<a href=#5249 id=5249 data-nosnippet>5249</a>                    ),
-<a href=#5250 id=5250 data-nosnippet>5250</a>                    out_ty: field.ty.clone(),
-<a href=#5251 id=5251 data-nosnippet>5251</a>                    groups: <span class="macro">vec!</span>[<span class="kw">crate</span>::jni::struct_plan::sum_tag(alt)],
-<a href=#5252 id=5252 data-nosnippet>5252</a>                    through: Vec::new(),
-<a href=#5253 id=5253 data-nosnippet>5253</a>                    from: OutFrom::Payload {
-<a href=#5254 id=5254 data-nosnippet>5254</a>                        variant: <span class="prelude-val">Some</span>(alt.name.clone()),
-<a href=#5255 id=5255 data-nosnippet>5255</a>                        member,
-<a href=#5256 id=5256 data-nosnippet>5256</a>                    },
-<a href=#5257 id=5257 data-nosnippet>5257</a>                    nullable: <span class="bool-val">false</span>,
-<a href=#5258 id=5258 data-nosnippet>5258</a>                    identity: <span class="bool-val">false</span>,
-<a href=#5259 id=5259 data-nosnippet>5259</a>                    reach: Vec::new(),
-<a href=#5260 id=5260 data-nosnippet>5260</a>                    abi: <span class="prelude-val">None</span>,
-<a href=#5261 id=5261 data-nosnippet>5261</a>                });
-<a href=#5262 id=5262 data-nosnippet>5262</a>            }
-<a href=#5263 id=5263 data-nosnippet>5263</a>        }
-<a href=#5264 id=5264 data-nosnippet>5264</a>        <span class="prelude-val">Some</span>(wires)
-<a href=#5265 id=5265 data-nosnippet>5265</a>    }
-<a href=#5266 id=5266 data-nosnippet>5266</a>}
-<a href=#5267 id=5267 data-nosnippet>5267</a>
-<a href=#5268 id=5268 data-nosnippet>5268</a><span class="doccomment">/// One step of a reach that reads a struct field.
-<a href=#5269 id=5269 data-nosnippet>5269</a>///
-<a href=#5270 id=5270 data-nosnippet>5270</a>/// Never optional: a composition looks through an `Option` rather than stopping
-<a href=#5271 id=5271 data-nosnippet>5271</a>/// at one — a terminal optional rides its own conversion, and an intermediate
-<a href=#5272 id=5272 data-nosnippet>5272</a>/// one is a shape the compositions decline.
-<a href=#5273 id=5273 data-nosnippet>5273</a></span><span class="kw">fn </span>field_step(ident: <span class="kw-2">&amp;</span>syn::Ident) -&gt; prebindgen_registry::unfold::PathStep {
-<a href=#5274 id=5274 data-nosnippet>5274</a>    prebindgen_registry::unfold::PathStep::field(ident.clone(), <span class="bool-val">false</span>)
-<a href=#5275 id=5275 data-nosnippet>5275</a>}
-<a href=#5276 id=5276 data-nosnippet>5276</a>
-<a href=#5277 id=5277 data-nosnippet>5277</a><span class="doccomment">/// The transparent wrappers over a crossing's value, or `None` when a composed
-<a href=#5278 id=5278 data-nosnippet>5278</a>/// chain cannot go through one of them.
-<a href=#5279 id=5279 data-nosnippet>5279</a>///
-<a href=#5280 id=5280 data-nosnippet>5280</a>/// A chain reaches the canonical value by peeling every wrapper and puts them
-<a href=#5281 id=5281 data-nosnippet>5281</a>/// back afterwards, so it needs the operation for the direction it is going:
-<a href=#5282 id=5282 data-nosnippet>5282</a>/// `Box::new` to build, `*b` to read. A wrapper missing that operation — `Cow`,
-<a href=#5283 id=5283 data-nosnippet>5283</a>/// which has no read — is not composable, and neither is a wrapper this adapter
-<a href=#5284 id=5284 data-nosnippet>5284</a>/// has no entry for at all.
-<a href=#5285 id=5285 data-nosnippet>5285</a>///
-<a href=#5286 id=5286 data-nosnippet>5286</a>/// Deconstructing additionally needs the crossing to **own** what it takes
-<a href=#5287 id=5287 data-nosnippet>5287</a>/// apart. Reading through a shared borrow would move the value out of the
-<a href=#5288 id=5288 data-nosnippet>5288</a>/// wrapper, which is what a `&amp;Box&lt;T&gt;` would do.
-<a href=#5289 id=5289 data-nosnippet>5289</a>///
-<a href=#5290 id=5290 data-nosnippet>5290</a>/// Refusing here is what keeps the legacy path in control. `JSource::build` and
-<a href=#5291 id=5291 data-nosnippet>5291</a>/// `JSource::read` expect the rejection to have happened while planning: past
-<a href=#5292 id=5292 data-nosnippet>5292</a>/// this point an unsupported wrapper is a panic during `write_rust`, or
-<a href=#5293 id=5293 data-nosnippet>5293</a>/// generated Rust that does not compile in the consumer's crate.
-<a href=#5294 id=5294 data-nosnippet>5294</a>///
-<a href=#5295 id=5295 data-nosnippet>5295</a>/// One function because it is one rule. Stated per planner, the choice copy
-<a href=#5296 id=5296 data-nosnippet>5296</a>/// omitted it, while the sequence and Optional copies omitted the ownership
-<a href=#5297 id=5297 data-nosnippet>5297</a>/// half.
-<a href=#5298 id=5298 data-nosnippet>5298</a></span><span class="kw">fn </span>composable_wrappers(
-<a href=#5299 id=5299 data-nosnippet>5299</a>    crossing: <span class="kw-2">&amp;</span>prebindgen_registry::recipe::Crossing,
-<a href=#5300 id=5300 data-nosnippet>5300</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;&gt; {
-<a href=#5301 id=5301 data-nosnippet>5301</a>    <span class="kw">let </span>wrappers = crossing.value().erased_wrappers();
-<a href=#5302 id=5302 data-nosnippet>5302</a>    <span class="kw">let </span>usable = |wrapper: &amp;&amp;<span class="lifetime">'static </span>str| -&gt; bool {
-<a href=#5303 id=5303 data-nosnippet>5303</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(ops) = <span class="kw">crate</span>::jni::trait_impl::wrapper_ops(wrapper) <span class="kw">else </span>{
-<a href=#5304 id=5304 data-nosnippet>5304</a>            <span class="kw">return </span><span class="bool-val">false</span>;
-<a href=#5305 id=5305 data-nosnippet>5305</a>        };
-<a href=#5306 id=5306 data-nosnippet>5306</a>        <span class="kw">match </span>crossing.direction() {
-<a href=#5307 id=5307 data-nosnippet>5307</a>            Direction::Construct =&gt; ops.build.is_some(),
-<a href=#5308 id=5308 data-nosnippet>5308</a>            Direction::Deconstruct =&gt; crossing.mode() == Mode::Owned &amp;&amp; ops.read.is_some(),
-<a href=#5309 id=5309 data-nosnippet>5309</a>        }
-<a href=#5310 id=5310 data-nosnippet>5310</a>    };
-<a href=#5311 id=5311 data-nosnippet>5311</a>    wrappers.iter().all(usable).then_some(wrappers)
-<a href=#5312 id=5312 data-nosnippet>5312</a>}
-<a href=#5313 id=5313 data-nosnippet>5313</a>
-<a href=#5314 id=5314 data-nosnippet>5314</a><span class="doccomment">/// The model field one part reads, or `None` for a part that is not a field.
-<a href=#5315 id=5315 data-nosnippet>5315</a></span><span class="kw">fn </span>part_field&lt;<span class="lifetime">'a</span>&gt;(part: <span class="kw-2">&amp;</span>Part&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>prebindgen_registry::flat::Field&gt; {
-<a href=#5316 id=5316 data-nosnippet>5316</a>    <span class="kw">match </span>part.from {
-<a href=#5317 id=5317 data-nosnippet>5317</a>        prebindgen_registry::recipe::PartSource::Field { field, .. } =&gt; <span class="prelude-val">Some</span>(field),
-<a href=#5318 id=5318 data-nosnippet>5318</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#5319 id=5319 data-nosnippet>5319</a>    }
-<a href=#5320 id=5320 data-nosnippet>5320</a>}
-<a href=#5321 id=5321 data-nosnippet>5321</a>
-<a href=#5322 id=5322 data-nosnippet>5322</a><span class="doccomment">/// The model field one part reads, which a sum payload names its slot after.
-<a href=#5323 id=5323 data-nosnippet>5323</a></span><span class="kw">fn </span>part_member(part: <span class="kw-2">&amp;</span>Part&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;syn::Member&gt; {
-<a href=#5324 id=5324 data-nosnippet>5324</a>    part_field(part).map(|f| f.member())
-<a href=#5325 id=5325 data-nosnippet>5325</a>}
-<a href=#5326 id=5326 data-nosnippet>5326</a>
-<a href=#5327 id=5327 data-nosnippet>5327</a><span class="doccomment">/// Every crossing a sum's arms delegate to, which is what reachability walks.
-<a href=#5328 id=5328 data-nosnippet>5328</a></span><span class="kw">fn </span>parts_subs(arms: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Alternative, <span class="kw-2">&amp;</span>JFrag)]) -&gt; Vec&lt;TypeKey&gt; {
-<a href=#5329 id=5329 data-nosnippet>5329</a>    arms.iter()
-<a href=#5330 id=5330 data-nosnippet>5330</a>        .flat_map(|(<span class="kw">_</span>, f)| f.conv.subs.iter().cloned())
-<a href=#5331 id=5331 data-nosnippet>5331</a>        .collect()
-<a href=#5332 id=5332 data-nosnippet>5332</a>}
-<a href=#5333 id=5333 data-nosnippet>5333</a>
-<a href=#5334 id=5334 data-nosnippet>5334</a><span class="doccomment">/// The Kotlin property name for one part of a product, sanitized — `object` is
-<a href=#5335 id=5335 data-nosnippet>5335</a>/// a keyword, and only the emitter's own mangler knows that.
-<a href=#5336 id=5336 data-nosnippet>5336</a></span><span class="kw">fn </span>field_kt(part: <span class="kw-2">&amp;</span>Part&lt;<span class="lifetime">'_</span>&gt;) -&gt; String {
-<a href=#5337 id=5337 data-nosnippet>5337</a>    <span class="kw">crate</span>::jni::render::kotlin_property_name(<span class="kw-2">&amp;</span>syn::Ident::new(
-<a href=#5338 id=5338 data-nosnippet>5338</a>        <span class="kw-2">&amp;</span>part.name,
-<a href=#5339 id=5339 data-nosnippet>5339</a>        proc_macro2::Span::call_site(),
-<a href=#5340 id=5340 data-nosnippet>5340</a>    ))
-<a href=#5341 id=5341 data-nosnippet>5341</a>}
-<a href=#5342 id=5342 data-nosnippet>5342</a>
-<a href=#5343 id=5343 data-nosnippet>5343</a><span class="doccomment">/// Whether this conversion delivers a Kotlin typed handle rather than a value.
-<a href=#5344 id=5344 data-nosnippet>5344</a></span><span class="kw">fn </span>is_handle(frag: <span class="kw-2">&amp;</span>JFrag) -&gt; bool {
-<a href=#5345 id=5345 data-nosnippet>5345</a>    frag.conv
-<a href=#5346 id=5346 data-nosnippet>5346</a>        .metadata
-<a href=#5347 id=5347 data-nosnippet>5347</a>        .projection
-<a href=#5348 id=5348 data-nosnippet>5348</a>        .as_ref()
-<a href=#5349 id=5349 data-nosnippet>5349</a>        .is_some_and(|p| p.kind == <span class="kw">crate</span>::jni::ProjectionKind::Handle)
-<a href=#5350 id=5350 data-nosnippet>5350</a>}
-<a href=#5351 id=5351 data-nosnippet>5351</a>
-<a href=#5352 id=5352 data-nosnippet>5352</a><span class="doccomment">/// One wire, read through a gate above it that may find nothing.
-<a href=#5353 id=5353 data-nosnippet>5353</a>///
-<a href=#5354 id=5354 data-nosnippet>5354</a>/// Every step below the gate becomes a safe call — not only the first: after
-<a href=#5355 id=5355 data-nosnippet>5355</a>/// one `?.` the chain is on a nullable value and stays there. What each form
-<a href=#5356 id=5356 data-nosnippet>5356</a>/// then needs is its own. An ordinary read carries the literal it stated for
-<a href=#5357 id=5357 data-nosnippet>5357</a>/// exactly this case; a sum's `when` gains the `null` arm; a sum's `as?` slot
-<a href=#5358 id=5358 data-nosnippet>5358</a>/// needs neither, a cast over a null subject being already null.
-<a href=#5359 id=5359 data-nosnippet>5359</a>///
-<a href=#5360 id=5360 data-nosnippet>5360</a>/// A wire whose value is a JVM object rides that `null` instead of a literal,
-<a href=#5361 id=5361 data-nosnippet>5361</a>/// and its Kotlin type says so. Read **after** the literal rather than before,
-<a href=#5362 id=5362 data-nosnippet>5362</a>/// because a `String` slot does both: it falls back to `""` when its own field
-<a href=#5363 id=5363 data-nosnippet>5363</a>/// is present under a closed ancestor, and it is typed `String?`.
-<a href=#5364 id=5364 data-nosnippet>5364</a></span><span class="kw">fn </span>gated(w: <span class="kw-2">&amp;</span>Wire) -&gt; Wire {
-<a href=#5365 id=5365 data-nosnippet>5365</a>    <span class="kw">let </span><span class="kw-2">mut </span>gated = w.clone();
-<a href=#5366 id=5366 data-nosnippet>5366</a>    <span class="kw">for </span>nav <span class="kw">in </span>gated
-<a href=#5367 id=5367 data-nosnippet>5367</a>        .access
-<a href=#5368 id=5368 data-nosnippet>5368</a>        .walk_mut()
-<a href=#5369 id=5369 data-nosnippet>5369</a>        .iter_mut()
-<a href=#5370 id=5370 data-nosnippet>5370</a>        .chain(gated.handle_target.iter_mut().flatten())
-<a href=#5371 id=5371 data-nosnippet>5371</a>    {
-<a href=#5372 id=5372 data-nosnippet>5372</a>        nav.gated = <span class="bool-val">true</span>;
-<a href=#5373 id=5373 data-nosnippet>5373</a>    }
-<a href=#5374 id=5374 data-nosnippet>5374</a>    <span class="kw">match </span><span class="kw-2">&amp;mut </span>gated.access {
-<a href=#5375 id=5375 data-nosnippet>5375</a>        Access::Read { tail, .. } =&gt; {
-<a href=#5376 id=5376 data-nosnippet>5376</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(absent) = gated.absent.take() {
-<a href=#5377 id=5377 data-nosnippet>5377</a>                <span class="kw">if </span>!tail.contains(<span class="string">" ?: "</span>) {
-<a href=#5378 id=5378 data-nosnippet>5378</a>                    <span class="kw-2">*</span>tail = <span class="macro">format!</span>(<span class="string">"{tail} ?: {absent}"</span>);
-<a href=#5379 id=5379 data-nosnippet>5379</a>                }
-<a href=#5380 id=5380 data-nosnippet>5380</a>            }
-<a href=#5381 id=5381 data-nosnippet>5381</a>        }
-<a href=#5382 id=5382 data-nosnippet>5382</a>        Access::Select { nullable, .. } =&gt; <span class="kw-2">*</span>nullable = <span class="bool-val">true</span>,
-<a href=#5383 id=5383 data-nosnippet>5383</a>        Access::Slot { .. } =&gt; {}
-<a href=#5384 id=5384 data-nosnippet>5384</a>    }
-<a href=#5385 id=5385 data-nosnippet>5385</a>    <span class="kw">if </span>gated.entry.is_some()
-<a href=#5386 id=5386 data-nosnippet>5386</a>        &amp;&amp; <span class="macro">matches!</span>(gated.access, Access::Read { .. })
-<a href=#5387 id=5387 data-nosnippet>5387</a>        &amp;&amp; <span class="kw">crate</span>::jni::emit::is_jobject_shaped_wire(<span class="kw-2">&amp;</span>gated.ty)
-<a href=#5388 id=5388 data-nosnippet>5388</a>        &amp;&amp; !gated.kt_ty.ends_with(<span class="string">'?'</span>)
-<a href=#5389 id=5389 data-nosnippet>5389</a>    {
-<a href=#5390 id=5390 data-nosnippet>5390</a>        gated.kt_ty.push(<span class="string">'?'</span>);
-<a href=#5391 id=5391 data-nosnippet>5391</a>    }
-<a href=#5392 id=5392 data-nosnippet>5392</a>    <span class="comment">// Anything under the gate can be absent, however the field itself was
-<a href=#5393 id=5393 data-nosnippet>5393</a>    // spelled.
-<a href=#5394 id=5394 data-nosnippet>5394</a>    </span>gated.handle_nullable = gated.handle_target.is_some() || gated.handle_nullable;
-<a href=#5395 id=5395 data-nosnippet>5395</a>    gated
-<a href=#5396 id=5396 data-nosnippet>5396</a>}
-<a href=#5397 id=5397 data-nosnippet>5397</a>
-<a href=#5398 id=5398 data-nosnippet>5398</a><span class="doccomment">/// Whether this fragment states a sum taken apart into a tag and its arms'
-<a href=#5399 id=5399 data-nosnippet>5399</a>/// slots, rather than a product taken apart into its fields.
-<a href=#5400 id=5400 data-nosnippet>5400</a></span><span class="kw">fn </span>is_choice(frag: <span class="kw-2">&amp;</span>JFrag) -&gt; bool {
-<a href=#5401 id=5401 data-nosnippet>5401</a>    frag.wires
-<a href=#5402 id=5402 data-nosnippet>5402</a>        .as_ref()
-<a href=#5403 id=5403 data-nosnippet>5403</a>        .and_then(|w| w.first())
-<a href=#5404 id=5404 data-nosnippet>5404</a>        .is_some_and(|w| <span class="macro">matches!</span>(w.access, Access::Select { .. }))
-<a href=#5405 id=5405 data-nosnippet>5405</a>}
-<a href=#5406 id=5406 data-nosnippet>5406</a>
-<a href=#5407 id=5407 data-nosnippet>5407</a><span class="attr">#[cfg(test)]
-<a href=#5408 id=5408 data-nosnippet>5408</a></span><span class="kw">mod </span>chain_tests {
-<a href=#5409 id=5409 data-nosnippet>5409</a>    <span class="kw">use </span>prebindgen_registry::generation::{ChainValue, ConversionChain, ConverterStep, Failure};
-<a href=#5410 id=5410 data-nosnippet>5410</a>
-<a href=#5411 id=5411 data-nosnippet>5411</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#5412 id=5412 data-nosnippet>5412</a>
-<a href=#5413 id=5413 data-nosnippet>5413</a>    <span class="kw">fn </span>fragment_id(name: <span class="kw-2">&amp;</span>str) -&gt; prebindgen_registry::FragmentId {
-<a href=#5414 id=5414 data-nosnippet>5414</a>        <span class="kw">let </span>source =
-<a href=#5415 id=5415 data-nosnippet>5415</a>            prebindgen_registry::flat::TypeRef::scalar(prebindgen_registry::flat::ScalarKind::I64);
-<a href=#5416 id=5416 data-nosnippet>5416</a>        <span class="kw">let </span>crossing =
-<a href=#5417 id=5417 data-nosnippet>5417</a>            prebindgen_registry::recipe::Crossing::new(source.clone(), Direction::Construct);
-<a href=#5418 id=5418 data-nosnippet>5418</a>        prebindgen_registry::FragmentId::new(
-<a href=#5419 id=5419 data-nosnippet>5419</a>            source.key(),
-<a href=#5420 id=5420 data-nosnippet>5420</a>            crossing.row(prebindgen_registry::recipe::RecipeName::new(name)),
-<a href=#5421 id=5421 data-nosnippet>5421</a>        )
-<a href=#5422 id=5422 data-nosnippet>5422</a>    }
-<a href=#5423 id=5423 data-nosnippet>5423</a>
-<a href=#5424 id=5424 data-nosnippet>5424</a>    <span class="doccomment">/// One inner chain, in the frame of the fragment that owns it.
-<a href=#5425 id=5425 data-nosnippet>5425</a>    </span><span class="kw">fn </span>inner_chain(
-<a href=#5426 id=5426 data-nosnippet>5426</a>        direction: Direction,
-<a href=#5427 id=5427 data-nosnippet>5427</a>        stage: OperationId,
-<a href=#5428 id=5428 data-nosnippet>5428</a>        key: <span class="kw-2">&amp;</span>TypeKey,
-<a href=#5429 id=5429 data-nosnippet>5429</a>    ) -&gt; ConversionChain&lt;JRepresentation&gt; {
-<a href=#5430 id=5430 data-nosnippet>5430</a>        <span class="kw">let </span>(from, into) = <span class="kw">match </span>direction {
-<a href=#5431 id=5431 data-nosnippet>5431</a>            Direction::Construct =&gt; (ChainValue::Intermediate(key.clone()), ChainValue::Source),
-<a href=#5432 id=5432 data-nosnippet>5432</a>            Direction::Deconstruct =&gt; (ChainValue::Source, ChainValue::Intermediate(key.clone())),
-<a href=#5433 id=5433 data-nosnippet>5433</a>        };
-<a href=#5434 id=5434 data-nosnippet>5434</a>        ConversionChain::Steps(<span class="macro">vec!</span>[ConverterStep::&lt;JRepresentation&gt;::new(
-<a href=#5435 id=5435 data-nosnippet>5435</a>            from,
-<a href=#5436 id=5436 data-nosnippet>5436</a>            into,
-<a href=#5437 id=5437 data-nosnippet>5437</a>            stage,
-<a href=#5438 id=5438 data-nosnippet>5438</a>            Failure::Fallible,
-<a href=#5439 id=5439 data-nosnippet>5439</a>            prebindgen_registry::generation::Cleanup::None,
-<a href=#5440 id=5440 data-nosnippet>5440</a>        )])
-<a href=#5441 id=5441 data-nosnippet>5441</a>    }
-<a href=#5442 id=5442 data-nosnippet>5442</a>
-<a href=#5443 id=5443 data-nosnippet>5443</a>    <span class="doccomment">/// Every step's destination is the next step's origin, and `Source`
-<a href=#5444 id=5444 data-nosnippet>5444</a>    /// appears once: at the END of a construct chain and the START of a
-<a href=#5445 id=5445 data-nosnippet>5445</a>    /// deconstruct one.
-<a href=#5446 id=5446 data-nosnippet>5446</a>    ///
-<a href=#5447 id=5447 data-nosnippet>5447</a>    /// The endpoints are what makes the chain a chain. `ChainValue::Source`
-<a href=#5448 id=5448 data-nosnippet>5448</a>    /// names the source value of the fragment that OWNS the chain, so an inner
-<a href=#5449 id=5449 data-nosnippet>5449</a>    /// fragment's steps mean something different once they are embedded in an
-<a href=#5450 id=5450 data-nosnippet>5450</a>    /// outer one — its source value is the outer fragment's carrier. Copying
-<a href=#5451 id=5451 data-nosnippet>5451</a>    /// them verbatim leaves `Source` in the middle and the steps either side of
-<a href=#5452 id=5452 data-nosnippet>5452</a>    /// it disconnected, which `validate_chain` rejects as a broken chain and
-<a href=#5453 id=5453 data-nosnippet>5453</a>    /// today's renderers miss because they read only the operation (#615
-<a href=#5454 id=5454 data-nosnippet>5454</a>    /// review).
-<a href=#5455 id=5455 data-nosnippet>5455</a>    </span><span class="attr">#[test]
-<a href=#5456 id=5456 data-nosnippet>5456</a>    </span><span class="kw">fn </span>an_embedded_chain_is_rebased_into_the_outer_frame() {
-<a href=#5457 id=5457 data-nosnippet>5457</a>        <span class="kw">for </span>direction <span class="kw">in </span>[Direction::Construct, Direction::Deconstruct] {
-<a href=#5458 id=5458 data-nosnippet>5458</a>            <span class="kw">let </span>inner_key = TypeKey::parse(<span class="string">"Label"</span>).expect(<span class="string">"test key"</span>);
-<a href=#5459 id=5459 data-nosnippet>5459</a>            <span class="kw">let </span>deeper_key = TypeKey::parse(<span class="string">"Deeper"</span>).expect(<span class="string">"test key"</span>);
-<a href=#5460 id=5460 data-nosnippet>5460</a>            <span class="kw">let </span>inner_stage = OperationId::stage(fragment_id(<span class="string">"inner"</span>), <span class="number">0</span>);
-<a href=#5461 id=5461 data-nosnippet>5461</a>            <span class="kw">let </span>outer_stage = OperationId::stage(fragment_id(<span class="string">"outer"</span>), <span class="number">0</span>);
-<a href=#5462 id=5462 data-nosnippet>5462</a>            <span class="comment">// The inner fragment's own chain already reaches ITS source value
-<a href=#5463 id=5463 data-nosnippet>5463</a>            // through a carrier of its own, so the rebase has to cross a chain
-<a href=#5464 id=5464 data-nosnippet>5464</a>            // that is more than one step long.
-<a href=#5465 id=5465 data-nosnippet>5465</a>            </span><span class="kw">let </span>inner = staged_chain(
-<a href=#5466 id=5466 data-nosnippet>5466</a>                direction,
-<a href=#5467 id=5467 data-nosnippet>5467</a>                inner_stage.clone(),
-<a href=#5468 id=5468 data-nosnippet>5468</a>                deeper_key,
-<a href=#5469 id=5469 data-nosnippet>5469</a>                <span class="kw-2">&amp;</span>inner_chain(
-<a href=#5470 id=5470 data-nosnippet>5470</a>                    direction,
-<a href=#5471 id=5471 data-nosnippet>5471</a>                    OperationId::stage(fragment_id(<span class="string">"deeper"</span>), <span class="number">0</span>),
-<a href=#5472 id=5472 data-nosnippet>5472</a>                    <span class="kw-2">&amp;</span>TypeKey::parse(<span class="string">"Deepest"</span>).expect(<span class="string">"test key"</span>),
-<a href=#5473 id=5473 data-nosnippet>5473</a>                ),
-<a href=#5474 id=5474 data-nosnippet>5474</a>                Failure::Fallible,
-<a href=#5475 id=5475 data-nosnippet>5475</a>            );
-<a href=#5476 id=5476 data-nosnippet>5476</a>
-<a href=#5477 id=5477 data-nosnippet>5477</a>            <span class="kw">let </span>chain = staged_chain(
-<a href=#5478 id=5478 data-nosnippet>5478</a>                direction,
-<a href=#5479 id=5479 data-nosnippet>5479</a>                outer_stage.clone(),
-<a href=#5480 id=5480 data-nosnippet>5480</a>                inner_key.clone(),
-<a href=#5481 id=5481 data-nosnippet>5481</a>                <span class="kw-2">&amp;</span>inner,
-<a href=#5482 id=5482 data-nosnippet>5482</a>                Failure::Fallible,
-<a href=#5483 id=5483 data-nosnippet>5483</a>            );
-<a href=#5484 id=5484 data-nosnippet>5484</a>            <span class="kw">let </span>steps = chain.steps();
-<a href=#5485 id=5485 data-nosnippet>5485</a>            <span class="macro">assert_eq!</span>(steps.len(), <span class="number">3</span>, <span class="string">"{direction:?}: every step is retained"</span>);
-<a href=#5486 id=5486 data-nosnippet>5486</a>
-<a href=#5487 id=5487 data-nosnippet>5487</a>            <span class="kw">for </span>pair <span class="kw">in </span>steps.windows(<span class="number">2</span>) {
-<a href=#5488 id=5488 data-nosnippet>5488</a>                <span class="macro">assert_eq!</span>(
-<a href=#5489 id=5489 data-nosnippet>5489</a>                    ConverterStep::into(<span class="kw-2">&amp;</span>pair[<span class="number">0</span>]),
-<a href=#5490 id=5490 data-nosnippet>5490</a>                    ConverterStep::from(<span class="kw-2">&amp;</span>pair[<span class="number">1</span>]),
-<a href=#5491 id=5491 data-nosnippet>5491</a>                    <span class="string">"{direction:?}: each step's destination is the next one's origin, \
-<a href=#5492 id=5492 data-nosnippet>5492</a>                     in {chain:?}"</span>,
-<a href=#5493 id=5493 data-nosnippet>5493</a>                    chain = steps
-<a href=#5494 id=5494 data-nosnippet>5494</a>                        .iter()
-<a href=#5495 id=5495 data-nosnippet>5495</a>                        .map(|step| <span class="macro">format!</span>(<span class="string">"{:?} -&gt; {:?}"</span>, step.from(), step.into()))
-<a href=#5496 id=5496 data-nosnippet>5496</a>                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#5497 id=5497 data-nosnippet>5497</a>                );
-<a href=#5498 id=5498 data-nosnippet>5498</a>            }
-<a href=#5499 id=5499 data-nosnippet>5499</a>            <span class="kw">let </span>sources = steps
-<a href=#5500 id=5500 data-nosnippet>5500</a>                .iter()
-<a href=#5501 id=5501 data-nosnippet>5501</a>                .filter(|step| {
-<a href=#5502 id=5502 data-nosnippet>5502</a>                    <span class="macro">matches!</span>(ConverterStep::from(step), ChainValue::Source)
-<a href=#5503 id=5503 data-nosnippet>5503</a>                        || <span class="macro">matches!</span>(ConverterStep::into(step), ChainValue::Source)
-<a href=#5504 id=5504 data-nosnippet>5504</a>                })
-<a href=#5505 id=5505 data-nosnippet>5505</a>                .count();
-<a href=#5506 id=5506 data-nosnippet>5506</a>            <span class="macro">assert_eq!</span>(sources, <span class="number">1</span>, <span class="string">"{direction:?}: `Source` appears once"</span>);
-<a href=#5507 id=5507 data-nosnippet>5507</a>            <span class="kw">match </span>direction {
-<a href=#5508 id=5508 data-nosnippet>5508</a>                Direction::Construct =&gt; <span class="macro">assert!</span>(
-<a href=#5509 id=5509 data-nosnippet>5509</a>                    <span class="macro">matches!</span>(ConverterStep::into(<span class="kw-2">&amp;</span>steps[<span class="number">2</span>]), ChainValue::Source),
-<a href=#5510 id=5510 data-nosnippet>5510</a>                    <span class="string">"constructing ends at the source value"
-<a href=#5511 id=5511 data-nosnippet>5511</a>                </span>),
-<a href=#5512 id=5512 data-nosnippet>5512</a>                Direction::Deconstruct =&gt; <span class="macro">assert!</span>(
-<a href=#5513 id=5513 data-nosnippet>5513</a>                    <span class="macro">matches!</span>(ConverterStep::from(<span class="kw-2">&amp;</span>steps[<span class="number">0</span>]), ChainValue::Source),
-<a href=#5514 id=5514 data-nosnippet>5514</a>                    <span class="string">"deconstructing starts at the source value"
-<a href=#5515 id=5515 data-nosnippet>5515</a>                </span>),
-<a href=#5516 id=5516 data-nosnippet>5516</a>            }
-<a href=#5517 id=5517 data-nosnippet>5517</a>        }
-<a href=#5518 id=5518 data-nosnippet>5518</a>    }
-<a href=#5519 id=5519 data-nosnippet>5519</a>
-<a href=#5520 id=5520 data-nosnippet>5520</a>    <span class="doccomment">/// A chain is stored in EXECUTION order for its own direction, which is
-<a href=#5521 id=5521 data-nosnippet>5521</a>    /// the whole reason the two stage-order readers are gone.
-<a href=#5522 id=5522 data-nosnippet>5522</a>    ///
-<a href=#5523 id=5523 data-nosnippet>5523</a>    /// The stages nest outward: an outer conversion is declared over an inner
-<a href=#5524 id=5524 data-nosnippet>5524</a>    /// fragment that already has one. Constructing runs the inner stage first
-<a href=#5525 id=5525 data-nosnippet>5525</a>    /// and ends at the source value; deconstructing starts at the source value
-<a href=#5526 id=5526 data-nosnippet>5526</a>    /// and runs the outer stage first. `pre_stages` stored one of those and
-<a href=#5527 id=5527 data-nosnippet>5527</a>    /// left each reader to reverse it, which is a rule two places could
-<a href=#5528 id=5528 data-nosnippet>5528</a>    /// disagree about.
-<a href=#5529 id=5529 data-nosnippet>5529</a>    </span><span class="attr">#[test]
-<a href=#5530 id=5530 data-nosnippet>5530</a>    </span><span class="kw">fn </span>a_chain_stores_execution_order_for_its_own_direction() {
-<a href=#5531 id=5531 data-nosnippet>5531</a>        <span class="kw">let </span>inner_key = TypeKey::parse(<span class="string">"Inner"</span>).expect(<span class="string">"test key"</span>);
-<a href=#5532 id=5532 data-nosnippet>5532</a>        <span class="kw">let </span>inner_stage = OperationId::stage(fragment_id(<span class="string">"inner"</span>), <span class="number">0</span>);
-<a href=#5533 id=5533 data-nosnippet>5533</a>        <span class="kw">let </span>inner = ConversionChain::Steps(<span class="macro">vec!</span>[ConverterStep::&lt;JRepresentation&gt;::new(
-<a href=#5534 id=5534 data-nosnippet>5534</a>            ChainValue::Source,
-<a href=#5535 id=5535 data-nosnippet>5535</a>            ChainValue::Intermediate(inner_key.clone()),
-<a href=#5536 id=5536 data-nosnippet>5536</a>            inner_stage.clone(),
-<a href=#5537 id=5537 data-nosnippet>5537</a>            Failure::Fallible,
-<a href=#5538 id=5538 data-nosnippet>5538</a>            prebindgen_registry::generation::Cleanup::None,
-<a href=#5539 id=5539 data-nosnippet>5539</a>        )]);
-<a href=#5540 id=5540 data-nosnippet>5540</a>        <span class="kw">let </span>outer_stage = OperationId::stage(fragment_id(<span class="string">"outer"</span>), <span class="number">0</span>);
-<a href=#5541 id=5541 data-nosnippet>5541</a>
-<a href=#5542 id=5542 data-nosnippet>5542</a>        <span class="kw">let </span>constructing = staged_chain(
-<a href=#5543 id=5543 data-nosnippet>5543</a>            Direction::Construct,
-<a href=#5544 id=5544 data-nosnippet>5544</a>            outer_stage.clone(),
-<a href=#5545 id=5545 data-nosnippet>5545</a>            inner_key.clone(),
-<a href=#5546 id=5546 data-nosnippet>5546</a>            <span class="kw-2">&amp;</span>inner,
-<a href=#5547 id=5547 data-nosnippet>5547</a>            Failure::Fallible,
-<a href=#5548 id=5548 data-nosnippet>5548</a>        );
-<a href=#5549 id=5549 data-nosnippet>5549</a>        <span class="macro">assert_eq!</span>(
-<a href=#5550 id=5550 data-nosnippet>5550</a>            constructing
-<a href=#5551 id=5551 data-nosnippet>5551</a>                .steps()
-<a href=#5552 id=5552 data-nosnippet>5552</a>                .iter()
-<a href=#5553 id=5553 data-nosnippet>5553</a>                .map(|step| step.operation().clone())
-<a href=#5554 id=5554 data-nosnippet>5554</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#5555 id=5555 data-nosnippet>5555</a>            <span class="macro">vec!</span>[inner_stage.clone(), outer_stage.clone()],
-<a href=#5556 id=5556 data-nosnippet>5556</a>            <span class="string">"constructing ends at the source value, so the outer stage runs last"
-<a href=#5557 id=5557 data-nosnippet>5557</a>        </span>);
-<a href=#5558 id=5558 data-nosnippet>5558</a>        <span class="macro">assert!</span>(
-<a href=#5559 id=5559 data-nosnippet>5559</a>            <span class="macro">matches!</span>(
-<a href=#5560 id=5560 data-nosnippet>5560</a>                ConverterStep::into(<span class="kw-2">&amp;</span>constructing.steps()[<span class="number">1</span>]),
-<a href=#5561 id=5561 data-nosnippet>5561</a>                ChainValue::Source
-<a href=#5562 id=5562 data-nosnippet>5562</a>            ),
-<a href=#5563 id=5563 data-nosnippet>5563</a>            <span class="string">"and the last step's destination IS the source value"
-<a href=#5564 id=5564 data-nosnippet>5564</a>        </span>);
-<a href=#5565 id=5565 data-nosnippet>5565</a>
-<a href=#5566 id=5566 data-nosnippet>5566</a>        <span class="kw">let </span>deconstructing = staged_chain(
-<a href=#5567 id=5567 data-nosnippet>5567</a>            Direction::Deconstruct,
-<a href=#5568 id=5568 data-nosnippet>5568</a>            outer_stage.clone(),
-<a href=#5569 id=5569 data-nosnippet>5569</a>            inner_key,
-<a href=#5570 id=5570 data-nosnippet>5570</a>            <span class="kw-2">&amp;</span>inner,
-<a href=#5571 id=5571 data-nosnippet>5571</a>            Failure::Fallible,
-<a href=#5572 id=5572 data-nosnippet>5572</a>        );
-<a href=#5573 id=5573 data-nosnippet>5573</a>        <span class="macro">assert_eq!</span>(
-<a href=#5574 id=5574 data-nosnippet>5574</a>            deconstructing
-<a href=#5575 id=5575 data-nosnippet>5575</a>                .steps()
-<a href=#5576 id=5576 data-nosnippet>5576</a>                .iter()
-<a href=#5577 id=5577 data-nosnippet>5577</a>                .map(|step| step.operation().clone())
-<a href=#5578 id=5578 data-nosnippet>5578</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#5579 id=5579 data-nosnippet>5579</a>            <span class="macro">vec!</span>[outer_stage, inner_stage],
-<a href=#5580 id=5580 data-nosnippet>5580</a>            <span class="string">"deconstructing starts at the source value, so the outer stage runs first"
-<a href=#5581 id=5581 data-nosnippet>5581</a>        </span>);
-<a href=#5582 id=5582 data-nosnippet>5582</a>        <span class="macro">assert!</span>(
-<a href=#5583 id=5583 data-nosnippet>5583</a>            <span class="macro">matches!</span>(
-<a href=#5584 id=5584 data-nosnippet>5584</a>                ConverterStep::from(<span class="kw-2">&amp;</span>deconstructing.steps()[<span class="number">0</span>]),
-<a href=#5585 id=5585 data-nosnippet>5585</a>                ChainValue::Source
-<a href=#5586 id=5586 data-nosnippet>5586</a>            ),
-<a href=#5587 id=5587 data-nosnippet>5587</a>            <span class="string">"and the first step's origin IS the source value"
-<a href=#5588 id=5588 data-nosnippet>5588</a>        </span>);
-<a href=#5589 id=5589 data-nosnippet>5589</a>    }
-<a href=#5590 id=5590 data-nosnippet>5590</a>}
+<a href=#5083 id=5083 data-nosnippet>5083</a>                        reach[path.len()] = <span class="kw">crate</span>::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
+<a href=#5084 id=5084 data-nosnippet>5084</a>                    }
+<a href=#5085 id=5085 data-nosnippet>5085</a>                    <span class="kw">for </span>wire <span class="kw">in </span><span class="self">self</span>.sum_out_wires(flat, <span class="kw-2">&amp;</span>sum_ident, probe)<span class="question-mark">? </span>{
+<a href=#5086 id=5086 data-nosnippet>5086</a>                        <span class="kw">let </span>groups = <span class="kw">match </span>optional {
+<a href=#5087 id=5087 data-nosnippet>5087</a>                            <span class="bool-val">true </span>=&gt; std::iter::once(<span class="kw">crate</span>::jni::emit::PRESENT_ARM)
+<a href=#5088 id=5088 data-nosnippet>5088</a>                                .chain(wire.groups.iter().copied())
+<a href=#5089 id=5089 data-nosnippet>5089</a>                                .collect(),
+<a href=#5090 id=5090 data-nosnippet>5090</a>                            <span class="bool-val">false </span>=&gt; wire.groups,
+<a href=#5091 id=5091 data-nosnippet>5091</a>                        };
+<a href=#5092 id=5092 data-nosnippet>5092</a>                        wires.push(OutWire {
+<a href=#5093 id=5093 data-nosnippet>5093</a>                            name: <span class="macro">format!</span>(<span class="string">"{name}__{}"</span>, wire.name),
+<a href=#5094 id=5094 data-nosnippet>5094</a>                            reach: reach.clone(),
+<a href=#5095 id=5095 data-nosnippet>5095</a>                            groups,
+<a href=#5096 id=5096 data-nosnippet>5096</a>                            ..wire
+<a href=#5097 id=5097 data-nosnippet>5097</a>                        });
+<a href=#5098 id=5098 data-nosnippet>5098</a>                    }
+<a href=#5099 id=5099 data-nosnippet>5099</a>                    <span class="kw">continue</span>;
+<a href=#5100 id=5100 data-nosnippet>5100</a>                }
+<a href=#5101 id=5101 data-nosnippet>5101</a>                <span class="comment">// A nested `data_class` inlines: its own leaves are reached
+<a href=#5102 id=5102 data-nosnippet>5102</a>                // through this field. An OPTIONAL one contributes a presence
+<a href=#5103 id=5103 data-nosnippet>5103</a>                // flag ahead of them, and its group carries wire defaults when
+<a href=#5104 id=5104 data-nosnippet>5104</a>                // the value is absent — the same shape a sum field's tag gives
+<a href=#5105 id=5105 data-nosnippet>5105</a>                // its groups, with presence in place of an alternative.
+<a href=#5106 id=5106 data-nosnippet>5106</a>                //
+<a href=#5107 id=5107 data-nosnippet>5107</a>                // A `Vec` of them is still refused: a repeated value has no
+<a href=#5108 id=5108 data-nosnippet>5108</a>                // fixed number of leaves to lay side by side, which is a
+<a href=#5109 id=5109 data-nosnippet>5109</a>                // sequence rather than a decomposition.
+<a href=#5110 id=5110 data-nosnippet>5110</a>                </span><span class="kw">crate</span>::jni::classify::TypeKind::DataStruct {
+<a href=#5111 id=5111 data-nosnippet>5111</a>                    st: <span class="kw">_</span>,
+<a href=#5112 id=5112 data-nosnippet>5112</a>                    cfg: <span class="prelude-val">Some</span>(child_cfg),
+<a href=#5113 id=5113 data-nosnippet>5113</a>                } =&gt; {
+<a href=#5114 id=5114 data-nosnippet>5114</a>                    <span class="kw">if </span><span class="macro">matches!</span>(field.ty.kind(), TypeKind::Vec(<span class="kw">_</span>)) {
+<a href=#5115 id=5115 data-nosnippet>5115</a>                        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#5116 id=5116 data-nosnippet>5116</a>                    }
+<a href=#5117 id=5117 data-nosnippet>5117</a>                    <span class="kw">let </span>child = <span class="kw">match </span>probe.unwrapped().kind() {
+<a href=#5118 id=5118 data-nosnippet>5118</a>                        TypeKind::Named { id, .. } =&gt; id.ident()<span class="question-mark">?</span>,
+<a href=#5119 id=5119 data-nosnippet>5119</a>                        <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#5120 id=5120 data-nosnippet>5120</a>                    };
+<a href=#5121 id=5121 data-nosnippet>5121</a>                    <span class="kw">let </span>optional = field.ty.optional_inner().is_some();
+<a href=#5122 id=5122 data-nosnippet>5122</a>                    <span class="kw">if </span>optional {
+<a href=#5123 id=5123 data-nosnippet>5123</a>                        <span class="comment">// The flag's own reach ends in the OPTIONAL step it
+<a href=#5124 id=5124 data-nosnippet>5124</a>                        // tests: presence is the gate, and the walk emits a
+<a href=#5125 id=5125 data-nosnippet>5125</a>                        // gate exactly where a segment's selector reaches
+<a href=#5126 id=5126 data-nosnippet>5126</a>                        // through one. The group's leaves then reach on from
+<a href=#5127 id=5127 data-nosnippet>5127</a>                        // the value that gate unwrapped.
+<a href=#5128 id=5128 data-nosnippet>5128</a>                        </span><span class="kw">let </span><span class="kw-2">mut </span>reach: Vec&lt;<span class="kw">crate</span>::unfold::PathStep&gt; =
+<a href=#5129 id=5129 data-nosnippet>5129</a>                            field_path.iter().map(field_step).collect();
+<a href=#5130 id=5130 data-nosnippet>5130</a>                        reach[path.len()] = <span class="kw">crate</span>::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
+<a href=#5131 id=5131 data-nosnippet>5131</a>                        wires.push(OutWire {
+<a href=#5132 id=5132 data-nosnippet>5132</a>                            name: <span class="macro">format!</span>(<span class="string">"{name}__{}"</span>, <span class="kw">crate</span>::jni::emit::PRESENT_LEAF),
+<a href=#5133 id=5133 data-nosnippet>5133</a>                            out_ty: field.ty.clone(),
+<a href=#5134 id=5134 data-nosnippet>5134</a>                            groups: Vec::new(),
+<a href=#5135 id=5135 data-nosnippet>5135</a>                            through: Vec::new(),
+<a href=#5136 id=5136 data-nosnippet>5136</a>                            from: OutFrom::Present,
+<a href=#5137 id=5137 data-nosnippet>5137</a>                            reach,
+<a href=#5138 id=5138 data-nosnippet>5138</a>                            nullable: <span class="bool-val">false</span>,
+<a href=#5139 id=5139 data-nosnippet>5139</a>                            identity: <span class="bool-val">false</span>,
+<a href=#5140 id=5140 data-nosnippet>5140</a>                            abi: <span class="prelude-val">None</span>,
+<a href=#5141 id=5141 data-nosnippet>5141</a>                        });
+<a href=#5142 id=5142 data-nosnippet>5142</a>                    }
+<a href=#5143 id=5143 data-nosnippet>5143</a>                    <span class="kw">let </span>inlined =
+<a href=#5144 id=5144 data-nosnippet>5144</a>                        <span class="self">self</span>.struct_out_wires_at(flat, <span class="kw-2">&amp;</span>child, <span class="kw-2">&amp;</span>field_path, <span class="kw-2">&amp;</span>name, depth + <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#5145 id=5145 data-nosnippet>5145</a>                    <span class="comment">// Which class this boundary reassembles through, recorded
+<a href=#5146 id=5146 data-nosnippet>5146</a>                    // where the flattening happens. `data_class!` named it, so
+<a href=#5147 id=5147 data-nosnippet>5147</a>                    // this stays a declaration read like the rest of the walk.
+<a href=#5148 id=5148 data-nosnippet>5148</a>                    </span><span class="kw">let </span>child_fqn = child_cfg.name_spec.as_ref().map(|spec| <span class="self">self</span>.fqn_of(spec))<span class="question-mark">?</span>;
+<a href=#5149 id=5149 data-nosnippet>5149</a>                    wires.extend(inlined.into_iter().map(|wire| {
+<a href=#5150 id=5150 data-nosnippet>5150</a>                        <span class="kw">let </span><span class="kw-2">mut </span>reach = wire.reach;
+<a href=#5151 id=5151 data-nosnippet>5151</a>                        <span class="kw">if </span>optional {
+<a href=#5152 id=5152 data-nosnippet>5152</a>                            <span class="comment">// The step reaching THIS field is optional for the
+<a href=#5153 id=5153 data-nosnippet>5153</a>                            // child's leaves: they are inside the value the
+<a href=#5154 id=5154 data-nosnippet>5154</a>                            // presence flag tests, so the walk gates them on
+<a href=#5155 id=5155 data-nosnippet>5155</a>                            // it. The flag's own reach stops at the `Option`,
+<a href=#5156 id=5156 data-nosnippet>5156</a>                            // which is the value it tests rather than one
+<a href=#5157 id=5157 data-nosnippet>5157</a>                            // inside it.
+<a href=#5158 id=5158 data-nosnippet>5158</a>                            </span>reach[path.len()] = <span class="kw">crate</span>::unfold::PathStep::field(fname.clone(), <span class="bool-val">true</span>);
+<a href=#5159 id=5159 data-nosnippet>5159</a>                        }
+<a href=#5160 id=5160 data-nosnippet>5160</a>                        OutWire {
+<a href=#5161 id=5161 data-nosnippet>5161</a>                            reach,
+<a href=#5162 id=5162 data-nosnippet>5162</a>                            <span class="comment">// Under a presence flag the child's leaves are the
+<a href=#5163 id=5163 data-nosnippet>5163</a>                            // one group that flag gates — including a selector
+<a href=#5164 id=5164 data-nosnippet>5164</a>                            // of the child's own, which keeps its own arms one
+<a href=#5165 id=5165 data-nosnippet>5165</a>                            // level further in.
+<a href=#5166 id=5166 data-nosnippet>5166</a>                            </span>groups: <span class="kw">match </span>optional {
+<a href=#5167 id=5167 data-nosnippet>5167</a>                                <span class="bool-val">true </span>=&gt; std::iter::once(<span class="kw">crate</span>::jni::emit::PRESENT_ARM)
+<a href=#5168 id=5168 data-nosnippet>5168</a>                                    .chain(wire.groups.iter().copied())
+<a href=#5169 id=5169 data-nosnippet>5169</a>                                    .collect(),
+<a href=#5170 id=5170 data-nosnippet>5170</a>                                <span class="bool-val">false </span>=&gt; wire.groups.clone(),
+<a href=#5171 id=5171 data-nosnippet>5171</a>                            },
+<a href=#5172 id=5172 data-nosnippet>5172</a>                            through: std::iter::once(child_fqn.clone())
+<a href=#5173 id=5173 data-nosnippet>5173</a>                                .chain(wire.through.iter().cloned())
+<a href=#5174 id=5174 data-nosnippet>5174</a>                                .collect(),
+<a href=#5175 id=5175 data-nosnippet>5175</a>                            ..wire
+<a href=#5176 id=5176 data-nosnippet>5176</a>                        }
+<a href=#5177 id=5177 data-nosnippet>5177</a>                    }));
+<a href=#5178 id=5178 data-nosnippet>5178</a>                    <span class="kw">continue</span>;
+<a href=#5179 id=5179 data-nosnippet>5179</a>                }
+<a href=#5180 id=5180 data-nosnippet>5180</a>                <span class="kw">_ </span>=&gt; {}
+<a href=#5181 id=5181 data-nosnippet>5181</a>            }
+<a href=#5182 id=5182 data-nosnippet>5182</a>
+<a href=#5183 id=5183 data-nosnippet>5183</a>            <span class="comment">// A simple value: the field's own output conversion encodes it, and
+<a href=#5184 id=5184 data-nosnippet>5184</a>            // the foreign `fromParts` forwards it verbatim. Nullability rides
+<a href=#5185 id=5185 data-nosnippet>5185</a>            // that conversion — `Option&lt;Box&lt;String&gt;&gt;` is a `String?` — so the
+<a href=#5186 id=5186 data-nosnippet>5186</a>            // value itself is not path-nullable.
+<a href=#5187 id=5187 data-nosnippet>5187</a>            </span>wires.push(OutWire {
+<a href=#5188 id=5188 data-nosnippet>5188</a>                name,
+<a href=#5189 id=5189 data-nosnippet>5189</a>                out_ty: field.ty.clone(),
+<a href=#5190 id=5190 data-nosnippet>5190</a>                groups: Vec::new(),
+<a href=#5191 id=5191 data-nosnippet>5191</a>                through: Vec::new(),
+<a href=#5192 id=5192 data-nosnippet>5192</a>                from: OutFrom::Place,
+<a href=#5193 id=5193 data-nosnippet>5193</a>                reach: field_path.iter().map(field_step).collect(),
+<a href=#5194 id=5194 data-nosnippet>5194</a>                nullable: <span class="bool-val">false</span>,
+<a href=#5195 id=5195 data-nosnippet>5195</a>                identity: <span class="bool-val">false</span>,
+<a href=#5196 id=5196 data-nosnippet>5196</a>                abi: <span class="prelude-val">None</span>,
+<a href=#5197 id=5197 data-nosnippet>5197</a>            });
+<a href=#5198 id=5198 data-nosnippet>5198</a>        }
+<a href=#5199 id=5199 data-nosnippet>5199</a>        <span class="prelude-val">Some</span>(wires)
+<a href=#5200 id=5200 data-nosnippet>5200</a>    }
+<a href=#5201 id=5201 data-nosnippet>5201</a>
+<a href=#5202 id=5202 data-nosnippet>5202</a>    <span class="doccomment">/// The values a `sealed_class` hands out: the selector, then one group of
+<a href=#5203 id=5203 data-nosnippet>5203</a>    /// slots per alternative, laid beside the others.
+<a href=#5204 id=5204 data-nosnippet>5204</a>    ///
+<a href=#5205 id=5205 data-nosnippet>5205</a>    /// Model and declaration only — no conversion is read. That is what lets
+<a href=#5206 id=5206 data-nosnippet>5206</a>    /// one answer serve on both sides of `resolve`: the leaf synthesis feeding
+<a href=#5207 id=5207 data-nosnippet>5207</a>    /// `Decompositions` runs before it, the recipe composes after it, and a fact
+<a href=#5208 id=5208 data-nosnippet>5208</a>    /// derived twice is a fact that can differ.
+<a href=#5209 id=5209 data-nosnippet>5209</a>    ///
+<a href=#5210 id=5210 data-nosnippet>5210</a>    /// `None` for a type the model does not hold as a data-carrying enum, or
+<a href=#5211 id=5211 data-nosnippet>5211</a>    /// one no `sealed_class!` declares — neither has a decomposition to state.
+<a href=#5212 id=5212 data-nosnippet>5212</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>sum_out_wires(
+<a href=#5213 id=5213 data-nosnippet>5213</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#5214 id=5214 data-nosnippet>5214</a>        flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
+<a href=#5215 id=5215 data-nosnippet>5215</a>        ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#5216 id=5216 data-nosnippet>5216</a>        sum_ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#5217 id=5217 data-nosnippet>5217</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;OutWire&gt;&gt; {
+<a href=#5218 id=5218 data-nosnippet>5218</a>        <span class="kw">let </span>prebindgen_registry::flat::Type::Variant(sum) = flat.declared_type(ident)<span class="question-mark">? </span><span class="kw">else </span>{
+<a href=#5219 id=5219 data-nosnippet>5219</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#5220 id=5220 data-nosnippet>5220</a>        };
+<a href=#5221 id=5221 data-nosnippet>5221</a>        <span class="kw">let </span>cfg = <span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>TypeKey::from_ident(ident))<span class="question-mark">?</span>.sum()<span class="question-mark">?</span>;
+<a href=#5222 id=5222 data-nosnippet>5222</a>
+<a href=#5223 id=5223 data-nosnippet>5223</a>        <span class="comment">// The selector rides ahead of the groups it chooses between, and
+<a href=#5224 id=5224 data-nosnippet>5224</a>        // carries **which sum** it selects over — nothing converts it, so
+<a href=#5225 id=5225 data-nosnippet>5225</a>        // naming the sum is the only use its type has, and it is the one an
+<a href=#5226 id=5226 data-nosnippet>5226</a>        // emitter needs: which enum to match over.
+<a href=#5227 id=5227 data-nosnippet>5227</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>wires = <span class="macro">vec!</span>[OutWire {
+<a href=#5228 id=5228 data-nosnippet>5228</a>            name: <span class="kw">crate</span>::jni::emit::SUM_TAG_LEAF.to_string(),
+<a href=#5229 id=5229 data-nosnippet>5229</a>            out_ty: sum_ty.clone(),
+<a href=#5230 id=5230 data-nosnippet>5230</a>            groups: Vec::new(),
+<a href=#5231 id=5231 data-nosnippet>5231</a>            through: Vec::new(),
+<a href=#5232 id=5232 data-nosnippet>5232</a>            from: OutFrom::Tag,
+<a href=#5233 id=5233 data-nosnippet>5233</a>            nullable: <span class="bool-val">false</span>,
+<a href=#5234 id=5234 data-nosnippet>5234</a>            identity: <span class="bool-val">false</span>,
+<a href=#5235 id=5235 data-nosnippet>5235</a>            reach: Vec::new(),
+<a href=#5236 id=5236 data-nosnippet>5236</a>            abi: <span class="prelude-val">None</span>,
+<a href=#5237 id=5237 data-nosnippet>5237</a>        }];
+<a href=#5238 id=5238 data-nosnippet>5238</a>        <span class="kw">for </span>alt <span class="kw">in </span><span class="kw-2">&amp;</span>sum.alternatives {
+<a href=#5239 id=5239 data-nosnippet>5239</a>            <span class="kw">let </span>kotlin = <span class="self">self</span>.sum_variant_class_name(cfg, <span class="kw-2">&amp;</span>alt.name);
+<a href=#5240 id=5240 data-nosnippet>5240</a>            <span class="kw">for </span>field <span class="kw">in </span><span class="kw-2">&amp;</span>alt.fields {
+<a href=#5241 id=5241 data-nosnippet>5241</a>                <span class="kw">let </span>member = field.member();
+<a href=#5242 id=5242 data-nosnippet>5242</a>                wires.push(OutWire {
+<a href=#5243 id=5243 data-nosnippet>5243</a>                    name: <span class="kw">crate</span>::jni::struct_plan::sum_slot_fragment(
+<a href=#5244 id=5244 data-nosnippet>5244</a>                        <span class="kw-2">&amp;</span>kotlin,
+<a href=#5245 id=5245 data-nosnippet>5245</a>                        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::struct_plan::sum_field_prop_name(<span class="kw-2">&amp;</span>member),
+<a href=#5246 id=5246 data-nosnippet>5246</a>                    ),
+<a href=#5247 id=5247 data-nosnippet>5247</a>                    out_ty: field.ty.clone(),
+<a href=#5248 id=5248 data-nosnippet>5248</a>                    groups: <span class="macro">vec!</span>[<span class="kw">crate</span>::jni::struct_plan::sum_tag(alt)],
+<a href=#5249 id=5249 data-nosnippet>5249</a>                    through: Vec::new(),
+<a href=#5250 id=5250 data-nosnippet>5250</a>                    from: OutFrom::Payload {
+<a href=#5251 id=5251 data-nosnippet>5251</a>                        variant: <span class="prelude-val">Some</span>(alt.name.clone()),
+<a href=#5252 id=5252 data-nosnippet>5252</a>                        member,
+<a href=#5253 id=5253 data-nosnippet>5253</a>                    },
+<a href=#5254 id=5254 data-nosnippet>5254</a>                    nullable: <span class="bool-val">false</span>,
+<a href=#5255 id=5255 data-nosnippet>5255</a>                    identity: <span class="bool-val">false</span>,
+<a href=#5256 id=5256 data-nosnippet>5256</a>                    reach: Vec::new(),
+<a href=#5257 id=5257 data-nosnippet>5257</a>                    abi: <span class="prelude-val">None</span>,
+<a href=#5258 id=5258 data-nosnippet>5258</a>                });
+<a href=#5259 id=5259 data-nosnippet>5259</a>            }
+<a href=#5260 id=5260 data-nosnippet>5260</a>        }
+<a href=#5261 id=5261 data-nosnippet>5261</a>        <span class="prelude-val">Some</span>(wires)
+<a href=#5262 id=5262 data-nosnippet>5262</a>    }
+<a href=#5263 id=5263 data-nosnippet>5263</a>}
+<a href=#5264 id=5264 data-nosnippet>5264</a>
+<a href=#5265 id=5265 data-nosnippet>5265</a><span class="doccomment">/// One step of a reach that reads a struct field.
+<a href=#5266 id=5266 data-nosnippet>5266</a>///
+<a href=#5267 id=5267 data-nosnippet>5267</a>/// Never optional: a composition looks through an `Option` rather than stopping
+<a href=#5268 id=5268 data-nosnippet>5268</a>/// at one — a terminal optional rides its own conversion, and an intermediate
+<a href=#5269 id=5269 data-nosnippet>5269</a>/// one is a shape the compositions decline.
+<a href=#5270 id=5270 data-nosnippet>5270</a></span><span class="kw">fn </span>field_step(ident: <span class="kw-2">&amp;</span>syn::Ident) -&gt; <span class="kw">crate</span>::unfold::PathStep {
+<a href=#5271 id=5271 data-nosnippet>5271</a>    <span class="kw">crate</span>::unfold::PathStep::field(ident.clone(), <span class="bool-val">false</span>)
+<a href=#5272 id=5272 data-nosnippet>5272</a>}
+<a href=#5273 id=5273 data-nosnippet>5273</a>
+<a href=#5274 id=5274 data-nosnippet>5274</a><span class="doccomment">/// The transparent wrappers over a crossing's value, or `None` when a composed
+<a href=#5275 id=5275 data-nosnippet>5275</a>/// chain cannot go through one of them.
+<a href=#5276 id=5276 data-nosnippet>5276</a>///
+<a href=#5277 id=5277 data-nosnippet>5277</a>/// A chain reaches the canonical value by peeling every wrapper and puts them
+<a href=#5278 id=5278 data-nosnippet>5278</a>/// back afterwards, so it needs the operation for the direction it is going:
+<a href=#5279 id=5279 data-nosnippet>5279</a>/// `Box::new` to build, `*b` to read. A wrapper missing that operation — `Cow`,
+<a href=#5280 id=5280 data-nosnippet>5280</a>/// which has no read — is not composable, and neither is a wrapper this adapter
+<a href=#5281 id=5281 data-nosnippet>5281</a>/// has no entry for at all.
+<a href=#5282 id=5282 data-nosnippet>5282</a>///
+<a href=#5283 id=5283 data-nosnippet>5283</a>/// Deconstructing additionally needs the crossing to **own** what it takes
+<a href=#5284 id=5284 data-nosnippet>5284</a>/// apart. Reading through a shared borrow would move the value out of the
+<a href=#5285 id=5285 data-nosnippet>5285</a>/// wrapper, which is what a `&amp;Box&lt;T&gt;` would do.
+<a href=#5286 id=5286 data-nosnippet>5286</a>///
+<a href=#5287 id=5287 data-nosnippet>5287</a>/// Refusing here is what keeps the legacy path in control. `JSource::build` and
+<a href=#5288 id=5288 data-nosnippet>5288</a>/// `JSource::read` expect the rejection to have happened while planning: past
+<a href=#5289 id=5289 data-nosnippet>5289</a>/// this point an unsupported wrapper is a panic during `write_rust`, or
+<a href=#5290 id=5290 data-nosnippet>5290</a>/// generated Rust that does not compile in the consumer's crate.
+<a href=#5291 id=5291 data-nosnippet>5291</a>///
+<a href=#5292 id=5292 data-nosnippet>5292</a>/// One function because it is one rule. Stated per planner, the choice copy
+<a href=#5293 id=5293 data-nosnippet>5293</a>/// omitted it, while the sequence and Optional copies omitted the ownership
+<a href=#5294 id=5294 data-nosnippet>5294</a>/// half.
+<a href=#5295 id=5295 data-nosnippet>5295</a></span><span class="kw">fn </span>composable_wrappers(
+<a href=#5296 id=5296 data-nosnippet>5296</a>    crossing: <span class="kw-2">&amp;</span>prebindgen_registry::recipe::Crossing,
+<a href=#5297 id=5297 data-nosnippet>5297</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;&gt; {
+<a href=#5298 id=5298 data-nosnippet>5298</a>    <span class="kw">let </span>wrappers = crossing.value().erased_wrappers();
+<a href=#5299 id=5299 data-nosnippet>5299</a>    <span class="kw">let </span>usable = |wrapper: &amp;&amp;<span class="lifetime">'static </span>str| -&gt; bool {
+<a href=#5300 id=5300 data-nosnippet>5300</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(ops) = <span class="kw">crate</span>::jni::trait_impl::wrapper_ops(wrapper) <span class="kw">else </span>{
+<a href=#5301 id=5301 data-nosnippet>5301</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#5302 id=5302 data-nosnippet>5302</a>        };
+<a href=#5303 id=5303 data-nosnippet>5303</a>        <span class="kw">match </span>crossing.direction() {
+<a href=#5304 id=5304 data-nosnippet>5304</a>            Direction::Construct =&gt; ops.build.is_some(),
+<a href=#5305 id=5305 data-nosnippet>5305</a>            Direction::Deconstruct =&gt; crossing.mode() == Mode::Owned &amp;&amp; ops.read.is_some(),
+<a href=#5306 id=5306 data-nosnippet>5306</a>        }
+<a href=#5307 id=5307 data-nosnippet>5307</a>    };
+<a href=#5308 id=5308 data-nosnippet>5308</a>    wrappers.iter().all(usable).then_some(wrappers)
+<a href=#5309 id=5309 data-nosnippet>5309</a>}
+<a href=#5310 id=5310 data-nosnippet>5310</a>
+<a href=#5311 id=5311 data-nosnippet>5311</a><span class="doccomment">/// The model field one part reads, or `None` for a part that is not a field.
+<a href=#5312 id=5312 data-nosnippet>5312</a></span><span class="kw">fn </span>part_field&lt;<span class="lifetime">'a</span>&gt;(part: <span class="kw-2">&amp;</span>Part&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>prebindgen_registry::flat::Field&gt; {
+<a href=#5313 id=5313 data-nosnippet>5313</a>    <span class="kw">match </span>part.from {
+<a href=#5314 id=5314 data-nosnippet>5314</a>        prebindgen_registry::recipe::PartSource::Field { field, .. } =&gt; <span class="prelude-val">Some</span>(field),
+<a href=#5315 id=5315 data-nosnippet>5315</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#5316 id=5316 data-nosnippet>5316</a>    }
+<a href=#5317 id=5317 data-nosnippet>5317</a>}
+<a href=#5318 id=5318 data-nosnippet>5318</a>
+<a href=#5319 id=5319 data-nosnippet>5319</a><span class="doccomment">/// The model field one part reads, which a sum payload names its slot after.
+<a href=#5320 id=5320 data-nosnippet>5320</a></span><span class="kw">fn </span>part_member(part: <span class="kw-2">&amp;</span>Part&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;syn::Member&gt; {
+<a href=#5321 id=5321 data-nosnippet>5321</a>    part_field(part).map(|f| f.member())
+<a href=#5322 id=5322 data-nosnippet>5322</a>}
+<a href=#5323 id=5323 data-nosnippet>5323</a>
+<a href=#5324 id=5324 data-nosnippet>5324</a><span class="doccomment">/// Every crossing a sum's arms delegate to, which is what reachability walks.
+<a href=#5325 id=5325 data-nosnippet>5325</a></span><span class="kw">fn </span>parts_subs(arms: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Alternative, <span class="kw-2">&amp;</span>JFrag)]) -&gt; Vec&lt;TypeKey&gt; {
+<a href=#5326 id=5326 data-nosnippet>5326</a>    arms.iter()
+<a href=#5327 id=5327 data-nosnippet>5327</a>        .flat_map(|(<span class="kw">_</span>, f)| f.conv.subs.iter().cloned())
+<a href=#5328 id=5328 data-nosnippet>5328</a>        .collect()
+<a href=#5329 id=5329 data-nosnippet>5329</a>}
+<a href=#5330 id=5330 data-nosnippet>5330</a>
+<a href=#5331 id=5331 data-nosnippet>5331</a><span class="doccomment">/// The Kotlin property name for one part of a product, sanitized — `object` is
+<a href=#5332 id=5332 data-nosnippet>5332</a>/// a keyword, and only the emitter's own mangler knows that.
+<a href=#5333 id=5333 data-nosnippet>5333</a></span><span class="kw">fn </span>field_kt(part: <span class="kw-2">&amp;</span>Part&lt;<span class="lifetime">'_</span>&gt;) -&gt; String {
+<a href=#5334 id=5334 data-nosnippet>5334</a>    <span class="kw">crate</span>::jni::render::kotlin_property_name(<span class="kw-2">&amp;</span>syn::Ident::new(
+<a href=#5335 id=5335 data-nosnippet>5335</a>        <span class="kw-2">&amp;</span>part.name,
+<a href=#5336 id=5336 data-nosnippet>5336</a>        proc_macro2::Span::call_site(),
+<a href=#5337 id=5337 data-nosnippet>5337</a>    ))
+<a href=#5338 id=5338 data-nosnippet>5338</a>}
+<a href=#5339 id=5339 data-nosnippet>5339</a>
+<a href=#5340 id=5340 data-nosnippet>5340</a><span class="doccomment">/// Whether this conversion delivers a Kotlin typed handle rather than a value.
+<a href=#5341 id=5341 data-nosnippet>5341</a></span><span class="kw">fn </span>is_handle(frag: <span class="kw-2">&amp;</span>JFrag) -&gt; bool {
+<a href=#5342 id=5342 data-nosnippet>5342</a>    frag.conv
+<a href=#5343 id=5343 data-nosnippet>5343</a>        .metadata
+<a href=#5344 id=5344 data-nosnippet>5344</a>        .projection
+<a href=#5345 id=5345 data-nosnippet>5345</a>        .as_ref()
+<a href=#5346 id=5346 data-nosnippet>5346</a>        .is_some_and(|p| p.kind == <span class="kw">crate</span>::jni::ProjectionKind::Handle)
+<a href=#5347 id=5347 data-nosnippet>5347</a>}
+<a href=#5348 id=5348 data-nosnippet>5348</a>
+<a href=#5349 id=5349 data-nosnippet>5349</a><span class="doccomment">/// One wire, read through a gate above it that may find nothing.
+<a href=#5350 id=5350 data-nosnippet>5350</a>///
+<a href=#5351 id=5351 data-nosnippet>5351</a>/// Every step below the gate becomes a safe call — not only the first: after
+<a href=#5352 id=5352 data-nosnippet>5352</a>/// one `?.` the chain is on a nullable value and stays there. What each form
+<a href=#5353 id=5353 data-nosnippet>5353</a>/// then needs is its own. An ordinary read carries the literal it stated for
+<a href=#5354 id=5354 data-nosnippet>5354</a>/// exactly this case; a sum's `when` gains the `null` arm; a sum's `as?` slot
+<a href=#5355 id=5355 data-nosnippet>5355</a>/// needs neither, a cast over a null subject being already null.
+<a href=#5356 id=5356 data-nosnippet>5356</a>///
+<a href=#5357 id=5357 data-nosnippet>5357</a>/// A wire whose value is a JVM object rides that `null` instead of a literal,
+<a href=#5358 id=5358 data-nosnippet>5358</a>/// and its Kotlin type says so. Read **after** the literal rather than before,
+<a href=#5359 id=5359 data-nosnippet>5359</a>/// because a `String` slot does both: it falls back to `""` when its own field
+<a href=#5360 id=5360 data-nosnippet>5360</a>/// is present under a closed ancestor, and it is typed `String?`.
+<a href=#5361 id=5361 data-nosnippet>5361</a></span><span class="kw">fn </span>gated(w: <span class="kw-2">&amp;</span>Wire) -&gt; Wire {
+<a href=#5362 id=5362 data-nosnippet>5362</a>    <span class="kw">let </span><span class="kw-2">mut </span>gated = w.clone();
+<a href=#5363 id=5363 data-nosnippet>5363</a>    <span class="kw">for </span>nav <span class="kw">in </span>gated
+<a href=#5364 id=5364 data-nosnippet>5364</a>        .access
+<a href=#5365 id=5365 data-nosnippet>5365</a>        .walk_mut()
+<a href=#5366 id=5366 data-nosnippet>5366</a>        .iter_mut()
+<a href=#5367 id=5367 data-nosnippet>5367</a>        .chain(gated.handle_target.iter_mut().flatten())
+<a href=#5368 id=5368 data-nosnippet>5368</a>    {
+<a href=#5369 id=5369 data-nosnippet>5369</a>        nav.gated = <span class="bool-val">true</span>;
+<a href=#5370 id=5370 data-nosnippet>5370</a>    }
+<a href=#5371 id=5371 data-nosnippet>5371</a>    <span class="kw">match </span><span class="kw-2">&amp;mut </span>gated.access {
+<a href=#5372 id=5372 data-nosnippet>5372</a>        Access::Read { tail, .. } =&gt; {
+<a href=#5373 id=5373 data-nosnippet>5373</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(absent) = gated.absent.take() {
+<a href=#5374 id=5374 data-nosnippet>5374</a>                <span class="kw">if </span>!tail.contains(<span class="string">" ?: "</span>) {
+<a href=#5375 id=5375 data-nosnippet>5375</a>                    <span class="kw-2">*</span>tail = <span class="macro">format!</span>(<span class="string">"{tail} ?: {absent}"</span>);
+<a href=#5376 id=5376 data-nosnippet>5376</a>                }
+<a href=#5377 id=5377 data-nosnippet>5377</a>            }
+<a href=#5378 id=5378 data-nosnippet>5378</a>        }
+<a href=#5379 id=5379 data-nosnippet>5379</a>        Access::Select { nullable, .. } =&gt; <span class="kw-2">*</span>nullable = <span class="bool-val">true</span>,
+<a href=#5380 id=5380 data-nosnippet>5380</a>        Access::Slot { .. } =&gt; {}
+<a href=#5381 id=5381 data-nosnippet>5381</a>    }
+<a href=#5382 id=5382 data-nosnippet>5382</a>    <span class="kw">if </span>gated.entry.is_some()
+<a href=#5383 id=5383 data-nosnippet>5383</a>        &amp;&amp; <span class="macro">matches!</span>(gated.access, Access::Read { .. })
+<a href=#5384 id=5384 data-nosnippet>5384</a>        &amp;&amp; <span class="kw">crate</span>::jni::emit::is_jobject_shaped_wire(<span class="kw-2">&amp;</span>gated.ty)
+<a href=#5385 id=5385 data-nosnippet>5385</a>        &amp;&amp; !gated.kt_ty.ends_with(<span class="string">'?'</span>)
+<a href=#5386 id=5386 data-nosnippet>5386</a>    {
+<a href=#5387 id=5387 data-nosnippet>5387</a>        gated.kt_ty.push(<span class="string">'?'</span>);
+<a href=#5388 id=5388 data-nosnippet>5388</a>    }
+<a href=#5389 id=5389 data-nosnippet>5389</a>    <span class="comment">// Anything under the gate can be absent, however the field itself was
+<a href=#5390 id=5390 data-nosnippet>5390</a>    // spelled.
+<a href=#5391 id=5391 data-nosnippet>5391</a>    </span>gated.handle_nullable = gated.handle_target.is_some() || gated.handle_nullable;
+<a href=#5392 id=5392 data-nosnippet>5392</a>    gated
+<a href=#5393 id=5393 data-nosnippet>5393</a>}
+<a href=#5394 id=5394 data-nosnippet>5394</a>
+<a href=#5395 id=5395 data-nosnippet>5395</a><span class="doccomment">/// Whether this fragment states a sum taken apart into a tag and its arms'
+<a href=#5396 id=5396 data-nosnippet>5396</a>/// slots, rather than a product taken apart into its fields.
+<a href=#5397 id=5397 data-nosnippet>5397</a></span><span class="kw">fn </span>is_choice(frag: <span class="kw-2">&amp;</span>JFrag) -&gt; bool {
+<a href=#5398 id=5398 data-nosnippet>5398</a>    frag.wires
+<a href=#5399 id=5399 data-nosnippet>5399</a>        .as_ref()
+<a href=#5400 id=5400 data-nosnippet>5400</a>        .and_then(|w| w.first())
+<a href=#5401 id=5401 data-nosnippet>5401</a>        .is_some_and(|w| <span class="macro">matches!</span>(w.access, Access::Select { .. }))
+<a href=#5402 id=5402 data-nosnippet>5402</a>}
+<a href=#5403 id=5403 data-nosnippet>5403</a>
+<a href=#5404 id=5404 data-nosnippet>5404</a><span class="attr">#[cfg(test)]
+<a href=#5405 id=5405 data-nosnippet>5405</a></span><span class="kw">mod </span>chain_tests {
+<a href=#5406 id=5406 data-nosnippet>5406</a>    <span class="kw">use </span>prebindgen_registry::generation::{ChainValue, ConversionChain, ConverterStep, Failure};
+<a href=#5407 id=5407 data-nosnippet>5407</a>
+<a href=#5408 id=5408 data-nosnippet>5408</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#5409 id=5409 data-nosnippet>5409</a>
+<a href=#5410 id=5410 data-nosnippet>5410</a>    <span class="kw">fn </span>fragment_id(name: <span class="kw-2">&amp;</span>str) -&gt; prebindgen_registry::FragmentId {
+<a href=#5411 id=5411 data-nosnippet>5411</a>        <span class="kw">let </span>source =
+<a href=#5412 id=5412 data-nosnippet>5412</a>            prebindgen_registry::flat::TypeRef::scalar(prebindgen_registry::flat::ScalarKind::I64);
+<a href=#5413 id=5413 data-nosnippet>5413</a>        <span class="kw">let </span>crossing =
+<a href=#5414 id=5414 data-nosnippet>5414</a>            prebindgen_registry::recipe::Crossing::new(source.clone(), Direction::Construct);
+<a href=#5415 id=5415 data-nosnippet>5415</a>        prebindgen_registry::FragmentId::new(
+<a href=#5416 id=5416 data-nosnippet>5416</a>            source.key(),
+<a href=#5417 id=5417 data-nosnippet>5417</a>            crossing.row(prebindgen_registry::recipe::RecipeName::new(name)),
+<a href=#5418 id=5418 data-nosnippet>5418</a>        )
+<a href=#5419 id=5419 data-nosnippet>5419</a>    }
+<a href=#5420 id=5420 data-nosnippet>5420</a>
+<a href=#5421 id=5421 data-nosnippet>5421</a>    <span class="doccomment">/// One inner chain, in the frame of the fragment that owns it.
+<a href=#5422 id=5422 data-nosnippet>5422</a>    </span><span class="kw">fn </span>inner_chain(
+<a href=#5423 id=5423 data-nosnippet>5423</a>        direction: Direction,
+<a href=#5424 id=5424 data-nosnippet>5424</a>        stage: OperationId,
+<a href=#5425 id=5425 data-nosnippet>5425</a>        key: <span class="kw-2">&amp;</span>TypeKey,
+<a href=#5426 id=5426 data-nosnippet>5426</a>    ) -&gt; ConversionChain&lt;JRepresentation&gt; {
+<a href=#5427 id=5427 data-nosnippet>5427</a>        <span class="kw">let </span>(from, into) = <span class="kw">match </span>direction {
+<a href=#5428 id=5428 data-nosnippet>5428</a>            Direction::Construct =&gt; (ChainValue::Intermediate(key.clone()), ChainValue::Source),
+<a href=#5429 id=5429 data-nosnippet>5429</a>            Direction::Deconstruct =&gt; (ChainValue::Source, ChainValue::Intermediate(key.clone())),
+<a href=#5430 id=5430 data-nosnippet>5430</a>        };
+<a href=#5431 id=5431 data-nosnippet>5431</a>        ConversionChain::Steps(<span class="macro">vec!</span>[ConverterStep::&lt;JRepresentation&gt;::new(
+<a href=#5432 id=5432 data-nosnippet>5432</a>            from,
+<a href=#5433 id=5433 data-nosnippet>5433</a>            into,
+<a href=#5434 id=5434 data-nosnippet>5434</a>            stage,
+<a href=#5435 id=5435 data-nosnippet>5435</a>            Failure::Fallible,
+<a href=#5436 id=5436 data-nosnippet>5436</a>            prebindgen_registry::generation::Cleanup::None,
+<a href=#5437 id=5437 data-nosnippet>5437</a>        )])
+<a href=#5438 id=5438 data-nosnippet>5438</a>    }
+<a href=#5439 id=5439 data-nosnippet>5439</a>
+<a href=#5440 id=5440 data-nosnippet>5440</a>    <span class="doccomment">/// Every step's destination is the next step's origin, and `Source`
+<a href=#5441 id=5441 data-nosnippet>5441</a>    /// appears once: at the END of a construct chain and the START of a
+<a href=#5442 id=5442 data-nosnippet>5442</a>    /// deconstruct one.
+<a href=#5443 id=5443 data-nosnippet>5443</a>    ///
+<a href=#5444 id=5444 data-nosnippet>5444</a>    /// The endpoints are what makes the chain a chain. `ChainValue::Source`
+<a href=#5445 id=5445 data-nosnippet>5445</a>    /// names the source value of the fragment that OWNS the chain, so an inner
+<a href=#5446 id=5446 data-nosnippet>5446</a>    /// fragment's steps mean something different once they are embedded in an
+<a href=#5447 id=5447 data-nosnippet>5447</a>    /// outer one — its source value is the outer fragment's carrier. Copying
+<a href=#5448 id=5448 data-nosnippet>5448</a>    /// them verbatim leaves `Source` in the middle and the steps either side of
+<a href=#5449 id=5449 data-nosnippet>5449</a>    /// it disconnected, which `validate_chain` rejects as a broken chain and
+<a href=#5450 id=5450 data-nosnippet>5450</a>    /// today's renderers miss because they read only the operation (#615
+<a href=#5451 id=5451 data-nosnippet>5451</a>    /// review).
+<a href=#5452 id=5452 data-nosnippet>5452</a>    </span><span class="attr">#[test]
+<a href=#5453 id=5453 data-nosnippet>5453</a>    </span><span class="kw">fn </span>an_embedded_chain_is_rebased_into_the_outer_frame() {
+<a href=#5454 id=5454 data-nosnippet>5454</a>        <span class="kw">for </span>direction <span class="kw">in </span>[Direction::Construct, Direction::Deconstruct] {
+<a href=#5455 id=5455 data-nosnippet>5455</a>            <span class="kw">let </span>inner_key = TypeKey::parse(<span class="string">"Label"</span>).expect(<span class="string">"test key"</span>);
+<a href=#5456 id=5456 data-nosnippet>5456</a>            <span class="kw">let </span>deeper_key = TypeKey::parse(<span class="string">"Deeper"</span>).expect(<span class="string">"test key"</span>);
+<a href=#5457 id=5457 data-nosnippet>5457</a>            <span class="kw">let </span>inner_stage = OperationId::stage(fragment_id(<span class="string">"inner"</span>), <span class="number">0</span>);
+<a href=#5458 id=5458 data-nosnippet>5458</a>            <span class="kw">let </span>outer_stage = OperationId::stage(fragment_id(<span class="string">"outer"</span>), <span class="number">0</span>);
+<a href=#5459 id=5459 data-nosnippet>5459</a>            <span class="comment">// The inner fragment's own chain already reaches ITS source value
+<a href=#5460 id=5460 data-nosnippet>5460</a>            // through a carrier of its own, so the rebase has to cross a chain
+<a href=#5461 id=5461 data-nosnippet>5461</a>            // that is more than one step long.
+<a href=#5462 id=5462 data-nosnippet>5462</a>            </span><span class="kw">let </span>inner = staged_chain(
+<a href=#5463 id=5463 data-nosnippet>5463</a>                direction,
+<a href=#5464 id=5464 data-nosnippet>5464</a>                inner_stage.clone(),
+<a href=#5465 id=5465 data-nosnippet>5465</a>                deeper_key,
+<a href=#5466 id=5466 data-nosnippet>5466</a>                <span class="kw-2">&amp;</span>inner_chain(
+<a href=#5467 id=5467 data-nosnippet>5467</a>                    direction,
+<a href=#5468 id=5468 data-nosnippet>5468</a>                    OperationId::stage(fragment_id(<span class="string">"deeper"</span>), <span class="number">0</span>),
+<a href=#5469 id=5469 data-nosnippet>5469</a>                    <span class="kw-2">&amp;</span>TypeKey::parse(<span class="string">"Deepest"</span>).expect(<span class="string">"test key"</span>),
+<a href=#5470 id=5470 data-nosnippet>5470</a>                ),
+<a href=#5471 id=5471 data-nosnippet>5471</a>                Failure::Fallible,
+<a href=#5472 id=5472 data-nosnippet>5472</a>            );
+<a href=#5473 id=5473 data-nosnippet>5473</a>
+<a href=#5474 id=5474 data-nosnippet>5474</a>            <span class="kw">let </span>chain = staged_chain(
+<a href=#5475 id=5475 data-nosnippet>5475</a>                direction,
+<a href=#5476 id=5476 data-nosnippet>5476</a>                outer_stage.clone(),
+<a href=#5477 id=5477 data-nosnippet>5477</a>                inner_key.clone(),
+<a href=#5478 id=5478 data-nosnippet>5478</a>                <span class="kw-2">&amp;</span>inner,
+<a href=#5479 id=5479 data-nosnippet>5479</a>                Failure::Fallible,
+<a href=#5480 id=5480 data-nosnippet>5480</a>            );
+<a href=#5481 id=5481 data-nosnippet>5481</a>            <span class="kw">let </span>steps = chain.steps();
+<a href=#5482 id=5482 data-nosnippet>5482</a>            <span class="macro">assert_eq!</span>(steps.len(), <span class="number">3</span>, <span class="string">"{direction:?}: every step is retained"</span>);
+<a href=#5483 id=5483 data-nosnippet>5483</a>
+<a href=#5484 id=5484 data-nosnippet>5484</a>            <span class="kw">for </span>pair <span class="kw">in </span>steps.windows(<span class="number">2</span>) {
+<a href=#5485 id=5485 data-nosnippet>5485</a>                <span class="macro">assert_eq!</span>(
+<a href=#5486 id=5486 data-nosnippet>5486</a>                    ConverterStep::into(<span class="kw-2">&amp;</span>pair[<span class="number">0</span>]),
+<a href=#5487 id=5487 data-nosnippet>5487</a>                    ConverterStep::from(<span class="kw-2">&amp;</span>pair[<span class="number">1</span>]),
+<a href=#5488 id=5488 data-nosnippet>5488</a>                    <span class="string">"{direction:?}: each step's destination is the next one's origin, \
+<a href=#5489 id=5489 data-nosnippet>5489</a>                     in {chain:?}"</span>,
+<a href=#5490 id=5490 data-nosnippet>5490</a>                    chain = steps
+<a href=#5491 id=5491 data-nosnippet>5491</a>                        .iter()
+<a href=#5492 id=5492 data-nosnippet>5492</a>                        .map(|step| <span class="macro">format!</span>(<span class="string">"{:?} -&gt; {:?}"</span>, step.from(), step.into()))
+<a href=#5493 id=5493 data-nosnippet>5493</a>                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#5494 id=5494 data-nosnippet>5494</a>                );
+<a href=#5495 id=5495 data-nosnippet>5495</a>            }
+<a href=#5496 id=5496 data-nosnippet>5496</a>            <span class="kw">let </span>sources = steps
+<a href=#5497 id=5497 data-nosnippet>5497</a>                .iter()
+<a href=#5498 id=5498 data-nosnippet>5498</a>                .filter(|step| {
+<a href=#5499 id=5499 data-nosnippet>5499</a>                    <span class="macro">matches!</span>(ConverterStep::from(step), ChainValue::Source)
+<a href=#5500 id=5500 data-nosnippet>5500</a>                        || <span class="macro">matches!</span>(ConverterStep::into(step), ChainValue::Source)
+<a href=#5501 id=5501 data-nosnippet>5501</a>                })
+<a href=#5502 id=5502 data-nosnippet>5502</a>                .count();
+<a href=#5503 id=5503 data-nosnippet>5503</a>            <span class="macro">assert_eq!</span>(sources, <span class="number">1</span>, <span class="string">"{direction:?}: `Source` appears once"</span>);
+<a href=#5504 id=5504 data-nosnippet>5504</a>            <span class="kw">match </span>direction {
+<a href=#5505 id=5505 data-nosnippet>5505</a>                Direction::Construct =&gt; <span class="macro">assert!</span>(
+<a href=#5506 id=5506 data-nosnippet>5506</a>                    <span class="macro">matches!</span>(ConverterStep::into(<span class="kw-2">&amp;</span>steps[<span class="number">2</span>]), ChainValue::Source),
+<a href=#5507 id=5507 data-nosnippet>5507</a>                    <span class="string">"constructing ends at the source value"
+<a href=#5508 id=5508 data-nosnippet>5508</a>                </span>),
+<a href=#5509 id=5509 data-nosnippet>5509</a>                Direction::Deconstruct =&gt; <span class="macro">assert!</span>(
+<a href=#5510 id=5510 data-nosnippet>5510</a>                    <span class="macro">matches!</span>(ConverterStep::from(<span class="kw-2">&amp;</span>steps[<span class="number">0</span>]), ChainValue::Source),
+<a href=#5511 id=5511 data-nosnippet>5511</a>                    <span class="string">"deconstructing starts at the source value"
+<a href=#5512 id=5512 data-nosnippet>5512</a>                </span>),
+<a href=#5513 id=5513 data-nosnippet>5513</a>            }
+<a href=#5514 id=5514 data-nosnippet>5514</a>        }
+<a href=#5515 id=5515 data-nosnippet>5515</a>    }
+<a href=#5516 id=5516 data-nosnippet>5516</a>
+<a href=#5517 id=5517 data-nosnippet>5517</a>    <span class="doccomment">/// A chain is stored in EXECUTION order for its own direction, which is
+<a href=#5518 id=5518 data-nosnippet>5518</a>    /// the whole reason the two stage-order readers are gone.
+<a href=#5519 id=5519 data-nosnippet>5519</a>    ///
+<a href=#5520 id=5520 data-nosnippet>5520</a>    /// The stages nest outward: an outer conversion is declared over an inner
+<a href=#5521 id=5521 data-nosnippet>5521</a>    /// fragment that already has one. Constructing runs the inner stage first
+<a href=#5522 id=5522 data-nosnippet>5522</a>    /// and ends at the source value; deconstructing starts at the source value
+<a href=#5523 id=5523 data-nosnippet>5523</a>    /// and runs the outer stage first. `pre_stages` stored one of those and
+<a href=#5524 id=5524 data-nosnippet>5524</a>    /// left each reader to reverse it, which is a rule two places could
+<a href=#5525 id=5525 data-nosnippet>5525</a>    /// disagree about.
+<a href=#5526 id=5526 data-nosnippet>5526</a>    </span><span class="attr">#[test]
+<a href=#5527 id=5527 data-nosnippet>5527</a>    </span><span class="kw">fn </span>a_chain_stores_execution_order_for_its_own_direction() {
+<a href=#5528 id=5528 data-nosnippet>5528</a>        <span class="kw">let </span>inner_key = TypeKey::parse(<span class="string">"Inner"</span>).expect(<span class="string">"test key"</span>);
+<a href=#5529 id=5529 data-nosnippet>5529</a>        <span class="kw">let </span>inner_stage = OperationId::stage(fragment_id(<span class="string">"inner"</span>), <span class="number">0</span>);
+<a href=#5530 id=5530 data-nosnippet>5530</a>        <span class="kw">let </span>inner = ConversionChain::Steps(<span class="macro">vec!</span>[ConverterStep::&lt;JRepresentation&gt;::new(
+<a href=#5531 id=5531 data-nosnippet>5531</a>            ChainValue::Source,
+<a href=#5532 id=5532 data-nosnippet>5532</a>            ChainValue::Intermediate(inner_key.clone()),
+<a href=#5533 id=5533 data-nosnippet>5533</a>            inner_stage.clone(),
+<a href=#5534 id=5534 data-nosnippet>5534</a>            Failure::Fallible,
+<a href=#5535 id=5535 data-nosnippet>5535</a>            prebindgen_registry::generation::Cleanup::None,
+<a href=#5536 id=5536 data-nosnippet>5536</a>        )]);
+<a href=#5537 id=5537 data-nosnippet>5537</a>        <span class="kw">let </span>outer_stage = OperationId::stage(fragment_id(<span class="string">"outer"</span>), <span class="number">0</span>);
+<a href=#5538 id=5538 data-nosnippet>5538</a>
+<a href=#5539 id=5539 data-nosnippet>5539</a>        <span class="kw">let </span>constructing = staged_chain(
+<a href=#5540 id=5540 data-nosnippet>5540</a>            Direction::Construct,
+<a href=#5541 id=5541 data-nosnippet>5541</a>            outer_stage.clone(),
+<a href=#5542 id=5542 data-nosnippet>5542</a>            inner_key.clone(),
+<a href=#5543 id=5543 data-nosnippet>5543</a>            <span class="kw-2">&amp;</span>inner,
+<a href=#5544 id=5544 data-nosnippet>5544</a>            Failure::Fallible,
+<a href=#5545 id=5545 data-nosnippet>5545</a>        );
+<a href=#5546 id=5546 data-nosnippet>5546</a>        <span class="macro">assert_eq!</span>(
+<a href=#5547 id=5547 data-nosnippet>5547</a>            constructing
+<a href=#5548 id=5548 data-nosnippet>5548</a>                .steps()
+<a href=#5549 id=5549 data-nosnippet>5549</a>                .iter()
+<a href=#5550 id=5550 data-nosnippet>5550</a>                .map(|step| step.operation().clone())
+<a href=#5551 id=5551 data-nosnippet>5551</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#5552 id=5552 data-nosnippet>5552</a>            <span class="macro">vec!</span>[inner_stage.clone(), outer_stage.clone()],
+<a href=#5553 id=5553 data-nosnippet>5553</a>            <span class="string">"constructing ends at the source value, so the outer stage runs last"
+<a href=#5554 id=5554 data-nosnippet>5554</a>        </span>);
+<a href=#5555 id=5555 data-nosnippet>5555</a>        <span class="macro">assert!</span>(
+<a href=#5556 id=5556 data-nosnippet>5556</a>            <span class="macro">matches!</span>(
+<a href=#5557 id=5557 data-nosnippet>5557</a>                ConverterStep::into(<span class="kw-2">&amp;</span>constructing.steps()[<span class="number">1</span>]),
+<a href=#5558 id=5558 data-nosnippet>5558</a>                ChainValue::Source
+<a href=#5559 id=5559 data-nosnippet>5559</a>            ),
+<a href=#5560 id=5560 data-nosnippet>5560</a>            <span class="string">"and the last step's destination IS the source value"
+<a href=#5561 id=5561 data-nosnippet>5561</a>        </span>);
+<a href=#5562 id=5562 data-nosnippet>5562</a>
+<a href=#5563 id=5563 data-nosnippet>5563</a>        <span class="kw">let </span>deconstructing = staged_chain(
+<a href=#5564 id=5564 data-nosnippet>5564</a>            Direction::Deconstruct,
+<a href=#5565 id=5565 data-nosnippet>5565</a>            outer_stage.clone(),
+<a href=#5566 id=5566 data-nosnippet>5566</a>            inner_key,
+<a href=#5567 id=5567 data-nosnippet>5567</a>            <span class="kw-2">&amp;</span>inner,
+<a href=#5568 id=5568 data-nosnippet>5568</a>            Failure::Fallible,
+<a href=#5569 id=5569 data-nosnippet>5569</a>        );
+<a href=#5570 id=5570 data-nosnippet>5570</a>        <span class="macro">assert_eq!</span>(
+<a href=#5571 id=5571 data-nosnippet>5571</a>            deconstructing
+<a href=#5572 id=5572 data-nosnippet>5572</a>                .steps()
+<a href=#5573 id=5573 data-nosnippet>5573</a>                .iter()
+<a href=#5574 id=5574 data-nosnippet>5574</a>                .map(|step| step.operation().clone())
+<a href=#5575 id=5575 data-nosnippet>5575</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#5576 id=5576 data-nosnippet>5576</a>            <span class="macro">vec!</span>[outer_stage, inner_stage],
+<a href=#5577 id=5577 data-nosnippet>5577</a>            <span class="string">"deconstructing starts at the source value, so the outer stage runs first"
+<a href=#5578 id=5578 data-nosnippet>5578</a>        </span>);
+<a href=#5579 id=5579 data-nosnippet>5579</a>        <span class="macro">assert!</span>(
+<a href=#5580 id=5580 data-nosnippet>5580</a>            <span class="macro">matches!</span>(
+<a href=#5581 id=5581 data-nosnippet>5581</a>                ConverterStep::from(<span class="kw-2">&amp;</span>deconstructing.steps()[<span class="number">0</span>]),
+<a href=#5582 id=5582 data-nosnippet>5582</a>                ChainValue::Source
+<a href=#5583 id=5583 data-nosnippet>5583</a>            ),
+<a href=#5584 id=5584 data-nosnippet>5584</a>            <span class="string">"and the first step's origin IS the source value"
+<a href=#5585 id=5585 data-nosnippet>5585</a>        </span>);
+<a href=#5586 id=5586 data-nosnippet>5586</a>    }
+<a href=#5587 id=5587 data-nosnippet>5587</a>}
 </code></pre></div></section></main></body></html>

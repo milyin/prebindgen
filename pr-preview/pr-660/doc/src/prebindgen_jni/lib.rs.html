@@ -81,19 +81,20 @@
 <a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub mod </span>jni;
 <a href=#82 id=82 data-nosnippet>82</a><span class="attr">#[cfg(test)]
 <a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">mod </span>test_util;
-<a href=#84 id=84 data-nosnippet>84</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>util;
-<a href=#85 id=85 data-nosnippet>85</a>
-<a href=#86 id=86 data-nosnippet>86</a><span class="kw">pub use </span>jni::{
-<a href=#87 id=87 data-nosnippet>87</a>    box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
-<a href=#88 id=88 data-nosnippet>88</a>    decode_byte_array, decode_string, encode_byte_array, encode_string, matching, null_byte_array,
-<a href=#89 id=89 data-nosnippet>89</a>    null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl, ConvertSourceDecl,
-<a href=#90 id=90 data-nosnippet>90</a>    DataClassDecl, Declarations, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
-<a href=#91 id=91 data-nosnippet>91</a>    FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, JniGenBuilder, PackageDecl,
-<a href=#92 id=92 data-nosnippet>92</a>    PtrClassDecl, SealedClassDecl, VariantDecl,
-<a href=#93 id=93 data-nosnippet>93</a>};
-<a href=#94 id=94 data-nosnippet>94</a><span class="comment">// Kotlin emission types now live in the standalone `kotlin-codegen` crate;
-<a href=#95 id=95 data-nosnippet>95</a>// re-exported here so the public `lang::` surface is unchanged (`KotlinFile`
-<a href=#96 id=96 data-nosnippet>96</a>// aliases the model's `KtFile`).
-<a href=#97 id=97 data-nosnippet>97</a></span><span class="kw">pub use </span>kotlin_codegen::KtFile <span class="kw">as </span>KotlinFile;
-<a href=#98 id=98 data-nosnippet>98</a><span class="kw">pub use </span>kotlin_codegen::WriteKotlinError;
+<a href=#84 id=84 data-nosnippet>84</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>unfold;
+<a href=#85 id=85 data-nosnippet>85</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>util;
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a><span class="kw">pub use </span>jni::{
+<a href=#88 id=88 data-nosnippet>88</a>    box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
+<a href=#89 id=89 data-nosnippet>89</a>    decode_byte_array, decode_string, encode_byte_array, encode_string, matching, null_byte_array,
+<a href=#90 id=90 data-nosnippet>90</a>    null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl, ConvertSourceDecl,
+<a href=#91 id=91 data-nosnippet>91</a>    DataClassDecl, Declarations, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+<a href=#92 id=92 data-nosnippet>92</a>    FieldsDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, JniGenBuilder, PackageDecl,
+<a href=#93 id=93 data-nosnippet>93</a>    PtrClassDecl, SealedClassDecl, VariantDecl,
+<a href=#94 id=94 data-nosnippet>94</a>};
+<a href=#95 id=95 data-nosnippet>95</a><span class="comment">// Kotlin emission types now live in the standalone `kotlin-codegen` crate;
+<a href=#96 id=96 data-nosnippet>96</a>// re-exported here so the public `lang::` surface is unchanged (`KotlinFile`
+<a href=#97 id=97 data-nosnippet>97</a>// aliases the model's `KtFile`).
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="kw">pub use </span>kotlin_codegen::KtFile <span class="kw">as </span>KotlinFile;
+<a href=#99 id=99 data-nosnippet>99</a><span class="kw">pub use </span>kotlin_codegen::WriteKotlinError;
 </code></pre></div></section></main></body></html>

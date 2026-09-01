@@ -1197,12 +1197,12 @@
 <a href=#1197 id=1197 data-nosnippet>1197</a>        /// single-leaf appender for a whole-element leaf fold. The wrapper
 <a href=#1198 id=1198 data-nosnippet>1198</a>        /// references the singleton instead of taking a caller `build`/`fold`.
 <a href=#1199 id=1199 data-nosnippet>1199</a>        </span><span class="kw">enum </span>FixedSingleton {
-<a href=#1200 id=1200 data-nosnippet>1200</a>            StructBuilder(std::rc::Rc&lt;prebindgen_registry::unfold::DeconSpec&gt;),
-<a href=#1201 id=1201 data-nosnippet>1201</a>            StructFolder(std::rc::Rc&lt;prebindgen_registry::unfold::DeconSpec&gt;),
+<a href=#1200 id=1200 data-nosnippet>1200</a>            StructBuilder(std::rc::Rc&lt;<span class="kw">crate</span>::unfold::DeconSpec&gt;),
+<a href=#1201 id=1201 data-nosnippet>1201</a>            StructFolder(std::rc::Rc&lt;<span class="kw">crate</span>::unfold::DeconSpec&gt;),
 <a href=#1202 id=1202 data-nosnippet>1202</a>            <span class="doccomment">/// A decomposed **sum**: the reassembly is a `when` over the tag
 <a href=#1203 id=1203 data-nosnippet>1203</a>            /// picking the live group, not a `fromParts` over a fixed product.
-<a href=#1204 id=1204 data-nosnippet>1204</a>            </span>SumBuilder(std::rc::Rc&lt;prebindgen_registry::unfold::DeconSpec&gt;),
-<a href=#1205 id=1205 data-nosnippet>1205</a>            SumFolder(std::rc::Rc&lt;prebindgen_registry::unfold::DeconSpec&gt;),
+<a href=#1204 id=1204 data-nosnippet>1204</a>            </span>SumBuilder(std::rc::Rc&lt;<span class="kw">crate</span>::unfold::DeconSpec&gt;),
+<a href=#1205 id=1205 data-nosnippet>1205</a>            SumFolder(std::rc::Rc&lt;<span class="kw">crate</span>::unfold::DeconSpec&gt;),
 <a href=#1206 id=1206 data-nosnippet>1206</a>            LeafFolder,
 <a href=#1207 id=1207 data-nosnippet>1207</a>        }
 <a href=#1208 id=1208 data-nosnippet>1208</a>        <span class="comment">// The interface allocations and their use-site roles are already in
@@ -1406,7 +1406,7 @@
 <a href=#1406 id=1406 data-nosnippet>1406</a>    </span><span class="kw">fn </span>value_struct_builder_singleton(
 <a href=#1407 id=1407 data-nosnippet>1407</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1408 id=1408 data-nosnippet>1408</a>        spec: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::IfaceSpec,
-<a href=#1409 id=1409 data-nosnippet>1409</a>        decon: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::DeconSpec,
+<a href=#1409 id=1409 data-nosnippet>1409</a>        decon: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::DeconSpec,
 <a href=#1410 id=1410 data-nosnippet>1410</a>    ) -&gt; KtDecl {
 <a href=#1411 id=1411 data-nosnippet>1411</a>        <span class="kw">let </span>source = <span class="kw-2">&amp;</span>decon.source;
 <a href=#1412 id=1412 data-nosnippet>1412</a>        <span class="kw">let </span>class_fqn = <span class="self">self
@@ -1452,7 +1452,7 @@
 <a href=#1452 id=1452 data-nosnippet>1452</a>    </span><span class="kw">fn </span>value_struct_folder_singleton(
 <a href=#1453 id=1453 data-nosnippet>1453</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1454 id=1454 data-nosnippet>1454</a>        spec: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::IfaceSpec,
-<a href=#1455 id=1455 data-nosnippet>1455</a>        decon: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::DeconSpec,
+<a href=#1455 id=1455 data-nosnippet>1455</a>        decon: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::DeconSpec,
 <a href=#1456 id=1456 data-nosnippet>1456</a>    ) -&gt; KtDecl {
 <a href=#1457 id=1457 data-nosnippet>1457</a>        <span class="kw">let </span>source = <span class="kw-2">&amp;</span>decon.source;
 <a href=#1458 id=1458 data-nosnippet>1458</a>        <span class="kw">let </span>class_fqn = <span class="self">self
@@ -1512,7 +1512,7 @@
 <a href=#1512 id=1512 data-nosnippet>1512</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1513 id=1513 data-nosnippet>1513</a>        flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
 <a href=#1514 id=1514 data-nosnippet>1514</a>        spec: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::IfaceSpec,
-<a href=#1515 id=1515 data-nosnippet>1515</a>        plan: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::DeconSpec,
+<a href=#1515 id=1515 data-nosnippet>1515</a>        plan: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::DeconSpec,
 <a href=#1516 id=1516 data-nosnippet>1516</a>    ) -&gt; KtDecl {
 <a href=#1517 id=1517 data-nosnippet>1517</a>        <span class="kw">let </span><span class="kw-2">mut </span>imports: BTreeSet&lt;String&gt; = BTreeSet::new();
 <a href=#1518 id=1518 data-nosnippet>1518</a>        <span class="kw">let </span>names: Vec&lt;String&gt; = spec.params.iter().map(|p| p.name.clone()).collect();
@@ -1554,7 +1554,7 @@
 <a href=#1554 id=1554 data-nosnippet>1554</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1555 id=1555 data-nosnippet>1555</a>        flat: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Flat,
 <a href=#1556 id=1556 data-nosnippet>1556</a>        spec: <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::IfaceSpec,
-<a href=#1557 id=1557 data-nosnippet>1557</a>        plan: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::DeconSpec,
+<a href=#1557 id=1557 data-nosnippet>1557</a>        plan: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::DeconSpec,
 <a href=#1558 id=1558 data-nosnippet>1558</a>    ) -&gt; KtDecl {
 <a href=#1559 id=1559 data-nosnippet>1559</a>        <span class="kw">let </span><span class="kw-2">mut </span>imports: BTreeSet&lt;String&gt; = BTreeSet::new();
 <a href=#1560 id=1560 data-nosnippet>1560</a>        <span class="kw">let </span>names: Vec&lt;String&gt; = spec.params.iter().map(|p| p.name.clone()).collect();

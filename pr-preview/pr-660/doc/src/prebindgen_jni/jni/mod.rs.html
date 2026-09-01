@@ -480,8 +480,8 @@
 <a href=#480 id=480 data-nosnippet>480</a><span class="doccomment">/// How a reach renders: its field steps, joined — the accessor call every leaf
 <a href=#481 id=481 data-nosnippet>481</a>/// hangs off is the site's, not the value's, so it is dropped.
 <a href=#482 id=482 data-nosnippet>482</a></span><span class="attr">#[cfg(test)]
-<a href=#483 id=483 data-nosnippet>483</a></span><span class="kw">fn </span>reach_of(path: <span class="kw-2">&amp;</span>[prebindgen_registry::unfold::PathStep]) -&gt; String {
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">use </span>prebindgen_registry::unfold::PathStep;
+<a href=#483 id=483 data-nosnippet>483</a></span><span class="kw">fn </span>reach_of(path: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::unfold::PathStep]) -&gt; String {
+<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::PathStep;
 <a href=#485 id=485 data-nosnippet>485</a>    path.iter()
 <a href=#486 id=486 data-nosnippet>486</a>        .filter_map(|step| <span class="kw">match </span>step {
 <a href=#487 id=487 data-nosnippet>487</a>            PathStep::Field { ident, .. } =&gt; <span class="prelude-val">Some</span>(ident.to_string()),
@@ -495,8 +495,8 @@
 <a href=#495 id=495 data-nosnippet>495</a>/// the accessor call every leaf hangs off is the site's, not the value's, so it
 <a href=#496 id=496 data-nosnippet>496</a>/// is dropped to line the two up.
 <a href=#497 id=497 data-nosnippet>497</a></span><span class="attr">#[cfg(test)]
-<a href=#498 id=498 data-nosnippet>498</a></span><span class="kw">fn </span>leaf_reach(leaf: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::UnfoldLeaf) -&gt; String {
-<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">use </span>prebindgen_registry::unfold::LeafSource;
+<a href=#498 id=498 data-nosnippet>498</a></span><span class="kw">fn </span>leaf_reach(leaf: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldLeaf) -&gt; String {
+<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::LeafSource;
 <a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>leaf.source {
 <a href=#501 id=501 data-nosnippet>501</a>        LeafSource::SumTag =&gt; <span class="string">"tag"</span>.to_string(),
 <a href=#502 id=502 data-nosnippet>502</a>        LeafSource::Presence =&gt; <span class="macro">format!</span>(<span class="string">"present({})"</span>, reach_of(<span class="kw-2">&amp;</span>leaf.path)),
@@ -1388,7 +1388,7 @@
 <a href=#1388 id=1388 data-nosnippet>1388</a>    /// callback argument comes apart. The registry holds none of this: it is
 <a href=#1389 id=1389 data-nosnippet>1389</a>    /// told only which readings the decompositions need on the output side, and
 <a href=#1390 id=1390 data-nosnippet>1390</a>    /// which leaves a callback argument's delivery depends on.
-<a href=#1391 id=1391 data-nosnippet>1391</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) unfolded: std::cell::OnceCell&lt;prebindgen_registry::unfold::Unfolded&gt;,
+<a href=#1391 id=1391 data-nosnippet>1391</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) unfolded: std::cell::OnceCell&lt;<span class="kw">crate</span>::unfold::Unfolded&gt;,
 <a href=#1392 id=1392 data-nosnippet>1392</a>
 <a href=#1393 id=1393 data-nosnippet>1393</a>    <span class="doccomment">/// Present only after resolution has finished. All artifact writers reach
 <a href=#1394 id=1394 data-nosnippet>1394</a>    /// derived JNI decisions through this one immutable store; the mutable

@@ -23,14 +23,14 @@
 <a href=#23 id=23 data-nosnippet>23</a>            )<span class="question-mark">?</span>;
 <a href=#24 id=24 data-nosnippet>24</a>        }
 <a href=#25 id=25 data-nosnippet>25</a>        <span class="comment">// What the adapter's decompositions asked the output tables for,
-<a href=#26 id=26 data-nosnippet>26</a>        // replayed in the order it asked. Building the plans reads the model
-<a href=#27 id=27 data-nosnippet>27</a>        // alone (see `unfold::Unfolding`), so this is every effect they have on
-<a href=#28 id=28 data-nosnippet>28</a>        // a registry — after `expand::apply`, which is where they were made.
+<a href=#26 id=26 data-nosnippet>26</a>        // replayed in the order it asked. Planning how a value comes apart reads
+<a href=#27 id=27 data-nosnippet>27</a>        // the model alone, so this is every effect those plans have on a
+<a href=#28 id=28 data-nosnippet>28</a>        // registry — after `expand::apply`, which is where the asks were made.
 <a href=#29 id=29 data-nosnippet>29</a>        </span><span class="kw">for </span>requirement <span class="kw">in </span><span class="kw-2">&amp;</span>d.requirements {
 <a href=#30 id=30 data-nosnippet>30</a>            <span class="kw">match </span>requirement {
-<a href=#31 id=31 data-nosnippet>31</a>                <span class="kw">crate</span>::unfold::Requirement::Output(reading) =&gt; <span class="self">self</span>.require_output(reading),
-<a href=#32 id=32 data-nosnippet>32</a>                <span class="kw">crate</span>::unfold::Requirement::Reference(reading) =&gt; <span class="self">self</span>.reference_output(reading),
-<a href=#33 id=33 data-nosnippet>33</a>                <span class="kw">crate</span>::unfold::Requirement::Unrequire(reading) =&gt; <span class="self">self</span>.unrequire_output(reading),
+<a href=#31 id=31 data-nosnippet>31</a>                Requirement::Output(reading) =&gt; <span class="self">self</span>.require_output(reading),
+<a href=#32 id=32 data-nosnippet>32</a>                Requirement::Reference(reading) =&gt; <span class="self">self</span>.reference_output(reading),
+<a href=#33 id=33 data-nosnippet>33</a>                Requirement::Unrequire(reading) =&gt; <span class="self">self</span>.unrequire_output(reading),
 <a href=#34 id=34 data-nosnippet>34</a>            }
 <a href=#35 id=35 data-nosnippet>35</a>        }
 <a href=#36 id=36 data-nosnippet>36</a>        <span class="comment">// Every crossing these types make is now covered by a plan, so the

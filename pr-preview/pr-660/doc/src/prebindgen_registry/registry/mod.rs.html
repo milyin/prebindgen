@@ -323,49 +323,69 @@
 <a href=#323 id=323 data-nosnippet>323</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) edges: Vec&lt;(Crossing, Crossing)&gt;,
 <a href=#324 id=324 data-nosnippet>324</a>}
 <a href=#325 id=325 data-nosnippet>325</a>
-<a href=#326 id=326 data-nosnippet>326</a><span class="doccomment">/// How a binding's composites cross **in pieces** instead of whole.
+<a href=#326 id=326 data-nosnippet>326</a><span class="doccomment">/// One output-side registration a decomposition asks the registry for.
 <a href=#327 id=327 data-nosnippet>327</a>///
-<a href=#328 id=328 data-nosnippet>328</a>/// One value, pushed once through `RegistryBuilder::decompose`, in place of the
-<a href=#329 id=329 data-nosnippet>329</a>/// separate hooks the registry used to call back for. Everything here reads the
-<a href=#330 id=330 data-nosnippet>330</a>/// model alone, which is what makes stating it up front possible.
-<a href=#331 id=331 data-nosnippet>331</a>///
-<a href=#332 id=332 data-nosnippet>332</a>/// The output side is stated as its **effects** rather than as its
-<a href=#333 id=333 data-nosnippet>333</a>/// declarations: an adapter applies its own deconstructor declarations with
-<a href=#334 id=334 data-nosnippet>334</a>/// [`unfold::Unfolding`](crate::unfold::Unfolding), keeps the plans it gets,
-<a href=#335 id=335 data-nosnippet>335</a>/// and hands over the two things a registry needs from them — the output
-<a href=#336 id=336 data-nosnippet>336</a>/// registrations to replay, and the leaf readings a callback argument's
-<a href=#337 id=337 data-nosnippet>337</a>/// delivery depends on. The parameter side is still stated as declarations,
-<a href=#338 id=338 data-nosnippet>338</a>/// because `expand::apply` still mutates the registry directly.
-<a href=#339 id=339 data-nosnippet>339</a></span><span class="attr">#[derive(Default)]
-<a href=#340 id=340 data-nosnippet>340</a></span><span class="kw">pub struct </span>Decompositions {
-<a href=#341 id=341 data-nosnippet>341</a>    <span class="doccomment">/// Parameter-side: values built on the Rust side from ingredients that
-<a href=#342 id=342 data-nosnippet>342</a>    /// cross separately.
-<a href=#343 id=343 data-nosnippet>343</a>    </span><span class="kw">pub </span>expansions: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::expand::Expansions&gt;,
-<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// Output-side registrations the adapter's decompositions asked for, in the
-<a href=#345 id=345 data-nosnippet>345</a>    /// order they were asked — see
-<a href=#346 id=346 data-nosnippet>346</a>    /// [`Unfolding::requirements`](crate::unfold::Unfolding::requirements).
-<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="kw">pub </span>requirements: Vec&lt;<span class="kw">crate</span>::unfold::Requirement&gt;,
-<a href=#348 id=348 data-nosnippet>348</a>    <span class="doccomment">/// Per callback-argument type, the readings its decomposition delivers —
-<a href=#349 id=349 data-nosnippet>349</a>    /// see
-<a href=#350 id=350 data-nosnippet>350</a>    /// [`Unfolding::callback_arg_leaves`](crate::unfold::Unfolding::callback_arg_leaves).
-<a href=#351 id=351 data-nosnippet>351</a>    ///
-<a href=#352 id=352 data-nosnippet>352</a>    /// The ordering fact no syntax shows: each leaf's own conversion has to
-<a href=#353 id=353 data-nosnippet>353</a>    /// exist before the callback's can be built, and a leaf is named by a plan
-<a href=#354 id=354 data-nosnippet>354</a>    /// rather than by the argument's type.
-<a href=#355 id=355 data-nosnippet>355</a>    </span><span class="kw">pub </span>callback_arg_leaves: HashMap&lt;TypeKey, Vec&lt;prebindgen_flat::flat::TypeRef&gt;&gt;,
-<a href=#356 id=356 data-nosnippet>356</a>    <span class="doccomment">/// The whole-value crossings these decompositions make unnecessary.
-<a href=#357 id=357 data-nosnippet>357</a>    ///
-<a href=#358 id=358 data-nosnippet>358</a>    /// Stated **with** the decompositions rather than beside them: a type
-<a href=#359 id=359 data-nosnippet>359</a>    /// crosses only in pieces *because* something decomposes it, and once the
-<a href=#360 id=360 data-nosnippet>360</a>    /// plans are applied its own direct converter is genuinely not needed — for
-<a href=#361 id=361 data-nosnippet>361</a>    /// a type with no destination representation, not even resolvable.
-<a href=#362 id=362 data-nosnippet>362</a>    ///
-<a href=#363 id=363 data-nosnippet>363</a>    /// Carries each declaration's own spelling for the same reason the declared
-<a href=#364 id=364 data-nosnippet>364</a>    /// types do — these are build-script-authored types the scan diagnoses
-<a href=#365 id=365 data-nosnippet>365</a>    /// before anything has classified them.
-<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">pub </span>replaces: HashMap&lt;TypeKey, Origin&lt;syn::Type&gt;&gt;,
-<a href=#367 id=367 data-nosnippet>367</a>}
-<a href=#368 id=368 data-nosnippet>368</a>
-<a href=#369 id=369 data-nosnippet>369</a><span class="attr">#[cfg(test)]
-<a href=#370 id=370 data-nosnippet>370</a></span><span class="kw">mod </span>tests;
+<a href=#328 id=328 data-nosnippet>328</a>/// An adapter that plans how a value comes apart reads the model alone; the one
+<a href=#329 id=329 data-nosnippet>329</a>/// thing it needs the registry for is to say which readings must cross on the
+<a href=#330 id=330 data-nosnippet>330</a>/// output side. It states those asks as a list, in the order it made them, and
+<a href=#331 id=331 data-nosnippet>331</a>/// the registry replays them onto its type tables in one place — so the
+<a href=#332 id=332 data-nosnippet>332</a>/// planning can happen before a registry exists, and nothing but the replay
+<a href=#333 id=333 data-nosnippet>333</a>/// mutates it.
+<a href=#334 id=334 data-nosnippet>334</a>///
+<a href=#335 id=335 data-nosnippet>335</a>/// The order is part of the meaning: [`Self::Unrequire`] drops a demand an
+<a href=#336 id=336 data-nosnippet>336</a>/// earlier [`Self::Output`] made.
+<a href=#337 id=337 data-nosnippet>337</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#338 id=338 data-nosnippet>338</a></span><span class="kw">pub enum </span>Requirement {
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="doccomment">/// This reading must cross on the output side, and a converter for it must
+<a href=#340 id=340 data-nosnippet>340</a>    /// resolve.
+<a href=#341 id=341 data-nosnippet>341</a>    </span>Output(prebindgen_flat::flat::TypeRef),
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// This reading enters the output table without demanding a converter — a
+<a href=#343 id=343 data-nosnippet>343</a>    /// type a plan *names* rather than one that crosses.
+<a href=#344 id=344 data-nosnippet>344</a>    </span>Reference(prebindgen_flat::flat::TypeRef),
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="doccomment">/// Drop an earlier demand that this reading's converter must resolve. The
+<a href=#346 id=346 data-nosnippet>346</a>    /// table entry stays, so a converter is still produced if one resolves.
+<a href=#347 id=347 data-nosnippet>347</a>    </span>Unrequire(prebindgen_flat::flat::TypeRef),
+<a href=#348 id=348 data-nosnippet>348</a>}
+<a href=#349 id=349 data-nosnippet>349</a>
+<a href=#350 id=350 data-nosnippet>350</a><span class="doccomment">/// How a binding's composites cross **in pieces** instead of whole.
+<a href=#351 id=351 data-nosnippet>351</a>///
+<a href=#352 id=352 data-nosnippet>352</a>/// One value, pushed once through `RegistryBuilder::decompose`, in place of the
+<a href=#353 id=353 data-nosnippet>353</a>/// separate hooks the registry used to call back for. Everything here reads the
+<a href=#354 id=354 data-nosnippet>354</a>/// model alone, which is what makes stating it up front possible.
+<a href=#355 id=355 data-nosnippet>355</a>///
+<a href=#356 id=356 data-nosnippet>356</a>/// The output side is stated as its **effects** rather than as its
+<a href=#357 id=357 data-nosnippet>357</a>/// declarations: an adapter plans how its values come apart, keeps those plans,
+<a href=#358 id=358 data-nosnippet>358</a>/// and hands over the two things a registry needs from them — the output
+<a href=#359 id=359 data-nosnippet>359</a>/// registrations to replay, and the leaf readings a callback argument's
+<a href=#360 id=360 data-nosnippet>360</a>/// delivery depends on. The parameter side is still stated as declarations,
+<a href=#361 id=361 data-nosnippet>361</a>/// because `expand::apply` still mutates the registry directly.
+<a href=#362 id=362 data-nosnippet>362</a></span><span class="attr">#[derive(Default)]
+<a href=#363 id=363 data-nosnippet>363</a></span><span class="kw">pub struct </span>Decompositions {
+<a href=#364 id=364 data-nosnippet>364</a>    <span class="doccomment">/// Parameter-side: values built on the Rust side from ingredients that
+<a href=#365 id=365 data-nosnippet>365</a>    /// cross separately.
+<a href=#366 id=366 data-nosnippet>366</a>    </span><span class="kw">pub </span>expansions: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::expand::Expansions&gt;,
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="doccomment">/// Output-side registrations the adapter's decompositions asked for, in the
+<a href=#368 id=368 data-nosnippet>368</a>    /// order they were asked.
+<a href=#369 id=369 data-nosnippet>369</a>    </span><span class="kw">pub </span>requirements: Vec&lt;Requirement&gt;,
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="doccomment">/// Per callback-argument type, the readings its decomposition delivers.
+<a href=#371 id=371 data-nosnippet>371</a>    ///
+<a href=#372 id=372 data-nosnippet>372</a>    /// The ordering fact no syntax shows: each leaf's own conversion has to
+<a href=#373 id=373 data-nosnippet>373</a>    /// exist before the callback's can be built, and a leaf is named by a plan
+<a href=#374 id=374 data-nosnippet>374</a>    /// rather than by the argument's type.
+<a href=#375 id=375 data-nosnippet>375</a>    </span><span class="kw">pub </span>callback_arg_leaves: HashMap&lt;TypeKey, Vec&lt;prebindgen_flat::flat::TypeRef&gt;&gt;,
+<a href=#376 id=376 data-nosnippet>376</a>    <span class="doccomment">/// The whole-value crossings these decompositions make unnecessary.
+<a href=#377 id=377 data-nosnippet>377</a>    ///
+<a href=#378 id=378 data-nosnippet>378</a>    /// Stated **with** the decompositions rather than beside them: a type
+<a href=#379 id=379 data-nosnippet>379</a>    /// crosses only in pieces *because* something decomposes it, and once the
+<a href=#380 id=380 data-nosnippet>380</a>    /// plans are applied its own direct converter is genuinely not needed — for
+<a href=#381 id=381 data-nosnippet>381</a>    /// a type with no destination representation, not even resolvable.
+<a href=#382 id=382 data-nosnippet>382</a>    ///
+<a href=#383 id=383 data-nosnippet>383</a>    /// Carries each declaration's own spelling for the same reason the declared
+<a href=#384 id=384 data-nosnippet>384</a>    /// types do — these are build-script-authored types the scan diagnoses
+<a href=#385 id=385 data-nosnippet>385</a>    /// before anything has classified them.
+<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">pub </span>replaces: HashMap&lt;TypeKey, Origin&lt;syn::Type&gt;&gt;,
+<a href=#387 id=387 data-nosnippet>387</a>}
+<a href=#388 id=388 data-nosnippet>388</a>
+<a href=#389 id=389 data-nosnippet>389</a><span class="attr">#[cfg(test)]
+<a href=#390 id=390 data-nosnippet>390</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>

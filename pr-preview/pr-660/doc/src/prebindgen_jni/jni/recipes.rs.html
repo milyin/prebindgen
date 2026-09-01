@@ -141,7 +141,7 @@
 <a href=#141 id=141 data-nosnippet>141</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
 <a href=#142 id=142 data-nosnippet>142</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#143 id=143 data-nosnippet>143</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(syn::Ident, Vec&lt;Reach&gt;)&gt; {
-<a href=#144 id=144 data-nosnippet>144</a>        <span class="kw">use </span>prebindgen_registry::unfold::{FieldDecon, FieldRecord};
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::{FieldDecon, FieldRecord};
 <a href=#145 id=145 data-nosnippet>145</a>        <span class="kw">let </span>decl = <span class="self">self
 <a href=#146 id=146 data-nosnippet>146</a>            </span>.return_expand_decls
 <a href=#147 id=147 data-nosnippet>147</a>            .iter()
@@ -220,7 +220,7 @@
 <a href=#220 id=220 data-nosnippet>220</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
 <a href=#221 id=221 data-nosnippet>221</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#222 id=222 data-nosnippet>222</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::collections::HashMap&lt;String, String&gt;&gt; {
-<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">use </span>prebindgen_registry::unfold::FieldDecon;
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::FieldDecon;
 <a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">let </span>decl = <span class="self">self
 <a href=#225 id=225 data-nosnippet>225</a>            </span>.return_expand_decls
 <a href=#226 id=226 data-nosnippet>226</a>            .iter()

@@ -11,7 +11,7 @@
 <a href=#11 id=11 data-nosnippet>11</a>//! **The comparison is shared here; being *asked* is enforced elsewhere.** A
 <a href=#12 id=12 data-nosnippet>12</a>//! helper alone would not have prevented that defect — a new declarator could
 <a href=#13 id=13 data-nosnippet>13</a>//! simply not call it. What prevents it is that the signature lookups
-<a href=#14 id=14 data-nosnippet>14</a>//! (`expand::ctor_signature` and `unfold::accessor_signature`) take the
+<a href=#14 id=14 data-nosnippet>14</a>//! (`expand::ctor_signature`, and an adapter's own accessor lookup) take the
 <a href=#15 id=15 data-nosnippet>15</a>//! expected target as a **parameter** and run this
 <a href=#16 id=16 data-nosnippet>16</a>//! check themselves. There is no way to obtain a declared function's signature
 <a href=#17 id=17 data-nosnippet>17</a>//! without naming the type it must match, so the obligation is discharged by
@@ -26,18 +26,18 @@
 <a href=#26 id=26 data-nosnippet>26</a>/// directions say it differently — a constructor *produces*, an accessor
 <a href=#27 id=27 data-nosnippet>27</a>/// *takes*. Those messages are the binding author's diagnostics and belong with
 <a href=#28 id=28 data-nosnippet>28</a>/// their own error enum, not here.
-<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>TargetMismatch {
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub struct </span>TargetMismatch {
 <a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// The declared function's ident.
-<a href=#31 id=31 data-nosnippet>31</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) func: String,
+<a href=#31 id=31 data-nosnippet>31</a>    </span><span class="kw">pub </span>func: String,
 <a href=#32 id=32 data-nosnippet>32</a>    <span class="doccomment">/// The type it is actually about.
-<a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) actual: String,
+<a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">pub </span>actual: String,
 <a href=#34 id=34 data-nosnippet>34</a>    <span class="doccomment">/// The type it was declared for.
-<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) expected: String,
+<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub </span>expected: String,
 <a href=#36 id=36 data-nosnippet>36</a>}
 <a href=#37 id=37 data-nosnippet>37</a>
 <a href=#38 id=38 data-nosnippet>38</a><span class="doccomment">/// The comparison itself: two [`TypeKey`]s, keyed so that spelling differences
 <a href=#39 id=39 data-nosnippet>39</a>/// which do not change identity cannot make a correct declaration fail.
-<a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>check_declared_target(
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">pub fn </span>check_declared_target(
 <a href=#41 id=41 data-nosnippet>41</a>    func: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#42 id=42 data-nosnippet>42</a>    actual: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#43 id=43 data-nosnippet>43</a>    expected: <span class="kw-2">&amp;</span>TypeKey,
