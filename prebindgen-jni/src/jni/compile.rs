@@ -1155,27 +1155,6 @@ impl JFrag {
     /// edge the canonical plan validates: a fallible fragment used by a site
     /// with no route is `MissingFailureRoute`, and freezing `None` made every
     /// JNI site that (#622 review).
-    pub(crate) fn freeze_site(
-        &self,
-        bound: &prebindgen_registry::recipe::Bound,
-        leaves: JAbiLeaves,
-    ) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
-        use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
-        // The leaves come from the plan that produced them — this does not
-        // derive them a second time, which is the whole point: a carrier
-        // derived beside the thing it carries is another parallel answer.
-        let slots = leaves.len();
-        SitePlan::new(
-            SiteId::new(bound.site.clone()),
-            bound.clone(),
-            self.id.clone(),
-            self.yields.clone(),
-            AbiLayout::new(slots, leaves),
-            Some(()),
-            prebindgen_registry::generation::Cleanup::None,
-        )
-    }
-
     /// Every private Rust artifact carried by this registry fragment.
     ///
     /// A custom conversion may add semantic Rust-side stages beside its
@@ -1214,13 +1193,7 @@ impl JFrag {
         direction: Direction,
         mode: Mode,
     ) -> crate::jni::chain::JPipeline {
-        JCompile::<Registry>::planned_pipeline(
-            direction,
-            mode,
-            &self.artifact(),
-            &self.chain,
-            self.conv.converter_id(),
-        )
+        pipeline_from(&self.artifact(), &self.chain, direction, mode)
     }
 
     pub(crate) fn composed_chain(&self) -> Option<ComposedChain> {
@@ -1242,12 +1215,60 @@ impl JFrag {
 
     /// Exact Rust-value-to-JNI operation selected for this fragment.
     pub(crate) fn output_abi(&self) -> OutAbi {
-        OutAbi::Value(Box::new(OutValueAbi {
-            pipeline: self.pipeline(Direction::Deconstruct, Mode::Owned),
-            projection: self.conv.metadata.projection.clone(),
-            dependency: self.rust.clone(),
-        }))
+        output_abi_from(&self.artifact(), &self.chain)
     }
+}
+
+/// The ordered conversion one fragment's value crosses through.
+///
+/// Stated once over the two things it needs — the artifact and the chain — so
+/// the compiler's fragment and the frozen plan reach the same answer through
+/// the same code rather than each spelling it (#660 item 5).
+fn pipeline_from(
+    artifact: &JConverterArtifact,
+    chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    direction: Direction,
+    mode: Mode,
+) -> crate::jni::chain::JPipeline {
+    JCompile::<Registry>::planned_pipeline(direction, mode, artifact, chain, &artifact.converter)
+}
+
+/// [`pipeline_from`]'s outgoing peer: the exact Rust-value-to-JNI operation.
+fn output_abi_from(
+    artifact: &JConverterArtifact,
+    chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+) -> OutAbi {
+    OutAbi::Value(Box::new(OutValueAbi {
+        pipeline: pipeline_from(artifact, chain, Direction::Deconstruct, Mode::Owned),
+        projection: artifact.metadata.projection.clone(),
+        dependency: artifact.rust.clone(),
+    }))
+}
+
+/// The site one planned fragment answers, with the ABI leaves it occupies.
+///
+/// Read off the frozen
+/// [`FragmentPlan`](prebindgen_registry::generation::FragmentPlan), like
+/// [`converter_artifacts`]: the identity and the yield a site plan states are
+/// the fragment's own, so a caller holding the plan needs nothing else. The
+/// leaves come from whatever produced them, which is the point — a carrier
+/// derived beside the thing it carries is another parallel answer.
+pub(crate) fn site_plan(
+    fragment: &prebindgen_registry::generation::FragmentPlan<JRepresentation>,
+    bound: &prebindgen_registry::recipe::Bound,
+    leaves: JAbiLeaves,
+) -> prebindgen_registry::generation::SitePlan<JRepresentation> {
+    use prebindgen_registry::generation::{AbiLayout, SiteId, SitePlan};
+    let slots = leaves.len();
+    SitePlan::new(
+        SiteId::new(bound.site.clone()),
+        bound.clone(),
+        fragment.id().clone(),
+        fragment.yields().clone(),
+        AbiLayout::new(slots, leaves),
+        Some(()),
+        prebindgen_registry::generation::Cleanup::None,
+    )
 }
 
 /// Every converter function one planned fragment renders.
@@ -1627,7 +1648,7 @@ impl<R: Conversions> JCompile<'_, R> {
             // emitter reads (#622 review).
             JPlan::Return(_) => return,
         };
-        let frozen = root.freeze_site(bound, leaves);
+        let frozen = site_plan(&root.freeze(), bound, leaves);
         // The carrier holds the SAME list the plan does, not a copy of it.
         // That is the property that makes it a replacement: a copy could only
         // be checked to match today, while one allocation has nothing to
@@ -4275,15 +4296,17 @@ impl Conv {
 }
 
 impl Conv {
-    /// The fragment behind this conversion.
+    /// This conversion's fragment, frozen.
     ///
     /// A callback parameter is answered whole rather than compiled as a site
     /// (`classify_leaf` says why: a callback ARGUMENT does not always have a
     /// conversion of its own), so it has no `Bound` from the compiler — but it
     /// does have a fragment, and this is what lets its site be stated
-    /// canonically anyway (#622 review).
-    pub(crate) fn fragment(&self) -> &JFrag {
-        &self.0
+    /// canonically anyway (#622 review). It hands back the plan rather than the
+    /// compiler's fragment: what a caller here needs of one is what the plan
+    /// carries, so the carrier stays inside (#660 item 5).
+    pub(crate) fn plan(&self) -> prebindgen_registry::generation::FragmentPlan<JRepresentation> {
+        self.0.freeze()
     }
 
     /// The registry-facing conversion this fragment was compiled with.
