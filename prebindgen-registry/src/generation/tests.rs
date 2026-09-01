@@ -14,11 +14,7 @@ impl Representation for Fake {
     type Step = &'static str;
     type ConverterArtifact = &'static str;
     type TerminalCodec = &'static str;
-    type ProductBridge = &'static str;
-    type OptionalBridge = &'static str;
-    type SequenceBridge = &'static str;
-    type ChoiceBridge = &'static str;
-    type CallbackBridge = &'static str;
+    type Bridge = &'static str;
     type Niche = u8;
     type Cleanup = &'static str;
     type FailureRoute = &'static str;

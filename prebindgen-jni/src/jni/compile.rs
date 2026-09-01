@@ -252,11 +252,7 @@ impl prebindgen_registry::generation::Representation for JRepresentation {
     type Step = OperationId;
     type ConverterArtifact = JConverterArtifact;
     type TerminalCodec = crate::jni::chain::JFunction;
-    type ProductBridge = crate::jni::chain::JFunction;
-    type OptionalBridge = crate::jni::chain::JFunction;
-    type SequenceBridge = crate::jni::chain::JFunction;
-    type ChoiceBridge = crate::jni::chain::JFunction;
-    type CallbackBridge = crate::jni::chain::JFunction;
+    type Bridge = crate::jni::chain::JFunction;
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = ();
