@@ -66,9 +66,9 @@ pub struct FoldLeaf {
     /// types; for a combined one the selector (`i32`) and `Option`-wrapped
     /// variant inputs. Spell it with `emit.emit_source_type(&ty)` in an emission callback.
     ///
-    /// A reading rather than a spelling for the reason `UnfoldLeaf::out_ty`
-    /// gives: a consumer asking what this leaf's type MEANS had to hand the
-    /// spelling back to the registry (#275). The leaves no source wrote — the
+    /// A reading rather than a spelling, for the same reason every leaf type in
+    /// this pipeline is one: a consumer asking what this leaf's type MEANS had
+    /// to hand the spelling back to the registry (#275). The leaves no source wrote — the
     /// presence flag, the selector — are built by
     /// [`TypeRef::scalar`](prebindgen_flat::flat::TypeRef::scalar), which
     /// pairs the kind with its own spelling and is placeless by construction.
