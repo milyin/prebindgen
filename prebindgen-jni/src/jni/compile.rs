@@ -689,7 +689,7 @@ pub(crate) struct OutWire {
     /// selector spliced into a value form reaches the sum it selects over, and
     /// a payload reaches the sum whose arm binds it. Empty means the value the
     /// site names, which is the common case.
-    pub(crate) reach: Vec<prebindgen_registry::unfold::PathStep>,
+    pub(crate) reach: Vec<crate::unfold::PathStep>,
     /// Whether this value is the whole crossed object rather than a part of it
     /// — the move-or-clone handle a decomposition delivers beside its fields.
     ///
@@ -752,8 +752,8 @@ impl OutAbi {
     }
 }
 
-impl prebindgen_registry::unfold::DecomposedLeaf for OutWire {
-    fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
+impl crate::unfold::DecomposedLeaf for OutWire {
+    fn reach(&self) -> &[crate::unfold::PathStep] {
         OutWire::reach(self)
     }
 
@@ -795,8 +795,8 @@ impl OutWire {
     /// The shim that lets the sum emitters speak recipes before every plan is one:
     /// what they read of a leaf is exactly what a wire states, so the switch is
     /// per call site rather than all at once.
-    pub(crate) fn from_leaf(leaf: &prebindgen_registry::unfold::UnfoldLeaf) -> Self {
-        use prebindgen_registry::unfold::LeafSource;
+    pub(crate) fn from_leaf(leaf: &crate::unfold::UnfoldLeaf) -> Self {
+        use crate::unfold::LeafSource;
         Self {
             name: leaf.name.clone(),
             out_ty: leaf.out_ty.clone(),
@@ -823,7 +823,7 @@ impl OutWire {
     }
 
     /// A whole plan's leaves in the recipe's vocabulary.
-    pub(crate) fn from_leaves(leaves: &[prebindgen_registry::unfold::UnfoldLeaf]) -> Vec<Self> {
+    pub(crate) fn from_leaves(leaves: &[crate::unfold::UnfoldLeaf]) -> Vec<Self> {
         leaves.iter().map(Self::from_leaf).collect()
     }
 
@@ -848,7 +848,7 @@ impl OutWire {
 
     /// The steps from the crossed value down to this one, or empty for a value
     /// no reach describes — the selector, or a payload its arm's pattern binds.
-    pub(crate) fn reach(&self) -> &[prebindgen_registry::unfold::PathStep] {
+    pub(crate) fn reach(&self) -> &[crate::unfold::PathStep] {
         &self.reach
     }
 
@@ -3219,7 +3219,7 @@ impl<R: Conversions> JCompile<'_, R> {
 pub(crate) fn freeze_out_wires(
     ext: &Declarations,
     registry: &Registry,
-    leaves: &[prebindgen_registry::unfold::UnfoldLeaf],
+    leaves: &[crate::unfold::UnfoldLeaf],
 ) -> Result<Vec<OutWire>, JErr> {
     let mut compiler = prebindgen_registry::recipe::Compiler::resume(
         registry.flat(),
@@ -5039,7 +5039,7 @@ impl Declarations {
                         _ => return None,
                     };
                     let optional = field.ty.optional_inner().is_some();
-                    let mut reach: Vec<prebindgen_registry::unfold::PathStep> =
+                    let mut reach: Vec<crate::unfold::PathStep> =
                         field_path.iter().map(field_step).collect();
                     if optional {
                         // An OPTIONAL sum is two selectors, one owning the
@@ -5050,7 +5050,7 @@ impl Declarations {
                         // group presence gates.
                         let mut flag_reach = reach.clone();
                         flag_reach[path.len()] =
-                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                            crate::unfold::PathStep::field(fname.clone(), true);
                         wires.push(OutWire {
                             name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
                             out_ty: field.ty.clone(),
@@ -5062,8 +5062,7 @@ impl Declarations {
                             identity: false,
                             abi: None,
                         });
-                        reach[path.len()] =
-                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        reach[path.len()] = crate::unfold::PathStep::field(fname.clone(), true);
                     }
                     for wire in self.sum_out_wires(flat, &sum_ident, probe)? {
                         let groups = match optional {
@@ -5108,10 +5107,9 @@ impl Declarations {
                         // gate exactly where a segment's selector reaches
                         // through one. The group's leaves then reach on from
                         // the value that gate unwrapped.
-                        let mut reach: Vec<prebindgen_registry::unfold::PathStep> =
+                        let mut reach: Vec<crate::unfold::PathStep> =
                             field_path.iter().map(field_step).collect();
-                        reach[path.len()] =
-                            prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                        reach[path.len()] = crate::unfold::PathStep::field(fname.clone(), true);
                         wires.push(OutWire {
                             name: format!("{name}__{}", crate::jni::emit::PRESENT_LEAF),
                             out_ty: field.ty.clone(),
@@ -5139,8 +5137,7 @@ impl Declarations {
                             // it. The flag's own reach stops at the `Option`,
                             // which is the value it tests rather than one
                             // inside it.
-                            reach[path.len()] =
-                                prebindgen_registry::unfold::PathStep::field(fname.clone(), true);
+                            reach[path.len()] = crate::unfold::PathStep::field(fname.clone(), true);
                         }
                         OutWire {
                             reach,
@@ -5252,8 +5249,8 @@ impl Declarations {
 /// Never optional: a composition looks through an `Option` rather than stopping
 /// at one — a terminal optional rides its own conversion, and an intermediate
 /// one is a shape the compositions decline.
-fn field_step(ident: &syn::Ident) -> prebindgen_registry::unfold::PathStep {
-    prebindgen_registry::unfold::PathStep::field(ident.clone(), false)
+fn field_step(ident: &syn::Ident) -> crate::unfold::PathStep {
+    crate::unfold::PathStep::field(ident.clone(), false)
 }
 
 /// The transparent wrappers over a crossing's value, or `None` when a composed

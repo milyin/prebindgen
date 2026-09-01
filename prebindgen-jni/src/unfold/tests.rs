@@ -4,10 +4,10 @@ use super::*;
 
 /// A fixture declaration's identity. A declaration is a key, not a spelling —
 /// see `ConstructorDecl::target`.
-fn key(s: &str) -> crate::registry::TypeKey {
-    crate::registry::TypeKey::parse(s).expect("a fixture type")
+fn key(s: &str) -> prebindgen_registry::TypeKey {
+    prebindgen_registry::TypeKey::parse(s).expect("a fixture type")
 }
-use prebindgen_flat::types_util::ident;
+use prebindgen_registry::types_util::ident;
 
 use crate::test_util::{flat_with, EmitSourceForTest};
 
@@ -19,8 +19,8 @@ use crate::test_util::{flat_with, EmitSourceForTest};
 /// standing up a source crate for it. Legitimate here and nowhere else: the
 /// `classify` guard exempts tests precisely because a fixture composing its own
 /// input is not a consumer reasoning from `origin`.
-fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
-    prebindgen_flat::flat::Flat::builder()
+fn tref(ty: syn::Type) -> prebindgen_registry::flat::TypeRef {
+    prebindgen_registry::flat::Flat::builder()
         .build()
         .expect("an empty model")
         .classify(&ty)
@@ -34,7 +34,8 @@ fn tref(ty: syn::Type) -> prebindgen_flat::flat::TypeRef {
 /// without demanding a converter. `None` = never asked for at all, which is a
 /// different fact from "asked for and then un-required" — the distinction the
 /// registry's `output_types[key].root` could not state on its own (#282).
-fn required(reg: &Unfolding<'_>, key: &crate::registry::TypeKey) -> Option<bool> {
+fn required(reg: &Unfolding<'_>, key: &prebindgen_registry::TypeKey) -> Option<bool> {
+    use prebindgen_registry::Requirement;
     reg.requirements().iter().fold(None, |seen, ask| match ask {
         Requirement::Output(t) if t.key() == *key => Some(true),
         Requirement::Reference(t) if t.key() == *key => Some(seen.unwrap_or(false)),

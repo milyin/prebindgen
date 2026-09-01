@@ -647,7 +647,7 @@ fn fn_expand_return_duplicate_rejected() {
 /// omission, no stale-ignore warning.
 #[test]
 fn typo_in_expand_decl_is_hard_error() {
-    use prebindgen_registry::WriteRustError;
+    use prebindgen_registry::{ScanError, WriteRustError};
     let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
@@ -673,11 +673,11 @@ fn typo_in_expand_decl_is_hard_error() {
     // itself, which is before the registry has read a signature. The typo is
     // still a hard error naming the same ident.
     match err {
-        WriteRustError::Unfold(e) => assert_eq!(
-            e.to_string(),
+        WriteRustError::Scan(ScanError::AdapterInvariant { message }) => assert_eq!(
+            message,
             "output expansion: accessor `z_err_mesage` is not a #[prebindgen] item"
         ),
-        other => panic!("expected an output-expansion error, got {other:?}"),
+        other => panic!("expected an output-expansion refusal, got {other:?}"),
     }
 }
 
@@ -2635,12 +2635,12 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
         "the outer flag is unconditional, the inner one sits in the group it          gates, and the leaf sits inside both"
     );
     assert_eq!(
-        prebindgen_registry::unfold::segments(&wires),
+        crate::unfold::segments(&wires),
         vec![0..3],
         "one segment at the top level — the inner selector belongs to it          rather than opening a second, overlapping one"
     );
     assert_eq!(
-        prebindgen_registry::unfold::segments_at(&wires, 1),
+        crate::unfold::segments_at(&wires, 1),
         vec![1..3],
         "and it is a segment of its own, one level down"
     );

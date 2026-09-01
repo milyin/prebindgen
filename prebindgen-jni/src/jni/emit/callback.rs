@@ -182,7 +182,7 @@ fn callback_argument_name(index: usize) -> syn::Ident {
 /// already-resolved leaf crossing once at this resolution seam.
 fn freeze_callback_delivery(
     ext: &Declarations,
-    plan: &prebindgen_registry::unfold::UnfoldPlan,
+    plan: &crate::unfold::UnfoldPlan,
     fragment: &crate::jni::compile::JFrag,
 ) -> Option<(
     Vec<crate::jni::compile::OutWire>,

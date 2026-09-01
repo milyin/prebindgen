@@ -23,14 +23,14 @@ impl Registry {
             )?;
         }
         // What the adapter's decompositions asked the output tables for,
-        // replayed in the order it asked. Building the plans reads the model
-        // alone (see `unfold::Unfolding`), so this is every effect they have on
-        // a registry — after `expand::apply`, which is where they were made.
+        // replayed in the order it asked. Planning how a value comes apart reads
+        // the model alone, so this is every effect those plans have on a
+        // registry — after `expand::apply`, which is where the asks were made.
         for requirement in &d.requirements {
             match requirement {
-                crate::unfold::Requirement::Output(reading) => self.require_output(reading),
-                crate::unfold::Requirement::Reference(reading) => self.reference_output(reading),
-                crate::unfold::Requirement::Unrequire(reading) => self.unrequire_output(reading),
+                Requirement::Output(reading) => self.require_output(reading),
+                Requirement::Reference(reading) => self.reference_output(reading),
+                Requirement::Unrequire(reading) => self.unrequire_output(reading),
             }
         }
         // Every crossing these types make is now covered by a plan, so the

@@ -9,8 +9,8 @@ pub(crate) struct TypeCell {
     /// and its origin are already here rather than re-derived per consumer.
     ///
     /// **Every** cell has one. There used to be a second variant for "a type only
-    /// the binding authored", on the assumption that a declared wire type or an
-    /// [`unfold`](crate::unfold) leaf had no reading to give. It did:
+    /// the binding authored", on the assumption that a declared wire type or a
+    /// decomposition leaf had no reading to give. It did:
     /// those are ordinary types in this language, they were simply absent from an
     /// index of what the *source* wrote. `ensure_entry` takes the reading from the
     /// grammar when the cell is born and stores it right here, so it is always
@@ -19,7 +19,7 @@ pub(crate) struct TypeCell {
     /// less than its neighbours.
     pub subject: Box<prebindgen_flat::flat::TypeRef>,
     /// The binding asks for this cell **directly** — a declared fn's signature, a
-    /// declared type, an `unfold` leaf — as opposed to reaching it through
+    /// declared type, a decomposition leaf — as opposed to reaching it through
     /// another crossing's [`Answer::subs`].
     ///
     /// A scan fact. Whether a converter is *needed* here is reachability from

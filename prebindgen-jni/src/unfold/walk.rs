@@ -11,7 +11,7 @@
 //! this module cannot know: where a source item is qualified from
 //! (`qualify`), and what each leaf is ([`DecomposedLeaf`]).
 
-use prebindgen_flat::flat::TypeRef;
+use prebindgen_registry::flat::TypeRef;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -98,7 +98,7 @@ pub trait DeliveryBridge {
 
     /// The sum a selector leaf names: the qualified source path of the type,
     /// and its Flat shape.
-    fn sum(&self, leaf: &Self::Leaf) -> (syn::Path, &prebindgen_flat::flat::Variant);
+    fn sum(&self, leaf: &Self::Leaf) -> (syn::Path, &prebindgen_registry::flat::Variant);
 
     /// Encode one leaf into the value the delivery call receives, and bind
     /// that value to `slot`.
@@ -115,7 +115,7 @@ pub trait DeliveryBridge {
         slot: &syn::Ident,
         reach: &Reach<'_>,
         fail: &dyn Fn(TokenStream) -> TokenStream,
-        emit: &crate::RustWriter,
+        emit: &prebindgen_registry::RustWriter,
     ) -> TokenStream;
 
     /// The expression that passes `slot` as one argument of the delivery call.
@@ -297,7 +297,7 @@ pub fn reached_is_ours<L: DecomposedLeaf>(leaf: &L, consuming: bool) -> bool {
     if leaf.identity() {
         !matches!(
             leaf.source().kind(),
-            prebindgen_flat::flat::TypeKind::Ref { .. }
+            prebindgen_registry::flat::TypeKind::Ref { .. }
         )
     } else {
         consuming
