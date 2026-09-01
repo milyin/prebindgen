@@ -201,6 +201,32 @@ pub enum Reach {
     /// Carrying one means this reach holding a `Shape<Deconstruct>` and the
     /// compiler composing a nested choice into a part, neither of which exists
     /// here.
+    ///
+    /// **Which of the two ways to carry it is settled** (#660 item 6). A part's
+    /// fragment normally comes from resolving the part's own crossing, and a
+    /// sum-typed field has none to resolve, so something has to compose it. The
+    /// two candidates were a [`Part`] — the resolved description of one product
+    /// position — carrying a pre-built fragment, and the product's member list
+    /// admitting a member the compiler composes in place. **It is the second**, because of where the
+    /// two steps sit: reading the parts off the model is a `&self` read with no
+    /// adapter in reach, and composing anything needs one. Pre-building a
+    /// fragment would have to happen during that read, which means handing the
+    /// adapter to it — turning the one step that is purely a model question into
+    /// a second composition site. Composing in place happens where the product
+    /// is already composed, one call away from the loop that composes a
+    /// top-level `Choice`.
+    ///
+    /// The adapter's own hooks do not change: a composed member is still paired
+    /// with a `Part` describing the field it came from, so `fields`,
+    /// `construct` and `value_form` keep seeing one list of
+    /// `(Part, &Fragment)`. What changes is this reach's `shape`, the member
+    /// list the parts reader returns, and one branch in the product path.
+    ///
+    /// Building it is worth doing **with** the reader that needs it, not
+    /// before: the case is a callback argument whose row is
+    /// `Deconstructing::Atomic` today, and `effective_callback_plan` is what
+    /// routes a callback to such a row. The row's shape and that function are
+    /// one mechanism, so the mechanism here and its removal are one change.
     Nested {
         /// Position of the field in the struct being taken apart.
         index: usize,
