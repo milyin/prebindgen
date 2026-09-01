@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Requirement","ScanError","WriteRustError"],"struct":["Answer","Building","Decompositions","DuplicateNameError","NotExpressibleEntry","Registry","RegistryBuilder","TypeKey","TypeKeyParseError"],"trait":["Conversions"],"type":["Crossing"]};
