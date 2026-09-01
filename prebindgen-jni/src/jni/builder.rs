@@ -210,6 +210,7 @@ impl Default for Declarations {
             struct_plans: Default::default(),
             sum_plans: Default::default(),
             vec_build_plans: Default::default(),
+            unfolded: Default::default(),
             generation: None,
         }
     }
@@ -232,6 +233,17 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
+    /// The applied output-side decompositions — how a return, an error or a
+    /// callback argument comes apart.
+    ///
+    /// Filled while this binding declares itself into the registry, which every
+    /// caller here is downstream of.
+    pub(crate) fn unfolded(&self) -> &prebindgen_registry::unfold::Unfolded {
+        self.unfolded
+            .get()
+            .expect("decompositions are applied while the binding is declared")
+    }
+
     /// Apply the package-level function-name mangle closure to `name`.
     pub(crate) fn mangle_fun(&self, package: &str, name: &str) -> String {
         match &self.fun_name_mangle {

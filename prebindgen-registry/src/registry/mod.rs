@@ -219,36 +219,6 @@ pub struct Registry {
     /// by language adapters at the parameter-emission site. Empty unless the
     /// adapter declared expansions.
     pub(crate) expansion_plans: HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan>,
-
-    /// Resolved output-expansion plans, keyed by function ident. Filled by
-    /// [`crate::unfold::apply`] before resolution; read by language
-    /// adapters at the return-emission site. Empty unless the adapter declared
-    /// deconstructors.
-    pub(crate) unfold_plans: HashMap<syn::Ident, crate::unfold::UnfoldPlan>,
-
-    /// Resolved **error**-position expansion plans, keyed by function ident: the
-    /// decomposition of a fallible fn's `Result<_, E>` domain error `E` (from
-    /// `.convert_error` / `.deconstruct_error`). Separate from
-    /// [`Self::unfold_plans`] — a fn may have both an output and an error plan.
-    pub(crate) error_plans: HashMap<syn::Ident, crate::unfold::UnfoldPlan>,
-
-    /// Default decomposition of a **callback argument** type — the `T` of a
-    /// declared fn's `impl Fn(T, …)` parameter — keyed by the bare arg type
-    /// (type-level, fn-independent). Filled by
-    /// [`crate::unfold::apply`] from the type's default
-    /// deconstructor (`by_ref = false`: the trampoline owns the value); read by
-    /// language adapters when emitting the callback trampoline. A type without
-    /// a default deconstructor has no entry and is delivered whole.
-    pub(crate) callback_arg_plans: HashMap<TypeKey, crate::unfold::UnfoldPlan>,
-
-    /// The declaration-default decomposition per deconstructor declaration
-    /// ([`crate::unfold::DeconId`]) — resolved once with
-    /// normalized inputs, independent of using functions and processing
-    /// order. The single source language adapters derive declaration-keyed
-    /// signature artifacts (e.g. generated callback interfaces) from, so
-    /// every function selecting the same declaration sees one signature by
-    /// construction.
-    pub(crate) decon_plans: HashMap<crate::unfold::DeconId, crate::unfold::DeconSpec>,
 }
 
 // Opaque — exists so `Result<Registry, _>::expect_err` works in tests, the way
@@ -299,16 +269,6 @@ impl Registry {
             .map(|cell| cell.entry.is_some())
     }
 
-    /// The unfold plans built for callback arguments.
-    ///
-    /// Test support, `testing`-gated. [`UnfoldPlan`](crate::unfold::UnfoldPlan)
-    /// is already public, so this exposes no new type — only the map the
-    /// registry keeps them in.
-    #[cfg(any(test, feature = "testing"))]
-    pub fn callback_arg_plans_for_test(&self) -> impl Iterator<Item = &crate::unfold::UnfoldPlan> {
-        self.callback_arg_plans.values()
-    }
-
     pub(crate) fn empty() -> Self {
         Self {
             flat: prebindgen_flat::flat::Flat::default(),
@@ -316,10 +276,6 @@ impl Registry {
             input_types: Default::default(),
             output_types: Default::default(),
             expansion_plans: HashMap::new(),
-            unfold_plans: HashMap::new(),
-            error_plans: HashMap::new(),
-            callback_arg_plans: HashMap::new(),
-            decon_plans: HashMap::new(),
         }
     }
 }
@@ -369,31 +325,34 @@ pub(crate) struct Declared {
 
 /// How a binding's composites cross **in pieces** instead of whole.
 ///
-/// One value, pushed once through `RegistryBuilder::decompose`, in place of the five
-/// separate hooks the registry used to call back for (`expansions`,
-/// `deconstructors`, `value_struct_decons`, `sum_decons`,
-/// `leaf_vec_fold_elements`). All five are implemented by one adapter and none
-/// of them ever needed more than the model, which is what makes stating them up
-/// front possible.
+/// One value, pushed once through `RegistryBuilder::decompose`, in place of the
+/// separate hooks the registry used to call back for. Everything here reads the
+/// model alone, which is what makes stating it up front possible.
 ///
-/// The fields are still the five declaration families, because unifying the
-/// plan IRs behind them is its own problem (see issue #223) and pretending
-/// otherwise here would only move the seam. What this settles is *when* they
-/// are stated and *by whom*.
+/// The output side is stated as its **effects** rather than as its
+/// declarations: an adapter applies its own deconstructor declarations with
+/// [`unfold::Unfolding`](crate::unfold::Unfolding), keeps the plans it gets,
+/// and hands over the two things a registry needs from them — the output
+/// registrations to replay, and the leaf readings a callback argument's
+/// delivery depends on. The parameter side is still stated as declarations,
+/// because `expand::apply` still mutates the registry directly.
 #[derive(Default)]
 pub struct Decompositions {
     /// Parameter-side: values built on the Rust side from ingredients that
     /// cross separately.
     pub expansions: Option<crate::expand::Expansions>,
-    /// Return/error-side: values delivered as leaves the far side reassembles.
-    pub deconstructors: Option<crate::unfold::Deconstructors>,
-    /// By-value struct decompositions whose leaves the adapter computed.
-    pub value_structs: Vec<crate::unfold::ValueDecon>,
-    /// The selector-carrying sibling: a tag plus one leaf group per
-    /// alternative.
-    pub sums: Vec<crate::unfold::SumDecon>,
-    /// Element types of a `Vec<T>`/`&[T]` delivered element-by-element.
-    pub leaf_vec_elements: Vec<TypeKey>,
+    /// Output-side registrations the adapter's decompositions asked for, in the
+    /// order they were asked — see
+    /// [`Unfolding::requirements`](crate::unfold::Unfolding::requirements).
+    pub requirements: Vec<crate::unfold::Requirement>,
+    /// Per callback-argument type, the readings its decomposition delivers —
+    /// see
+    /// [`Unfolding::callback_arg_leaves`](crate::unfold::Unfolding::callback_arg_leaves).
+    ///
+    /// The ordering fact no syntax shows: each leaf's own conversion has to
+    /// exist before the callback's can be built, and a leaf is named by a plan
+    /// rather than by the argument's type.
+    pub callback_arg_leaves: HashMap<TypeKey, Vec<prebindgen_flat::flat::TypeRef>>,
     /// The whole-value crossings these decompositions make unnecessary.
     ///
     /// Stated **with** the decompositions rather than beside them: a type

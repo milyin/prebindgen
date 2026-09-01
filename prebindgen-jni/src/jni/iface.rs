@@ -1193,11 +1193,12 @@ impl SpecKey {
 /// so it is computed per `DeconId` over all plans, shared by the memo
 /// derivation ([`SpecKey::Folder`]'s typed groups) and the declaration
 /// emitter (the hoisted `fromParts`/appender singletons).
-pub(crate) fn fixed_decon_ids(registry: &impl Conversions) -> std::collections::HashSet<DeconId> {
-    let fixed: std::collections::HashSet<DeconId> = registry
-        .unfold_plans()
+pub(crate) fn fixed_decon_ids(ext: &Declarations) -> std::collections::HashSet<DeconId> {
+    let fixed: std::collections::HashSet<DeconId> = ext
+        .unfolded()
+        .unfold_plans
         .values()
-        .chain(registry.callback_arg_plans().values())
+        .chain(ext.unfolded().callback_arg_plans.values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.decon.clone())
         .collect();
@@ -1215,10 +1216,10 @@ pub(crate) fn fixed_decon_ids(registry: &impl Conversions) -> std::collections::
     // assumed, so a future wiring change fails here instead of emitting a
     // wrapper that references an interface which no longer exists.
     debug_assert!(
-        !registry
-            .unfold_plans()
+        !ext.unfolded()
+            .unfold_plans
             .values()
-            .chain(registry.callback_arg_plans().values())
+            .chain(ext.unfolded().callback_arg_plans.values())
             .any(|p| !p.fixed_builder && p.decon.as_ref().is_some_and(|d| fixed.contains(d))),
         "fixed and non-fixed plans share one DeconId — the typed interface \
          cannot be shaped (or suppressed) for both"
@@ -1258,10 +1259,10 @@ fn derive_iface_spec(
                 .collect::<Option<_>>()?;
             callback_iface_spec(ext, registry, &args)
         }
-        SpecKey::Builder(d) => builder_iface_spec(ext, registry, d),
+        SpecKey::Builder(d) => builder_iface_spec(ext, d),
         SpecKey::Folder(d) => {
-            let mut spec = folder_iface_spec(ext, registry, d)?;
-            if fixed_decon_ids(registry).contains(d) {
+            let mut spec = folder_iface_spec(ext, d)?;
+            if fixed_decon_ids(ext).contains(d) {
                 spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)?;
             }
             Some(spec)
@@ -1270,7 +1271,7 @@ fn derive_iface_spec(
         // above: the memo key holds an identity, and the reading behind it is a
         // lookup. `None` defers, exactly as it does there (#291).
         SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(ext, &registry.reading(el_key)?),
-        SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
+        SpecKey::Handler(d) => error_handler_iface_spec(ext, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }
 }
@@ -1399,11 +1400,10 @@ fn sum_segment_reassembly(
 /// Optional `parts` row. In that case the registry still knows the model shape,
 /// but JniGen must honor the terminal declaration and deliver the value whole.
 pub(crate) fn effective_callback_plan<'a>(
-    ext: &Declarations,
-    registry: &'a impl Conversions,
+    ext: &'a Declarations,
     ty: &prebindgen_registry::flat::TypeRef,
 ) -> Option<&'a UnfoldPlan> {
-    let plan = registry.callback_arg_plan(&ty.key())?;
+    let plan = ext.unfolded().callback_arg_plans.get(&ty.key())?;
     if plan.is_optional_base() {
         let crossing = prebindgen_registry::recipe::Crossing::new(
             plan.source.clone().optional(),
@@ -1478,8 +1478,8 @@ pub(crate) fn callback_iface_spec(
         // `List<Element>`, so it takes the plain whole-value path below (no leaf
         // params, no reassembly group). Only `Base`/accessor plans decompose the
         // arg into the callback's `run` params here.
-        let plan = effective_callback_plan(ext, registry, t)
-            .filter(|p| !super::render::is_iterable_fold(&p.shape));
+        let plan =
+            effective_callback_plan(ext, t).filter(|p| !super::render::is_iterable_fold(&p.shape));
         if let Some(plan) = plan {
             let optional = plan.is_optional_base();
             let whole_name = whole_value_name(t, i);
@@ -1676,8 +1676,8 @@ pub(crate) fn callback_iface_spec(
                 .iter()
                 .map(|ty| {
                     let short = subject_short(ty);
-                    let optional = effective_callback_plan(ext, registry, ty)
-                        .is_some_and(UnfoldPlan::is_optional_base);
+                    let optional =
+                        effective_callback_plan(ext, ty).is_some_and(UnfoldPlan::is_optional_base);
                     if optional {
                         format!("{short}Optional")
                     } else {
@@ -1704,12 +1704,8 @@ pub(crate) fn callback_iface_spec(
 /// representative plan in `registry.decon_plans`, never from a using
 /// function's own plan. Named `<decl-base>Builder`, placed in the source
 /// type's package.
-pub(crate) fn builder_iface_spec(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    decon: &DeconId,
-) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans().get(decon)?;
+pub(crate) fn builder_iface_spec(ext: &Declarations, decon: &DeconId) -> Option<IfaceSpec> {
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let params = plan_leaf_params(
         ext,
         &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
@@ -1733,12 +1729,8 @@ pub(crate) fn builder_iface_spec(
 /// (invariant — `A` appears in both parameter and return position). Keyed by
 /// the element's deconstructor declaration. Named `<decl-base>Folder`,
 /// placed in the element type's package.
-pub(crate) fn folder_iface_spec(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    decon: &DeconId,
-) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans().get(decon)?;
+pub(crate) fn folder_iface_spec(ext: &Declarations, decon: &DeconId) -> Option<IfaceSpec> {
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let mut params: Vec<IfaceParam> = vec![IfaceParam::same("acc".to_string(), KtType::var_("A"))];
     params.extend(plan_leaf_params(
         ext,
@@ -1824,7 +1816,7 @@ pub(crate) fn fixed_folder_typed_groups(
     registry: &impl Conversions,
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
-    let spec = registry.decon_plans().get(decon)?;
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let fqn = ext.kotlin_fqn(&spec.source.key())?;
     let (reassemble, imports) = fixed_reassembly(
         ext,
@@ -1880,12 +1872,8 @@ pub(crate) fn fixed_folder_typed_groups(
 /// (`JniErrorHandler`) channel, so there is no discriminator and no defaults.
 /// Keyed by the error type's deconstructor declaration. Named
 /// `<decl-base>Handler`, placed in the error type's package.
-pub(crate) fn error_handler_iface_spec(
-    ext: &Declarations,
-    registry: &impl Conversions,
-    decon: &DeconId,
-) -> Option<IfaceSpec> {
-    let spec = registry.decon_plans().get(decon)?;
+pub(crate) fn error_handler_iface_spec(ext: &Declarations, decon: &DeconId) -> Option<IfaceSpec> {
+    let spec = ext.unfolded().decon_plans.get(decon)?;
     let params: Vec<IfaceParam> = plan_leaf_params(
         ext,
         &crate::jni::compile::OutWire::from_leaves(&spec.leaves),
@@ -1971,7 +1959,7 @@ pub(crate) fn onerror_iface_spec(
     fn_ident: &syn::Ident,
 ) -> Option<ErrorIfaces> {
     let binding = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
-    let domain = match registry.error_plans().get(fn_ident) {
+    let domain = match ext.unfolded().error_plans.get(fn_ident) {
         Some(plan) => {
             let decon = plan
                 .decon

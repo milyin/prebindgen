@@ -3456,11 +3456,9 @@ impl<R: Conversions> Compile for JCompile<'_, R> {
             // Retain that as an ordinary composed-only fragment so an Invoke
             // recipe receives the same plan as ordinary output delivery instead
             // of escaping through a callback-specific compatibility converter.
-            if let Some(plan) = crate::jni::iface::effective_callback_plan(
-                self.decls,
-                self.registry,
-                at.crossing.spelled(),
-            ) {
+            if let Some(plan) =
+                crate::jni::iface::effective_callback_plan(self.decls, at.crossing.spelled())
+            {
                 let mut fragment = JFrag::new(
                     at,
                     self.parts_marker(

@@ -692,8 +692,9 @@ fn iface_spec_memo_shares_one_derivation() {
     // The plan-facing dispatcher and a direct key lookup share one
     // allocation — the wrapper surface and the interface declaration cannot
     // diverge from the fold upcall's descriptor.
-    let plan = registry
-        .unfold_plans()
+    let plan = ext
+        .unfolded()
+        .unfold_plans
         .get(&syn::parse_str::<syn::Ident>("z_things_all").unwrap())
         .expect("fold plan");
     let via_plan = folder_iface_for_plan(ext, registry, plan).expect("folder spec");

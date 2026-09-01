@@ -487,7 +487,7 @@ impl Declarations {
         // a different recipe (#623 review). `decon` is the gate the model
         // already carries for this: `None` only for the whole-element arm.
         let mut decomposed: BTreeMap<TypeKey, TypeRef> = BTreeMap::new();
-        for plan in registry.callback_arg_plans().values() {
+        for plan in self.unfolded().callback_arg_plans.values() {
             if plan.decon.is_none() {
                 continue;
             }
@@ -815,7 +815,7 @@ impl Declarations {
                     // one the argument's own `Role::CallbackArg` site names are
                     // one fragment rather than two rows over one crossing.
                     if !self.field_crosses_as_its_fields(core)
-                        && registry.callback_arg_plan(&arg.key()).is_none()
+                        && !self.unfolded().callback_arg_plans.contains_key(&arg.key())
                     {
                         continue;
                     }

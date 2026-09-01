@@ -1,4 +1,4 @@
-use prebindgen_registry::{Conversions, RegistryBuilder};
+use prebindgen_registry::RegistryBuilder;
 
 use super::*;
 
@@ -647,7 +647,7 @@ fn fn_expand_return_duplicate_rejected() {
 /// omission, no stale-ignore warning.
 #[test]
 fn typo_in_expand_decl_is_hard_error() {
-    use prebindgen_registry::{ScanError, WriteRustError};
+    use prebindgen_registry::WriteRustError;
     let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
@@ -668,14 +668,16 @@ fn typo_in_expand_decl_is_hard_error() {
     let err = jni
         .build_with(registry)
         .expect_err("typo'd expand accessor must fail the scan");
+    // Reported by the decomposition, not by the scan's declared-name check:
+    // this binding applies its own output decompositions while it declares
+    // itself, which is before the registry has read a signature. The typo is
+    // still a hard error naming the same ident.
     match err {
-        WriteRustError::Scan(ScanError::DeclaredNotFound { entries }) => {
-            assert_eq!(
-                entries,
-                vec![("helper function", "z_err_mesage".to_string())]
-            );
-        }
-        other => panic!("expected DeclaredNotFound, got {other:?}"),
+        WriteRustError::Unfold(e) => assert_eq!(
+            e.to_string(),
+            "output expansion: accessor `z_err_mesage` is not a #[prebindgen] item"
+        ),
+        other => panic!("expected an output-expansion error, got {other:?}"),
     }
 }
 
@@ -2144,10 +2146,10 @@ fn constructor_member_skips_default_output_expand() {
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
     let gen = jni.build_with(registry).expect("resolve");
-    let registry = gen.registry();
+    let unfolded = gen.declarations().unfolded();
     // …the free fn is decomposed…
     assert!(
-        registry.unfold_plans().contains_key(&syn::Ident::new(
+        unfolded.unfold_plans.contains_key(&syn::Ident::new(
             "z_thing_get",
             proc_macro2::Span::call_site()
         )),
@@ -2155,7 +2157,7 @@ fn constructor_member_skips_default_output_expand() {
     );
     // …but the constructor member is NOT (its return is the factory value).
     assert!(
-        !registry.unfold_plans().contains_key(&syn::Ident::new(
+        !unfolded.unfold_plans.contains_key(&syn::Ident::new(
             "z_thing_make",
             proc_macro2::Span::call_site()
         )),
