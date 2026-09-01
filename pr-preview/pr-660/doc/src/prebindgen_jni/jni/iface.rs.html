@@ -1193,217 +1193,217 @@
 <a href=#1193 id=1193 data-nosnippet>1193</a>/// so it is computed per `DeconId` over all plans, shared by the memo
 <a href=#1194 id=1194 data-nosnippet>1194</a>/// derivation ([`SpecKey::Folder`]'s typed groups) and the declaration
 <a href=#1195 id=1195 data-nosnippet>1195</a>/// emitter (the hoisted `fromParts`/appender singletons).
-<a href=#1196 id=1196 data-nosnippet>1196</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fixed_decon_ids(registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions) -&gt; std::collections::HashSet&lt;DeconId&gt; {
-<a href=#1197 id=1197 data-nosnippet>1197</a>    <span class="kw">let </span>fixed: std::collections::HashSet&lt;DeconId&gt; = registry
-<a href=#1198 id=1198 data-nosnippet>1198</a>        .unfold_plans()
-<a href=#1199 id=1199 data-nosnippet>1199</a>        .values()
-<a href=#1200 id=1200 data-nosnippet>1200</a>        .chain(registry.callback_arg_plans().values())
-<a href=#1201 id=1201 data-nosnippet>1201</a>        .filter(|p| p.fixed_builder)
-<a href=#1202 id=1202 data-nosnippet>1202</a>        .filter_map(|p| p.decon.clone())
-<a href=#1203 id=1203 data-nosnippet>1203</a>        .collect();
-<a href=#1204 id=1204 data-nosnippet>1204</a>    <span class="comment">// Fixedness must be UNIFORM per identity, and two consumers now depend on
-<a href=#1205 id=1205 data-nosnippet>1205</a>    // that: the memo swaps in the fixed typed-group view for the whole
-<a href=#1206 id=1206 data-nosnippet>1206</a>    // identity, and the emitter suppresses the typed interface entirely when
-<a href=#1207 id=1207 data-nosnippet>1207</a>    // the singleton is its only implementation. A mixed identity would give a
-<a href=#1208 id=1208 data-nosnippet>1208</a>    // non-fixed wrapper a `build`/`fold` param whose interface was shaped —
-<a href=#1209 id=1209 data-nosnippet>1209</a>    // or removed — for the fixed case.
-<a href=#1210 id=1210 data-nosnippet>1210</a>    //
-<a href=#1211 id=1211 data-nosnippet>1211</a>    // It holds by construction: `apply_value_structs` / `apply_sum_returns` run
-<a href=#1212 id=1212 data-nosnippet>1212</a>    // AFTER `unfold::apply` and wire every reachable position of a type at
-<a href=#1213 id=1213 data-nosnippet>1213</a>    // once, so a `DeconId::Default` is all-fixed or all-not; a `DeconId::PerFn`
-<a href=#1214 id=1214 data-nosnippet>1214</a>    // is unique to one function and so trivially uniform. Asserted rather than
-<a href=#1215 id=1215 data-nosnippet>1215</a>    // assumed, so a future wiring change fails here instead of emitting a
-<a href=#1216 id=1216 data-nosnippet>1216</a>    // wrapper that references an interface which no longer exists.
-<a href=#1217 id=1217 data-nosnippet>1217</a>    </span><span class="macro">debug_assert!</span>(
-<a href=#1218 id=1218 data-nosnippet>1218</a>        !registry
-<a href=#1219 id=1219 data-nosnippet>1219</a>            .unfold_plans()
-<a href=#1220 id=1220 data-nosnippet>1220</a>            .values()
-<a href=#1221 id=1221 data-nosnippet>1221</a>            .chain(registry.callback_arg_plans().values())
-<a href=#1222 id=1222 data-nosnippet>1222</a>            .any(|p| !p.fixed_builder &amp;&amp; p.decon.as_ref().is_some_and(|d| fixed.contains(d))),
-<a href=#1223 id=1223 data-nosnippet>1223</a>        <span class="string">"fixed and non-fixed plans share one DeconId — the typed interface \
-<a href=#1224 id=1224 data-nosnippet>1224</a>         cannot be shaped (or suppressed) for both"
-<a href=#1225 id=1225 data-nosnippet>1225</a>    </span>);
-<a href=#1226 id=1226 data-nosnippet>1226</a>    fixed
-<a href=#1227 id=1227 data-nosnippet>1227</a>}
-<a href=#1228 id=1228 data-nosnippet>1228</a>
-<a href=#1229 id=1229 data-nosnippet>1229</a><span class="doccomment">/// Derive the spec for one identity — the SINGLE construction point behind
-<a href=#1230 id=1230 data-nosnippet>1230</a>/// [`Declarations::iface_spec`]. Any `syn` context is **looked up**, never
-<a href=#1231 id=1231 data-nosnippet>1231</a>/// rebuilt from the key: `Registry::reading` answers from the type table, and a
-<a href=#1232 id=1232 data-nosnippet>1232</a>/// key it cannot answer for defers rather than producing tokens nothing
-<a href=#1233 id=1233 data-nosnippet>1233</a>/// classified (#291). A `Folder` derivation folds the fixed-builder
-<a href=#1234 id=1234 data-nosnippet>1234</a>/// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
-<a href=#1235 id=1235 data-nosnippet>1235</a></span><span class="kw">fn </span>derive_iface_spec(
-<a href=#1236 id=1236 data-nosnippet>1236</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1237 id=1237 data-nosnippet>1237</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1238 id=1238 data-nosnippet>1238</a>    key: <span class="kw-2">&amp;</span>SpecKey,
-<a href=#1239 id=1239 data-nosnippet>1239</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
-<a href=#1240 id=1240 data-nosnippet>1240</a>    <span class="kw">match </span>key {
-<a href=#1241 id=1241 data-nosnippet>1241</a>        SpecKey::Callback(arg_keys) =&gt; {
-<a href=#1242 id=1242 data-nosnippet>1242</a>            <span class="comment">// The one deliberate round trip in this file, and the memo forces
-<a href=#1243 id=1243 data-nosnippet>1243</a>            // it: `SpecKey` needs `Ord`, so it holds `TypeKey`s — a `TypeRef`
-<a href=#1244 id=1244 data-nosnippet>1244</a>            // could not go in one (its `Origin` carries a `SourceLocation`, so
-<a href=#1245 id=1245 data-nosnippet>1245</a>            // two identical readings from different files would compare
-<a href=#1246 id=1246 data-nosnippet>1246</a>            // unequal), and `derive_iface_spec` is contractually a pure
-<a href=#1247 id=1247 data-nosnippet>1247</a>            // function of the key.
-<a href=#1248 id=1248 data-nosnippet>1248</a>            //
-<a href=#1249 id=1249 data-nosnippet>1249</a>            // A LOOKUP, not a classification: `Registry::reading` has answered
-<a href=#1250 id=1250 data-nosnippet>1250</a>            // only from the type table since #267. `None` means the arg has
-<a href=#1251 id=1251 data-nosnippet>1251</a>            // not entered the pipeline yet, which is the same "not yet
-<a href=#1252 id=1252 data-nosnippet>1252</a>            // derivable" state `iface_spec` already documents and retries —
-<a href=#1253 id=1253 data-nosnippet>1253</a>            // so it defers rather than answering "not optional", which is what
-<a href=#1254 id=1254 data-nosnippet>1254</a>            // the accessor used to do here.
-<a href=#1255 id=1255 data-nosnippet>1255</a>            </span><span class="kw">let </span>args: Vec&lt;prebindgen_registry::flat::TypeRef&gt; = arg_keys
-<a href=#1256 id=1256 data-nosnippet>1256</a>                .iter()
-<a href=#1257 id=1257 data-nosnippet>1257</a>                .map(|k| registry.reading(k))
-<a href=#1258 id=1258 data-nosnippet>1258</a>                .collect::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#1259 id=1259 data-nosnippet>1259</a>            callback_iface_spec(ext, registry, <span class="kw-2">&amp;</span>args)
-<a href=#1260 id=1260 data-nosnippet>1260</a>        }
-<a href=#1261 id=1261 data-nosnippet>1261</a>        SpecKey::Builder(d) =&gt; builder_iface_spec(ext, registry, d),
-<a href=#1262 id=1262 data-nosnippet>1262</a>        SpecKey::Folder(d) =&gt; {
-<a href=#1263 id=1263 data-nosnippet>1263</a>            <span class="kw">let </span><span class="kw-2">mut </span>spec = folder_iface_spec(ext, registry, d)<span class="question-mark">?</span>;
-<a href=#1264 id=1264 data-nosnippet>1264</a>            <span class="kw">if </span>fixed_decon_ids(registry).contains(d) {
-<a href=#1265 id=1265 data-nosnippet>1265</a>                spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)<span class="question-mark">?</span>;
-<a href=#1266 id=1266 data-nosnippet>1266</a>            }
-<a href=#1267 id=1267 data-nosnippet>1267</a>            <span class="prelude-val">Some</span>(spec)
-<a href=#1268 id=1268 data-nosnippet>1268</a>        }
-<a href=#1269 id=1269 data-nosnippet>1269</a>        <span class="comment">// Same round trip, same reason, same answer as the `Callback` arm
-<a href=#1270 id=1270 data-nosnippet>1270</a>        // above: the memo key holds an identity, and the reading behind it is a
-<a href=#1271 id=1271 data-nosnippet>1271</a>        // lookup. `None` defers, exactly as it does there (#291).
-<a href=#1272 id=1272 data-nosnippet>1272</a>        </span>SpecKey::WholeFolder(el_key) =&gt; whole_folder_iface_spec(ext, <span class="kw-2">&amp;</span>registry.reading(el_key)<span class="question-mark">?</span>),
-<a href=#1273 id=1273 data-nosnippet>1273</a>        SpecKey::Handler(d) =&gt; error_handler_iface_spec(ext, registry, d),
-<a href=#1274 id=1274 data-nosnippet>1274</a>        SpecKey::JniErrorHandler =&gt; <span class="prelude-val">Some</span>(jni_error_handler_iface_spec(ext)),
-<a href=#1275 id=1275 data-nosnippet>1275</a>    }
-<a href=#1276 id=1276 data-nosnippet>1276</a>}
-<a href=#1277 id=1277 data-nosnippet>1277</a>
-<a href=#1278 id=1278 data-nosnippet>1278</a><span class="kw">impl </span>Declarations {
-<a href=#1279 id=1279 data-nosnippet>1279</a>    <span class="doccomment">/// The memoized spec for one interface identity: derived once per
-<a href=#1280 id=1280 data-nosnippet>1280</a>    /// generator run and shared by every consumer — the resolve-time
-<a href=#1281 id=1281 data-nosnippet>1281</a>    /// trampoline, the per-function plan, and the declaration emitter — so
-<a href=#1282 id=1282 data-nosnippet>1282</a>    /// the FQN/descriptor pair cannot drift between artifact tiers (issue
-<a href=#1283 id=1283 data-nosnippet>1283</a>    /// #107). `None` (not yet derivable — e.g. leaf converters still
-<a href=#1284 id=1284 data-nosnippet>1284</a>    /// unresolved) is NOT cached: the resolve-time caller defers and
-<a href=#1285 id=1285 data-nosnippet>1285</a>    /// retries. In debug builds a cache hit re-derives and asserts equality,
-<a href=#1286 id=1286 data-nosnippet>1286</a>    /// so any nondeterminism in the constructors fails loudly under test
-<a href=#1287 id=1287 data-nosnippet>1287</a>    /// instead of shipping descriptor drift.
-<a href=#1288 id=1288 data-nosnippet>1288</a>    /// The frozen interface spec, for a render caller.
-<a href=#1289 id=1289 data-nosnippet>1289</a>    ///
-<a href=#1290 id=1290 data-nosnippet>1290</a>    /// `iface_spec` already answers from the generation first when one is
-<a href=#1291 id=1291 data-nosnippet>1291</a>    /// installed, so a renderer never reaches the derivation below it and needs
-<a href=#1292 id=1292 data-nosnippet>1292</a>    /// no `Conversions` to get there. Panics by name if no generation exists,
-<a href=#1293 id=1293 data-nosnippet>1293</a>    /// which is the failure a renderer would hit deriving without one (#613
-<a href=#1294 id=1294 data-nosnippet>1294</a>    /// step 7).
-<a href=#1295 id=1295 data-nosnippet>1295</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iface_spec_frozen(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>SpecKey) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
-<a href=#1296 id=1296 data-nosnippet>1296</a>        <span class="self">self</span>.generation
-<a href=#1297 id=1297 data-nosnippet>1297</a>            .as_deref()
-<a href=#1298 id=1298 data-nosnippet>1298</a>            .unwrap_or_else(|| {
-<a href=#1299 id=1299 data-nosnippet>1299</a>                <span class="macro">panic!</span>(<span class="string">"interface spec `{key:?}`: its frozen JNI generation plan is unavailable"</span>)
-<a href=#1300 id=1300 data-nosnippet>1300</a>            })
-<a href=#1301 id=1301 data-nosnippet>1301</a>            .interface(key)
-<a href=#1302 id=1302 data-nosnippet>1302</a>    }
-<a href=#1303 id=1303 data-nosnippet>1303</a>
-<a href=#1304 id=1304 data-nosnippet>1304</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iface_spec(
-<a href=#1305 id=1305 data-nosnippet>1305</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1306 id=1306 data-nosnippet>1306</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1307 id=1307 data-nosnippet>1307</a>        key: <span class="kw-2">&amp;</span>SpecKey,
-<a href=#1308 id=1308 data-nosnippet>1308</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
-<a href=#1309 id=1309 data-nosnippet>1309</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(generation) = <span class="kw-2">&amp;</span><span class="self">self</span>.generation {
-<a href=#1310 id=1310 data-nosnippet>1310</a>            <span class="kw">return </span>generation.interface(key);
-<a href=#1311 id=1311 data-nosnippet>1311</a>        }
-<a href=#1312 id=1312 data-nosnippet>1312</a>        <span class="kw">let </span>hit = <span class="self">self</span>.iface_specs.borrow().get(key).cloned();
-<a href=#1313 id=1313 data-nosnippet>1313</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(hit) = hit {
-<a href=#1314 id=1314 data-nosnippet>1314</a>            <span class="attr">#[cfg(debug_assertions)]
-<a href=#1315 id=1315 data-nosnippet>1315</a>            </span>{
-<a href=#1316 id=1316 data-nosnippet>1316</a>                <span class="kw">let </span>fresh = derive_iface_spec(<span class="self">self</span>, registry, key);
-<a href=#1317 id=1317 data-nosnippet>1317</a>                <span class="macro">debug_assert_eq!</span>(
-<a href=#1318 id=1318 data-nosnippet>1318</a>                    fresh.as_ref().map(|s| <span class="macro">format!</span>(<span class="string">"{s:?}"</span>)),
-<a href=#1319 id=1319 data-nosnippet>1319</a>                    <span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, <span class="kw-2">*</span>hit)),
-<a href=#1320 id=1320 data-nosnippet>1320</a>                    <span class="string">"IfaceSpec derivation drifted for {key:?}"
-<a href=#1321 id=1321 data-nosnippet>1321</a>                </span>);
-<a href=#1322 id=1322 data-nosnippet>1322</a>            }
-<a href=#1323 id=1323 data-nosnippet>1323</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(hit);
-<a href=#1324 id=1324 data-nosnippet>1324</a>        }
-<a href=#1325 id=1325 data-nosnippet>1325</a>        <span class="kw">let </span>spec = std::sync::Arc::new(derive_iface_spec(<span class="self">self</span>, registry, key)<span class="question-mark">?</span>);
-<a href=#1326 id=1326 data-nosnippet>1326</a>        <span class="self">self</span>.iface_specs
-<a href=#1327 id=1327 data-nosnippet>1327</a>            .borrow_mut()
-<a href=#1328 id=1328 data-nosnippet>1328</a>            .insert(key.clone(), spec.clone());
-<a href=#1329 id=1329 data-nosnippet>1329</a>        <span class="prelude-val">Some</span>(spec)
-<a href=#1330 id=1330 data-nosnippet>1330</a>    }
-<a href=#1331 id=1331 data-nosnippet>1331</a>}
-<a href=#1332 id=1332 data-nosnippet>1332</a>
-<a href=#1333 id=1333 data-nosnippet>1333</a><span class="doccomment">/// The [`TypedGroup::reassemble`] expression (and its raw-text imports) for a
-<a href=#1334 id=1334 data-nosnippet>1334</a>/// **fixed-builder** decomposition's leaves — the one place the two shapes are
-<a href=#1335 id=1335 data-nosnippet>1335</a>/// distinguished, so the callback proxy and the `Vec` folder cannot pick
-<a href=#1336 id=1336 data-nosnippet>1336</a>/// different reassemblies for the same type.
-<a href=#1337 id=1337 data-nosnippet>1337</a>///
-<a href=#1338 id=1338 data-nosnippet>1338</a>/// A product reassembles through the class's own `fromParts`; a **sum** cannot
-<a href=#1339 id=1339 data-nosnippet>1339</a>/// — its `fromParts` is the Kotlin-facing convenience whose parameters are
-<a href=#1340 id=1340 data-nosnippet>1340</a>/// property types, not the wire — so it reassembles through the same inlined
-<a href=#1341 id=1341 data-nosnippet>1341</a>/// `when` over the tag that a sum-typed struct field gets.
-<a href=#1342 id=1342 data-nosnippet>1342</a></span><span class="kw">fn </span>fixed_reassembly(
-<a href=#1343 id=1343 data-nosnippet>1343</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1344 id=1344 data-nosnippet>1344</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1345 id=1345 data-nosnippet>1345</a>    source: <span class="kw-2">&amp;</span>TypeKey,
-<a href=#1346 id=1346 data-nosnippet>1346</a>    wires: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
-<a href=#1347 id=1347 data-nosnippet>1347</a>    class_fqn: <span class="kw-2">&amp;</span>str,
-<a href=#1348 id=1348 data-nosnippet>1348</a>    first_slot: usize,
-<a href=#1349 id=1349 data-nosnippet>1349</a>) -&gt; (String, Vec&lt;String&gt;) {
-<a href=#1350 id=1350 data-nosnippet>1350</a>    <span class="comment">// Whether the delivered value IS a sum, not whether it contains one. A
-<a href=#1351 id=1351 data-nosnippet>1351</a>    // struct with a sum-typed field carries a tag and still reassembles
-<a href=#1352 id=1352 data-nosnippet>1352</a>    // through its own `fromParts`, with the field's `when` inlined as one
-<a href=#1353 id=1353 data-nosnippet>1353</a>    // argument; asking the containing question sent it to `sum_reconstruct`,
-<a href=#1354 id=1354 data-nosnippet>1354</a>    // which panics on a struct (#616 review).
-<a href=#1355 id=1355 data-nosnippet>1355</a>    </span><span class="kw">if </span>!<span class="kw">crate</span>::jni::emit::is_whole_sum_row(wires) {
-<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="kw">let </span>slots: Vec&lt;String&gt; = (<span class="number">0</span>..wires.len())
-<a href=#1357 id=1357 data-nosnippet>1357</a>            .map(|i| <span class="macro">format!</span>(<span class="string">"${}"</span>, i + first_slot))
-<a href=#1358 id=1358 data-nosnippet>1358</a>            .collect();
-<a href=#1359 id=1359 data-nosnippet>1359</a>        <span class="kw">let </span>class_short = class_fqn.rsplit(<span class="string">'.'</span>).next().unwrap_or(class_fqn);
-<a href=#1360 id=1360 data-nosnippet>1360</a>        <span class="kw">return </span>(
-<a href=#1361 id=1361 data-nosnippet>1361</a>            <span class="macro">format!</span>(<span class="string">"{class_short}.fromParts({})"</span>, slots.join(<span class="string">", "</span>)),
-<a href=#1362 id=1362 data-nosnippet>1362</a>            Vec::new(),
-<a href=#1363 id=1363 data-nosnippet>1363</a>        );
-<a href=#1364 id=1364 data-nosnippet>1364</a>    }
-<a href=#1365 id=1365 data-nosnippet>1365</a>    sum_segment_reassembly(ext, registry, source, wires, first_slot)
-<a href=#1366 id=1366 data-nosnippet>1366</a>}
-<a href=#1367 id=1367 data-nosnippet>1367</a>
-<a href=#1368 id=1368 data-nosnippet>1368</a><span class="doccomment">/// The `when` that rebuilds one sum from its own segment — a selector followed
-<a href=#1369 id=1369 data-nosnippet>1369</a>/// by its groups.
-<a href=#1370 id=1370 data-nosnippet>1370</a>///
-<a href=#1371 id=1371 data-nosnippet>1371</a>/// Called directly where the caller has already isolated the segment, and
-<a href=#1372 id=1372 data-nosnippet>1372</a>/// through [`fixed_reassembly`] where the whole delivered value is the sum.
-<a href=#1373 id=1373 data-nosnippet>1373</a></span><span class="kw">fn </span>sum_segment_reassembly(
-<a href=#1374 id=1374 data-nosnippet>1374</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1375 id=1375 data-nosnippet>1375</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1376 id=1376 data-nosnippet>1376</a>    source: <span class="kw-2">&amp;</span>TypeKey,
-<a href=#1377 id=1377 data-nosnippet>1377</a>    wires: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
-<a href=#1378 id=1378 data-nosnippet>1378</a>    first_slot: usize,
-<a href=#1379 id=1379 data-nosnippet>1379</a>) -&gt; (String, Vec&lt;String&gt;) {
-<a href=#1380 id=1380 data-nosnippet>1380</a>    <span class="kw">let </span>slots: Vec&lt;String&gt; = (<span class="number">0</span>..wires.len())
-<a href=#1381 id=1381 data-nosnippet>1381</a>        .map(|i| <span class="macro">format!</span>(<span class="string">"${}"</span>, i + first_slot))
-<a href=#1382 id=1382 data-nosnippet>1382</a>        .collect();
-<a href=#1383 id=1383 data-nosnippet>1383</a>    <span class="kw">let </span>params = plan_leaf_params(ext, wires).unwrap_or_default();
-<a href=#1384 id=1384 data-nosnippet>1384</a>    <span class="kw">let </span><span class="kw-2">mut </span>imports: BTreeSet&lt;String&gt; = BTreeSet::new();
-<a href=#1385 id=1385 data-nosnippet>1385</a>    <span class="kw">let </span>(<span class="kw">_</span>, when) = ext.sum_reconstruct(
-<a href=#1386 id=1386 data-nosnippet>1386</a>        registry.flat(),
-<a href=#1387 id=1387 data-nosnippet>1387</a>        source,
-<a href=#1388 id=1388 data-nosnippet>1388</a>        wires,
-<a href=#1389 id=1389 data-nosnippet>1389</a>        <span class="kw-2">&amp;</span>params,
-<a href=#1390 id=1390 data-nosnippet>1390</a>        <span class="kw-2">&amp;</span>slots,
-<a href=#1391 id=1391 data-nosnippet>1391</a>        <span class="kw-2">&amp;mut </span>imports,
-<a href=#1392 id=1392 data-nosnippet>1392</a>    );
-<a href=#1393 id=1393 data-nosnippet>1393</a>    (when, imports.into_iter().collect())
-<a href=#1394 id=1394 data-nosnippet>1394</a>}
-<a href=#1395 id=1395 data-nosnippet>1395</a>
-<a href=#1396 id=1396 data-nosnippet>1396</a><span class="doccomment">/// The callback plan this adapter can actually deliver for `ty`.
-<a href=#1397 id=1397 data-nosnippet>1397</a>///
-<a href=#1398 id=1398 data-nosnippet>1398</a>/// An explicit conversion of the whole optional intentionally suppresses the
-<a href=#1399 id=1399 data-nosnippet>1399</a>/// Optional `parts` row. In that case the registry still knows the model shape,
-<a href=#1400 id=1400 data-nosnippet>1400</a>/// but JniGen must honor the terminal declaration and deliver the value whole.
-<a href=#1401 id=1401 data-nosnippet>1401</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>effective_callback_plan&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#1402 id=1402 data-nosnippet>1402</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1403 id=1403 data-nosnippet>1403</a>    registry: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">impl </span>Conversions,
+<a href=#1196 id=1196 data-nosnippet>1196</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fixed_decon_ids(ext: <span class="kw-2">&amp;</span>Declarations) -&gt; std::collections::HashSet&lt;DeconId&gt; {
+<a href=#1197 id=1197 data-nosnippet>1197</a>    <span class="kw">let </span>fixed: std::collections::HashSet&lt;DeconId&gt; = ext
+<a href=#1198 id=1198 data-nosnippet>1198</a>        .unfolded()
+<a href=#1199 id=1199 data-nosnippet>1199</a>        .unfold_plans
+<a href=#1200 id=1200 data-nosnippet>1200</a>        .values()
+<a href=#1201 id=1201 data-nosnippet>1201</a>        .chain(ext.unfolded().callback_arg_plans.values())
+<a href=#1202 id=1202 data-nosnippet>1202</a>        .filter(|p| p.fixed_builder)
+<a href=#1203 id=1203 data-nosnippet>1203</a>        .filter_map(|p| p.decon.clone())
+<a href=#1204 id=1204 data-nosnippet>1204</a>        .collect();
+<a href=#1205 id=1205 data-nosnippet>1205</a>    <span class="comment">// Fixedness must be UNIFORM per identity, and two consumers now depend on
+<a href=#1206 id=1206 data-nosnippet>1206</a>    // that: the memo swaps in the fixed typed-group view for the whole
+<a href=#1207 id=1207 data-nosnippet>1207</a>    // identity, and the emitter suppresses the typed interface entirely when
+<a href=#1208 id=1208 data-nosnippet>1208</a>    // the singleton is its only implementation. A mixed identity would give a
+<a href=#1209 id=1209 data-nosnippet>1209</a>    // non-fixed wrapper a `build`/`fold` param whose interface was shaped —
+<a href=#1210 id=1210 data-nosnippet>1210</a>    // or removed — for the fixed case.
+<a href=#1211 id=1211 data-nosnippet>1211</a>    //
+<a href=#1212 id=1212 data-nosnippet>1212</a>    // It holds by construction: `apply_value_structs` / `apply_sum_returns` run
+<a href=#1213 id=1213 data-nosnippet>1213</a>    // AFTER `unfold::apply` and wire every reachable position of a type at
+<a href=#1214 id=1214 data-nosnippet>1214</a>    // once, so a `DeconId::Default` is all-fixed or all-not; a `DeconId::PerFn`
+<a href=#1215 id=1215 data-nosnippet>1215</a>    // is unique to one function and so trivially uniform. Asserted rather than
+<a href=#1216 id=1216 data-nosnippet>1216</a>    // assumed, so a future wiring change fails here instead of emitting a
+<a href=#1217 id=1217 data-nosnippet>1217</a>    // wrapper that references an interface which no longer exists.
+<a href=#1218 id=1218 data-nosnippet>1218</a>    </span><span class="macro">debug_assert!</span>(
+<a href=#1219 id=1219 data-nosnippet>1219</a>        !ext.unfolded()
+<a href=#1220 id=1220 data-nosnippet>1220</a>            .unfold_plans
+<a href=#1221 id=1221 data-nosnippet>1221</a>            .values()
+<a href=#1222 id=1222 data-nosnippet>1222</a>            .chain(ext.unfolded().callback_arg_plans.values())
+<a href=#1223 id=1223 data-nosnippet>1223</a>            .any(|p| !p.fixed_builder &amp;&amp; p.decon.as_ref().is_some_and(|d| fixed.contains(d))),
+<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="string">"fixed and non-fixed plans share one DeconId — the typed interface \
+<a href=#1225 id=1225 data-nosnippet>1225</a>         cannot be shaped (or suppressed) for both"
+<a href=#1226 id=1226 data-nosnippet>1226</a>    </span>);
+<a href=#1227 id=1227 data-nosnippet>1227</a>    fixed
+<a href=#1228 id=1228 data-nosnippet>1228</a>}
+<a href=#1229 id=1229 data-nosnippet>1229</a>
+<a href=#1230 id=1230 data-nosnippet>1230</a><span class="doccomment">/// Derive the spec for one identity — the SINGLE construction point behind
+<a href=#1231 id=1231 data-nosnippet>1231</a>/// [`Declarations::iface_spec`]. Any `syn` context is **looked up**, never
+<a href=#1232 id=1232 data-nosnippet>1232</a>/// rebuilt from the key: `Registry::reading` answers from the type table, and a
+<a href=#1233 id=1233 data-nosnippet>1233</a>/// key it cannot answer for defers rather than producing tokens nothing
+<a href=#1234 id=1234 data-nosnippet>1234</a>/// classified (#291). A `Folder` derivation folds the fixed-builder
+<a href=#1235 id=1235 data-nosnippet>1235</a>/// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
+<a href=#1236 id=1236 data-nosnippet>1236</a></span><span class="kw">fn </span>derive_iface_spec(
+<a href=#1237 id=1237 data-nosnippet>1237</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1238 id=1238 data-nosnippet>1238</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1239 id=1239 data-nosnippet>1239</a>    key: <span class="kw-2">&amp;</span>SpecKey,
+<a href=#1240 id=1240 data-nosnippet>1240</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
+<a href=#1241 id=1241 data-nosnippet>1241</a>    <span class="kw">match </span>key {
+<a href=#1242 id=1242 data-nosnippet>1242</a>        SpecKey::Callback(arg_keys) =&gt; {
+<a href=#1243 id=1243 data-nosnippet>1243</a>            <span class="comment">// The one deliberate round trip in this file, and the memo forces
+<a href=#1244 id=1244 data-nosnippet>1244</a>            // it: `SpecKey` needs `Ord`, so it holds `TypeKey`s — a `TypeRef`
+<a href=#1245 id=1245 data-nosnippet>1245</a>            // could not go in one (its `Origin` carries a `SourceLocation`, so
+<a href=#1246 id=1246 data-nosnippet>1246</a>            // two identical readings from different files would compare
+<a href=#1247 id=1247 data-nosnippet>1247</a>            // unequal), and `derive_iface_spec` is contractually a pure
+<a href=#1248 id=1248 data-nosnippet>1248</a>            // function of the key.
+<a href=#1249 id=1249 data-nosnippet>1249</a>            //
+<a href=#1250 id=1250 data-nosnippet>1250</a>            // A LOOKUP, not a classification: `Registry::reading` has answered
+<a href=#1251 id=1251 data-nosnippet>1251</a>            // only from the type table since #267. `None` means the arg has
+<a href=#1252 id=1252 data-nosnippet>1252</a>            // not entered the pipeline yet, which is the same "not yet
+<a href=#1253 id=1253 data-nosnippet>1253</a>            // derivable" state `iface_spec` already documents and retries —
+<a href=#1254 id=1254 data-nosnippet>1254</a>            // so it defers rather than answering "not optional", which is what
+<a href=#1255 id=1255 data-nosnippet>1255</a>            // the accessor used to do here.
+<a href=#1256 id=1256 data-nosnippet>1256</a>            </span><span class="kw">let </span>args: Vec&lt;prebindgen_registry::flat::TypeRef&gt; = arg_keys
+<a href=#1257 id=1257 data-nosnippet>1257</a>                .iter()
+<a href=#1258 id=1258 data-nosnippet>1258</a>                .map(|k| registry.reading(k))
+<a href=#1259 id=1259 data-nosnippet>1259</a>                .collect::&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#1260 id=1260 data-nosnippet>1260</a>            callback_iface_spec(ext, registry, <span class="kw-2">&amp;</span>args)
+<a href=#1261 id=1261 data-nosnippet>1261</a>        }
+<a href=#1262 id=1262 data-nosnippet>1262</a>        SpecKey::Builder(d) =&gt; builder_iface_spec(ext, d),
+<a href=#1263 id=1263 data-nosnippet>1263</a>        SpecKey::Folder(d) =&gt; {
+<a href=#1264 id=1264 data-nosnippet>1264</a>            <span class="kw">let </span><span class="kw-2">mut </span>spec = folder_iface_spec(ext, d)<span class="question-mark">?</span>;
+<a href=#1265 id=1265 data-nosnippet>1265</a>            <span class="kw">if </span>fixed_decon_ids(ext).contains(d) {
+<a href=#1266 id=1266 data-nosnippet>1266</a>                spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)<span class="question-mark">?</span>;
+<a href=#1267 id=1267 data-nosnippet>1267</a>            }
+<a href=#1268 id=1268 data-nosnippet>1268</a>            <span class="prelude-val">Some</span>(spec)
+<a href=#1269 id=1269 data-nosnippet>1269</a>        }
+<a href=#1270 id=1270 data-nosnippet>1270</a>        <span class="comment">// Same round trip, same reason, same answer as the `Callback` arm
+<a href=#1271 id=1271 data-nosnippet>1271</a>        // above: the memo key holds an identity, and the reading behind it is a
+<a href=#1272 id=1272 data-nosnippet>1272</a>        // lookup. `None` defers, exactly as it does there (#291).
+<a href=#1273 id=1273 data-nosnippet>1273</a>        </span>SpecKey::WholeFolder(el_key) =&gt; whole_folder_iface_spec(ext, <span class="kw-2">&amp;</span>registry.reading(el_key)<span class="question-mark">?</span>),
+<a href=#1274 id=1274 data-nosnippet>1274</a>        SpecKey::Handler(d) =&gt; error_handler_iface_spec(ext, d),
+<a href=#1275 id=1275 data-nosnippet>1275</a>        SpecKey::JniErrorHandler =&gt; <span class="prelude-val">Some</span>(jni_error_handler_iface_spec(ext)),
+<a href=#1276 id=1276 data-nosnippet>1276</a>    }
+<a href=#1277 id=1277 data-nosnippet>1277</a>}
+<a href=#1278 id=1278 data-nosnippet>1278</a>
+<a href=#1279 id=1279 data-nosnippet>1279</a><span class="kw">impl </span>Declarations {
+<a href=#1280 id=1280 data-nosnippet>1280</a>    <span class="doccomment">/// The memoized spec for one interface identity: derived once per
+<a href=#1281 id=1281 data-nosnippet>1281</a>    /// generator run and shared by every consumer — the resolve-time
+<a href=#1282 id=1282 data-nosnippet>1282</a>    /// trampoline, the per-function plan, and the declaration emitter — so
+<a href=#1283 id=1283 data-nosnippet>1283</a>    /// the FQN/descriptor pair cannot drift between artifact tiers (issue
+<a href=#1284 id=1284 data-nosnippet>1284</a>    /// #107). `None` (not yet derivable — e.g. leaf converters still
+<a href=#1285 id=1285 data-nosnippet>1285</a>    /// unresolved) is NOT cached: the resolve-time caller defers and
+<a href=#1286 id=1286 data-nosnippet>1286</a>    /// retries. In debug builds a cache hit re-derives and asserts equality,
+<a href=#1287 id=1287 data-nosnippet>1287</a>    /// so any nondeterminism in the constructors fails loudly under test
+<a href=#1288 id=1288 data-nosnippet>1288</a>    /// instead of shipping descriptor drift.
+<a href=#1289 id=1289 data-nosnippet>1289</a>    /// The frozen interface spec, for a render caller.
+<a href=#1290 id=1290 data-nosnippet>1290</a>    ///
+<a href=#1291 id=1291 data-nosnippet>1291</a>    /// `iface_spec` already answers from the generation first when one is
+<a href=#1292 id=1292 data-nosnippet>1292</a>    /// installed, so a renderer never reaches the derivation below it and needs
+<a href=#1293 id=1293 data-nosnippet>1293</a>    /// no `Conversions` to get there. Panics by name if no generation exists,
+<a href=#1294 id=1294 data-nosnippet>1294</a>    /// which is the failure a renderer would hit deriving without one (#613
+<a href=#1295 id=1295 data-nosnippet>1295</a>    /// step 7).
+<a href=#1296 id=1296 data-nosnippet>1296</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iface_spec_frozen(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>SpecKey) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
+<a href=#1297 id=1297 data-nosnippet>1297</a>        <span class="self">self</span>.generation
+<a href=#1298 id=1298 data-nosnippet>1298</a>            .as_deref()
+<a href=#1299 id=1299 data-nosnippet>1299</a>            .unwrap_or_else(|| {
+<a href=#1300 id=1300 data-nosnippet>1300</a>                <span class="macro">panic!</span>(<span class="string">"interface spec `{key:?}`: its frozen JNI generation plan is unavailable"</span>)
+<a href=#1301 id=1301 data-nosnippet>1301</a>            })
+<a href=#1302 id=1302 data-nosnippet>1302</a>            .interface(key)
+<a href=#1303 id=1303 data-nosnippet>1303</a>    }
+<a href=#1304 id=1304 data-nosnippet>1304</a>
+<a href=#1305 id=1305 data-nosnippet>1305</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iface_spec(
+<a href=#1306 id=1306 data-nosnippet>1306</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1307 id=1307 data-nosnippet>1307</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1308 id=1308 data-nosnippet>1308</a>        key: <span class="kw-2">&amp;</span>SpecKey,
+<a href=#1309 id=1309 data-nosnippet>1309</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
+<a href=#1310 id=1310 data-nosnippet>1310</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(generation) = <span class="kw-2">&amp;</span><span class="self">self</span>.generation {
+<a href=#1311 id=1311 data-nosnippet>1311</a>            <span class="kw">return </span>generation.interface(key);
+<a href=#1312 id=1312 data-nosnippet>1312</a>        }
+<a href=#1313 id=1313 data-nosnippet>1313</a>        <span class="kw">let </span>hit = <span class="self">self</span>.iface_specs.borrow().get(key).cloned();
+<a href=#1314 id=1314 data-nosnippet>1314</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(hit) = hit {
+<a href=#1315 id=1315 data-nosnippet>1315</a>            <span class="attr">#[cfg(debug_assertions)]
+<a href=#1316 id=1316 data-nosnippet>1316</a>            </span>{
+<a href=#1317 id=1317 data-nosnippet>1317</a>                <span class="kw">let </span>fresh = derive_iface_spec(<span class="self">self</span>, registry, key);
+<a href=#1318 id=1318 data-nosnippet>1318</a>                <span class="macro">debug_assert_eq!</span>(
+<a href=#1319 id=1319 data-nosnippet>1319</a>                    fresh.as_ref().map(|s| <span class="macro">format!</span>(<span class="string">"{s:?}"</span>)),
+<a href=#1320 id=1320 data-nosnippet>1320</a>                    <span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"{:?}"</span>, <span class="kw-2">*</span>hit)),
+<a href=#1321 id=1321 data-nosnippet>1321</a>                    <span class="string">"IfaceSpec derivation drifted for {key:?}"
+<a href=#1322 id=1322 data-nosnippet>1322</a>                </span>);
+<a href=#1323 id=1323 data-nosnippet>1323</a>            }
+<a href=#1324 id=1324 data-nosnippet>1324</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(hit);
+<a href=#1325 id=1325 data-nosnippet>1325</a>        }
+<a href=#1326 id=1326 data-nosnippet>1326</a>        <span class="kw">let </span>spec = std::sync::Arc::new(derive_iface_spec(<span class="self">self</span>, registry, key)<span class="question-mark">?</span>);
+<a href=#1327 id=1327 data-nosnippet>1327</a>        <span class="self">self</span>.iface_specs
+<a href=#1328 id=1328 data-nosnippet>1328</a>            .borrow_mut()
+<a href=#1329 id=1329 data-nosnippet>1329</a>            .insert(key.clone(), spec.clone());
+<a href=#1330 id=1330 data-nosnippet>1330</a>        <span class="prelude-val">Some</span>(spec)
+<a href=#1331 id=1331 data-nosnippet>1331</a>    }
+<a href=#1332 id=1332 data-nosnippet>1332</a>}
+<a href=#1333 id=1333 data-nosnippet>1333</a>
+<a href=#1334 id=1334 data-nosnippet>1334</a><span class="doccomment">/// The [`TypedGroup::reassemble`] expression (and its raw-text imports) for a
+<a href=#1335 id=1335 data-nosnippet>1335</a>/// **fixed-builder** decomposition's leaves — the one place the two shapes are
+<a href=#1336 id=1336 data-nosnippet>1336</a>/// distinguished, so the callback proxy and the `Vec` folder cannot pick
+<a href=#1337 id=1337 data-nosnippet>1337</a>/// different reassemblies for the same type.
+<a href=#1338 id=1338 data-nosnippet>1338</a>///
+<a href=#1339 id=1339 data-nosnippet>1339</a>/// A product reassembles through the class's own `fromParts`; a **sum** cannot
+<a href=#1340 id=1340 data-nosnippet>1340</a>/// — its `fromParts` is the Kotlin-facing convenience whose parameters are
+<a href=#1341 id=1341 data-nosnippet>1341</a>/// property types, not the wire — so it reassembles through the same inlined
+<a href=#1342 id=1342 data-nosnippet>1342</a>/// `when` over the tag that a sum-typed struct field gets.
+<a href=#1343 id=1343 data-nosnippet>1343</a></span><span class="kw">fn </span>fixed_reassembly(
+<a href=#1344 id=1344 data-nosnippet>1344</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1345 id=1345 data-nosnippet>1345</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1346 id=1346 data-nosnippet>1346</a>    source: <span class="kw-2">&amp;</span>TypeKey,
+<a href=#1347 id=1347 data-nosnippet>1347</a>    wires: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
+<a href=#1348 id=1348 data-nosnippet>1348</a>    class_fqn: <span class="kw-2">&amp;</span>str,
+<a href=#1349 id=1349 data-nosnippet>1349</a>    first_slot: usize,
+<a href=#1350 id=1350 data-nosnippet>1350</a>) -&gt; (String, Vec&lt;String&gt;) {
+<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="comment">// Whether the delivered value IS a sum, not whether it contains one. A
+<a href=#1352 id=1352 data-nosnippet>1352</a>    // struct with a sum-typed field carries a tag and still reassembles
+<a href=#1353 id=1353 data-nosnippet>1353</a>    // through its own `fromParts`, with the field's `when` inlined as one
+<a href=#1354 id=1354 data-nosnippet>1354</a>    // argument; asking the containing question sent it to `sum_reconstruct`,
+<a href=#1355 id=1355 data-nosnippet>1355</a>    // which panics on a struct (#616 review).
+<a href=#1356 id=1356 data-nosnippet>1356</a>    </span><span class="kw">if </span>!<span class="kw">crate</span>::jni::emit::is_whole_sum_row(wires) {
+<a href=#1357 id=1357 data-nosnippet>1357</a>        <span class="kw">let </span>slots: Vec&lt;String&gt; = (<span class="number">0</span>..wires.len())
+<a href=#1358 id=1358 data-nosnippet>1358</a>            .map(|i| <span class="macro">format!</span>(<span class="string">"${}"</span>, i + first_slot))
+<a href=#1359 id=1359 data-nosnippet>1359</a>            .collect();
+<a href=#1360 id=1360 data-nosnippet>1360</a>        <span class="kw">let </span>class_short = class_fqn.rsplit(<span class="string">'.'</span>).next().unwrap_or(class_fqn);
+<a href=#1361 id=1361 data-nosnippet>1361</a>        <span class="kw">return </span>(
+<a href=#1362 id=1362 data-nosnippet>1362</a>            <span class="macro">format!</span>(<span class="string">"{class_short}.fromParts({})"</span>, slots.join(<span class="string">", "</span>)),
+<a href=#1363 id=1363 data-nosnippet>1363</a>            Vec::new(),
+<a href=#1364 id=1364 data-nosnippet>1364</a>        );
+<a href=#1365 id=1365 data-nosnippet>1365</a>    }
+<a href=#1366 id=1366 data-nosnippet>1366</a>    sum_segment_reassembly(ext, registry, source, wires, first_slot)
+<a href=#1367 id=1367 data-nosnippet>1367</a>}
+<a href=#1368 id=1368 data-nosnippet>1368</a>
+<a href=#1369 id=1369 data-nosnippet>1369</a><span class="doccomment">/// The `when` that rebuilds one sum from its own segment — a selector followed
+<a href=#1370 id=1370 data-nosnippet>1370</a>/// by its groups.
+<a href=#1371 id=1371 data-nosnippet>1371</a>///
+<a href=#1372 id=1372 data-nosnippet>1372</a>/// Called directly where the caller has already isolated the segment, and
+<a href=#1373 id=1373 data-nosnippet>1373</a>/// through [`fixed_reassembly`] where the whole delivered value is the sum.
+<a href=#1374 id=1374 data-nosnippet>1374</a></span><span class="kw">fn </span>sum_segment_reassembly(
+<a href=#1375 id=1375 data-nosnippet>1375</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1376 id=1376 data-nosnippet>1376</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1377 id=1377 data-nosnippet>1377</a>    source: <span class="kw-2">&amp;</span>TypeKey,
+<a href=#1378 id=1378 data-nosnippet>1378</a>    wires: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
+<a href=#1379 id=1379 data-nosnippet>1379</a>    first_slot: usize,
+<a href=#1380 id=1380 data-nosnippet>1380</a>) -&gt; (String, Vec&lt;String&gt;) {
+<a href=#1381 id=1381 data-nosnippet>1381</a>    <span class="kw">let </span>slots: Vec&lt;String&gt; = (<span class="number">0</span>..wires.len())
+<a href=#1382 id=1382 data-nosnippet>1382</a>        .map(|i| <span class="macro">format!</span>(<span class="string">"${}"</span>, i + first_slot))
+<a href=#1383 id=1383 data-nosnippet>1383</a>        .collect();
+<a href=#1384 id=1384 data-nosnippet>1384</a>    <span class="kw">let </span>params = plan_leaf_params(ext, wires).unwrap_or_default();
+<a href=#1385 id=1385 data-nosnippet>1385</a>    <span class="kw">let </span><span class="kw-2">mut </span>imports: BTreeSet&lt;String&gt; = BTreeSet::new();
+<a href=#1386 id=1386 data-nosnippet>1386</a>    <span class="kw">let </span>(<span class="kw">_</span>, when) = ext.sum_reconstruct(
+<a href=#1387 id=1387 data-nosnippet>1387</a>        registry.flat(),
+<a href=#1388 id=1388 data-nosnippet>1388</a>        source,
+<a href=#1389 id=1389 data-nosnippet>1389</a>        wires,
+<a href=#1390 id=1390 data-nosnippet>1390</a>        <span class="kw-2">&amp;</span>params,
+<a href=#1391 id=1391 data-nosnippet>1391</a>        <span class="kw-2">&amp;</span>slots,
+<a href=#1392 id=1392 data-nosnippet>1392</a>        <span class="kw-2">&amp;mut </span>imports,
+<a href=#1393 id=1393 data-nosnippet>1393</a>    );
+<a href=#1394 id=1394 data-nosnippet>1394</a>    (when, imports.into_iter().collect())
+<a href=#1395 id=1395 data-nosnippet>1395</a>}
+<a href=#1396 id=1396 data-nosnippet>1396</a>
+<a href=#1397 id=1397 data-nosnippet>1397</a><span class="doccomment">/// The callback plan this adapter can actually deliver for `ty`.
+<a href=#1398 id=1398 data-nosnippet>1398</a>///
+<a href=#1399 id=1399 data-nosnippet>1399</a>/// An explicit conversion of the whole optional intentionally suppresses the
+<a href=#1400 id=1400 data-nosnippet>1400</a>/// Optional `parts` row. In that case the registry still knows the model shape,
+<a href=#1401 id=1401 data-nosnippet>1401</a>/// but JniGen must honor the terminal declaration and deliver the value whole.
+<a href=#1402 id=1402 data-nosnippet>1402</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>effective_callback_plan&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#1403 id=1403 data-nosnippet>1403</a>    ext: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Declarations,
 <a href=#1404 id=1404 data-nosnippet>1404</a>    ty: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
 <a href=#1405 id=1405 data-nosnippet>1405</a>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>UnfoldPlan&gt; {
-<a href=#1406 id=1406 data-nosnippet>1406</a>    <span class="kw">let </span>plan = registry.callback_arg_plan(<span class="kw-2">&amp;</span>ty.key())<span class="question-mark">?</span>;
+<a href=#1406 id=1406 data-nosnippet>1406</a>    <span class="kw">let </span>plan = ext.unfolded().callback_arg_plans.get(<span class="kw-2">&amp;</span>ty.key())<span class="question-mark">?</span>;
 <a href=#1407 id=1407 data-nosnippet>1407</a>    <span class="kw">if </span>plan.is_optional_base() {
 <a href=#1408 id=1408 data-nosnippet>1408</a>        <span class="kw">let </span>crossing = prebindgen_registry::recipe::Crossing::new(
 <a href=#1409 id=1409 data-nosnippet>1409</a>            plan.source.clone().optional(),
@@ -1478,8 +1478,8 @@
 <a href=#1478 id=1478 data-nosnippet>1478</a>        // `List&lt;Element&gt;`, so it takes the plain whole-value path below (no leaf
 <a href=#1479 id=1479 data-nosnippet>1479</a>        // params, no reassembly group). Only `Base`/accessor plans decompose the
 <a href=#1480 id=1480 data-nosnippet>1480</a>        // arg into the callback's `run` params here.
-<a href=#1481 id=1481 data-nosnippet>1481</a>        </span><span class="kw">let </span>plan = effective_callback_plan(ext, registry, t)
-<a href=#1482 id=1482 data-nosnippet>1482</a>            .filter(|p| !<span class="kw">super</span>::render::is_iterable_fold(<span class="kw-2">&amp;</span>p.shape));
+<a href=#1481 id=1481 data-nosnippet>1481</a>        </span><span class="kw">let </span>plan =
+<a href=#1482 id=1482 data-nosnippet>1482</a>            effective_callback_plan(ext, t).filter(|p| !<span class="kw">super</span>::render::is_iterable_fold(<span class="kw-2">&amp;</span>p.shape));
 <a href=#1483 id=1483 data-nosnippet>1483</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(plan) = plan {
 <a href=#1484 id=1484 data-nosnippet>1484</a>            <span class="kw">let </span>optional = plan.is_optional_base();
 <a href=#1485 id=1485 data-nosnippet>1485</a>            <span class="kw">let </span>whole_name = whole_value_name(t, i);
@@ -1676,8 +1676,8 @@
 <a href=#1676 id=1676 data-nosnippet>1676</a>                .iter()
 <a href=#1677 id=1677 data-nosnippet>1677</a>                .map(|ty| {
 <a href=#1678 id=1678 data-nosnippet>1678</a>                    <span class="kw">let </span>short = subject_short(ty);
-<a href=#1679 id=1679 data-nosnippet>1679</a>                    <span class="kw">let </span>optional = effective_callback_plan(ext, registry, ty)
-<a href=#1680 id=1680 data-nosnippet>1680</a>                        .is_some_and(UnfoldPlan::is_optional_base);
+<a href=#1679 id=1679 data-nosnippet>1679</a>                    <span class="kw">let </span>optional =
+<a href=#1680 id=1680 data-nosnippet>1680</a>                        effective_callback_plan(ext, ty).is_some_and(UnfoldPlan::is_optional_base);
 <a href=#1681 id=1681 data-nosnippet>1681</a>                    <span class="kw">if </span>optional {
 <a href=#1682 id=1682 data-nosnippet>1682</a>                        <span class="macro">format!</span>(<span class="string">"{short}Optional"</span>)
 <a href=#1683 id=1683 data-nosnippet>1683</a>                    } <span class="kw">else </span>{
@@ -1704,283 +1704,271 @@
 <a href=#1704 id=1704 data-nosnippet>1704</a>/// representative plan in `registry.decon_plans`, never from a using
 <a href=#1705 id=1705 data-nosnippet>1705</a>/// function's own plan. Named `&lt;decl-base&gt;Builder`, placed in the source
 <a href=#1706 id=1706 data-nosnippet>1706</a>/// type's package.
-<a href=#1707 id=1707 data-nosnippet>1707</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>builder_iface_spec(
-<a href=#1708 id=1708 data-nosnippet>1708</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1709 id=1709 data-nosnippet>1709</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1710 id=1710 data-nosnippet>1710</a>    decon: <span class="kw-2">&amp;</span>DeconId,
-<a href=#1711 id=1711 data-nosnippet>1711</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
-<a href=#1712 id=1712 data-nosnippet>1712</a>    <span class="kw">let </span>spec = registry.decon_plans().get(decon)<span class="question-mark">?</span>;
-<a href=#1713 id=1713 data-nosnippet>1713</a>    <span class="kw">let </span>params = plan_leaf_params(
-<a href=#1714 id=1714 data-nosnippet>1714</a>        ext,
-<a href=#1715 id=1715 data-nosnippet>1715</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
-<a href=#1716 id=1716 data-nosnippet>1716</a>    )<span class="question-mark">?</span>;
-<a href=#1717 id=1717 data-nosnippet>1717</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(
-<a href=#1718 id=1718 data-nosnippet>1718</a>        <span class="string">"{}Builder"</span>,
-<a href=#1719 id=1719 data-nosnippet>1719</a>        decon_base_name(<span class="kw-2">&amp;</span>subject_short(<span class="kw-2">&amp;</span>spec.source), <span class="prelude-val">Some</span>(decon))
-<a href=#1720 id=1720 data-nosnippet>1720</a>    );
-<a href=#1721 id=1721 data-nosnippet>1721</a>    <span class="kw">let </span>package = subject_package(ext, <span class="kw-2">&amp;</span>spec.source);
-<a href=#1722 id=1722 data-nosnippet>1722</a>    <span class="prelude-val">Some</span>(IfaceSpec::assemble(
-<a href=#1723 id=1723 data-nosnippet>1723</a>        package,
-<a href=#1724 id=1724 data-nosnippet>1724</a>        name,
-<a href=#1725 id=1725 data-nosnippet>1725</a>        <span class="macro">vec!</span>[<span class="string">"out R"</span>.to_string()],
-<a href=#1726 id=1726 data-nosnippet>1726</a>        params,
-<a href=#1727 id=1727 data-nosnippet>1727</a>        KtType::var_r(),
-<a href=#1728 id=1728 data-nosnippet>1728</a>    ))
-<a href=#1729 id=1729 data-nosnippet>1729</a>}
-<a href=#1730 id=1730 data-nosnippet>1730</a>
-<a href=#1731 id=1731 data-nosnippet>1731</a><span class="doccomment">/// Interface for a **decomposed-element fold** (`Iterable` delivery over a
-<a href=#1732 id=1732 data-nosnippet>1732</a>/// type with a deconstructor): `run(acc: A, element-leaves…): A`, `&lt;A&gt;`
-<a href=#1733 id=1733 data-nosnippet>1733</a>/// (invariant — `A` appears in both parameter and return position). Keyed by
-<a href=#1734 id=1734 data-nosnippet>1734</a>/// the element's deconstructor declaration. Named `&lt;decl-base&gt;Folder`,
-<a href=#1735 id=1735 data-nosnippet>1735</a>/// placed in the element type's package.
-<a href=#1736 id=1736 data-nosnippet>1736</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>folder_iface_spec(
-<a href=#1737 id=1737 data-nosnippet>1737</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1738 id=1738 data-nosnippet>1738</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1739 id=1739 data-nosnippet>1739</a>    decon: <span class="kw-2">&amp;</span>DeconId,
-<a href=#1740 id=1740 data-nosnippet>1740</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
-<a href=#1741 id=1741 data-nosnippet>1741</a>    <span class="kw">let </span>spec = registry.decon_plans().get(decon)<span class="question-mark">?</span>;
-<a href=#1742 id=1742 data-nosnippet>1742</a>    <span class="kw">let </span><span class="kw-2">mut </span>params: Vec&lt;IfaceParam&gt; = <span class="macro">vec!</span>[IfaceParam::same(<span class="string">"acc"</span>.to_string(), KtType::var_(<span class="string">"A"</span>))];
-<a href=#1743 id=1743 data-nosnippet>1743</a>    params.extend(plan_leaf_params(
-<a href=#1744 id=1744 data-nosnippet>1744</a>        ext,
-<a href=#1745 id=1745 data-nosnippet>1745</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
-<a href=#1746 id=1746 data-nosnippet>1746</a>    )<span class="question-mark">?</span>);
-<a href=#1747 id=1747 data-nosnippet>1747</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(
-<a href=#1748 id=1748 data-nosnippet>1748</a>        <span class="string">"{}Folder"</span>,
-<a href=#1749 id=1749 data-nosnippet>1749</a>        decon_base_name(<span class="kw-2">&amp;</span>subject_short(<span class="kw-2">&amp;</span>spec.source), <span class="prelude-val">Some</span>(decon))
-<a href=#1750 id=1750 data-nosnippet>1750</a>    );
-<a href=#1751 id=1751 data-nosnippet>1751</a>    <span class="kw">let </span>package = subject_package(ext, <span class="kw-2">&amp;</span>spec.source);
-<a href=#1752 id=1752 data-nosnippet>1752</a>    <span class="prelude-val">Some</span>(IfaceSpec::assemble(
-<a href=#1753 id=1753 data-nosnippet>1753</a>        package,
-<a href=#1754 id=1754 data-nosnippet>1754</a>        name,
-<a href=#1755 id=1755 data-nosnippet>1755</a>        <span class="macro">vec!</span>[<span class="string">"A"</span>.to_string()],
-<a href=#1756 id=1756 data-nosnippet>1756</a>        params,
-<a href=#1757 id=1757 data-nosnippet>1757</a>        KtType::var_(<span class="string">"A"</span>),
-<a href=#1758 id=1758 data-nosnippet>1758</a>    ))
-<a href=#1759 id=1759 data-nosnippet>1759</a>}
-<a href=#1760 id=1760 data-nosnippet>1760</a>
-<a href=#1761 id=1761 data-nosnippet>1761</a><span class="doccomment">/// Interface for a **whole-element fold** (`Iterable` delivery of a type
-<a href=#1762 id=1762 data-nosnippet>1762</a>/// without a deconstructor — no declaration involved):
-<a href=#1763 id=1763 data-nosnippet>1763</a>/// `run(acc: A, element): A`. One shape per element type by construction.
-<a href=#1764 id=1764 data-nosnippet>1764</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>whole_folder_iface_spec(
-<a href=#1765 id=1765 data-nosnippet>1765</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1766 id=1766 data-nosnippet>1766</a>    element: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
-<a href=#1767 id=1767 data-nosnippet>1767</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
-<a href=#1768 id=1768 data-nosnippet>1768</a>    <span class="kw">let </span><span class="kw-2">mut </span>params: Vec&lt;IfaceParam&gt; = <span class="macro">vec!</span>[IfaceParam::same(<span class="string">"acc"</span>.to_string(), KtType::var_(<span class="string">"A"</span>))];
-<a href=#1769 id=1769 data-nosnippet>1769</a>    <span class="comment">// `raw_handle = true`: an opaque-handle element crosses the JNI border as
-<a href=#1770 id=1770 data-nosnippet>1770</a>    // its raw `jlong` (the folder wraps it into the typed handle class in Kotlin
-<a href=#1771 id=1771 data-nosnippet>1771</a>    // bytecode — a native `new_object` per element would cost descriptor parse +
-<a href=#1772 id=1772 data-nosnippet>1772</a>    // FindClass + GetMethodID + NewObjectA). Primitive arrays and String are
-<a href=#1773 id=1773 data-nosnippet>1773</a>    // unaffected (they ignore the flag; see [`leaf_iface_param`]).
-<a href=#1774 id=1774 data-nosnippet>1774</a>    </span>params.push(leaf_iface_param(
-<a href=#1775 id=1775 data-nosnippet>1775</a>        ext,
-<a href=#1776 id=1776 data-nosnippet>1776</a>        <span class="string">"element"</span>.to_string(),
-<a href=#1777 id=1777 data-nosnippet>1777</a>        element,
-<a href=#1778 id=1778 data-nosnippet>1778</a>        <span class="bool-val">false</span>,
-<a href=#1779 id=1779 data-nosnippet>1779</a>        <span class="bool-val">true</span>,
-<a href=#1780 id=1780 data-nosnippet>1780</a>    )<span class="question-mark">?</span>);
-<a href=#1781 id=1781 data-nosnippet>1781</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{}Folder"</span>, subject_short(element));
-<a href=#1782 id=1782 data-nosnippet>1782</a>    <span class="kw">let </span>package = subject_package(ext, element);
-<a href=#1783 id=1783 data-nosnippet>1783</a>    <span class="prelude-val">Some</span>(IfaceSpec::assemble(
-<a href=#1784 id=1784 data-nosnippet>1784</a>        package,
-<a href=#1785 id=1785 data-nosnippet>1785</a>        name,
-<a href=#1786 id=1786 data-nosnippet>1786</a>        <span class="macro">vec!</span>[<span class="string">"A"</span>.to_string()],
-<a href=#1787 id=1787 data-nosnippet>1787</a>        params,
-<a href=#1788 id=1788 data-nosnippet>1788</a>        KtType::var_(<span class="string">"A"</span>),
-<a href=#1789 id=1789 data-nosnippet>1789</a>    ))
-<a href=#1790 id=1790 data-nosnippet>1790</a>}
-<a href=#1791 id=1791 data-nosnippet>1791</a>
-<a href=#1792 id=1792 data-nosnippet>1792</a><span class="doccomment">/// The folder spec for an `Iterable` plan: declaration-keyed when the
-<a href=#1793 id=1793 data-nosnippet>1793</a>/// element decomposes, whole-element otherwise. Thin KEY dispatch into the
-<a href=#1794 id=1794 data-nosnippet>1794</a>/// [`Declarations::iface_spec`] memo — the fixed-builder typed-group view is
-<a href=#1795 id=1795 data-nosnippet>1795</a>/// applied there per `DeconId` (the declaration identity the JVM resolves
-<a href=#1796 id=1796 data-nosnippet>1796</a>/// against), not per this plan's own `fixed_builder` flag.
-<a href=#1797 id=1797 data-nosnippet>1797</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>folder_iface_for_plan(
-<a href=#1798 id=1798 data-nosnippet>1798</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1799 id=1799 data-nosnippet>1799</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1800 id=1800 data-nosnippet>1800</a>    plan: <span class="kw-2">&amp;</span>UnfoldPlan,
-<a href=#1801 id=1801 data-nosnippet>1801</a>) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
-<a href=#1802 id=1802 data-nosnippet>1802</a>    <span class="macro">debug_assert!</span>(
-<a href=#1803 id=1803 data-nosnippet>1803</a>        plan.shape.has_iterable_layer(),
-<a href=#1804 id=1804 data-nosnippet>1804</a>        <span class="string">"folder_iface_for_plan requires an Iterable (or Option&lt;Iterable&gt;) plan"
-<a href=#1805 id=1805 data-nosnippet>1805</a>    </span>);
-<a href=#1806 id=1806 data-nosnippet>1806</a>    <span class="kw">match </span>(<span class="kw-2">&amp;</span>plan.element, <span class="kw-2">&amp;</span>plan.decon) {
-<a href=#1807 id=1807 data-nosnippet>1807</a>        (<span class="prelude-val">Some</span>(el), <span class="kw">_</span>) =&gt; ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::whole_folder(el)),
-<a href=#1808 id=1808 data-nosnippet>1808</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(d)) =&gt; ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::Folder(d.clone())),
-<a href=#1809 id=1809 data-nosnippet>1809</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; <span class="prelude-val">None</span>,
-<a href=#1810 id=1810 data-nosnippet>1810</a>    }
-<a href=#1811 id=1811 data-nosnippet>1811</a>}
-<a href=#1812 id=1812 data-nosnippet>1812</a>
-<a href=#1813 id=1813 data-nosnippet>1813</a><span class="doccomment">/// The typed-view groups for a **fixed-builder** decomposed fold (synthesized
-<a href=#1814 id=1814 data-nosnippet>1814</a>/// by-value `data_class` element). `folder_iface_spec` lays its `run` params out
-<a href=#1815 id=1815 data-nosnippet>1815</a>/// as `[acc: A, leaf0, …]`; this groups them so the user-facing folder receives
-<a href=#1816 id=1816 data-nosnippet>1816</a>/// `(acc, element)` while the JNI-called raw twin keeps the decoupled leaves and
-<a href=#1817 id=1817 data-nosnippet>1817</a>/// the `asRaw` proxy reassembles the whole value via `Class.fromParts(leaves…)`.
-<a href=#1818 id=1818 data-nosnippet>1818</a>/// So no Java object is built on the Rust side — only raw leaves cross. Applied
-<a href=#1819 id=1819 data-nosnippet>1819</a>/// in both `folder_iface_for_plan` (the wrapper's view) and the interface
-<a href=#1820 id=1820 data-nosnippet>1820</a>/// emission (`write_iface_files`), keyed by the element's deconstructor so the
-<a href=#1821 id=1821 data-nosnippet>1821</a>/// two stay in lockstep.
-<a href=#1822 id=1822 data-nosnippet>1822</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fixed_folder_typed_groups(
-<a href=#1823 id=1823 data-nosnippet>1823</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1824 id=1824 data-nosnippet>1824</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1825 id=1825 data-nosnippet>1825</a>    decon: <span class="kw-2">&amp;</span>DeconId,
-<a href=#1826 id=1826 data-nosnippet>1826</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;TypedGroup&gt;&gt; {
-<a href=#1827 id=1827 data-nosnippet>1827</a>    <span class="kw">let </span>spec = registry.decon_plans().get(decon)<span class="question-mark">?</span>;
-<a href=#1828 id=1828 data-nosnippet>1828</a>    <span class="kw">let </span>fqn = ext.kotlin_fqn(<span class="kw-2">&amp;</span>spec.source.key())<span class="question-mark">?</span>;
-<a href=#1829 id=1829 data-nosnippet>1829</a>    <span class="kw">let </span>(reassemble, imports) = fixed_reassembly(
-<a href=#1830 id=1830 data-nosnippet>1830</a>        ext,
-<a href=#1831 id=1831 data-nosnippet>1831</a>        registry,
-<a href=#1832 id=1832 data-nosnippet>1832</a>        <span class="kw-2">&amp;</span>spec.source.key(),
-<a href=#1833 id=1833 data-nosnippet>1833</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
-<a href=#1834 id=1834 data-nosnippet>1834</a>        <span class="kw-2">&amp;</span>fqn,
-<a href=#1835 id=1835 data-nosnippet>1835</a>        <span class="number">0</span>,
-<a href=#1836 id=1836 data-nosnippet>1836</a>    );
-<a href=#1837 id=1837 data-nosnippet>1837</a>    <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[
-<a href=#1838 id=1838 data-nosnippet>1838</a>        TypedGroup {
-<a href=#1839 id=1839 data-nosnippet>1839</a>            name: <span class="string">"acc"</span>.to_string(),
-<a href=#1840 id=1840 data-nosnippet>1840</a>            typed: KtType::var_(<span class="string">"A"</span>),
-<a href=#1841 id=1841 data-nosnippet>1841</a>            reassemble: <span class="prelude-val">None</span>,
-<a href=#1842 id=1842 data-nosnippet>1842</a>            imports: Vec::new(),
-<a href=#1843 id=1843 data-nosnippet>1843</a>            leaf_count: <span class="number">1</span>,
-<a href=#1844 id=1844 data-nosnippet>1844</a>            <span class="comment">// The accumulator is the consumer's own value, of the consumer's
-<a href=#1845 id=1845 data-nosnippet>1845</a>            // own type variable — never ours to close.
-<a href=#1846 id=1846 data-nosnippet>1846</a>            </span>close: <span class="prelude-val">None</span>,
-<a href=#1847 id=1847 data-nosnippet>1847</a>        },
-<a href=#1848 id=1848 data-nosnippet>1848</a>        TypedGroup {
-<a href=#1849 id=1849 data-nosnippet>1849</a>            name: <span class="string">"element"</span>.to_string(),
-<a href=#1850 id=1850 data-nosnippet>1850</a>            typed: KtType::cls(fqn.to_string()),
-<a href=#1851 id=1851 data-nosnippet>1851</a>            reassemble: <span class="prelude-val">Some</span>(reassemble),
-<a href=#1852 id=1852 data-nosnippet>1852</a>            imports,
-<a href=#1853 id=1853 data-nosnippet>1853</a>            leaf_count: spec.leaves.len(),
-<a href=#1854 id=1854 data-nosnippet>1854</a>            <span class="comment">// Same rule as every other reassembled value — and BREAKING for a
-<a href=#1855 id=1855 data-nosnippet>1855</a>            // fold whose element reaches a handle: the element is now closed
-<a href=#1856 id=1856 data-nosnippet>1856</a>            // after each `run`, so a body that accumulates its elements
-<a href=#1857 id=1857 data-nosnippet>1857</a>            // (`{ acc, e -&gt; acc + e }`) accumulates closed handles unless it
-<a href=#1858 id=1858 data-nosnippet>1858</a>            // `take()`s each one. Note this is not a sum-only rule; a nested
-<a href=#1859 id=1859 data-nosnippet>1859</a>            // `data_class` element lands here too.
-<a href=#1860 id=1860 data-nosnippet>1860</a>            //
-<a href=#1861 id=1861 data-nosnippet>1861</a>            // A fold over a BORROWED run never trips it: a borrowed handle
-<a href=#1862 id=1862 data-nosnippet>1862</a>            // projection carries `owned: false`, so the element reaches nothing
-<a href=#1863 id=1863 data-nosnippet>1863</a>            // to release and the per-iteration close that would double-free is
-<a href=#1864 id=1864 data-nosnippet>1864</a>            // not emitted.
-<a href=#1865 id=1865 data-nosnippet>1865</a>            </span>close: <span class="kw">crate</span>::jni::struct_plan::type_close_strategy(
-<a href=#1866 id=1866 data-nosnippet>1866</a>                ext,
-<a href=#1867 id=1867 data-nosnippet>1867</a>                registry.flat(),
-<a href=#1868 id=1868 data-nosnippet>1868</a>                <span class="kw-2">&amp;</span>spec.source,
-<a href=#1869 id=1869 data-nosnippet>1869</a>                <span class="number">0</span>,
-<a href=#1870 id=1870 data-nosnippet>1870</a>            ),
-<a href=#1871 id=1871 data-nosnippet>1871</a>        },
-<a href=#1872 id=1872 data-nosnippet>1872</a>    ])
-<a href=#1873 id=1873 data-nosnippet>1873</a>}
-<a href=#1874 id=1874 data-nosnippet>1874</a>
-<a href=#1875 id=1875 data-nosnippet>1875</a><span class="doccomment">/// Interface for a fallible function's **domain** onError handler:
-<a href=#1876 id=1876 data-nosnippet>1876</a>/// `run(ze-leaves…): R`, `&lt;out R&gt;`. The `ze` leaves are typed EXACTLY like a
-<a href=#1877 id=1877 data-nosnippet>1877</a>/// builder's for the same decomposition — the domain-error channel IS the
-<a href=#1878 id=1878 data-nosnippet>1878</a>/// output channel. This handler is called ONLY on a domain error (`Err(E)`);
-<a href=#1879 id=1879 data-nosnippet>1879</a>/// binding/system failures go to the separate [`jni_error_handler_iface_spec`]
-<a href=#1880 id=1880 data-nosnippet>1880</a>/// (`JniErrorHandler`) channel, so there is no discriminator and no defaults.
-<a href=#1881 id=1881 data-nosnippet>1881</a>/// Keyed by the error type's deconstructor declaration. Named
-<a href=#1882 id=1882 data-nosnippet>1882</a>/// `&lt;decl-base&gt;Handler`, placed in the error type's package.
-<a href=#1883 id=1883 data-nosnippet>1883</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>error_handler_iface_spec(
-<a href=#1884 id=1884 data-nosnippet>1884</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1885 id=1885 data-nosnippet>1885</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
-<a href=#1886 id=1886 data-nosnippet>1886</a>    decon: <span class="kw-2">&amp;</span>DeconId,
-<a href=#1887 id=1887 data-nosnippet>1887</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
-<a href=#1888 id=1888 data-nosnippet>1888</a>    <span class="kw">let </span>spec = registry.decon_plans().get(decon)<span class="question-mark">?</span>;
-<a href=#1889 id=1889 data-nosnippet>1889</a>    <span class="kw">let </span>params: Vec&lt;IfaceParam&gt; = plan_leaf_params(
-<a href=#1890 id=1890 data-nosnippet>1890</a>        ext,
-<a href=#1891 id=1891 data-nosnippet>1891</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
-<a href=#1892 id=1892 data-nosnippet>1892</a>    )<span class="question-mark">?</span>;
-<a href=#1893 id=1893 data-nosnippet>1893</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(
-<a href=#1894 id=1894 data-nosnippet>1894</a>        <span class="string">"{}Handler"</span>,
-<a href=#1895 id=1895 data-nosnippet>1895</a>        decon_base_name(<span class="kw-2">&amp;</span>subject_short(<span class="kw-2">&amp;</span>spec.source), <span class="prelude-val">Some</span>(decon))
-<a href=#1896 id=1896 data-nosnippet>1896</a>    );
-<a href=#1897 id=1897 data-nosnippet>1897</a>    <span class="kw">let </span>package = subject_package(ext, <span class="kw-2">&amp;</span>spec.source);
-<a href=#1898 id=1898 data-nosnippet>1898</a>    <span class="kw">let </span>source_short = subject_short(<span class="kw-2">&amp;</span>spec.source);
-<a href=#1899 id=1899 data-nosnippet>1899</a>    <span class="kw">let </span><span class="kw-2">mut </span>iface = IfaceSpec::assemble(
-<a href=#1900 id=1900 data-nosnippet>1900</a>        package,
-<a href=#1901 id=1901 data-nosnippet>1901</a>        name,
-<a href=#1902 id=1902 data-nosnippet>1902</a>        <span class="macro">vec!</span>[<span class="string">"out R"</span>.to_string()],
-<a href=#1903 id=1903 data-nosnippet>1903</a>        params,
-<a href=#1904 id=1904 data-nosnippet>1904</a>        KtType::var_r(),
-<a href=#1905 id=1905 data-nosnippet>1905</a>    );
-<a href=#1906 id=1906 data-nosnippet>1906</a>    iface.kdoc = <span class="prelude-val">Some</span>(<span class="macro">format!</span>(
-<a href=#1907 id=1907 data-nosnippet>1907</a>        <span class="string">"Domain-error callback: called only when the native function returns `Err` — the\n\
-<a href=#1908 id=1908 data-nosnippet>1908</a>         parameters carry the decomposed `{source_short}`. Binding/system failures go to the\n\
-<a href=#1909 id=1909 data-nosnippet>1909</a>         separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`\n\
-<a href=#1910 id=1910 data-nosnippet>1910</a>         discriminator here. The wrapper returns whatever `run` returns. Where that type is\n\
-<a href=#1911 id=1911 data-nosnippet>1911</a>         nullable you may return `null` to decline — you are not required to fabricate a result.\n\
-<a href=#1912 id=1912 data-nosnippet>1912</a>         Consequently the handler firing, not the returned value, is the error discriminator:\n\
-<a href=#1913 id=1913 data-nosnippet>1913</a>         `null` can also be a successful optional result, and a non-null value can be a fallback\n\
-<a href=#1914 id=1914 data-nosnippet>1914</a>         you supplied. Throwing from `run` is safe (it executes after the native call has returned)."
-<a href=#1915 id=1915 data-nosnippet>1915</a>    </span>));
-<a href=#1916 id=1916 data-nosnippet>1916</a>    <span class="prelude-val">Some</span>(iface)
-<a href=#1917 id=1917 data-nosnippet>1917</a>}
-<a href=#1918 id=1918 data-nosnippet>1918</a>
-<a href=#1919 id=1919 data-nosnippet>1919</a><span class="doccomment">/// The shared infallible handler `JniErrorHandler&lt;out R&gt; { run(je: String?): R }`
-<a href=#1920 id=1920 data-nosnippet>1920</a>/// — every function without an error plan takes one; placed in the root
-<a href=#1921 id=1921 data-nosnippet>1921</a>/// package.
-<a href=#1922 id=1922 data-nosnippet>1922</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>jni_error_handler_iface_spec(ext: <span class="kw-2">&amp;</span>Declarations) -&gt; IfaceSpec {
-<a href=#1923 id=1923 data-nosnippet>1923</a>    <span class="kw">let </span>params = <span class="macro">vec!</span>[IfaceParam::same(
-<a href=#1924 id=1924 data-nosnippet>1924</a>        <span class="string">"je"</span>.to_string(),
-<a href=#1925 id=1925 data-nosnippet>1925</a>        KtType::string().nullable(),
-<a href=#1926 id=1926 data-nosnippet>1926</a>    )];
-<a href=#1927 id=1927 data-nosnippet>1927</a>    <span class="kw">let </span><span class="kw-2">mut </span>iface = IfaceSpec::assemble(
-<a href=#1928 id=1928 data-nosnippet>1928</a>        ext.package.clone(),
-<a href=#1929 id=1929 data-nosnippet>1929</a>        <span class="string">"JniErrorHandler"</span>.to_string(),
-<a href=#1930 id=1930 data-nosnippet>1930</a>        <span class="macro">vec!</span>[<span class="string">"out R"</span>.to_string()],
-<a href=#1931 id=1931 data-nosnippet>1931</a>        params,
-<a href=#1932 id=1932 data-nosnippet>1932</a>        KtType::var_r(),
+<a href=#1707 id=1707 data-nosnippet>1707</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>builder_iface_spec(ext: <span class="kw-2">&amp;</span>Declarations, decon: <span class="kw-2">&amp;</span>DeconId) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
+<a href=#1708 id=1708 data-nosnippet>1708</a>    <span class="kw">let </span>spec = ext.unfolded().decon_plans.get(decon)<span class="question-mark">?</span>;
+<a href=#1709 id=1709 data-nosnippet>1709</a>    <span class="kw">let </span>params = plan_leaf_params(
+<a href=#1710 id=1710 data-nosnippet>1710</a>        ext,
+<a href=#1711 id=1711 data-nosnippet>1711</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
+<a href=#1712 id=1712 data-nosnippet>1712</a>    )<span class="question-mark">?</span>;
+<a href=#1713 id=1713 data-nosnippet>1713</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(
+<a href=#1714 id=1714 data-nosnippet>1714</a>        <span class="string">"{}Builder"</span>,
+<a href=#1715 id=1715 data-nosnippet>1715</a>        decon_base_name(<span class="kw-2">&amp;</span>subject_short(<span class="kw-2">&amp;</span>spec.source), <span class="prelude-val">Some</span>(decon))
+<a href=#1716 id=1716 data-nosnippet>1716</a>    );
+<a href=#1717 id=1717 data-nosnippet>1717</a>    <span class="kw">let </span>package = subject_package(ext, <span class="kw-2">&amp;</span>spec.source);
+<a href=#1718 id=1718 data-nosnippet>1718</a>    <span class="prelude-val">Some</span>(IfaceSpec::assemble(
+<a href=#1719 id=1719 data-nosnippet>1719</a>        package,
+<a href=#1720 id=1720 data-nosnippet>1720</a>        name,
+<a href=#1721 id=1721 data-nosnippet>1721</a>        <span class="macro">vec!</span>[<span class="string">"out R"</span>.to_string()],
+<a href=#1722 id=1722 data-nosnippet>1722</a>        params,
+<a href=#1723 id=1723 data-nosnippet>1723</a>        KtType::var_r(),
+<a href=#1724 id=1724 data-nosnippet>1724</a>    ))
+<a href=#1725 id=1725 data-nosnippet>1725</a>}
+<a href=#1726 id=1726 data-nosnippet>1726</a>
+<a href=#1727 id=1727 data-nosnippet>1727</a><span class="doccomment">/// Interface for a **decomposed-element fold** (`Iterable` delivery over a
+<a href=#1728 id=1728 data-nosnippet>1728</a>/// type with a deconstructor): `run(acc: A, element-leaves…): A`, `&lt;A&gt;`
+<a href=#1729 id=1729 data-nosnippet>1729</a>/// (invariant — `A` appears in both parameter and return position). Keyed by
+<a href=#1730 id=1730 data-nosnippet>1730</a>/// the element's deconstructor declaration. Named `&lt;decl-base&gt;Folder`,
+<a href=#1731 id=1731 data-nosnippet>1731</a>/// placed in the element type's package.
+<a href=#1732 id=1732 data-nosnippet>1732</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>folder_iface_spec(ext: <span class="kw-2">&amp;</span>Declarations, decon: <span class="kw-2">&amp;</span>DeconId) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
+<a href=#1733 id=1733 data-nosnippet>1733</a>    <span class="kw">let </span>spec = ext.unfolded().decon_plans.get(decon)<span class="question-mark">?</span>;
+<a href=#1734 id=1734 data-nosnippet>1734</a>    <span class="kw">let </span><span class="kw-2">mut </span>params: Vec&lt;IfaceParam&gt; = <span class="macro">vec!</span>[IfaceParam::same(<span class="string">"acc"</span>.to_string(), KtType::var_(<span class="string">"A"</span>))];
+<a href=#1735 id=1735 data-nosnippet>1735</a>    params.extend(plan_leaf_params(
+<a href=#1736 id=1736 data-nosnippet>1736</a>        ext,
+<a href=#1737 id=1737 data-nosnippet>1737</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
+<a href=#1738 id=1738 data-nosnippet>1738</a>    )<span class="question-mark">?</span>);
+<a href=#1739 id=1739 data-nosnippet>1739</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(
+<a href=#1740 id=1740 data-nosnippet>1740</a>        <span class="string">"{}Folder"</span>,
+<a href=#1741 id=1741 data-nosnippet>1741</a>        decon_base_name(<span class="kw-2">&amp;</span>subject_short(<span class="kw-2">&amp;</span>spec.source), <span class="prelude-val">Some</span>(decon))
+<a href=#1742 id=1742 data-nosnippet>1742</a>    );
+<a href=#1743 id=1743 data-nosnippet>1743</a>    <span class="kw">let </span>package = subject_package(ext, <span class="kw-2">&amp;</span>spec.source);
+<a href=#1744 id=1744 data-nosnippet>1744</a>    <span class="prelude-val">Some</span>(IfaceSpec::assemble(
+<a href=#1745 id=1745 data-nosnippet>1745</a>        package,
+<a href=#1746 id=1746 data-nosnippet>1746</a>        name,
+<a href=#1747 id=1747 data-nosnippet>1747</a>        <span class="macro">vec!</span>[<span class="string">"A"</span>.to_string()],
+<a href=#1748 id=1748 data-nosnippet>1748</a>        params,
+<a href=#1749 id=1749 data-nosnippet>1749</a>        KtType::var_(<span class="string">"A"</span>),
+<a href=#1750 id=1750 data-nosnippet>1750</a>    ))
+<a href=#1751 id=1751 data-nosnippet>1751</a>}
+<a href=#1752 id=1752 data-nosnippet>1752</a>
+<a href=#1753 id=1753 data-nosnippet>1753</a><span class="doccomment">/// Interface for a **whole-element fold** (`Iterable` delivery of a type
+<a href=#1754 id=1754 data-nosnippet>1754</a>/// without a deconstructor — no declaration involved):
+<a href=#1755 id=1755 data-nosnippet>1755</a>/// `run(acc: A, element): A`. One shape per element type by construction.
+<a href=#1756 id=1756 data-nosnippet>1756</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>whole_folder_iface_spec(
+<a href=#1757 id=1757 data-nosnippet>1757</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1758 id=1758 data-nosnippet>1758</a>    element: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
+<a href=#1759 id=1759 data-nosnippet>1759</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
+<a href=#1760 id=1760 data-nosnippet>1760</a>    <span class="kw">let </span><span class="kw-2">mut </span>params: Vec&lt;IfaceParam&gt; = <span class="macro">vec!</span>[IfaceParam::same(<span class="string">"acc"</span>.to_string(), KtType::var_(<span class="string">"A"</span>))];
+<a href=#1761 id=1761 data-nosnippet>1761</a>    <span class="comment">// `raw_handle = true`: an opaque-handle element crosses the JNI border as
+<a href=#1762 id=1762 data-nosnippet>1762</a>    // its raw `jlong` (the folder wraps it into the typed handle class in Kotlin
+<a href=#1763 id=1763 data-nosnippet>1763</a>    // bytecode — a native `new_object` per element would cost descriptor parse +
+<a href=#1764 id=1764 data-nosnippet>1764</a>    // FindClass + GetMethodID + NewObjectA). Primitive arrays and String are
+<a href=#1765 id=1765 data-nosnippet>1765</a>    // unaffected (they ignore the flag; see [`leaf_iface_param`]).
+<a href=#1766 id=1766 data-nosnippet>1766</a>    </span>params.push(leaf_iface_param(
+<a href=#1767 id=1767 data-nosnippet>1767</a>        ext,
+<a href=#1768 id=1768 data-nosnippet>1768</a>        <span class="string">"element"</span>.to_string(),
+<a href=#1769 id=1769 data-nosnippet>1769</a>        element,
+<a href=#1770 id=1770 data-nosnippet>1770</a>        <span class="bool-val">false</span>,
+<a href=#1771 id=1771 data-nosnippet>1771</a>        <span class="bool-val">true</span>,
+<a href=#1772 id=1772 data-nosnippet>1772</a>    )<span class="question-mark">?</span>);
+<a href=#1773 id=1773 data-nosnippet>1773</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{}Folder"</span>, subject_short(element));
+<a href=#1774 id=1774 data-nosnippet>1774</a>    <span class="kw">let </span>package = subject_package(ext, element);
+<a href=#1775 id=1775 data-nosnippet>1775</a>    <span class="prelude-val">Some</span>(IfaceSpec::assemble(
+<a href=#1776 id=1776 data-nosnippet>1776</a>        package,
+<a href=#1777 id=1777 data-nosnippet>1777</a>        name,
+<a href=#1778 id=1778 data-nosnippet>1778</a>        <span class="macro">vec!</span>[<span class="string">"A"</span>.to_string()],
+<a href=#1779 id=1779 data-nosnippet>1779</a>        params,
+<a href=#1780 id=1780 data-nosnippet>1780</a>        KtType::var_(<span class="string">"A"</span>),
+<a href=#1781 id=1781 data-nosnippet>1781</a>    ))
+<a href=#1782 id=1782 data-nosnippet>1782</a>}
+<a href=#1783 id=1783 data-nosnippet>1783</a>
+<a href=#1784 id=1784 data-nosnippet>1784</a><span class="doccomment">/// The folder spec for an `Iterable` plan: declaration-keyed when the
+<a href=#1785 id=1785 data-nosnippet>1785</a>/// element decomposes, whole-element otherwise. Thin KEY dispatch into the
+<a href=#1786 id=1786 data-nosnippet>1786</a>/// [`Declarations::iface_spec`] memo — the fixed-builder typed-group view is
+<a href=#1787 id=1787 data-nosnippet>1787</a>/// applied there per `DeconId` (the declaration identity the JVM resolves
+<a href=#1788 id=1788 data-nosnippet>1788</a>/// against), not per this plan's own `fixed_builder` flag.
+<a href=#1789 id=1789 data-nosnippet>1789</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>folder_iface_for_plan(
+<a href=#1790 id=1790 data-nosnippet>1790</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1791 id=1791 data-nosnippet>1791</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1792 id=1792 data-nosnippet>1792</a>    plan: <span class="kw-2">&amp;</span>UnfoldPlan,
+<a href=#1793 id=1793 data-nosnippet>1793</a>) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
+<a href=#1794 id=1794 data-nosnippet>1794</a>    <span class="macro">debug_assert!</span>(
+<a href=#1795 id=1795 data-nosnippet>1795</a>        plan.shape.has_iterable_layer(),
+<a href=#1796 id=1796 data-nosnippet>1796</a>        <span class="string">"folder_iface_for_plan requires an Iterable (or Option&lt;Iterable&gt;) plan"
+<a href=#1797 id=1797 data-nosnippet>1797</a>    </span>);
+<a href=#1798 id=1798 data-nosnippet>1798</a>    <span class="kw">match </span>(<span class="kw-2">&amp;</span>plan.element, <span class="kw-2">&amp;</span>plan.decon) {
+<a href=#1799 id=1799 data-nosnippet>1799</a>        (<span class="prelude-val">Some</span>(el), <span class="kw">_</span>) =&gt; ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::whole_folder(el)),
+<a href=#1800 id=1800 data-nosnippet>1800</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(d)) =&gt; ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::Folder(d.clone())),
+<a href=#1801 id=1801 data-nosnippet>1801</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#1802 id=1802 data-nosnippet>1802</a>    }
+<a href=#1803 id=1803 data-nosnippet>1803</a>}
+<a href=#1804 id=1804 data-nosnippet>1804</a>
+<a href=#1805 id=1805 data-nosnippet>1805</a><span class="doccomment">/// The typed-view groups for a **fixed-builder** decomposed fold (synthesized
+<a href=#1806 id=1806 data-nosnippet>1806</a>/// by-value `data_class` element). `folder_iface_spec` lays its `run` params out
+<a href=#1807 id=1807 data-nosnippet>1807</a>/// as `[acc: A, leaf0, …]`; this groups them so the user-facing folder receives
+<a href=#1808 id=1808 data-nosnippet>1808</a>/// `(acc, element)` while the JNI-called raw twin keeps the decoupled leaves and
+<a href=#1809 id=1809 data-nosnippet>1809</a>/// the `asRaw` proxy reassembles the whole value via `Class.fromParts(leaves…)`.
+<a href=#1810 id=1810 data-nosnippet>1810</a>/// So no Java object is built on the Rust side — only raw leaves cross. Applied
+<a href=#1811 id=1811 data-nosnippet>1811</a>/// in both `folder_iface_for_plan` (the wrapper's view) and the interface
+<a href=#1812 id=1812 data-nosnippet>1812</a>/// emission (`write_iface_files`), keyed by the element's deconstructor so the
+<a href=#1813 id=1813 data-nosnippet>1813</a>/// two stay in lockstep.
+<a href=#1814 id=1814 data-nosnippet>1814</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fixed_folder_typed_groups(
+<a href=#1815 id=1815 data-nosnippet>1815</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1816 id=1816 data-nosnippet>1816</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1817 id=1817 data-nosnippet>1817</a>    decon: <span class="kw-2">&amp;</span>DeconId,
+<a href=#1818 id=1818 data-nosnippet>1818</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;TypedGroup&gt;&gt; {
+<a href=#1819 id=1819 data-nosnippet>1819</a>    <span class="kw">let </span>spec = ext.unfolded().decon_plans.get(decon)<span class="question-mark">?</span>;
+<a href=#1820 id=1820 data-nosnippet>1820</a>    <span class="kw">let </span>fqn = ext.kotlin_fqn(<span class="kw-2">&amp;</span>spec.source.key())<span class="question-mark">?</span>;
+<a href=#1821 id=1821 data-nosnippet>1821</a>    <span class="kw">let </span>(reassemble, imports) = fixed_reassembly(
+<a href=#1822 id=1822 data-nosnippet>1822</a>        ext,
+<a href=#1823 id=1823 data-nosnippet>1823</a>        registry,
+<a href=#1824 id=1824 data-nosnippet>1824</a>        <span class="kw-2">&amp;</span>spec.source.key(),
+<a href=#1825 id=1825 data-nosnippet>1825</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
+<a href=#1826 id=1826 data-nosnippet>1826</a>        <span class="kw-2">&amp;</span>fqn,
+<a href=#1827 id=1827 data-nosnippet>1827</a>        <span class="number">0</span>,
+<a href=#1828 id=1828 data-nosnippet>1828</a>    );
+<a href=#1829 id=1829 data-nosnippet>1829</a>    <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[
+<a href=#1830 id=1830 data-nosnippet>1830</a>        TypedGroup {
+<a href=#1831 id=1831 data-nosnippet>1831</a>            name: <span class="string">"acc"</span>.to_string(),
+<a href=#1832 id=1832 data-nosnippet>1832</a>            typed: KtType::var_(<span class="string">"A"</span>),
+<a href=#1833 id=1833 data-nosnippet>1833</a>            reassemble: <span class="prelude-val">None</span>,
+<a href=#1834 id=1834 data-nosnippet>1834</a>            imports: Vec::new(),
+<a href=#1835 id=1835 data-nosnippet>1835</a>            leaf_count: <span class="number">1</span>,
+<a href=#1836 id=1836 data-nosnippet>1836</a>            <span class="comment">// The accumulator is the consumer's own value, of the consumer's
+<a href=#1837 id=1837 data-nosnippet>1837</a>            // own type variable — never ours to close.
+<a href=#1838 id=1838 data-nosnippet>1838</a>            </span>close: <span class="prelude-val">None</span>,
+<a href=#1839 id=1839 data-nosnippet>1839</a>        },
+<a href=#1840 id=1840 data-nosnippet>1840</a>        TypedGroup {
+<a href=#1841 id=1841 data-nosnippet>1841</a>            name: <span class="string">"element"</span>.to_string(),
+<a href=#1842 id=1842 data-nosnippet>1842</a>            typed: KtType::cls(fqn.to_string()),
+<a href=#1843 id=1843 data-nosnippet>1843</a>            reassemble: <span class="prelude-val">Some</span>(reassemble),
+<a href=#1844 id=1844 data-nosnippet>1844</a>            imports,
+<a href=#1845 id=1845 data-nosnippet>1845</a>            leaf_count: spec.leaves.len(),
+<a href=#1846 id=1846 data-nosnippet>1846</a>            <span class="comment">// Same rule as every other reassembled value — and BREAKING for a
+<a href=#1847 id=1847 data-nosnippet>1847</a>            // fold whose element reaches a handle: the element is now closed
+<a href=#1848 id=1848 data-nosnippet>1848</a>            // after each `run`, so a body that accumulates its elements
+<a href=#1849 id=1849 data-nosnippet>1849</a>            // (`{ acc, e -&gt; acc + e }`) accumulates closed handles unless it
+<a href=#1850 id=1850 data-nosnippet>1850</a>            // `take()`s each one. Note this is not a sum-only rule; a nested
+<a href=#1851 id=1851 data-nosnippet>1851</a>            // `data_class` element lands here too.
+<a href=#1852 id=1852 data-nosnippet>1852</a>            //
+<a href=#1853 id=1853 data-nosnippet>1853</a>            // A fold over a BORROWED run never trips it: a borrowed handle
+<a href=#1854 id=1854 data-nosnippet>1854</a>            // projection carries `owned: false`, so the element reaches nothing
+<a href=#1855 id=1855 data-nosnippet>1855</a>            // to release and the per-iteration close that would double-free is
+<a href=#1856 id=1856 data-nosnippet>1856</a>            // not emitted.
+<a href=#1857 id=1857 data-nosnippet>1857</a>            </span>close: <span class="kw">crate</span>::jni::struct_plan::type_close_strategy(
+<a href=#1858 id=1858 data-nosnippet>1858</a>                ext,
+<a href=#1859 id=1859 data-nosnippet>1859</a>                registry.flat(),
+<a href=#1860 id=1860 data-nosnippet>1860</a>                <span class="kw-2">&amp;</span>spec.source,
+<a href=#1861 id=1861 data-nosnippet>1861</a>                <span class="number">0</span>,
+<a href=#1862 id=1862 data-nosnippet>1862</a>            ),
+<a href=#1863 id=1863 data-nosnippet>1863</a>        },
+<a href=#1864 id=1864 data-nosnippet>1864</a>    ])
+<a href=#1865 id=1865 data-nosnippet>1865</a>}
+<a href=#1866 id=1866 data-nosnippet>1866</a>
+<a href=#1867 id=1867 data-nosnippet>1867</a><span class="doccomment">/// Interface for a fallible function's **domain** onError handler:
+<a href=#1868 id=1868 data-nosnippet>1868</a>/// `run(ze-leaves…): R`, `&lt;out R&gt;`. The `ze` leaves are typed EXACTLY like a
+<a href=#1869 id=1869 data-nosnippet>1869</a>/// builder's for the same decomposition — the domain-error channel IS the
+<a href=#1870 id=1870 data-nosnippet>1870</a>/// output channel. This handler is called ONLY on a domain error (`Err(E)`);
+<a href=#1871 id=1871 data-nosnippet>1871</a>/// binding/system failures go to the separate [`jni_error_handler_iface_spec`]
+<a href=#1872 id=1872 data-nosnippet>1872</a>/// (`JniErrorHandler`) channel, so there is no discriminator and no defaults.
+<a href=#1873 id=1873 data-nosnippet>1873</a>/// Keyed by the error type's deconstructor declaration. Named
+<a href=#1874 id=1874 data-nosnippet>1874</a>/// `&lt;decl-base&gt;Handler`, placed in the error type's package.
+<a href=#1875 id=1875 data-nosnippet>1875</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>error_handler_iface_spec(ext: <span class="kw-2">&amp;</span>Declarations, decon: <span class="kw-2">&amp;</span>DeconId) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
+<a href=#1876 id=1876 data-nosnippet>1876</a>    <span class="kw">let </span>spec = ext.unfolded().decon_plans.get(decon)<span class="question-mark">?</span>;
+<a href=#1877 id=1877 data-nosnippet>1877</a>    <span class="kw">let </span>params: Vec&lt;IfaceParam&gt; = plan_leaf_params(
+<a href=#1878 id=1878 data-nosnippet>1878</a>        ext,
+<a href=#1879 id=1879 data-nosnippet>1879</a>        <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::OutWire::from_leaves(<span class="kw-2">&amp;</span>spec.leaves),
+<a href=#1880 id=1880 data-nosnippet>1880</a>    )<span class="question-mark">?</span>;
+<a href=#1881 id=1881 data-nosnippet>1881</a>    <span class="kw">let </span>name = <span class="macro">format!</span>(
+<a href=#1882 id=1882 data-nosnippet>1882</a>        <span class="string">"{}Handler"</span>,
+<a href=#1883 id=1883 data-nosnippet>1883</a>        decon_base_name(<span class="kw-2">&amp;</span>subject_short(<span class="kw-2">&amp;</span>spec.source), <span class="prelude-val">Some</span>(decon))
+<a href=#1884 id=1884 data-nosnippet>1884</a>    );
+<a href=#1885 id=1885 data-nosnippet>1885</a>    <span class="kw">let </span>package = subject_package(ext, <span class="kw-2">&amp;</span>spec.source);
+<a href=#1886 id=1886 data-nosnippet>1886</a>    <span class="kw">let </span>source_short = subject_short(<span class="kw-2">&amp;</span>spec.source);
+<a href=#1887 id=1887 data-nosnippet>1887</a>    <span class="kw">let </span><span class="kw-2">mut </span>iface = IfaceSpec::assemble(
+<a href=#1888 id=1888 data-nosnippet>1888</a>        package,
+<a href=#1889 id=1889 data-nosnippet>1889</a>        name,
+<a href=#1890 id=1890 data-nosnippet>1890</a>        <span class="macro">vec!</span>[<span class="string">"out R"</span>.to_string()],
+<a href=#1891 id=1891 data-nosnippet>1891</a>        params,
+<a href=#1892 id=1892 data-nosnippet>1892</a>        KtType::var_r(),
+<a href=#1893 id=1893 data-nosnippet>1893</a>    );
+<a href=#1894 id=1894 data-nosnippet>1894</a>    iface.kdoc = <span class="prelude-val">Some</span>(<span class="macro">format!</span>(
+<a href=#1895 id=1895 data-nosnippet>1895</a>        <span class="string">"Domain-error callback: called only when the native function returns `Err` — the\n\
+<a href=#1896 id=1896 data-nosnippet>1896</a>         parameters carry the decomposed `{source_short}`. Binding/system failures go to the\n\
+<a href=#1897 id=1897 data-nosnippet>1897</a>         separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`\n\
+<a href=#1898 id=1898 data-nosnippet>1898</a>         discriminator here. The wrapper returns whatever `run` returns. Where that type is\n\
+<a href=#1899 id=1899 data-nosnippet>1899</a>         nullable you may return `null` to decline — you are not required to fabricate a result.\n\
+<a href=#1900 id=1900 data-nosnippet>1900</a>         Consequently the handler firing, not the returned value, is the error discriminator:\n\
+<a href=#1901 id=1901 data-nosnippet>1901</a>         `null` can also be a successful optional result, and a non-null value can be a fallback\n\
+<a href=#1902 id=1902 data-nosnippet>1902</a>         you supplied. Throwing from `run` is safe (it executes after the native call has returned)."
+<a href=#1903 id=1903 data-nosnippet>1903</a>    </span>));
+<a href=#1904 id=1904 data-nosnippet>1904</a>    <span class="prelude-val">Some</span>(iface)
+<a href=#1905 id=1905 data-nosnippet>1905</a>}
+<a href=#1906 id=1906 data-nosnippet>1906</a>
+<a href=#1907 id=1907 data-nosnippet>1907</a><span class="doccomment">/// The shared infallible handler `JniErrorHandler&lt;out R&gt; { run(je: String?): R }`
+<a href=#1908 id=1908 data-nosnippet>1908</a>/// — every function without an error plan takes one; placed in the root
+<a href=#1909 id=1909 data-nosnippet>1909</a>/// package.
+<a href=#1910 id=1910 data-nosnippet>1910</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>jni_error_handler_iface_spec(ext: <span class="kw-2">&amp;</span>Declarations) -&gt; IfaceSpec {
+<a href=#1911 id=1911 data-nosnippet>1911</a>    <span class="kw">let </span>params = <span class="macro">vec!</span>[IfaceParam::same(
+<a href=#1912 id=1912 data-nosnippet>1912</a>        <span class="string">"je"</span>.to_string(),
+<a href=#1913 id=1913 data-nosnippet>1913</a>        KtType::string().nullable(),
+<a href=#1914 id=1914 data-nosnippet>1914</a>    )];
+<a href=#1915 id=1915 data-nosnippet>1915</a>    <span class="kw">let </span><span class="kw-2">mut </span>iface = IfaceSpec::assemble(
+<a href=#1916 id=1916 data-nosnippet>1916</a>        ext.package.clone(),
+<a href=#1917 id=1917 data-nosnippet>1917</a>        <span class="string">"JniErrorHandler"</span>.to_string(),
+<a href=#1918 id=1918 data-nosnippet>1918</a>        <span class="macro">vec!</span>[<span class="string">"out R"</span>.to_string()],
+<a href=#1919 id=1919 data-nosnippet>1919</a>        params,
+<a href=#1920 id=1920 data-nosnippet>1920</a>        KtType::var_r(),
+<a href=#1921 id=1921 data-nosnippet>1921</a>    );
+<a href=#1922 id=1922 data-nosnippet>1922</a>    iface.kdoc = <span class="prelude-val">Some</span>(
+<a href=#1923 id=1923 data-nosnippet>1923</a>        <span class="string">"Binding-error callback — every wrapper's binding/system failure channel (any\n\
+<a href=#1924 id=1924 data-nosnippet>1924</a>         converter in the chain may fail, or a handle may be closed). `je` is the\n\
+<a href=#1925 id=1925 data-nosnippet>1925</a>         failure message. For an infallible wrapper this is the sole `onError`; a\n\
+<a href=#1926 id=1926 data-nosnippet>1926</a>         fallible wrapper takes it as `onBindingError` alongside the typed domain\n\
+<a href=#1927 id=1927 data-nosnippet>1927</a>         handler. The wrapper returns whatever `run` returns. Where that type is nullable you may\n\
+<a href=#1928 id=1928 data-nosnippet>1928</a>         return `null` to decline — you are not required to fabricate a result. Consequently the\n\
+<a href=#1929 id=1929 data-nosnippet>1929</a>         handler firing, not the returned value, is the error discriminator: `null` can also be a\n\
+<a href=#1930 id=1930 data-nosnippet>1930</a>         successful optional result, and a non-null value can be a fallback you supplied. Throwing\n\
+<a href=#1931 id=1931 data-nosnippet>1931</a>         from `run` is safe (it executes after the native call has returned)."
+<a href=#1932 id=1932 data-nosnippet>1932</a>            </span>.to_string(),
 <a href=#1933 id=1933 data-nosnippet>1933</a>    );
-<a href=#1934 id=1934 data-nosnippet>1934</a>    iface.kdoc = <span class="prelude-val">Some</span>(
-<a href=#1935 id=1935 data-nosnippet>1935</a>        <span class="string">"Binding-error callback — every wrapper's binding/system failure channel (any\n\
-<a href=#1936 id=1936 data-nosnippet>1936</a>         converter in the chain may fail, or a handle may be closed). `je` is the\n\
-<a href=#1937 id=1937 data-nosnippet>1937</a>         failure message. For an infallible wrapper this is the sole `onError`; a\n\
-<a href=#1938 id=1938 data-nosnippet>1938</a>         fallible wrapper takes it as `onBindingError` alongside the typed domain\n\
-<a href=#1939 id=1939 data-nosnippet>1939</a>         handler. The wrapper returns whatever `run` returns. Where that type is nullable you may\n\
-<a href=#1940 id=1940 data-nosnippet>1940</a>         return `null` to decline — you are not required to fabricate a result. Consequently the\n\
-<a href=#1941 id=1941 data-nosnippet>1941</a>         handler firing, not the returned value, is the error discriminator: `null` can also be a\n\
-<a href=#1942 id=1942 data-nosnippet>1942</a>         successful optional result, and a non-null value can be a fallback you supplied. Throwing\n\
-<a href=#1943 id=1943 data-nosnippet>1943</a>         from `run` is safe (it executes after the native call has returned)."
-<a href=#1944 id=1944 data-nosnippet>1944</a>            </span>.to_string(),
-<a href=#1945 id=1945 data-nosnippet>1945</a>    );
-<a href=#1946 id=1946 data-nosnippet>1946</a>    iface
-<a href=#1947 id=1947 data-nosnippet>1947</a>}
-<a href=#1948 id=1948 data-nosnippet>1948</a>
-<a href=#1949 id=1949 data-nosnippet>1949</a><span class="doccomment">/// The two onError handler interfaces for a declared function. A function has
-<a href=#1950 id=1950 data-nosnippet>1950</a>/// two independent error channels: a binding/system failure (any converter in
-<a href=#1951 id=1951 data-nosnippet>1951</a>/// the chain, a closed handle, …) and — for a `Result&lt;_, E&gt;` function — a
-<a href=#1952 id=1952 data-nosnippet>1952</a>/// domain error (`Err(E)`). Each is delivered to its own SAM handler, so
-<a href=#1953 id=1953 data-nosnippet>1953</a>/// neither carries a discriminator or fabricated defaults.
-<a href=#1954 id=1954 data-nosnippet>1954</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ErrorIfaces {
-<a href=#1955 id=1955 data-nosnippet>1955</a>    <span class="doccomment">/// Binding/system-failure channel — always the base `JniErrorHandler`.
-<a href=#1956 id=1956 data-nosnippet>1956</a>    </span><span class="kw">pub </span>binding: std::sync::Arc&lt;IfaceSpec&gt;,
-<a href=#1957 id=1957 data-nosnippet>1957</a>    <span class="doccomment">/// Domain-error channel — the typed `&lt;Src&gt;Handler` (no `je`); `Some` iff
-<a href=#1958 id=1958 data-nosnippet>1958</a>    /// the function has a declared error plan (returns `Result&lt;_, E&gt;`).
-<a href=#1959 id=1959 data-nosnippet>1959</a>    </span><span class="kw">pub </span>domain: <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt;,
-<a href=#1960 id=1960 data-nosnippet>1960</a>}
-<a href=#1961 id=1961 data-nosnippet>1961</a>
-<a href=#1962 id=1962 data-nosnippet>1962</a><span class="doccomment">/// The onError handler interfaces for a declared function — the always-present
-<a href=#1963 id=1963 data-nosnippet>1963</a>/// binding `JniErrorHandler` plus, for a fallible function, its
-<a href=#1964 id=1964 data-nosnippet>1964</a>/// declaration-keyed typed domain `&lt;Src&gt;Handler`. Thin KEY dispatch into the
-<a href=#1965 id=1965 data-nosnippet>1965</a>/// [`Declarations::iface_spec`] memo. `None` = the domain handler is underivable
-<a href=#1966 id=1966 data-nosnippet>1966</a>/// (the Rust emitter panics, the Kotlin renderer skips) — the binding channel
-<a href=#1967 id=1967 data-nosnippet>1967</a>/// alone always derives.
-<a href=#1968 id=1968 data-nosnippet>1968</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>onerror_iface_spec(
-<a href=#1969 id=1969 data-nosnippet>1969</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1970 id=1970 data-nosnippet>1970</a>    registry: <span class="kw-2">&amp;</span>Registry,
-<a href=#1971 id=1971 data-nosnippet>1971</a>    fn_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#1972 id=1972 data-nosnippet>1972</a>) -&gt; <span class="prelude-ty">Option</span>&lt;ErrorIfaces&gt; {
-<a href=#1973 id=1973 data-nosnippet>1973</a>    <span class="kw">let </span>binding = ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::JniErrorHandler)<span class="question-mark">?</span>;
-<a href=#1974 id=1974 data-nosnippet>1974</a>    <span class="kw">let </span>domain = <span class="kw">match </span>registry.error_plans().get(fn_ident) {
-<a href=#1975 id=1975 data-nosnippet>1975</a>        <span class="prelude-val">Some</span>(plan) =&gt; {
-<a href=#1976 id=1976 data-nosnippet>1976</a>            <span class="kw">let </span>decon = plan
-<a href=#1977 id=1977 data-nosnippet>1977</a>                .decon
-<a href=#1978 id=1978 data-nosnippet>1978</a>                .clone()
-<a href=#1979 id=1979 data-nosnippet>1979</a>                .expect(<span class="string">"error plans are always record-built (decon is Some)"</span>);
-<a href=#1980 id=1980 data-nosnippet>1980</a>            <span class="prelude-val">Some</span>(ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::Handler(decon))<span class="question-mark">?</span>)
-<a href=#1981 id=1981 data-nosnippet>1981</a>        }
-<a href=#1982 id=1982 data-nosnippet>1982</a>        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#1983 id=1983 data-nosnippet>1983</a>    };
-<a href=#1984 id=1984 data-nosnippet>1984</a>    <span class="prelude-val">Some</span>(ErrorIfaces { binding, domain })
-<a href=#1985 id=1985 data-nosnippet>1985</a>}
+<a href=#1934 id=1934 data-nosnippet>1934</a>    iface
+<a href=#1935 id=1935 data-nosnippet>1935</a>}
+<a href=#1936 id=1936 data-nosnippet>1936</a>
+<a href=#1937 id=1937 data-nosnippet>1937</a><span class="doccomment">/// The two onError handler interfaces for a declared function. A function has
+<a href=#1938 id=1938 data-nosnippet>1938</a>/// two independent error channels: a binding/system failure (any converter in
+<a href=#1939 id=1939 data-nosnippet>1939</a>/// the chain, a closed handle, …) and — for a `Result&lt;_, E&gt;` function — a
+<a href=#1940 id=1940 data-nosnippet>1940</a>/// domain error (`Err(E)`). Each is delivered to its own SAM handler, so
+<a href=#1941 id=1941 data-nosnippet>1941</a>/// neither carries a discriminator or fabricated defaults.
+<a href=#1942 id=1942 data-nosnippet>1942</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ErrorIfaces {
+<a href=#1943 id=1943 data-nosnippet>1943</a>    <span class="doccomment">/// Binding/system-failure channel — always the base `JniErrorHandler`.
+<a href=#1944 id=1944 data-nosnippet>1944</a>    </span><span class="kw">pub </span>binding: std::sync::Arc&lt;IfaceSpec&gt;,
+<a href=#1945 id=1945 data-nosnippet>1945</a>    <span class="doccomment">/// Domain-error channel — the typed `&lt;Src&gt;Handler` (no `je`); `Some` iff
+<a href=#1946 id=1946 data-nosnippet>1946</a>    /// the function has a declared error plan (returns `Result&lt;_, E&gt;`).
+<a href=#1947 id=1947 data-nosnippet>1947</a>    </span><span class="kw">pub </span>domain: <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt;,
+<a href=#1948 id=1948 data-nosnippet>1948</a>}
+<a href=#1949 id=1949 data-nosnippet>1949</a>
+<a href=#1950 id=1950 data-nosnippet>1950</a><span class="doccomment">/// The onError handler interfaces for a declared function — the always-present
+<a href=#1951 id=1951 data-nosnippet>1951</a>/// binding `JniErrorHandler` plus, for a fallible function, its
+<a href=#1952 id=1952 data-nosnippet>1952</a>/// declaration-keyed typed domain `&lt;Src&gt;Handler`. Thin KEY dispatch into the
+<a href=#1953 id=1953 data-nosnippet>1953</a>/// [`Declarations::iface_spec`] memo. `None` = the domain handler is underivable
+<a href=#1954 id=1954 data-nosnippet>1954</a>/// (the Rust emitter panics, the Kotlin renderer skips) — the binding channel
+<a href=#1955 id=1955 data-nosnippet>1955</a>/// alone always derives.
+<a href=#1956 id=1956 data-nosnippet>1956</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>onerror_iface_spec(
+<a href=#1957 id=1957 data-nosnippet>1957</a>    ext: <span class="kw-2">&amp;</span>Declarations,
+<a href=#1958 id=1958 data-nosnippet>1958</a>    registry: <span class="kw-2">&amp;</span>Registry,
+<a href=#1959 id=1959 data-nosnippet>1959</a>    fn_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#1960 id=1960 data-nosnippet>1960</a>) -&gt; <span class="prelude-ty">Option</span>&lt;ErrorIfaces&gt; {
+<a href=#1961 id=1961 data-nosnippet>1961</a>    <span class="kw">let </span>binding = ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::JniErrorHandler)<span class="question-mark">?</span>;
+<a href=#1962 id=1962 data-nosnippet>1962</a>    <span class="kw">let </span>domain = <span class="kw">match </span>ext.unfolded().error_plans.get(fn_ident) {
+<a href=#1963 id=1963 data-nosnippet>1963</a>        <span class="prelude-val">Some</span>(plan) =&gt; {
+<a href=#1964 id=1964 data-nosnippet>1964</a>            <span class="kw">let </span>decon = plan
+<a href=#1965 id=1965 data-nosnippet>1965</a>                .decon
+<a href=#1966 id=1966 data-nosnippet>1966</a>                .clone()
+<a href=#1967 id=1967 data-nosnippet>1967</a>                .expect(<span class="string">"error plans are always record-built (decon is Some)"</span>);
+<a href=#1968 id=1968 data-nosnippet>1968</a>            <span class="prelude-val">Some</span>(ext.iface_spec(registry, <span class="kw-2">&amp;</span>SpecKey::Handler(decon))<span class="question-mark">?</span>)
+<a href=#1969 id=1969 data-nosnippet>1969</a>        }
+<a href=#1970 id=1970 data-nosnippet>1970</a>        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#1971 id=1971 data-nosnippet>1971</a>    };
+<a href=#1972 id=1972 data-nosnippet>1972</a>    <span class="prelude-val">Some</span>(ErrorIfaces { binding, domain })
+<a href=#1973 id=1973 data-nosnippet>1973</a>}
 </code></pre></div></section></main></body></html>

@@ -487,7 +487,7 @@
 <a href=#487 id=487 data-nosnippet>487</a>        // a different recipe (#623 review). `decon` is the gate the model
 <a href=#488 id=488 data-nosnippet>488</a>        // already carries for this: `None` only for the whole-element arm.
 <a href=#489 id=489 data-nosnippet>489</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>decomposed: BTreeMap&lt;TypeKey, TypeRef&gt; = BTreeMap::new();
-<a href=#490 id=490 data-nosnippet>490</a>        <span class="kw">for </span>plan <span class="kw">in </span>registry.callback_arg_plans().values() {
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="kw">for </span>plan <span class="kw">in </span><span class="self">self</span>.unfolded().callback_arg_plans.values() {
 <a href=#491 id=491 data-nosnippet>491</a>            <span class="kw">if </span>plan.decon.is_none() {
 <a href=#492 id=492 data-nosnippet>492</a>                <span class="kw">continue</span>;
 <a href=#493 id=493 data-nosnippet>493</a>            }
@@ -815,7 +815,7 @@
 <a href=#815 id=815 data-nosnippet>815</a>                    // one the argument's own `Role::CallbackArg` site names are
 <a href=#816 id=816 data-nosnippet>816</a>                    // one fragment rather than two rows over one crossing.
 <a href=#817 id=817 data-nosnippet>817</a>                    </span><span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(core)
-<a href=#818 id=818 data-nosnippet>818</a>                        &amp;&amp; registry.callback_arg_plan(<span class="kw-2">&amp;</span>arg.key()).is_none()
+<a href=#818 id=818 data-nosnippet>818</a>                        &amp;&amp; !<span class="self">self</span>.unfolded().callback_arg_plans.contains_key(<span class="kw-2">&amp;</span>arg.key())
 <a href=#819 id=819 data-nosnippet>819</a>                    {
 <a href=#820 id=820 data-nosnippet>820</a>                        <span class="kw">continue</span>;
 <a href=#821 id=821 data-nosnippet>821</a>                    }

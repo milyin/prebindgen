@@ -759,8 +759,8 @@
 <a href=#759 id=759 data-nosnippet>759</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, PlanError&gt; {
 <a href=#760 id=760 data-nosnippet>760</a>        <span class="kw">let </span>jni_method = ext.mangle_jni_method(<span class="kw-2">&amp;</span>kt_snake_to_camel(<span class="kw-2">&amp;</span>f.name.to_string()));
 <a href=#761 id=761 data-nosnippet>761</a>        <span class="kw">let </span>native_symbol = ext.native_method_symbol(<span class="kw-2">&amp;</span>jni_method);
-<a href=#762 id=762 data-nosnippet>762</a>        <span class="kw">let </span>unfold = registry.unfold_plans().get(<span class="kw-2">&amp;</span>f.name).cloned();
-<a href=#763 id=763 data-nosnippet>763</a>        <span class="kw">let </span>error = registry.error_plans().get(<span class="kw-2">&amp;</span>f.name).cloned();
+<a href=#762 id=762 data-nosnippet>762</a>        <span class="kw">let </span>unfold = ext.unfolded().unfold_plans.get(<span class="kw-2">&amp;</span>f.name).cloned();
+<a href=#763 id=763 data-nosnippet>763</a>        <span class="kw">let </span>error = ext.unfolded().error_plans.get(<span class="kw-2">&amp;</span>f.name).cloned();
 <a href=#764 id=764 data-nosnippet>764</a>        <span class="kw">let </span>onerror_iface = onerror_iface_spec(ext, registry, <span class="kw-2">&amp;</span>f.name);
 <a href=#765 id=765 data-nosnippet>765</a>        <span class="comment">// Output first: the Rust emitter historically resolved the output
 <a href=#766 id=766 data-nosnippet>766</a>        // before the inputs, so an unresolved-output failure takes precedence
@@ -1212,8 +1212,8 @@
 <a href=#1212 id=1212 data-nosnippet>1212</a>        };
 <a href=#1213 id=1213 data-nosnippet>1213</a>        <span class="kw">let </span>decon = plan.decon.as_ref().map(|id| {
 <a href=#1214 id=1214 data-nosnippet>1214</a>            std::rc::Rc::new(
-<a href=#1215 id=1215 data-nosnippet>1215</a>                registry
-<a href=#1216 id=1216 data-nosnippet>1216</a>                    .decon_plans()
+<a href=#1215 id=1215 data-nosnippet>1215</a>                ext.unfolded()
+<a href=#1216 id=1216 data-nosnippet>1216</a>                    .decon_plans
 <a href=#1217 id=1217 data-nosnippet>1217</a>                    .get(id)
 <a href=#1218 id=1218 data-nosnippet>1218</a>                    .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"unfold plan names unknown deconstructor `{id:?}`"</span>))
 <a href=#1219 id=1219 data-nosnippet>1219</a>                    .clone(),
