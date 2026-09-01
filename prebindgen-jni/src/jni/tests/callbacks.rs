@@ -692,8 +692,9 @@ fn iface_spec_memo_shares_one_derivation() {
     // The plan-facing dispatcher and a direct key lookup share one
     // allocation — the wrapper surface and the interface declaration cannot
     // diverge from the fold upcall's descriptor.
-    let plan = registry
-        .unfold_plans()
+    let plan = ext
+        .unfolded()
+        .unfold_plans
         .get(&syn::parse_str::<syn::Ident>("z_things_all").unwrap())
         .expect("fold plan");
     let via_plan = folder_iface_for_plan(ext, registry, plan).expect("folder spec");
@@ -1242,7 +1243,6 @@ fn a_delivered_argument_names_the_row_it_crossed_on() {
         .in_frag(&param_reading(&gen, "z_get", 0))
         .expect("the callback parameter compiled");
     let crate::jni::compile::JAbiLeaves::Decomposed(delivered) = callback
-        .fragment()
         .rust
         .invoke_plan()
         .expect("the callback conversion is an Invoke")
@@ -1312,7 +1312,6 @@ fn a_whole_delivered_argument_shares_the_trampolines_abi() {
     let crate::jni::compile::JAbiLeaves::Invoked(delivered) = decls
         .in_frag(&param_reading(&gen, "z_watch", 0))
         .expect("the callback parameter compiled")
-        .fragment()
         .rust
         .invoke_plan()
         .expect("the callback conversion is an Invoke")

@@ -317,6 +317,25 @@ impl RegistryBuilder {
             .flat_map(|plan| plan.leaves.iter().map(|leaf| &leaf.ty)))
     }
 
+    /// The `#[prebindgen]` functions this binding exports, as declared with
+    /// [`Self::export`].
+    ///
+    /// Read back by an adapter that applies its own decompositions: which
+    /// functions are exported decides which of them a type's default
+    /// decomposition auto-applies to.
+    pub fn exports(&self) -> &std::collections::HashSet<syn::Ident> {
+        &self.registry.declared.functions
+    }
+
+    /// The exported functions declared with [`Self::accessor`] — the ones that
+    /// read one value out of another.
+    ///
+    /// Read back for the same reason as [`Self::exports`]: an accessor is the
+    /// only kind of function a decomposition record may name.
+    pub fn accessors(&self) -> &std::collections::HashSet<syn::Ident> {
+        &self.registry.declared.accessors
+    }
+
     /// Whether the source declares a type under this name — see
     /// `Registry::declares_type`.
     #[cfg(test)]
@@ -443,20 +462,5 @@ impl Conversions for RegistryBuilder {
             .filter(|(d, _)| *d == dir)
             .map(|(_, k)| k.clone())
             .collect()
-    }
-    fn callback_arg_plan(&self, key: &TypeKey) -> Option<&crate::unfold::UnfoldPlan> {
-        self.registry.callback_arg_plans.get(key)
-    }
-    fn callback_arg_plans(&self) -> &HashMap<TypeKey, crate::unfold::UnfoldPlan> {
-        &self.registry.callback_arg_plans
-    }
-    fn unfold_plans(&self) -> &HashMap<syn::Ident, crate::unfold::UnfoldPlan> {
-        &self.registry.unfold_plans
-    }
-    fn error_plans(&self) -> &HashMap<syn::Ident, crate::unfold::UnfoldPlan> {
-        &self.registry.error_plans
-    }
-    fn decon_plans(&self) -> &HashMap<crate::unfold::DeconId, crate::unfold::DeconSpec> {
-        &self.registry.decon_plans
     }
 }

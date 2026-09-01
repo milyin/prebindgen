@@ -210,6 +210,7 @@ impl Default for Declarations {
             struct_plans: Default::default(),
             sum_plans: Default::default(),
             vec_build_plans: Default::default(),
+            unfolded: Default::default(),
             generation: None,
         }
     }
@@ -232,6 +233,17 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
+    /// The applied output-side decompositions — how a return, an error or a
+    /// callback argument comes apart.
+    ///
+    /// Filled while this binding declares itself into the registry, which every
+    /// caller here is downstream of.
+    pub(crate) fn unfolded(&self) -> &crate::unfold::Unfolded {
+        self.unfolded
+            .get()
+            .expect("decompositions are applied while the binding is declared")
+    }
+
     /// Apply the package-level function-name mangle closure to `name`.
     pub(crate) fn mangle_fun(&self, package: &str, name: &str) -> String {
         match &self.fun_name_mangle {
@@ -633,7 +645,7 @@ impl JniGenBuilder {
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
         for (decl, kind) in members {
             let rust_ident = decl.rust_ident().clone();
-            let kotlin_name_override = decl.kotlin_name_override().clone();
+            let kotlin_name_override = decl.name_override().clone();
             self.accept_fn_expands(decl);
             // A constructor member's return is a factory, never
             // output-flattened — derived from `class_members` in
@@ -652,7 +664,7 @@ impl JniGenBuilder {
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
         let mut entry = FunctionEntry::new(decl.rust_ident().clone());
-        entry.kotlin_name_override = decl.kotlin_name_override().clone();
+        entry.kotlin_name_override = decl.name_override().clone();
         self.decls
             .packages
             .entry(subpackage.to_string())
@@ -884,8 +896,8 @@ impl Declarations {
         registry: &impl Conversions,
         key: &TypeKey,
         fields: &[LocalField],
-    ) -> Vec<prebindgen_registry::unfold::DeconRecord> {
-        use prebindgen_registry::unfold::DeconRecord;
+    ) -> Vec<crate::unfold::DeconRecord> {
+        use crate::unfold::DeconRecord;
         fields
             .iter()
             .map(|f| match f {
@@ -922,7 +934,7 @@ impl Declarations {
     }
 
     /// Expand a `.fields(fields!(f))` declaration into one
-    /// [`FieldRecord`](prebindgen_registry::unfold::FieldRecord) per field of the
+    /// [`FieldRecord`](crate::unfold::FieldRecord) per field of the
     /// struct `f` returns — the value form.
     ///
     /// The walk is the adapter's job because only it knows which structs are
@@ -941,7 +953,7 @@ impl Declarations {
         registry: &impl Conversions,
         key: &TypeKey,
         decl: &FieldsDecl,
-    ) -> Vec<prebindgen_registry::unfold::FieldRecord> {
+    ) -> Vec<crate::unfold::FieldRecord> {
         let func = decl.func();
         let accessor = registry.flat().function(&func).unwrap_or_else(|| {
             panic!(
@@ -980,7 +992,7 @@ impl Declarations {
         // than a no-op.
         let named: std::collections::HashSet<String> = out
             .iter()
-            .map(|r: &prebindgen_registry::unfold::FieldRecord| {
+            .map(|r: &crate::unfold::FieldRecord| {
                 r.members
                     .iter()
                     .map(|m| m.to_string())
@@ -1023,9 +1035,9 @@ impl Declarations {
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
-        out: &mut Vec<prebindgen_registry::unfold::FieldRecord>,
+        out: &mut Vec<crate::unfold::FieldRecord>,
     ) {
-        use prebindgen_registry::unfold::{FieldDecon, FieldRecord};
+        use crate::unfold::{FieldDecon, FieldRecord};
         // A value form holding itself would expand forever; the cycle rule for
         // everything reachable BELOW a field is core's `visited` check.
         assert!(
@@ -1205,8 +1217,8 @@ impl Declarations {
     pub(crate) fn build_deconstructors(
         &self,
         registry: &impl Conversions,
-    ) -> prebindgen_registry::unfold::Deconstructors {
-        use prebindgen_registry::unfold::{
+    ) -> crate::unfold::Deconstructors {
+        use crate::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
         };
         let mut dec = Deconstructors {

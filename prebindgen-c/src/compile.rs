@@ -308,11 +308,7 @@ impl Representation for CRepresentation {
     type Step = CCall;
     type ConverterArtifact = CFunction;
     type TerminalCodec = CCall;
-    type ProductBridge = CCall;
-    type OptionalBridge = CCall;
-    type SequenceBridge = CCall;
-    type ChoiceBridge = CCall;
-    type CallbackBridge = CCall;
+    type Bridge = CCall;
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = CFailureRoute;
@@ -515,7 +511,9 @@ impl CFrag {
             self.yields.clone(),
         );
         if self.function.is_deferred_invoke() {
-            plan
+            // Invoked where it lands rather than through a function of its own:
+            // no artifact, and still a conversion the plan can name.
+            plan.with_composed_conversion(self.function.clone())
         } else {
             plan.with_artifact(self.function.clone())
         }

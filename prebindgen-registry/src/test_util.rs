@@ -27,9 +27,9 @@ pub(crate) fn reg_with(sources: &[&str]) -> RegistryBuilder {
     reg_from_items(declare_referenced(items)).expect("index")
 }
 
-/// A **scanned** registry from item sources — for tests that drive `expand` /
-/// `unfold` directly and need the type tables populated, without going through
-/// a generator's conversion loop.
+/// A **scanned** registry from item sources — for tests that drive `expand`
+/// directly and need the type tables populated, without going through a
+/// generator's conversion loop.
 pub(crate) fn scanned_with(sources: &[&str]) -> Registry {
     reg_with(sources).scanned().expect("scan")
 }
@@ -60,7 +60,7 @@ where
 ///
 /// A fixture that is *about* a handle's treatment already declares it; this covers
 /// the ones where the handle is incidental — `reg_with(&["fn get(s: &Storage) -> Payload"])`
-/// is testing an unfold plan, not what `Storage` is. Declaring them as
+/// is testing a plan's shape, not what `Storage` is. Declaring them as
 /// [`Extern`](prebindgen_flat::flat::Extern)s is exactly what a real source crate does
 /// for a foreign handle, and it is inert for the registry either way: a type alias
 /// lands in no registry map.

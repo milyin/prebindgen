@@ -540,16 +540,15 @@ pub trait Representation {
     type ConverterArtifact;
     /// Terminal conversion at an [`Atomic`](ShapePlan::Atomic) shape.
     type TerminalCodec;
-    /// Packing or unpacking a fixed product.
-    type ProductBridge;
-    /// Absent/present control flow.
-    type OptionalBridge;
-    /// Builder or traversal control flow for a sequence.
-    type SequenceBridge;
-    /// Arm/tag control flow for a choice.
-    type ChoiceBridge;
-    /// Callable construction and invocation control flow.
-    type CallbackBridge;
+    /// The control flow of one composite shape.
+    ///
+    /// Packing a product, gating an optional, building or traversing a
+    /// sequence, selecting a choice arm, and constructing or invoking a
+    /// callable are all the same kind of answer: what the adapter does at a
+    /// shape whose children carry the values. The [`ShapePlan`] variant that
+    /// holds the bridge says which of those it is, so the adapter does not
+    /// need a separate type per variant to know.
+    type Bridge;
     /// One semantic niche identity. Equal values denote the same bit domain.
     type Niche: Clone + Eq + Hash;
     /// A cleanup operation.
@@ -832,35 +831,35 @@ pub enum ShapePlan<R: Representation> {
     /// Pack or unpack all fixed positions.
     Product {
         /// Adapter representation operation.
-        bridge: FixedArity<R::ProductBridge>,
+        bridge: FixedArity<R::Bridge>,
         /// Ordered source parts.
         parts: Vec<FragmentUse>,
     },
     /// Absent/present control flow around one value.
     Optional {
         /// Adapter representation operation.
-        bridge: R::OptionalBridge,
+        bridge: R::Bridge,
         /// The present value.
         value: FragmentUse,
     },
     /// Builder or traversal control flow around one element type.
     Sequence {
         /// Adapter representation operation.
-        bridge: R::SequenceBridge,
+        bridge: R::Bridge,
         /// The repeated element.
         element: FragmentUse,
     },
     /// Tagged selection among ordered arms.
     Choice {
         /// Adapter representation operation and arm contracts.
-        bridge: ChoiceArity<R::ChoiceBridge>,
+        bridge: ChoiceArity<R::Bridge>,
         /// Parts in every arm, in tag and then position order.
         arms: Vec<Vec<FragmentUse>>,
     },
     /// Foreign callable construction and later argument delivery.
     Invoke {
         /// Adapter callable operation.
-        bridge: FixedArity<R::CallbackBridge>,
+        bridge: FixedArity<R::Bridge>,
         /// Callback arguments. Their direction is opposite the callable's.
         arguments: Vec<FragmentUse>,
     },
@@ -873,11 +872,7 @@ pub enum ShapePlan<R: Representation> {
 impl<R: Representation> Clone for ShapePlan<R>
 where
     R::TerminalCodec: Clone,
-    R::ProductBridge: Clone,
-    R::OptionalBridge: Clone,
-    R::SequenceBridge: Clone,
-    R::ChoiceBridge: Clone,
-    R::CallbackBridge: Clone,
+    R::Bridge: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -1002,7 +997,9 @@ pub struct FragmentPlan<R: Representation> {
     source: TypeRef,
     intermediate: R::Intermediate,
     converter: ConverterPlan<R>,
-    artifact: Option<R::ConverterArtifact>,
+    conversion: Option<R::ConverterArtifact>,
+    /// Whether [`Self::conversion`] is also emitted into the file.
+    renders: bool,
     yields: Yield,
 }
 
@@ -1020,14 +1017,32 @@ impl<R: Representation> FragmentPlan<R> {
             source,
             intermediate,
             converter,
-            artifact: None,
+            conversion: None,
+            renders: false,
             yields,
         }
     }
 
-    /// Attach the adapter's frozen private-converter artifact.
+    /// Attach the adapter's frozen private-converter artifact, which the file
+    /// emits.
     pub fn with_artifact(mut self, artifact: R::ConverterArtifact) -> Self {
-        self.artifact = Some(artifact);
+        self.conversion = Some(artifact);
+        self.renders = true;
+        self
+    }
+
+    /// Attach a conversion the file does **not** emit.
+    ///
+    /// A fragment can have a conversion and render nothing: one composed into
+    /// its parent emits no converter of its own, and a deferred callable is
+    /// invoked where it lands rather than through a function of its own. Both
+    /// adapters have such fragments, and both still have to say what the
+    /// conversion *is* — an emitter asking how such a value crosses has a fair
+    /// question, and before this the plan could not answer it and the adapter's
+    /// own compile-time carrier had to (#660 item 5).
+    pub fn with_composed_conversion(mut self, conversion: R::ConverterArtifact) -> Self {
+        self.conversion = Some(conversion);
+        self.renders = false;
         self
     }
 
@@ -1052,8 +1067,18 @@ impl<R: Representation> FragmentPlan<R> {
     }
 
     /// Adapter-owned converter artifact in registry dependency order.
+    ///
+    /// `None` for a fragment that renders nothing, whether or not it has a
+    /// conversion — this is the file's question. [`Self::conversion`] is the
+    /// other one.
     pub fn artifact(&self) -> Option<&R::ConverterArtifact> {
-        self.artifact.as_ref()
+        self.conversion.as_ref().filter(|_| self.renders)
+    }
+
+    /// How this fragment's value crosses, whether or not the file emits a
+    /// converter for it — see [`Self::with_composed_conversion`].
+    pub fn conversion(&self) -> Option<&R::ConverterArtifact> {
+        self.conversion.as_ref()
     }
 
     /// Source-value contract produced by this fragment.
@@ -1196,6 +1221,7 @@ pub struct ArtifactPlan<R: Representation> {
     id: ArtifactId,
     prerequisites: Vec<ArtifactId>,
     inputs: Vec<ArtifactInput>,
+    follows: Vec<FragmentId>,
     payload: R::Artifact,
 }
 
@@ -1211,8 +1237,29 @@ impl<R: Representation> ArtifactPlan<R> {
             id,
             prerequisites,
             inputs,
+            follows: Vec::new(),
             payload,
         }
+    }
+
+    /// State that this artifact exists only while one of `fragments` is reached.
+    ///
+    /// The inverse of an [`ArtifactInput::Fragment`]. An input is a *reason* a
+    /// fragment is kept: the artifact needs it, so the plan must not prune it.
+    /// This is a *consequence* of a fragment being kept: the file emits a
+    /// private converter because its fragment survived, and emitting one is no
+    /// reason to keep the fragment. So the plan drops such an artifact when it
+    /// has dropped every fragment it follows.
+    ///
+    /// Several fragments can render one converter — an operation shared by two
+    /// crossings is emitted once — which is why this is a list: the artifact
+    /// stays while any one of them does.
+    ///
+    /// Left unset, the artifact is unconditional: the binding declared it, and
+    /// no fragment's fate withdraws it.
+    pub fn follows(mut self, fragments: Vec<FragmentId>) -> Self {
+        self.follows = fragments;
+        self
     }
 
     /// Semantic artifact identity.
@@ -1230,6 +1277,12 @@ impl<R: Representation> ArtifactPlan<R> {
         &self.inputs
     }
 
+    /// Fragments whose reachability this item's existence follows — see
+    /// [`Self::follows`]. Empty for an unconditional artifact.
+    pub fn followed(&self) -> &[FragmentId] {
+        &self.follows
+    }
+
     /// Adapter-owned artifact description.
     pub fn payload(&self) -> &R::Artifact {
         &self.payload
@@ -1241,6 +1294,10 @@ pub struct GenerationPlanBuilder<R: Representation> {
     fragments: HashMap<FragmentId, FragmentPlan<R>>,
     sites: HashMap<SiteId, SitePlan<R>>,
     artifacts: HashMap<ArtifactId, ArtifactPlan<R>>,
+    /// Artifacts in the order they were added, which is the order the file
+    /// emits them in. A prerequisite still hoists ahead of its dependent.
+    declared: Vec<ArtifactId>,
+    roots: Vec<FragmentId>,
     errors: Vec<PlanError>,
 }
 
@@ -1250,6 +1307,8 @@ impl<R: Representation> Default for GenerationPlanBuilder<R> {
             fragments: HashMap::new(),
             sites: HashMap::new(),
             artifacts: HashMap::new(),
+            declared: Vec::new(),
+            roots: Vec::new(),
             errors: Vec::new(),
         }
     }
@@ -1280,11 +1339,27 @@ impl<R: Representation> GenerationPlanBuilder<R> {
     }
 
     /// Add one final artifact. Duplicate semantic identities are errors.
+    ///
+    /// The order artifacts are added in is the order the file emits them in.
     pub fn artifact(&mut self, plan: ArtifactPlan<R>) -> &mut Self {
         let id = plan.id.clone();
         if self.artifacts.insert(id.clone(), plan).is_some() {
             self.errors.push(PlanError::DuplicateArtifact(id));
+        } else {
+            self.declared.push(id);
         }
+        self
+    }
+
+    /// Declare `fragment` reached because the binding's surface says so.
+    ///
+    /// Sites and artifact inputs are the reasons a fragment is kept that the
+    /// plan can see for itself. This is the one an adapter has to state: a
+    /// declared class crosses in both directions whether or not this build
+    /// happens to export a function that mentions it, so its converters are
+    /// binding surface and not dead code.
+    pub fn root(&mut self, fragment: FragmentId) -> &mut Self {
+        self.roots.push(fragment);
         self
     }
 
@@ -1294,26 +1369,68 @@ impl<R: Representation> GenerationPlanBuilder<R> {
         self.validate_sites();
         self.validate_artifacts();
         let fragment_order = topo_fragments(&self.fragments, &mut self.errors);
-        let artifact_order = topo_artifacts(&self.artifacts, &mut self.errors);
+        let artifact_order = topo_artifacts(&self.artifacts, &self.declared, &mut self.errors);
         if !self.errors.is_empty() {
             return Err(PlanErrors(self.errors));
         }
 
-        let mut roots: Vec<_> = self.sites.values().map(|s| s.fragment.clone()).collect();
-        roots.extend(self.artifacts.values().flat_map(|artifact| {
-            artifact.inputs.iter().filter_map(|input| match input {
-                ArtifactInput::Fragment(id) => Some(id.clone()),
-                ArtifactInput::Site { .. } => None,
-            })
-        }));
-        roots.sort_by_cached_key(FragmentId::stable_key);
-        roots.dedup();
-        let reachable = reachable_fragments(&self.fragments, roots);
+        // What the binding asks for outright: the fragment each site names, and
+        // the roots the adapter declared.
+        let declared_roots: Vec<_> = self
+            .sites
+            .values()
+            .map(|s| s.fragment.clone())
+            .chain(self.roots.iter().cloned())
+            .collect();
+        // An artifact that follows fragments is kept only while one of them is
+        // reached, and until it is kept it asks for nothing: a private
+        // converter the file will not emit is no reason to keep the converters
+        // it would have called. But a kept one's inputs are reasons, and
+        // keeping it can reach a fragment that keeps another — so this runs to
+        // a fixed point rather than in one pass. It terminates because the kept
+        // set only grows.
+        let mut kept: HashSet<ArtifactId> = HashSet::new();
+        let mut reachable;
+        loop {
+            let mut roots = declared_roots.clone();
+            roots.extend(
+                self.artifacts
+                    .values()
+                    .filter(|artifact| artifact.follows.is_empty() || kept.contains(&artifact.id))
+                    .flat_map(|artifact| {
+                        artifact.inputs.iter().filter_map(|input| match input {
+                            ArtifactInput::Fragment(id) => Some(id.clone()),
+                            ArtifactInput::Site { .. } => None,
+                        })
+                    }),
+            );
+            roots.sort_by_cached_key(FragmentId::stable_key);
+            roots.dedup();
+            reachable = reachable_fragments(&self.fragments, roots);
+            let grown: HashSet<ArtifactId> = self
+                .artifacts
+                .values()
+                .filter(|artifact| {
+                    artifact.follows.is_empty()
+                        || artifact.follows.iter().any(|id| reachable.contains(id))
+                })
+                .map(|artifact| artifact.id.clone())
+                .collect();
+            if grown == kept {
+                break;
+            }
+            kept = grown;
+        }
         let fragment_order = fragment_order
             .into_iter()
             .filter(|id| reachable.contains(id))
             .collect();
         self.fragments.retain(|id, _| reachable.contains(id));
+        let artifact_order: Vec<_> = artifact_order
+            .into_iter()
+            .filter(|id| kept.contains(id))
+            .collect();
+        self.artifacts.retain(|id, _| kept.contains(id));
 
         let mut site_order: Vec<_> = self.sites.keys().cloned().collect();
         site_order.sort_by_cached_key(SiteId::stable_key);
@@ -1797,8 +1914,11 @@ fn visit_fragment<R: Representation>(
     order.push(id.clone());
 }
 
+/// Artifacts in emission order: the order they were declared in, with each
+/// artifact's prerequisites hoisted ahead of it.
 fn topo_artifacts<R: Representation>(
     plans: &HashMap<ArtifactId, ArtifactPlan<R>>,
+    declared: &[ArtifactId],
     errors: &mut Vec<PlanError>,
 ) -> Vec<ArtifactId> {
     fn visit<R: Representation>(
@@ -1831,12 +1951,10 @@ fn topo_artifacts<R: Representation>(
         order.push(id.clone());
     }
 
-    let mut roots: Vec<_> = plans.keys().cloned().collect();
-    roots.sort();
     let mut state = HashMap::new();
     let mut order = Vec::new();
-    for root in roots {
-        visit(&root, plans, &mut state, &mut order, errors);
+    for root in declared {
+        visit(root, plans, &mut state, &mut order, errors);
     }
     order
 }

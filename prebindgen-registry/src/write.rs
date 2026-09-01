@@ -132,9 +132,12 @@ pub trait RustArtifact {
 /// The frozen set of final artifacts a generated Rust file is assembled from.
 ///
 /// An assembly is ordered: artifacts reach the file in the order the adapter
-/// added them, which for converters is the registry-owned dependency order of
-/// the fragments they came from. It holds one artifact per [`ArtifactKey`], so
-/// sharing never depends on the Rust symbol final emission allocates.
+/// added them. An adapter that plans its output first adds them by projecting
+/// its [`GenerationPlan`](crate::generation::GenerationPlan) — every artifact
+/// the plan states, in the plan's order, so the plan is what the file says
+/// rather than a second description of it. It holds one artifact per
+/// [`ArtifactKey`], so sharing never depends on the Rust symbol final emission
+/// allocates.
 pub struct Assembly<A> {
     artifacts: Vec<A>,
     /// The rendering capability, minted while freezing. Writing an assembly

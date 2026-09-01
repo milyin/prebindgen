@@ -39,8 +39,9 @@ pub(crate) struct JniGenerationPlan {
     sums: HashMap<TypeKey, Rc<crate::jni::kotlin_emit::SealedClassPlan>>,
     vec_builds: HashMap<TypeKey, Rc<VecBuildHelpers>>,
     /// Every final artifact of the generated Rust file, frozen in the order it
-    /// is written. Built once the last fragment is compiled, and the only
-    /// thing `write_rust` reads the file's converters and externs from.
+    /// is written — the projection of [`Self::plan`]: its artifacts, its order,
+    /// its payloads. The only thing `write_rust` reads the file's converters and
+    /// externs from, so the plan is what the file says.
     assembly: prebindgen_registry::write::Assembly<JFinalArtifact>,
 }
 
@@ -469,39 +470,45 @@ impl JniGenerationPlan {
                 }
             }
         }
-        let root = |artifact: &JFinalArtifact,
-                    extra: &[prebindgen_registry::generation::FragmentId]| {
-            let calls = artifact.calls();
-            let inputs: Vec<_> = calls
-                .iter()
-                .filter_map(|call| match call {
-                    prebindgen_registry::write::ArtifactKey::Operation(operation) => {
-                        by_operation.get(operation).cloned()
-                    }
-                    prebindgen_registry::write::ArtifactKey::Artifact(_) => None,
-                })
-                .flatten()
-                .chain(extra.iter().cloned())
-                .map(prebindgen_registry::generation::ArtifactInput::Fragment)
-                .collect();
-            if inputs.is_empty() {
-                return None;
-            }
-            let key = artifact.key();
-            let id = match key {
-                prebindgen_registry::write::ArtifactKey::Artifact(id) => id,
-                prebindgen_registry::write::ArtifactKey::Operation(operation) => {
-                    prebindgen_registry::generation::ArtifactId::new(
-                        "jni-operation",
-                        operation.to_string(),
-                    )
-                    .expect("an operation identity is a non-empty artifact name")
-                }
-            };
-            Some(prebindgen_registry::generation::ArtifactPlan::<
+        // One artifact, stated to the plan: what it needs (the fragments whose
+        // converters it calls, plus any delegation its owner declares), and
+        // — for a private converter — the fragments whose survival it follows.
+        let plan_of =
+            |artifact: &JFinalArtifact, extra: &[prebindgen_registry::generation::FragmentId]| {
+                let calls = artifact.calls();
+                let inputs: Vec<_> = calls
+                    .iter()
+                    .filter_map(|call| match call {
+                        prebindgen_registry::write::ArtifactKey::Operation(operation) => {
+                            by_operation.get(operation).cloned()
+                        }
+                        prebindgen_registry::write::ArtifactKey::Artifact(_) => None,
+                    })
+                    .flatten()
+                    .chain(extra.iter().cloned())
+                    .map(prebindgen_registry::generation::ArtifactInput::Fragment)
+                    .collect();
+                let key = artifact.key();
+                let (id, follows) = match key {
+                    prebindgen_registry::write::ArtifactKey::Artifact(id) => (id, Vec::new()),
+                    // A private converter renders one operation, and the file emits
+                    // it because a fragment that renders it survived. Stated as
+                    // `follows` rather than as an input: it is a consequence of
+                    // those fragments being reached, not a reason to keep them.
+                    prebindgen_registry::write::ArtifactKey::Operation(operation) => (
+                        prebindgen_registry::generation::ArtifactId::new(
+                            "jni-operation",
+                            operation.to_string(),
+                        )
+                        .expect("an operation identity is a non-empty artifact name"),
+                        by_operation.get(&operation).cloned().unwrap_or_default(),
+                    ),
+                };
+                prebindgen_registry::generation::ArtifactPlan::<
                 crate::jni::compile::JRepresentation,
-            >::new(id, Vec::new(), inputs, artifact.clone()))
-        };
+            >::new(id, Vec::new(), inputs, artifact.clone())
+            .follows(follows)
+            };
         // A declared class is binding surface in BOTH directions, whether or
         // not this build happens to export a function that returns it — the
         // same reason C roots its plan at `opaque`/`data`/`enum` declarations
@@ -517,7 +524,20 @@ impl JniGenerationPlan {
                 }
             }
         }
-        let mut seen = std::collections::HashSet::new();
+        // One entry per identity, in emission order, resolving a repeat the way
+        // the assembly does: a shared operation is cloned once per fragment
+        // that renders it, and only the clone something activated answers
+        // `reachable`. Keeping the first would drop a converter the file needs.
+        let mut stated: Vec<
+            prebindgen_registry::generation::ArtifactPlan<crate::jni::compile::JRepresentation>,
+        > = Vec::new();
+        let mut seen: std::collections::HashMap<
+            prebindgen_registry::generation::ArtifactId,
+            usize,
+        > = std::collections::HashMap::new();
+        // Emission order, stated once: the prelude, the helpers a converter may
+        // call, the converters themselves, then the exported surface. The
+        // assembly below is this list, so this is the file's order.
         for artifact in std::iter::once(JFinalArtifact::Prelude)
             .chain(
                 destructors
@@ -534,6 +554,21 @@ impl JniGenerationPlan {
                     .iter()
                     .map(|g| JFinalArtifact::ConstantExpr(Box::new(g.clone()))),
             )
+            // Converters call converters: a `whole` struct converter calls its
+            // fields', and a callback's calls what its body converts through.
+            // Those edges are not in the shape, so the converter states them.
+            .chain(
+                conversions
+                    .fragments()
+                    .into_iter()
+                    // This states the plan, so it cannot ask the plan. It asks
+                    // the same statement the plan is built from: a fragment
+                    // that freezes without an artifact renders nothing. Which
+                    // of these survive is the plan's answer, through `follows`.
+                    .filter(|fragment| fragment.freeze().artifact().is_some())
+                    .flat_map(crate::jni::compile::JFrag::converter_artifacts)
+                    .map(|converter| JFinalArtifact::Converter(Box::new(converter))),
+            )
             .chain(
                 wrappers
                     .iter()
@@ -543,20 +578,6 @@ impl JniGenerationPlan {
                 constants
                     .iter()
                     .map(|c| JFinalArtifact::Const(Box::new(c.clone()))),
-            )
-            // Converters call converters: a `whole` struct converter calls its
-            // fields', and a callback's calls what its body converts through.
-            // Those edges are not in the shape, so the converter states them.
-            .chain(
-                conversions
-                    .fragments()
-                    .into_iter()
-                    // This roots the plan, so it cannot ask the plan. It asks
-                    // the same statement the plan is built from: a fragment
-                    // that freezes without an artifact renders nothing.
-                    .filter(|fragment| fragment.freeze().artifact().is_some())
-                    .flat_map(crate::jni::compile::JFrag::converter_artifacts)
-                    .map(|converter| JFinalArtifact::Converter(Box::new(converter))),
             )
         {
             // A converter artifact carries its owner's delegations; the
@@ -572,71 +593,43 @@ impl JniGenerationPlan {
                     .collect(),
                 prebindgen_registry::write::ArtifactKey::Artifact(_) => Vec::new(),
             };
-            if let Some(rooted) = root(&artifact, &extra) {
-                // Shared converters are reached from several fragments and
-                // named once in the file; the plan names them once too.
-                if seen.insert(rooted.id().clone()) {
-                    collected.artifact(rooted);
+            let plan = plan_of(&artifact, &extra);
+            match seen.get(plan.id()).copied() {
+                Some(at) => {
+                    if !stated[at].payload().reachable() && artifact.reachable() {
+                        stated[at] = plan;
+                    }
+                }
+                None => {
+                    seen.insert(plan.id().clone(), stated.len());
+                    stated.push(plan);
                 }
             }
         }
-        if !declared_surface.is_empty() {
-            declared_surface.sort_by_cached_key(|id| format!("{id:?}"));
-            declared_surface.dedup();
-            collected.artifact(prebindgen_registry::generation::ArtifactPlan::<
-                crate::jni::compile::JRepresentation,
-            >::new(
-                prebindgen_registry::generation::ArtifactId::new("jni-declared-surface", "classes")
-                    .expect("a constant artifact name is non-empty"),
-                Vec::new(),
-                declared_surface
-                    .iter()
-                    .cloned()
-                    .map(prebindgen_registry::generation::ArtifactInput::Fragment)
-                    .collect(),
-                JFinalArtifact::Prelude,
-            ));
+        for plan in stated {
+            collected.artifact(plan);
         }
-        #[cfg_attr(not(test), allow(unused_variables))]
+        // A declared class is binding surface in BOTH directions, whether or
+        // not this build happens to export a function that returns it — the
+        // same reason C roots its plan at `opaque`/`data`/`enum` declarations
+        // rather than at call sites alone. Without this a data class's output
+        // converter is reachable only by accident (#613 step 8).
+        declared_surface.sort_by_cached_key(|id| format!("{id:?}"));
+        declared_surface.dedup();
+        for fragment in declared_surface {
+            collected.root(fragment);
+        }
         let plan = collected.build().map_err(|errors| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: format!("the JNI generation plan is not valid: {errors}"),
             }
         })?;
+        // The file IS the plan: every artifact it emits, in the plan's own
+        // order, taken from the plan's payloads. Nothing is assembled beside the
+        // plan and checked to agree with it (#660 item 4).
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
-        assembly.artifact(JFinalArtifact::Prelude);
-        for destructor in destructors {
-            assembly.artifact(JFinalArtifact::HandleDestructor(Box::new(destructor)));
-        }
-        for helpers in vec_builds {
-            assembly.artifact(JFinalArtifact::VecBuild(Box::new(helpers)));
-        }
-        for getter in constant_exprs {
-            assembly.artifact(JFinalArtifact::ConstantExpr(Box::new(getter)));
-        }
-        // "Reached, and renders something" — both from the plan. A fragment
-        // that freezes without an artifact is the canonical statement of
-        // composed-only, and `JniGenerationPlan::freeze` already asserts the
-        // two agree, so asking the plan removes the second source rather than
-        // trusting it (#613 step 5c).
-        let renders: std::collections::HashSet<_> = plan
-            .fragments()
-            .filter(|fragment| fragment.artifact().is_some())
-            .map(|fragment| fragment.id().clone())
-            .collect();
-        for converter in conversions
-            .fragments()
-            .into_iter()
-            .filter(|fragment| renders.contains(&fragment.id))
-            .flat_map(crate::jni::compile::JFrag::converter_artifacts)
-        {
-            assembly.artifact(JFinalArtifact::Converter(Box::new(converter)));
-        }
-        for wrapper in wrappers {
-            assembly.artifact(JFinalArtifact::Wrapper(Box::new(wrapper)));
-        }
-        for constant in constants {
-            assembly.artifact(JFinalArtifact::Const(Box::new(constant)));
+        for artifact in plan.artifacts() {
+            assembly.artifact(artifact.payload().clone());
         }
         // JniGen qualifies each source reference by the item's own origin
         // module, so it declares no single one for the writer to fall back on.

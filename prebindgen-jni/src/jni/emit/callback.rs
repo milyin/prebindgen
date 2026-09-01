@@ -182,7 +182,7 @@ fn callback_argument_name(index: usize) -> syn::Ident {
 /// already-resolved leaf crossing once at this resolution seam.
 fn freeze_callback_delivery(
     ext: &Declarations,
-    plan: &prebindgen_registry::unfold::UnfoldPlan,
+    plan: &crate::unfold::UnfoldPlan,
     fragment: &crate::jni::compile::JFrag,
 ) -> Option<(
     Vec<crate::jni::compile::OutWire>,
@@ -430,8 +430,10 @@ pub(crate) fn callback_input(
         // `fromParts` + `add`), then deliver the assembled list whole to the
         // user callback's `run(List<T>)`. Reuses the OUTPUT fold's folder
         // interface + appender singleton, driven from the trampoline.
-        if let Some(plan) = registry
-            .callback_arg_plan(&arg_ty.key())
+        if let Some(plan) = ext
+            .unfolded()
+            .callback_arg_plans
+            .get(&arg_ty.key())
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
             let fragment = *arg_fragments.get(i)?;
@@ -479,7 +481,7 @@ pub(crate) fn callback_input(
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
-        if let Some(plan) = effective_callback_plan(ext, registry, arg_ty) {
+        if let Some(plan) = effective_callback_plan(ext, arg_ty) {
             let fragment = *arg_fragments.get(i)?;
             let (wires, chain) = freeze_callback_delivery(ext, plan, fragment)?;
             let optional = plan.is_optional_base();
@@ -506,7 +508,7 @@ pub(crate) fn callback_input(
         // projection, and the final JNI wire; rendering does not look the type
         // up again or reconstruct any of those decisions.
         let fragment = *arg_fragments.get(i)?;
-        let arg_abi = fragment.output_abi();
+        let arg_abi = crate::jni::compile::output_abi_of(&fragment.freeze())?;
         arg_abi.activate();
         let crate::jni::compile::OutAbi::Value(arg_value) = arg_abi else {
             unreachable!("a whole callback argument is not a synthesized selector")

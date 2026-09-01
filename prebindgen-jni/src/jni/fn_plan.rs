@@ -42,7 +42,7 @@ pub(crate) struct JniFunctionPlan {
     /// Registry-resolved output decomposition selected for this function.
     /// Rust delivery, Kotlin surface/KDoc, and the report all consume this
     /// owned plan after the registry phase is closed.
-    pub unfold: Option<prebindgen_registry::unfold::UnfoldPlan>,
+    pub unfold: Option<crate::unfold::UnfoldPlan>,
     /// Registry-resolved domain-error delivery selected for this function.
     /// The structural decomposition, exact outgoing JNI operations, and any
     /// composed converter are frozen together before either writer runs.
@@ -57,7 +57,7 @@ pub(crate) struct JniFunctionPlan {
 /// [`Self::wires`] and [`Self::chain`], so it cannot reconstruct converters
 /// from `TypeRef` while rendering the wrapper.
 pub(crate) struct ErrorOutputPlan {
-    pub unfold: prebindgen_registry::unfold::UnfoldPlan,
+    pub unfold: crate::unfold::UnfoldPlan,
     pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Origin qualification and sum shape for these leaves, frozen with them,
@@ -66,7 +66,7 @@ pub(crate) struct ErrorOutputPlan {
 }
 
 impl std::ops::Deref for ErrorOutputPlan {
-    type Target = prebindgen_registry::unfold::UnfoldPlan;
+    type Target = crate::unfold::UnfoldPlan;
 
     fn deref(&self) -> &Self::Target {
         &self.unfold
@@ -305,7 +305,7 @@ pub(crate) enum HandleMode {
 }
 
 /// How the return value crosses the boundary. Mirrors the unfold plan's
-/// [`Delivery`](prebindgen_registry::unfold::Delivery), resolved per function:
+/// [`Delivery`](crate::unfold::Delivery), resolved per function:
 /// `Unfold` = callback delivery (builder/fold lambda, erased `Any?` wire);
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
@@ -344,7 +344,7 @@ pub(crate) struct UnfoldOutputPlan {
     /// Declaration-normalized decomposition used by fixed Kotlin
     /// builder/folder singletons. `None` for a whole-element fold, which has
     /// no deconstructor declaration.
-    pub decon: Option<std::rc::Rc<prebindgen_registry::unfold::DeconSpec>>,
+    pub decon: Option<std::rc::Rc<crate::unfold::DeconSpec>>,
     /// Origin qualification and sum shape for these leaves, frozen with them,
     /// so rendering the delivery asks the registry nothing.
     pub delivery: crate::jni::emit::FrozenDelivery,
@@ -759,8 +759,8 @@ impl JniFunctionPlan {
     ) -> Result<Self, PlanError> {
         let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.name.to_string()));
         let native_symbol = ext.native_method_symbol(&jni_method);
-        let unfold = registry.unfold_plans().get(&f.name).cloned();
-        let error = registry.error_plans().get(&f.name).cloned();
+        let unfold = ext.unfolded().unfold_plans.get(&f.name).cloned();
+        let error = ext.unfolded().error_plans.get(&f.name).cloned();
         let onerror_iface = onerror_iface_spec(ext, registry, &f.name);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
@@ -952,17 +952,18 @@ fn classify_leaf(
         // Stated here rather than left out, so the canonical site set covers
         // this path too (#622 review).
         {
-            let fragment = entry.fragment();
+            let fragment = entry.plan();
             ext.site_plans
                 .borrow_mut()
-                .push(std::rc::Rc::new(fragment.freeze_site(
+                .push(std::rc::Rc::new(crate::jni::compile::site_plan(
+                    fragment,
                     &prebindgen_registry::recipe::Bound {
                         site: Site {
                             owner: owner.clone(),
                             role: leaf_role(expanded, position, leaf_index),
                         },
                         crossing: Crossing::new(reading.clone(), Direction::Construct),
-                        recipe: fragment.id.recipe().clone(),
+                        recipe: fragment.id().recipe().clone(),
                         origin: prebindgen_registry::recipe::Origin::Function,
                     },
                     crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
@@ -978,8 +979,8 @@ fn classify_leaf(
             // fabricated `Bound` is what the first two attempts at this
             // produced, and a site that misreports which row it took is worse
             // than an absent one (#622 review).
-            if let Some(plan) = fragment.rust.invoke_plan() {
-                let arguments = match &fragment.shape {
+            if let Some(plan) = entry.rust.invoke_plan() {
+                let arguments = match fragment.converter().shape() {
                     prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
                         arguments.as_slice()
                     }
@@ -1131,7 +1132,7 @@ fn return_site(
 fn build_error_output(
     ext: &Declarations,
     registry: &Registry,
-    unfold: prebindgen_registry::unfold::UnfoldPlan,
+    unfold: crate::unfold::UnfoldPlan,
 ) -> Result<ErrorOutputPlan, PlanError> {
     let wires = std::rc::Rc::new(
         crate::jni::compile::freeze_out_wires(ext, registry, &unfold.leaves).map_err(|_| {
@@ -1178,10 +1179,10 @@ fn build_output(
     ext: &Declarations,
     registry: &Registry,
     f: &prebindgen_registry::flat::Function,
-    unfold_plan: Option<&prebindgen_registry::unfold::UnfoldPlan>,
-    error_plan: Option<&prebindgen_registry::unfold::UnfoldPlan>,
+    unfold_plan: Option<&crate::unfold::UnfoldPlan>,
+    error_plan: Option<&crate::unfold::UnfoldPlan>,
 ) -> Result<FnOutputPlan, PlanError> {
-    use prebindgen_registry::unfold::{Delivery, UnfoldShape};
+    use crate::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
 
     // Callback delivery: the return is decomposed to a foreign builder/fold
@@ -1212,8 +1213,8 @@ fn build_output(
         };
         let decon = plan.decon.as_ref().map(|id| {
             std::rc::Rc::new(
-                registry
-                    .decon_plans()
+                ext.unfolded()
+                    .decon_plans
                     .get(id)
                     .unwrap_or_else(|| panic!("unfold plan names unknown deconstructor `{id:?}`"))
                     .clone(),

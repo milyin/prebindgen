@@ -78,6 +78,39 @@ where
     }
 }
 
+/// The flat model from item sources, with referenced types declared.
+///
+/// What a fixture needs when it drives a phase that reads the model and nothing
+/// else — [`unfold`](crate::unfold), whose `apply*` functions take an
+/// [`Unfolding`](crate::unfold::Unfolding) over a model rather than a registry.
+pub(crate) fn flat_with(sources: &[&str]) -> prebindgen_registry::flat::Flat {
+    let items = sources
+        .iter()
+        .map(|src| {
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, prebindgen::SourceLocation::default())
+        })
+        .collect::<Vec<_>>();
+    prebindgen_registry::Flat::builder()
+        .items(declare_referenced(items))
+        .build()
+        .expect("index")
+}
+
+/// A `TypeRef` rendered as the Rust source a generated file would spell.
+///
+/// Fixtures compare readings by their spelling; the writer is what knows how to
+/// produce one, so a test borrows it rather than formatting tokens itself.
+pub(crate) trait EmitSourceForTest {
+    fn emit_source(&self) -> proc_macro2::TokenStream;
+}
+
+impl EmitSourceForTest for prebindgen_registry::flat::TypeRef {
+    fn emit_source(&self) -> proc_macro2::TokenStream {
+        prebindgen_registry::RustWriter::for_test().emit_source_type(self)
+    }
+}
+
 /// One type as the **model** reads it, for a test that needs a `TypeRef` and has
 /// only a spelling.
 ///
