@@ -1344,33 +1344,63 @@ impl<R: Representation> GenerationPlanBuilder<R> {
             return Err(PlanErrors(self.errors));
         }
 
-        let mut roots: Vec<_> = self.sites.values().map(|s| s.fragment.clone()).collect();
-        roots.extend(self.roots.iter().cloned());
-        roots.extend(self.artifacts.values().flat_map(|artifact| {
-            artifact.inputs.iter().filter_map(|input| match input {
-                ArtifactInput::Fragment(id) => Some(id.clone()),
-                ArtifactInput::Site { .. } => None,
-            })
-        }));
-        roots.sort_by_cached_key(FragmentId::stable_key);
-        roots.dedup();
-        let reachable = reachable_fragments(&self.fragments, roots);
+        // What the binding asks for outright: the fragment each site names, and
+        // the roots the adapter declared.
+        let declared_roots: Vec<_> = self
+            .sites
+            .values()
+            .map(|s| s.fragment.clone())
+            .chain(self.roots.iter().cloned())
+            .collect();
+        // An artifact that follows fragments is kept only while one of them is
+        // reached, and until it is kept it asks for nothing: a private
+        // converter the file will not emit is no reason to keep the converters
+        // it would have called. But a kept one's inputs are reasons, and
+        // keeping it can reach a fragment that keeps another — so this runs to
+        // a fixed point rather than in one pass. It terminates because the kept
+        // set only grows.
+        let mut kept: HashSet<ArtifactId> = HashSet::new();
+        let mut reachable;
+        loop {
+            let mut roots = declared_roots.clone();
+            roots.extend(
+                self.artifacts
+                    .values()
+                    .filter(|artifact| artifact.follows.is_empty() || kept.contains(&artifact.id))
+                    .flat_map(|artifact| {
+                        artifact.inputs.iter().filter_map(|input| match input {
+                            ArtifactInput::Fragment(id) => Some(id.clone()),
+                            ArtifactInput::Site { .. } => None,
+                        })
+                    }),
+            );
+            roots.sort_by_cached_key(FragmentId::stable_key);
+            roots.dedup();
+            reachable = reachable_fragments(&self.fragments, roots);
+            let grown: HashSet<ArtifactId> = self
+                .artifacts
+                .values()
+                .filter(|artifact| {
+                    artifact.follows.is_empty()
+                        || artifact.follows.iter().any(|id| reachable.contains(id))
+                })
+                .map(|artifact| artifact.id.clone())
+                .collect();
+            if grown == kept {
+                break;
+            }
+            kept = grown;
+        }
         let fragment_order = fragment_order
             .into_iter()
             .filter(|id| reachable.contains(id))
             .collect();
         self.fragments.retain(|id, _| reachable.contains(id));
-        // An artifact that follows fragments goes with the last of them: it
-        // renders their converter, so with none of them left there is nothing
-        // for it to render. An artifact that follows none is unconditional.
-        let kept = |plan: &ArtifactPlan<R>| {
-            plan.follows.is_empty() || plan.follows.iter().any(|id| reachable.contains(id))
-        };
         let artifact_order: Vec<_> = artifact_order
             .into_iter()
-            .filter(|id| self.artifacts.get(id).is_some_and(kept))
+            .filter(|id| kept.contains(id))
             .collect();
-        self.artifacts.retain(|_, plan| kept(plan));
+        self.artifacts.retain(|id, _| kept.contains(id));
 
         let mut site_order: Vec<_> = self.sites.keys().cloned().collect();
         site_order.sort_by_cached_key(SiteId::stable_key);

@@ -293,6 +293,82 @@ fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
 }
 
 #[test]
+fn an_artifact_that_follows_an_unreached_fragment_asks_for_nothing() {
+    // Three crossings compiled, one reached: a site names `Leaf`, nothing names
+    // `&Leaf`, and `Pair` is named only by the converter `&Leaf` would have
+    // rendered. So the file emits `Leaf`'s converter and neither of the others.
+    //
+    // The trap this guards is the artifact input: an artifact's inputs are
+    // reasons to keep a fragment, and a converter for an unreached fragment
+    // would otherwise keep everything it calls — which would make `follows`
+    // decide nothing, because the fragments it gates on could never be pruned.
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let unreached = fragment_id(&model, "&Leaf", Direction::Construct);
+    let called_only_by_it = fragment_id(&model, "Pair", Direction::Construct);
+
+    let site_plan = site(&model, &leaf, None, 1);
+    let site_id = site_plan.id().clone();
+    let kept_id = ArtifactId::new("converter", "leaf").unwrap();
+    let dropped_id = ArtifactId::new("converter", "unreached").unwrap();
+    let orphan_id = ArtifactId::new("converter", "pair").unwrap();
+    let wrapper_id = ArtifactId::new("wrapper", "make_pair").unwrap();
+
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(
+            atomic(&model, leaf.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("leaf converter"),
+        )
+        .fragment(
+            atomic(&model, unreached.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("unreached converter"),
+        )
+        .fragment(
+            atomic(
+                &model,
+                called_only_by_it.clone(),
+                Failure::Infallible,
+                Mode::Owned,
+            )
+            .with_artifact("pair converter"),
+        )
+        .site(site_plan)
+        .artifact(artifact(
+            "wrapper",
+            "make_pair",
+            vec![],
+            vec![ArtifactInput::Site {
+                site: site_id,
+                slots: 1,
+            }],
+        ))
+        .artifact(artifact("converter", "leaf", vec![], vec![]).follows(vec![leaf.clone()]))
+        .artifact(
+            artifact(
+                "converter",
+                "unreached",
+                vec![],
+                vec![ArtifactInput::Fragment(called_only_by_it.clone())],
+            )
+            .follows(vec![unreached.clone()]),
+        )
+        .artifact(
+            artifact("converter", "pair", vec![], vec![]).follows(vec![called_only_by_it.clone()]),
+        );
+    let plan = builder.build().unwrap();
+
+    let artifacts: Vec<_> = plan.artifacts().map(ArtifactPlan::id).collect();
+    assert_eq!(artifacts, vec![&wrapper_id, &kept_id]);
+    assert!(!artifacts.contains(&&dropped_id));
+    assert!(!artifacts.contains(&&orphan_id));
+    let fragments: Vec<_> = plan.fragments().map(FragmentPlan::id).collect();
+    assert_eq!(fragments, vec![&leaf]);
+    assert!(plan.fragment(&unreached).is_none());
+    assert!(plan.fragment(&called_only_by_it).is_none());
+}
+
+#[test]
 fn freeze_reports_arity_niche_ownership_and_validity_errors() {
     let model = model();
     let leaf = fragment_id(&model, "Leaf", Direction::Construct);
