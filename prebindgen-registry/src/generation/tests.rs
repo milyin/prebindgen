@@ -369,6 +369,42 @@ fn an_artifact_that_follows_an_unreached_fragment_asks_for_nothing() {
 }
 
 #[test]
+fn an_unknown_root_or_followed_fragment_is_rejected() {
+    // Both references the plan gained with `follows` name a fragment by id and
+    // are read outside the input/prerequisite walk, so an id no fragment
+    // answers to has to be refused here. Unrefused it is worse than an unknown
+    // input: the reachability walk reaches whatever it is handed, so an
+    // artifact following an unknown id would be kept, and a kept artifact roots
+    // its own inputs — an adapter identity bug would silently widen the plan
+    // rather than fail it.
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let absent = fragment_id(&model, "&Leaf", Direction::Construct);
+
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(atomic(
+            &model,
+            leaf.clone(),
+            Failure::Infallible,
+            Mode::Owned,
+        ))
+        .site(site(&model, &leaf, None, 1))
+        .artifact(artifact("converter", "absent", vec![], vec![]).follows(vec![absent.clone()]))
+        .root(absent.clone());
+    let errors = errors(builder.build());
+
+    has(
+        &errors,
+        |e| matches!(e, PlanError::UnknownFollowedFragment { fragment, .. } if *fragment == absent),
+    );
+    has(
+        &errors,
+        |e| matches!(e, PlanError::UnknownRoot(id) if *id == absent),
+    );
+}
+
+#[test]
 fn freeze_reports_arity_niche_ownership_and_validity_errors() {
     let model = model();
     let leaf = fragment_id(&model, "Leaf", Direction::Construct);

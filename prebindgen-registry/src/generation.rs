@@ -1595,6 +1595,24 @@ impl<R: Representation> GenerationPlanBuilder<R> {
                     ArtifactInput::Fragment(_) => {}
                 }
             }
+            // A followed fragment is not an input, so the loop above does not
+            // see it — and an unknown one is worse than an unknown input:
+            // `reachable_fragments` reaches whatever it is handed, so an
+            // artifact following an id no fragment has would be kept, and a
+            // kept artifact roots its own inputs (#660 review).
+            for fragment in artifact.followed() {
+                if !self.fragments.contains_key(fragment) {
+                    self.errors.push(PlanError::UnknownFollowedFragment {
+                        artifact: artifact.id().clone(),
+                        fragment: fragment.clone(),
+                    });
+                }
+            }
+        }
+        for root in &self.roots {
+            if !self.fragments.contains_key(root) {
+                self.errors.push(PlanError::UnknownRoot(root.clone()));
+            }
         }
     }
 }
@@ -1713,6 +1731,13 @@ pub enum PlanError {
     },
     UnknownArtifactFragment(ArtifactId),
     UnknownArtifactSite(ArtifactId),
+    /// An artifact follows a fragment the plan does not hold.
+    UnknownFollowedFragment {
+        artifact: ArtifactId,
+        fragment: FragmentId,
+    },
+    /// A declared reachability root names a fragment the plan does not hold.
+    UnknownRoot(FragmentId),
     AbiArity(ArtifactId, SiteId),
     FragmentCycle(FragmentId),
     ArtifactCycle(ArtifactId),
@@ -1789,6 +1814,10 @@ impl fmt::Display for PlanError {
                 write!(f, "artifact {id} references an unknown fragment")
             }
             UnknownArtifactSite(id) => write!(f, "artifact {id} references an unknown site"),
+            UnknownFollowedFragment { artifact, fragment } => {
+                write!(f, "artifact {artifact} follows unknown fragment {fragment}")
+            }
+            UnknownRoot(id) => write!(f, "declared root names unknown fragment {id}"),
             AbiArity(artifact, site) => write!(
                 f,
                 "artifact {artifact} disagrees with the ABI arity of site {site}"
@@ -1966,18 +1995,23 @@ fn reachable_fragments<R: Representation>(
     let mut reached = HashSet::new();
     let mut pending = roots;
     while let Some(id) = pending.pop() {
-        if !reached.insert(id.clone()) {
+        // Only an id the plan holds enters the reached set. Inserting first and
+        // looking up after would let an unknown id be "reached", which is a
+        // claim about a fragment that does not exist — validation rejects such
+        // an id, and this makes the walk itself not depend on that (#660 review).
+        let Some(plan) = plans.get(&id) else {
+            continue;
+        };
+        if !reached.insert(id) {
             continue;
         }
-        if let Some(plan) = plans.get(&id) {
-            pending.extend(
-                plan.converter()
-                    .shape()
-                    .uses()
-                    .into_iter()
-                    .map(|usage| usage.fragment().clone()),
-            );
-        }
+        pending.extend(
+            plan.converter()
+                .shape()
+                .uses()
+                .into_iter()
+                .map(|usage| usage.fragment().clone()),
+        );
     }
     reached
 }
