@@ -633,7 +633,7 @@ impl JniGenBuilder {
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
         for (decl, kind) in members {
             let rust_ident = decl.rust_ident().clone();
-            let kotlin_name_override = decl.kotlin_name_override().clone();
+            let kotlin_name_override = decl.name_override().clone();
             self.accept_fn_expands(decl);
             // A constructor member's return is a factory, never
             // output-flattened — derived from `class_members` in
@@ -652,7 +652,7 @@ impl JniGenBuilder {
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
         let mut entry = FunctionEntry::new(decl.rust_ident().clone());
-        entry.kotlin_name_override = decl.kotlin_name_override().clone();
+        entry.kotlin_name_override = decl.name_override().clone();
         self.decls
             .packages
             .entry(subpackage.to_string())

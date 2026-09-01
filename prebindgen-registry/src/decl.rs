@@ -40,7 +40,7 @@ pub enum LocalVariant {
 }
 
 /// One arm of an `expand_return!` `.field*` list (type-level or per-fn). The name is stored raw (`None` = derive at replay time: for a
-/// class-level field, the class member's Kotlin name if the accessor is a
+/// class-level field, the class member's target-language name if the accessor is a
 /// declared member, else `snake_to_camel`; for a per-fn field,
 /// `snake_to_camel`).
 // large_enum_variant: a handful of fields exist per binding, held while
@@ -260,9 +260,9 @@ macro_rules! fields {
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: the value is always
 /// built from its ingredients at the boundary and never materializes in
-/// Kotlin — no class, no handle, nothing to `close()`. The one restriction is
-/// structural: [`variant_self`](Self::variant_self) hard-errors for such a
-/// type, since there is no Kotlin object to pass.
+/// the target language — no class, no handle, nothing to close. The one
+/// restriction is structural: [`variant_self`](Self::variant_self) hard-errors
+/// for such a type, since there is no target-language object to pass.
 ///
 /// ```
 /// // A KeyExpr param accepts EITHER a String (built via keyexpr_new_try_from)
@@ -324,14 +324,14 @@ impl ExpandParamDecl {
     /// builds the value in the same call. E.g. `keyexpr_new_try_from(&str)`
     /// gives every function taking a `KeyExpr` a String-carrying arm —
     /// as a selector + nullable slot at the wire tier (see the type-level
-    /// docs for the exact generated shape), not as a Kotlin overload.
+    /// docs for the exact generated shape), not as a target-language overload.
     ///
-    /// A variant arm only *names* the constructor: no Kotlin surface of its
+    /// A variant arm only *names* the constructor: no target-language surface of its
     /// own, so a decorated `fun!` (`.name()` / expand overrides) is a hard
     /// error rather than a silent discard.
     pub fn variant(mut self, ctor: FunctionDecl) -> Self {
         assert!(
-            ctor.kotlin_name_override.is_none()
+            ctor.name_override.is_none()
                 && ctor.param_expands.is_empty()
                 && ctor.return_expand.is_none(),
             "expand_param!({}).variant(fun!({})): a variant arm only names the \
@@ -388,10 +388,10 @@ impl ExpandParamDecl {
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: every returned /
 /// callback-delivered / `Result`-error value of it is decomposed into these
-/// fields and the value itself never reaches Kotlin. This is the natural
-/// shape for an error type consumed by the `onError` channel — no dead
-/// Kotlin class is emitted. Restrictions for such a type:
-/// [`field_self`](Self::field_self) hard-errors (there is no Kotlin object to
+/// fields and the value itself never reaches the target language. This is the
+/// natural shape for an error type consumed by an error channel — no dead
+/// class is emitted. Restrictions for such a type:
+/// [`field_self`](Self::field_self) hard-errors (there is no target-language object to
 /// deliver), and field names cannot inherit from class members (there are
 /// none) — use `.name(...)` on each field or accept the camel-cased default.
 ///
@@ -451,8 +451,8 @@ impl ExpandReturnDecl {
     ///   becoming a nullable handle leaf that is null when the binding-side
     ///   predicate declines.
     ///
-    /// The Kotlin field name is uniform for both: an explicit `.name(...)`
-    /// on the `fun!`; else the Kotlin name of the class member if the same
+    /// The target-language field name is uniform for both: an explicit
+    /// `.name(...)` on the `fun!`; else the name of the class member if the same
     /// fn is also declared as a method on this type's class (so a getter
     /// that is both a method and a field is named once); else the
     /// camel-cased fn ident (a path's LAST segment).
@@ -471,7 +471,7 @@ impl ExpandReturnDecl {
             accessor.rust_ident
         );
         self.fields.push(match accessor.local {
-            None => LocalField::Named(accessor.rust_ident, accessor.kotlin_name_override),
+            None => LocalField::Named(accessor.rust_ident, accessor.name_override),
             Some((path, sig)) => {
                 let Some(sig) = sig else {
                     panic!(
@@ -485,7 +485,7 @@ impl ExpandReturnDecl {
                 LocalField::Local {
                     path,
                     sig,
-                    name_override: accessor.kotlin_name_override,
+                    name_override: accessor.name_override,
                 }
             }
         });
@@ -713,10 +713,10 @@ impl FieldsDecl {
     }
 
     /// Rename **one** field's leaf, overriding the name derived from the struct
-    /// field ident. The literal Kotlin name, like `fun!(f).name(...)`.
-    pub fn name(mut self, field: impl AsRef<str>, kotlin_name: impl Into<String>) -> Self {
+    /// field ident. The literal target-language name, like `fun!(f).name(...)`.
+    pub fn name(mut self, field: impl AsRef<str>, target_name: impl Into<String>) -> Self {
         let field = field.as_ref().to_string();
-        let kotlin_name = kotlin_name.into();
+        let target_name = target_name.into();
         assert!(
             !self.names.iter().any(|(f, _)| *f == field),
             "fields!({}).name(\"{}\", ...): field is already renamed",
@@ -728,14 +728,14 @@ impl FieldsDecl {
         // (Core rejects it for a `.field()` name; here the name never reaches
         // that check, so it is made at the point of declaration.)
         assert!(
-            !kotlin_name.contains("__"),
+            !target_name.contains("__"),
             "fields!({}).name(\"{}\", \"{}\"): `__` is the reserved chain separator \
              and cannot appear in a leaf name",
             self.func,
             field,
-            kotlin_name,
+            target_name,
         );
-        self.names.push((field, kotlin_name));
+        self.names.push((field, target_name));
         self
     }
 }
@@ -772,7 +772,7 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// to a package or attaches it to a class as a method or a factory.
 ///
 /// Build it from a bare Rust name with [`fun!`](crate::fun) and chain
-/// [`name`](Self::name) to set its Kotlin name.
+/// [`name`](Self::name) to set its target-language name.
 /// [`expand_param`](Self::expand_param) / [`expand_return`](Self::expand_return)
 /// **override, for this one function**, the boundary defaults its
 /// parameter/return types declare at the generator level
@@ -780,7 +780,7 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// at both scopes.
 pub struct FunctionDecl {
     rust_ident: syn::Ident,
-    kotlin_name_override: Option<String>,
+    name_override: Option<String>,
     param_expands: Vec<(String, ExpandParamDecl)>,
     return_expand: Option<ExpandReturnDecl>,
     split_on_params: Vec<String>,
@@ -794,7 +794,7 @@ impl FunctionDecl {
     pub fn new(rust_ident: syn::Ident) -> Self {
         Self {
             rust_ident,
-            kotlin_name_override: None,
+            name_override: None,
             param_expands: Vec::new(),
             return_expand: None,
             split_on_params: Vec::new(),
@@ -807,9 +807,9 @@ impl FunctionDecl {
         &self.rust_ident
     }
 
-    /// The explicit Kotlin-side name, if `.name(...)` was declared.
-    pub fn kotlin_name_override(&self) -> &Option<String> {
-        &self.kotlin_name_override
+    /// The explicit target-language name, if `.name(...)` was declared.
+    pub fn name_override(&self) -> &Option<String> {
+        &self.name_override
     }
 
     /// The per-parameter expand overrides declared with `.expand_param(...)`.
@@ -851,7 +851,7 @@ impl FunctionDecl {
     ) {
         (
             self.rust_ident,
-            self.kotlin_name_override,
+            self.name_override,
             self.param_expands,
             self.return_expand,
             self.split_on_params,
@@ -898,10 +898,12 @@ impl FunctionDecl {
         self
     }
 
-    /// Set the Kotlin-side name. Default: the Rust name camel-cased
-    /// (`session_declare_publisher` → `sessionDeclarePublisher`).
-    pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
-        self.kotlin_name_override = Some(kotlin_name.into());
+    /// Set the name this function takes in the target language. Left unset,
+    /// the adapter derives one from the Rust name — the JNI adapter, for
+    /// example, camel-cases it (`session_declare_publisher` →
+    /// `sessionDeclarePublisher`).
+    pub fn name(mut self, target_name: impl Into<String>) -> Self {
+        self.name_override = Some(target_name.into());
         self
     }
 
@@ -1149,11 +1151,11 @@ impl ConvertSourceDecl {
 impl From<FunctionDecl> for ConvertSourceDecl {
     fn from(decl: FunctionDecl) -> Self {
         assert!(
-            decl.kotlin_name_override.is_none()
+            decl.name_override.is_none()
                 && decl.param_expands.is_empty()
                 && decl.return_expand.is_none(),
             "fun!({}) as a conversion source: a conversion fn is never surfaced in \
-             Kotlin — .name()/expand overrides don't apply",
+             the target language — .name()/expand overrides don't apply",
             decl.rust_ident
         );
         let local = decl.local.map(|(path, sig)| {
