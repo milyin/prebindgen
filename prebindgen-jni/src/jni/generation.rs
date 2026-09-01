@@ -614,21 +614,14 @@ impl JniGenerationPlan {
         for getter in constant_exprs {
             assembly.artifact(JFinalArtifact::ConstantExpr(Box::new(getter)));
         }
-        // "Reached, and renders something" — both from the plan. A fragment
-        // that freezes without an artifact is the canonical statement of
-        // composed-only, and `JniGenerationPlan::freeze` already asserts the
-        // two agree, so asking the plan removes the second source rather than
-        // trusting it (#613 step 5c).
-        let renders: std::collections::HashSet<_> = plan
+        // The converters are the plan's, not a second selection that agrees
+        // with it: each one is read off the `FragmentPlan` of a fragment the
+        // plan kept, in the plan's own dependency order. What used to stand
+        // here filtered the compiler's fragments by a set of ids taken from the
+        // plan, which is agreement rather than derivation (#660 item 4).
+        for converter in plan
             .fragments()
-            .filter(|fragment| fragment.artifact().is_some())
-            .map(|fragment| fragment.id().clone())
-            .collect();
-        for converter in conversions
-            .fragments()
-            .into_iter()
-            .filter(|fragment| renders.contains(&fragment.id))
-            .flat_map(crate::jni::compile::JFrag::converter_artifacts)
+            .flat_map(crate::jni::compile::converter_artifacts)
         {
             assembly.artifact(JFinalArtifact::Converter(Box::new(converter)));
         }

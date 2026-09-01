@@ -1186,16 +1186,7 @@ impl JFrag {
     /// which is what the canonical plan carries, so the same list is derivable
     /// from a `FragmentPlan` alone (#613 step 8).
     pub(crate) fn converter_artifacts(&self) -> Vec<crate::jni::chain::JFunction> {
-        let artifact = self.artifact();
-        std::iter::once(artifact.rust.clone())
-            .chain(artifact.stages.iter().cloned())
-            .chain(
-                self.chain
-                    .steps()
-                    .iter()
-                    .map(|step| crate::jni::chain::JFunction::marker(step.operation().clone())),
-            )
-            .collect()
+        converter_artifacts(&self.freeze())
     }
 
     /// This fragment's converter with its wire and layout — the one statement
@@ -1257,6 +1248,33 @@ impl JFrag {
             dependency: self.rust.clone(),
         }))
     }
+}
+
+/// Every converter function one planned fragment renders.
+///
+/// The wire-facing converter, the semantic stages a `convert!` declaration puts
+/// beside it, and one marker per chain step. All three are read off the frozen
+/// [`FragmentPlan`](prebindgen_registry::generation::FragmentPlan), so what the
+/// generated file emits for a fragment is stated by the canonical plan and
+/// nowhere else. A fragment that renders no converter of its own — composed
+/// into its parent — yields nothing.
+pub(crate) fn converter_artifacts(
+    fragment: &prebindgen_registry::generation::FragmentPlan<JRepresentation>,
+) -> Vec<crate::jni::chain::JFunction> {
+    let Some(artifact) = fragment.artifact() else {
+        return Vec::new();
+    };
+    std::iter::once(artifact.rust.clone())
+        .chain(artifact.stages.iter().cloned())
+        .chain(
+            fragment
+                .converter()
+                .chain()
+                .steps()
+                .iter()
+                .map(|step| crate::jni::chain::JFunction::marker(step.operation().clone())),
+        )
+        .collect()
 }
 
 /// How long what this conversion produces stays usable.
