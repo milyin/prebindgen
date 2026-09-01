@@ -10,10 +10,10 @@ the adapter’s <code>expand</code> declaration.</p>
 <p>The type does <strong>not</strong> have to be declared in any package. A boundary decl
 on an undeclared type makes it <strong>rust-side-only</strong>: every returned /
 callback-delivered / <code>Result</code>-error value of it is decomposed into these
-fields and the value itself never reaches Kotlin. This is the natural
-shape for an error type consumed by the <code>onError</code> channel — no dead
-Kotlin class is emitted. Restrictions for such a type:
-<a href="../struct.ExpandReturnDecl.html#method.field_self" title="method prebindgen_jni::ExpandReturnDecl::field_self"><code>field_self</code></a> hard-errors (there is no Kotlin object to
+fields and the value itself never reaches the target language. This is the
+natural shape for an error type consumed by an error channel — no dead
+class is emitted. Restrictions for such a type:
+<a href="../struct.ExpandReturnDecl.html#method.field_self" title="method prebindgen_jni::ExpandReturnDecl::field_self"><code>field_self</code></a> hard-errors (there is no target-language object to
 deliver), and field names cannot inherit from class members (there are
 none) — use <code>.name(...)</code> on each field or accept the camel-cased default.</p>
 
@@ -38,8 +38,8 @@ One use among many: conditional delivery, an <code>Option&lt;&amp;Self&gt;</code
 becoming a nullable handle leaf that is null when the binding-side
 predicate declines.</li>
 </ul>
-<p>The Kotlin field name is uniform for both: an explicit <code>.name(...)</code>
-on the <code>fun!</code>; else the Kotlin name of the class member if the same
+<p>The target-language field name is uniform for both: an explicit
+<code>.name(...)</code> on the <code>fun!</code>; else the name of the class member if the same
 fn is also declared as a method on this type’s class (so a getter
 that is both a method and a field is named once); else the
 camel-cased fn ident (a path’s LAST segment).</p>
