@@ -996,6 +996,22 @@ impl<'a, C: Compile> Compiler<'a, C> {
         for reach in reaches {
             match reach {
                 Reach::Omit => {}
+                // The nested shape's own parts, compiled against the field's
+                // type. `deconstruct_parts` is the same entry the outer shape
+                // took, one level in — so a nested `Choice` composes exactly as
+                // a top-level one does (#613 step 10).
+                Reach::Nested { index, shape } => {
+                    let field = fields.get(*index).ok_or_else(|| {
+                        CompileError::Recipe(Box::new(RecipeError::OutOfRange {
+                            recipe: at.recipe.clone(),
+                            index: *index,
+                            len: fields.len(),
+                        }))
+                    })?;
+                    let inner = self.fields_of(&field.ty);
+                    let (_, mut inner_parts) = self.deconstruct_parts(at, shape, Some(inner))?;
+                    parts.append(&mut inner_parts);
+                }
                 Reach::Path(indices) => {
                     // Walk the chain against the model, as validation did.
                     let mut here: &[Field] = fields;

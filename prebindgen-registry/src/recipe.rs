@@ -185,6 +185,28 @@ pub enum Reach {
     /// chain, and without it a `parts` row for a value form that inlines a
     /// nested declared class cannot be spelled at all (#613 step 10).
     Path(Vec<usize>),
+    /// Field `index`, taken apart **here** by `shape` rather than by whatever
+    /// row its own type has.
+    ///
+    /// **A STRUCT-shaped field only.** `shape` is a [`Deconstruct`], which is
+    /// `Fields` or `ValueForm` — both read parts off a product — so the field
+    /// must be one. A sum-typed field is refused rather than silently
+    /// contributing nothing, which is what an empty field list would otherwise
+    /// do (#658 review).
+    ///
+    /// It does NOT yet serve the case #613 step 10 ends at. A `sealed_class`
+    /// has no deconstructing whole-value crossing (`prebindgen-jni` states that
+    /// contract), so a sum-typed field's LEAVES are what cross, and reaching
+    /// them is a `Choice` — which lives on [`Shape`], not on `Deconstruct`.
+    /// Carrying one means this reach holding a `Shape<Deconstruct>` and the
+    /// compiler composing a nested choice into a part, neither of which exists
+    /// here.
+    Nested {
+        /// Position of the field in the struct being taken apart.
+        index: usize,
+        /// How that field comes apart, compiled in place.
+        shape: Box<Deconstruct>,
+    },
     /// The value itself, as one part — cloned from a borrow, moved from an
     /// owned receiver. The form `DeconRecord::Identity` states and no reach
     /// could: `Field` indexes into a product and `Accessor` calls out of one,
@@ -1010,6 +1032,33 @@ impl<'a> Check<'a, '_> {
                 }
                 // Each hop resolves against the previous field's type, so a
                 // chain is validated exactly as the accesses it renders.
+                // The field's own type is reached, and the nested shape's
+                // reaches are validated against it — the same walk one level in.
+                Reach::Nested { index, shape } => {
+                    let Some(fields) = self.fields(ty) else {
+                        self.not_a_product();
+                        continue;
+                    };
+                    match fields.get(*index) {
+                        Some(field) => {
+                            let inner = field.ty.clone();
+                            // A `Deconstruct` reads parts off a product. A
+                            // field that is not one contributes nothing at all
+                            // through this reach, so it is refused here rather
+                            // than silently dropping its leaves (#658 review).
+
+                            match shape.as_ref() {
+                                Deconstruct::Fields(inner_reaches) => {
+                                    out.extend(self.reaches(&inner, inner_reaches));
+                                }
+                                Deconstruct::ValueForm { parts, .. } => {
+                                    out.extend(self.reaches(&inner, parts));
+                                }
+                            }
+                        }
+                        None => self.out_of_range(*index, fields.len()),
+                    }
+                }
                 Reach::Path(indices) => {
                     let mut at: TypeRef = ty.clone();
                     let mut ok = true;
