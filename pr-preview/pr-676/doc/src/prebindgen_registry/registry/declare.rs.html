@@ -510,20 +510,23 @@
 <a href=#510 id=510 data-nosnippet>510</a>/// keeps its own conversions now, so that read is gone and the rest — the
 <a href=#511 id=511 data-nosnippet>511</a>/// model, the decompositions — is complete from the moment it is declared.
 <a href=#512 id=512 data-nosnippet>512</a></span><span class="kw">impl </span>Conversions <span class="kw">for </span>RegistryBuilder {
-<a href=#513 id=513 data-nosnippet>513</a>    <span class="kw">fn </span>reading(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>TypeKey) -&gt; <span class="prelude-ty">Option</span>&lt;prebindgen_flat::flat::TypeRef&gt; {
-<a href=#514 id=514 data-nosnippet>514</a>        <span class="self">self</span>.registry.reading(key)
+<a href=#513 id=513 data-nosnippet>513</a>    <span class="kw">fn </span>expansion_plans(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>HashMap&lt;(syn::Ident, syn::Ident), <span class="kw">crate</span>::expand::FoldPlan&gt; {
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="self">self</span>.registry.expansion_plans()
 <a href=#515 id=515 data-nosnippet>515</a>    }
-<a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">fn </span>flat(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::flat::Flat {
-<a href=#517 id=517 data-nosnippet>517</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.registry.flat
+<a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">fn </span>reading(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>TypeKey) -&gt; <span class="prelude-ty">Option</span>&lt;prebindgen_flat::flat::TypeRef&gt; {
+<a href=#517 id=517 data-nosnippet>517</a>        <span class="self">self</span>.registry.reading(key)
 <a href=#518 id=518 data-nosnippet>518</a>    }
-<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">fn </span>crossing_keys(<span class="kw-2">&amp;</span><span class="self">self</span>, dir: Direction) -&gt; Vec&lt;TypeKey&gt; {
-<a href=#520 id=520 data-nosnippet>520</a>        <span class="self">self</span>.order
-<a href=#521 id=521 data-nosnippet>521</a>            .as_deref()
-<a href=#522 id=522 data-nosnippet>522</a>            .unwrap_or_default()
-<a href=#523 id=523 data-nosnippet>523</a>            .iter()
-<a href=#524 id=524 data-nosnippet>524</a>            .filter(|(d, <span class="kw">_</span>)| <span class="kw-2">*</span>d == dir)
-<a href=#525 id=525 data-nosnippet>525</a>            .map(|(<span class="kw">_</span>, k)| k.clone())
-<a href=#526 id=526 data-nosnippet>526</a>            .collect()
-<a href=#527 id=527 data-nosnippet>527</a>    }
-<a href=#528 id=528 data-nosnippet>528</a>}
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">fn </span>flat(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_flat::flat::Flat {
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.registry.flat
+<a href=#521 id=521 data-nosnippet>521</a>    }
+<a href=#522 id=522 data-nosnippet>522</a>    <span class="kw">fn </span>crossing_keys(<span class="kw-2">&amp;</span><span class="self">self</span>, dir: Direction) -&gt; Vec&lt;TypeKey&gt; {
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="self">self</span>.order
+<a href=#524 id=524 data-nosnippet>524</a>            .as_deref()
+<a href=#525 id=525 data-nosnippet>525</a>            .unwrap_or_default()
+<a href=#526 id=526 data-nosnippet>526</a>            .iter()
+<a href=#527 id=527 data-nosnippet>527</a>            .filter(|(d, <span class="kw">_</span>)| <span class="kw-2">*</span>d == dir)
+<a href=#528 id=528 data-nosnippet>528</a>            .map(|(<span class="kw">_</span>, k)| k.clone())
+<a href=#529 id=529 data-nosnippet>529</a>            .collect()
+<a href=#530 id=530 data-nosnippet>530</a>    }
+<a href=#531 id=531 data-nosnippet>531</a>}
 </code></pre></div></section></main></body></html>
