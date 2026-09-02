@@ -126,8 +126,8 @@ merged tree — and record what building it showed:
    `declare_into` runs it, and `recipes()` is built afterwards *from the plans it
    produces*. So step 6's "readers of `Product` recipes" has nothing to read;
    what is duplicated is the derivation, and one shared derivation fixes it.
-3. **Step 7's prototype is green and partial, and what it costs today is the
-   cost of an intermediate.** Every difference between what the two adapters
+3. **Step 7 is built as far as it goes, and it costs 185 lines on figure 1.**
+   Every difference between what the two adapters
    call a site is addressed. Three are about which positions each adapter plans,
    and a hook that asks the adapter settles those: `prebindgen-c` skips a `()`
    return because C has nothing to hand back there while `prebindgen-jni` plans
@@ -169,46 +169,66 @@ merged tree — and record what building it showed:
    reaches its private fallback is the one thing with no site to reach: a getter
    synthesised for a declared constant, which is not a `#[prebindgen]` function.
 
-   **Two adapter-private planners remain.** `prebindgen-c` still declines the
-   canonical fallible return through `plans_site` and recreates a `Role::Return`
-   and a `Role::Error` site in `Cbindgen::fallible_return_plans`, which is its
-   delivery policy — the ok value to an out-parameter, the error to the return —
-   done by re-enumerating rather than by lowering the plan the registry
-   compiled. And in JniGen one exported return is still planned privately
-   further down: a callback-delivered expansion whose source has no `parts` row
-   is planned on its default row, so the walk's plan carries no wires,
+   `prebindgen-c` states its own case the same way. A fallible return's **error
+   arm is a position in the model**, not a channel a target invented — a `Result`
+   has two arms whatever reads it — so the walk enumerates it, and whether a
+   binding crosses anything there is that binding's answer, given through
+   `plans_site`: JniGen throws the error, so the JVM receives no value at that
+   position and it declines; `prebindgen-c` hands the error back and plans it.
+   Declining rather than refusing is the distinction that matters — a refusal is
+   a diagnostic about something that should have compiled, and `build_with`
+   drops refusals, so a position left to refuse would look handled while nothing
+   had decided anything (#685 review). What C
+   crosses at the **return** is then the ok arm alone, which is a fact about the
+   C binding, so it is bound rather than re-derived. `CCompile::plans_site` is
+   back to one rule, the `()` return C has nothing to hand back at, and
+   `Cbindgen::fallible_return_plans` is deleted.
+
+   **One adapter-private planner remains**, and it closes with finding 4 rather
+   than on its own. A callback-delivered expansion whose source has no `parts`
+   row is planned on its default row, so the walk's plan carries no wires;
    `build_output` falls back to `freeze_out_wires` and compiles the leaves
    itself. Confirmed rather than reasoned: a probe that panicked on that fallback
-   fired for `annotated_new` in `examples/perftest-flat` (#684 review). That one
-   closes with finding 4 rather than on its own — `value_form_of` declines
-   exactly those decompositions, so there is no `parts` row for the site to ask
-   for. Where a row does exist, the emitter reads the site's own list, and
-   `a_decomposed_return_shares_one_wire_list_with_its_site` asserts the two are
-   the same allocation.
+   fired for `annotated_new` in `examples/perftest-flat` (#684 review).
+   `value_form_of` declines exactly those decompositions, so there is no `parts`
+   row for the site to ask for. Where a row does exist, the emitter reads the
+   site's own list, and `a_decomposed_return_shares_one_wire_list_with_its_site`
+   asserts the two are the same allocation.
 
-   So the enumeration is shared and the compilation is not yet, which is a step
-   toward the shape step 7 asks for rather than that shape.
+   So every site of every exported function is enumerated and compiled by the
+   registry, bar that one, and what each adapter still decides it decides through
+   a hook or a binding rather than by walking the functions itself.
 
-   What is established: the branch is green — every gate passes with the
-   generated fixtures byte-identical — and this intermediate costs 213 lines on
-   figure 1 (28,353) and 428 on figure 2 (58,184). Those figures price the
-   duplication that is left, not a finished step 7, and no conclusion about
-   whether step 7 pays can be drawn from them.
+   The branch is green: every gate passes with the generated fixtures
+   byte-identical. It costs 185 lines on figure 1 (28,325) and 409 on figure 2
+   (58,165), measured against this umbrella's head the same way.
 
-   What remains is the two private planners above and the artifact half. Of the
-   four deletions step 7 names, only `prebindgen-c`'s `compile_sites` has gone;
-   the site enumeration in `fn_plan.rs`, `JniGenerationPlan::freeze` and the
-   orchestration in both `build_with` bodies still have a reader. Those 213
-   lines have to come out of the adapters for this step to pay, and
-   `JniGenerationPlan::freeze` is the 328-line candidate. **How much of it is a saving is not known.** It is
-   not orchestration to delete but artifacts to move, and most of its body is
-   JNI-specific planning — the data classes, sealed classes, wrappers, constants
-   and destructors it builds — which becomes `ArtifactPlan` construction in the
-   adapter rather than disappearing. What the move buys is whatever ordering and
-   assembly the registry then does instead, and that has to be measured, not
-   assumed. `prebindgen-c` already builds two artifact kinds this way, in
-   `type_artifact_plans` and `tagged_union_artifact_plans`; its own figures are
-   the closest evidence of what the pattern costs.
+   **The artifact half is already done, and step 7's last deletion is not
+   available.** Of the four deletions step 7 names, `prebindgen-c`'s
+   `compile_sites` and `fallible_return_plans` are gone.
+   `JniGenerationPlan::freeze` was the candidate for a third — 328 lines,
+   against 185 that have to come out for the step to pay — but it is not an
+   artifact assembly waiting to be moved. It already states every artifact to
+   the registry's `GenerationPlanBuilder` as an `ArtifactPlan`, with the
+   fragments whose converters it calls as `ArtifactInput::Fragment` and a
+   private converter's fragments as `follows`, and it derives the `Assembly`
+   from `plan.artifacts()` rather than beside it. That is step 7's "every
+   artifact kind becomes an `ArtifactPlan` that `follows` its fragments", and
+   #660 did it.
+
+   What is left in `freeze` is not artifact assembly: it is the memo hand-off —
+   `fn_plans`, `iface_specs`, `struct_plans`, `sum_plans` and `vec_build_plans`
+   moved out of the mutable planning store — the pre-population that has to
+   happen before that store is drained, and the operation-to-fragment map the
+   plan's pruning needs. None of it is duplicated in the registry, so deleting
+   it would move it rather than remove it. This is the same shape as step 6's
+   `struct_plan.rs`, which #620 had already deleted before step 6 asked for it.
+
+   So the 185 lines are not duplication awaiting removal. They are what the
+   mechanism costs: the hooks and the `Bindings` entries that let each adapter
+   state its own answers instead of walking the functions itself. Whether that
+   is worth 185 lines on figure 1 is a judgement about the architecture rather
+   than a measurement still to be taken, and it is the goal owner's to make.
 4. **Step 6b's prototype shares the derivation, and leaves the migration
    around it unfinished.** Both are derived from one declaration's
    records: `Declarations::value_form_of` builds the recipe's list of `Reach`es,
@@ -232,9 +252,10 @@ A fifth assumption — that the registry cannot be told which recipe a site take
 hook is the right seam is a question for review, which the prototype has not
 had.
 
-Neither prototype is a candidate to merge. Step 7's is green and partial; step
-6b's stops at an unresolved converter. What each needs next is stated in its
-entry above.
+Neither prototype is a candidate to merge. Step 7's is green and complete as far
+as the step goes, and costs 185 lines on figure 1, which a child of #676 may not
+do; step 6b's stops at an unresolved converter. What each entry above says is
+what a successor needs.
 
 Findings 3 and 4 were reached by building them, on the branches
 `feat/676-step7-registry-owns-the-plan` and `feat/676-step6b-one-derivation`.
