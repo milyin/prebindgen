@@ -944,6 +944,8 @@ impl Carrier for Note {
     fn yields(&self) -> Yield {
         self.yields.clone()
     }
+
+    fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
 }
 
 /// The smallest adapter that exercises every hook: it emits nothing and only

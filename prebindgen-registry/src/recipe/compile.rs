@@ -35,6 +35,7 @@ use super::{
 };
 use crate::{
     flat::{Alternative, Field, Function, Type, TypeKey, TypeKind, TypeRef},
+    generation::{ChoiceArity, FixedArity, FragmentUse, OperationId, ShapePlan},
     Conversions, FragmentId,
 };
 
@@ -55,6 +56,14 @@ pub trait Carrier {
     fn delegates_to(&self, parts: &[TypeKey]) -> Vec<TypeKey> {
         parts.to_vec()
     }
+
+    /// Take the shape the registry composed for this fragment.
+    ///
+    /// The registry knows which shape it is compiling and which child fragments
+    /// it handed to the hook, so it builds the [`ShapePlan`] rather than each
+    /// hook stating one. The fragment carries it as far as the `FragmentPlan`
+    /// the adapter freezes.
+    fn composed(&mut self, shape: ShapePlan);
 }
 
 /// The Rust value a fragment produces.
@@ -385,6 +394,33 @@ impl<E> From<RecipeError> for CompileError<E> {
 
 type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>::Error>>;
 
+/// One compiled part: its fragment, and the edge to it the shape records.
+type Edge<C> =
+    Result<(Rc<<C as Compile>::Fragment>, FragmentUse), CompileError<<C as Compile>::Error>>;
+
+/// A fragment and the shape the registry composed for it.
+type Composed<C> =
+    Result<(<C as Compile>::Fragment, ShapePlan), CompileError<<C as Compile>::Error>>;
+
+/// A product's fragment and the edges to its parts, which the shape of the
+/// product — or of the choice whose arm it is — records.
+type Assembled<C> =
+    Result<(<C as Compile>::Fragment, Vec<FragmentUse>), CompileError<<C as Compile>::Error>>;
+
+/// Every composite shape's bridge is the fragment's own converter identity: the
+/// shape says how the parts go together, and the identity says which generated
+/// function does it.
+fn bridge(at: At<'_>) -> OperationId {
+    OperationId::converter(at.fragment_id())
+}
+
+fn product_shape(at: At<'_>, parts: Vec<FragmentUse>) -> ShapePlan {
+    ShapePlan::Product {
+        bridge: FixedArity::new(parts.len(), bridge(at)),
+        parts,
+    }
+}
+
 /// [`Built`], beside the crossings the fragment delegates to.
 type Answered<C> =
     Result<(Rc<<C as Compile>::Fragment>, Vec<TypeKey>), CompileError<<C as Compile>::Error>>;
@@ -650,10 +686,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
         };
         let at = At { crossing, recipe };
-        let fragment = match &chosen {
+        let (mut fragment, shape) = match &chosen {
             Recipe::Constructing(shape) => self.constructing(adapter, at, shape)?,
             Recipe::Deconstructing(shape) => self.deconstructing(adapter, at, shape)?,
         };
+        fragment.composed(shape);
         // What the hook was handed, now what the fragment says it delegates to.
         let parts = self.delegations.remove(&key).unwrap_or_default();
         self.delegations
@@ -689,7 +726,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
-    ) -> Built<C> {
+    ) -> Edge<C> {
         self.part_of(adapter, at, direction, None, index, ty, wanted, false)
     }
 
@@ -706,7 +743,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
         identity: bool,
-    ) -> Built<C> {
+    ) -> Edge<C> {
         let crossing = Crossing::new(ty.clone(), direction);
         // Every edge the registry compiles for this row, which is the default
         // answer to `Carrier::delegates_to`. An arm's parts land on the choice
@@ -729,7 +766,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 }
                 .into());
             }
-            return self.recipe(adapter, &crossing, &row);
+            let fragment = self.recipe(adapter, &crossing, &row)?;
+            let edge = FragmentUse::new(
+                FragmentId::new(crossing.spelled().key(), row),
+                fragment.yields(),
+            );
+            return Ok((fragment, edge));
         }
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
@@ -763,7 +805,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
             .into());
         }
-        Ok(fragment)
+        let edge = FragmentUse::new(
+            FragmentId::new(bound.crossing.spelled().key(), bound.recipe),
+            produced,
+        );
+        Ok((fragment, edge))
     }
 
     fn constructing(
@@ -771,7 +817,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         shape: &Shape<Construct>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    ) -> Composed<C> {
         match shape {
             Shape::Atomic => self.atomic(adapter, at),
             Shape::Optional => self.optional(adapter, at),
@@ -779,18 +825,22 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Invoke => self.invoke(adapter, at),
             Shape::Product(op) => {
                 let (kind, parts) = self.construct_parts(at, op, None)?;
-                self.product(adapter, at, None, kind, parts)
+                let (fragment, uses) = self.product(adapter, at, None, kind, parts)?;
+                Ok((fragment, product_shape(at, uses)))
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
+                let mut arm_uses = Vec::new();
                 for arm in arms {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
                     let at_arm = Some(arm.alternative);
-                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
+                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                    built.push((alternative, fragment));
+                    arm_uses.push(uses);
                 }
-                self.choice(adapter, at, built)
+                self.choice(adapter, at, built, arm_uses)
             }
         }
     }
@@ -800,7 +850,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         shape: &Shape<Deconstruct>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    ) -> Composed<C> {
         match shape {
             Shape::Atomic => self.atomic(adapter, at),
             Shape::Optional => self.optional(adapter, at),
@@ -808,38 +858,35 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Invoke => self.invoke(adapter, at),
             Shape::Product(op) => {
                 let (kind, parts) = self.deconstruct_parts(at, op, None)?;
-                self.product(adapter, at, None, kind, parts)
+                let (fragment, uses) = self.product(adapter, at, None, kind, parts)?;
+                Ok((fragment, product_shape(at, uses)))
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
+                let mut arm_uses = Vec::new();
                 for arm in arms {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.deconstruct_parts(at, &arm.op, Some(&alternative.fields))?;
                     let at_arm = Some(arm.alternative);
-                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
+                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                    built.push((alternative, fragment));
+                    arm_uses.push(uses);
                 }
-                self.choice(adapter, at, built)
+                self.choice(adapter, at, built, arm_uses)
             }
         }
     }
 
     // ── The hooks ─────────────────────────────────────────────────────────
 
-    fn atomic(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn atomic(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         let mut cx = self.cx();
-        adapter.atomic(&mut cx, at).map_err(CompileError::Adapter)
+        let fragment = adapter.atomic(&mut cx, at).map_err(CompileError::Adapter)?;
+        Ok((fragment, ShapePlan::Atomic(bridge(at))))
     }
 
-    fn optional(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn optional(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         // The payload is the crossing's own — `Option<T>` gives `T` — so the
         // recipe states no inner type and there is none to disagree with.
         let Some(inner) = at.crossing.value().optional_inner().cloned() else {
@@ -852,18 +899,21 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // reading through the shared optional cannot produce, and
         // `&mut Option<T>` would demand an owned one where it lends `&mut T`.
         let wanted = mode_of(inner).through(at.crossing.mode());
-        let inner = self.part(adapter, at, at.crossing.direction(), 0, inner, wanted)?;
+        let (inner, value) = self.part(adapter, at, at.crossing.direction(), 0, inner, wanted)?;
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .optional(&mut cx, at, &inner)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Optional {
+                bridge: bridge(at),
+                value,
+            },
+        ))
     }
 
-    fn sequence(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn sequence(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         // The element is the crossing's own, for the reason `optional` gives.
         let Some(inner) = super::sequence_elem(at.crossing.value()).cloned() else {
             return Err(wrong_shape(at, "Sequence", "a `Vec`, slice or array"));
@@ -872,18 +922,22 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // A run's element is held the way the collection lends it, which is
         // what the adapter is told and so what its fragment must satisfy.
         let elements = element_mode(at.crossing, inner);
-        let inner = self.part(adapter, at, at.crossing.direction(), 0, inner, elements)?;
+        let (inner, element) =
+            self.part(adapter, at, at.crossing.direction(), 0, inner, elements)?;
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .sequence(&mut cx, at, elements, &inner)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Sequence {
+                bridge: bridge(at),
+                element,
+            },
+        ))
     }
 
-    fn invoke(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn invoke(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         let direction = at.crossing.direction();
         let Some(args) = at.crossing.value().callback_args().map(<[_]>::to_vec) else {
             return Err(wrong_shape(at, "Invoke", "a callback type"));
@@ -892,15 +946,25 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // them out through the call. The swap is the argument's, not the site's
         // — the parts still belong to the callback recipe that names them.
         let mut built = Vec::new();
+        let mut arguments = Vec::new();
         for (index, arg) in args.iter().enumerate() {
             let wanted = mode_of(arg);
-            built.push(self.part(adapter, at, direction.swap(), index, arg, wanted)?);
+            let (fragment, edge) = self.part(adapter, at, direction.swap(), index, arg, wanted)?;
+            built.push(fragment);
+            arguments.push(edge);
         }
         let refs: Vec<&C::Fragment> = built.iter().map(|f| &**f).collect();
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .callback(&mut cx, at, &refs, None)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Invoke {
+                bridge: FixedArity::new(arguments.len(), bridge(at)),
+                arguments,
+            },
+        ))
     }
 
     /// One product, whichever of the four hooks composes it.
@@ -911,7 +975,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         arm: Option<usize>,
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    ) -> Assembled<C> {
         let mut parts = parts;
         if at.crossing.direction() == Direction::Deconstruct {
             for part in &mut parts {
@@ -919,11 +983,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
         }
         let mut built = Vec::new();
+        let mut uses = Vec::new();
         for (index, part) in parts.iter().enumerate() {
             // `part.mode` rather than the type's own spelling: a product edge
             // states what it needs — a constructor parameter, a field, an
             // accessor's receiver — and `part` checks against that.
-            built.push(self.part_of(
+            let (fragment, edge) = self.part_of(
                 adapter,
                 at,
                 at.crossing.direction(),
@@ -932,17 +997,20 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 &part.ty,
                 part.mode,
                 matches!(part.from, PartSource::Identity),
-            )?);
+            )?;
+            built.push(fragment);
+            uses.push(edge);
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
             parts.into_iter().zip(built.iter().map(|f| &**f)).collect();
         let mut cx = self.cx();
-        match kind {
+        let fragment = match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
             ProductKind::ValueForm(func) => adapter.value_form(&mut cx, at, func, &paired),
         }
-        .map_err(CompileError::Adapter)
+        .map_err(CompileError::Adapter)?;
+        Ok((fragment, uses))
     }
 
     fn choice(
@@ -950,12 +1018,20 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         arms: Vec<(&'a Alternative, C::Fragment)>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+        arm_uses: Vec<Vec<FragmentUse>>,
+    ) -> Composed<C> {
         let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .choice(&mut cx, at, &paired)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Choice {
+                bridge: ChoiceArity::new(arm_uses.iter().map(Vec::len).collect(), bridge(at)),
+                arms: arm_uses,
+            },
+        ))
     }
 
     // ── Reading the parts off the model ───────────────────────────────────
