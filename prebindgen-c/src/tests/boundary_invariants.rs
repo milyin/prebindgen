@@ -462,33 +462,66 @@ fn a_planned_wrapper_holds_no_declaration_object() {
 }
 
 /// A planned artifact — an opaque handle, a value-opaque, a tagged union, a
-/// callback — reaches the file through a lookup in the frozen plan and the
-/// writer, and through nothing else.
+/// callback — reaches the file as the plan's own payload, and through nothing
+/// else.
+///
+/// It used to reach it through `CPlanned`, a handle holding the plan and an id
+/// to look the payload up by. The payload is now the final artifact itself, so
+/// there is nothing to look up: what this checks is that the artifact the file
+/// renders carries frozen state and its identity in the plan, and never the
+/// declaration object the binding was written into.
 #[test]
 fn planned_artifacts_reach_the_file_through_the_frozen_plan() {
     let source = include_str!("../assembly.rs");
     let file = syn::parse_file(source).expect("C assembly parses");
-    let fields = file
+    let variants = file
         .items
         .iter()
         .find_map(|item| match item {
-            syn::Item::Struct(item) if item.ident == "CPlanned" => {
-                Some(item.fields.to_token_stream().to_string())
-            }
+            syn::Item::Enum(item) if item.ident == "CFinalArtifact" => Some(
+                item.variants
+                    .iter()
+                    .map(|variant| {
+                        let fields: String = variant.fields.to_token_stream().to_string();
+                        (
+                            variant.ident.to_string(),
+                            fields.split_whitespace().collect(),
+                        )
+                    })
+                    .collect::<Vec<(String, String)>>(),
+            ),
             _ => None,
         })
-        .expect("the planned-artifact placement");
-    let fields: String = fields.split_whitespace().collect();
-    for forbidden in ["CbindgenBuilder", "Registry", "Compiled", "RefCell"] {
+        .expect("the final artifact");
+
+    for (name, fields) in &variants {
+        for forbidden in [
+            "CbindgenBuilder",
+            "Registry",
+            "Compiled",
+            "RefCell",
+            "GenerationPlan",
+        ] {
+            assert!(
+                !fields.contains(forbidden),
+                "`{name}` retains {forbidden}, so rendering could resume planning"
+            );
+        }
+    }
+
+    // The four the registry plans carry the identity they were planned under,
+    // because an artifact's key is its identity in the plan and the payload
+    // alone cannot say it.
+    for planned in ["OpaqueHandle", "ValueOpaque", "TaggedUnion", "Callback"] {
+        let (_, fields) = variants
+            .iter()
+            .find(|(name, _)| name == planned)
+            .unwrap_or_else(|| panic!("`{planned}` is a final artifact"));
         assert!(
-            !fields.contains(forbidden),
-            "a placed artifact retains {forbidden}, so rendering could resume planning"
+            fields.contains("ArtifactId"),
+            "`{planned}` must carry the identity it is planned under"
         );
     }
-    assert!(
-        fields.contains("Rc<GenerationPlan") && fields.contains("ArtifactId"),
-        "a placed artifact is a frozen plan and the identity to look up in it"
-    );
 }
 
 #[test]
@@ -549,7 +582,7 @@ fn type_artifacts_retain_source_types_and_fragment_dependencies() {
         .all(|input| matches!(input, ArtifactInput::Fragment(_))));
     assert!(matches!(
         handle.payload(),
-        crate::chain::CArtifact::OpaqueHandle(plan) if plan.source.key().as_str() == "Handle"
+        crate::assembly::CFinalArtifact::OpaqueHandle(_, plan) if plan.source.key().as_str() == "Handle"
     ));
 
     let value = generation
@@ -562,7 +595,7 @@ fn type_artifacts_retain_source_types_and_fragment_dependencies() {
         .all(|input| matches!(input, ArtifactInput::Fragment(_))));
     assert!(matches!(
         value.payload(),
-        crate::chain::CArtifact::ValueOpaque(plan) if plan.source.key().as_str() == "Payload"
+        crate::assembly::CFinalArtifact::ValueOpaque(_, plan) if plan.source.key().as_str() == "Payload"
     ));
 }
 
@@ -662,7 +695,7 @@ fn tagged_union_artifacts_retain_cleanup_types_and_dependencies() {
         .iter()
         .find(|artifact| artifact.id().name() == "Shape")
         .expect("Shape artifact");
-    let crate::chain::CArtifact::TaggedUnion(shape_plan) = shape.payload() else {
+    let crate::assembly::CFinalArtifact::TaggedUnion(_, shape_plan) = shape.payload() else {
         panic!("Shape must be a tagged-union artifact");
     };
     assert!(matches!(
@@ -677,7 +710,7 @@ fn tagged_union_artifacts_retain_cleanup_types_and_dependencies() {
         .expect("Note artifact");
     let shape_id = ArtifactId::new("c-tagged-union", "Shape").expect("valid artifact id");
     assert_eq!(note.prerequisites(), std::slice::from_ref(&shape_id));
-    let crate::chain::CArtifact::TaggedUnion(note_plan) = note.payload() else {
+    let crate::assembly::CFinalArtifact::TaggedUnion(_, note_plan) = note.payload() else {
         panic!("Note must be a tagged-union artifact");
     };
     assert!(matches!(
