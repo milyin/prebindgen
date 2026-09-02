@@ -1113,6 +1113,21 @@ fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
         ],
         "the callback leaf is the expansion's second leaf, not a parameter: {roles:?}"
     );
+    // And it is the REGISTRY's answer, not one the adapter pushed beside it:
+    // `planned_sites` is what `Registry::compile_sites` returned. Asserting on
+    // `site_plans` alone would pass either way (#687 review).
+    assert!(
+        gen.declarations()
+            .planned_sites
+            .borrow()
+            .keys()
+            .any(|site| site.owner == "z_go"
+                && matches!(
+                    site.role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )),
+        "the expanded callback's delivered value is a site the registry planned"
+    );
 }
 
 /// A value a callback delivers by taking it apart states its own site, and
@@ -1217,6 +1232,23 @@ fn a_delivered_argument_names_the_row_it_crossed_on() {
                 )
         })
         .expect("the delivered ZReply states a site");
+
+    // That site is the REGISTRY's answer. `planned_sites` is exactly what
+    // `Registry::compile_sites` returned, so asserting on it tells a site the
+    // walk planned apart from one the adapter pushed beside it — which is what
+    // `site_plans` alone cannot distinguish (#687 review).
+    assert!(
+        decls
+            .planned_sites
+            .borrow()
+            .keys()
+            .any(|s| s.owner == "z_get"
+                && matches!(
+                    s.role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )),
+        "a plain callback parameter's delivered value is a site the registry planned"
+    );
 
     // The row is `site_bindings`' answer, and it is the decomposing one — not
     // the whole-value default, which for this crossing is a conversion that

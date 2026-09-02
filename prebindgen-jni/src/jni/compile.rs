@@ -30,6 +30,14 @@ pub(crate) enum JPlan {
     /// A return that crosses as one value: what it converts through, and what
     /// the Kotlin surface declares.
     Return(std::rc::Rc<crate::jni::fn_plan::ValueOutputPlan>),
+    /// One value a callback parameter delivers: the edge of the parameter's own
+    /// `Invoke` conversion that carries it, and the ABI that edge finalized.
+    ///
+    /// A JniGen callback argument has no conversion of its own — a sealed class
+    /// reaches the JVM as a selector plus the live arm's slots — so what the
+    /// site states is read off the callback's compiled fragment rather than
+    /// composed here.
+    CallbackArg(prebindgen_registry::generation::FragmentUse, JAbiLeaves),
     /// A return the binding takes apart: the values it hands out, in the order
     /// the builder receives them.
     ///
@@ -1685,6 +1693,19 @@ impl JCompile<'_> {
             // The whole leaf, not just its descriptors: `RustParamOp`,
             // `KotlinParamOp` and the pipeline are the site's operations, and
             // a carrier without them could not replace the plan (#622 review).
+            // The site a callback argument states is built from the parent's
+            // edge, not from this site's own fragment.
+            JPlan::CallbackArg(edge, abi) => {
+                self.decls
+                    .site_plans
+                    .borrow_mut()
+                    .push(std::rc::Rc::new(callback_arg_site(
+                        bound,
+                        edge,
+                        abi.clone(),
+                    )));
+                return;
+            }
             JPlan::Param(leaf) => JAbiLeaves::Params(leaf.clone()),
             JPlan::Decomposed(wires) => JAbiLeaves::Decomposed(wires.clone()),
             // A whole return's plan is complete here: the delivery a convert
@@ -3459,14 +3480,6 @@ impl Compile for JCompile<'_> {
     /// conversion of their own — so `fn_plan` builds that leaf and there is no
     /// site plan to make here.
     fn plans_site(&self, site: &Site, _crossing: &Crossing) -> bool {
-        // A callback's arguments are answered through the callback parameter,
-        // which JniGen takes whole: its fragment carries an `Invoke` shape with
-        // one edge per argument, and the parameter's own plan states a site for
-        // each of them. Planning them again here, as independent crossings,
-        // would state the same positions twice.
-        if matches!(site.role, Role::CallbackArg { .. }) {
-            return false;
-        }
         // Nothing crosses at the error arm of a fallible return. The walk
         // enumerates it because a `Result` has two arms whatever reads it, and
         // `prebindgen-c` hands the error back through one of them — but JniGen
@@ -3918,6 +3931,22 @@ impl Compile for JCompile<'_> {
         // are the `Bound`'s to say: the role names the position and the model
         // names the parameter. An expansion's leaf is named by the plan that
         // expanded it, which the binding view answers for.
+        // One value a callback parameter delivers. It is a place in THIS
+        // function, which is what `Role::CallbackArg` names and why the registry
+        // keeps it apart from the `Role::Part` the shared callback recipe is
+        // compiled at: several functions taking one `impl Fn` signature share
+        // the delivery, and each states its own site over it.
+        //
+        // The row is the one the walk resolved, never one composed here. A
+        // fabricated `Bound` is what the first two attempts at this produced,
+        // and a site that misreports which row it took is worse than an absent
+        // one (#622 review).
+        if let Role::CallbackArg { param, arg } = &bound.site.role {
+            let (edge, abi) = self.callback_arg_of(registry, &bound.site.owner, *param, *arg)?;
+            let plan = JPlan::CallbackArg(edge, abi);
+            self.freeze_site_of(bound, root, &plan);
+            return Ok(plan);
+        }
         let named = match &bound.site.role {
             Role::Return => None,
             Role::Param { index } => Some((
@@ -4462,22 +4491,59 @@ impl Wire {
 }
 
 impl JCompile<'_> {
-    /// The leaf for a callback parameter, and one site plan per value that
-    /// callback delivers.
-    ///
-    /// A JniGen callback argument has no conversion of its own — a sealed class
-    /// reaches the JVM as a selector plus the live arm's slots — so the
-    /// parameter is answered whole and its arguments are read off the answer.
-    /// The delivered values are still places in **this** function, which is what
-    /// `Role::CallbackArg` names and why the registry keeps it apart from the
-    /// `Role::Part` the shared callback recipe is compiled at: several functions
-    /// taking one `impl Fn` signature share the delivery, and each states its own
-    /// site over it.
-    ///
-    /// The recipe each argument site takes is `site_bindings`' answer, never one
-    /// composed here. A fabricated `Bound` is what the first two attempts at this
-    /// produced, and a site that misreports which row it took is worse than an
-    /// absent one (#622 review).
+    /// The callback a parameter position delivers through: the parameter's own
+    /// type, or the one leaf of its expansion that is a callback. A parameter
+    /// delivers through at most one, which is why `Role::CallbackArg` names the
+    /// source position and not the leaf.
+    fn callback_at(
+        registry: &dyn Conversions,
+        owner: &syn::Ident,
+        param: usize,
+    ) -> Option<TypeRef> {
+        let source = registry.flat().function(owner)?.params.get(param)?;
+        match registry
+            .expansion_plans()
+            .get(&(owner.clone(), source.name.clone()))
+        {
+            Some(plan) => plan
+                .leaves
+                .iter()
+                .map(|leaf| &leaf.ty)
+                .find(|ty| ty.callback_args().is_some())
+                .cloned(),
+            None => Some(source.ty.clone()),
+        }
+    }
+
+    /// The edge and ABI one delivered value takes, read off that callback's own
+    /// compiled fragment: the argument has no conversion of its own.
+    fn callback_arg_of(
+        &self,
+        registry: &dyn Conversions,
+        owner: &syn::Ident,
+        param: usize,
+        arg: usize,
+    ) -> Result<(prebindgen_registry::generation::FragmentUse, JAbiLeaves), JErr> {
+        let refused = || JErr::Refused(format!("JniGen: no callback argument {arg} at {param}"));
+        let parent = Self::callback_at(registry, owner, param).ok_or_else(refused)?;
+        let entry = self.decls.in_frag(&parent).ok_or_else(refused)?;
+        let prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } =
+            entry.plan().converter().shape()
+        else {
+            return Err(refused());
+        };
+        let edge = arguments.get(arg).ok_or_else(refused)?;
+        let abi = entry
+            .rust
+            .invoke_plan()
+            .and_then(|plan| plan.arg_abi(arg))
+            .ok_or_else(refused)?;
+        Ok((edge.clone(), abi))
+    }
+
+    /// The leaf a callback parameter crosses as. It is answered **whole**,
+    /// because a JniGen callback argument has no conversion of its own — a
+    /// sealed class reaches the JVM as a selector plus the live arm's slots.
     fn callback_param_leaf(
         &self,
         registry: &dyn Conversions,
@@ -4485,7 +4551,7 @@ impl JCompile<'_> {
         ident: &syn::Ident,
         args: &[TypeRef],
     ) -> Result<std::rc::Rc<crate::jni::fn_plan::PlanLeaf>, JErr> {
-        use prebindgen_registry::recipe::{Crossing, Direction, Mode};
+        use prebindgen_registry::recipe::{Direction, Mode};
         use quote::ToTokens as _;
 
         let ext = self.decls;
@@ -4519,42 +4585,8 @@ impl JCompile<'_> {
             kotlin: crate::jni::fn_plan::KotlinParamOp::Callback { iface },
         });
 
-        // One site per value the callback delivers.
-        let position = match &bound.site.role {
-            Role::Param { index } => *index,
-            Role::ExpansionLeaf { param, .. } => *param,
-            role => return Err(JErr::Refused(format!("JniGen: no site plan for {role:?}"))),
-        };
-        if let Some(plan) = entry.rust.invoke_plan() {
-            let arguments = match entry.plan().converter().shape() {
-                prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
-                    arguments.as_slice()
-                }
-                _ => &[],
-            };
-            for (arg, ty) in args.iter().enumerate() {
-                let (Some(edge), Some(abi)) = (arguments.get(arg), plan.arg_abi(arg)) else {
-                    continue;
-                };
-                let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
-                let site = Site {
-                    owner: bound.site.owner.clone(),
-                    role: Role::CallbackArg {
-                        param: position,
-                        arg,
-                    },
-                };
-                let Some(bound) = ext
-                    .site_bindings()
-                    .resolve(&site, &crossing, ext.recipe_table())
-                else {
-                    continue;
-                };
-                ext.site_plans
-                    .borrow_mut()
-                    .push(std::rc::Rc::new(callback_arg_site(&bound, edge, abi)));
-            }
-        }
+        // The values this callback delivers are sites of their own, which the
+        // walk enumerates and `Role::CallbackArg` answers above.
         Ok(leaf)
     }
 

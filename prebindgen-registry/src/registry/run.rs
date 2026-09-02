@@ -118,15 +118,31 @@ impl Registry {
                                 Crossing::new(of.ty.clone(), Direction::Construct)
                             });
                             // A position the adapter has nothing to say about is not
-                            // a site of its binding, and not a failure either.
-                            if !adapter.plans_site(&site, &crossing) {
-                                continue;
+                            // a site of its binding, and not a failure either. As
+                            // above, it does not prune what is inside it.
+                            if adapter.plans_site(&site, &crossing) {
+                                match compiler.site(adapter, site.clone(), crossing) {
+                                    Ok(Some(plan)) => plans.push((site, plan)),
+                                    Ok(None) => {}
+                                    Err(e) => refusals.push((site, e)),
+                                }
                             }
-                            match compiler.site(adapter, site.clone(), crossing) {
-                                Ok(Some(plan)) => plans.push((site, plan)),
-                                Ok(None) => {}
-                                Err(e) => refusals.push((site, e)),
-                            }
+                            // A leaf can be the callback the parameter delivers
+                            // through, and the values it delivers are positions of
+                            // this function just as a plain callback parameter's
+                            // are. They are numbered by the SOURCE parameter, not
+                            // by the leaf, because a parameter delivers through at
+                            // most one callback.
+                            callback_args(
+                                adapter,
+                                &mut compiler,
+                                bindings,
+                                &mut plans,
+                                &mut refusals,
+                                name,
+                                index,
+                                &of.ty,
+                            );
                         }
                         continue;
                     }
@@ -152,28 +168,16 @@ impl Registry {
                     }
                     // A callback parameter's arguments cross the other way:
                     // Rust holds them and pushes them out through the call.
-                    let Some(args) = param.ty.callback_args() else {
-                        continue;
-                    };
-                    for (arg, ty) in args.iter().enumerate() {
-                        let site = Site {
-                            owner: name.clone(),
-                            role: Role::CallbackArg { param: index, arg },
-                        };
-                        let crossing = bindings
-                            .crossing_of(&site)
-                            .unwrap_or_else(|| Crossing::new(ty.clone(), Direction::Deconstruct));
-                        // A position the adapter has nothing to say about is not
-                        // a site of its binding, and not a failure either.
-                        if !adapter.plans_site(&site, &crossing) {
-                            continue;
-                        }
-                        match compiler.site(adapter, site.clone(), crossing) {
-                            Ok(Some(plan)) => plans.push((site, plan)),
-                            Ok(None) => {}
-                            Err(e) => refusals.push((site, e)),
-                        }
-                    }
+                    callback_args(
+                        adapter,
+                        &mut compiler,
+                        bindings,
+                        &mut plans,
+                        &mut refusals,
+                        name,
+                        index,
+                        &param.ty,
+                    );
                 }
                 // The return, crossing what the model says it does — a `Result`
                 // return crosses whole, and a binding that crosses something
@@ -215,5 +219,50 @@ impl Registry {
             }
         }
         (Sited { plans, refusals }, compiler.finish())
+    }
+}
+
+/// Every value a callback at one parameter position delivers, as sites of the
+/// function that takes it.
+///
+/// `ty` is the callback — the parameter's own type, or the one leaf of its
+/// expansion that is a callback. Not a callback, and there is nothing here.
+/// The sites are numbered by the SOURCE parameter position, because a parameter
+/// delivers through at most one callback and the leaf it arrived on is not a
+/// position the function has.
+#[allow(clippy::too_many_arguments)]
+fn callback_args<C: crate::recipe::Compile>(
+    adapter: &mut C,
+    compiler: &mut crate::recipe::Compiler<'_, C>,
+    bindings: &crate::recipe::Bindings,
+    plans: &mut Vec<(crate::recipe::Site, C::Plan)>,
+    refusals: &mut Vec<(crate::recipe::Site, crate::recipe::CompileError<C::Error>)>,
+    owner: &syn::Ident,
+    param: usize,
+    ty: &crate::flat::TypeRef,
+) {
+    use crate::recipe::{Crossing, Direction, Role, Site};
+
+    let Some(args) = ty.callback_args() else {
+        return;
+    };
+    for (arg, ty) in args.iter().enumerate() {
+        let site = Site {
+            owner: owner.clone(),
+            role: Role::CallbackArg { param, arg },
+        };
+        let crossing = bindings
+            .crossing_of(&site)
+            .unwrap_or_else(|| Crossing::new(ty.clone(), Direction::Deconstruct));
+        // A position the adapter has nothing to say about is not a site of its
+        // binding, and not a failure either.
+        if !adapter.plans_site(&site, &crossing) {
+            continue;
+        }
+        match compiler.site(adapter, site.clone(), crossing) {
+            Ok(Some(plan)) => plans.push((site, plan)),
+            Ok(None) => {}
+            Err(e) => refusals.push((site, e)),
+        }
     }
 }
