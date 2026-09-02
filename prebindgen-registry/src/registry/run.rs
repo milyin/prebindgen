@@ -48,9 +48,8 @@ impl Registry {
     }
 }
 
-/// Every site an exported function has, each with the plan the adapter made of
-/// it — or the first refusal, which ends the walk.
-/// What the site walk produced.
+/// What the site walk produced: every site an exported function has, each with
+/// the plan the adapter made of it, and every site that refused.
 ///
 /// A refusal does not end the walk. One site that will not compile says nothing
 /// about the next, and an adapter that reports per function — naming the
@@ -92,11 +91,14 @@ impl Registry {
     ) -> (Sited<C>, crate::recipe::Compiled<C::Fragment>) {
         use crate::recipe::{Compiler, Crossing, Direction, Role, Site};
 
-        let mut compiler = Compiler::resume(self, recipes, bindings, compiled);
+        let mut walk = SiteWalk {
+            compiler: Compiler::resume(self, recipes, bindings, compiled),
+            bindings,
+            plans: Vec::new(),
+            refusals: Vec::new(),
+        };
         let mut names: Vec<&syn::Ident> = self.exports().iter().collect();
         names.sort_by_key(|name| name.to_string());
-        let mut plans = Vec::new();
-        let mut refusals = Vec::new();
         {
             for name in names {
                 let Some(function) = self.flat().function(name) else {
@@ -117,32 +119,14 @@ impl Registry {
                             let crossing = bindings.crossing_of(&site).unwrap_or_else(|| {
                                 Crossing::new(of.ty.clone(), Direction::Construct)
                             });
-                            // A position the adapter has nothing to say about is not
-                            // a site of its binding, and not a failure either. As
-                            // above, it does not prune what is inside it.
-                            if adapter.plans_site(&site, &crossing) {
-                                match compiler.site(adapter, site.clone(), crossing) {
-                                    Ok(Some(plan)) => plans.push((site, plan)),
-                                    Ok(None) => {}
-                                    Err(e) => refusals.push((site, e)),
-                                }
-                            }
+                            walk.visit(adapter, site, crossing);
                             // A leaf can be the callback the parameter delivers
                             // through, and the values it delivers are positions of
                             // this function just as a plain callback parameter's
                             // are. They are numbered by the SOURCE parameter, not
                             // by the leaf, because a parameter delivers through at
                             // most one callback.
-                            callback_args(
-                                adapter,
-                                &mut compiler,
-                                bindings,
-                                &mut plans,
-                                &mut refusals,
-                                name,
-                                index,
-                                &of.ty,
-                            );
+                            walk.callback_args(adapter, name, index, &of.ty);
                         }
                         continue;
                     }
@@ -153,31 +137,13 @@ impl Registry {
                     let crossing = bindings
                         .crossing_of(&site)
                         .unwrap_or_else(|| Crossing::new(param.ty.clone(), Direction::Construct));
-                    // A position the adapter has nothing to say about is not
-                    // a site of its binding, and not a failure either. It does
-                    // not prune the positions **inside** it: an adapter that
-                    // answers a callback parameter whole still crosses a value
-                    // at each of that callback's arguments, so declining the
-                    // parameter must not take its arguments with it.
-                    if adapter.plans_site(&site, &crossing) {
-                        match compiler.site(adapter, site.clone(), crossing) {
-                            Ok(Some(plan)) => plans.push((site, plan)),
-                            Ok(None) => {}
-                            Err(e) => refusals.push((site, e)),
-                        }
-                    }
+                    // A declined position does not prune the positions **inside** it: an
+                    // adapter that answers a callback parameter whole still crosses a value
+                    // at each of that callback's arguments.
+                    walk.visit(adapter, site, crossing);
                     // A callback parameter's arguments cross the other way:
                     // Rust holds them and pushes them out through the call.
-                    callback_args(
-                        adapter,
-                        &mut compiler,
-                        bindings,
-                        &mut plans,
-                        &mut refusals,
-                        name,
-                        index,
-                        &param.ty,
-                    );
+                    walk.callback_args(adapter, name, index, &param.ty);
                 }
                 // The return, crossing what the model says it does — a `Result`
                 // return crosses whole, and a binding that crosses something
@@ -205,64 +171,84 @@ impl Registry {
                     let crossing = bindings
                         .crossing_of(&site)
                         .unwrap_or_else(|| Crossing::new(ty.clone(), Direction::Deconstruct));
-                    // A position the adapter has nothing to say about is not
-                    // a site of its binding, and not a failure either.
-                    if !adapter.plans_site(&site, &crossing) {
-                        continue;
-                    }
-                    match compiler.site(adapter, site.clone(), crossing) {
-                        Ok(Some(plan)) => plans.push((site, plan)),
-                        Ok(None) => {}
-                        Err(e) => refusals.push((site, e)),
-                    }
+                    walk.visit(adapter, site, crossing);
                 }
             }
         }
-        (Sited { plans, refusals }, compiler.finish())
+        (
+            Sited {
+                plans: walk.plans,
+                refusals: walk.refusals,
+            },
+            walk.compiler.finish(),
+        )
     }
 }
 
-/// Every value a callback at one parameter position delivers, as sites of the
-/// function that takes it.
+/// The state one walk over the sites carries: the compiler it drives each site
+/// through, the bindings that say what a site crosses, and what came back.
 ///
-/// `ty` is the callback — the parameter's own type, or the one leaf of its
-/// expansion that is a callback. Not a callback, and there is nothing here.
-/// The sites are numbered by the SOURCE parameter position, because a parameter
-/// delivers through at most one callback and the leaf it arrived on is not a
-/// position the function has.
-#[allow(clippy::too_many_arguments)]
-fn callback_args<C: crate::recipe::Compile>(
-    adapter: &mut C,
-    compiler: &mut crate::recipe::Compiler<'_, C>,
-    bindings: &crate::recipe::Bindings,
-    plans: &mut Vec<(crate::recipe::Site, C::Plan)>,
-    refusals: &mut Vec<(crate::recipe::Site, crate::recipe::CompileError<C::Error>)>,
-    owner: &syn::Ident,
-    param: usize,
-    ty: &crate::flat::TypeRef,
-) {
-    use crate::recipe::{Crossing, Direction, Role, Site};
+/// It exists so that asking the adapter and sorting the answer is written once.
+/// It was written four times, and the shape it takes — ask `plans_site`, compile,
+/// sort into plans or refusals — is the same at every position.
+struct SiteWalk<'a, C: crate::recipe::Compile> {
+    compiler: crate::recipe::Compiler<'a, C>,
+    bindings: &'a crate::recipe::Bindings,
+    plans: Vec<(crate::recipe::Site, C::Plan)>,
+    refusals: Vec<(crate::recipe::Site, crate::recipe::CompileError<C::Error>)>,
+}
 
-    let Some(args) = ty.callback_args() else {
-        return;
-    };
-    for (arg, ty) in args.iter().enumerate() {
-        let site = Site {
-            owner: owner.clone(),
-            role: Role::CallbackArg { param, arg },
-        };
-        let crossing = bindings
-            .crossing_of(&site)
-            .unwrap_or_else(|| Crossing::new(ty.clone(), Direction::Deconstruct));
-        // A position the adapter has nothing to say about is not a site of its
-        // binding, and not a failure either.
+impl<C: crate::recipe::Compile> SiteWalk<'_, C> {
+    /// One position, offered to the adapter and compiled if it takes it.
+    ///
+    /// A position the adapter has nothing to say about is not a site of its
+    /// binding, and not a failure either.
+    fn visit(
+        &mut self,
+        adapter: &mut C,
+        site: crate::recipe::Site,
+        crossing: crate::recipe::Crossing,
+    ) {
         if !adapter.plans_site(&site, &crossing) {
-            continue;
+            return;
         }
-        match compiler.site(adapter, site.clone(), crossing) {
-            Ok(Some(plan)) => plans.push((site, plan)),
+        match self.compiler.site(adapter, site.clone(), crossing) {
+            Ok(Some(plan)) => self.plans.push((site, plan)),
             Ok(None) => {}
-            Err(e) => refusals.push((site, e)),
+            Err(e) => self.refusals.push((site, e)),
+        }
+    }
+
+    /// Every value a callback at one parameter position delivers, as sites of
+    /// the function that takes it.
+    ///
+    /// `ty` is the callback — the parameter's own type, or the one leaf of its
+    /// expansion that is a callback. Not a callback, and there is nothing here.
+    /// The sites are numbered by the SOURCE parameter position, because a
+    /// parameter delivers through at most one callback and the leaf it arrived
+    /// on is not a position the function has.
+    fn callback_args(
+        &mut self,
+        adapter: &mut C,
+        owner: &syn::Ident,
+        param: usize,
+        ty: &crate::flat::TypeRef,
+    ) {
+        use crate::recipe::{Crossing, Direction, Role, Site};
+
+        let Some(args) = ty.callback_args() else {
+            return;
+        };
+        for (arg, ty) in args.iter().enumerate() {
+            let site = Site {
+                owner: owner.clone(),
+                role: Role::CallbackArg { param, arg },
+            };
+            let crossing = self
+                .bindings
+                .crossing_of(&site)
+                .unwrap_or_else(|| Crossing::new(ty.clone(), Direction::Deconstruct));
+            self.visit(adapter, site, crossing);
         }
     }
 }
