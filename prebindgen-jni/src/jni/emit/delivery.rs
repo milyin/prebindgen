@@ -13,12 +13,14 @@
 //! looks like — together with `jvalue` layout, local-frame sizing, cached
 //! method lookup and exception routing, which are JNI policy and stay.
 //!
-//! [`DeliveryBridge`]: crate::unfold::DeliveryBridge
+//! [`DeliveryBridge`]: unfold::DeliveryBridge
 
-use prebindgen_registry::Conversions;
+use prebindgen_registry::{
+    unfold::{self, bind_hoists, DeliveryBridge, PathStep},
+    Conversions,
+};
 
 use super::*;
-use crate::unfold::{bind_hoists, DeliveryBridge, PathStep};
 
 /// Emit the output-expansion delivery body (output phase) for a function
 /// marked `.expand_output()`. The return value (`__out`) is decomposed by the
@@ -42,16 +44,16 @@ use crate::unfold::{bind_hoists, DeliveryBridge, PathStep};
 /// (JString/JByteArray/JObject — cast via `.into()`) or primitive (boxed to
 /// `java.lang.*` via the cached `box_helper_for_wire` runtime helpers).
 ///
-/// [`UnfoldShape::Base`]: crate::unfold::UnfoldShape::Base
-/// [`UnfoldShape::Optional`]: crate::unfold::UnfoldShape::Optional
+/// [`UnfoldShape::Base`]: unfold::UnfoldShape::Base
+/// [`UnfoldShape::Optional`]: unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    plan: &crate::unfold::UnfoldPlan,
+    plan: &unfold::UnfoldPlan,
     output: &crate::jni::fn_plan::UnfoldOutputPlan,
     call_expr: &TokenStream,
     on_err: &TokenStream,
     emit: &prebindgen_registry::RustWriter,
 ) -> TokenStream {
-    use crate::unfold::UnfoldShape;
+    use unfold::UnfoldShape;
     let context = &output.delivery;
 
     let n = plan.leaves.len();
@@ -351,7 +353,7 @@ pub(crate) struct Delivered<'a> {
     ///
     /// Per **site** rather than per value: two values reached through one
     /// accessor share its call, and that is the whole point of a hoist.
-    pub(crate) hoists: &'a [crate::unfold::Hoist],
+    pub(crate) hoists: &'a [unfold::Hoist],
     /// Whether the delivered value is reached through a borrow.
     pub(crate) by_ref: bool,
     /// True when these leaves are the model-derived data-class Product itself.
@@ -379,7 +381,7 @@ pub(crate) struct FrozenDelivery {
     /// copied: a delivery context may reference canonical leaves, not own a
     /// second conversion graph over them (#622 review).
     wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
-    hoists: Vec<crate::unfold::Hoist>,
+    hoists: Vec<unfold::Hoist>,
     by_ref: bool,
     fixed_product: bool,
     optional: bool,
@@ -413,7 +415,7 @@ impl FrozenDelivery {
     pub(crate) fn new(
         ext: &Declarations,
         registry: &(impl Conversions + ?Sized),
-        plan: &crate::unfold::UnfoldPlan,
+        plan: &unfold::UnfoldPlan,
         wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
         chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
@@ -436,7 +438,7 @@ impl FrozenDelivery {
     fn build(
         ext: &Declarations,
         registry: &(impl Conversions + ?Sized),
-        hoists: Vec<crate::unfold::Hoist>,
+        hoists: Vec<unfold::Hoist>,
         by_ref: bool,
         fixed_product: bool,
         optional: bool,
@@ -449,7 +451,7 @@ impl FrozenDelivery {
             .flat_map(|hoist| &hoist.prefix)
             .chain(wires.iter().flat_map(|wire| wire.reach()))
         {
-            if let crate::unfold::PathStep::Call { ident, .. } = step {
+            if let unfold::PathStep::Call { ident, .. } = step {
                 modules
                     .entry(ident.to_string())
                     .or_insert_with(|| ext.fn_module(registry, ident));
@@ -633,7 +635,7 @@ impl FrozenDelivery {
     }
 }
 
-impl crate::unfold::DeliveryBridge for FrozenDelivery {
+impl unfold::DeliveryBridge for FrozenDelivery {
     type Leaf = crate::jni::compile::OutWire;
 
     fn qualify(&self, ident: &syn::Ident) -> syn::Path {
@@ -672,7 +674,7 @@ impl crate::unfold::DeliveryBridge for FrozenDelivery {
         leaf: &crate::jni::compile::OutWire,
         index: usize,
         slot: &syn::Ident,
-        reach: &crate::unfold::Reach<'_>,
+        reach: &unfold::Reach<'_>,
         fail: &dyn Fn(TokenStream) -> TokenStream,
         emit: &prebindgen_registry::RustWriter,
     ) -> TokenStream {
@@ -729,9 +731,9 @@ impl crate::unfold::DeliveryBridge for FrozenDelivery {
     /// A slot is a `jvalue` for a primitive-wire leaf and a `JObject`
     /// otherwise, and an unfilled one carries that shape's own empty value: a
     /// zero of the right jvalue member, or a JVM null.
-    fn slot(&self, leaf: &crate::jni::compile::OutWire) -> crate::unfold::Slot {
+    fn slot(&self, leaf: &crate::jni::compile::OutWire) -> unfold::Slot {
         let slot = crate::jni::emit::sum_out::leaf_slot(self, leaf);
-        crate::unfold::Slot {
+        unfold::Slot {
             ty: slot.ty,
             default: slot.default,
         }
@@ -764,7 +766,7 @@ impl crate::unfold::DeliveryBridge for FrozenDelivery {
 impl<'a> Delivered<'a> {
     /// Delivery from a registry-compiled return, callback, or error site.
     pub(crate) fn planned(
-        plan: &'a crate::unfold::UnfoldPlan,
+        plan: &'a unfold::UnfoldPlan,
         wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
         chain: Option<crate::jni::compile::ComposedChain>,
     ) -> Self {
@@ -886,7 +888,7 @@ pub(crate) fn encode_plan_leaves(
 
     // Which leaves form a segment is the plan's own answer, read by the
     // walk: a selector plus the group leaves after it.
-    let sum_segments = crate::unfold::segments(&wires);
+    let sum_segments = unfold::segments(&wires);
 
     // Leaves under a conditional value form are collected per hoist and emitted
     // below as ONE `match` on its `Option` local — the same treatment a sum's
@@ -911,7 +913,7 @@ pub(crate) fn encode_plan_leaves(
         // the sum it is encoded from, and gating the whole segment when that
         // reach passes through an optional step, is the walk's.
         let group_args = std::cell::RefCell::new(Vec::new());
-        let group_stmts = crate::unfold::segment(
+        let group_stmts = unfold::segment(
             context,
             &qualify,
             &at,
@@ -982,9 +984,9 @@ pub(crate) fn encode_plan_leaves(
                      base_is_ref: bool,
                      unwrap_last: bool,
                      body: &dyn Fn(TokenStream) -> TokenStream| {
-            crate::unfold::reach_leaf(
+            unfold::reach_leaf(
                 &qualify,
-                crate::unfold::LeafAt {
+                unfold::LeafAt {
                     leaf,
                     path,
                     base,
@@ -1211,7 +1213,7 @@ pub(crate) fn encode_plan_leaves(
     // Each conditional value form's leaves share one `match` on its `Option`
     // local — the walk's shape, filled with this adapter's slots.
     for (i, body) in cond_stmts {
-        stmts.extend(crate::unfold::conditional_arm(
+        stmts.extend(unfold::conditional_arm(
             context, &hoisted, i, &wires, obj_idents, body,
         ));
     }
@@ -1288,12 +1290,13 @@ pub(crate) fn leaf_ty_is_prim(
 
 #[cfg(test)]
 mod tests {
+    use unfold::{LeafSource, UnfoldLeaf};
+
     use super::*;
     /// A `TypeRef` through the model. `Flat::classify` is sealed to `api::core`
     /// (#280), so a test under `api::lang` asks the sanctioned probe helper
     /// rather than reaching around the seal — which is the seal working.
     use crate::test_util::reading as tref;
-    use crate::unfold::{LeafSource, UnfoldLeaf};
 
     /// A leaf as the resolver builds one. `source` is not decoration: it
     /// decides the terminal treatment (a `Field` leaf is CLONED out of the
@@ -1347,19 +1350,16 @@ mod tests {
                 PathStep::field(syn::parse_quote!(b), true),
             ],
         ] {
-            assert!(
-                crate::unfold::steps_are_movable(&path),
-                "fixture must be movable"
-            );
+            assert!(unfold::steps_are_movable(&path), "fixture must be movable");
             let l = leaf(
                 syn::parse_quote!(Owned),
                 path.clone(),
                 true,
                 LeafSource::Reach,
             );
-            let got = crate::unfold::reach_leaf(
+            let got = unfold::reach_leaf(
                 &qualify,
-                crate::unfold::LeafAt {
+                unfold::LeafAt {
                     leaf: &crate::jni::compile::OutWire::from_leaf(&l),
                     path: &path,
                     base: quote!(__src),
@@ -1389,9 +1389,9 @@ mod tests {
             true,
             LeafSource::Reach,
         );
-        let got = crate::unfold::reach_leaf(
+        let got = unfold::reach_leaf(
             &qualify,
-            crate::unfold::LeafAt {
+            unfold::LeafAt {
                 leaf: &crate::jni::compile::OutWire::from_leaf(&l),
                 path: &path,
                 base: quote!(__src),
@@ -1431,9 +1431,9 @@ mod tests {
             false,
             LeafSource::Reach,
         );
-        let got = crate::unfold::reach_leaf(
+        let got = unfold::reach_leaf(
             &qualify,
-            crate::unfold::LeafAt {
+            unfold::LeafAt {
                 leaf: &crate::jni::compile::OutWire::from_leaf(&l),
                 path: &path,
                 base: quote!(__src),
@@ -1468,9 +1468,9 @@ mod tests {
             false,
             LeafSource::Reach,
         );
-        let got = crate::unfold::reach_leaf(
+        let got = unfold::reach_leaf(
             &qualify,
-            crate::unfold::LeafAt {
+            unfold::LeafAt {
                 leaf: &crate::jni::compile::OutWire::from_leaf(&l),
                 path: &path,
                 base: quote!(__src),
@@ -1505,9 +1505,9 @@ mod tests {
         // The suffix a rebase would hand over — the optional call is gone from
         // it, and used to take the guard with it.
         let rest = vec![PathStep::field(syn::parse_quote!(a), false)];
-        let _ = crate::unfold::reach_leaf(
+        let _ = unfold::reach_leaf(
             &qualify,
-            crate::unfold::LeafAt {
+            unfold::LeafAt {
                 leaf: &crate::jni::compile::OutWire::from_leaf(&l),
                 path: &rest,
                 base: quote!(__vf0),

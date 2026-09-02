@@ -203,9 +203,9 @@ impl std::error::Error for UnfoldError {}
 /// The registry has no vocabulary for a decomposition — these declarations are
 /// this adapter's — so a refusal reaches a build script the way every other
 /// adapter refusal does, carrying this error's own message.
-impl From<UnfoldError> for prebindgen_registry::WriteRustError {
+impl From<UnfoldError> for crate::WriteRustError {
     fn from(e: UnfoldError) -> Self {
-        prebindgen_registry::ScanError::AdapterInvariant {
+        crate::ScanError::AdapterInvariant {
             message: e.to_string(),
         }
         .into()

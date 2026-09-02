@@ -242,7 +242,7 @@ impl Declarations {
     ///
     /// Filled while this binding declares itself into the registry, which every
     /// caller here is downstream of.
-    pub(crate) fn unfolded(&self) -> &crate::unfold::Unfolded {
+    pub(crate) fn unfolded(&self) -> &prebindgen_registry::unfold::Unfolded {
         self.unfolded
             .get()
             .expect("decompositions are applied while the binding is declared")
@@ -900,8 +900,8 @@ impl Declarations {
         registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
         fields: &[LocalField],
-    ) -> Vec<crate::unfold::DeconRecord> {
-        use crate::unfold::DeconRecord;
+    ) -> Vec<prebindgen_registry::unfold::DeconRecord> {
+        use prebindgen_registry::unfold::DeconRecord;
         fields
             .iter()
             .map(|f| match f {
@@ -938,7 +938,7 @@ impl Declarations {
     }
 
     /// Expand a `.fields(fields!(f))` declaration into one
-    /// [`FieldRecord`](crate::unfold::FieldRecord) per field of the
+    /// [`FieldRecord`](prebindgen_registry::unfold::FieldRecord) per field of the
     /// struct `f` returns — the value form.
     ///
     /// The walk is the adapter's job because only it knows which structs are
@@ -957,7 +957,7 @@ impl Declarations {
         registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
         decl: &FieldsDecl,
-    ) -> Vec<crate::unfold::FieldRecord> {
+    ) -> Vec<prebindgen_registry::unfold::FieldRecord> {
         let func = decl.func();
         let accessor = registry.flat().function(&func).unwrap_or_else(|| {
             panic!(
@@ -996,7 +996,7 @@ impl Declarations {
         // than a no-op.
         let named: std::collections::HashSet<String> = out
             .iter()
-            .map(|r: &crate::unfold::FieldRecord| {
+            .map(|r: &prebindgen_registry::unfold::FieldRecord| {
                 r.members
                     .iter()
                     .map(|m| m.to_string())
@@ -1039,9 +1039,9 @@ impl Declarations {
         members: &[syn::Ident],
         name_prefix: &str,
         depth: usize,
-        out: &mut Vec<crate::unfold::FieldRecord>,
+        out: &mut Vec<prebindgen_registry::unfold::FieldRecord>,
     ) {
-        use crate::unfold::{FieldDecon, FieldRecord};
+        use prebindgen_registry::unfold::{FieldDecon, FieldRecord};
         // A value form holding itself would expand forever; the cycle rule for
         // everything reachable BELOW a field is core's `visited` check.
         assert!(
@@ -1221,8 +1221,8 @@ impl Declarations {
     pub(crate) fn build_deconstructors(
         &self,
         registry: &(impl Conversions + ?Sized),
-    ) -> crate::unfold::Deconstructors {
-        use crate::unfold::{
+    ) -> prebindgen_registry::unfold::Deconstructors {
+        use prebindgen_registry::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
         };
         let mut dec = Deconstructors {

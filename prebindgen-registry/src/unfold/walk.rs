@@ -11,11 +11,13 @@
 //! this module cannot know: where a source item is qualified from
 //! (`qualify`), and what each leaf is ([`DecomposedLeaf`]).
 
-use prebindgen_registry::flat::TypeRef;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::unfold::{steps_are_movable, PathStep};
+use crate::{
+    flat::TypeRef,
+    unfold::{steps_are_movable, PathStep},
+};
 
 /// What the walk needs to know about one delivered leaf.
 ///
@@ -98,7 +100,7 @@ pub trait DeliveryBridge {
 
     /// The sum a selector leaf names: the qualified source path of the type,
     /// and its Flat shape.
-    fn sum(&self, leaf: &Self::Leaf) -> (syn::Path, &prebindgen_registry::flat::Variant);
+    fn sum(&self, leaf: &Self::Leaf) -> (syn::Path, &crate::flat::Variant);
 
     /// Encode one leaf into the value the delivery call receives, and bind
     /// that value to `slot`.
@@ -115,7 +117,7 @@ pub trait DeliveryBridge {
         slot: &syn::Ident,
         reach: &Reach<'_>,
         fail: &dyn Fn(TokenStream) -> TokenStream,
-        emit: &prebindgen_registry::RustWriter,
+        emit: &crate::RustWriter,
     ) -> TokenStream;
 
     /// The expression that passes `slot` as one argument of the delivery call.
@@ -246,7 +248,7 @@ pub fn project_leading_fields(
 
 /// Where one leaf's reach starts, once the hoists are bound.
 ///
-/// Produced by [`Hoisted::place`], which is the one place that decides it: the
+/// Produced by `Hoisted::place`, which is the one place that decides it: the
 /// innermost value form the leaf sits under, the name a conditional form's
 /// `Some` arm binds, or the delivered value itself.
 pub struct LeafPlace {
@@ -295,10 +297,7 @@ impl LeafPlace {
 ///   a consuming one gives its fields away.
 pub fn reached_is_ours<L: DecomposedLeaf>(leaf: &L, consuming: bool) -> bool {
     if leaf.identity() {
-        !matches!(
-            leaf.source().kind(),
-            prebindgen_registry::flat::TypeKind::Ref { .. }
-        )
+        !matches!(leaf.source().kind(), crate::flat::TypeKind::Ref { .. })
     } else {
         consuming
     }

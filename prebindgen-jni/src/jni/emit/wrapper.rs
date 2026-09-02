@@ -1,13 +1,13 @@
 //! Extern `"C"` JNI wrapper functions: signature lowering, input
 //! params, and the expanded-param path.
 
-use prebindgen_registry::types_util::result_ok_type;
-
-use super::*;
-use crate::{
-    jni::trait_impl::read_through_erased_wrappers,
+use prebindgen_registry::{
+    types_util::result_ok_type,
     unfold::{bind_hoists, reach_leaf, LeafAt},
 };
+
+use super::*;
+use crate::jni::trait_impl::read_through_erased_wrappers;
 
 /// What the extern calls once its inputs are decoded.
 #[derive(Clone)]
@@ -302,7 +302,7 @@ impl JWrapper {
         // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
         // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
         let call_expr: TokenStream = if is_convert {
-            use crate::unfold::UnfoldShape;
+            use prebindgen_registry::unfold::UnfoldShape;
             let uplan = unfold_plan.expect("is_convert ⇒ plan");
             let leaf = &uplan.leaves[0];
             let by_ref = uplan.by_ref;
@@ -322,7 +322,7 @@ impl JWrapper {
                 FnOutputPlan::Unfold(_) => unreachable!("a convert has a value output plan"),
             };
             let qualify = |id: &syn::Ident| -> syn::Path {
-                crate::unfold::DeliveryBridge::qualify(delivery, id)
+                prebindgen_registry::unfold::DeliveryBridge::qualify(delivery, id)
             };
             // `None` when the reach is the IDENTITY of `base` and no value form had
             // to be bound — the leaf IS the value, so there is nothing to compose.

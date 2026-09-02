@@ -2635,12 +2635,12 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
         "the outer flag is unconditional, the inner one sits in the group it          gates, and the leaf sits inside both"
     );
     assert_eq!(
-        crate::unfold::segments(&wires),
+        prebindgen_registry::unfold::segments(&wires),
         vec![0..3],
         "one segment at the top level — the inner selector belongs to it          rather than opening a second, overlapping one"
     );
     assert_eq!(
-        crate::unfold::segments_at(&wires, 1),
+        prebindgen_registry::unfold::segments_at(&wires, 1),
         vec![1..3],
         "and it is a segment of its own, one level down"
     );

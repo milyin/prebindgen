@@ -52,7 +52,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
     }
 }
 
-/// The [`LeafSource::Reach`](crate::unfold::LeafSource) leaves of
+/// The [`LeafSource::Reach`](prebindgen_registry::unfold::LeafSource) leaves of
 /// a by-value `data_class`, as the fixed-builder output and callback paths want
 /// them.
 ///
@@ -73,8 +73,8 @@ pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
     registry: &(impl Conversions + ?Sized),
     s: &prebindgen_registry::flat::Struct,
-) -> Option<Vec<crate::unfold::UnfoldLeaf>> {
-    use crate::unfold::{LeafSource, UnfoldLeaf};
+) -> Option<Vec<prebindgen_registry::unfold::UnfoldLeaf>> {
+    use prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
     Some(
         ext.struct_out_wires_of(registry.flat(), &s.name)?
             .into_iter()

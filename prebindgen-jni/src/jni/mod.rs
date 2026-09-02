@@ -39,6 +39,7 @@ pub use prebindgen_jni_runtime::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
     null_string, CachedIfaceMethod, JniBindingError,
 };
+use prebindgen_registry::unfold;
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
 pub(crate) use prebindgen_registry::{
     flat::Origin,
@@ -480,8 +481,8 @@ pub(crate) type NamedWire = (
 /// How a reach renders: its field steps, joined — the accessor call every leaf
 /// hangs off is the site's, not the value's, so it is dropped.
 #[cfg(test)]
-fn reach_of(path: &[crate::unfold::PathStep]) -> String {
-    use crate::unfold::PathStep;
+fn reach_of(path: &[unfold::PathStep]) -> String {
+    use prebindgen_registry::unfold::PathStep;
     path.iter()
         .filter_map(|step| match step {
             PathStep::Field { ident, .. } => Some(ident.to_string()),
@@ -495,8 +496,8 @@ fn reach_of(path: &[crate::unfold::PathStep]) -> String {
 /// the accessor call every leaf hangs off is the site's, not the value's, so it
 /// is dropped to line the two up.
 #[cfg(test)]
-fn leaf_reach(leaf: &crate::unfold::UnfoldLeaf) -> String {
-    use crate::unfold::LeafSource;
+fn leaf_reach(leaf: &unfold::UnfoldLeaf) -> String {
+    use prebindgen_registry::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
         LeafSource::Presence => format!("present({})", reach_of(&leaf.path)),
@@ -1394,7 +1395,7 @@ pub struct Declarations {
     /// callback argument comes apart. The registry holds none of this: it is
     /// told only which readings the decompositions need on the output side, and
     /// which leaves a callback argument's delivery depends on.
-    pub(crate) unfolded: std::cell::OnceCell<crate::unfold::Unfolded>,
+    pub(crate) unfolded: std::cell::OnceCell<unfold::Unfolded>,
 
     /// Present only after resolution has finished. All artifact writers reach
     /// derived JNI decisions through this one immutable store; the mutable

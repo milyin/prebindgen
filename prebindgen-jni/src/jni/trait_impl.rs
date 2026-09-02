@@ -806,10 +806,10 @@ impl Declarations {
         // this adapter's to keep, and the registry is told only the two things
         // it needs from them — which readings must cross on the output side,
         // and which leaves a callback argument's delivery depends on.
-        let mut unfolding = crate::unfold::Unfolding::new(registry.flat());
+        let mut unfolding = prebindgen_registry::unfold::Unfolding::new(registry.flat());
         let exports = registry.exports().clone();
         let accessors = registry.accessors().clone();
-        crate::unfold::apply(
+        prebindgen_registry::unfold::apply(
             &mut unfolding,
             &self.build_deconstructors(&registry),
             &exports,
@@ -817,7 +817,7 @@ impl Declarations {
         )?;
         // Synthesized by-value `data_class` decompositions: the leaves are
         // already built above; this wires them into fixed-builder plans.
-        crate::unfold::apply_value_structs(
+        prebindgen_registry::unfold::apply_value_structs(
             &mut unfolding,
             self.build_value_struct_decons(&registry),
             &exports,
@@ -825,7 +825,7 @@ impl Declarations {
         // The same wiring for a value whose alternatives are chosen at runtime
         // (a tag plus one leaf group per variant) rather than being a fixed
         // product.
-        crate::unfold::apply_sum_returns(
+        prebindgen_registry::unfold::apply_sum_returns(
             &mut unfolding,
             self.build_sum_decons(&registry),
             &exports,
@@ -834,7 +834,7 @@ impl Declarations {
         // `data_class` folds above, for String / scalar / handle elements, so
         // the list is built on the Kotlin side rather than through a Rust
         // `ArrayList`.
-        crate::unfold::apply_leaf_vec_folds(
+        prebindgen_registry::unfold::apply_leaf_vec_folds(
             &mut unfolding,
             self.build_leaf_vec_fold_elements(&registry),
             &exports,
@@ -857,7 +857,7 @@ impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
         registry: &(impl Conversions + ?Sized),
-    ) -> Vec<crate::unfold::ValueDecon> {
+    ) -> Vec<prebindgen_registry::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
             prebindgen_registry::flat::Type::Struct(s) => Some(s),
@@ -879,7 +879,7 @@ impl Declarations {
             if let Some(leaves) = crate::jni::synth_value_struct_leaves(self, registry, item_struct)
             {
                 if !leaves.is_empty() {
-                    out.push(crate::unfold::ValueDecon {
+                    out.push(prebindgen_registry::unfold::ValueDecon {
                         key,
                         source: reading.clone(),
                         leaves,
@@ -893,7 +893,7 @@ impl Declarations {
     pub(crate) fn build_sum_decons(
         &self,
         registry: &(impl Conversions + ?Sized),
-    ) -> Vec<crate::unfold::SumDecon> {
+    ) -> Vec<prebindgen_registry::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
@@ -915,7 +915,7 @@ impl Declarations {
             else {
                 continue;
             };
-            out.push(crate::unfold::SumDecon {
+            out.push(prebindgen_registry::unfold::SumDecon {
                 key: key.clone(),
                 // The sum's own reading, which the declaration answers with —
                 // `Variant::type_ref` exists for exactly this, and it works in

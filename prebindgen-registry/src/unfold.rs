@@ -27,11 +27,11 @@
 
 use std::collections::HashSet;
 
-use prebindgen_registry::{declared_target::check_declared_target, TypeKey};
+use crate::{declared_target::check_declared_target, TypeKey};
 
 mod error;
 mod walk;
-pub(crate) use walk::{
+pub use walk::{
     bind_hoists, conditional_arm, reach_leaf, segment, segments, segments_at, DecomposedLeaf,
     DeliveryBridge, LeafAt, LeafPlace, Reach, Slot,
 };
@@ -55,11 +55,11 @@ pub use self::{
 ///
 /// The adapter that declared the decompositions owns this. It holds no
 /// registry: every `apply*` function here reads signatures from the model and
-/// writes plans and [`Requirement`]s into this, which is what lets the plans be
+/// writes plans and [`Requirement`](crate::Requirement)s into this, which is what lets the plans be
 /// built at declaration time.
 pub struct Unfolding<'f> {
-    flat: &'f prebindgen_registry::flat::Flat,
-    requirements: Vec<prebindgen_registry::Requirement>,
+    flat: &'f crate::flat::Flat,
+    requirements: Vec<crate::Requirement>,
 
     /// The plans built so far.
     pub plans: Unfolded,
@@ -99,7 +99,7 @@ pub struct Unfolded {
 
 impl<'f> Unfolding<'f> {
     /// Start applying declarations against `flat`.
-    pub fn new(flat: &'f prebindgen_registry::flat::Flat) -> Self {
+    pub fn new(flat: &'f crate::flat::Flat) -> Self {
         Self {
             flat,
             requirements: Vec::new(),
@@ -108,13 +108,13 @@ impl<'f> Unfolding<'f> {
     }
 
     /// The model the declarations are read against.
-    pub fn flat(&self) -> &'f prebindgen_registry::flat::Flat {
+    pub fn flat(&self) -> &'f crate::flat::Flat {
         self.flat
     }
 
     /// The registrations asked for, in the order they were asked. Hand these to
     /// [`Decompositions::requirements`](crate::Decompositions::requirements).
-    pub fn requirements(&self) -> &[prebindgen_registry::Requirement] {
+    pub fn requirements(&self) -> &[crate::Requirement] {
         &self.requirements
     }
 
@@ -127,7 +127,7 @@ impl<'f> Unfolding<'f> {
     /// [`Decompositions::callback_arg_leaves`](crate::Decompositions::callback_arg_leaves).
     pub fn callback_arg_leaves(
         &self,
-    ) -> std::collections::HashMap<TypeKey, Vec<prebindgen_registry::flat::TypeRef>> {
+    ) -> std::collections::HashMap<TypeKey, Vec<crate::flat::TypeRef>> {
         self.plans
             .callback_arg_plans
             .iter()
@@ -147,9 +147,9 @@ impl<'f> Unfolding<'f> {
 
     /// Register `reading` (and its nested positions) as a required **output** so
     /// the resolver produces a converter for it.
-    fn require_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+    fn require_output(&mut self, reading: &crate::flat::TypeRef) {
         self.requirements
-            .push(prebindgen_registry::Requirement::Output(reading.clone()));
+            .push(crate::Requirement::Output(reading.clone()));
     }
 
     /// Register `reading` as an output cell **without** demanding a converter —
@@ -157,9 +157,9 @@ impl<'f> Unfolding<'f> {
     /// [`SumTag`](LeafSource::SumTag) selector needs: it names *which* sum it
     /// chooses between, and that sum has no whole-value output converter at all,
     /// so requiring one would fail resolution (#282).
-    fn reference_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+    fn reference_output(&mut self, reading: &crate::flat::TypeRef) {
         self.requirements
-            .push(prebindgen_registry::Requirement::Reference(reading.clone()));
+            .push(crate::Requirement::Reference(reading.clone()));
     }
 
     /// Drop `reading` from the required-output set. Used by
@@ -167,9 +167,9 @@ impl<'f> Unfolding<'f> {
     /// delivered element-by-element through a fold, the whole-collection
     /// converter is genuinely not needed — and for a `Vec` of opaque handles it
     /// cannot resolve at all, so requiring it would wrongly fail resolution.
-    fn unrequire_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+    fn unrequire_output(&mut self, reading: &crate::flat::TypeRef) {
         self.requirements
-            .push(prebindgen_registry::Requirement::Unrequire(reading.clone()));
+            .push(crate::Requirement::Unrequire(reading.clone()));
     }
 }
 
@@ -248,7 +248,7 @@ pub struct FieldRecord {
     /// returns. Asking the registry here was asking before registration
     /// (#266) — a lookup that could only miss, answered by a second source of
     /// readings that hid the ordering.
-    pub ty: prebindgen_registry::flat::TypeRef,
+    pub ty: crate::flat::TypeRef,
     /// How this field decomposes.
     pub decon: FieldDecon,
 }
@@ -287,7 +287,7 @@ impl DeconRecord {
 #[derive(Clone)]
 pub struct DeconstructorDecl {
     /// The type being decomposed, as an **identity** — see
-    /// [`ConstructorDecl::target`](prebindgen_registry::expand::ConstructorDecl::target).
+    /// [`ConstructorDecl::target`](crate::expand::ConstructorDecl::target).
     pub target: TypeKey,
     pub records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
@@ -535,7 +535,7 @@ pub fn apply(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen_registry::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let crate::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -552,7 +552,7 @@ pub fn apply(
                 // cannot see — `Box<T>` — stops reading as un-nameable.
                 if !matches!(
                     core_ty.unwrapped().kind(),
-                    prebindgen_registry::flat::TypeKind::Named { .. }
+                    crate::flat::TypeKind::Named { .. }
                 ) {
                     continue;
                 }
@@ -612,7 +612,7 @@ pub struct ValueDecon {
     /// Canonical key of the value struct (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The struct type (owned) the leaves decompose.
-    pub source: prebindgen_registry::flat::TypeRef,
+    pub source: crate::flat::TypeRef,
     /// Field-access leaves in foreign-signature / `fromParts` order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -668,7 +668,7 @@ pub struct SumDecon {
     /// Canonical key of the sum type (the `DeconId::Default` key).
     pub key: TypeKey,
     /// The enum type (owned) the leaves decompose.
-    pub source: prebindgen_registry::flat::TypeRef,
+    pub source: crate::flat::TypeRef,
     /// The tag leaf followed by every variant's group, in tag order.
     pub leaves: Vec<UnfoldLeaf>,
 }
@@ -737,7 +737,7 @@ pub fn apply_sum_returns(
 fn wire_fixed_decon(
     registry: &mut Unfolding<'_>,
     key: &TypeKey,
-    source: &prebindgen_registry::flat::TypeRef,
+    source: &crate::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<DeconId, UnfoldError> {
     let decon = DeconId::Default(key.to_string());
@@ -838,7 +838,7 @@ fn wire_fixed_callbacks(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen_registry::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let crate::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -919,7 +919,7 @@ pub fn apply_leaf_vec_folds(
     }
     let elem_keys = elements;
     // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
-    let is_nominated = |bare: &prebindgen_registry::flat::TypeRef| elem_keys.contains(&bare.key());
+    let is_nominated = |bare: &crate::flat::TypeRef| elem_keys.contains(&bare.key());
     for func in declared_fns {
         let Some(params) = registry.flat().function(&func).map(|f| f.params.clone()) else {
             continue;
@@ -964,7 +964,7 @@ pub fn apply_leaf_vec_folds(
             // The callback's argument types, read off the parameter's
             // classification. `TypeKind::Callback` carries them as `TypeRef`s, so
             // there is nothing to re-extract from the signature's syntax.
-            let prebindgen_registry::flat::TypeKind::Callback { args } = param.ty.kind() else {
+            let crate::flat::TypeKind::Callback { args } = param.ty.kind() else {
                 continue;
             };
             for arg_ty in args {
@@ -992,10 +992,7 @@ pub fn apply_leaf_vec_folds(
 /// Build a fixed-builder whole-element fold [`UnfoldPlan`] for a single-leaf
 /// element `vec_elem` (the `Vec`/slice element as written, keeping any leading
 /// `&` so `into_iter()`'s yield matches the element's own output converter).
-fn whole_leaf_fold_plan(
-    vec_elem: &prebindgen_registry::flat::TypeRef,
-    shape: UnfoldShape,
-) -> UnfoldPlan {
+fn whole_leaf_fold_plan(vec_elem: &crate::flat::TypeRef, shape: UnfoldShape) -> UnfoldPlan {
     UnfoldPlan {
         source: vec_elem.clone(),
         decon: None,
@@ -1058,8 +1055,8 @@ fn check_records(
 /// The arity layers over `ty`, the types they wrap, and the value underneath.
 ///
 /// A thin owned view over
-/// [`TypeRef::layer_stack`](prebindgen_registry::flat::TypeRef::layer_stack) and
-/// [`layer_types`](prebindgen_registry::flat::TypeRef::layer_types): the borrows are
+/// [`TypeRef::layer_stack`](crate::flat::TypeRef::layer_stack) and
+/// [`layer_types`](crate::flat::TypeRef::layer_types): the borrows are
 /// resolved to clones because these feed plan fields and registry calls that own
 /// their types. The classification is the model's; only the copying is local, and
 /// it happens **once**, where a value is stored — not on every question asked.
@@ -1070,7 +1067,7 @@ struct Layered {
     /// The arity layers, outermost first.
     shape: UnfoldShape,
     /// Every type on the way down, outermost first — what a registration walks.
-    layer_types: Vec<prebindgen_registry::flat::TypeRef>,
+    layer_types: Vec<crate::flat::TypeRef>,
     /// Past the borrow too: what actually crosses — as an **identity**, which
     /// is all its one consumer ever asked of it.
     core: TypeKey,
@@ -1085,7 +1082,7 @@ struct Layered {
 /// to be the scan admitting a type with no element. Re-deriving a reading from
 /// `spell()` — the round trip this signature makes impossible — is reasoning
 /// from the spelling, which is what `origin` is not for.
-fn peel(ty: &prebindgen_registry::flat::TypeRef) -> Layered {
+fn peel(ty: &crate::flat::TypeRef) -> Layered {
     let (shape, layered) = ty.layer_stack();
     let borrowed = layered.borrow_target();
     Layered {
@@ -1102,9 +1099,7 @@ fn peel(ty: &prebindgen_registry::flat::TypeRef) -> Layered {
 /// because the layer underneath is the thing it is about to classify. `Vec<T>`
 /// answers `(false, Vec<T>)` here and `(iterable, T)` there, and confusing the two
 /// turns "this arg is a collection" into "this arg is a T".
-fn peel_borrow(
-    ty: &prebindgen_registry::flat::TypeRef,
-) -> (bool, &prebindgen_registry::flat::TypeRef) {
+fn peel_borrow(ty: &crate::flat::TypeRef) -> (bool, &crate::flat::TypeRef) {
     match ty.borrow_target() {
         Some(inner) => (true, inner),
         None => (false, ty),
@@ -1115,7 +1110,7 @@ fn peel_borrow(
 /// `T == key` — the default-output match. `Result<_, _>` is NOT peeled, so a
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
-fn returns_type(ret: &prebindgen_registry::flat::TypeRef, key: &TypeKey) -> bool {
+fn returns_type(ret: &crate::flat::TypeRef, key: &TypeKey) -> bool {
     peel(ret).core == *key
 }
 
@@ -1320,7 +1315,7 @@ fn register_decon_spec(
     acc: &Deconstructors,
     decon: &DeconId,
     records: &[DeconRecord],
-    source: &prebindgen_registry::flat::TypeRef,
+    source: &crate::flat::TypeRef,
 ) -> Result<(), UnfoldError> {
     if registry.plans.decon_plans.contains_key(decon) {
         return Ok(());
@@ -1396,7 +1391,7 @@ fn build_plan(
     registry: &Unfolding<'_>,
     ed: &OutputDecl,
     by_ref: bool,
-    source: &prebindgen_registry::flat::TypeRef,
+    source: &crate::flat::TypeRef,
     shape: UnfoldShape,
     records: &[DeconRecord],
     decon: DeconId,
@@ -1444,7 +1439,7 @@ fn build_plan(
 /// decompositions clone the root identity, so any order is fine.)
 fn require_root_identity_last(
     by_ref: bool,
-    source: &prebindgen_registry::flat::TypeRef,
+    source: &crate::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     if by_ref {
@@ -1484,7 +1479,7 @@ fn flatten(
     acc: &Deconstructors,
     registry: &Unfolding<'_>,
     records: &[DeconRecord],
-    source: &prebindgen_registry::flat::TypeRef,
+    source: &crate::flat::TypeRef,
     path_prefix: &[PathStep],
     name_prefix: &[String],
     by_ref: bool,
@@ -1842,7 +1837,7 @@ fn flatten(
 /// names are explicit and emitted literally, so a collision is a declaration
 /// bug — never auto-resolved.
 fn require_unique_leaf_names(
-    source: &prebindgen_registry::flat::TypeRef,
+    source: &crate::flat::TypeRef,
     leaves: &[UnfoldLeaf],
 ) -> Result<(), UnfoldError> {
     let mut seen: HashSet<&str> = HashSet::new();
@@ -1888,7 +1883,7 @@ fn accessor_signature(
     registry: &Unfolding<'_>,
     func: &syn::Ident,
     expected: &TypeKey,
-) -> Result<prebindgen_registry::flat::TypeRef, UnfoldError> {
+) -> Result<crate::flat::TypeRef, UnfoldError> {
     let f = registry
         .flat()
         .function(&func)
@@ -1947,8 +1942,8 @@ fn accessor_consumes(registry: &Unfolding<'_>, func: &syn::Ident) -> bool {
 
 /// The shared mismatch, in this direction's vocabulary: an output accessor is
 /// declared to **take** the type the deconstructor decomposes.
-impl From<prebindgen_registry::declared_target::TargetMismatch> for UnfoldError {
-    fn from(m: prebindgen_registry::declared_target::TargetMismatch) -> Self {
+impl From<crate::declared_target::TargetMismatch> for UnfoldError {
+    fn from(m: crate::declared_target::TargetMismatch) -> Self {
         UnfoldError::AccessorTargetMismatch {
             accessor: m.func,
             takes: m.actual,

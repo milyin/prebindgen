@@ -116,6 +116,7 @@ pub mod registry;
 pub(crate) mod resolve;
 #[cfg(test)]
 pub(crate) mod test_util;
+pub mod unfold;
 pub mod write;
 
 /// The flat model itself lives in the separate `prebindgen-flat` crate —

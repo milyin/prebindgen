@@ -121,6 +121,22 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
 
 /// Test-only adapter exposing the same model-generated source tokens as a
 /// production emission callback.
+/// A model from item sources, for a test that needs a `Flat` and no registry
+/// around it.
+pub(crate) fn flat_with(sources: &[&str]) -> prebindgen_flat::flat::Flat {
+    let items = sources
+        .iter()
+        .map(|src| {
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, SourceLocation::default())
+        })
+        .collect::<Vec<_>>();
+    crate::Flat::builder()
+        .items(declare_referenced(items))
+        .build()
+        .expect("index")
+}
+
 pub(crate) trait EmitSourceForTest {
     fn emit_source(&self) -> proc_macro2::TokenStream;
 }

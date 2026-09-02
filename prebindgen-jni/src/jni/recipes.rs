@@ -141,7 +141,7 @@ impl Declarations {
         registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
-        use crate::unfold::{FieldDecon, FieldRecord};
+        use prebindgen_registry::unfold::{FieldDecon, FieldRecord};
         let decl = self
             .return_expand_decls
             .iter()
@@ -220,7 +220,7 @@ impl Declarations {
         registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<std::collections::HashMap<String, String>> {
-        use crate::unfold::FieldDecon;
+        use prebindgen_registry::unfold::FieldDecon;
         let decl = self
             .return_expand_decls
             .iter()
