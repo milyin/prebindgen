@@ -69,3 +69,70 @@ RUSTFLAGS="-D warnings" cargo build
 
 plus the CI formatting configuration, and a full build after which the
 committed generated bindings under `examples/` are byte-for-byte unchanged.
+
+## Figures so far
+
+Measured on `umbrella/registry-conveyor` after #680, by the same script and the
+same `grep`. **Interim, not closing**: #676 is open and its checklist still has
+steps 4, 5, 6's second half and 7 unchecked. The two figures are gates on those
+deliverables, not a substitute for them, and re-scoping the umbrella is the goal
+owner's call rather than this document's (#681 review).
+
+| figure | baseline (`eb4aa007`) | after #680 | change |
+|---|---|---|---|
+| 1 — adapter production lines in registry-facing files | 28,348 | **28,140** | −208 |
+| 2 — production lines across the three crates | 57,844 | **57,756** | −88 |
+
+Per crate:
+
+| crate | production | test items | test files | total |
+|---|---|---|---|---|
+| `prebindgen-registry` | 15,153 | 724 | 7,708 | 23,585 |
+| `prebindgen-c` | 8,658 | 81 | 5,826 | 14,565 |
+| `prebindgen-jni` | 33,945 | 1,582 | 21,826 | 57,353 |
+
+Both figures are below the baseline. The registry grew and both adapters
+shrank, which is the direction the criterion asks for; whether the umbrella has
+met it is decided when its steps are done, not here.
+
+## What has landed, and what each remaining step is blocked on
+
+Four children so far:
+
+- **#677** — `RegistryBuilder::generate` walks the crossings and drives every
+  `Compile` hook through one `Compiler` the registry holds. `convert_with`,
+  `Answer`, `Compiler::recipe_of` and both adapters' crossing walks are gone.
+- **#678** — the registry composes every `ShapePlan` and hands it to the
+  fragment. `Representation` loses `Bridge`, `TerminalCodec` and `Step`, and
+  both adapters' shape helpers go.
+- **#679** — `Intermediate` and `Niche`, which both adapters spelled the same
+  way, become registry types.
+- **#680** — the leaf model and the walk over it become
+  `prebindgen_registry::leaf`. Which **delivery** those leaves take stays with
+  the adapter, because it follows from what the target can receive.
+
+Steps 4, 5, 6's second half and 7 have not landed. Each was built or priced
+against the committed tree, and each rests on something #675 assumes about this
+code that the code does not bear out:
+
+1. **The registry cannot build a `Compile::Fragment`.** It is the adapter's
+   type and the registry never looks inside one. Step 4's "the registry wraps
+   the bridge into the fragment" therefore needs a second hook per shape, and
+   step 3's `GenerationPlan<C: Compile>` needs the adapter's `Compile` type to
+   be lifetime-free, which costs more than deleting `Representation` saves.
+2. **The declaration applier runs before the recipe table exists.**
+   `declare_into` runs it, and `recipes()` is built afterwards *from the plans it
+   produces*. So step 6's "readers of `Product` recipes" has nothing to read;
+   what is duplicated is the derivation, and one shared derivation fixes it.
+3. **Site enumeration is not language-neutral.** `prebindgen-c` skips a `()`
+   return because C has nothing to hand back there, and `prebindgen-jni` plans
+   one because the JVM does; JniGen answers a callback parameter whole, and has
+   synthesized const-getter sites C has no equivalent of. Step 7's "the registry
+   compiles every site" holds only with a per-adapter rule for each.
+
+A fourth assumption — that the registry cannot be told which recipe a site takes
+— was investigated and looks wrong: asking the adapter through a hook works. That
+is a **prototype on the branch `feat/676-step7-registry-owns-the-plan`, not part
+of this tree**: it has had no review, and a branch can change or go away. It is
+recorded here only as a direction a successor should try first, and this document
+otherwise describes the committed tree (#681 review).
