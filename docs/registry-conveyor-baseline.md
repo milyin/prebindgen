@@ -70,12 +70,15 @@ RUSTFLAGS="-D warnings" cargo build
 plus the CI formatting configuration, and a full build after which the
 committed generated bindings under `examples/` are byte-for-byte unchanged.
 
-## Closing figures
+## Figures so far
 
-Measured on `umbrella/registry-conveyor` when #676 closed, by the same script
-and the same `grep`.
+Measured on `umbrella/registry-conveyor` after #680, by the same script and the
+same `grep`. **Interim, not closing**: #676 is open and its checklist still has
+steps 4, 5, 6's second half and 7 unchecked. The two figures are gates on those
+deliverables, not a substitute for them, and re-scoping the umbrella is the goal
+owner's call rather than this document's (#681 review).
 
-| figure | baseline (`eb4aa007`) | closing | change |
+| figure | baseline (`eb4aa007`) | after #680 | change |
 |---|---|---|---|
 | 1 — adapter production lines in registry-facing files | 28,348 | **28,140** | −208 |
 | 2 — production lines across the three crates | 57,844 | **57,756** | −88 |
@@ -88,12 +91,13 @@ Per crate:
 | `prebindgen-c` | 8,658 | 81 | 5,826 | 14,565 |
 | `prebindgen-jni` | 33,945 | 1,582 | 21,826 | 57,353 |
 
-Both figures are below the baseline, which is the criterion #675 states. The
-registry grew and both adapters shrank, which is what the criterion is for.
+Both figures are below the baseline. The registry grew and both adapters
+shrank, which is the direction the criterion asks for; whether the umbrella has
+met it is decided when its steps are done, not here.
 
-## What the umbrella did, and what it did not
+## What has landed, and what each remaining step is blocked on
 
-Four children landed:
+Four children so far:
 
 - **#677** — `RegistryBuilder::generate` walks the crossings and drives every
   `Compile` hook through one `Compiler` the registry holds. `convert_with`,
@@ -107,8 +111,9 @@ Four children landed:
   `prebindgen_registry::leaf`. Which **delivery** those leaves take stays with
   the adapter, because it follows from what the target can receive.
 
-Steps 4, 5, 6's second half and 7 did not land. Each was built or priced, and
-each rests on something #675 assumes about this code that is not so:
+Steps 4, 5, 6's second half and 7 have not landed. Each was built or priced
+against the committed tree, and each rests on something #675 assumes about this
+code that the code does not bear out:
 
 1. **The registry cannot build a `Compile::Fragment`.** It is the adapter's
    type and the registry never looks inside one. Step 4's "the registry wraps
@@ -125,8 +130,9 @@ each rests on something #675 assumes about this code that is not so:
    synthesized const-getter sites C has no equivalent of. Step 7's "the registry
    compiles every site" holds only with a per-adapter rule for each.
 
-One of #675's assumptions was wrong and is now fixed: the registry **can** be
-told which recipe a site takes, by asking. `Compile::site_recipe` is on the
-branch `feat/676-step7-registry-owns-the-plan`, beside a `Compile::plan` that
-derives its per-site context from the `Bound` rather than carrying it. Neither
-shipped, because on their own they move lines without moving the first figure.
+A fourth assumption — that the registry cannot be told which recipe a site takes
+— was investigated and looks wrong: asking the adapter through a hook works. That
+is a **prototype on the branch `feat/676-step7-registry-owns-the-plan`, not part
+of this tree**: it has had no review, and a branch can change or go away. It is
+recorded here only as a direction a successor should try first, and this document
+otherwise describes the committed tree (#681 review).
