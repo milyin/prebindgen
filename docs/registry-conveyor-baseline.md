@@ -229,6 +229,21 @@ merged tree — and record what building it showed:
    state its own answers instead of walking the functions itself. Whether that
    is worth 185 lines on figure 1 is a judgement about the architecture rather
    than a measurement still to be taken, and it is the goal owner's to make.
+   **Step 7 adds to both sides rather than moving between them.** Measured
+   per crate against this umbrella's head:
+
+   | crate | umbrella | step 7 | delta |
+   |---|---|---|---|
+   | `prebindgen-registry` | 15,153 | 15,376 | +223 |
+   | `prebindgen-c` | 8,658 | 8,699 | +41 |
+   | `prebindgen-jni` | 33,945 | 34,090 | +145 |
+   | **total (figure 2)** | **57,756** | **58,165** | **+409** |
+
+   The adapters grew by 186 between them. So this is not a move whose boundary
+   cost is the problem — the thing step 7 exists to shrink got bigger. A hook the
+   registry calls and a `Bindings` entry the adapter writes are both adapter
+   code, and they cost more than the walks they replaced.
+
 4. **Step 6b's prototype shares the derivation, and leaves the migration
    around it unfinished.** Both are derived from one declaration's
    records: `Declarations::value_form_of` builds the recipe's list of `Reach`es,
@@ -263,3 +278,90 @@ Both are **prototypes, not part of this tree**: neither has had review, and a
 branch can change or go away. They are recorded here as the directions a
 successor should try first; this document otherwise describes the committed tree
 (#681 review).
+
+## What the figures settle, and what they leave open
+
+**Two criteria are in play, and which one governs has not been decided.**
+
+- **#675 as written**: figure 2 is bounded on *every step*, and figure 1 is
+  judged over the *completed plan* against the 28,348 baseline.
+- **#676's amendment**: figure 1 must not rise in any child, and figure 2 is
+  bounded once, at the umbrella's close, below 57,844.
+
+The amendment was written in this umbrella after four measurements, and **no goal
+owner has approved it** — #681's review said so, and #676's own description still
+says the decision has not been made. So the arithmetic below is given under both.
+
+### What is measured
+
+| step | figure 1 | figure 2 | what the number covers |
+|---|---|---|---|
+| 7, as prototyped | 28,325 (+185) | **+409** | the prototype that exists, built and green — **not** the whole step: one exported return still plans its leaves privately |
+| 6b | falls | ~+10 | the shared derivation only; the migration that would finish it is unpriced |
+| 4 | falls | ~+40 | the `Optional` shape only, not the rest of the step |
+
+Every one of these is a floor for work that is not finished. Step 7's is the
+firmest, because the thing it measures compiles and passes every gate — but
+#675's step 7 is "the registry compiles **every** site", and this prototype
+compiles all but one.
+
+### What is settled
+
+**The step 7 prototype cannot land as a child under either criterion**, because
+figure 2 rises by 409: #675 bounds figure 2 on every step, and the amendment
+leaves 88 lines of headroom at the close. Under #675 its figure 1 of 28,325 would
+have passed the 28,348 baseline; under the amendment it would not. That much the
+figures decide on their own.
+
+Why it costs what it does, per crate against this umbrella's head:
+
+| crate | umbrella | prototype | delta |
+|---|---|---|---|
+| `prebindgen-registry` | 15,153 | 15,376 | +223 |
+| `prebindgen-c` | 8,658 | 8,699 | +41 |
+| `prebindgen-jni` | 33,945 | 34,090 | +145 |
+| **total** | **57,756** | **58,165** | **+409** |
+
+The adapters grew by 186 between them, so this is not a move whose boundary cost
+is the problem — the thing step 7 exists to shrink got bigger. The plan assumed
+each move's boundary cost would be paid out of large deletions, and those had
+already happened: #513 took the Rust side, #620 took `struct_plan.rs`, #660 made
+the generation plan the assembly.
+
+### What is not settled
+
+**Whether a *completed* step 7 could come in under budget is unmeasured.** The
+completion — removing the `freeze_out_wires` fallback, which needs step 6b's
+migration — is unbuilt, and it can delete as well as add: the fallback and the
+duplicated derivation behind it are both code it would remove. So the figures
+prove this prototype cannot be the step 7 child; they do not prove that no
+completion or regrouping lets #676 close on its original terms.
+
+## The answers available
+
+1. **Build the completion and measure it.** The only path that might let #676
+   close on #675's terms. It requires step 6b's migration, which is unpriced
+   beyond the ~10 lines its shared derivation costs, and which finding 4 records
+   as blocked on the construct conversion those crossings were selecting.
+2. **Accept the prototype's cost as a re-scoped step 7.** Relax whichever
+   criterion governs, and waive the one exported return that still plans its
+   leaves privately — explicitly, as a known exception, since #675's step 7 says
+   every site. Then +409 is the price of the re-scoped step rather than evidence
+   about the original one.
+3. **Close on what landed.** Figure 1 is 28,140 against a baseline of 28,348 and
+   figure 2 is 57,756 against 57,844. **Under #675 this closes cleanly**: figure
+   1 is judged over the completed plan and passes, and every step lowered figure
+   2 or held it. **Under the amendment it needs one waiver**: the per-child rule
+   says no child may raise figure 1, and #680 took it from 28,138 to 28,140.
+   Being 208 below the baseline at the end does not repair a child that rose by
+   2, so closing this way under the amendment means treating #680 as a known
+   exception — it returned the leaf model to the registry and deleted nothing,
+   which is what a move looks like when the deletion has already happened
+   elsewhere.
+
+Nine children have merged under any of the three, and the vocabulary, the shared
+crossing walk, the registry's `ShapePlan`, the neutral leaf model and the
+findings above are all in the tree.
+
+This document chooses none of the three, and does not choose which criterion
+governs. It records what the figures decide and what they leave to be decided.
