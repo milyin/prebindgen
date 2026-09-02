@@ -5,10 +5,10 @@
 <a href=#5 id=5 data-nosnippet>5</a>//! is frozen with it — so a generator hands the emitter no items, no
 <a href=#6 id=6 data-nosnippet>6</a>//! prerequisites, and no questions to ask back.
 <a href=#7 id=7 data-nosnippet>7</a>//!
-<a href=#8 id=8 data-nosnippet>8</a>//! **Conversion is not here.** A generator builds those itself, one per
-<a href=#9 id=9 data-nosnippet>9</a>//! crossing, inside `RegistryBuilder::convert_with` — so there is no
-<a href=#10 id=10 data-nosnippet>10</a>//! `on_input_type`, no deferral, and no fixed-point loop retrying until it
-<a href=#11 id=11 data-nosnippet>11</a>//! converges.
+<a href=#8 id=8 data-nosnippet>8</a>//! **Conversion is not here.** A generator builds those in its
+<a href=#9 id=9 data-nosnippet>9</a>//! [`Compile`](crate::recipe::Compile) hooks, one per crossing, which
+<a href=#10 id=10 data-nosnippet>10</a>//! `RegistryBuilder::generate` drives — so there is no `on_input_type`, no
+<a href=#11 id=11 data-nosnippet>11</a>//! deferral, and no fixed-point loop retrying until it converges.
 <a href=#12 id=12 data-nosnippet>12</a>//!
 <a href=#13 id=13 data-nosnippet>13</a>//! [`ConverterImpl::converter`] is the stable identity of the wire-facing
 <a href=#14 id=14 data-nosnippet>14</a>//! converter. Its executable artifact is retained separately by the adapter's
@@ -64,9 +64,9 @@
 <a href=#64 id=64 data-nosnippet>64</a>    /// cross-direction — their required-ness flows through the registry's
 <a href=#65 id=65 data-nosnippet>65</a>    /// type-graph edges, not here).
 <a href=#66 id=66 data-nosnippet>66</a>    ///
-<a href=#67 id=67 data-nosnippet>67</a>    /// This is what an adapter reports back as an
-<a href=#68 id=68 data-nosnippet>68</a>    /// [`Answer`](crate::Answer), and what `propagate_required` walks to mark
-<a href=#69 id=69 data-nosnippet>69</a>    /// reachable crossings required.
+<a href=#67 id=67 data-nosnippet>67</a>    /// This is what a fragment answers with through
+<a href=#68 id=68 data-nosnippet>68</a>    /// [`Carrier::delegates_to`](crate::recipe::Carrier::delegates_to), and what
+<a href=#69 id=69 data-nosnippet>69</a>    /// `propagate_required` walks to mark reachable crossings required.
 <a href=#70 id=70 data-nosnippet>70</a>    ///
 <a href=#71 id=71 data-nosnippet>71</a>    /// **Identities, not spellings.** They are looked up and walked, never
 <a href=#72 id=72 data-nosnippet>72</a>    /// emitted. An adapter that composed the inner type keys it
@@ -101,9 +101,9 @@
 <a href=#101 id=101 data-nosnippet>101</a>/// What used to be here and is not any more: which items to build, how
 <a href=#102 id=102 data-nosnippet>102</a>/// composites decompose, and the wire form of each type. A generator states the
 <a href=#103 id=103 data-nosnippet>103</a>/// first two into the builder (`RegistryBuilder::export`,
-<a href=#104 id=104 data-nosnippet>104</a>/// `RegistryBuilder::decompose`) and answers the third inside
-<a href=#105 id=105 data-nosnippet>105</a>/// `RegistryBuilder::convert_with` — so nothing in core calls back to ask. Moving emission out too is what would delete this
-<a href=#106 id=106 data-nosnippet>106</a>/// trait entirely (prebindgen#251 phase E).
+<a href=#104 id=104 data-nosnippet>104</a>/// `RegistryBuilder::decompose`) and answers the third in its `Compile` hooks —
+<a href=#105 id=105 data-nosnippet>105</a>/// so nothing in core has to ask for it item by item. Moving emission out too is
+<a href=#106 id=106 data-nosnippet>106</a>/// what would delete this trait entirely (prebindgen#251 phase E).
 <a href=#107 id=107 data-nosnippet>107</a>///
 <a href=#108 id=108 data-nosnippet>108</a>/// Anything language-specific the rest of the pipeline must carry — a JNI
 <a href=#109 id=109 data-nosnippet>109</a>/// adapter's Kotlin class names and exception info, a C adapter's header names,

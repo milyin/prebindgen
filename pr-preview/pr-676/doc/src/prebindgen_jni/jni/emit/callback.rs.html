@@ -404,7 +404,7 @@
 <a href=#404 id=404 data-nosnippet>404</a>    operation: prebindgen_registry::OperationId,
 <a href=#405 id=405 data-nosnippet>405</a>    source: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
 <a href=#406 id=406 data-nosnippet>406</a>    args: <span class="kw-2">&amp;</span>[prebindgen_registry::flat::TypeRef],
-<a href=#407 id=407 data-nosnippet>407</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#407 id=407 data-nosnippet>407</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#408 id=408 data-nosnippet>408</a>    arg_fragments: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::compile::JFrag],
 <a href=#409 id=409 data-nosnippet>409</a>) -&gt; <span class="prelude-ty">Option</span>&lt;(syn::Type, JInvokePlan)&gt; {
 <a href=#410 id=410 data-nosnippet>410</a>    <span class="comment">// Human-readable tag for attach/log messages.

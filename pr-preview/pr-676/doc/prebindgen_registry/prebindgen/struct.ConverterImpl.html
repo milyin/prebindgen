@@ -38,9 +38,9 @@ looked up to build a wrapper (<code>Option&lt;X&gt;</code> → <code>[X]</code>,
 handle, string) and for a callback’s own converter (callback args are
 cross-direction — their required-ness flows through the registry’s
 type-graph edges, not here).</p>
-<p>This is what an adapter reports back as an
-<a href="../registry/struct.Answer.html" title="struct prebindgen_registry::registry::Answer"><code>Answer</code></a>, and what <code>propagate_required</code> walks to mark
-reachable crossings required.</p>
+<p>This is what a fragment answers with through
+<a href="../recipe/trait.Carrier.html#method.delegates_to" title="method prebindgen_registry::recipe::Carrier::delegates_to"><code>Carrier::delegates_to</code></a>, and what
+<code>propagate_required</code> walks to mark reachable crossings required.</p>
 <p><strong>Identities, not spellings.</strong> They are looked up and walked, never
 emitted. An adapter that composed the inner type keys it
 (<code>TypeKey::from_type</code>); one that read it off the model asks the reading

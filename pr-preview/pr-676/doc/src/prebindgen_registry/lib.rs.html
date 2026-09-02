@@ -19,8 +19,8 @@
 <a href=#19 id=19 data-nosnippet>19</a>//!
 <a href=#20 id=20 data-nosnippet>20</a>//! * **Says how the language represents Rust types on the wire** — it builds a
 <a href=#21 id=21 data-nosnippet>21</a>//!   [`ConverterImpl`] (a converter artifact identity plus its wire type) for
-<a href=#22 id=22 data-nosnippet>22</a>//!   each crossing the registry hands it, and gives them all back through
-<a href=#23 id=23 data-nosnippet>23</a>//!   `RegistryBuilder::convert_with`.
+<a href=#22 id=22 data-nosnippet>22</a>//!   each crossing the registry hands it, through the `Compile` hooks
+<a href=#23 id=23 data-nosnippet>23</a>//!   [`RegistryBuilder::generate`] drives.
 <a href=#24 id=24 data-nosnippet>24</a>//! * **Plans what the generated file holds** — every wrapper, converter,
 <a href=#25 id=25 data-nosnippet>25</a>//!   helper, mirror and constant is an artifact of the adapter's frozen
 <a href=#26 id=26 data-nosnippet>26</a>//!   [`Assembly`](write::Assembly), which the registry orders and
@@ -54,7 +54,7 @@
 <a href=#54 id=54 data-nosnippet>54</a>//! 1. [`flat::Flat::builder`] parses the declared sources into the model, and
 <a href=#55 id=55 data-nosnippet>55</a>//!    [`Registry::builder`] starts describing a binding over it.
 <a href=#56 id=56 data-nosnippet>56</a>//! 2. The generator states that binding, then
-<a href=#57 id=57 data-nosnippet>57</a>//!    [`RegistryBuilder::convert_with`] walks every crossing needing a
+<a href=#57 id=57 data-nosnippet>57</a>//!    [`RegistryBuilder::generate`] walks every crossing needing a
 <a href=#58 id=58 data-nosnippet>58</a>//!    conversion — inner types first, so each one can be built from those
 <a href=#59 id=59 data-nosnippet>59</a>//!    already done — and `build` names any gap.
 <a href=#60 id=60 data-nosnippet>60</a>//! 3. The resolved registry becomes a field of the built generator, whose
@@ -144,7 +144,7 @@
 <a href=#144 id=144 data-nosnippet>144</a>    niches::{NicheSlot, Niches},
 <a href=#145 id=145 data-nosnippet>145</a>    prebindgen::{ConverterImpl, NamePredicate, Prebindgen},
 <a href=#146 id=146 data-nosnippet>146</a>    registry::{
-<a href=#147 id=147 data-nosnippet>147</a>        Answer, Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
+<a href=#147 id=147 data-nosnippet>147</a>        Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
 <a href=#148 id=148 data-nosnippet>148</a>        NotExpressibleEntry, Registry, RegistryBuilder, Requirement, ScanError, TypeKey,
 <a href=#149 id=149 data-nosnippet>149</a>        TypeKeyParseError, WriteRustError,
 <a href=#150 id=150 data-nosnippet>150</a>    },

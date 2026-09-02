@@ -400,7 +400,7 @@
 <a href=#400 id=400 data-nosnippet>400</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_jobject_struct_input_plan(
 <a href=#401 id=401 data-nosnippet>401</a>    ext: <span class="kw-2">&amp;</span>Declarations,
 <a href=#402 id=402 data-nosnippet>402</a>    s: <span class="kw-2">&amp;</span>flat::Struct,
-<a href=#403 id=403 data-nosnippet>403</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#403 id=403 data-nosnippet>403</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#404 id=404 data-nosnippet>404</a>) -&gt; <span class="prelude-ty">Option</span>&lt;JObjectStructInputPlan&gt; {
 <a href=#405 id=405 data-nosnippet>405</a>    <span class="kw">let </span>struct_name = s.name.to_string();
 <a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">let </span><span class="kw-2">mut </span>fields = Vec::new();
@@ -790,7 +790,7 @@
 <a href=#790 id=790 data-nosnippet>790</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_jobject_sum_input_plan(
 <a href=#791 id=791 data-nosnippet>791</a>    ext: <span class="kw-2">&amp;</span>Declarations,
 <a href=#792 id=792 data-nosnippet>792</a>    v: <span class="kw-2">&amp;</span>flat::Variant,
-<a href=#793 id=793 data-nosnippet>793</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#793 id=793 data-nosnippet>793</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#794 id=794 data-nosnippet>794</a>) -&gt; <span class="prelude-ty">Option</span>&lt;JObjectSumInputPlan&gt; {
 <a href=#795 id=795 data-nosnippet>795</a>    <span class="kw">let </span>key = TypeKey::from_ident(<span class="kw-2">&amp;</span>v.name);
 <a href=#796 id=796 data-nosnippet>796</a>    <span class="kw">let </span>cfg = ext.types.get(<span class="kw-2">&amp;</span>key)<span class="question-mark">?</span>;
@@ -1199,7 +1199,7 @@
 <a href=#1199 id=1199 data-nosnippet>1199</a>
 <a href=#1200 id=1200 data-nosnippet>1200</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_flat_input_plan(
 <a href=#1201 id=1201 data-nosnippet>1201</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1202 id=1202 data-nosnippet>1202</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1202 id=1202 data-nosnippet>1202</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1203 id=1203 data-nosnippet>1203</a>    param_name: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#1204 id=1204 data-nosnippet>1204</a>    arg: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#1205 id=1205 data-nosnippet>1205</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;FlatInputPlan&gt;, FlatInputError&gt; {

@@ -540,7 +540,7 @@
 <a href=#540 id=540 data-nosnippet>540</a>/// `enum_shape` over a `syn::ItemEnum` to re-derive what the first had thrown
 <a href=#541 id=541 data-nosnippet>541</a>/// away.
 <a href=#542 id=542 data-nosnippet>542</a></span><span class="kw">fn </span>payload_enum&lt;<span class="lifetime">'r</span>&gt;(
-<a href=#543 id=543 data-nosnippet>543</a>    registry: <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw">impl </span>Conversions,
+<a href=#543 id=543 data-nosnippet>543</a>    registry: <span class="kw-2">&amp;</span><span class="lifetime">'r </span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#544 id=544 data-nosnippet>544</a>    key: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#545 id=545 data-nosnippet>545</a>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'r </span>prebindgen_registry::flat::Variant&gt; {
 <a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">match </span>registry.flat().declared_type(<span class="kw-2">&amp;</span>key.ident()<span class="question-mark">?</span>)<span class="question-mark">? </span>{
@@ -567,7 +567,7 @@
 <a href=#567 id=567 data-nosnippet>567</a>/// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
 <a href=#568 id=568 data-nosnippet>568</a>/// `syn::ItemEnum` to re-derive what the first had already thrown away.
 <a href=#569 id=569 data-nosnippet>569</a></span><span class="kw">fn </span>unit_enum&lt;<span class="lifetime">'r</span>&gt;(
-<a href=#570 id=570 data-nosnippet>570</a>    registry: <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw">impl </span>Conversions,
+<a href=#570 id=570 data-nosnippet>570</a>    registry: <span class="kw-2">&amp;</span><span class="lifetime">'r </span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#571 id=571 data-nosnippet>571</a>    key: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#572 id=572 data-nosnippet>572</a>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'r </span>prebindgen_registry::flat::Enum&gt; {
 <a href=#573 id=573 data-nosnippet>573</a>    <span class="kw">match </span>registry.flat().declared_type(<span class="kw-2">&amp;</span>key.ident()<span class="question-mark">?</span>)<span class="question-mark">? </span>{

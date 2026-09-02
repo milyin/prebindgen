@@ -41,7 +41,7 @@
 <a href=#41 id=41 data-nosnippet>41</a>/// walks agreeing was a property nothing checked.
 <a href=#42 id=42 data-nosnippet>42</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>synth_sum_leaves(
 <a href=#43 id=43 data-nosnippet>43</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#44 id=44 data-nosnippet>44</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#44 id=44 data-nosnippet>44</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#45 id=45 data-nosnippet>45</a>    ident: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#46 id=46 data-nosnippet>46</a>    sum: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Variant,
 <a href=#47 id=47 data-nosnippet>47</a>) -&gt; Vec&lt;<span class="kw">crate</span>::unfold::UnfoldLeaf&gt; {
