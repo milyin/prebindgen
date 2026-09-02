@@ -115,3 +115,30 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
 }
+
+/// A model from item sources, for a test that needs a `Flat` and no registry
+/// around it.
+pub(crate) fn flat_with(sources: &[&str]) -> prebindgen_registry::flat::Flat {
+    let items = sources
+        .iter()
+        .map(|src| {
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, prebindgen::SourceLocation::default())
+        })
+        .collect::<Vec<_>>();
+    prebindgen_registry::Flat::builder()
+        .items(declare_referenced(items))
+        .build()
+        .expect("index")
+}
+
+/// One type as the writer spells it, for a test comparing a reading's syntax.
+pub(crate) trait EmitSourceForTest {
+    fn emit_source(&self) -> proc_macro2::TokenStream;
+}
+
+impl EmitSourceForTest for prebindgen_registry::flat::TypeRef {
+    fn emit_source(&self) -> proc_macro2::TokenStream {
+        prebindgen_registry::RustWriter::for_test().emit_source_type(self)
+    }
+}

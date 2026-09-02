@@ -11,9 +11,10 @@
 //! outgoing wires and converter pipelines before either writer runs.
 
 use kotlin_codegen::KtType;
-use prebindgen_registry::{flat::TypeRef, unfold, Conversions};
+use prebindgen_registry::{flat::TypeRef, Conversions};
 
 use super::*;
+use crate::unfold;
 
 /// The lowered plan for one bound function: one [`PlanParam`] per source
 /// `syn::Signature` parameter (non-`Typed`/non-`Ident` args — `self`,
@@ -1179,7 +1180,7 @@ fn build_output(
     unfold_plan: Option<&unfold::UnfoldPlan>,
     error_plan: Option<&unfold::UnfoldPlan>,
 ) -> Result<FnOutputPlan, PlanError> {
-    use prebindgen_registry::unfold::{Delivery, UnfoldShape};
+    use crate::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
 
     // Callback delivery: the return is decomposed to a foreign builder/fold

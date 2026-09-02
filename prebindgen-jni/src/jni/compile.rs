@@ -13,7 +13,7 @@ use prebindgen_registry::{
         At, Bound, Carrier, Compile, Ctx, Direction, Frag, Mode, Part, Parts, Refusal, Validity,
         Yield,
     },
-    unfold, Conversions,
+    Conversions,
 };
 
 use super::*;
@@ -792,7 +792,7 @@ impl OutWire {
     /// what they read of a leaf is exactly what a wire states, so the switch is
     /// per call site rather than all at once.
     pub(crate) fn from_leaf(leaf: &unfold::UnfoldLeaf) -> Self {
-        use prebindgen_registry::unfold::LeafSource;
+        use crate::unfold::LeafSource;
         Self {
             name: leaf.name.clone(),
             out_ty: leaf.out_ty.clone(),

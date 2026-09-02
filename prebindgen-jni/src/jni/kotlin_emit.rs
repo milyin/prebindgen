@@ -29,9 +29,9 @@ use kotlin_codegen::{
     KtClass, KtClassKind, KtClassModifier, KtCode, KtCompanion, KtCtorParam, KtDecl, KtFile, KtFun,
     KtParam, KtProperty, KtType, KtVis,
 };
-use prebindgen_registry::unfold;
 
 use super::*;
+use crate::unfold;
 
 /// Banner line prepended to every generated `.kt` file, overriding
 /// `kotlin_codegen::KOTLIN_BANNER` so the file names the generator that

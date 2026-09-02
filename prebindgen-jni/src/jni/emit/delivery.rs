@@ -15,12 +15,10 @@
 //!
 //! [`DeliveryBridge`]: unfold::DeliveryBridge
 
-use prebindgen_registry::{
-    unfold::{self, bind_hoists, DeliveryBridge, PathStep},
-    Conversions,
-};
+use prebindgen_registry::Conversions;
 
 use super::*;
+use crate::unfold::{bind_hoists, DeliveryBridge, PathStep};
 
 /// Emit the output-expansion delivery body (output phase) for a function
 /// marked `.expand_output()`. The return value (`__out`) is decomposed by the

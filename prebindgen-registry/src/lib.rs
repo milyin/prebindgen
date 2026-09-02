@@ -109,6 +109,7 @@ pub mod domain;
 mod emit;
 pub mod expand;
 pub mod generation;
+pub mod leaf;
 pub mod niches;
 pub mod prebindgen;
 pub mod recipe;
@@ -116,7 +117,6 @@ pub mod registry;
 pub(crate) mod resolve;
 #[cfg(test)]
 pub(crate) mod test_util;
-pub mod unfold;
 pub mod write;
 
 /// The flat model itself lives in the separate `prebindgen-flat` crate —

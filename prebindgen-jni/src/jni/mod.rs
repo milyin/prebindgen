@@ -39,7 +39,6 @@ pub use prebindgen_jni_runtime::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
     null_string, CachedIfaceMethod, JniBindingError,
 };
-use prebindgen_registry::unfold;
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
 pub(crate) use prebindgen_registry::{
     flat::Origin,
@@ -50,6 +49,7 @@ pub(crate) use prebindgen_registry::{
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
 
+use crate::unfold;
 pub(crate) use crate::{
     jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
     util::snake_to_camel,
@@ -482,7 +482,7 @@ pub(crate) type NamedWire = (
 /// hangs off is the site's, not the value's, so it is dropped.
 #[cfg(test)]
 fn reach_of(path: &[unfold::PathStep]) -> String {
-    use prebindgen_registry::unfold::PathStep;
+    use crate::unfold::PathStep;
     path.iter()
         .filter_map(|step| match step {
             PathStep::Field { ident, .. } => Some(ident.to_string()),
@@ -497,7 +497,7 @@ fn reach_of(path: &[unfold::PathStep]) -> String {
 /// is dropped to line the two up.
 #[cfg(test)]
 fn leaf_reach(leaf: &unfold::UnfoldLeaf) -> String {
-    use prebindgen_registry::unfold::LeafSource;
+    use crate::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
         LeafSource::Presence => format!("present({})", reach_of(&leaf.path)),

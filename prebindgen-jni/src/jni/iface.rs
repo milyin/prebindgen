@@ -22,12 +22,10 @@
 //! determinism is a checked invariant rather than a convention.
 
 use kotlin_codegen::{KtCode, KtDecl, KtFun, KtFunInterface, KtFunSig, KtParam, KtType, KtVis};
-use prebindgen_registry::{
-    unfold::{dedup_names, DeconId, UnfoldPlan},
-    Conversions,
-};
+use prebindgen_registry::Conversions;
 
 use super::*;
+use crate::unfold::{dedup_names, DeconId, UnfoldPlan};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
