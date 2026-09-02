@@ -329,6 +329,20 @@ impl Bindings {
         BindingsBuilder::default()
     }
 
+    /// The crossing a declaration bound this site to, where one did.
+    ///
+    /// A site's crossing is usually the model's — a parameter crosses its own
+    /// type. It is not always: a declaration may bind a return to the value its
+    /// decomposition produces rather than to what the signature says. So a
+    /// caller enumerating sites asks here first and falls back to the model,
+    /// which is what keeps the two answers from disagreeing.
+    pub fn crossing_of(&self, site: &Site) -> Option<Crossing> {
+        self.bound
+            .get(site)?
+            .as_ref()
+            .map(|bound| bound.crossing.clone())
+    }
+
     /// The recipe this site takes.
     ///
     /// `None` when a declaration bound the site to [`Ask::Omit`]. A site nobody

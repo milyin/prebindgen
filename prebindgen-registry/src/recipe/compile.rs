@@ -347,6 +347,38 @@ pub trait Compile {
         }
     }
 
+    /// Whether this adapter plans this site at all.
+    ///
+    /// The registry enumerates the positions a value *can* cross at, which is
+    /// the model's answer. Whether a given target has anything to do with one is
+    /// not: `prebindgen-c` plans nothing for a `()` return because C hands
+    /// nothing back there, while a JVM binding does; and JniGen answers a
+    /// callback parameter whole, so planning it as a site would freeze the same
+    /// position twice.
+    ///
+    /// The default is that every enumerated site is planned. An adapter that
+    /// says no gets no plan and no refusal — a position it has nothing to say
+    /// about is not a failure.
+    fn plans_site(&self, _site: &Site, _crossing: &Crossing) -> bool {
+        true
+    }
+
+    /// Which recipe this site takes, where the binding table cannot say.
+    ///
+    /// `None` — the default, and the answer for every site of most adapters —
+    /// means the binding decides. An adapter answers otherwise where the choice
+    /// follows from something compiled rather than from the model: JniGen picks
+    /// its `pair` row for an optional whose payload turned out to be a
+    /// niche-free primitive, which is a fact about the compiled payload and not
+    /// about the declaration.
+    ///
+    /// Asked before the root fragment is built, so the answer chooses which
+    /// fragment that is. The row must still be declared, so choosing one cannot
+    /// invent a representation outside the table.
+    fn site_recipe(&mut self, _cx: &mut Ctx<'_, Self>, _bound: &Bound) -> Option<RecipeName> {
+        None
+    }
+
     /// Wrap the site's root fragment into a plan — the signature, the call, the
     /// cleanup.
     ///
@@ -570,42 +602,31 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Ok(None);
         };
-        self.plan(adapter, bound)
-    }
-
-    /// Compile one site through a named recipe chosen by the adapter.
-    ///
-    /// This is the dynamic counterpart of a binding-table
-    /// `Ask::Recipe`: useful where the choice follows from a compiled
-    /// destination fragment rather than from the Flat model alone. The row
-    /// must still be declared in the recipe table, so choosing it cannot
-    /// invent a representation outside the registry's model. An
-    /// adapter-selected recipe deliberately takes precedence over any binding
-    /// for the same site; callers use this entry point only after destination
-    /// compilation has supplied information the binding table cannot express.
-    pub fn site_recipe(
-        &mut self,
-        adapter: &mut C,
-        site: Site,
-        crossing: Crossing,
-        name: &RecipeName,
-    ) -> Result<Option<C::Plan>, CompileError<C::Error>> {
-        let crossing_key = crossing.key();
-        let Some(recipe) = self.recipes.key_of(&crossing_key, name).cloned() else {
-            return Err(RecipeError::NoSuchRecipe {
-                recipe: crossing_key.row(name.clone()),
-            }
-            .into());
+        // The adapter's own answer takes precedence, and only where it has one:
+        // a choice that follows from a compiled fragment is one the binding
+        // table cannot express.
+        let chosen = {
+            let mut cx = self.cx();
+            adapter.site_recipe(&mut cx, &bound)
         };
-        self.plan(
-            adapter,
-            Bound {
-                site,
-                crossing,
-                recipe,
-                origin: Origin::Adapter,
-            },
-        )
+        let bound = match chosen {
+            None => bound,
+            Some(name) => {
+                let crossing_key = bound.crossing.key();
+                let Some(recipe) = self.recipes.key_of(&crossing_key, &name).cloned() else {
+                    return Err(RecipeError::NoSuchRecipe {
+                        recipe: crossing_key.row(name),
+                    }
+                    .into());
+                };
+                Bound {
+                    recipe,
+                    origin: Origin::Adapter,
+                    ..bound
+                }
+            }
+        };
+        self.plan(adapter, bound)
     }
 
     fn plan(

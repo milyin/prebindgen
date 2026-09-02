@@ -3630,3 +3630,179 @@ fn a_value_form_states_what_it_hands_out() {
         "the recipe and the expansion plan disagree",
     );
 }
+
+/// A fallible function whose error type expands binds its return exactly once.
+///
+/// `build_output` accepts an output plan and an error plan together and gives
+/// the output one precedence, so the binding table makes that same single
+/// choice in one pass — two passes would answer one site twice and be refused
+/// as a rebind. This covers the error-plan half of that precedence.
+///
+/// It does not cover a function holding **both** plans, which I could not
+/// construct: an output plan is stored only when the decomposed type matches
+/// the return peeled of `&`, `Option` and `Vec`, and `Result` is not peeled
+/// there, so a fallible return takes no output expansion — a type-level one
+/// does not auto-apply, and a per-function one is refused with "the function's
+/// return type is `Result<T, E>`, not `T`". An assertion that no function holds
+/// both held across every fixture and every test (#684 review).
+///
+/// Nor does it claim the site plan is what the emitter reads: that is
+/// `a_decomposed_return_shares_one_wire_list_with_its_site`, which asserts the
+/// two hold the same allocation. It holds only where the source has a `parts`
+/// row; where it has none the leaves are still compiled privately.
+#[test]
+fn a_fallible_return_whose_error_expands_binds_once() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOneStruct {
+                    pub label: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZFailStruct {
+                    pub reason: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_to_struct(o: &ZOne) -> ZOneStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_fail_to_struct(e: &ZFail) -> ZFailStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        // The one function with both: its `Ok` type expands on the output side
+        // and its `Err` type expands on the error side.
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_one_try(n: i64) -> Result<ZOne, ZFail> {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .class(crate::ptr_class!(ZFail))
+                .fun(prebindgen_registry::fun!(z_one_try)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZOne)
+                .fields(prebindgen_registry::fields!(z_one_to_struct)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZFail)
+                .fields(prebindgen_registry::fields!(z_fail_to_struct)),
+        )
+        .build_with(registry)
+        .expect("a fallible function whose error expands resolves");
+
+    // The site the two passes would have collided on is planned, once.
+    let returns = gen
+        .declarations()
+        .site_plans
+        .borrow()
+        .iter()
+        .filter(|plan| {
+            plan.id().site().owner == "z_one_try"
+                && matches!(
+                    plan.id().site().role,
+                    prebindgen_registry::recipe::Role::Return
+                )
+        })
+        .count();
+    assert_eq!(returns, 1, "one return site for a fallible expanded return");
+}
+
+/// The walk enumerates the error arm of a fallible return, because a `Result`
+/// has two arms whatever reads it. JniGen throws the error rather than handing
+/// it back, so nothing crosses there — and it says so through `plans_site`,
+/// which is the binding's own answer.
+///
+/// The distinction this pins is between declining and refusing. Left to be
+/// attempted, the site reaches `JCompile::plan`, which has no `Role::Error` arm
+/// and returns a refusal; `build_with` drops every refusal, so the position
+/// would look handled while nothing had decided anything (#685 review).
+#[test]
+fn the_error_arm_of_a_fallible_return_is_declined_not_refused() {
+    use prebindgen_registry::recipe::{Compile, Crossing, Direction, Role, Site};
+
+    let loc = myflat_loc();
+    let items = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_one_try(n: i64) -> Result<ZOne, ZFail> {
+                unimplemented!()
+            }
+        )),
+        loc,
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let gen = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .class(crate::ptr_class!(ZFail))
+                .fun(prebindgen_registry::fun!(z_one_try)),
+        )
+        .build_with(registry)
+        .expect("a fallible return resolves");
+
+    let decls = gen.declarations();
+    // No plan for the position…
+    assert!(
+        decls
+            .site_plans
+            .borrow()
+            .iter()
+            .all(|plan| !matches!(plan.id().site().role, Role::Error)),
+        "JniGen planned an error arm"
+    );
+
+    // …and the reason is the decline, not a refusal that was thrown away. The
+    // return of the same function is planned, so this is not the walk skipping
+    // the function altogether.
+    let adapter = crate::jni::compile::JCompile {
+        decls,
+        declared_return: None,
+    };
+    let owner: syn::Ident = syn::parse_quote!(z_one_try);
+    let error_ty = gen
+        .registry()
+        .flat()
+        .function(&owner)
+        .and_then(|f| f.ret.fallible_parts().map(|(_, e)| e.clone()))
+        .expect("the fixture's return is fallible");
+    assert!(
+        !adapter.plans_site(
+            &Site {
+                owner: owner.clone(),
+                role: Role::Error,
+            },
+            &Crossing::new(error_ty, Direction::Deconstruct),
+        ),
+        "the error arm must be declined, so the walk never asks `plan` for it"
+    );
+}

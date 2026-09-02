@@ -510,6 +510,9 @@ impl RegistryBuilder {
 /// keeps its own conversions now, so that read is gone and the rest — the
 /// model, the decompositions — is complete from the moment it is declared.
 impl Conversions for RegistryBuilder {
+    fn expansion_plans(&self) -> &HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan> {
+        self.registry.expansion_plans()
+    }
     fn reading(&self, key: &TypeKey) -> Option<prebindgen_flat::flat::TypeRef> {
         self.registry.reading(key)
     }

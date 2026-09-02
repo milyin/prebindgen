@@ -657,6 +657,71 @@ impl Declarations {
         };
 
         let mut bound = Bindings::builder();
+
+        // What crosses at a **convert** return is not the value the signature
+        // names. The binding converts it first, and the converted value's type
+        // is the function's own output expansion answer, which no model can
+        // state. Bound here so the walk plans that crossing rather than the
+        // return type, and so the site needs no adapter-private planning.
+        // What an **expanded** return crosses. A return the binding converts or
+        // takes apart does not cross the value its signature names, and only
+        // the binding's own output expansion says what it does cross. Bound
+        // here so the walk plans that crossing, which is what lets the site be
+        // planned once rather than again at the emission site.
+        //
+        // One binding per function, in the same precedence `build_output`
+        // applies: a function may have BOTH an output expansion and an error
+        // plan, and the output expansion wins. Binding each in its own pass
+        // would answer one site twice and be refused as a rebind.
+        let mut owners: std::collections::BTreeSet<String> = Default::default();
+        let unfolded = self.unfolded();
+        owners.extend(unfolded.unfold_plans.keys().map(|f| f.to_string()));
+        owners.extend(unfolded.error_plans.keys().map(|f| f.to_string()));
+        for owner in owners {
+            let func = quote::format_ident!("{owner}");
+            let (crossed, ask) = match unfolded.unfold_plans.get(&func) {
+                // A convert hands over one converted value and takes whatever
+                // row that value has; a decomposition crosses the value it
+                // takes apart and asks for the row that names its parts.
+                Some(plan) => match plan.delivery {
+                    crate::unfold::Delivery::Return => match plan.convert_out_ty.as_ref() {
+                        Some(out) => (out.clone(), Ask::Default),
+                        None => continue,
+                    },
+                    crate::unfold::Delivery::Callback => {
+                        let crossing = Crossing::new(plan.source.clone(), Direction::Deconstruct);
+                        let ask = if recipes.key_of(&crossing.key(), &parts()).is_some() {
+                            Ask::Recipe(parts())
+                        } else {
+                            Ask::Default
+                        };
+                        (plan.source.clone(), ask)
+                    }
+                },
+                // No output expansion, but the binding peels the error: only
+                // the ok arm crosses at the return, because the error is thrown
+                // rather than crossed there.
+                None => {
+                    let Some((ok, _)) = model
+                        .function(&func)
+                        .and_then(|function| function.ret.fallible_parts())
+                    else {
+                        continue;
+                    };
+                    (ok.clone(), Ask::Default)
+                }
+            };
+            bound.bind(
+                Site {
+                    owner: func,
+                    role: prebindgen_registry::recipe::Role::Return,
+                },
+                Crossing::new(crossed, Direction::Deconstruct),
+                ask,
+                Origin::Function,
+            );
+        }
+
         let mut declared: Vec<TypeKey> = self
             .types
             .iter()

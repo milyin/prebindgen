@@ -16,7 +16,10 @@ use prebindgen_registry::{
         AbiLayout, ArtifactId, Cleanup, ConverterPlan, Failure, FragmentPlan, NichePlan,
         OperationId, Representation, ShapePlan, SiteId, SitePlan,
     },
-    recipe::{At, Carrier, Compile, Ctx, Frag, Mode, Parts, Refusal, Role, Validity, Yield},
+    recipe::{
+        At, Carrier, Compile, Crossing, Ctx, Frag, Mode, Parts, Refusal, Role, Site, Validity,
+        Yield,
+    },
     FragmentId,
 };
 
@@ -789,6 +792,18 @@ fn wrong(at: At<'_>, why: &str) -> Refusal<String> {
 }
 
 impl Compile for CCompile<'_> {
+    /// A `()` return is not a value C hands back, so there is no site there.
+    fn plans_site(&self, _site: &Site, crossing: &Crossing) -> bool {
+        // Nothing crosses at a `()` return: C has no value to hand back there.
+        if matches!(
+            crossing.spelled().kind(),
+            prebindgen_registry::flat::TypeKind::Unit
+        ) {
+            return false;
+        }
+        true
+    }
+
     type Fragment = CFrag;
     /// C signatures, calls, and callback arguments render from this immutable
     /// site plan.

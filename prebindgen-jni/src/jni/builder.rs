@@ -183,6 +183,7 @@ impl Default for Declarations {
         Self {
             tables: None,
             compiled: Default::default(),
+            planned_sites: Default::default(),
             site_plans: Default::default(),
             package: String::new(),
             fun_name_mangle: None,

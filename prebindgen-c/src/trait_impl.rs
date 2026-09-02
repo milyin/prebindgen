@@ -1,4 +1,8 @@
-use prebindgen_registry::{recipe::Direction, Building, Conversions, RegistryBuilder};
+use prebindgen_registry::{
+    generation::SitePlan,
+    recipe::{Direction, Role, Site},
+    Building, Conversions, RegistryBuilder,
+};
 
 use super::*;
 
@@ -217,97 +221,103 @@ impl CbindgenBuilder {
     /// wrappers and callback artifacts alike. Every callback argument is a root
     /// deconstruction site, so its ABI and encoder are the same frozen payload
     /// an ordinary return consumes.
-    fn compile_sites<'v>(
-        &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v>>,
-        registry: &'v Registry,
+    /// The declared callback a function's parameter is, if it is one: its key
+    /// and the argument types it delivers.
+    fn callback_of(
+        &self,
+        registry: &Registry,
+        owner: &syn::Ident,
+        param: usize,
+    ) -> Option<(CallbackKey, Vec<prebindgen_registry::flat::TypeRef>)> {
+        let ty = &registry.flat().function(owner)?.params.get(param)?.ty;
+        let args = ty.callback_args()?;
+        let key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
+        self.callbacks
+            .contains_key(&key)
+            .then(|| (key, args.to_vec()))
+    }
+
+    /// The callback artifacts the compiled sites feed, and the sites
+    /// themselves.
+    ///
+    /// The registry enumerates and compiles every site — which positions exist
+    /// is the model's answer, and the same whatever the target. What is left
+    /// here is C's: one callback artifact per distinct C signature, built from
+    /// the argument sites that reach it, and the two ABI checks a C callback
+    /// argument has to pass.
+    fn callback_artifacts(
+        &self,
+        registry: &Registry,
+        sites: Vec<(Site, SitePlan<crate::compile::CRepresentation>)>,
     ) -> Result<CPlanParts, String> {
-        use prebindgen_registry::{
-            generation::{ArtifactId, ArtifactInput, ArtifactPlan},
-            recipe::{Crossing, Direction, Role, Site},
-        };
+        use prebindgen_registry::generation::{ArtifactId, ArtifactInput, ArtifactPlan};
 
         struct PendingCallback {
             callback: crate::chain::CallbackArtifact,
             inputs: Vec<ArtifactInput>,
         }
 
-        let mut adapter = crate::compile::CCompile { gen: self };
-        let mut plans = Vec::new();
         let mut callbacks = std::collections::BTreeMap::<String, PendingCallback>::new();
-        let declared = self.declared_functions();
-        let mut names: Vec<&syn::Ident> = declared.iter().collect();
-        names.sort_by_key(|i| i.to_string());
-        for name in names {
-            let Some(f) = registry.flat().function(name) else {
-                continue;
-            };
-            for (index, param) in f.params.iter().enumerate() {
-                let site = Site {
-                    owner: name.clone(),
-                    role: Role::Param { index },
-                };
-                let crossing = Crossing::new(param.ty.clone(), Direction::Construct);
-                if let Some(plan) = compiler
-                    .site(&mut adapter, site, crossing)
-                    .map_err(|e| e.to_string())?
-                {
-                    plans.push(plan);
-                }
-
-                let Some(args) = param.ty.callback_args() else {
-                    continue;
-                };
-                let key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
-                let cfg = self.callbacks.get(&key).ok_or_else(|| {
-                    format!(
-                        "Cbindgen: callback parameter {} of `{name}` has no callback declaration",
-                        index
-                    )
-                })?;
-                let mut arguments = Vec::new();
-                for (arg_index, arg) in args.iter().enumerate() {
-                    let site = Site {
-                        owner: name.clone(),
-                        role: Role::CallbackArg {
-                            param: index,
-                            arg: arg_index,
-                        },
-                    };
-                    let crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
-                    let plan = compiler
-                        .site(&mut adapter, site, crossing)
-                        .map_err(|e| e.to_string())?
+        let mut arguments = std::collections::BTreeMap::<
+            (syn::Ident, usize),
+            Vec<crate::chain::CallbackArgument>,
+        >::new();
+        let mut plans = Vec::with_capacity(sites.len());
+        for (site, plan) in sites {
+            if let Role::CallbackArg { param, arg } = site.role {
+                let (key, args) =
+                    self.callback_of(registry, &site.owner, param)
                         .ok_or_else(|| {
                             format!(
-                                "Cbindgen: callback argument {arg_index} of parameter {index} in \
-                                 `{name}` was omitted"
-                            )
+                        "Cbindgen: callback parameter {param} of `{}` has no callback declaration",
+                        site.owner
+                    )
                         })?;
-                    let zero_copy_element = self.callback_slice_elem_wire_type_of(arg);
-                    let takeable = cfg.takeable.contains(&arg_index);
-                    if zero_copy_element.is_none() && !plan.abi().payload().has_abi() {
-                        return Err(format!(
-                            "Cbindgen: callback argument `{arg}` has no C ABI — deliver its parts \
-                             as separate callback arguments instead"
-                        ));
-                    }
-                    if takeable
-                        && !matches!(plan.abi().payload(), crate::compile::CValue::Direct { .. })
-                    {
-                        return Err(format!(
-                            "Cbindgen: takeable callback argument `{arg}` must have one direct C wire"
-                        ));
-                    }
-                    arguments.push(crate::chain::CallbackArgument {
+                let ty = &args[arg];
+                let zero_copy_element = self.callback_slice_elem_wire_type_of(ty);
+                let takeable = self.callbacks[&key].takeable.contains(&arg);
+                if zero_copy_element.is_none() && !plan.abi().payload().has_abi() {
+                    return Err(format!(
+                        "Cbindgen: callback argument `{ty}` has no C ABI — deliver its parts as \
+                         separate callback arguments instead"
+                    ));
+                }
+                if takeable
+                    && !matches!(plan.abi().payload(), crate::compile::CValue::Direct { .. })
+                {
+                    return Err(format!(
+                        "Cbindgen: takeable callback argument `{ty}` must have one direct C wire"
+                    ));
+                }
+                arguments
+                    .entry((site.owner.clone(), param))
+                    .or_default()
+                    .push(crate::chain::CallbackArgument {
                         site: plan.id().clone(),
                         value: plan.abi().payload().clone(),
                         zero_copy_element,
                         takeable,
                     });
-                    plans.push(plan);
-                }
-
+            }
+            plans.push(plan);
+        }
+        // Every declared callback PARAMETER gets an artifact, not only the ones
+        // that produced argument sites: `impl Fn()` delivers nothing and still
+        // needs its closure struct.
+        let mut owners: Vec<syn::Ident> = self.declared_functions().into_iter().collect();
+        owners.sort_by_key(|name| name.to_string());
+        for owner in owners {
+            let Some(function) = registry.flat().function(&owner) else {
+                continue;
+            };
+            for param in 0..function.params.len() {
+                let Some((key, args)) = self.callback_of(registry, &owner, param) else {
+                    continue;
+                };
+                let arguments = arguments
+                    .remove(&(owner.clone(), param))
+                    .unwrap_or_default();
+                let ty = function.params[param].ty.clone();
                 let inputs = arguments
                     .iter()
                     .map(|argument| ArtifactInput::Site {
@@ -315,13 +325,12 @@ impl CbindgenBuilder {
                         slots: argument.value.slots(),
                     })
                     .collect();
-
                 let callback_name = self.callback_c_name(&key);
                 let callback = crate::chain::CallbackArtifact::new(
                     self.callback_c_ident(&key),
-                    crate::compile::callback_operation(&param.ty),
-                    param.ty.clone(),
-                    args.to_vec(),
+                    crate::compile::callback_operation(&ty),
+                    ty,
+                    args,
                     arguments,
                 );
                 match callbacks.entry(callback_name.clone()) {
@@ -331,37 +340,16 @@ impl CbindgenBuilder {
                     std::collections::btree_map::Entry::Occupied(mut entry) => {
                         if entry.get().callback.signature() != callback.signature() {
                             return Err(format!(
-                                "Cbindgen: callback name `{callback_name}` resolves to incompatible C ABIs"
+                                "Cbindgen: callback name `{callback_name}` resolves to \
+                                 incompatible C ABIs"
                             ));
                         }
                         entry.get_mut().inputs.extend(inputs);
                     }
                 }
             }
-            // A `Result`'s arms are their own sites; the whole `Result` is not
-            // a value C ever holds, so it is not one.
-            let returns: Vec<(Role, &prebindgen_registry::flat::TypeRef)> =
-                match f.ret.fallible_parts() {
-                    Some((ok, err)) => vec![(Role::Return, ok), (Role::Error, err)],
-                    None => vec![(Role::Return, &f.ret)],
-                };
-            for (role, ty) in returns {
-                if matches!(ty.kind(), prebindgen_registry::flat::TypeKind::Unit) {
-                    continue;
-                }
-                let site = Site {
-                    owner: name.clone(),
-                    role,
-                };
-                let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
-                if let Some(plan) = compiler
-                    .site(&mut adapter, site, crossing)
-                    .map_err(|e| e.to_string())?
-                {
-                    plans.push(plan);
-                }
-            }
         }
+
         let artifacts = callbacks
             .into_iter()
             .map(|(name, pending)| {
@@ -838,21 +826,28 @@ impl CbindgenBuilder {
         let registry = declared.build()?;
         // Freeze every ordinary and callback position plus the callback artifacts
         // that consume those sites.
+        // The registry enumerates and compiles every site; what comes back to
+        // this binding is one callback artifact per distinct C signature.
         let CPlanParts {
             sites,
             mut artifacts,
         } = {
-            let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                &registry,
+            let carried = self.compiled.borrow().clone();
+            let (sited, store) = registry.compile_sites(
+                &mut crate::compile::CCompile { gen: &self },
                 &recipes,
                 &bindings,
-                self.compiled.borrow().clone(),
+                carried,
             );
-            let parts = self
-                .compile_sites(&mut compiler, &registry)
-                .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
-            *self.compiled.borrow_mut() = compiler.finish();
-            parts
+            *self.compiled.borrow_mut() = store;
+            if let Some((site, e)) = sited.refusals.into_iter().next() {
+                return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                    message: format!("Cbindgen: {site} could not be planned: {e}"),
+                }
+                .into());
+            }
+            self.callback_artifacts(&registry, sited.plans)
+                .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?
         };
         artifacts.extend(
             self.type_artifact_plans(&registry)

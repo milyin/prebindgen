@@ -167,6 +167,18 @@ impl crate::Conversions for prebindgen_flat::flat::Flat {
     fn flat(&self) -> &prebindgen_flat::flat::Flat {
         self
     }
+    fn expansion_plans(
+        &self,
+    ) -> &std::collections::HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan> {
+        // A bare model has no binding around it, so nothing expanded.
+        thread_local! {
+            static NONE: &'static std::collections::HashMap<
+                (syn::Ident, syn::Ident),
+                crate::expand::FoldPlan,
+            > = Box::leak(Box::default());
+        }
+        NONE.with(|none| *none)
+    }
     fn reading(&self, key: &prebindgen_flat::TypeKey) -> Option<prebindgen_flat::flat::TypeRef> {
         let ty: syn::Type = syn::parse_str(key.as_str()).ok()?;
         self.classify(&ty).ok()

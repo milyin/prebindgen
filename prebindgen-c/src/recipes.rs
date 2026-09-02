@@ -281,6 +281,37 @@ impl CbindgenBuilder {
         use prebindgen_registry::recipe::{Ask, Bindings, Crossing, Origin as Asked, Site};
 
         let mut bound = Bindings::builder();
+
+        // C hands a fallible function's ok value back through an out-parameter
+        // and its error through the return, so what crosses at the **return**
+        // site is the ok arm alone. The error arm is its own site, which the
+        // walk enumerates because a `Result` has two arms whatever reads it.
+        let mut fallible: Vec<&syn::Ident> = model
+            .functions()
+            .filter(|function| function.ret.fallible_parts().is_some())
+            .map(|function| &function.name)
+            .collect();
+        fallible.sort_by_key(|name| name.to_string());
+        for name in fallible {
+            let Some((ok, _)) = model
+                .function(name)
+                .and_then(|function| function.ret.fallible_parts())
+            else {
+                continue;
+            };
+            bound.bind(
+                Site {
+                    owner: name.clone(),
+                    role: prebindgen_registry::recipe::Role::Return,
+                },
+                Crossing::new(
+                    ok.clone(),
+                    prebindgen_registry::recipe::Direction::Deconstruct,
+                ),
+                Ask::Default,
+                Asked::Function,
+            );
+        }
         // A union's payload reads like a struct's field for `bool` and
         // `String`, and needs a reading of its own where it is a `Box` over a
         // declared handle — see [`payload`].
