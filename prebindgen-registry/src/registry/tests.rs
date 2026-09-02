@@ -1803,6 +1803,8 @@ fn one_marked_row_refusing_does_not_silence_the_next() {
         fn yields(&self) -> Yield {
             self.0.clone()
         }
+
+        fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
     }
 
     impl Rows {

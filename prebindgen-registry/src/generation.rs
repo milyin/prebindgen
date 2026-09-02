@@ -530,25 +530,12 @@ impl std::error::Error for IdentityError {}
 pub trait Representation {
     /// A syntax-free identity for a private Rust carrier in a converter graph.
     type Intermediate: Clone + Eq;
-    /// One adapter-declared conversion between two graph values.
-    type Step;
     /// Frozen adapter artifact that renders this fragment's private converter.
     ///
     /// The registry owns its dependency-ordered placement but treats the
     /// payload as opaque. [`FragmentPlan`] represents fragments without a
     /// standalone converter explicitly.
     type ConverterArtifact;
-    /// Terminal conversion at an [`Atomic`](ShapePlan::Atomic) shape.
-    type TerminalCodec;
-    /// The control flow of one composite shape.
-    ///
-    /// Packing a product, gating an optional, building or traversing a
-    /// sequence, selecting a choice arm, and constructing or invoking a
-    /// callable are all the same kind of answer: what the adapter does at a
-    /// shape whose children carry the values. The [`ShapePlan`] variant that
-    /// holds the bridge says which of those it is, so the adapter does not
-    /// need a separate type per variant to know.
-    type Bridge;
     /// One semantic niche identity. Equal values denote the same bit domain.
     type Niche: Clone + Eq + Hash;
     /// A cleanup operation.
@@ -713,7 +700,7 @@ pub enum ChainValue<I> {
 pub struct ConverterStep<R: Representation> {
     from: ChainValue<R::Intermediate>,
     into: ChainValue<R::Intermediate>,
-    operation: R::Step,
+    operation: OperationId,
     failure: Failure,
     cleanup: Cleanup<R::Cleanup>,
 }
@@ -723,7 +710,7 @@ impl<R: Representation> ConverterStep<R> {
     pub fn new(
         from: ChainValue<R::Intermediate>,
         into: ChainValue<R::Intermediate>,
-        operation: R::Step,
+        operation: OperationId,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
     ) -> Self {
@@ -747,7 +734,7 @@ impl<R: Representation> ConverterStep<R> {
     }
 
     /// Adapter-owned semantic operation.
-    pub fn operation(&self) -> &R::Step {
+    pub fn operation(&self) -> &OperationId {
         &self.operation
     }
 
@@ -783,7 +770,6 @@ pub enum ConversionChain<R: Representation> {
 impl<R: Representation> Clone for ConversionChain<R>
 where
     R::Intermediate: Clone,
-    R::Step: Clone,
     R::Cleanup: Clone,
 {
     fn clone(&self) -> Self {
@@ -797,7 +783,6 @@ where
 impl<R: Representation> Clone for ConverterStep<R>
 where
     R::Intermediate: Clone,
-    R::Step: Clone,
     R::Cleanup: Clone,
 {
     fn clone(&self) -> Self {
@@ -822,86 +807,48 @@ impl<R: Representation> ConversionChain<R> {
 }
 
 /// The registry-composed converter operation for one fragment.
-pub enum ShapePlan<R: Representation> {
+#[derive(Clone)]
+pub enum ShapePlan {
     /// Convert one wire leaf to or from the fragment's intermediate.
-    ///
-    /// The codec remains present when the fragment has a staged
-    /// [`ConversionChain`]; it may be an identity operation at this boundary.
-    Atomic(R::TerminalCodec),
+    Atomic(OperationId),
     /// Pack or unpack all fixed positions.
     Product {
-        /// Adapter representation operation.
-        bridge: FixedArity<R::Bridge>,
+        /// This fragment's converter identity.
+        bridge: FixedArity<OperationId>,
         /// Ordered source parts.
         parts: Vec<FragmentUse>,
     },
     /// Absent/present control flow around one value.
     Optional {
-        /// Adapter representation operation.
-        bridge: R::Bridge,
+        /// This fragment's converter identity.
+        bridge: OperationId,
         /// The present value.
         value: FragmentUse,
     },
     /// Builder or traversal control flow around one element type.
     Sequence {
-        /// Adapter representation operation.
-        bridge: R::Bridge,
+        /// This fragment's converter identity.
+        bridge: OperationId,
         /// The repeated element.
         element: FragmentUse,
     },
     /// Tagged selection among ordered arms.
     Choice {
-        /// Adapter representation operation and arm contracts.
-        bridge: ChoiceArity<R::Bridge>,
+        /// This fragment's converter identity, and the arm contracts.
+        bridge: ChoiceArity<OperationId>,
         /// Parts in every arm, in tag and then position order.
         arms: Vec<Vec<FragmentUse>>,
     },
     /// Foreign callable construction and later argument delivery.
     Invoke {
-        /// Adapter callable operation.
-        bridge: FixedArity<R::Bridge>,
+        /// This fragment's converter identity.
+        bridge: FixedArity<OperationId>,
         /// Callback arguments. Their direction is opposite the callable's.
         arguments: Vec<FragmentUse>,
     },
 }
 
-// Cloned where a shape travels with the fragment that owns it — the same
-// reason, and the same shape of impl, as [`ConversionChain`]'s above:
-// `derive(Clone)` would ask `R: Clone`, and `R` names an adapter's associated
-// types rather than being a value.
-impl<R: Representation> Clone for ShapePlan<R>
-where
-    R::TerminalCodec: Clone,
-    R::Bridge: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::Atomic(codec) => Self::Atomic(codec.clone()),
-            Self::Product { bridge, parts } => Self::Product {
-                bridge: bridge.clone(),
-                parts: parts.clone(),
-            },
-            Self::Optional { bridge, value } => Self::Optional {
-                bridge: bridge.clone(),
-                value: value.clone(),
-            },
-            Self::Sequence { bridge, element } => Self::Sequence {
-                bridge: bridge.clone(),
-                element: element.clone(),
-            },
-            Self::Choice { bridge, arms } => Self::Choice {
-                bridge: bridge.clone(),
-                arms: arms.clone(),
-            },
-            Self::Invoke { bridge, arguments } => Self::Invoke {
-                bridge: bridge.clone(),
-                arguments: arguments.clone(),
-            },
-        }
-    }
-}
-
-impl<R: Representation> ShapePlan<R> {
+impl ShapePlan {
     fn uses(&self) -> Vec<&FragmentUse> {
         match self {
             Self::Atomic(_) => Vec::new(),
@@ -923,7 +870,7 @@ impl<R: Representation> ShapePlan<R> {
 
 /// Complete syntax-free converter graph for one fragment.
 pub struct ConverterPlan<R: Representation> {
-    shape: ShapePlan<R>,
+    shape: ShapePlan,
     chain: ConversionChain<R>,
     niches: NichePlan<R::Niche>,
     failure: Failure,
@@ -933,7 +880,7 @@ pub struct ConverterPlan<R: Representation> {
 impl<R: Representation> ConverterPlan<R> {
     /// Freeze one converter operation graph.
     pub fn new(
-        shape: ShapePlan<R>,
+        shape: ShapePlan,
         niches: NichePlan<R::Niche>,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
@@ -950,7 +897,7 @@ impl<R: Representation> ConverterPlan<R> {
     /// Freeze a converter whose selected shape is joined to the source by
     /// explicit adapter conversion steps.
     pub fn with_chain(
-        shape: ShapePlan<R>,
+        shape: ShapePlan,
         chain: ConversionChain<R>,
         niches: NichePlan<R::Niche>,
         failure: Failure,
@@ -971,7 +918,7 @@ impl<R: Representation> ConverterPlan<R> {
     }
 
     /// The selected shape and representation operation.
-    pub fn shape(&self) -> &ShapePlan<R> {
+    pub fn shape(&self) -> &ShapePlan {
         &self.shape
     }
 

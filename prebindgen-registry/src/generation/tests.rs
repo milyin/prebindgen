@@ -11,15 +11,21 @@ struct Fake;
 
 impl Representation for Fake {
     type Intermediate = &'static str;
-    type Step = &'static str;
     type ConverterArtifact = &'static str;
-    type TerminalCodec = &'static str;
-    type Bridge = &'static str;
     type Niche = u8;
     type Cleanup = &'static str;
     type FailureRoute = &'static str;
     type AbiLayout = &'static str;
     type Artifact = &'static str;
+}
+
+/// A distinct operation identity for a shape bridge or a chain step. These
+/// tests only need to be able to tell two of them apart.
+fn op(label: &str) -> OperationId {
+    OperationId::shared(
+        ArtifactId::new("test-operation", label).expect("a label is never empty"),
+        Direction::Construct,
+    )
 }
 
 fn model() -> Flat {
@@ -145,7 +151,7 @@ fn atomic(model: &Flat, id: FragmentId, failure: Failure, mode: Mode) -> Fragmen
         ty(model, id.spelling().as_str()),
         "intermediate",
         ConverterPlan::new(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
             failure,
             Cleanup::None,
@@ -233,7 +239,7 @@ fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
         "pair intermediate",
         ConverterPlan::new(
             ShapePlan::Product {
-                bridge: FixedArity::new(2, "tuple"),
+                bridge: FixedArity::new(2, op("tuple")),
                 parts: vec![
                     FragmentUse::new(leaf.clone(), requirement.clone()),
                     FragmentUse::new(leaf.clone(), requirement),
@@ -415,7 +421,7 @@ fn freeze_reports_arity_niche_ownership_and_validity_errors() {
         "pair",
         ConverterPlan::new(
             ShapePlan::Product {
-                bridge: FixedArity::new(2, "tuple"),
+                bridge: FixedArity::new(2, op("tuple")),
                 parts: vec![FragmentUse::new(
                     leaf.clone(),
                     yield_of(&leaf, Mode::Exclusive, Validity::SelfSufficient),
@@ -432,7 +438,7 @@ fn freeze_reports_arity_niche_ownership_and_validity_errors() {
         ty(&model, "Leaf"),
         "leaf",
         ConverterPlan::new(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
             Failure::Infallible,
             Cleanup::None,
@@ -465,7 +471,7 @@ fn invoke_children_must_use_the_opposite_direction() {
         "callable",
         ConverterPlan::new(
             ShapePlan::Invoke {
-                bridge: FixedArity::new(1, "invoke"),
+                bridge: FixedArity::new(1, op("invoke")),
                 arguments: vec![FragmentUse::new(
                     argument.clone(),
                     yield_of(&argument, Mode::Owned, Validity::SelfSufficient),
@@ -549,19 +555,19 @@ fn atomic_codec_and_staged_chain_are_distinct_operations() {
         ty(&model, "Leaf"),
         "jint",
         ConverterPlan::with_chain(
-            ShapePlan::Atomic("read jint wire"),
+            ShapePlan::Atomic(op("read jint wire")),
             ConversionChain::Steps(vec![
                 ConverterStep::new(
                     ChainValue::Intermediate("jint"),
                     ChainValue::Intermediate("i32"),
-                    "normalize jint",
+                    op("normalize jint"),
                     Failure::Infallible,
                     Cleanup::None,
                 ),
                 ConverterStep::new(
                     ChainValue::Intermediate("i32"),
                     ChainValue::Source,
-                    "construct Percent",
+                    op("construct Percent"),
                     Failure::Fallible,
                     Cleanup::OnFailure("drop intermediate"),
                 ),
@@ -583,12 +589,12 @@ fn atomic_codec_and_staged_chain_are_distinct_operations() {
     let ShapePlan::Atomic(codec) = converter.shape() else {
         panic!("staged leaf must retain its terminal wire codec");
     };
-    assert_eq!(*codec, "read jint wire");
+    assert_eq!(*codec, op("read jint wire"));
     assert_eq!(fragment.intermediate(), &"jint");
     let chain = converter.chain();
     assert_eq!(chain.steps().len(), 2);
-    assert_eq!(*chain.steps()[0].operation(), "normalize jint");
-    assert_eq!(*chain.steps()[1].operation(), "construct Percent");
+    assert_eq!(*chain.steps()[0].operation(), op("normalize jint"));
+    assert_eq!(*chain.steps()[1].operation(), op("construct Percent"));
 }
 
 #[test]
@@ -602,7 +608,7 @@ fn malformed_conversion_chains_are_rejected() {
         ty(&model, "Leaf"),
         "Leaf",
         ConverterPlan::with_chain(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             ConversionChain::Steps(vec![]),
             NichePlan::none(),
             Failure::Infallible,
@@ -620,11 +626,11 @@ fn malformed_conversion_chains_are_rejected() {
         ty(&model, "Leaf"),
         "Leaf",
         ConverterPlan::with_chain(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             ConversionChain::Steps(vec![ConverterStep::new(
                 ChainValue::Intermediate("not jint"),
                 ChainValue::Intermediate("i32"),
-                "convert",
+                op("convert"),
                 Failure::Fallible,
                 Cleanup::None,
             )]),
@@ -676,7 +682,7 @@ fn fragment_identity_duplicates_and_yield_type_are_checked() {
         ty(&model, "Leaf"),
         "Leaf",
         ConverterPlan::new(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
             Failure::Infallible,
             Cleanup::None,
@@ -694,7 +700,7 @@ fn fragment_identity_duplicates_and_yield_type_are_checked() {
         ty(&model, "Pair"),
         "Pair",
         ConverterPlan::new(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
             Failure::Infallible,
             Cleanup::None,
@@ -711,7 +717,7 @@ fn fragment_identity_duplicates_and_yield_type_are_checked() {
         ty(&model, "Leaf"),
         "Leaf",
         ConverterPlan::new(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
             Failure::Infallible,
             Cleanup::None,
@@ -740,7 +746,7 @@ fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
         "Pair",
         ConverterPlan::new(
             ShapePlan::Product {
-                bridge: FixedArity::new(1, "tuple"),
+                bridge: FixedArity::new(1, op("tuple")),
                 parts: vec![FragmentUse::new(
                     leaf.clone(),
                     yield_of(&leaf, Mode::Owned, Validity::SelfSufficient),
@@ -772,7 +778,7 @@ fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
             "Pair",
             ConverterPlan::new(
                 ShapePlan::Product {
-                    bridge: FixedArity::new(1, "tuple"),
+                    bridge: FixedArity::new(1, op("tuple")),
                     parts: vec![pair_part],
                 },
                 NichePlan::none(),
@@ -787,7 +793,7 @@ fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
             "Leaf",
             ConverterPlan::new(
                 ShapePlan::Product {
-                    bridge: FixedArity::new(1, "tuple"),
+                    bridge: FixedArity::new(1, op("tuple")),
                     parts: vec![leaf_part],
                 },
                 NichePlan::none(),
@@ -838,7 +844,7 @@ fn site_identity_recipe_contract_and_cleanup_are_checked() {
         ty(&model, "Leaf"),
         "Leaf",
         ConverterPlan::new(
-            ShapePlan::Atomic("codec"),
+            ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
             Failure::Infallible,
             Cleanup::None,
