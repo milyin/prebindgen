@@ -112,8 +112,11 @@ Four children so far:
   the adapter, because it follows from what the target can receive.
 
 Steps 4, 5, 6's second half and 7 have not landed. Each was built or priced
-against the committed tree, and each rests on something #675 assumes about this
-code that the code does not bear out:
+against the committed tree. The first two rest on something #675 assumes about
+this code that the code does not bear out. The last two come from **prototypes**
+— branches that build the step far enough to see what it runs into, named at the
+end of this section, and part of no merged tree — and record where each stopped
+and what it left open:
 
 1. **The registry cannot build a `Compile::Fragment`.** It is the adapter's
    type and the registry never looks inside one. Step 4's "the registry wraps
@@ -124,15 +127,54 @@ code that the code does not bear out:
    `declare_into` runs it, and `recipes()` is built afterwards *from the plans it
    produces*. So step 6's "readers of `Product` recipes" has nothing to read;
    what is duplicated is the derivation, and one shared derivation fixes it.
-3. **Site enumeration is not language-neutral.** `prebindgen-c` skips a `()`
-   return because C has nothing to hand back there, and `prebindgen-jni` plans
-   one because the JVM does; JniGen answers a callback parameter whole, and has
-   synthesized const-getter sites C has no equivalent of. Step 7's "the registry
-   compiles every site" holds only with a per-adapter rule for each.
+3. **Step 7's prototype did not share site enumeration, and one difference
+   between the adapters is still open.** Three of the four differences between what the two adapters
+   call a site are about which positions each of them plans, and a hook that
+   asks the adapter settles all three: `prebindgen-c` skips a `()` return
+   because C has nothing to hand back there while `prebindgen-jni` plans one;
+   JniGen answers a callback parameter whole; JniGen's synthesized const getters
+   are not `#[prebindgen]` functions, so they sit in no export set and a walk
+   over the exports never reaches them. The fourth difference is about what one
+   site *crosses*: `prebindgen-c` enumerates a `Result` return as **two** sites,
+   the ok arm and the error arm, and JniGen as **one**, whose crossing is the
+   whole `Result`.
 
-A fourth assumption — that the registry cannot be told which recipe a site takes
-— was investigated and looks wrong: asking the adapter through a hook works. That
-is a **prototype on the branch `feat/676-step7-registry-owns-the-plan`, not part
-of this tree**: it has had no review, and a branch can change or go away. It is
-recorded here only as a direction a successor should try first, and this document
-otherwise describes the committed tree (#681 review).
+   The prototype kept C's split and stopped there, so what it shows is a limit
+   of the prototype rather than a property of the registry. #675 defines a site
+   as a source position and a crossing as that Rust type with a direction, which
+   makes the whole `Result` the one semantic return crossing. C's split is its
+   **delivery policy** — how the ok value and the error each reach the caller —
+   sitting inside C's private enumeration, which is the duplication step 7
+   exists to remove. The open work is to normalize the site and its crossing in
+   the registry, and to let each adapter lower that one `Result` crossing:
+   JniGen to a single JVM return, `prebindgen-c` to its out-parameter and its
+   error channel.
+4. **Step 6b's prototype shares the derivation, and leaves the migration
+   around it unfinished.** Both are derived from one declaration's
+   records: `Declarations::value_form_of` builds the recipe's list of `Reach`es,
+   and the declaration applier flattens the same records into leaves. Reading
+   the leaves instead of re-walking the records agrees wherever both answer,
+   with the generated files byte-identical.
+
+   The two part on a value form whose records state their own decomposition —
+   the record walk declines such a value form, the flattening handles it — which
+   is step 6's "`recipes.rs` stops declining". Declaring those decompositions
+   moves the `impl Fn(Probe)` and `impl Fn(Report)` callback arguments off the
+   path that was converting them, and the build stops at resolution:
+   `Unresolved { key: TypeKey("impl Fn (Probe) …"), direction: Construct }`.
+   Resolution stops before anything is generated, so there is no second set of
+   files to compare and this says nothing about whether the output would change.
+   It is the work step 6b has to do: the shared derivation has to keep, or
+   rebuild, the construct conversion those two crossings were selecting.
+
+A fifth assumption — that the registry cannot be told which recipe a site takes
+— looks wrong: a hook that asks the adapter works in the prototype. Whether that
+hook is the right seam is a question for review, which the prototype has not
+had.
+
+Findings 3 and 4 were reached by building them, on the branches
+`feat/676-step7-registry-owns-the-plan` and `feat/676-step6b-one-derivation`.
+Both are **prototypes, not part of this tree**: neither has had review, and a
+branch can change or go away. They are recorded here as the directions a
+successor should try first; this document otherwise describes the committed tree
+(#681 review).
