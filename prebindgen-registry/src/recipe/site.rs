@@ -141,6 +141,19 @@ pub enum Role {
     Const,
 }
 
+impl Role {
+    /// The source parameter position this role sits at, for the roles that have
+    /// one. `None` for a return, an error arm, a receiver, a constant or a part.
+    pub fn param_position(&self) -> Option<usize> {
+        match self {
+            Role::Param { index }
+            | Role::ExpansionLeaf { param: index, .. }
+            | Role::CallbackArg { param: index, .. } => Some(*index),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

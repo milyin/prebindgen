@@ -1377,6 +1377,16 @@ pub struct Declarations {
     pub(crate) planned_sites: std::cell::RefCell<
         std::collections::HashMap<prebindgen_registry::recipe::Site, crate::jni::compile::JPlan>,
     >,
+    /// A site role `JCompile::plan` refuses outright, so the reporting path can
+    /// be exercised.
+    ///
+    /// No shape in either adapter refuses at a site today — a tuple, a nested
+    /// `Vec`, a raw pointer, a handle and a borrow all plan — which is exactly
+    /// why discarding `Sited::refusals` looked safe and why the discard needs a
+    /// test that does not depend on finding one.
+    #[cfg(test)]
+    pub(crate) refuse_role: std::cell::RefCell<Option<String>>,
+
     pub(crate) site_plans: std::cell::RefCell<
         Vec<
             std::rc::Rc<

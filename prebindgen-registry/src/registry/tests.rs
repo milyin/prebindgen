@@ -2114,3 +2114,160 @@ fn declining_a_callback_parameter_still_enumerates_its_arguments() {
         "an adapter that plans a callback argument gets a site plan for it"
     );
 }
+
+/// A site an adapter refuses comes back in `Sited::refusals`, so an adapter can
+/// report it.
+///
+/// This is the channel, not a shape: with the two adapters as they stand no
+/// site refuses, which is why dropping the refusals looked safe. What made it
+/// unsafe is that the walk is authoritative now — a `Role::CallbackArg` plan is
+/// frozen inside `Compile::plan`, and no later lookup consumes it, so a refusal
+/// there would leave a site that never existed rather than a diagnostic (#676
+/// review).
+#[test]
+fn a_refused_site_comes_back_for_the_adapter_to_report() {
+    use std::cell::RefCell;
+
+    use crate::recipe::{
+        At, Bindings, Carrier, Compile, Compiled, Ctx, Frag, Mode, Parts, Recipes, Role, Validity,
+        Yield,
+    };
+
+    #[derive(Default)]
+    struct RefusesArgs(RefCell<usize>);
+
+    #[derive(Clone)]
+    struct One(Yield);
+
+    impl Carrier for One {
+        fn yields(&self) -> Yield {
+            self.0.clone()
+        }
+        fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
+    }
+
+    impl RefusesArgs {
+        fn answer(&mut self, at: At<'_>) -> Frag<Self> {
+            Ok(One(Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            }))
+        }
+    }
+
+    impl Compile for RefusesArgs {
+        type Fragment = One;
+        type Plan = ();
+        type Error = String;
+
+        fn atomic(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn optional(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>, _i: &One) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn sequence(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _e: Mode,
+            _i: &One,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn construct(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _a: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn fields(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn value_form(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn choice(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[(&prebindgen_flat::flat::Alternative, &One)],
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn callback(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[&One],
+            _r: Option<&One>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+
+        /// Refuse exactly the delivered value, which is the site whose plan
+        /// nothing else would miss.
+        fn plan(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            bound: &crate::recipe::Bound,
+            _root: &One,
+        ) -> Result<(), String> {
+            if matches!(bound.site.role, Role::CallbackArg { .. }) {
+                *self.0.borrow_mut() += 1;
+                return Err("nothing crosses here".into());
+            }
+            Ok(())
+        }
+    }
+
+    let subscribe: syn::Ident = syn::parse_quote!(subscribe);
+    let registry =
+        crate::test_util::reg_with(&["fn subscribe(cb: impl Fn(u16) + Send + Sync + 'static) {}"])
+            .export(&subscribe)
+            .scanned()
+            .expect("scan");
+    let recipes = Recipes::builder().build(registry.flat()).expect("table");
+
+    let mut adapter = RefusesArgs::default();
+    let (sited, _) = registry.compile_sites(
+        &mut adapter,
+        &recipes,
+        &Bindings::default(),
+        Compiled::default(),
+    );
+
+    assert_eq!(*adapter.0.borrow(), 1, "the argument site was offered");
+    let refused: Vec<_> = sited
+        .refusals
+        .iter()
+        .filter(|(site, _)| matches!(site.role, Role::CallbackArg { .. }))
+        .collect();
+    assert_eq!(
+        refused.len(),
+        1,
+        "the refusal comes back rather than being swallowed by the walk"
+    );
+    assert!(
+        !sited
+            .plans
+            .iter()
+            .any(|(site, _)| matches!(site.role, Role::CallbackArg { .. })),
+        "and the refused site contributes no plan"
+    );
+}

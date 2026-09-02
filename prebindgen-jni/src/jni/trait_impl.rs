@@ -697,9 +697,32 @@ impl JniGenBuilder {
             carried,
         );
         *decls.compiled.borrow_mut() = store;
-        // A site that will not compile is reported where it is read, which names
-        // the parameter rather than the position — so the refusals are dropped
-        // here and the plans that did compile are kept.
+        // A site that will not compile is reported here, naming the parameter the
+        // model gives it as well as the position. `fn_plan` re-diagnoses a
+        // missing site when it reads one, but only for the sites it reads: a
+        // callback argument or an expansion leaf that refused, in a function
+        // whose plan never asks for it, would otherwise produce no diagnostic at
+        // all — and a refusal that vanishes looks like a site that was handled.
+        if let Some((site, error)) = sited.refusals.into_iter().next() {
+            return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                // `Site`'s own `Display` names the place — "parameter 1",
+                // "argument 0 of the callback in parameter 0" — which is exact
+                // but not what the author typed. The parameter's name is what
+                // makes the refusal actionable, and it is the model's to give.
+                message: match site
+                    .role
+                    .param_position()
+                    .and_then(|index| registry.flat().function(&site.owner)?.params.get(index))
+                {
+                    Some(param) => format!(
+                        "JniGen: {site} (`{}`) could not be planned: {error}",
+                        param.name
+                    ),
+                    None => format!("JniGen: {site} could not be planned: {error}"),
+                },
+            }
+            .into());
+        }
         *decls.planned_sites.borrow_mut() = sited.plans.into_iter().collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.

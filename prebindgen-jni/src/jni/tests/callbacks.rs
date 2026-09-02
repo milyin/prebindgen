@@ -1490,3 +1490,52 @@ fn two_callbacks_in_one_expanded_parameter_are_refused() {
         "the refusal names the shape and why: {message}"
     );
 }
+
+/// A site the registry refuses fails the build, naming the parameter.
+///
+/// `fn_plan` re-diagnoses a missing site when it reads one, but only for the
+/// sites it reads: a `Role::CallbackArg` plan is frozen inside `JCompile::plan`
+/// and no later lookup consumes it, so a refusal there left a site that never
+/// existed rather than a diagnostic (#690 review).
+///
+/// No shape refuses at a site today, which is why discarding the refusals looked
+/// safe — a tuple, a nested `Vec`, a raw pointer, a handle and a borrow all
+/// plan. So the refusal is made, through a test-only seam, and what is under
+/// test is the path that carries it out.
+#[test]
+fn a_refused_callback_argument_fails_the_build_and_names_its_parameter() {
+    let loc = myflat_loc();
+    let items = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_watch(on_one: impl Fn(ZOne) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc,
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let builder = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(prebindgen_registry::fun!(z_watch)),
+        );
+    *builder.decls.refuse_role.borrow_mut() =
+        Some("argument 0 of the callback in parameter 0".to_string());
+
+    let Err(error) = builder.build_with(registry) else {
+        panic!("a refused site fails the build rather than vanishing")
+    };
+    let message = error.to_string();
+    assert!(
+        message.contains("could not be planned"),
+        "the refusal is reported: {message}"
+    );
+    assert!(
+        message.contains("on_one"),
+        "and names the parameter the author wrote, not only the position: {message}"
+    );
+}

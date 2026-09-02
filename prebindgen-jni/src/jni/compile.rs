@@ -3927,6 +3927,18 @@ impl Compile for JCompile<'_> {
 
     fn plan(&mut self, cx: &mut Ctx<'_, Self>, bound: &Bound, root: &JFrag) -> Result<JPlan, JErr> {
         let registry = self.enter(cx);
+        // The seam the refusal-reporting test drives: no shape refuses at a site
+        // today, so the path that carries a refusal out needs one made.
+        #[cfg(test)]
+        if self
+            .decls
+            .refuse_role
+            .borrow()
+            .as_deref()
+            .is_some_and(|role| bound.site.role.to_string() == role)
+        {
+            return Err(JErr::Refused("nothing crosses here".into()));
+        }
         // Which place in the exported function this is, and what to call it,
         // are the `Bound`'s to say: the role names the position and the model
         // names the parameter. An expansion's leaf is named by the plan that
