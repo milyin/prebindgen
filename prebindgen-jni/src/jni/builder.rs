@@ -184,6 +184,8 @@ impl Default for Declarations {
             tables: None,
             compiled: Default::default(),
             planned_sites: Default::default(),
+            #[cfg(test)]
+            refuse_role: Default::default(),
             site_plans: Default::default(),
             package: String::new(),
             fun_name_mangle: None,
