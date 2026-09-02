@@ -114,9 +114,8 @@ Four children so far:
 Steps 4, 5, 6's second half and 7 have not landed. Each was built or priced
 against the committed tree. The first two rest on something #675 assumes about
 this code that the code does not bear out. The last two come from **prototypes**
-— branches that build the step far enough to see what it runs into, named at the
-end of this section, and part of no merged tree — and record where each stopped
-and what it left open:
+— branches that build the step, named at the end of this section, and part of no
+merged tree — and record what building it showed:
 
 1. **The registry cannot build a `Compile::Fragment`.** It is the adapter's
    type and the registry never looks inside one. Step 4's "the registry wraps
@@ -127,28 +126,37 @@ and what it left open:
    `declare_into` runs it, and `recipes()` is built afterwards *from the plans it
    produces*. So step 6's "readers of `Product` recipes" has nothing to read;
    what is duplicated is the derivation, and one shared derivation fixes it.
-3. **Step 7's prototype did not share site enumeration, and one difference
-   between the adapters is still open.** Three of the four differences between what the two adapters
-   call a site are about which positions each of them plans, and a hook that
-   asks the adapter settles all three: `prebindgen-c` skips a `()` return
-   because C has nothing to hand back there while `prebindgen-jni` plans one;
-   JniGen answers a callback parameter whole; JniGen's synthesized const getters
-   are not `#[prebindgen]` functions, so they sit in no export set and a walk
-   over the exports never reaches them. The fourth difference is about what one
-   site *crosses*: `prebindgen-c` enumerates a `Result` return as **two** sites,
-   the ok arm and the error arm, and JniGen as **one**, whose crossing is the
-   whole `Result`.
+3. **Step 7 works and does not pay.** Every difference between what the two
+   adapters call a site is settled. Three of them are about which positions each
+   adapter plans, and a hook that asks the adapter settles those: `prebindgen-c`
+   skips a `()` return because C has nothing to hand back there while
+   `prebindgen-jni` plans one; JniGen answers a callback parameter whole;
+   JniGen's synthesized const getters are not `#[prebindgen]` functions, so they
+   sit in no export set and a walk over the exports never reaches them.
 
-   The prototype kept C's split and stopped there, so what it shows is a limit
-   of the prototype rather than a property of the registry. #675 defines a site
-   as a source position and a crossing as that Rust type with a direction, which
-   makes the whole `Result` the one semantic return crossing. C's split is its
-   **delivery policy** — how the ok value and the error each reach the caller —
-   sitting inside C's private enumeration, which is the duplication step 7
-   exists to remove. The open work is to normalize the site and its crossing in
-   the registry, and to let each adapter lower that one `Result` crossing:
-   JniGen to a single JVM return, `prebindgen-c` to its out-parameter and its
-   error channel.
+   The fourth was about what one site *crosses*, and it is settled by
+   normalizing rather than by asking. The walk enumerates **one** return site,
+   crossing the return as the model states it, so a fallible return crosses
+   whole — which is what #675's own definitions give, a site being a source
+   position and a crossing that Rust type with a direction. Each adapter lowers
+   that one crossing to its own **delivery**: `prebindgen-c` compiles one site
+   per arm, the ok value to its out-parameter and the error to the return;
+   JniGen compiles the arm it returns and throws the error. The decline is
+   scoped to the return, so a `Result` reaching any other position is still
+   planned like anything else, which is what keeps `prebindgen-c`'s refusal of a
+   `Result` callback argument working.
+
+   The branch is green — every gate passes with the fixtures byte-identical —
+   and it **fails both figures**: figure 1 rises 178 to 28,318, figure 2 rises
+   393 to 58,149. Only `fn_plan.rs` shrank, by 30 lines. Of the four deletions
+   step 7 is named for, only `prebindgen-c`'s `compile_sites` happened, and what
+   replaced it cost more than it saved. The other three — the site enumeration
+   in `fn_plan.rs`, `JniGenerationPlan::freeze`, and the orchestration in both
+   `build_with` bodies — still have a reader, because **JniGen still compiles
+   sites while it emits**: a whole return's final plan carries a delivery the
+   hook's intermediate does not, and is built at the emission site. The open
+   work is to move that, which is a restructuring of JniGen's per-function plan
+   building rather than more of this.
 4. **Step 6b's prototype shares the derivation, and leaves the migration
    around it unfinished.** Both are derived from one declaration's
    records: `Declarations::value_form_of` builds the recipe's list of `Reach`es,
@@ -171,6 +179,10 @@ A fifth assumption — that the registry cannot be told which recipe a site take
 — looks wrong: a hook that asks the adapter works in the prototype. Whether that
 hook is the right seam is a question for review, which the prototype has not
 had.
+
+Neither prototype is a candidate to merge. Step 7's is complete and green and
+fails both figures; step 6b's stops at an unresolved converter. What each needs
+next is stated in its entry above.
 
 Findings 3 and 4 were reached by building them, on the branches
 `feat/676-step7-registry-owns-the-plan` and `feat/676-step6b-one-derivation`.
