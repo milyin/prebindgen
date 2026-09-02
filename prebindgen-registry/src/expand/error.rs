@@ -3,6 +3,17 @@
 /// Errors surfaced while resolving [`Expansions`](super::Expansions).
 #[derive(Debug)]
 pub enum ExpandError {
+    /// An expansion whose leaves hold more than one callback.
+    ///
+    /// A site names a callback's delivered value by the SOURCE parameter it
+    /// arrived on — `Role::CallbackArg { param, arg }` — so two callbacks under
+    /// one parameter give two distinct positions the same identity. Refused
+    /// where the expansion is declared, rather than left to collide when the
+    /// sites are planned.
+    TwoCallbacksInOneParam {
+        func: syn::Ident,
+        param: syn::Ident,
+    },
     UnknownFunction(syn::Ident),
     UnknownParam(syn::Ident, syn::Ident),
     UnknownConstructor(syn::Ident),
@@ -90,6 +101,12 @@ impl std::fmt::Display for ExpandDeclError {
 impl std::fmt::Display for ExpandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExpandError::TwoCallbacksInOneParam { func, param } => write!(
+                f,
+                "expand: `{func}`'s parameter `{param}` expands into more than one callback. \
+                 A delivered value is named by the parameter it arrived on, so two callbacks \
+                 under one parameter would give two positions the same site",
+            ),
             ExpandError::UnknownFunction(name) => {
                 write!(f, "expand: function `{}` is not a #[prebindgen] item", name)
             }

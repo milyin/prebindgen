@@ -314,6 +314,23 @@ fn process_expand(
         &mut visited,
     )?;
 
+    // One callback per expanded parameter. A delivered value's site is named by
+    // the SOURCE parameter it arrived on, not by the leaf, so a second callback
+    // here would give two distinct positions one identity. Refused where the
+    // expansion is declared rather than left to collide when the sites are
+    // planned (#687 review).
+    if plan
+        .leaves
+        .iter()
+        .filter(|leaf| leaf.ty.callback_args().is_some())
+        .count()
+        > 1
+    {
+        return Err(ExpandError::TwoCallbacksInOneParam {
+            func: ed.func.clone(),
+            param: ed.param.clone(),
+        });
+    }
     for leaf in &plan.leaves {
         registry.require_input(&leaf.ty);
     }

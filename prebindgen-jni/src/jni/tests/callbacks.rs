@@ -1448,3 +1448,45 @@ fn param_reading(
         .ty
         .clone()
 }
+
+/// Two callbacks under one expanded parameter are refused where the expansion
+/// is declared.
+///
+/// A delivered value's site is named by the SOURCE parameter it arrived on —
+/// `Role::CallbackArg { param, arg }` — not by the leaf the callback came in
+/// on, because a parameter delivers through at most one callback. Nothing had
+/// enforced that: a constructor taking two callbacks gave two distinct
+/// positions one identity, and with different signatures the second site would
+/// have read the first callback's edge (#687 review).
+#[test]
+fn two_callbacks_in_one_expanded_parameter_are_refused() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(on_tick: impl Fn(i64) + Send + Sync + 'static, on_text: impl Fn(bool) + Send + Sync + 'static) -> ZOpts { unimplemented!() }",
+        "pub fn z_go(opts: ZOpts) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let error = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_go)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect_err("two callbacks under one parameter cannot both be named");
+    let message = error.to_string();
+    assert!(
+        message.contains("more than one callback"),
+        "the refusal names the shape and why: {message}"
+    );
+}
