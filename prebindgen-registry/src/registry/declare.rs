@@ -426,10 +426,15 @@ impl RegistryBuilder {
                     }),
                     Some(row) => compiler.row(adapter, &crossing, row).map(|_| ()),
                 };
+                // Either way this crossing is finished: an unasked row of a
+                // crossing that would not compile has nothing left to answer.
                 match answered {
                     Ok(()) => {}
                     Err(CompileError::Adapter(Refusal::Gap(_))) => break,
-                    Err(e) => refusals.push(e.to_string()),
+                    Err(e) => {
+                        refusals.push(e.to_string());
+                        break;
+                    }
                 }
             }
         }
