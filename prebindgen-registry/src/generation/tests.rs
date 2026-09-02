@@ -928,3 +928,71 @@ fn unknown_artifact_dependencies_and_inputs_are_rejected() {
     });
     has(&errors, |e| matches!(e, PlanError::UnknownArtifactSite(_)));
 }
+
+/// A kept artifact's prerequisites are kept with it, even when they follow a
+/// fragment nothing reached.
+///
+/// `follows` says an artifact exists only while a fragment is reached, and the
+/// kept set grew only from unconditional or followed artifacts. So a helper that
+/// followed an unreached fragment was dropped while the artifact placed after it
+/// stayed — and the plan returned was valid, ordered, and missing something its
+/// own ordering named: `plan.artifact(helper)` answered `None` while the wrapper
+/// that requires it was still there (#660, #676 review).
+#[test]
+fn a_kept_artifact_keeps_what_it_requires() {
+    let model = model();
+    let leaf = fragment_id(&model, "Leaf", Direction::Construct);
+    let unreached = fragment_id(&model, "&Leaf", Direction::Construct);
+
+    let site_plan = site(&model, &leaf, None, 1);
+    let site_id = site_plan.id().clone();
+    let helper_id = ArtifactId::new("helper", "memory").unwrap();
+    let nested_id = ArtifactId::new("helper", "arrays").unwrap();
+    let wrapper_id = ArtifactId::new("wrapper", "make_leaf").unwrap();
+
+    let mut builder = GenerationPlanBuilder::<Fake>::new();
+    builder
+        .fragment(
+            atomic(&model, leaf.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("leaf converter"),
+        )
+        .fragment(
+            atomic(&model, unreached.clone(), Failure::Infallible, Mode::Owned)
+                .with_artifact("unreached converter"),
+        )
+        .site(site_plan)
+        // The wrapper is unconditional and requires the memory helper, which
+        // requires the array builder. Both helpers follow a fragment nothing
+        // reaches, so nothing but the requirement keeps them.
+        .artifact(artifact(
+            "wrapper",
+            "make_leaf",
+            vec![helper_id.clone()],
+            vec![ArtifactInput::Site {
+                site: site_id,
+                slots: 1,
+            }],
+        ))
+        .artifact(
+            artifact("helper", "memory", vec![nested_id.clone()], vec![])
+                .follows(vec![unreached.clone()]),
+        )
+        .artifact(artifact("helper", "arrays", vec![], vec![]).follows(vec![unreached.clone()]));
+    let plan = builder.build().unwrap();
+
+    let artifacts: Vec<_> = plan.artifacts().map(ArtifactPlan::id).collect();
+    assert!(
+        artifacts.contains(&&helper_id),
+        "the helper the wrapper requires is kept: {artifacts:?}"
+    );
+    assert!(
+        artifacts.contains(&&nested_id),
+        "and so is the one that helper requires, transitively: {artifacts:?}"
+    );
+    assert!(plan.artifact(&helper_id).is_some());
+    assert!(plan.artifact(&nested_id).is_some());
+    // And the ordering still places each prerequisite before what needs it.
+    let position = |id: &ArtifactId| artifacts.iter().position(|other| *other == id).unwrap();
+    assert!(position(&nested_id) < position(&helper_id));
+    assert!(position(&helper_id) < position(&wrapper_id));
+}

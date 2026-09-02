@@ -1353,7 +1353,7 @@ impl<R: Representation> GenerationPlanBuilder<R> {
             roots.sort_by_cached_key(FragmentId::stable_key);
             roots.dedup();
             reachable = reachable_fragments(&self.fragments, roots);
-            let grown: HashSet<ArtifactId> = self
+            let mut grown: HashSet<ArtifactId> = self
                 .artifacts
                 .values()
                 .filter(|artifact| {
@@ -1362,6 +1362,23 @@ impl<R: Representation> GenerationPlanBuilder<R> {
                 })
                 .map(|artifact| artifact.id.clone())
                 .collect();
+            // A kept artifact's prerequisites are kept with it. `follows` says
+            // an artifact exists only while a fragment is reached, and a
+            // prerequisite that follows an unreached one would otherwise be
+            // dropped while something placed after it stayed — leaving a plan
+            // that orders an artifact behind one it does not contain. Closed
+            // transitively, because a prerequisite has prerequisites of its own.
+            let mut frontier: Vec<ArtifactId> = grown.iter().cloned().collect();
+            while let Some(id) = frontier.pop() {
+                let Some(artifact) = self.artifacts.get(&id) else {
+                    continue;
+                };
+                for required in &artifact.prerequisites {
+                    if self.artifacts.contains_key(required) && grown.insert(required.clone()) {
+                        frontier.push(required.clone());
+                    }
+                }
+            }
             if grown == kept {
                 break;
             }
