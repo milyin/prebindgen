@@ -1772,3 +1772,162 @@ fn expansion_leaf_readings_derive_before_validation() {
         "both non-selector arms are nullable synthetic readings"
     );
 }
+
+/// A marked row that refuses says nothing about the rows beside it.
+///
+/// `declare_unasked` states that a row is compiled whether or not a site names
+/// it, and two such rows on one crossing describe that crossing for two
+/// independent purposes. So `generate` compiles both and reports both hard
+/// refusals. Only the crossing's own recipe failing ends the crossing, because a
+/// row of a crossing that would not compile has nothing left to answer.
+#[test]
+fn one_marked_row_refusing_does_not_silence_the_next() {
+    use std::cell::RefCell;
+
+    use crate::recipe::{
+        At, Bindings, Carrier, Compile, Constructing, Ctx, Frag, Mode, Parts, RecipeName, Recipes,
+        Refusal, Validity, Yield,
+    };
+
+    /// Answers every hook, refusing the row named `refuses`, and records the
+    /// name of every row it was asked for.
+    struct Rows {
+        refuses: &'static str,
+        asked: RefCell<Vec<String>>,
+    }
+
+    #[derive(Clone)]
+    struct Answered(Yield);
+
+    impl Carrier for Answered {
+        fn yields(&self) -> Yield {
+            self.0.clone()
+        }
+    }
+
+    impl Rows {
+        fn answer(&mut self, at: At<'_>) -> Frag<Self> {
+            let name = at.recipe.name().to_string();
+            self.asked.borrow_mut().push(name.clone());
+            if name == self.refuses {
+                return Err(Refusal::Error(format!("`{name}` refuses")));
+            }
+            Ok(Answered(Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            }))
+        }
+    }
+
+    impl Compile for Rows {
+        type Fragment = Answered;
+        type Plan = ();
+        type Error = String;
+
+        fn atomic(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn optional(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _inner: &Answered,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn sequence(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _elements: Mode,
+            _inner: &Answered,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn construct(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _func: &prebindgen_flat::flat::Function,
+            _args: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn fields(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn value_form(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _func: &prebindgen_flat::flat::Function,
+            _parts: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn choice(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _arms: &[(&prebindgen_flat::flat::Alternative, &Answered)],
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn callback(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _args: &[&Answered],
+            _result: Option<&Answered>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn plan(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            _bound: &crate::recipe::Bound,
+            _root: &Answered,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    let consume: syn::Ident = syn::parse_quote!(consume);
+    let mut builder = crate::test_util::reg_with(&["fn consume(id: u16) {}"]).export(&consume);
+    let model = builder.flat().clone();
+    let id = model
+        .classify(&syn::parse_quote!(u16))
+        .expect("the model classifies u16");
+    let mut recipes = Recipes::builder();
+    recipes
+        .declare_default(id.clone(), RecipeName::new("whole"), Constructing::Atomic)
+        .declare_unasked(id.clone(), RecipeName::new("first"), Constructing::Atomic)
+        .declare_unasked(id, RecipeName::new("second"), Constructing::Atomic);
+    let recipes = recipes.build(&model).expect("table");
+
+    let mut adapter = Rows {
+        refuses: "first",
+        asked: RefCell::new(Vec::new()),
+    };
+    let Err(error) = builder.generate(&mut adapter, &recipes, &Bindings::default()) else {
+        panic!("`first` refuses, and a refusal that is not a gap is reported")
+    };
+    let error = error.to_string();
+
+    assert!(error.contains("`first` refuses"), "{error}");
+    let asked = adapter.asked.borrow();
+    assert!(
+        asked.iter().any(|name| name == "second"),
+        "the row beside the one that refused was still compiled: {asked:?}"
+    );
+    assert!(
+        asked.iter().any(|name| name == "whole"),
+        "the crossing's own recipe answered first: {asked:?}"
+    );
+}

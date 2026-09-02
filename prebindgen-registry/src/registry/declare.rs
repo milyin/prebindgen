@@ -416,25 +416,27 @@ impl RegistryBuilder {
                 continue;
             };
             let crossing = crate::recipe::Crossing::new(ty, *direction);
-            // The crossing's own recipe first: an unasked row answers nothing
-            // of its own, and a gap in the crossing is a gap in every row of it.
-            let unasked = recipes.unasked_of(&crossing.key());
-            for row in std::iter::once(None).chain(unasked.iter().map(Some)) {
-                let answered = match &row {
-                    None => compiler.crossing(adapter, &crossing).map(|(_, delegates)| {
-                        self.built.insert((*direction, key.clone()), delegates);
-                    }),
-                    Some(row) => compiler.row(adapter, &crossing, row).map(|_| ()),
-                };
-                // Either way this crossing is finished: an unasked row of a
-                // crossing that would not compile has nothing left to answer.
-                match answered {
-                    Ok(()) => {}
-                    Err(CompileError::Adapter(Refusal::Gap(_))) => break,
-                    Err(e) => {
-                        refusals.push(e.to_string());
-                        break;
-                    }
+            // The crossing's own recipe first. A refusal there ends the
+            // crossing: an unasked row of a crossing that would not compile has
+            // nothing left to answer, and asking anyway reports one failure
+            // twice.
+            match compiler.crossing(adapter, &crossing) {
+                Ok((_, delegates)) => {
+                    self.built.insert((*direction, key.clone()), delegates);
+                }
+                Err(CompileError::Adapter(Refusal::Gap(_))) => continue,
+                Err(e) => {
+                    refusals.push(e.to_string());
+                    continue;
+                }
+            }
+            // The marked rows are independent of one another: each says how
+            // this crossing comes apart for a purpose no site names, so one
+            // refusing says nothing about the next.
+            for row in recipes.unasked_of(&crossing.key()) {
+                match compiler.row(adapter, &crossing, &row) {
+                    Ok(_) | Err(CompileError::Adapter(Refusal::Gap(_))) => {}
+                    Err(e) => refusals.push(e.to_string()),
                 }
             }
         }
