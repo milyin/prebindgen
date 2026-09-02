@@ -129,19 +129,18 @@ impl Declarations {
     /// The accessor a type's value form names, and one reach per field of the
     /// struct it returns.
     ///
-    /// `None` unless the declaration is exactly one `.fields(fields!(f))` whose
-    /// every field is a plain leaf. A record that states its own decomposition
-    /// — a per-field `expand_return!` override, an inlined nested class, a sum
-    /// laid out as a selector and its groups — is a shape this recipe does not
-    /// state yet, and stating half of one would describe a boundary nothing
-    /// emits.
+    /// Read off the leaves the declaration applier already flattened from this
+    /// declaration's records, so the recipe and the decomposition state one
+    /// derivation rather than two readings of the same records. `None` unless
+    /// the declaration is exactly one `.fields(fields!(f))` — a record list
+    /// stating its own decomposition is a shape this recipe does not state yet,
+    /// and stating half of one would describe a boundary nothing emits.
     fn value_form_of(
         &self,
         model: &Flat,
-        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
-        use crate::unfold::{FieldDecon, FieldRecord};
+        use prebindgen_registry::leaf::{DeconId, PathStep};
         let decl = self
             .return_expand_decls
             .iter()
@@ -149,49 +148,62 @@ impl Declarations {
         let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
             return None;
         };
-        let records: Vec<FieldRecord> = self.lower_value_form(registry, decl.key(), fields);
+        let spec = self
+            .unfolded()
+            .decon_plans
+            .get(&DeconId::Default(decl.key().to_string()))?;
+        // The struct the value-form accessor returns — the one every leaf's
+        // field steps index into.
         let ret = model.function(fields.func())?.ret.clone();
         let ret = ret.borrow_target().unwrap_or(&ret);
         let prebindgen_registry::flat::TypeKind::Named { id, .. } = ret.unwrapped().kind() else {
             return None;
         };
-        let prebindgen_registry::flat::Type::Struct(st) =
+        let prebindgen_registry::flat::Type::Struct(root) =
             id.ident().and_then(|i| model.declared_type(&i))?
         else {
             return None;
         };
         let mut reaches = Vec::new();
-        for record in &records {
-            if !matches!(record.decon, FieldDecon::Default) {
-                return None;
-            }
-            // A record with several members is an INLINED nested class: each
-            // member is one hop of a field-access chain. `Reach::Path` states
-            // that; before it existed this row declined and fell back to a
-            // placeholder (#613 step 10).
-            let mut here = st;
-            let mut indices = Vec::with_capacity(record.members.len());
-            for member in &record.members {
+        let mut seen: Vec<Vec<usize>> = Vec::new();
+        for leaf in &spec.leaves {
+            let mut here = root;
+            let mut indices = Vec::new();
+            // Every leaf of a value form starts by calling the accessor; what
+            // follows is the chain of struct fields this reach names.
+            for step in leaf.path.iter().skip(1) {
+                // The first step that is not a field read is the field type's
+                // own decomposition, which is that type's own recipe's
+                // business. The reach names the field and stops here.
+                let PathStep::Field { ident, .. } = step else {
+                    break;
+                };
                 let hop = here
                     .fields
                     .iter()
-                    .position(|f| f.name.as_ref() == Some(member))?;
+                    .position(|f| f.name.as_ref() == Some(ident))?;
                 indices.push(hop);
-                if indices.len() < record.members.len() {
-                    let next = here.fields[hop].ty.stripped_key().ident()?;
-                    let prebindgen_registry::flat::Type::Struct(next) =
-                        model.declared_type(&next)?
-                    else {
-                        return None;
-                    };
+                if let Some(prebindgen_registry::flat::Type::Struct(next)) = here.fields[hop]
+                    .ty
+                    .stripped_key()
+                    .ident()
+                    .and_then(|i| model.declared_type(&i))
+                {
                     here = next;
                 }
             }
+            // Several leaves come off one field when that field's own type
+            // decomposes further. The recipe names the field once.
+            if indices.is_empty() || seen.last() == Some(&indices) {
+                continue;
+            }
+            seen.push(indices.clone());
             let [index] = indices.as_slice() else {
+                // An inlined nested class: each member is one hop of a
+                // field-access chain, which is what `Reach::Path` states.
                 reaches.push(Reach::Path(indices));
                 continue;
             };
-            let index = *index;
             // A field that reaches the type being taken apart. The leaf
             // synthesis treats `Box<T>` as a spelling of its own and stops
             // there; a recipe keys a crossing by the value that crosses, so
@@ -199,13 +211,16 @@ impl Declarations {
             // reaching itself. Refused here rather than by `Recipes::build`,
             // which would refuse the whole binding over a shape the leaf
             // synthesis handles.
-            if st.fields[index].ty.stripped_key() == ty.stripped_key() {
+            if root.fields[*index].ty.stripped_key() == ty.stripped_key() {
                 return None;
             }
-            reaches.push(Reach::Field(index));
+            reaches.push(Reach::Field(*index));
         }
         Some((fields.func().clone(), reaches))
     }
+}
+
+impl Declarations {
 }
 
 impl Declarations {
@@ -317,7 +332,7 @@ impl Declarations {
             // which can splice a child's fields, so `Report` yields six records
             // over a five-field struct. It maps each record back to the struct
             // field it names and declines the shapes a row cannot hold.
-            let (func, parts) = self.value_form_of(model, registry, ty)?;
+            let (func, parts) = self.value_form_of(model, ty)?;
             return Some(Deconstruct::ValueForm { func, parts });
         }
         let mut reaches = Vec::with_capacity(fields.len());
@@ -419,7 +434,7 @@ impl Declarations {
             // once and hands out the fields of the struct it returns. The one
             // declaration shape that names its own accessor, and the reason
             // `Deconstruct::ValueForm` exists.
-            if let Some((func, reaches)) = self.value_form_of(model, registry, &ty) {
+            if let Some((func, reaches)) = self.value_form_of(model, &ty) {
                 recipes.declare(
                     ty.clone(),
                     parts(),

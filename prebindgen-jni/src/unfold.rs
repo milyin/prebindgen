@@ -409,6 +409,25 @@ pub fn apply(
         check_records(&d.records, accessor_fns)?;
     }
 
+    // Every type-level deconstructor's declaration-default spec, registered
+    // whether or not a function uses it. The spec is keyed by the declaration
+    // and flattened from normalized inputs, so it does not depend on the using
+    // function — and the recipe table, which is built after this pass, asks for
+    // the leaves of value forms no function returns.
+    for d in &acc.deconstructors {
+        if d.default.is_none() {
+            continue;
+        }
+        let Some(source) = syn::parse_str::<syn::Type>(d.target.as_str())
+            .ok()
+            .and_then(|ty| registry.flat().classify(&ty).ok())
+        else {
+            continue;
+        };
+        let decon = decl_id(&d.target, d);
+        register_decon_spec(registry, acc, &decon, &d.records.clone(), &source)?;
+    }
+
     // Explicit decls first; they take precedence over (and suppress) a default
     // for the same `(fn, target)`.
     let mut done: std::collections::HashSet<(syn::Ident, DeconTarget)> = Default::default();
