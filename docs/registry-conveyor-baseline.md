@@ -128,39 +128,87 @@ merged tree — and record what building it showed:
    what is duplicated is the derivation, and one shared derivation fixes it.
 3. **Step 7's prototype is green and partial, and what it costs today is the
    cost of an intermediate.** Every difference between what the two adapters
-   call a site is now *addressed*, three of them by a hook that asks the adapter
-   which positions it plans: `prebindgen-c` skips a `()` return because C has
-   nothing to hand back there while `prebindgen-jni` plans one; JniGen answers a
-   callback parameter whole; JniGen's synthesized const getters are not
-   `#[prebindgen]` functions, so they sit in no export set and a walk over the
-   exports never reaches them.
+   call a site is addressed. Three are about which positions each adapter plans,
+   and a hook that asks the adapter settles those: `prebindgen-c` skips a `()`
+   return because C has nothing to hand back there while `prebindgen-jni` plans
+   one; JniGen answers a callback parameter whole; JniGen's synthesized const
+   getters are not `#[prebindgen]` functions, so they sit in no export set and a
+   walk over the exports never reaches them.
 
-   The fourth was about what one site *crosses*, and the walk now enumerates
-   **one** return site crossing the return as the model states it — so a fallible
-   return crosses whole, which is what #675's own definitions give, a site being
-   a source position and a crossing that Rust type with a direction.
+   The fourth is about what one site *crosses*. The walk enumerates **one**
+   return site, crossing the return as the model states it, so a fallible return
+   crosses whole — which is what #675's own definitions give, a site being a
+   source position and a crossing that Rust type with a direction. Where a
+   binding crosses something else there, it says so rather than declining:
+   `Bindings` is where a binding states what crosses at a site.
 
-   **The registry does not yet compile that canonical site.** Both adapters
-   decline it through `plans_site`, and each then plans privately:
-   `prebindgen-c` recreates a `Role::Return` and a `Role::Error` site in
-   `Cbindgen::fallible_return_plans`, and JniGen plans its return while it emits.
-   So the enumeration is shared and the compilation is not, which is a step
+   JniGen states all three of its cases that way, in **one pass per function**
+   and in the precedence `build_output` applies. An **expanded** return — one the
+   binding converts or takes apart — does not cross the value its signature
+   names, and only the binding's own output expansion says what it does cross: a
+   convert crosses the converted value; a return handed to a callback crosses the
+   value it takes apart, and asks for the row naming its parts; a fallible return
+   whose error the binding peels crosses only its ok arm, since the error is
+   thrown rather than crossed there. A fallible return with no error plan still
+   crosses whole, which is what the model already says.
+
+   One pass rather than one per kind, because two would answer the same site
+   twice and be refused as a rebind (#684 review). Whether a function can hold
+   both an output expansion and an error plan is unsettled: `peel` does not peel
+   `Result`, so a fallible return takes no output expansion, and an assertion
+   that no function holds both held across every fixture and every test. The
+   single pass is the right shape either way.
+
+   With the right crossing in hand a return's plan is complete in the hook: the
+   delivery a convert converts through is built there, `fn_plan.rs` reads that
+   plan instead of rebuilding it, and `ValueOutputPlan::site` — which existed
+   only to carry the site through that rebuild — is deleted.
+   `JCompile::plans_site` is left with one rule, the callback parameter it
+   answers whole, and `return_site` compiles a site for no exported function; an
+   assertion to that effect held across every fixture and every test. What still
+   reaches its private fallback is the one thing with no site to reach: a getter
+   synthesised for a declared constant, which is not a `#[prebindgen]` function.
+
+   **Two adapter-private planners remain.** `prebindgen-c` still declines the
+   canonical fallible return through `plans_site` and recreates a `Role::Return`
+   and a `Role::Error` site in `Cbindgen::fallible_return_plans`, which is its
+   delivery policy — the ok value to an out-parameter, the error to the return —
+   done by re-enumerating rather than by lowering the plan the registry
+   compiled. And in JniGen one exported return is still planned privately
+   further down: a callback-delivered expansion whose source has no `parts` row
+   is planned on its default row, so the walk's plan carries no wires,
+   `build_output` falls back to `freeze_out_wires` and compiles the leaves
+   itself. Confirmed rather than reasoned: a probe that panicked on that fallback
+   fired for `annotated_new` in `examples/perftest-flat` (#684 review). That one
+   closes with finding 4 rather than on its own — `value_form_of` declines
+   exactly those decompositions, so there is no `parts` row for the site to ask
+   for. Where a row does exist, the emitter reads the site's own list, and
+   `a_decomposed_return_shares_one_wire_list_with_its_site` asserts the two are
+   the same allocation.
+
+   So the enumeration is shared and the compilation is not yet, which is a step
    toward the shape step 7 asks for rather than that shape.
 
    What is established: the branch is green — every gate passes with the
-   generated fixtures byte-identical — and this intermediate costs 178 lines on
-   figure 1 (28,318) and 393 on figure 2 (58,149). Those figures price the
-   duplication, not a finished step 7, and no conclusion about whether step 7
-   pays can be drawn from them.
+   generated fixtures byte-identical — and this intermediate costs 213 lines on
+   figure 1 (28,353) and 428 on figure 2 (58,184). Those figures price the
+   duplication that is left, not a finished step 7, and no conclusion about
+   whether step 7 pays can be drawn from them.
 
-   What remains: three of the four deletions step 7 names — the site enumeration
-   in `fn_plan.rs`, `JniGenerationPlan::freeze`, and the orchestration in both
-   `build_with` bodies — still have a reader, and only `prebindgen-c`'s
-   `compile_sites` has gone. They survive because JniGen builds a return's final
-   plan at the emission site, carrying a delivery the hook's intermediate does
-   not. Removing the private planning on both sides, so the registry compiles
-   the canonical return site and each adapter lowers that one plan to its own
-   delivery, is the work left; the figures are worth reading again after it.
+   What remains is the two private planners above and the artifact half. Of the
+   four deletions step 7 names, only `prebindgen-c`'s `compile_sites` has gone;
+   the site enumeration in `fn_plan.rs`, `JniGenerationPlan::freeze` and the
+   orchestration in both `build_with` bodies still have a reader. Those 213
+   lines have to come out of the adapters for this step to pay, and
+   `JniGenerationPlan::freeze` is the 328-line candidate. **How much of it is a saving is not known.** It is
+   not orchestration to delete but artifacts to move, and most of its body is
+   JNI-specific planning — the data classes, sealed classes, wrappers, constants
+   and destructors it builds — which becomes `ArtifactPlan` construction in the
+   adapter rather than disappearing. What the move buys is whatever ordering and
+   assembly the registry then does instead, and that has to be measured, not
+   assumed. `prebindgen-c` already builds two artifact kinds this way, in
+   `type_artifact_plans` and `tagged_union_artifact_plans`; its own figures are
+   the closest evidence of what the pattern costs.
 4. **Step 6b's prototype shares the derivation, and leaves the migration
    around it unfinished.** Both are derived from one declaration's
    records: `Declarations::value_form_of` builds the recipe's list of `Reach`es,
