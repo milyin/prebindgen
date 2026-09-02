@@ -860,10 +860,17 @@ pub(crate) fn kotlin_jvm_slots(ty: &str) -> usize {
 /// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
 /// Which place in the exported function this leaf is.
 ///
-/// One answer for every caller: the callback shortcut below also runs for an
-/// expansion leaf, and hardcoding `Role::Param` there labelled an expanded
-/// callback leaf as a parameter — undoing the rule the ordinary path states
-/// (#622 review).
+/// `owner` is the function and the role names the position in it. Naming the
+/// PARAMETER as owner, always at index 0, froze one identity for two functions
+/// with a parameter of the same name, and every leaf of an expanded parameter
+/// collided with its siblings.
+///
+/// `Role::Param`'s index is the position in the SOURCE parameter list, so an
+/// expansion's leaves cannot be numbered as parameters: that names positions the
+/// function does not have and attaches one parameter's site to another's
+/// crossing. They are `ExpansionLeaf`s of the parameter that expanded, which is
+/// the same question `CallbackArg` answers for a callback's arguments (#622
+/// review).
 fn leaf_role(
     expanded: bool,
     position: usize,
@@ -893,29 +900,15 @@ fn classify_leaf(
     leaf_index: usize,
 ) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
     use prebindgen_registry::recipe::Site;
-    // Every parameter's leaf is built in `JCompile::plan`, including a callback
-    // parameter's — which is answered whole and states one site per value the
-    // callback delivers. This reads the answer; it makes none.
-    // A site is a place in an exported function, which is what the registry's
-    // `Site` means: `owner` is the function and `role` names the position in
-    // it. This named the PARAMETER as owner and always index 0, so two
-    // functions with a parameter of the same name froze the same identity, and
-    // every leaf of an expanded parameter collided with its siblings (#622
-    // review).
-    //
-    // `Role::Param`'s index is the position in the SOURCE parameter list, so
-    // an expansion's leaves cannot be numbered as parameters: doing that names
-    // positions the function does not have and attaches one parameter's site to
-    // another's crossing. They are `ExpansionLeaf`s of the parameter that
-    // expanded, which is the same question `CallbackArg` already answers for a
-    // callback's arguments (#622 review).
+    // Every parameter's leaf is built in `JCompile::plan`, a callback
+    // parameter's included, and the registry compiled every site before this
+    // ran. So this reads the answer — including which row the site took, which
+    // `JCompile::site_recipe` gave while the binding was resolved — and makes
+    // none.
     let site = Site {
         owner: owner.clone(),
         role: leaf_role(expanded, position, leaf_index),
     };
-    // The registry compiled every site before this ran, so the answer is read
-    // rather than made — including which row the site took, which
-    // `JCompile::site_recipe` answered while the registry resolved the binding.
     let unresolved = || {
         if expanded {
             PlanError::UnresolvedLeaf {
