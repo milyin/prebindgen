@@ -706,28 +706,106 @@ fn a_site_takes_the_row_it_names() {
     assert_eq!(other.recipe, row(&crossing, "whole"));
 }
 
+/// An adapter picks a declared row for one site, where the binding table cannot
+/// say which: the choice follows from something already compiled.
 #[test]
 fn an_adapter_can_select_one_declared_row_for_one_site() {
+    /// Answers `fields` for parameter 0 and leaves every other site alone.
+    #[derive(Default)]
+    struct Selective(Recorder);
+
+    impl Compile for Selective {
+        type Fragment = Note;
+        type Plan = String;
+        type Error = String;
+
+        fn site_recipe(&mut self, _cx: &mut Ctx<'_, Self>, bound: &Bound) -> Option<RecipeName> {
+            matches!(bound.site.role, Role::Param { index: 0 }).then(|| recipe_name("fields"))
+        }
+        fn atomic(&mut self, cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.0.atomic(cx, at)
+        }
+        fn optional(&mut self, cx: &mut Ctx<'_, Self>, at: At<'_>, inner: &Note) -> Frag<Self> {
+            self.0.optional(cx, at, inner)
+        }
+        fn sequence(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            elements: Mode,
+            inner: &Note,
+        ) -> Frag<Self> {
+            self.0.sequence(cx, at, elements, inner)
+        }
+        fn construct(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            func: &Function,
+            args: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.0.construct(cx, at, func, args)
+        }
+        fn fields(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            parts: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.0.fields(cx, at, parts)
+        }
+        fn value_form(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            func: &Function,
+            parts: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.0.value_form(cx, at, func, parts)
+        }
+        fn choice(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            arms: &[(&Alternative, &Note)],
+        ) -> Frag<Self> {
+            self.0.choice(cx, at, arms)
+        }
+        fn callback(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            args: &[&Note],
+            result: Option<&Note>,
+        ) -> Frag<Self> {
+            self.0.callback(cx, at, args, result)
+        }
+        fn plan(
+            &mut self,
+            cx: &mut Ctx<'_, Self>,
+            bound: &Bound,
+            root: &Note,
+        ) -> Result<String, String> {
+            self.0.plan(cx, bound, root)
+        }
+    }
+
     let model = model(&[SAMPLE]);
     let recipes = two_recipes(&model);
     let bindings = Bindings::default();
     let crossing = Crossing::new(ty(&model, "Sample"), Direction::Deconstruct);
-    let mut adapter = Recorder::default();
+    let mut adapter = Selective::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
     let selected = compiler
-        .site_recipe(
-            &mut adapter,
-            site("z_put", 0),
-            crossing.clone(),
-            &recipe_name("fields"),
-        )
+        .site(&mut adapter, site("z_put", 0), crossing.clone())
         .expect("declared row")
         .expect("site plan");
     assert!(selected.contains("recipe `fields`"), "{selected}");
 
+    // Every other site takes the binding's answer, which is the default row.
     let default = compiler
-        .site(&mut adapter, site("z_get", 0), crossing)
+        .site(&mut adapter, site("z_get", 1), crossing)
         .expect("default row")
         .expect("site plan");
     assert!(default.contains("recipe `whole`"), "{default}");

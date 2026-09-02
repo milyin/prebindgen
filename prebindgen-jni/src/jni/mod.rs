@@ -557,7 +557,6 @@ impl JniGen {
         let mut adapter = crate::jni::compile::JCompile {
             decls: &self.decls,
             declared_return: None,
-            site: None,
         };
         let fragment = if parts {
             // By its row rather than by name: asking for a row the crossing does
@@ -1370,6 +1369,14 @@ pub struct Declarations {
     /// set can be validated as one — which is where a duplicate site identity
     /// or a missing failure route shows up, neither being visible in a site
     /// compared against itself (#622 review).
+    /// What the registry's site walk compiled, by site.
+    ///
+    /// `Registry::compile_sites` enumerates every position a value crosses at
+    /// and compiles each through `Compile::plan`, so `fn_plan` reads the answer
+    /// off this rather than driving a compiler of its own.
+    pub(crate) planned_sites: std::cell::RefCell<
+        std::collections::HashMap<prebindgen_registry::recipe::Site, crate::jni::compile::JPlan>,
+    >,
     pub(crate) site_plans: std::cell::RefCell<
         Vec<
             std::rc::Rc<

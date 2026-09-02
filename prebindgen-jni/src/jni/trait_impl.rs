@@ -569,6 +569,33 @@ impl Declarations {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
+/// Where one site sorts in a function's canonical order: the return first, then
+/// each parameter position, and within a position its expansion leaves before
+/// the arguments of a callback that sits there.
+///
+/// `usize::MAX` is the position given to everything that is not attached to a
+/// parameter, which sorts it after every parameter that is.
+fn site_order(site: &prebindgen_registry::recipe::Site) -> (String, usize, usize, usize) {
+    use prebindgen_registry::recipe::Role;
+    let (position, kind, index) = match site.role {
+        Role::Return => (0, 0, 0),
+        Role::Error => (0, 1, 0),
+        // Parameter positions are numbered from one, so the return keeps zero.
+        Role::Param { index } => (index + 1, 0, 0),
+        Role::ExpansionLeaf { param, leaf } => (param + 1, 0, leaf),
+        Role::CallbackArg { param, arg } => (param + 1, 1, arg),
+        // A receiver is the value the call is made on, so it precedes every
+        // parameter and follows the return, which is numbered zero.
+        Role::Receiver => (0, 2, 0),
+        // Neither a constant's site nor a part of another crossing's recipe is
+        // attached to a parameter position, so both sort after every parameter
+        // that is. A part keeps its own numbering within that.
+        Role::Const => (usize::MAX, 0, 0),
+        Role::Part { arm, index, .. } => (usize::MAX, 1 + arm.unwrap_or(0), index),
+    };
+    (site.owner.to_string(), position, kind, index)
+}
+
 impl JniGenBuilder {
     /// State this binding into `registry`: what it exports, what crosses, and
     /// what it defines itself.
@@ -647,13 +674,33 @@ impl JniGenBuilder {
             &mut crate::jni::compile::JCompile {
                 decls: &decls,
                 declared_return: None,
-                site: None,
             },
             decls.recipe_table(),
             decls.site_bindings(),
         )?;
         let registry = declared.build()?;
         let mut refusals: Vec<String> = Vec::new();
+        // Every position a value crosses at, compiled once by the registry.
+        // `fn_plan` reads the answers off `decls` rather than driving a
+        // compiler of its own.
+        // Cloned into a local first: the hooks mirror the store back onto
+        // `decls` as they run, and a `borrow()` living in the argument list
+        // would still be held when the first one does.
+        let carried = decls.compiled.borrow().clone();
+        let (sited, store) = registry.compile_sites(
+            &mut crate::jni::compile::JCompile {
+                decls: &decls,
+                declared_return: None,
+            },
+            decls.recipe_table(),
+            decls.site_bindings(),
+            carried,
+        );
+        *decls.compiled.borrow_mut() = store;
+        // A site that will not compile is reported where it is read, which names
+        // the parameter rather than the position — so the refusals are dropped
+        // here and the plans that did compile are kept.
+        *decls.planned_sites.borrow_mut() = sited.plans.into_iter().collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
         decls
@@ -714,7 +761,6 @@ impl JniGenBuilder {
             let mut adapter = crate::jni::compile::JCompile {
                 decls: &decls,
                 declared_return: None,
-                site: None,
             };
             if let Err(e) = compiler.row(&mut adapter, &crossing, &row) {
                 refusals.push(format!(
@@ -729,6 +775,20 @@ impl JniGenBuilder {
             }
             .into());
         }
+        // One order for the canonical site set, whoever froze each site.
+        //
+        // The registry's walk freezes most of them, and JniGen freezes the rest
+        // while it emits — a whole return, whose final plan carries a delivery
+        // the hook's intermediate does not, and the two construct positions that
+        // never reach `Compiler::site`. Which of the two froze a site is an
+        // ordering nobody should be able to read off the plan, so the set is put
+        // back into the one order it has always had: per function, the return
+        // first, then each parameter position with the leaves and callback
+        // arguments that belong to it.
+        decls
+            .site_plans
+            .borrow_mut()
+            .sort_by_key(|plan| site_order(plan.id().site()));
         let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry)?;
         decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })

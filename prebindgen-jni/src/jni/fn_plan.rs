@@ -367,14 +367,6 @@ pub(crate) struct UnfoldOutputPlan {
 /// Value-return facts: the resolved conversion target and wire on the Rust
 /// side, the declared-surface classification on the Kotlin side.
 pub(crate) struct ValueOutputPlan {
-    /// Where this return crosses and which fragment answers it, carried from
-    /// the site hook so the plan the emitters actually read — the one with the
-    /// convert delivery attached — is the one frozen into the canonical site,
-    /// rather than the intermediate the hook produced (#622 review).
-    pub site: Option<(
-        prebindgen_registry::recipe::Bound,
-        prebindgen_registry::generation::FragmentId,
-    )>,
     /// `Return`-delivery convert (`convert_output`) — the wrapper returns the
     /// single deconstructed value through its ordinary output converter.
     pub is_convert: bool,
@@ -903,7 +895,7 @@ fn classify_leaf(
     position: usize,
     leaf_index: usize,
 ) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
-    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Site};
+    use prebindgen_registry::recipe::{Crossing, Direction, Site};
     // `impl Fn(args)` never reaches the compiler: a callback is answered whole,
     // because a JniGen callback ARGUMENT has no conversion of its own —
     // a sealed class reaches the JVM as a selector plus the live arm's slots.
@@ -1012,26 +1004,6 @@ fn classify_leaf(
         }
         return Ok(leaf);
     }
-    // The compiler, resumed over what the build already compiled. Every
-    // fragment this site's recipe needs is in that store, so `site` finds them
-    // rather than building them again — and the plan it wraps them in is the
-    // one hook the registry calls per site rather than per crossing.
-    let mut compiler = Compiler::resume(
-        registry,
-        ext.recipe_table(),
-        ext.site_bindings(),
-        ext.compiled.borrow().clone(),
-    );
-    let mut adapter = crate::jni::compile::JCompile {
-        decls: ext,
-        declared_return: None,
-        site: Some(crate::jni::compile::PlanSite::Param(
-            crate::jni::compile::ParamSite {
-                ident: ident.clone(),
-                expanded,
-            },
-        )),
-    };
     // A site is a place in an exported function, which is what the registry's
     // `Site` means: `owner` is the function and `role` names the position in
     // it. This named the PARAMETER as owner and always index 0, so two
@@ -1049,32 +1021,11 @@ fn classify_leaf(
         owner: owner.clone(),
         role: leaf_role(expanded, position, leaf_index),
     };
-    let crossing = Crossing::new(reading.clone(), Direction::Construct);
-    let use_pair = crate::jni::compile::optional_pair_plan_candidate(ext, reading)
-        && ext
-            .recipe_table()
-            .key_of(&crossing.key(), &crate::jni::recipes::pair())
-            .is_some();
-    let planned = if use_pair {
-        compiler.site_recipe(&mut adapter, site, crossing, &crate::jni::recipes::pair())
-    } else {
-        compiler.site(&mut adapter, site, crossing)
-    };
-    *ext.compiled.borrow_mut() = compiler.finish();
-    match planned {
-        Ok(Some(plan)) => plan.param().ok_or_else(|| PlanError::Unresolved {
-            ty: Box::new(reading.clone()),
-        }),
-        // A site the bindings omitted, which JniGen never declares.
-        Ok(None) => Err(PlanError::Unresolved {
-            ty: Box::new(reading.clone()),
-        }),
-        Err(prebindgen_registry::recipe::CompileError::Adapter(
-            prebindgen_registry::recipe::Refusal::Error(crate::jni::compile::JErr::Plan(e)),
-        )) => Err(*e),
-        // A refusal or a table disagreement, which reach this path only for a
-        // type with no conversion — the same failure the entry lookup reported.
-        Err(_) => Err(if expanded {
+    // The registry compiled every site before this ran, so the answer is read
+    // rather than made — including which row the site took, which
+    // `JCompile::site_recipe` answered while the registry resolved the binding.
+    let unresolved = || {
+        if expanded {
             PlanError::UnresolvedLeaf {
                 ty: Box::new(reading.clone()),
                 param: source_param.clone(),
@@ -1083,8 +1034,14 @@ fn classify_leaf(
             PlanError::Unresolved {
                 ty: Box::new(reading.clone()),
             }
-        }),
-    }
+        }
+    };
+    ext.planned_sites
+        .borrow()
+        .get(&site)
+        .cloned()
+        .and_then(|plan| plan.param())
+        .ok_or_else(unresolved)
 }
 
 /// Compile the return of `func` as one site.
@@ -1100,20 +1057,29 @@ fn return_site(
     declared: Option<TypeRef>,
 ) -> Option<crate::jni::compile::JPlan> {
     use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
-    let mut compiler = Compiler::resume(
-        registry,
-        ext.recipe_table(),
-        ext.site_bindings(),
-        ext.compiled.borrow().clone(),
-    );
-    let mut adapter = crate::jni::compile::JCompile {
-        decls: ext,
-        declared_return: declared,
-        site: Some(crate::jni::compile::PlanSite::Return),
-    };
     let site = Site {
         owner: func.clone(),
         role: Role::Return,
+    };
+    // The registry's walk covers the exported functions, so its answer is read
+    // rather than remade wherever it has one.
+    if let Some(plan) = ext.planned_sites.borrow().get(&site).cloned() {
+        return Some(plan);
+    }
+    // The one thing the walk does not cover, and cannot: a getter this binding
+    // synthesised for a declared constant is not a `#[prebindgen]` function, so
+    // it is in no export set and there is no site for the walk to reach. Every
+    // return of every exported function is planned by the walk — checked, not
+    // assumed: an assertion here that the owner is not an export held across
+    // every fixture and every test.
+    //
+    // `declared_return` rides on the adapter for the same reason — it is the
+    // caller's intent, not a position the `Bound` could name.
+    let carried = ext.compiled.borrow().clone();
+    let mut compiler = Compiler::resume(registry, ext.recipe_table(), ext.site_bindings(), carried);
+    let mut adapter = crate::jni::compile::JCompile {
+        decls: ext,
+        declared_return: declared,
     };
     let crossing = Crossing::new(target.clone(), Direction::Deconstruct);
     let planned = compiler.site(&mut adapter, site, crossing);
@@ -1240,6 +1206,15 @@ fn build_output(
             } else {
                 delivered
             };
+            // The site's own wire list when the registry compiled one that
+            // matches. A callback-delivered expansion whose source has no
+            // `parts` row is planned on its default row instead, which yields
+            // no wires — `annotated_new` in `examples/perftest-flat` is one —
+            // and its leaves are still compiled privately below. That is the
+            // last exported return JniGen plans for itself, and it closes with
+            // the recipe gap this document's finding 4 records: `value_form_of`
+            // declines exactly those decompositions, so no `parts` row exists
+            // for the site to ask for.
             let composed = return_site(ext, registry, ident, &plan.source, None)
                 .and_then(|site| site.decomposed())
                 .filter(|wires| {
@@ -1348,58 +1323,7 @@ fn build_output(
     .ok_or_else(|| PlanError::UnresolvedOutput {
         ty: Box::new(target.clone()),
     })?;
-    // Read off the shared plan: it is the site's own answer, and the plan
-    // built below adds the convert delivery to it rather than replacing it.
-    let (pipeline, surface, is_enum, is_option_enum, enum_niches) = (
-        plan.pipeline.clone(),
-        plan.surface.clone(),
-        plan.is_enum,
-        plan.is_option_enum,
-        plan.enum_niches.clone(),
-    );
-    // The convert shortcut reaches the plan's single leaf itself rather than
-    // through the leaf encoder, and qualifies the accessor calls on that reach
-    // — so those origins are frozen here, with the leaf they belong to.
-    let convert_delivery = is_convert.then(|| {
-        let unfold = unfold_plan.expect("a convert is a Return delivery, which carries its plan");
-        crate::jni::emit::FrozenDelivery::new(
-            ext,
-            registry,
-            unfold,
-            std::rc::Rc::new(
-                unfold
-                    .leaves
-                    .iter()
-                    .map(crate::jni::compile::OutWire::from_leaf)
-                    .collect(),
-            ),
-            None,
-        )
-    });
-    // The plan the emitters read: the site's answer with the convert delivery
-    // attached. This is the one frozen into the canonical site, because it is
-    // the authoritative one — freezing the hook's intermediate carried a
-    // `convert_delivery` of `None` while this object owned the real one.
-    let final_plan = std::rc::Rc::new(ValueOutputPlan {
-        site: plan.site.clone(),
-        is_convert,
-        pipeline,
-        surface,
-        is_enum,
-        is_option_enum,
-        enum_niches,
-        convert_delivery,
-    });
-    if let Some((bound, fragment)) = &final_plan.site {
-        ext.site_plans
-            .borrow_mut()
-            .push(std::rc::Rc::new(crate::jni::compile::whole_return_site(
-                bound,
-                fragment,
-                final_plan.clone(),
-            )));
-    }
-    Ok(FnOutputPlan::Value(final_plan))
+    Ok(FnOutputPlan::Value(plan))
 }
 
 /// Whether a return surfaces as a Kotlin enum class, and whether an optional
