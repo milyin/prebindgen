@@ -186,7 +186,7 @@ pub(crate) fn optional_pair_plan(
 /// JniGen's half of the canonical generation plan.
 ///
 /// Declared here so a JNI fragment can state its conversion chain in the
-/// registry's vocabulary — [`prebindgen_registry::generation::ConversionChain`]
+/// registry's vocabulary — [`prebindgen_registry::generation::ConversionChain<JRepresentation>`]
 /// — rather than in a row of its own. #613 step 4 is what puts JNI fragments
 /// and sites into `FragmentPlan` / `SitePlan`; this states the representation
 /// those will be over, and the chain is its first live use.
@@ -248,11 +248,9 @@ pub(crate) struct JRepresentation;
 impl prebindgen_registry::generation::Representation for JRepresentation {
     /// A stage's carrier is named by the crossing it converts, which is what
     /// JniGen already keys its fragments on.
-    type Intermediate = TypeKey;
     /// One stage: the identity of the artifact that renders it.
-    type ConverterArtifact = JConverterArtifact;
-    type Niche = String;
     type Cleanup = ();
+    type ConverterArtifact = JConverterArtifact;
     type FailureRoute = ();
     /// A site's ordered ABI: the leaves that cross, in order.
     type AbiLayout = JAbiLeaves;
@@ -5479,7 +5477,7 @@ mod chain_tests {
             Direction::Construct => (ChainValue::Intermediate(key.clone()), ChainValue::Source),
             Direction::Deconstruct => (ChainValue::Source, ChainValue::Intermediate(key.clone())),
         };
-        ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+        ConversionChain::Steps(vec![ConverterStep::new(
             from,
             into,
             stage,
@@ -5578,7 +5576,7 @@ mod chain_tests {
     fn a_chain_stores_execution_order_for_its_own_direction() {
         let inner_key = TypeKey::parse("Inner").expect("test key");
         let inner_stage = OperationId::stage(fragment_id("inner"), 0);
-        let inner = ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+        let inner = ConversionChain::Steps(vec![ConverterStep::new(
             ChainValue::Source,
             ChainValue::Intermediate(inner_key.clone()),
             inner_stage.clone(),

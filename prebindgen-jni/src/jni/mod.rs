@@ -1014,22 +1014,20 @@ impl JniGen {
             // through them.
             let steps = |chain: &prebindgen_registry::generation::ConversionChain<
                 crate::jni::compile::JRepresentation,
-            >| {
-                match chain {
-                    prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
-                    prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
-                        .iter()
-                        .map(|step| {
-                            format!(
-                                "{:?}:{:?}->{:?}:{:?}",
-                                step.operation(),
-                                step.from(),
-                                step.into(),
-                                step.failure()
-                            )
-                        })
-                        .collect(),
-                }
+            >| match chain {
+                prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
+                prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
+                    .iter()
+                    .map(|step| {
+                        format!(
+                            "{:?}:{:?}->{:?}:{:?}",
+                            step.operation(),
+                            step.from(),
+                            step.into(),
+                            step.failure()
+                        )
+                    })
+                    .collect(),
             };
             assert_eq!(
                 steps(plan.converter().chain()),

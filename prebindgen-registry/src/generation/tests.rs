@@ -10,10 +10,8 @@ use crate::{
 struct Fake;
 
 impl Representation for Fake {
-    type Intermediate = &'static str;
-    type ConverterArtifact = &'static str;
-    type Niche = u8;
     type Cleanup = &'static str;
+    type ConverterArtifact = &'static str;
     type FailureRoute = &'static str;
     type AbiLayout = &'static str;
     type Artifact = &'static str;
@@ -21,6 +19,11 @@ impl Representation for Fake {
 
 /// A distinct operation identity for a shape bridge or a chain step. These
 /// tests only need to be able to tell two of them apart.
+/// A syntax-free carrier identity, which these tests only need to tell apart.
+fn key(label: &str) -> TypeKey {
+    TypeKey::parse(label).expect("a label parses as a carrier identity")
+}
+
 fn op(label: &str) -> OperationId {
     OperationId::shared(
         ArtifactId::new("test-operation", label).expect("a label is never empty"),
@@ -149,7 +152,7 @@ fn atomic(model: &Flat, id: FragmentId, failure: Failure, mode: Mode) -> Fragmen
     FragmentPlan::new(
         id.clone(),
         ty(model, id.spelling().as_str()),
-        "intermediate",
+        key("intermediate"),
         ConverterPlan::new(
             ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
@@ -236,7 +239,7 @@ fn freeze_prunes_unreached_fragments_and_orders_dependencies_first() {
     let pair_plan = FragmentPlan::new(
         pair.clone(),
         ty(&model, "Pair"),
-        "pair intermediate",
+        key("pair_intermediate"),
         ConverterPlan::new(
             ShapePlan::Product {
                 bridge: FixedArity::new(2, op("tuple")),
@@ -418,7 +421,7 @@ fn freeze_reports_arity_niche_ownership_and_validity_errors() {
     let bad = FragmentPlan::new(
         pair.clone(),
         ty(&model, "Pair"),
-        "pair",
+        key("pair"),
         ConverterPlan::new(
             ShapePlan::Product {
                 bridge: FixedArity::new(2, op("tuple")),
@@ -427,7 +430,7 @@ fn freeze_reports_arity_niche_ownership_and_validity_errors() {
                     yield_of(&leaf, Mode::Exclusive, Validity::SelfSufficient),
                 )],
             },
-            NichePlan::new(2, vec![1], vec![1]),
+            NichePlan::new(2, vec!["a".to_owned()], vec!["a".to_owned()]),
             Failure::Infallible,
             Cleanup::UnlessTransferred("drop"),
         ),
@@ -436,7 +439,7 @@ fn freeze_reports_arity_niche_ownership_and_validity_errors() {
     let leaf_plan = FragmentPlan::new(
         leaf.clone(),
         ty(&model, "Leaf"),
-        "leaf",
+        key("leaf"),
         ConverterPlan::new(
             ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
@@ -468,7 +471,7 @@ fn invoke_children_must_use_the_opposite_direction() {
     let invoke = FragmentPlan::new(
         callable.clone(),
         ty(&model, "Pair"),
-        "callable",
+        key("callable"),
         ConverterPlan::new(
             ShapePlan::Invoke {
                 bridge: FixedArity::new(1, op("invoke")),
@@ -553,19 +556,19 @@ fn atomic_codec_and_staged_chain_are_distinct_operations() {
     let fragment = FragmentPlan::new(
         leaf.clone(),
         ty(&model, "Leaf"),
-        "jint",
+        key("jint"),
         ConverterPlan::with_chain(
             ShapePlan::Atomic(op("read jint wire")),
             ConversionChain::Steps(vec![
                 ConverterStep::new(
-                    ChainValue::Intermediate("jint"),
-                    ChainValue::Intermediate("i32"),
+                    ChainValue::Intermediate(key("jint")),
+                    ChainValue::Intermediate(key("i32")),
                     op("normalize jint"),
                     Failure::Infallible,
                     Cleanup::None,
                 ),
                 ConverterStep::new(
-                    ChainValue::Intermediate("i32"),
+                    ChainValue::Intermediate(key("i32")),
                     ChainValue::Source,
                     op("construct Percent"),
                     Failure::Fallible,
@@ -590,7 +593,7 @@ fn atomic_codec_and_staged_chain_are_distinct_operations() {
         panic!("staged leaf must retain its terminal wire codec");
     };
     assert_eq!(*codec, op("read jint wire"));
-    assert_eq!(fragment.intermediate(), &"jint");
+    assert_eq!(fragment.intermediate(), &key("jint"));
     let chain = converter.chain();
     assert_eq!(chain.steps().len(), 2);
     assert_eq!(*chain.steps()[0].operation(), op("normalize jint"));
@@ -606,7 +609,7 @@ fn malformed_conversion_chains_are_rejected() {
     empty.fragment(FragmentPlan::new(
         leaf.clone(),
         ty(&model, "Leaf"),
-        "Leaf",
+        key("Leaf"),
         ConverterPlan::with_chain(
             ShapePlan::Atomic(op("codec")),
             ConversionChain::Steps(vec![]),
@@ -624,12 +627,12 @@ fn malformed_conversion_chains_are_rejected() {
     broken.fragment(FragmentPlan::new(
         leaf.clone(),
         ty(&model, "Leaf"),
-        "Leaf",
+        key("Leaf"),
         ConverterPlan::with_chain(
             ShapePlan::Atomic(op("codec")),
             ConversionChain::Steps(vec![ConverterStep::new(
-                ChainValue::Intermediate("not jint"),
-                ChainValue::Intermediate("i32"),
+                ChainValue::Intermediate(key("not_jint")),
+                ChainValue::Intermediate(key("i32")),
                 op("convert"),
                 Failure::Fallible,
                 Cleanup::None,
@@ -680,7 +683,7 @@ fn fragment_identity_duplicates_and_yield_type_are_checked() {
     spelling.fragment(FragmentPlan::new(
         bad_spelling.clone(),
         ty(&model, "Leaf"),
-        "Leaf",
+        key("Leaf"),
         ConverterPlan::new(
             ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
@@ -698,7 +701,7 @@ fn fragment_identity_duplicates_and_yield_type_are_checked() {
     crossing.fragment(FragmentPlan::new(
         bad_crossing.clone(),
         ty(&model, "Pair"),
-        "Pair",
+        key("Pair"),
         ConverterPlan::new(
             ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
@@ -715,7 +718,7 @@ fn fragment_identity_duplicates_and_yield_type_are_checked() {
     wrong_yield.fragment(FragmentPlan::new(
         leaf.clone(),
         ty(&model, "Leaf"),
-        "Leaf",
+        key("Leaf"),
         ConverterPlan::new(
             ShapePlan::Atomic(op("codec")),
             NichePlan::none(),
@@ -743,7 +746,7 @@ fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
     unknown.fragment(FragmentPlan::new(
         pair.clone(),
         ty(&model, "Pair"),
-        "Pair",
+        key("Pair"),
         ConverterPlan::new(
             ShapePlan::Product {
                 bridge: FixedArity::new(1, op("tuple")),
@@ -775,7 +778,7 @@ fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
         .fragment(FragmentPlan::new(
             pair.clone(),
             ty(&model, "Pair"),
-            "Pair",
+            key("Pair"),
             ConverterPlan::new(
                 ShapePlan::Product {
                     bridge: FixedArity::new(1, op("tuple")),
@@ -790,7 +793,7 @@ fn unknown_fragment_edges_and_fragment_cycles_are_rejected() {
         .fragment(FragmentPlan::new(
             leaf.clone(),
             ty(&model, "Leaf"),
-            "Leaf",
+            key("Leaf"),
             ConverterPlan::new(
                 ShapePlan::Product {
                     bridge: FixedArity::new(1, op("tuple")),
@@ -842,7 +845,7 @@ fn site_identity_recipe_contract_and_cleanup_are_checked() {
     let borrowed_leaf = FragmentPlan::new(
         leaf.clone(),
         ty(&model, "Leaf"),
-        "Leaf",
+        key("Leaf"),
         ConverterPlan::new(
             ShapePlan::Atomic(op("codec")),
             NichePlan::none(),

@@ -528,18 +528,19 @@ impl std::error::Error for IdentityError {}
 /// Rust syntax remains forbidden until final emission spells an opaque
 /// [`TypeRef`].
 pub trait Representation {
-    /// A syntax-free identity for a private Rust carrier in a converter graph.
-    type Intermediate: Clone + Eq;
+    /// A cleanup operation: what has to be released, not just when.
+    ///
+    /// `()` in both adapters today, which says only that neither has needed one
+    /// yet — a third with a pinned foreign buffer to free and a temporary handle
+    /// to destroy would have two, and could not tell them apart through a unit
+    /// (#679 review).
+    type Cleanup;
     /// Frozen adapter artifact that renders this fragment's private converter.
     ///
     /// The registry owns its dependency-ordered placement but treats the
     /// payload as opaque. [`FragmentPlan`] represents fragments without a
     /// standalone converter explicitly.
     type ConverterArtifact;
-    /// One semantic niche identity. Equal values denote the same bit domain.
-    type Niche: Clone + Eq + Hash;
-    /// A cleanup operation.
-    type Cleanup;
     /// A typed route for a failed site conversion.
     type FailureRoute;
     /// The ordered wire layout of one site.
@@ -698,8 +699,8 @@ pub enum ChainValue<I> {
 /// selected fragment, which is how conversions such as
 /// `jint -> i32 -> Percent` remain one recipe answer.
 pub struct ConverterStep<R: Representation> {
-    from: ChainValue<R::Intermediate>,
-    into: ChainValue<R::Intermediate>,
+    from: ChainValue<TypeKey>,
+    into: ChainValue<TypeKey>,
     operation: OperationId,
     failure: Failure,
     cleanup: Cleanup<R::Cleanup>,
@@ -708,8 +709,8 @@ pub struct ConverterStep<R: Representation> {
 impl<R: Representation> ConverterStep<R> {
     /// Describe one directional conversion step.
     pub fn new(
-        from: ChainValue<R::Intermediate>,
-        into: ChainValue<R::Intermediate>,
+        from: ChainValue<TypeKey>,
+        into: ChainValue<TypeKey>,
         operation: OperationId,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
@@ -724,12 +725,12 @@ impl<R: Representation> ConverterStep<R> {
     }
 
     /// Value consumed by this step.
-    pub fn from(&self) -> &ChainValue<R::Intermediate> {
+    pub fn from(&self) -> &ChainValue<TypeKey> {
         &self.from
     }
 
     /// Value produced by this step.
-    pub fn into(&self) -> &ChainValue<R::Intermediate> {
+    pub fn into(&self) -> &ChainValue<TypeKey> {
         &self.into
     }
 
@@ -769,7 +770,6 @@ pub enum ConversionChain<R: Representation> {
 // marker type naming an adapter's associated types rather than a value.
 impl<R: Representation> Clone for ConversionChain<R>
 where
-    R::Intermediate: Clone,
     R::Cleanup: Clone,
 {
     fn clone(&self) -> Self {
@@ -782,7 +782,6 @@ where
 
 impl<R: Representation> Clone for ConverterStep<R>
 where
-    R::Intermediate: Clone,
     R::Cleanup: Clone,
 {
     fn clone(&self) -> Self {
@@ -872,7 +871,7 @@ impl ShapePlan {
 pub struct ConverterPlan<R: Representation> {
     shape: ShapePlan,
     chain: ConversionChain<R>,
-    niches: NichePlan<R::Niche>,
+    niches: NichePlan<String>,
     failure: Failure,
     cleanup: Cleanup<R::Cleanup>,
 }
@@ -881,7 +880,7 @@ impl<R: Representation> ConverterPlan<R> {
     /// Freeze one converter operation graph.
     pub fn new(
         shape: ShapePlan,
-        niches: NichePlan<R::Niche>,
+        niches: NichePlan<String>,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
     ) -> Self {
@@ -899,7 +898,7 @@ impl<R: Representation> ConverterPlan<R> {
     pub fn with_chain(
         shape: ShapePlan,
         chain: ConversionChain<R>,
-        niches: NichePlan<R::Niche>,
+        niches: NichePlan<String>,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
     ) -> Self {
@@ -923,7 +922,7 @@ impl<R: Representation> ConverterPlan<R> {
     }
 
     /// Consumed and exposed niche domains.
-    pub fn niches(&self) -> &NichePlan<R::Niche> {
+    pub fn niches(&self) -> &NichePlan<String> {
         &self.niches
     }
 
@@ -942,7 +941,7 @@ impl<R: Representation> ConverterPlan<R> {
 pub struct FragmentPlan<R: Representation> {
     id: FragmentId,
     source: TypeRef,
-    intermediate: R::Intermediate,
+    intermediate: TypeKey,
     converter: ConverterPlan<R>,
     conversion: Option<R::ConverterArtifact>,
     /// Whether [`Self::conversion`] is also emitted into the file.
@@ -955,7 +954,7 @@ impl<R: Representation> FragmentPlan<R> {
     pub fn new(
         id: FragmentId,
         source: TypeRef,
-        intermediate: R::Intermediate,
+        intermediate: TypeKey,
         converter: ConverterPlan<R>,
         yields: Yield,
     ) -> Self {
@@ -1004,7 +1003,7 @@ impl<R: Representation> FragmentPlan<R> {
     }
 
     /// Adapter-selected carrier adjacent to the shape.
-    pub fn intermediate(&self) -> &R::Intermediate {
+    pub fn intermediate(&self) -> &TypeKey {
         &self.intermediate
     }
 
