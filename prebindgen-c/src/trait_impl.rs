@@ -355,10 +355,10 @@ impl CbindgenBuilder {
             .map(|(name, pending)| {
                 let id = ArtifactId::new("c-callback", name).map_err(|e| e.to_string())?;
                 Ok(ArtifactPlan::new(
-                    id,
+                    id.clone(),
                     Vec::new(),
                     pending.inputs,
-                    crate::chain::CArtifact::Callback(pending.callback),
+                    crate::assembly::CFinalArtifact::Callback(id, Box::new(pending.callback)),
                 ))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -541,15 +541,19 @@ impl CbindgenBuilder {
             if dependencies.is_empty() {
                 continue;
             }
+            let id = ArtifactId::new("c-opaque-handle", key.as_str()).map_err(|e| e.to_string())?;
             artifacts.push(ArtifactPlan::new(
-                ArtifactId::new("c-opaque-handle", key.as_str()).map_err(|e| e.to_string())?,
+                id.clone(),
                 Vec::new(),
                 dependencies,
-                crate::chain::CArtifact::OpaqueHandle(crate::chain::OpaqueHandleArtifact {
-                    source: reading,
-                    c_struct: self.c_type_ident(key),
-                    drop_ident: self.destructor_symbol(key),
-                }),
+                crate::assembly::CFinalArtifact::OpaqueHandle(
+                    id,
+                    Box::new(crate::chain::OpaqueHandleArtifact {
+                        source: reading,
+                        c_struct: self.c_type_ident(key),
+                        drop_ident: self.destructor_symbol(key),
+                    }),
+                ),
             ));
         }
 
@@ -622,17 +626,21 @@ impl CbindgenBuilder {
                         .value_opaque_writeback_plan(registry, key)
                         .expect("value-opaque declaration has a write-back policy"),
                 });
+            let id = ArtifactId::new("c-value-opaque", key.as_str()).map_err(|e| e.to_string())?;
             artifacts.push(ArtifactPlan::new(
-                ArtifactId::new("c-value-opaque", key.as_str()).map_err(|e| e.to_string())?,
+                id.clone(),
                 Vec::new(),
                 dependencies,
-                crate::chain::CArtifact::ValueOpaque(crate::chain::ValueOpaqueArtifact {
-                    source: reading,
-                    opaque: cfg.opaque.clone(),
-                    mirror,
-                    drop_ident: self.destructor_symbol(key),
-                    take,
-                }),
+                crate::assembly::CFinalArtifact::ValueOpaque(
+                    id,
+                    Box::new(crate::chain::ValueOpaqueArtifact {
+                        source: reading,
+                        opaque: cfg.opaque.clone(),
+                        mirror,
+                        drop_ident: self.destructor_symbol(key),
+                        take,
+                    }),
+                ),
             ));
         }
         Ok(artifacts)
@@ -718,15 +726,19 @@ impl CbindgenBuilder {
                 .iter()
                 .any(|arm| arm.fields.iter().any(|field| field.cleanup.is_some()))
                 .then(|| self.destructor_symbol(key));
+            let id = ArtifactId::new("c-tagged-union", key.as_str()).map_err(|e| e.to_string())?;
             artifacts.push(ArtifactPlan::new(
-                ArtifactId::new("c-tagged-union", key.as_str()).map_err(|e| e.to_string())?,
+                id.clone(),
                 prerequisites,
                 inputs,
-                crate::chain::CArtifact::TaggedUnion(crate::chain::TaggedUnionArtifact {
-                    c_name: self.c_type_ident(key),
-                    arms,
-                    drop_ident,
-                }),
+                crate::assembly::CFinalArtifact::TaggedUnion(
+                    id,
+                    Box::new(crate::chain::TaggedUnionArtifact {
+                        c_name: self.c_type_ident(key),
+                        arms,
+                        drop_ident,
+                    }),
+                ),
             ));
         }
         Ok(artifacts)
@@ -880,15 +892,17 @@ impl CbindgenBuilder {
         // dependency order, then one exported wrapper per declared function,
         // named in source order so the file's layout does not depend on how
         // the declarations were written.
+        //
+        // The four kinds the plan already holds are read back from it by kind:
+        // the payload IS the final artifact now, so this is a filter rather
+        // than a wrapper around a lookup.
         let planned = |kind: &str| {
-            crate::assembly::CPlanned::of_kind(&generation, kind)
-                .into_iter()
-                .map(|artifact| crate::assembly::CFinalArtifact::Planned(Box::new(artifact)))
+            generation
+                .artifacts()
+                .filter(|artifact| artifact.id().kind() == kind)
+                .map(|artifact| artifact.payload().clone())
                 .collect::<Vec<_>>()
         };
-        // The type-level artifacts, in the order C needs to read them, then
-        // the reserved sum-type values. The runtime helpers they call are
-        // planned below, once these have said what they call.
         let mut artifacts: Vec<crate::assembly::CFinalArtifact> = Vec::new();
         artifacts.extend(planned("c-opaque-handle"));
         artifacts.extend(
@@ -933,9 +947,6 @@ impl CbindgenBuilder {
                 function,
             )))
         }));
-        // Constants: this binding has no constant declaration mechanism, so
-        // every captured one is aliased. Named in source order, as the
-        // wrappers are.
         let mut sorted_constants: Vec<_> = registry.flat().constants().collect();
         sorted_constants.sort_by_key(|constant| constant.name.to_string());
         artifacts.extend(sorted_constants.into_iter().map(|constant| {
@@ -944,11 +955,6 @@ impl CbindgenBuilder {
             )))
         }));
 
-        // The runtime helpers exist because something calls them, so the
-        // planned artifacts are what decide it. Asking them is what makes the
-        // answer exact: a `Vec` delivered to a callback needs the array
-        // builder just as a `Vec` return does, which a gate over return types
-        // alone missed (#437).
         let calls: std::collections::HashSet<_> = artifacts
             .iter()
             .flat_map(prebindgen_registry::write::RustArtifact::calls)

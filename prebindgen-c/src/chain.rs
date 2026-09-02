@@ -1173,65 +1173,8 @@ impl CallbackArtifact {
     }
 }
 
-/// Adapter-owned final artifacts stored and ordered by the registry plan.
-pub(crate) enum CArtifact {
-    Callback(CallbackArtifact),
-    OpaqueHandle(OpaqueHandleArtifact),
-    TaggedUnion(TaggedUnionArtifact),
-    ValueOpaque(ValueOpaqueArtifact),
-}
-
-impl CArtifact {
-    /// Identities this artifact's items answer for beyond its own.
-    ///
-    /// A callback renders the Invoke helper of its converter operation, whose
-    /// fragment deliberately carries no artifact of its own.
-    pub(crate) fn provides(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
-        match self {
-            Self::Callback(callback) => vec![prebindgen_registry::write::ArtifactKey::Operation(
-                callback.invoke.operation.clone(),
-            )],
-            Self::OpaqueHandle(_) | Self::TaggedUnion(_) | Self::ValueOpaque(_) => Vec::new(),
-        }
-    }
-
-    /// The converters this artifact's body calls.
-    pub(crate) fn calls(&self) -> Vec<prebindgen_registry::write::ArtifactKey> {
-        let mut calls = Vec::new();
-        match self {
-            // The Invoke helper converts each argument on its way out.
-            Self::Callback(callback) => {
-                for argument in &callback.arguments {
-                    argument.value.calls(&mut calls);
-                }
-            }
-            // A tagged union's typed destructor frees what its live arm owns,
-            // which reaches a nested union's destructor and the memory helpers.
-            Self::TaggedUnion(union) => {
-                for field in union.arms.iter().flat_map(|arm| &arm.fields) {
-                    if let Some(cleanup) = &field.cleanup {
-                        cleanup.calls(&mut calls);
-                    }
-                }
-            }
-            // A handle is a pointer and a value-opaque is reinterpreted:
-            // neither converts nor frees anything of its own.
-            Self::OpaqueHandle(_) | Self::ValueOpaque(_) => {}
-        }
-        calls
-    }
-
-    pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
-        match self {
-            Self::Callback(callback) => callback.render(emit),
-            Self::OpaqueHandle(handle) => handle.render(emit),
-            Self::TaggedUnion(tagged_union) => tagged_union.render(emit),
-            Self::ValueOpaque(value) => value.render(emit),
-        }
-    }
-}
-
 /// One opaque C handle declaration and its typed destructor.
+#[derive(Clone)]
 pub(crate) struct OpaqueHandleArtifact {
     pub(crate) source: TypeRef,
     pub(crate) c_struct: syn::Ident,
@@ -1239,7 +1182,7 @@ pub(crate) struct OpaqueHandleArtifact {
 }
 
 impl OpaqueHandleArtifact {
-    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
+    pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let source = emit.emit_source_type(&self.source);
         let c_struct = &self.c_struct;
         let drop_ident = &self.drop_ident;
@@ -1265,6 +1208,7 @@ impl OpaqueHandleArtifact {
 }
 
 /// A generated visible mirror and whether it needs a full gravestone.
+#[derive(Clone)]
 pub(crate) struct ValueOpaqueMirror {
     pub(crate) ident: syn::Ident,
     pub(crate) fields: Vec<(syn::Ident, syn::Type)>,
@@ -1272,12 +1216,14 @@ pub(crate) struct ValueOpaqueMirror {
 }
 
 /// The optional public move helper for a takeable value-opaque type.
+#[derive(Clone)]
 pub(crate) struct ValueOpaqueTake {
     pub(crate) ident: syn::Ident,
     pub(crate) writeback: ValueOpaqueWriteback,
 }
 
 /// One value-opaque declaration family retained until final source spelling.
+#[derive(Clone)]
 pub(crate) struct ValueOpaqueArtifact {
     pub(crate) source: TypeRef,
     pub(crate) opaque: syn::Type,
@@ -1287,7 +1233,7 @@ pub(crate) struct ValueOpaqueArtifact {
 }
 
 impl ValueOpaqueArtifact {
-    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
+    pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let source = emit.emit_source_type(&self.source);
         let opaque = &self.opaque;
         let mut items = Vec::new();
@@ -1390,6 +1336,7 @@ impl ValueOpaqueArtifact {
 }
 
 /// One recursively composed cleanup operation for an owning union payload.
+#[derive(Clone)]
 pub(crate) enum PayloadCleanup {
     AllocatedString,
     BoxedPointer {
@@ -1459,18 +1406,21 @@ impl PayloadCleanup {
 }
 
 /// One payload field's target wire and optional ownership cleanup.
+#[derive(Clone)]
 pub(crate) struct TaggedUnionFieldArtifact {
     pub(crate) wire: syn::Type,
     pub(crate) cleanup: Option<PayloadCleanup>,
 }
 
 /// One alternative of a frozen C tagged-union declaration.
+#[derive(Clone)]
 pub(crate) struct TaggedUnionArmArtifact {
     pub(crate) alternative: Alternative,
     pub(crate) fields: Vec<TaggedUnionFieldArtifact>,
 }
 
 /// A tagged-union mirror and its optional typed destructor.
+#[derive(Clone)]
 pub(crate) struct TaggedUnionArtifact {
     pub(crate) c_name: syn::Ident,
     pub(crate) arms: Vec<TaggedUnionArmArtifact>,
@@ -1478,7 +1428,7 @@ pub(crate) struct TaggedUnionArtifact {
 }
 
 impl TaggedUnionArtifact {
-    fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
+    pub(crate) fn render(&self, emit: &RustWriter) -> Vec<syn::Item> {
         let c_name = &self.c_name;
         let variants = self.arms.iter().map(|arm| {
             let alternative = &arm.alternative;

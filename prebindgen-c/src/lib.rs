@@ -480,7 +480,10 @@ impl CbindgenBuilder {
                 | assembly::CFinalArtifact::Enum(_)
                 | assembly::CFinalArtifact::DomainConstant(_)
                 | assembly::CFinalArtifact::ArrayBuilder
-                | assembly::CFinalArtifact::Planned(_) => None,
+                | assembly::CFinalArtifact::OpaqueHandle(..)
+                | assembly::CFinalArtifact::ValueOpaque(..)
+                | assembly::CFinalArtifact::TaggedUnion(..)
+                | assembly::CFinalArtifact::Callback(..) => None,
             })
     }
 }

@@ -310,7 +310,7 @@ impl Representation for CRepresentation {
     type ConverterArtifact = CFunction;
     type FailureRoute = CFailureRoute;
     type AbiLayout = CValue;
-    type Artifact = crate::chain::CArtifact;
+    type Artifact = crate::assembly::CFinalArtifact;
 }
 
 /// The C adapter's answer for one crossing.
