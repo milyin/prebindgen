@@ -1948,12 +1948,15 @@ fn declining_a_callback_parameter_still_enumerates_its_arguments() {
     use std::cell::RefCell;
 
     use crate::recipe::{
-        At, Bindings, Carrier, Compile, Compiled, Crossing, Ctx, Frag, Mode, Parts, Recipes, Site,
-        Validity, Yield,
+        At, Bindings, Carrier, Compile, Compiled, Crossing, Ctx, Frag, Mode, Parts, Recipes, Role,
+        Site, Validity, Yield,
     };
 
     #[derive(Default)]
     struct Sites {
+        /// Whether this adapter answers a callback parameter whole, and so
+        /// declines the position.
+        whole: bool,
         planned: RefCell<Vec<String>>,
         asked: RefCell<Vec<String>>,
     }
@@ -1986,7 +1989,7 @@ fn declining_a_callback_parameter_still_enumerates_its_arguments() {
         /// The rule under test: a callback parameter is answered whole.
         fn plans_site(&self, site: &Site, crossing: &Crossing) -> bool {
             self.asked.borrow_mut().push(format!("{:?}", site.role));
-            if crossing.spelled().callback_args().is_some() {
+            if self.whole && crossing.spelled().callback_args().is_some() {
                 return false;
             }
             self.planned.borrow_mut().push(format!("{:?}", site.role));
@@ -2069,7 +2072,10 @@ fn declining_a_callback_parameter_still_enumerates_its_arguments() {
             .expect("scan");
 
     let recipes = Recipes::builder().build(registry.flat()).expect("table");
-    let mut adapter = Sites::default();
+    let mut adapter = Sites {
+        whole: true,
+        ..Sites::default()
+    };
     let (_sited, _store) = registry.compile_sites(
         &mut adapter,
         &recipes,
@@ -2090,5 +2096,21 @@ fn declining_a_callback_parameter_still_enumerates_its_arguments() {
     assert!(
         asked.iter().any(|role| role.starts_with("CallbackArg")),
         "its argument is still offered even though the parameter was declined: {asked:?}"
+    );
+    // And an adapter that accepts the position gets a compiled plan for it, so
+    // "the walk offers it" and "the walk plans it" are not the same assertion.
+    let mut accepts = Sites::default();
+    let (sited, _) = registry.compile_sites(
+        &mut accepts,
+        &recipes,
+        &Bindings::default(),
+        Compiled::default(),
+    );
+    assert!(
+        sited
+            .plans
+            .iter()
+            .any(|(site, _)| matches!(site.role, Role::CallbackArg { .. })),
+        "an adapter that plans a callback argument gets a site plan for it"
     );
 }

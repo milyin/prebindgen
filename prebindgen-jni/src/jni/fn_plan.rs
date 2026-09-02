@@ -780,8 +780,8 @@ impl JniFunctionPlan {
                     // its own reading now, so there is nothing to fetch and
                     // nothing that can miss.
                     leaves.push(classify_leaf(
-                        ext, registry, &leaf.name, &leaf.ty, /*expanded=*/ true, &ident,
-                        &f.name, position, leaf_index,
+                        ext, &leaf.ty, /*expanded=*/ true, &ident, &f.name, position,
+                        leaf_index,
                     )?);
                 }
                 ParamForm::Expanded {
@@ -790,8 +790,7 @@ impl JniFunctionPlan {
                 }
             } else {
                 ParamForm::Single(classify_leaf(
-                    ext, registry, &ident, &param.ty, /*expanded=*/ false, &ident, &f.name,
-                    position, 0,
+                    ext, &param.ty, /*expanded=*/ false, &ident, &f.name, position, 0,
                 )?)
             };
             params.push(PlanParam { ident, ty, form });
@@ -883,8 +882,6 @@ fn leaf_role(
 #[allow(clippy::too_many_arguments)]
 fn classify_leaf(
     ext: &Declarations,
-    registry: &Registry,
-    ident: &syn::Ident,
     reading: &TypeRef,
     expanded: bool,
     source_param: &syn::Ident,
@@ -895,115 +892,10 @@ fn classify_leaf(
     position: usize,
     leaf_index: usize,
 ) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
-    use prebindgen_registry::recipe::{Crossing, Direction, Site};
-    // `impl Fn(args)` never reaches the compiler: a callback is answered whole,
-    // because a JniGen callback ARGUMENT has no conversion of its own —
-    // a sealed class reaches the JVM as a selector plus the live arm's slots.
-    // Driving the derived callback recipe here would ask for the one conversion
-    // that does not exist. This carve-out goes when the arms are recipes a
-    // callback can be composed from.
-    if let Some(args) = reading.callback_args() {
-        // `SpecKey` is a memo key and holds `TypeKey`s, so the args reach it as
-        // each arg reading's own identity.
-        let iface = ext.iface_spec(registry, &SpecKey::callback(args));
-        let entry = ext.in_frag(reading).ok_or_else(|| PlanError::Unresolved {
-            ty: Box::new(reading.clone()),
-        })?;
-        let pipeline = entry.pipeline(
-            prebindgen_registry::recipe::Direction::Construct,
-            prebindgen_registry::recipe::Mode::Owned,
-        );
-        let wire_ident = ident.clone();
-        let native = std::rc::Rc::new(vec![NativeParam {
-            rust_ident: wire_ident.clone(),
-            rust_wire: annotate_jobject_with_lifetime(pipeline.wire(), "a").to_token_stream(),
-            kt_name: kt_param_name(&ident.to_string()),
-            kt_wire: entry.metadata.kotlin_name.clone(),
-            jvm_slots: 1,
-        }]);
-        let leaf = std::rc::Rc::new(PlanLeaf {
-            reading: reading.clone(),
-            kt_name: kt_param_name(&ident.to_string()),
-            kt_public: None,
-            optional: reading.optional_inner().is_some(),
-            as_enum_value: ext.is_kotlin_enum_reading(reading),
-            enum_niche: crate::jni::compile::option_enum_niche(
-                ext,
-                reading,
-                prebindgen_registry::recipe::Direction::Construct,
-            ),
-            native,
-            pipeline,
-            rust: RustParamOp::Pipeline { wire_ident },
-            kotlin: KotlinParamOp::Callback { iface },
-        });
-        // This parameter never reaches `Compiler::site`, so nothing else
-        // states it canonically — but every fact a site plan needs is here:
-        // the place in the function, the crossing, and the fragment that
-        // answers it, whose own id carries the recipe that was selected.
-        // Stated here rather than left out, so the canonical site set covers
-        // this path too (#622 review).
-        {
-            let fragment = entry.plan();
-            ext.site_plans
-                .borrow_mut()
-                .push(std::rc::Rc::new(crate::jni::compile::site_plan(
-                    fragment,
-                    &prebindgen_registry::recipe::Bound {
-                        site: Site {
-                            owner: owner.clone(),
-                            role: leaf_role(expanded, position, leaf_index),
-                        },
-                        crossing: Crossing::new(reading.clone(), Direction::Construct),
-                        recipe: fragment.id().recipe().clone(),
-                        origin: prebindgen_registry::recipe::Origin::Function,
-                    },
-                    crate::jni::compile::JAbiLeaves::Params(leaf.clone()),
-                )));
-            // And one site per value the callback delivers. A delivered
-            // argument is a place in THIS function, which is what
-            // `Role::CallbackArg` names and why the registry keeps it apart
-            // from the `Role::Part` the shared callback recipe is compiled at:
-            // several functions taking one `impl Fn` signature share the
-            // delivery, and each states its own site over it.
-            //
-            // The recipe is `site_bindings`' answer, not one composed here. A
-            // fabricated `Bound` is what the first two attempts at this
-            // produced, and a site that misreports which row it took is worse
-            // than an absent one (#622 review).
-            if let Some(plan) = entry.rust.invoke_plan() {
-                let arguments = match fragment.converter().shape() {
-                    prebindgen_registry::generation::ShapePlan::Invoke { arguments, .. } => {
-                        arguments.as_slice()
-                    }
-                    _ => &[],
-                };
-                for (arg, ty) in args.iter().enumerate() {
-                    let (Some(edge), Some(abi)) = (arguments.get(arg), plan.arg_abi(arg)) else {
-                        continue;
-                    };
-                    let crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
-                    let site = Site {
-                        owner: owner.clone(),
-                        role: prebindgen_registry::recipe::Role::CallbackArg {
-                            param: position,
-                            arg,
-                        },
-                    };
-                    let Some(bound) =
-                        ext.site_bindings()
-                            .resolve(&site, &crossing, ext.recipe_table())
-                    else {
-                        continue;
-                    };
-                    ext.site_plans.borrow_mut().push(std::rc::Rc::new(
-                        crate::jni::compile::callback_arg_site(&bound, edge, abi),
-                    ));
-                }
-            }
-        }
-        return Ok(leaf);
-    }
+    use prebindgen_registry::recipe::Site;
+    // Every parameter's leaf is built in `JCompile::plan`, including a callback
+    // parameter's — which is answered whole and states one site per value the
+    // callback delivers. This reads the answer; it makes none.
     // A site is a place in an exported function, which is what the registry's
     // `Site` means: `owner` is the function and `role` names the position in
     // it. This named the PARAMETER as owner and always index 0, so two
