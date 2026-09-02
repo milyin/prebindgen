@@ -528,18 +528,12 @@ impl std::error::Error for IdentityError {}
 /// Rust syntax remains forbidden until final emission spells an opaque
 /// [`TypeRef`].
 pub trait Representation {
-    /// A syntax-free identity for a private Rust carrier in a converter graph.
-    type Intermediate: Clone + Eq;
     /// Frozen adapter artifact that renders this fragment's private converter.
     ///
     /// The registry owns its dependency-ordered placement but treats the
     /// payload as opaque. [`FragmentPlan`] represents fragments without a
     /// standalone converter explicitly.
     type ConverterArtifact;
-    /// One semantic niche identity. Equal values denote the same bit domain.
-    type Niche: Clone + Eq + Hash;
-    /// A cleanup operation.
-    type Cleanup;
     /// A typed route for a failed site conversion.
     type FailureRoute;
     /// The ordered wire layout of one site.
@@ -697,22 +691,23 @@ pub enum ChainValue<I> {
 /// A step has no fragment identity of its own: it is an internal node of the
 /// selected fragment, which is how conversions such as
 /// `jint -> i32 -> Percent` remain one recipe answer.
-pub struct ConverterStep<R: Representation> {
-    from: ChainValue<R::Intermediate>,
-    into: ChainValue<R::Intermediate>,
+#[derive(Clone)]
+pub struct ConverterStep {
+    from: ChainValue<TypeKey>,
+    into: ChainValue<TypeKey>,
     operation: OperationId,
     failure: Failure,
-    cleanup: Cleanup<R::Cleanup>,
+    cleanup: Cleanup<()>,
 }
 
-impl<R: Representation> ConverterStep<R> {
+impl ConverterStep {
     /// Describe one directional conversion step.
     pub fn new(
-        from: ChainValue<R::Intermediate>,
-        into: ChainValue<R::Intermediate>,
+        from: ChainValue<TypeKey>,
+        into: ChainValue<TypeKey>,
         operation: OperationId,
         failure: Failure,
-        cleanup: Cleanup<R::Cleanup>,
+        cleanup: Cleanup<()>,
     ) -> Self {
         Self {
             from,
@@ -724,12 +719,12 @@ impl<R: Representation> ConverterStep<R> {
     }
 
     /// Value consumed by this step.
-    pub fn from(&self) -> &ChainValue<R::Intermediate> {
+    pub fn from(&self) -> &ChainValue<TypeKey> {
         &self.from
     }
 
     /// Value produced by this step.
-    pub fn into(&self) -> &ChainValue<R::Intermediate> {
+    pub fn into(&self) -> &ChainValue<TypeKey> {
         &self.into
     }
 
@@ -744,7 +739,7 @@ impl<R: Representation> ConverterStep<R> {
     }
 
     /// Cleanup attached to this step's failure and success edges.
-    pub fn cleanup(&self) -> &Cleanup<R::Cleanup> {
+    pub fn cleanup(&self) -> &Cleanup<()> {
         &self.cleanup
     }
 }
@@ -757,48 +752,17 @@ impl<R: Representation> ConverterStep<R> {
 /// from the fragment's shape-adjacent intermediate to [`ChainValue::Source`]
 /// when constructing, and in the opposite direction when deconstructing.
 /// [`Self::Direct`] means the shape itself consumes or produces the source value.
-pub enum ConversionChain<R: Representation> {
+#[derive(Clone)]
+pub enum ConversionChain {
     /// No adapter conversion lies between the shape and source value.
     Direct,
     /// One or more explicit internal conversions.
-    Steps(Vec<ConverterStep<R>>),
+    Steps(Vec<ConverterStep>),
 }
 
-// Cloned where a chain travels with the fragment that owns it. Written out
-// rather than derived: `derive(Clone)` would require `R: Clone`, and `R` is a
-// marker type naming an adapter's associated types rather than a value.
-impl<R: Representation> Clone for ConversionChain<R>
-where
-    R::Intermediate: Clone,
-    R::Cleanup: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::Direct => Self::Direct,
-            Self::Steps(steps) => Self::Steps(steps.clone()),
-        }
-    }
-}
-
-impl<R: Representation> Clone for ConverterStep<R>
-where
-    R::Intermediate: Clone,
-    R::Cleanup: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            from: self.from.clone(),
-            into: self.into.clone(),
-            operation: self.operation.clone(),
-            failure: self.failure,
-            cleanup: self.cleanup.clone(),
-        }
-    }
-}
-
-impl<R: Representation> ConversionChain<R> {
+impl ConversionChain {
     /// Explicit steps in execution order.
-    pub fn steps(&self) -> &[ConverterStep<R>] {
+    pub fn steps(&self) -> &[ConverterStep] {
         match self {
             Self::Direct => &[],
             Self::Steps(steps) => steps,
@@ -869,21 +833,21 @@ impl ShapePlan {
 }
 
 /// Complete syntax-free converter graph for one fragment.
-pub struct ConverterPlan<R: Representation> {
+pub struct ConverterPlan {
     shape: ShapePlan,
-    chain: ConversionChain<R>,
-    niches: NichePlan<R::Niche>,
+    chain: ConversionChain,
+    niches: NichePlan<String>,
     failure: Failure,
-    cleanup: Cleanup<R::Cleanup>,
+    cleanup: Cleanup<()>,
 }
 
-impl<R: Representation> ConverterPlan<R> {
+impl ConverterPlan {
     /// Freeze one converter operation graph.
     pub fn new(
         shape: ShapePlan,
-        niches: NichePlan<R::Niche>,
+        niches: NichePlan<String>,
         failure: Failure,
-        cleanup: Cleanup<R::Cleanup>,
+        cleanup: Cleanup<()>,
     ) -> Self {
         Self {
             shape,
@@ -898,10 +862,10 @@ impl<R: Representation> ConverterPlan<R> {
     /// explicit adapter conversion steps.
     pub fn with_chain(
         shape: ShapePlan,
-        chain: ConversionChain<R>,
-        niches: NichePlan<R::Niche>,
+        chain: ConversionChain,
+        niches: NichePlan<String>,
         failure: Failure,
-        cleanup: Cleanup<R::Cleanup>,
+        cleanup: Cleanup<()>,
     ) -> Self {
         Self {
             shape,
@@ -913,7 +877,7 @@ impl<R: Representation> ConverterPlan<R> {
     }
 
     /// Directional internal conversions between the shape and source value.
-    pub fn chain(&self) -> &ConversionChain<R> {
+    pub fn chain(&self) -> &ConversionChain {
         &self.chain
     }
 
@@ -923,7 +887,7 @@ impl<R: Representation> ConverterPlan<R> {
     }
 
     /// Consumed and exposed niche domains.
-    pub fn niches(&self) -> &NichePlan<R::Niche> {
+    pub fn niches(&self) -> &NichePlan<String> {
         &self.niches
     }
 
@@ -933,7 +897,7 @@ impl<R: Representation> ConverterPlan<R> {
     }
 
     /// Cleanup attached to this graph.
-    pub fn cleanup(&self) -> &Cleanup<R::Cleanup> {
+    pub fn cleanup(&self) -> &Cleanup<()> {
         &self.cleanup
     }
 }
@@ -942,8 +906,8 @@ impl<R: Representation> ConverterPlan<R> {
 pub struct FragmentPlan<R: Representation> {
     id: FragmentId,
     source: TypeRef,
-    intermediate: R::Intermediate,
-    converter: ConverterPlan<R>,
+    intermediate: TypeKey,
+    converter: ConverterPlan,
     conversion: Option<R::ConverterArtifact>,
     /// Whether [`Self::conversion`] is also emitted into the file.
     renders: bool,
@@ -955,8 +919,8 @@ impl<R: Representation> FragmentPlan<R> {
     pub fn new(
         id: FragmentId,
         source: TypeRef,
-        intermediate: R::Intermediate,
-        converter: ConverterPlan<R>,
+        intermediate: TypeKey,
+        converter: ConverterPlan,
         yields: Yield,
     ) -> Self {
         Self {
@@ -1004,12 +968,12 @@ impl<R: Representation> FragmentPlan<R> {
     }
 
     /// Adapter-selected carrier adjacent to the shape.
-    pub fn intermediate(&self) -> &R::Intermediate {
+    pub fn intermediate(&self) -> &TypeKey {
         &self.intermediate
     }
 
     /// Registry-composed converter operation graph.
-    pub fn converter(&self) -> &ConverterPlan<R> {
+    pub fn converter(&self) -> &ConverterPlan {
         &self.converter
     }
 
@@ -1065,7 +1029,7 @@ pub struct SitePlan<R: Representation> {
     required: Yield,
     abi: AbiLayout<R::AbiLayout>,
     failure_route: Option<R::FailureRoute>,
-    cleanup: Cleanup<R::Cleanup>,
+    cleanup: Cleanup<()>,
 }
 
 // Cloned where a site travels with the plan being collected, for the same
@@ -1075,7 +1039,7 @@ impl<R: Representation> Clone for SitePlan<R>
 where
     R::AbiLayout: Clone,
     R::FailureRoute: Clone,
-    R::Cleanup: Clone,
+    (): Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -1100,7 +1064,7 @@ impl<R: Representation> SitePlan<R> {
         required: Yield,
         abi: AbiLayout<R::AbiLayout>,
         failure_route: Option<R::FailureRoute>,
-        cleanup: Cleanup<R::Cleanup>,
+        cleanup: Cleanup<()>,
     ) -> Self {
         Self {
             id,
@@ -1144,7 +1108,7 @@ impl<R: Representation> SitePlan<R> {
     }
 
     /// Site-level cleanup policy.
-    pub fn cleanup(&self) -> &Cleanup<R::Cleanup> {
+    pub fn cleanup(&self) -> &Cleanup<()> {
         &self.cleanup
     }
 }

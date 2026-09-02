@@ -248,11 +248,8 @@ pub(crate) struct JRepresentation;
 impl prebindgen_registry::generation::Representation for JRepresentation {
     /// A stage's carrier is named by the crossing it converts, which is what
     /// JniGen already keys its fragments on.
-    type Intermediate = TypeKey;
     /// One stage: the identity of the artifact that renders it.
     type ConverterArtifact = JConverterArtifact;
-    type Niche = String;
-    type Cleanup = ();
     type FailureRoute = ();
     /// A site's ordered ABI: the leaves that cross, in order.
     type AbiLayout = JAbiLeaves;
@@ -292,7 +289,7 @@ pub(crate) struct JFrag {
     /// each reader to reverse it for input; storing execution order means the
     /// reversal happens once, where the chain is built and the direction is
     /// already in hand.
-    pub(crate) chain: prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    pub(crate) chain: prebindgen_registry::generation::ConversionChain,
     pub(crate) rust: crate::jni::chain::JFunction,
     /// Frozen semantic stages beside the wire-facing converter. The
     /// compatibility ConverterImpl keeps marker functions for ordering and
@@ -982,9 +979,9 @@ fn staged_chain(
     direction: Direction,
     operation: OperationId,
     inner_key: TypeKey,
-    inner: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    inner: &prebindgen_registry::generation::ConversionChain,
     failure: prebindgen_registry::generation::Failure,
-) -> prebindgen_registry::generation::ConversionChain<JRepresentation> {
+) -> prebindgen_registry::generation::ConversionChain {
     use prebindgen_registry::generation::{ChainValue, Cleanup, ConversionChain, ConverterStep};
     let (from, into) = match direction {
         Direction::Construct => (
@@ -1017,7 +1014,7 @@ fn staged_chain(
             step.cleanup().clone(),
         )
     });
-    let steps: Vec<ConverterStep<JRepresentation>> = match direction {
+    let steps: Vec<ConverterStep> = match direction {
         Direction::Construct => inner.chain(std::iter::once(own)).collect(),
         Direction::Deconstruct => std::iter::once(own).chain(inner).collect(),
     };
@@ -1033,7 +1030,7 @@ impl JFrag {
     /// A fragment whose source value is reached through explicit stages.
     fn planned_staged(
         at: At<'_>,
-        chain: prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        chain: prebindgen_registry::generation::ConversionChain,
         conv: ConverterImpl<KotlinMeta>,
         rust: crate::jni::chain::JFunction,
     ) -> Self {
@@ -1242,7 +1239,7 @@ impl JFrag {
 /// the same code rather than each spelling it (#660 item 5).
 fn pipeline_from(
     artifact: &JConverterArtifact,
-    chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    chain: &prebindgen_registry::generation::ConversionChain,
     direction: Direction,
     mode: Mode,
 ) -> crate::jni::chain::JPipeline {
@@ -1252,7 +1249,7 @@ fn pipeline_from(
 /// [`pipeline_from`]'s outgoing peer: the exact Rust-value-to-JNI operation.
 fn output_abi_from(
     artifact: &JConverterArtifact,
-    chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+    chain: &prebindgen_registry::generation::ConversionChain,
 ) -> OutAbi {
     OutAbi::Value(Box::new(OutValueAbi {
         pipeline: pipeline_from(artifact, chain, Direction::Deconstruct, Mode::Owned),
@@ -2450,7 +2447,7 @@ impl JCompile<'_> {
         direction: Direction,
         mode: Mode,
         artifact: &JConverterArtifact,
-        chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        chain: &prebindgen_registry::generation::ConversionChain,
         converter: &OperationId,
     ) -> crate::jni::chain::JChild {
         let stages: Vec<OperationId> = chain
@@ -2488,7 +2485,7 @@ impl JCompile<'_> {
         direction: Direction,
         mode: Mode,
         artifact: &JConverterArtifact,
-        chain: &prebindgen_registry::generation::ConversionChain<JRepresentation>,
+        chain: &prebindgen_registry::generation::ConversionChain,
         converter: &OperationId,
     ) -> crate::jni::chain::JPipeline {
         // A root output is already the source call's exact return spelling.
@@ -5470,16 +5467,12 @@ mod chain_tests {
     }
 
     /// One inner chain, in the frame of the fragment that owns it.
-    fn inner_chain(
-        direction: Direction,
-        stage: OperationId,
-        key: &TypeKey,
-    ) -> ConversionChain<JRepresentation> {
+    fn inner_chain(direction: Direction, stage: OperationId, key: &TypeKey) -> ConversionChain {
         let (from, into) = match direction {
             Direction::Construct => (ChainValue::Intermediate(key.clone()), ChainValue::Source),
             Direction::Deconstruct => (ChainValue::Source, ChainValue::Intermediate(key.clone())),
         };
-        ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+        ConversionChain::Steps(vec![ConverterStep::new(
             from,
             into,
             stage,
@@ -5578,7 +5571,7 @@ mod chain_tests {
     fn a_chain_stores_execution_order_for_its_own_direction() {
         let inner_key = TypeKey::parse("Inner").expect("test key");
         let inner_stage = OperationId::stage(fragment_id("inner"), 0);
-        let inner = ConversionChain::Steps(vec![ConverterStep::<JRepresentation>::new(
+        let inner = ConversionChain::Steps(vec![ConverterStep::new(
             ChainValue::Source,
             ChainValue::Intermediate(inner_key.clone()),
             inner_stage.clone(),

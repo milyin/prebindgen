@@ -303,10 +303,7 @@ pub(crate) enum CFailureRoute {
 pub(crate) enum CRepresentation {}
 
 impl Representation for CRepresentation {
-    type Intermediate = TypeKey;
     type ConverterArtifact = CFunction;
-    type Niche = String;
-    type Cleanup = ();
     type FailureRoute = CFailureRoute;
     type AbiLayout = CValue;
     type Artifact = crate::chain::CArtifact;
