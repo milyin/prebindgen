@@ -426,8 +426,8 @@ fn ordinary_wrapper_rendering_cannot_resume_legacy_planning() {
 }
 
 /// The wrapper is planned once, at the end of resolution: what it renders from
-/// is its own frozen state and the frozen plan, never the declaration object
-/// the binding was written into.
+/// is its own frozen state and the registry's frozen site plans, never the
+/// declaration object the binding was written into.
 #[test]
 fn a_planned_wrapper_holds_no_declaration_object() {
     let source = include_str!("../assembly.rs");
@@ -449,9 +449,15 @@ fn a_planned_wrapper_holds_no_declaration_object() {
             "a planned wrapper retains {forbidden}, so rendering could resume planning"
         );
     }
+    // It holds the `SitePlan`s themselves rather than the `GenerationPlan` they
+    // came from: a wrapper is stated as an artifact OF that plan, so it cannot
+    // be built from it. Both are frozen registry state, which is what this
+    // invariant is about — the check is that the wrapper reads planned sites,
+    // not that it reads them through the plan object.
     assert!(
-        fields.contains("GenerationPlan"),
-        "a planned wrapper must read its boundary sites from the frozen plan"
+        fields.contains("SitePlan"),
+        "a planned wrapper must read its boundary sites from the registry's frozen \
+         site plans"
     );
 }
 
