@@ -861,6 +861,10 @@ impl CbindgenBuilder {
         for fragment in self.compiled.borrow().fragments() {
             generation.fragment(fragment.freeze());
         }
+        // The sites a wrapper reads, kept before they are handed to the plan:
+        // a wrapper is stated as an artifact of that plan, so it cannot be built
+        // from it.
+        let wrapper_sites = sites.clone();
         for site in sites {
             generation.site(site);
         }
@@ -925,7 +929,7 @@ impl CbindgenBuilder {
         artifacts.extend(wrapped.into_iter().map(|function| {
             crate::assembly::CFinalArtifact::Wrapper(Box::new(crate::assembly::CWrapper::new(
                 &self,
-                &generation,
+                &wrapper_sites,
                 function,
             )))
         }));

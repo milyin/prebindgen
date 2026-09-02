@@ -104,8 +104,10 @@ impl RustArtifact for CFinalArtifact {
 
 /// One declared function's exported wrapper, frozen at the end of resolution.
 pub(crate) struct CWrapper {
-    /// The plan the wrapper's own boundary sites are read from.
-    generation: Rc<GenerationPlan<crate::compile::CRepresentation>>,
+    /// This function's own boundary sites, as the registry planned them. All a
+    /// wrapper reads of the plan, and taken by value so a wrapper can be stated
+    /// before the plan is built.
+    sites: Vec<prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>>,
     /// The `#[prebindgen]` function this wrapper exports.
     function: prebindgen_registry::flat::Function,
     /// The `#[no_mangle]` symbol the wrapper is exported under.
@@ -124,9 +126,13 @@ pub(crate) struct CWrapper {
 
 impl CWrapper {
     /// Plan the wrapper for one declared function.
+    /// `sites` are the boundary sites the registry planned for this function,
+    /// which is everything of the plan a wrapper reads. Taking them rather than
+    /// the plan is what lets a wrapper be stated as an `ArtifactPlan` before the
+    /// plan is built, since the sites exist first.
     pub(crate) fn new(
         decls: &CbindgenBuilder,
-        generation: &Rc<GenerationPlan<crate::compile::CRepresentation>>,
+        sites: &[prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>],
         function: &prebindgen_registry::flat::Function,
     ) -> Self {
         let name = &function.name;
@@ -143,7 +149,11 @@ impl CWrapper {
             );
         }
         Self {
-            generation: Rc::clone(generation),
+            sites: sites
+                .iter()
+                .filter(|site| site.id().site().owner == *name)
+                .cloned()
+                .collect(),
             function: function.clone(),
             symbol: decls.fn_symbol(name),
             call_path: decls.src_fn(name),
@@ -163,11 +173,7 @@ impl CWrapper {
         &self,
         role: prebindgen_registry::recipe::Role,
     ) -> Option<&prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>> {
-        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
-            owner: self.function.name.clone(),
-            role,
-        });
-        self.generation.site(&id)
+        self.sites.iter().find(|site| site.id().site().role == role)
     }
 
     /// One boundary site of this wrapper's own function.
@@ -175,14 +181,11 @@ impl CWrapper {
         &self,
         role: prebindgen_registry::recipe::Role,
     ) -> &prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation> {
-        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
-            owner: self.function.name.clone(),
-            role,
-        });
+        let name = self.function.name.clone();
+        let described = role.to_string();
         let site = self
-            .generation
-            .site(&id)
-            .unwrap_or_else(|| panic!("C generation plan has no site {id}"));
+            .site_if_planned(role)
+            .unwrap_or_else(|| panic!("C generation plan has no {described} of `{name}`"));
         assert!(
             matches!(
                 site.cleanup(),
