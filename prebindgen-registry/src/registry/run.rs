@@ -138,14 +138,17 @@ impl Registry {
                         .crossing_of(&site)
                         .unwrap_or_else(|| Crossing::new(param.ty.clone(), Direction::Construct));
                     // A position the adapter has nothing to say about is not
-                    // a site of its binding, and not a failure either.
-                    if !adapter.plans_site(&site, &crossing) {
-                        continue;
-                    }
-                    match compiler.site(adapter, site.clone(), crossing) {
-                        Ok(Some(plan)) => plans.push((site, plan)),
-                        Ok(None) => {}
-                        Err(e) => refusals.push((site, e)),
+                    // a site of its binding, and not a failure either. It does
+                    // not prune the positions **inside** it: an adapter that
+                    // answers a callback parameter whole still crosses a value
+                    // at each of that callback's arguments, so declining the
+                    // parameter must not take its arguments with it.
+                    if adapter.plans_site(&site, &crossing) {
+                        match compiler.site(adapter, site.clone(), crossing) {
+                            Ok(Some(plan)) => plans.push((site, plan)),
+                            Ok(None) => {}
+                            Err(e) => refusals.push((site, e)),
+                        }
                     }
                     // A callback parameter's arguments cross the other way:
                     // Rust holds them and pushes them out through the call.

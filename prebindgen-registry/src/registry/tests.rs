@@ -1933,3 +1933,162 @@ fn one_marked_row_refusing_does_not_silence_the_next() {
         "the crossing's own recipe answered first: {asked:?}"
     );
 }
+
+/// Declining a callback **parameter** must not take its **arguments** with it.
+///
+/// An adapter that answers a callback parameter whole — JniGen does — says so
+/// through [`Compile::plans_site`], and a walk that treated that as "skip this
+/// parameter and everything inside it" would never offer the argument
+/// positions to anyone. Nothing in a generated file would necessarily change,
+/// because the adapter that declined the parameter is also the one that
+/// reconstructs its arguments; the omission only shows as a site the registry
+/// never enumerated (#687 review).
+#[test]
+fn declining_a_callback_parameter_still_enumerates_its_arguments() {
+    use std::cell::RefCell;
+
+    use crate::recipe::{
+        At, Bindings, Carrier, Compile, Compiled, Crossing, Ctx, Frag, Mode, Parts, Recipes, Site,
+        Validity, Yield,
+    };
+
+    #[derive(Default)]
+    struct Sites {
+        planned: RefCell<Vec<String>>,
+        asked: RefCell<Vec<String>>,
+    }
+
+    #[derive(Clone)]
+    struct One(Yield);
+
+    impl Carrier for One {
+        fn yields(&self) -> Yield {
+            self.0.clone()
+        }
+        fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
+    }
+
+    impl Sites {
+        fn answer(&mut self, at: At<'_>) -> Frag<Self> {
+            Ok(One(Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            }))
+        }
+    }
+
+    impl Compile for Sites {
+        type Fragment = One;
+        type Plan = ();
+        type Error = String;
+
+        /// The rule under test: a callback parameter is answered whole.
+        fn plans_site(&self, site: &Site, crossing: &Crossing) -> bool {
+            self.asked.borrow_mut().push(format!("{:?}", site.role));
+            if crossing.spelled().callback_args().is_some() {
+                return false;
+            }
+            self.planned.borrow_mut().push(format!("{:?}", site.role));
+            true
+        }
+
+        fn atomic(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn optional(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>, _i: &One) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn sequence(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _e: Mode,
+            _i: &One,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn construct(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _a: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn fields(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn value_form(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn choice(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[(&prebindgen_flat::flat::Alternative, &One)],
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn callback(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[&One],
+            _r: Option<&One>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn plan(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            _bound: &crate::recipe::Bound,
+            _root: &One,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    let subscribe: syn::Ident = syn::parse_quote!(subscribe);
+    let registry =
+        crate::test_util::reg_with(&["fn subscribe(cb: impl Fn(u16) + Send + Sync + 'static) {}"])
+            .export(&subscribe)
+            .scanned()
+            .expect("scan");
+
+    let recipes = Recipes::builder().build(registry.flat()).expect("table");
+    let mut adapter = Sites::default();
+    let (_sited, _store) = registry.compile_sites(
+        &mut adapter,
+        &recipes,
+        &Bindings::default(),
+        Compiled::default(),
+    );
+
+    let asked = adapter.asked.borrow().clone();
+    let planned = adapter.planned.borrow().clone();
+    assert!(
+        asked.iter().any(|role| role.starts_with("Param")),
+        "the callback parameter is offered: {asked:?}"
+    );
+    assert!(
+        !planned.iter().any(|role| role.starts_with("Param")),
+        "and declined: {planned:?}"
+    );
+    assert!(
+        asked.iter().any(|role| role.starts_with("CallbackArg")),
+        "its argument is still offered even though the parameter was declined: {asked:?}"
+    );
+}
