@@ -303,6 +303,7 @@ pub(crate) enum CFailureRoute {
 pub(crate) enum CRepresentation {}
 
 impl Representation for CRepresentation {
+    type Cleanup = ();
     type ConverterArtifact = CFunction;
     type FailureRoute = CFailureRoute;
     type AbiLayout = CValue;

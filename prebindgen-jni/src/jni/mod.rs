@@ -1012,7 +1012,9 @@ impl JniGen {
             // did (#621 review): the operations and their order ARE the
             // contract, and a reader of the plan routes to stage artifacts
             // through them.
-            let steps = |chain: &prebindgen_registry::generation::ConversionChain| match chain {
+            let steps = |chain: &prebindgen_registry::generation::ConversionChain<
+                crate::jni::compile::JRepresentation,
+            >| match chain {
                 prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
                 prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
                     .iter()

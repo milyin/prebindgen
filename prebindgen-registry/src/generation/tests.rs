@@ -10,6 +10,7 @@ use crate::{
 struct Fake;
 
 impl Representation for Fake {
+    type Cleanup = &'static str;
     type ConverterArtifact = &'static str;
     type FailureRoute = &'static str;
     type AbiLayout = &'static str;
@@ -431,7 +432,7 @@ fn freeze_reports_arity_niche_ownership_and_validity_errors() {
             },
             NichePlan::new(2, vec!["a".to_owned()], vec!["a".to_owned()]),
             Failure::Infallible,
-            Cleanup::UnlessTransferred(()),
+            Cleanup::UnlessTransferred("drop"),
         ),
         yield_of(&pair, Mode::Shared, Validity::Borrowed),
     );
@@ -571,7 +572,7 @@ fn atomic_codec_and_staged_chain_are_distinct_operations() {
                     ChainValue::Source,
                     op("construct Percent"),
                     Failure::Fallible,
-                    Cleanup::OnFailure(()),
+                    Cleanup::OnFailure("drop intermediate"),
                 ),
             ]),
             NichePlan::none(),
@@ -839,7 +840,7 @@ fn site_identity_recipe_contract_and_cleanup_are_checked() {
         },
         AbiLayout::new(1, "layout"),
         Some("throw"),
-        Cleanup::UnlessTransferred(()),
+        Cleanup::UnlessTransferred("drop"),
     );
     let borrowed_leaf = FragmentPlan::new(
         leaf.clone(),
