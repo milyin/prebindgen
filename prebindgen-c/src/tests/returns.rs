@@ -629,3 +629,48 @@ fn borrowed_option_ref_output_nullable() {
     );
     assert!(!compact.contains("out:*mut*constz_timestamp_t"), "{src}");
 }
+
+/// A unit **parameter** is reported by the resolver, which is the diagnostic a
+/// binding author can act on.
+///
+/// `CCompile::plans_site` declines a unit crossing because C has nothing to hand
+/// back at a `()` return, and that answer is scoped to the return: the renderer
+/// asks for every parameter through `CWrapper::site(Role::Param { .. })`, so a
+/// declined parameter would leave it asking for a site nobody planned (#687
+/// review).
+///
+/// **This test does not discriminate that scoping.** It passes either way,
+/// because the crossing walk needs a construct converter for `()` and fails
+/// first. It is kept for what it does pin — which of the two failures a unit
+/// parameter produces — and the scoping is a correctness fix without a
+/// reachable case that I could construct.
+#[test]
+fn a_unit_parameter_is_reported_by_the_resolver() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_take_unit(marker: (), n: u32) -> u32 {
+            unimplemented!()
+        }
+    );
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced([(syn::Item::Fn(func), loc)]))
+            .expect("index items");
+
+    let cbindgen = CbindgenBuilder::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .function(syn::parse_quote!(z_take_unit));
+
+    // C has no construct converter for `()`, so this binding cannot be built —
+    // and the point is *which* way it fails. The site is planned, so the
+    // failure is the resolver naming the type it could not convert. While the
+    // unit decline covered every role, the position was skipped instead, and
+    // the renderer panicked asking for a site nobody had planned.
+    let message = catch_msg(|| {
+        let _ = write(cbindgen, registry, "unitparam");
+    });
+    assert!(
+        message.contains("Unresolved") && message.contains("()"),
+        "a unit parameter is reported by the resolver, not by a missing site: {message}"
+    );
+}

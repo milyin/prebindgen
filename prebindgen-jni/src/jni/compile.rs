@@ -3464,6 +3464,15 @@ impl Compile for JCompile<'_> {
         if crossing.spelled().callback_args().is_some() {
             return false;
         }
+        // A callback's arguments are answered through the callback parameter
+        // itself. JniGen takes that parameter whole, so its fragment carries an
+        // `Invoke` shape with one edge per argument, and each argument's site
+        // plan is read off that fragment in `fn_plan::classify_leaf` — from what
+        // the registry compiled, not from a second walk. Planning them again
+        // here as independent crossings would state the same positions twice.
+        if matches!(site.role, Role::CallbackArg { .. }) {
+            return false;
+        }
         // Nothing crosses at the error arm of a fallible return. The walk
         // enumerates it because a `Result` has two arms whatever reads it, and
         // `prebindgen-c` hands the error back through one of them — but JniGen

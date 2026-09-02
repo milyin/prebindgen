@@ -793,15 +793,17 @@ fn wrong(at: At<'_>, why: &str) -> Refusal<String> {
 
 impl Compile for CCompile<'_> {
     /// A `()` return is not a value C hands back, so there is no site there.
-    fn plans_site(&self, _site: &Site, crossing: &Crossing) -> bool {
-        // Nothing crosses at a `()` return: C has no value to hand back there.
-        if matches!(
-            crossing.spelled().kind(),
-            prebindgen_registry::flat::TypeKind::Unit
-        ) {
-            return false;
-        }
-        true
+    fn plans_site(&self, site: &Site, crossing: &Crossing) -> bool {
+        // Nothing crosses at a `()` **return**: C has no value to hand back
+        // there, and that includes the ok arm of a `Result<(), E>`, which is a
+        // return site of its own. Only the return — a unit anywhere else is a
+        // position the wrapper still renders, and declining it would leave the
+        // renderer asking for a site nobody planned.
+        !matches!(site.role, Role::Return)
+            || !matches!(
+                crossing.spelled().kind(),
+                prebindgen_registry::flat::TypeKind::Unit
+            )
     }
 
     type Fragment = CFrag;
