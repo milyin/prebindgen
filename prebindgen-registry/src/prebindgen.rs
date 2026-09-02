@@ -5,10 +5,10 @@
 //! is frozen with it — so a generator hands the emitter no items, no
 //! prerequisites, and no questions to ask back.
 //!
-//! **Conversion is not here.** A generator builds those itself, one per
-//! crossing, inside `RegistryBuilder::convert_with` — so there is no
-//! `on_input_type`, no deferral, and no fixed-point loop retrying until it
-//! converges.
+//! **Conversion is not here.** A generator builds those in its
+//! [`Compile`](crate::recipe::Compile) hooks, one per crossing, which
+//! `RegistryBuilder::generate` drives — so there is no `on_input_type`, no
+//! deferral, and no fixed-point loop retrying until it converges.
 //!
 //! [`ConverterImpl::converter`] is the stable identity of the wire-facing
 //! converter. Its executable artifact is retained separately by the adapter's
@@ -64,9 +64,9 @@ pub struct ConverterImpl<M = ()> {
     /// cross-direction — their required-ness flows through the registry's
     /// type-graph edges, not here).
     ///
-    /// This is what an adapter reports back as an
-    /// [`Answer`](crate::Answer), and what `propagate_required` walks to mark
-    /// reachable crossings required.
+    /// This is what a fragment answers with through
+    /// [`Carrier::delegates_to`](crate::recipe::Carrier::delegates_to), and what
+    /// `propagate_required` walks to mark reachable crossings required.
     ///
     /// **Identities, not spellings.** They are looked up and walked, never
     /// emitted. An adapter that composed the inner type keys it
@@ -101,9 +101,9 @@ impl<M> ConverterImpl<M> {
 /// What used to be here and is not any more: which items to build, how
 /// composites decompose, and the wire form of each type. A generator states the
 /// first two into the builder (`RegistryBuilder::export`,
-/// `RegistryBuilder::decompose`) and answers the third inside
-/// `RegistryBuilder::convert_with` — so nothing in core calls back to ask. Moving emission out too is what would delete this
-/// trait entirely (prebindgen#251 phase E).
+/// `RegistryBuilder::decompose`) and answers the third in its `Compile` hooks —
+/// so nothing in core has to ask for it item by item. Moving emission out too is
+/// what would delete this trait entirely (prebindgen#251 phase E).
 ///
 /// Anything language-specific the rest of the pipeline must carry — a JNI
 /// adapter's Kotlin class names and exception info, a C adapter's header names,

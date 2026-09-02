@@ -34,8 +34,9 @@ use super::{
     RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
 };
 use crate::{
-    flat::{Alternative, Field, Flat, Function, Type, TypeKey, TypeKind, TypeRef},
-    FragmentId,
+    flat::{Alternative, Field, Function, Type, TypeKey, TypeKind, TypeRef},
+    generation::{ChoiceArity, FixedArity, FragmentUse, OperationId, ShapePlan},
+    Conversions, FragmentId,
 };
 
 /// What a fragment produces, which is the only thing the registry reads out of
@@ -43,6 +44,26 @@ use crate::{
 pub trait Carrier {
     /// The Rust value this fragment yields.
     fn yields(&self) -> Yield;
+
+    /// The crossings this fragment is built out of, which the completeness check
+    /// follows to decide what the binding must be able to make. Identities, not
+    /// spellings, so `T`, `&T` and `Box<T>` name one crossing.
+    ///
+    /// `parts` is what the registry handed the hook, which is the right answer
+    /// for most fragments. An adapter narrows where a part is no crossing of its
+    /// own — an opaque union payload, a boxed inner — and the `atomic` hook has
+    /// no parts, so a fragment that delegates from there must answer.
+    fn delegates_to(&self, parts: &[TypeKey]) -> Vec<TypeKey> {
+        parts.to_vec()
+    }
+
+    /// Take the shape the registry composed for this fragment.
+    ///
+    /// The registry knows which shape it is compiling and which child fragments
+    /// it handed to the hook, so it builds the [`ShapePlan`] rather than each
+    /// hook stating one. The fragment carries it as far as the `FragmentPlan`
+    /// the adapter freezes.
+    fn composed(&mut self, shape: ShapePlan);
 }
 
 /// The Rust value a fragment produces.
@@ -106,19 +127,27 @@ impl At<'_> {
     }
 }
 
-/// What every hook receives: a read-only view of the model and the table.
-///
-/// A hook asks the registry nothing and records nothing in it. What it produces
-/// is its fragment, and what the registry reads of that is
-/// [`Carrier::yields`].
-pub struct Cx<'a> {
-    model: &'a Flat,
+/// What every hook receives: a read-only view of the model, of the binding, and
+/// of what has compiled so far. A hook asks the registry nothing and records
+/// nothing in it; what it produces is its fragment.
+pub struct Cx<'a, F> {
+    conversions: &'a dyn Conversions,
+    compiled: &'a Compiled<F>,
 }
 
-impl Cx<'_> {
-    /// The model every structural fact is read off.
-    pub fn model(&self) -> &Flat {
-        self.model
+impl<F> Cx<'_, F> {
+    /// What the binding says about a type, and the model every structural fact
+    /// is read off: the same view an emitter reads after the fill, lent per call
+    /// so an adapter need not hold one itself.
+    pub fn conversions(&self) -> &dyn Conversions {
+        self.conversions
+    }
+
+    /// The fragments compiled so far, this recipe's parts among them. A shared
+    /// borrow is enough: the parts are compiled before the hook runs, and
+    /// nothing writes to the store while one is running.
+    pub fn compiled(&self) -> &Compiled<F> {
+        self.compiled
     }
 }
 
@@ -178,8 +207,34 @@ pub enum PartSource<'a> {
 /// A product's parts, each already compiled.
 pub type Parts<'a, C> = &'a [(Part<'a>, &'a <C as Compile>::Fragment)];
 
+/// The context one hook receives, named by the adapter. [`Cx`] is generic over
+/// the **fragment** so an adapter that delegates to another can hand its own
+/// context straight through.
+pub type Ctx<'a, C> = Cx<'a, <C as Compile>::Fragment>;
+
+/// Why a hook has no fragment: an ordinary **gap** — nothing for this crossing,
+/// which the scan's over-approximation makes common and which matters only where
+/// an exported function reaches it — or an **error**, a wrong declaration,
+/// reported either way. Both were one answer before, which both adapters turned
+/// into a gap with `.ok()?`.
+#[derive(Debug)]
+pub enum Refusal<E> {
+    /// Nothing for this crossing, and why. A diagnostic: nothing fails on it.
+    Gap(String),
+    /// The declaration or the composition is wrong. Always reported.
+    Error(E),
+}
+
+/// So a hook can `?` its own error type: a helper that failed has said
+/// something is wrong, not that the crossing is unanswered.
+impl<E> From<E> for Refusal<E> {
+    fn from(error: E) -> Self {
+        Refusal::Error(error)
+    }
+}
+
 /// Shorthand for what every fragment-producing hook returns.
-pub type Frag<C> = Result<<C as Compile>::Fragment, <C as Compile>::Error>;
+pub type Frag<C> = Result<<C as Compile>::Fragment, Refusal<<C as Compile>::Error>>;
 
 /// The adapter's half of code generation: what one crossing costs on the wire.
 ///
@@ -201,10 +256,15 @@ pub trait Compile {
     type Error;
 
     /// No parts: the adapter emits the conversion itself.
-    fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self>;
+    fn atomic(&mut self, cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self>;
 
     /// Absent, or the inner fragment's value.
-    fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Self::Fragment) -> Frag<Self>;
+    fn optional(
+        &mut self,
+        cx: &mut Ctx<'_, Self>,
+        at: At<'_>,
+        inner: &Self::Fragment,
+    ) -> Frag<Self>;
 
     /// A run of the inner fragment's value.
     ///
@@ -212,7 +272,7 @@ pub trait Compile {
     /// adapter reads it rather than checking it against anything.
     fn sequence(
         &mut self,
-        cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         elements: Mode,
         inner: &Self::Fragment,
@@ -221,19 +281,19 @@ pub trait Compile {
     /// Call `func` to assemble the value. Its parameters are `args`.
     fn construct(
         &mut self,
-        cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         func: &Function,
         args: Parts<'_, Self>,
     ) -> Frag<Self>;
 
     /// Read the parts off the value where it stands.
-    fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self>;
+    fn fields(&mut self, cx: &mut Ctx<'_, Self>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self>;
 
     /// Call `func` once, then read the parts off what it returned.
     fn value_form(
         &mut self,
-        cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         func: &Function,
         parts: Parts<'_, Self>,
@@ -246,7 +306,7 @@ pub trait Compile {
     /// hooks above, which is why this hook needs no direction of its own.
     fn choice(
         &mut self,
-        cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         arms: &[(&Alternative, &Self::Fragment)],
     ) -> Frag<Self>;
@@ -257,7 +317,7 @@ pub trait Compile {
     /// is the position issue #216's return value lands in.
     fn callback(
         &mut self,
-        cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         args: &[&Self::Fragment],
         result: Option<&Self::Fragment>,
@@ -294,7 +354,7 @@ pub trait Compile {
     /// recipe, however many sites reuse it.
     fn plan(
         &mut self,
-        cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         bound: &Bound,
         root: &Self::Fragment,
     ) -> Result<Self::Plan, Self::Error>;
@@ -303,8 +363,10 @@ pub trait Compile {
 /// What a compilation reports when it cannot finish.
 #[derive(Debug)]
 pub enum CompileError<E> {
-    /// The adapter could not answer for a recipe or a site.
-    Adapter(E),
+    /// The adapter refused a recipe or a site, possibly through a part rather
+    /// than through what was asked for. A [`Refusal::Gap`] is a failure only
+    /// where something has already reached the crossing — at a **site**, say.
+    Adapter(Refusal<E>),
     /// The table and the model disagree with what a site asked for.
     ///
     /// Boxed: a `RecipeError` names a site and a crossing, which makes it much
@@ -315,7 +377,8 @@ pub enum CompileError<E> {
 impl<E: fmt::Display> fmt::Display for CompileError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CompileError::Adapter(e) => write!(f, "{e}"),
+            CompileError::Adapter(Refusal::Gap(why)) => f.write_str(why),
+            CompileError::Adapter(Refusal::Error(e)) => write!(f, "{e}"),
             CompileError::Recipe(e) => write!(f, "{e}"),
         }
     }
@@ -330,6 +393,37 @@ impl<E> From<RecipeError> for CompileError<E> {
 }
 
 type Built<C> = Result<Rc<<C as Compile>::Fragment>, CompileError<<C as Compile>::Error>>;
+
+/// One compiled part: its fragment, and the edge to it the shape records.
+type Edge<C> =
+    Result<(Rc<<C as Compile>::Fragment>, FragmentUse), CompileError<<C as Compile>::Error>>;
+
+/// A fragment and the shape the registry composed for it.
+type Composed<C> =
+    Result<(<C as Compile>::Fragment, ShapePlan), CompileError<<C as Compile>::Error>>;
+
+/// A product's fragment and the edges to its parts, which the shape of the
+/// product — or of the choice whose arm it is — records.
+type Assembled<C> =
+    Result<(<C as Compile>::Fragment, Vec<FragmentUse>), CompileError<<C as Compile>::Error>>;
+
+/// Every composite shape's bridge is the fragment's own converter identity: the
+/// shape says how the parts go together, and the identity says which generated
+/// function does it.
+fn bridge(at: At<'_>) -> OperationId {
+    OperationId::converter(at.fragment_id())
+}
+
+fn product_shape(at: At<'_>, parts: Vec<FragmentUse>) -> ShapePlan {
+    ShapePlan::Product {
+        bridge: FixedArity::new(parts.len(), bridge(at)),
+        parts,
+    }
+}
+
+/// [`Built`], beside the crossings the fragment delegates to.
+type Answered<C> =
+    Result<(Rc<<C as Compile>::Fragment>, Vec<TypeKey>), CompileError<<C as Compile>::Error>>;
 
 /// What a compilation has produced, apart from its plans.
 ///
@@ -368,16 +462,6 @@ impl<F> Clone for Compiled<F> {
 }
 
 impl<F> Compiled<F> {
-    /// How many fragments have been built, making memoization observable.
-    pub fn len(&self) -> usize {
-        self.fragments.len()
-    }
-
-    /// Whether nothing has been compiled yet.
-    pub fn is_empty(&self) -> bool {
-        self.fragments.is_empty()
-    }
-
     /// The fragment for one crossing, compiled **as a whole**.
     ///
     /// What an adapter's emitters ask once they stop reading the converter
@@ -427,30 +511,39 @@ impl<F> Compiled<F> {
 /// Drives an adapter over the table: one fragment per spelled crossing and
 /// globally identified row, one plan per site.
 pub struct Compiler<'a, C: Compile> {
-    model: &'a Flat,
+    conversions: &'a dyn Conversions,
     recipes: &'a Recipes,
     bindings: &'a Bindings,
     compiled: Compiled<C::Fragment>,
+    /// Per fragment, the crossings it is built out of: the parts the registry
+    /// compiled for it while the row was being built, replaced by the
+    /// fragment's own [`Carrier::delegates_to`] once the hook has answered.
+    delegations: HashMap<FragmentId, Vec<TypeKey>>,
 }
 
 impl<'a, C: Compile> Compiler<'a, C> {
     /// Drive `adapter` over this table.
-    pub fn new(model: &'a Flat, recipes: &'a Recipes, bindings: &'a Bindings) -> Self {
-        Self::resume(model, recipes, bindings, Compiled::default())
+    pub fn new(
+        conversions: &'a dyn Conversions,
+        recipes: &'a Recipes,
+        bindings: &'a Bindings,
+    ) -> Self {
+        Self::resume(conversions, recipes, bindings, Compiled::default())
     }
 
     /// [`Self::new`], carrying on from what an earlier run built.
     pub fn resume(
-        model: &'a Flat,
+        conversions: &'a dyn Conversions,
         recipes: &'a Recipes,
         bindings: &'a Bindings,
         compiled: Compiled<C::Fragment>,
     ) -> Self {
         Self {
-            model,
+            conversions,
             recipes,
             bindings,
             compiled,
+            delegations: HashMap::new(),
         }
     }
 
@@ -531,72 +624,49 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
             .into());
         }
-        let mut cx = Cx { model: self.model };
+        let mut cx = self.cx();
         adapter
             .plan(&mut cx, &bound, &root)
             .map(Some)
-            .map_err(CompileError::Adapter)
+            .map_err(|e| CompileError::Adapter(e.into()))
     }
 
     /// The fragment for one crossing's default recipe.
     ///
     /// The per-recipe half of [`Self::site`], for an adapter that composes the
     /// per-site wrapping itself. Built once and reused, like every other recipe.
-    pub fn crossing(
-        &mut self,
-        adapter: &mut C,
-        crossing: &Crossing,
-    ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
+    /// Beside the fragment, the crossings it delegates to: what the registry's
+    /// reachability walk follows, and the reason [`Carrier::delegates_to`]
+    /// exists.
+    pub fn crossing(&mut self, adapter: &mut C, crossing: &Crossing) -> Answered<C> {
         let recipe = self.recipes.recipe(crossing).0;
         let fragment = self.recipe(adapter, crossing, &recipe)?;
+        let id = FragmentId::new(crossing.spelled().key(), recipe.clone());
         // The whole-crossing answer, so the emitters can ask for it back
         // without re-deriving which recipe a crossing defaults to.
         self.compiled
             .defaults
             .insert((crossing.spelled().key(), crossing.direction()), recipe);
-        Ok(fragment)
+        let delegates = self.delegations.get(&id).cloned().unwrap_or_default();
+        Ok((fragment, delegates))
     }
 
-    /// The recipes this compilation was built against.
+    /// The fragment for one crossing under a row of the table, rather than the
+    /// one the crossing defaults to.
     ///
-    /// So a caller can ask whether a crossing has a recipe before compiling it by
-    /// name — the check [`Self::recipe_of`] enforces, available ahead of the
-    /// error rather than only through it.
-    pub fn recipes(&self) -> &Recipes {
-        self.recipes
-    }
-
-    /// The fragment for one crossing under a **named** recipe, rather than the one
-    /// the crossing defaults to.
-    ///
-    /// For an adapter that states more than one recipe for a type and wants both:
-    /// the default answers every site, and this compiles the other so it can be
-    /// checked, or read through
-    /// [`Compiled::recipe_fragment`](Compiled::recipe_fragment), before any site
-    /// takes it.
-    ///
-    /// Refuses a name the crossing does not have. Compiling a recipe falls back to
-    /// the derived recipe when the lookup misses, which is right for the two
-    /// callers that pass a name they got **from** the table — a crossing's
-    /// default, or a site's binding — and wrong here, where the name is the
-    /// caller's own claim. Without the check a conditionally-declared recipe that was not
-    /// declared compiles the default instead and files it under the asked-for
-    /// name, leaving [`Compiled::recipe_fragment`] to answer for a recipe that does
-    /// not exist.
-    pub fn recipe_of(
+    /// For a type whose table states more than one recipe: the default answers
+    /// every site, and this builds the other so it can be read through
+    /// [`Compiled::recipe_fragment`] before any site takes it. A key comes only
+    /// from [`Recipes::key_of`](super::Recipes::key_of), so this cannot reach
+    /// `recipe`'s fallback to the derived recipe — right for a name read *from*
+    /// the table, and wrong for a caller's own claim.
+    pub fn row(
         &mut self,
         adapter: &mut C,
         crossing: &Crossing,
-        name: &RecipeName,
+        row: &RecipeKey,
     ) -> Result<Rc<C::Fragment>, CompileError<C::Error>> {
-        let crossing_key = crossing.key();
-        let Some(recipe) = self.recipes.key_of(&crossing_key, name).cloned() else {
-            return Err(RecipeError::NoSuchRecipe {
-                recipe: crossing_key.row(name.clone()),
-            }
-            .into());
-        };
-        self.recipe(adapter, crossing, &recipe)
+        self.recipe(adapter, crossing, row)
     }
 
     /// The fragment for one recipe, built once and reused.
@@ -616,10 +686,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
         };
         let at = At { crossing, recipe };
-        let fragment = match &chosen {
+        let (mut fragment, shape) = match &chosen {
             Recipe::Constructing(shape) => self.constructing(adapter, at, shape)?,
             Recipe::Deconstructing(shape) => self.deconstructing(adapter, at, shape)?,
         };
+        fragment.composed(shape);
+        // What the hook was handed, now what the fragment says it delegates to.
+        let parts = self.delegations.remove(&key).unwrap_or_default();
+        self.delegations
+            .insert(key.clone(), fragment.delegates_to(&parts));
         let fragment = Rc::new(fragment);
         self.compiled.fragments.insert(key, fragment.clone());
         Ok(fragment)
@@ -651,7 +726,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
-    ) -> Built<C> {
+    ) -> Edge<C> {
         self.part_of(adapter, at, direction, None, index, ty, wanted, false)
     }
 
@@ -668,8 +743,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
         ty: &TypeRef,
         wanted: Mode,
         identity: bool,
-    ) -> Built<C> {
+    ) -> Edge<C> {
         let crossing = Crossing::new(ty.clone(), direction);
+        // Every edge the registry compiles for this row, which is the default
+        // answer to `Carrier::delegates_to`. An arm's parts land on the choice
+        // that owns them, because the arm has no fragment identity of its own.
+        self.delegations
+            .entry(at.fragment_id())
+            .or_default()
+            .push(ty.key());
         let site = Site::arm_part(at.recipe, arm, index);
         // An identity part IS its receiver, so resolving it the ordinary way
         // finds the row being compiled and recurses without bound. It takes the
@@ -684,7 +766,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 }
                 .into());
             }
-            return self.recipe(adapter, &crossing, &row);
+            let fragment = self.recipe(adapter, &crossing, &row)?;
+            let edge = FragmentUse::new(
+                FragmentId::new(crossing.spelled().key(), row),
+                fragment.yields(),
+            );
+            return Ok((fragment, edge));
         }
         let Some(bound) = self.bindings.resolve(&site, &crossing, self.recipes) else {
             return Err(RecipeError::UnknownRecipe {
@@ -718,7 +805,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
             .into());
         }
-        Ok(fragment)
+        let edge = FragmentUse::new(
+            FragmentId::new(bound.crossing.spelled().key(), bound.recipe),
+            produced,
+        );
+        Ok((fragment, edge))
     }
 
     fn constructing(
@@ -726,7 +817,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         shape: &Shape<Construct>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    ) -> Composed<C> {
         match shape {
             Shape::Atomic => self.atomic(adapter, at),
             Shape::Optional => self.optional(adapter, at),
@@ -734,18 +825,22 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Invoke => self.invoke(adapter, at),
             Shape::Product(op) => {
                 let (kind, parts) = self.construct_parts(at, op, None)?;
-                self.product(adapter, at, None, kind, parts)
+                let (fragment, uses) = self.product(adapter, at, None, kind, parts)?;
+                Ok((fragment, product_shape(at, uses)))
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
+                let mut arm_uses = Vec::new();
                 for arm in arms {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
                     let at_arm = Some(arm.alternative);
-                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
+                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                    built.push((alternative, fragment));
+                    arm_uses.push(uses);
                 }
-                self.choice(adapter, at, built)
+                self.choice(adapter, at, built, arm_uses)
             }
         }
     }
@@ -755,7 +850,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         shape: &Shape<Deconstruct>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    ) -> Composed<C> {
         match shape {
             Shape::Atomic => self.atomic(adapter, at),
             Shape::Optional => self.optional(adapter, at),
@@ -763,38 +858,35 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Invoke => self.invoke(adapter, at),
             Shape::Product(op) => {
                 let (kind, parts) = self.deconstruct_parts(at, op, None)?;
-                self.product(adapter, at, None, kind, parts)
+                let (fragment, uses) = self.product(adapter, at, None, kind, parts)?;
+                Ok((fragment, product_shape(at, uses)))
             }
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
+                let mut arm_uses = Vec::new();
                 for arm in arms {
                     let alternative = self.alternative(at, arm.alternative)?;
                     let (kind, parts) =
                         self.deconstruct_parts(at, &arm.op, Some(&alternative.fields))?;
                     let at_arm = Some(arm.alternative);
-                    built.push((alternative, self.product(adapter, at, at_arm, kind, parts)?));
+                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                    built.push((alternative, fragment));
+                    arm_uses.push(uses);
                 }
-                self.choice(adapter, at, built)
+                self.choice(adapter, at, built, arm_uses)
             }
         }
     }
 
     // ── The hooks ─────────────────────────────────────────────────────────
 
-    fn atomic(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn atomic(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         let mut cx = self.cx();
-        adapter.atomic(&mut cx, at).map_err(CompileError::Adapter)
+        let fragment = adapter.atomic(&mut cx, at).map_err(CompileError::Adapter)?;
+        Ok((fragment, ShapePlan::Atomic(bridge(at))))
     }
 
-    fn optional(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn optional(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         // The payload is the crossing's own — `Option<T>` gives `T` — so the
         // recipe states no inner type and there is none to disagree with.
         let Some(inner) = at.crossing.value().optional_inner().cloned() else {
@@ -807,18 +899,21 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // reading through the shared optional cannot produce, and
         // `&mut Option<T>` would demand an owned one where it lends `&mut T`.
         let wanted = mode_of(inner).through(at.crossing.mode());
-        let inner = self.part(adapter, at, at.crossing.direction(), 0, inner, wanted)?;
+        let (inner, value) = self.part(adapter, at, at.crossing.direction(), 0, inner, wanted)?;
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .optional(&mut cx, at, &inner)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Optional {
+                bridge: bridge(at),
+                value,
+            },
+        ))
     }
 
-    fn sequence(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn sequence(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         // The element is the crossing's own, for the reason `optional` gives.
         let Some(inner) = super::sequence_elem(at.crossing.value()).cloned() else {
             return Err(wrong_shape(at, "Sequence", "a `Vec`, slice or array"));
@@ -827,18 +922,22 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // A run's element is held the way the collection lends it, which is
         // what the adapter is told and so what its fragment must satisfy.
         let elements = element_mode(at.crossing, inner);
-        let inner = self.part(adapter, at, at.crossing.direction(), 0, inner, elements)?;
+        let (inner, element) =
+            self.part(adapter, at, at.crossing.direction(), 0, inner, elements)?;
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .sequence(&mut cx, at, elements, &inner)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Sequence {
+                bridge: bridge(at),
+                element,
+            },
+        ))
     }
 
-    fn invoke(
-        &mut self,
-        adapter: &mut C,
-        at: At<'_>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    fn invoke(&mut self, adapter: &mut C, at: At<'_>) -> Composed<C> {
         let direction = at.crossing.direction();
         let Some(args) = at.crossing.value().callback_args().map(<[_]>::to_vec) else {
             return Err(wrong_shape(at, "Invoke", "a callback type"));
@@ -847,15 +946,25 @@ impl<'a, C: Compile> Compiler<'a, C> {
         // them out through the call. The swap is the argument's, not the site's
         // — the parts still belong to the callback recipe that names them.
         let mut built = Vec::new();
+        let mut arguments = Vec::new();
         for (index, arg) in args.iter().enumerate() {
             let wanted = mode_of(arg);
-            built.push(self.part(adapter, at, direction.swap(), index, arg, wanted)?);
+            let (fragment, edge) = self.part(adapter, at, direction.swap(), index, arg, wanted)?;
+            built.push(fragment);
+            arguments.push(edge);
         }
         let refs: Vec<&C::Fragment> = built.iter().map(|f| &**f).collect();
         let mut cx = self.cx();
-        adapter
+        let fragment = adapter
             .callback(&mut cx, at, &refs, None)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Invoke {
+                bridge: FixedArity::new(arguments.len(), bridge(at)),
+                arguments,
+            },
+        ))
     }
 
     /// One product, whichever of the four hooks composes it.
@@ -866,7 +975,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         arm: Option<usize>,
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+    ) -> Assembled<C> {
         let mut parts = parts;
         if at.crossing.direction() == Direction::Deconstruct {
             for part in &mut parts {
@@ -874,11 +983,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
             }
         }
         let mut built = Vec::new();
+        let mut uses = Vec::new();
         for (index, part) in parts.iter().enumerate() {
             // `part.mode` rather than the type's own spelling: a product edge
             // states what it needs — a constructor parameter, a field, an
             // accessor's receiver — and `part` checks against that.
-            built.push(self.part_of(
+            let (fragment, edge) = self.part_of(
                 adapter,
                 at,
                 at.crossing.direction(),
@@ -887,17 +997,20 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 &part.ty,
                 part.mode,
                 matches!(part.from, PartSource::Identity),
-            )?);
+            )?;
+            built.push(fragment);
+            uses.push(edge);
         }
         let paired: Vec<(Part<'p>, &C::Fragment)> =
             parts.into_iter().zip(built.iter().map(|f| &**f)).collect();
-        let mut cx = Cx { model: self.model };
-        match kind {
+        let mut cx = self.cx();
+        let fragment = match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
             ProductKind::ValueForm(func) => adapter.value_form(&mut cx, at, func, &paired),
         }
-        .map_err(CompileError::Adapter)
+        .map_err(CompileError::Adapter)?;
+        Ok((fragment, uses))
     }
 
     fn choice(
@@ -905,18 +1018,29 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         arms: Vec<(&'a Alternative, C::Fragment)>,
-    ) -> Result<C::Fragment, CompileError<C::Error>> {
+        arm_uses: Vec<Vec<FragmentUse>>,
+    ) -> Composed<C> {
         let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
-        let mut cx = Cx { model: self.model };
-        adapter
+        let mut cx = self.cx();
+        let fragment = adapter
             .choice(&mut cx, at, &paired)
-            .map_err(CompileError::Adapter)
+            .map_err(CompileError::Adapter)?;
+        Ok((
+            fragment,
+            ShapePlan::Choice {
+                bridge: ChoiceArity::new(arm_uses.iter().map(Vec::len).collect(), bridge(at)),
+                arms: arm_uses,
+            },
+        ))
     }
 
     // ── Reading the parts off the model ───────────────────────────────────
 
-    fn cx(&mut self) -> Cx<'_> {
-        Cx { model: self.model }
+    fn cx(&self) -> Cx<'_, C::Fragment> {
+        Cx {
+            conversions: self.conversions,
+            compiled: &self.compiled,
+        }
     }
 
     fn construct_parts(
@@ -1092,7 +1216,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         at: At<'_>,
         name: &syn::Ident,
     ) -> Result<&'a Function, CompileError<C::Error>> {
-        self.model.function(name).ok_or_else(|| {
+        self.conversions.flat().function(name).ok_or_else(|| {
             CompileError::Recipe(Box::new(RecipeError::UnknownFunction {
                 recipe: at.recipe.clone(),
                 func: name.clone(),
@@ -1128,7 +1252,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
     fn declared(&self, ty: &TypeRef) -> Option<&'a Type> {
         let value = ty.borrow_target().unwrap_or(ty).unwrapped();
         match value.kind() {
-            TypeKind::Named { id, .. } => self.model.resolve(id),
+            TypeKind::Named { id, .. } => self.conversions.flat().resolve(id),
             _ => None,
         }
     }

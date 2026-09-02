@@ -412,7 +412,7 @@ impl FrozenDelivery {
 
     pub(crate) fn new(
         ext: &Declarations,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         plan: &crate::unfold::UnfoldPlan,
         wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
         chain: Option<crate::jni::compile::ComposedChain>,
@@ -435,7 +435,7 @@ impl FrozenDelivery {
     #[allow(clippy::too_many_arguments)]
     fn build(
         ext: &Declarations,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         hoists: Vec<crate::unfold::Hoist>,
         by_ref: bool,
         fixed_product: bool,
@@ -502,7 +502,7 @@ impl FrozenDelivery {
     /// uses; only the call at the end differs.
     pub(crate) fn for_value_struct(
         ext: &Declarations,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         wires: Vec<crate::jni::compile::OutWire>,
     ) -> Option<Self> {
         let descriptors = crate::jni::iface::leaf_descriptors(ext, &wires)?;

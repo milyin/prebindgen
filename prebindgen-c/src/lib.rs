@@ -540,7 +540,7 @@ fn type_short(key: &TypeKey) -> String {
 /// `enum_shape` over a `syn::ItemEnum` to re-derive what the first had thrown
 /// away.
 fn payload_enum<'r>(
-    registry: &'r impl Conversions,
+    registry: &'r (impl Conversions + ?Sized),
     key: &TypeKey,
 ) -> Option<&'r prebindgen_registry::flat::Variant> {
     match registry.flat().declared_type(&key.ident()?)? {
@@ -567,7 +567,7 @@ fn payload_enum<'r>(
 /// was `enum_item` + `assert_unit_enum`, the second running `enum_shape` over a
 /// `syn::ItemEnum` to re-derive what the first had already thrown away.
 fn unit_enum<'r>(
-    registry: &'r impl Conversions,
+    registry: &'r (impl Conversions + ?Sized),
     key: &TypeKey,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
     match registry.flat().declared_type(&key.ident()?)? {

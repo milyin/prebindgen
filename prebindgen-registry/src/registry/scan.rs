@@ -589,7 +589,7 @@ impl Registry {
         dir: Direction,
         ty: &syn::Type,
         root: bool,
-        entry: Option<Answer>,
+        entry: Option<Vec<TypeKey>>,
     ) {
         self.intern(dir, ty, root).unwrap_or_else(|e| {
             panic!(

@@ -433,7 +433,7 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
 fn whole_object_planning_has_no_source_spelling_access() {
     let compile = include_str!("../compile.rs");
     let struct_planner = compile
-        .split_once("    fn planned_struct_codec(&self, at: At<'_>)")
+        .split_once("    fn planned_struct_codec(&self, registry: &dyn Conversions, at: At<'_>)")
         .expect("whole-struct planner")
         .1
         .split_once("    /// Freeze the explicit whole-object decoder")
@@ -441,7 +441,7 @@ fn whole_object_planning_has_no_source_spelling_access() {
         .0;
     assert!(!struct_planner.contains(".emit()"), "{struct_planner}");
     let sum_planner = compile
-        .split_once("    fn planned_sum_codec(&self, at: At<'_>)")
+        .split_once("    fn planned_sum_codec(&self, registry: &dyn Conversions, at: At<'_>)")
         .expect("whole-sum planner")
         .1
         .split_once("    /// Freeze a declared fieldless enum")

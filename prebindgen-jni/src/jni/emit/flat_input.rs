@@ -400,7 +400,7 @@ enum JObjectStructFieldKind {
 pub(crate) fn build_jobject_struct_input_plan(
     ext: &Declarations,
     s: &flat::Struct,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
 ) -> Option<JObjectStructInputPlan> {
     let struct_name = s.name.to_string();
     let mut fields = Vec::new();
@@ -790,7 +790,7 @@ impl JObjectSumInputPlan {
 pub(crate) fn build_jobject_sum_input_plan(
     ext: &Declarations,
     v: &flat::Variant,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
 ) -> Option<JObjectSumInputPlan> {
     let key = TypeKey::from_ident(&v.name);
     let cfg = ext.types.get(&key)?;
@@ -1199,7 +1199,7 @@ pub(crate) fn wire_kotlin_type(entry: &prebindgen_registry::ConverterImpl<Kotlin
 
 pub(crate) fn build_flat_input_plan(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     param_name: &syn::Ident,
     arg: &TypeRef,
 ) -> Result<Option<FlatInputPlan>, FlatInputError> {

@@ -548,21 +548,29 @@ impl JniGen {
             .map_err(|e| format!("the model does not classify {}: {e}", quote::quote!(#ty)))?;
         let crossing = Crossing::new(reading, direction);
         let mut compiler = Compiler::resume(
-            self.registry.flat(),
+            &self.registry,
             self.decls.recipe_table(),
             self.decls.site_bindings(),
             self.decls.compiled.borrow().clone(),
         );
         let mut adapter = crate::jni::compile::JCompile {
             decls: &self.decls,
-            registry: &self.registry,
             declared_return: None,
             site: None,
         };
         let fragment = if parts {
-            compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+            // By its row rather than by name: asking for a row the crossing does
+            // not have is the caller's own claim, and answering it with the
+            // default would file the default under a recipe that does not exist.
+            let row = self
+                .decls
+                .recipe_table()
+                .key_of(&crossing.key(), &crate::jni::recipes::parts())
+                .cloned()
+                .ok_or_else(|| format!("{} states no `parts` recipe", crossing.key()))?;
+            compiler.row(&mut adapter, &crossing, &row)
         } else {
-            compiler.crossing(&mut adapter, &crossing)
+            compiler.crossing(&mut adapter, &crossing).map(|(f, _)| f)
         }
         .map_err(|e| e.to_string())?;
         fragment.rust.mark_reachable();
@@ -1224,8 +1232,8 @@ pub struct Declarations {
     ///
     /// Shared and interior-mutable because JniGen reads it **while** it is
     /// being filled: unlike `prebindgen-c`, this adapter's emitters are also
-    /// its conversion builders, and `JniGen::build_with` calls them from inside
-    /// `convert_with`. A conversion for one type is built out of the
+    /// its conversion builders, and the registry calls them from inside
+    /// `generate`. A conversion for one type is built out of the
     /// conversions for its inners, which the resolver compiles first — the same
     /// order that filled the converter table, so a fragment is there exactly
     /// when a table entry would have been. Resolution drains it into

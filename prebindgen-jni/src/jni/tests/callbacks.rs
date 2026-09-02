@@ -782,7 +782,7 @@ fn generation_plan_freezes_and_drains_derivations() {
     // the plan had been frozen, and two stores are what let the two answers
     // differ. One store now serves both phases.
     assert!(
-        !ext.compiled.borrow().is_empty(),
+        !ext.compiled.borrow().fragments().is_empty(),
         "one store serves both phases, so freeze leaves it where the compiler did"
     );
     let (fragments, functions, interfaces, structs, sums, vec_builds) =

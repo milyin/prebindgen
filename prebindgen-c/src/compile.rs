@@ -13,11 +13,10 @@
 use prebindgen_registry::{
     flat::{Alternative, Function},
     generation::{
-        AbiLayout, ArtifactId, ChoiceArity, Cleanup, ConverterPlan, Failure, FixedArity,
-        FragmentPlan, FragmentUse, NichePlan, OperationId, Representation, ShapePlan, SiteId,
-        SitePlan,
+        AbiLayout, ArtifactId, Cleanup, ConverterPlan, Failure, FragmentPlan, NichePlan,
+        OperationId, Representation, ShapePlan, SiteId, SitePlan,
     },
-    recipe::{At, Carrier, Compile, Cx, Frag, Mode, Parts, Role, Validity, Yield},
+    recipe::{At, Carrier, Compile, Ctx, Frag, Mode, Parts, Refusal, Role, Validity, Yield},
     FragmentId,
 };
 
@@ -305,10 +304,7 @@ pub(crate) enum CRepresentation {}
 
 impl Representation for CRepresentation {
     type Intermediate = TypeKey;
-    type Step = CCall;
     type ConverterArtifact = CFunction;
-    type TerminalCodec = CCall;
-    type Bridge = CCall;
     type Niche = String;
     type Cleanup = ();
     type FailureRoute = CFailureRoute;
@@ -338,11 +334,10 @@ pub(crate) struct CFrag {
     pub(crate) arm: Option<Arm>,
     /// What the fragment produces, which is all the registry reads of it.
     pub(crate) yields: Yield,
-    /// The registry-composed shape of this fragment, in the canonical
-    /// vocabulary. Built where the shape is known — the hook the compiler
-    /// called — rather than stated in an adapter enum and translated at freeze,
-    /// which is the duplication #613 step 6 removes.
-    pub(crate) shape: ShapePlan<CRepresentation>,
+    /// The shape the registry composed for this fragment, taken through
+    /// [`Carrier::composed`]. `None` until the compiler hands it over, which it
+    /// does before any other code sees the fragment.
+    pub(crate) shape: Option<ShapePlan>,
     /// Frozen site wire layout and encoder, shared by ordinary and callback sites.
     pub(crate) value: CValue,
 }
@@ -358,52 +353,10 @@ pub(crate) struct Arm {
 
 #[derive(Clone)]
 pub(crate) struct ArmPart {
-    pub(crate) use_: FragmentUse,
     pub(crate) wire: syn::Type,
     pub(crate) child: CCall,
     pub(crate) mode: Mode,
     pub(crate) hold_uninit: bool,
-}
-/// A composed shape's bridge is always this fragment's own call, so each form
-/// is built from its edges alone — and the arity-bearing ones read their counts
-/// off those edges rather than being told.
-fn optional_shape(function: &CFunction, value: FragmentUse) -> ShapePlan<CRepresentation> {
-    ShapePlan::Optional {
-        bridge: function.call().clone(),
-        value,
-    }
-}
-
-fn sequence_shape(function: &CFunction, element: FragmentUse) -> ShapePlan<CRepresentation> {
-    ShapePlan::Sequence {
-        bridge: function.call().clone(),
-        element,
-    }
-}
-
-fn product_shape(function: &CFunction, parts: Vec<FragmentUse>) -> ShapePlan<CRepresentation> {
-    ShapePlan::Product {
-        bridge: FixedArity::new(parts.len(), function.call().clone()),
-        parts,
-    }
-}
-
-fn choice_shape(function: &CFunction, arms: Vec<Vec<FragmentUse>>) -> ShapePlan<CRepresentation> {
-    ShapePlan::Choice {
-        bridge: ChoiceArity::new(arms.iter().map(Vec::len).collect(), function.call().clone()),
-        arms,
-    }
-}
-
-fn invoke_shape(function: &CFunction, arguments: Vec<FragmentUse>) -> ShapePlan<CRepresentation> {
-    ShapePlan::Invoke {
-        bridge: FixedArity::new(arguments.len(), function.call().clone()),
-        arguments,
-    }
-}
-
-fn fragment_use(fragment: &CFrag) -> FragmentUse {
-    FragmentUse::new(fragment.id.clone(), fragment.yields.clone())
 }
 
 fn c_artifact(kind: &'static str, name: impl Into<String>) -> ArtifactId {
@@ -470,12 +423,25 @@ impl Carrier for CFrag {
     fn yields(&self) -> Yield {
         self.yields.clone()
     }
+
+    fn composed(&mut self, shape: ShapePlan) {
+        self.shape = Some(shape);
+    }
+
+    /// Narrower than the parts the registry compiled, on purpose: a choice arm
+    /// and a construct both drop an opaque union payload and a boxed inner,
+    /// which cross inside this conversion and never as crossings of their own.
+    fn delegates_to(&self, _parts: &[TypeKey]) -> Vec<TypeKey> {
+        self.subs.clone()
+    }
 }
 
 impl CFrag {
     pub(crate) fn freeze(&self) -> FragmentPlan<CRepresentation> {
-        // Stated once, where the hook that composed it knew the shape.
-        let shape = self.shape.clone();
+        let shape = self
+            .shape
+            .clone()
+            .expect("the registry composes a shape for every fragment");
         let niche_key = |slot: &NicheSlot| {
             format!(
                 "{}=>{}",
@@ -535,7 +501,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs,
@@ -565,7 +531,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs,
@@ -599,7 +565,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs: vec![],
@@ -633,7 +599,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs: vec![],
@@ -663,7 +629,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs: vec![],
@@ -700,7 +666,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs,
@@ -740,7 +706,7 @@ impl CFrag {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: ShapePlan::Atomic(function.call().clone()),
+            shape: None,
             function,
             niches,
             subs,
@@ -759,11 +725,11 @@ impl CFrag {
 
 /// The adapter, for the length of one crossing's compilation.
 ///
-/// Holds the binding's declarations and the registry view the emission helpers
-/// still read the model through.
-pub(crate) struct CCompile<'a, R> {
+/// Holds the binding's declarations. The registry view the emission helpers
+/// read the model through arrives per call, on [`Cx`], because the registry
+/// drives the walk and cannot lend the view to something it is handed.
+pub(crate) struct CCompile<'a> {
     pub(crate) gen: &'a CbindgenBuilder,
-    pub(crate) registry: &'a R,
 }
 
 /// Whether the mirror's declared field wire and the conversion's are the same
@@ -810,19 +776,28 @@ fn held_uninit(declared: &syn::Type, produced: &syn::Type) -> bool {
         if TypeKey::from_type(inner) == TypeKey::from_type(produced))
 }
 
-/// A refusal naming the crossing that could not be answered.
-fn refuse(at: At<'_>, why: &str) -> String {
-    format!("Cbindgen: {} ({why})", at.crossing.key())
+/// A gap: C has nothing for this crossing. The scan over-approximates, so most
+/// bindings leave some unanswered, and whether one matters is decided by
+/// whether a declared function reaches it.
+fn refuse(at: At<'_>, why: &str) -> Refusal<String> {
+    Refusal::Gap(format!("Cbindgen: {} ({why})", at.crossing.key()))
 }
 
-impl<R: Conversions> Compile for CCompile<'_, R> {
+/// A wrong declaration, reported whether or not anything reaches this crossing:
+/// a recipe over a type that cannot take it, or a mirror that contradicts how a
+/// field crosses.
+fn wrong(at: At<'_>, why: &str) -> Refusal<String> {
+    Refusal::Error(format!("Cbindgen: {} ({why})", at.crossing.key()))
+}
+
+impl Compile for CCompile<'_> {
     type Fragment = CFrag;
     /// C signatures, calls, and callback arguments render from this immutable
     /// site plan.
     type Plan = SitePlan<CRepresentation>;
     type Error = String;
 
-    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+    fn atomic(&mut self, cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         // The field recipe, where a value crosses differently **inside a
         // `data_struct`'s mirror** than it does on its own. Two types have one:
@@ -848,7 +823,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             if at.crossing.direction() == Direction::Construct && r_is_bool(ty) {
                 let plan = self
                     .gen
-                    .in_terminal(ty, self.registry)
+                    .in_terminal(ty, cx.conversions())
                     .expect("bool has an ordinary input-terminal plan");
                 return Ok(CFrag::from_input_terminal(at, plan));
             }
@@ -869,17 +844,17 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         }
         if let Some((plan, niches)) =
             self.gen
-                .custom_plan(ty, self.registry, at.crossing.direction())
+                .custom_plan(ty, cx.conversions(), at.crossing.direction())
         {
             return Ok(CFrag::from_custom(at, plan, niches));
         }
         if at.crossing.direction() == Direction::Deconstruct {
-            if let Some(plan) = self.gen.out_terminal(ty, self.registry) {
+            if let Some(plan) = self.gen.out_terminal(ty, cx.conversions()) {
                 return Ok(CFrag::from_output_terminal(at, plan));
             }
         }
         if at.crossing.direction() == Direction::Construct {
-            if let Some(plan) = self.gen.in_terminal(ty, self.registry) {
+            if let Some(plan) = self.gen.in_terminal(ty, cx.conversions()) {
                 return Ok(CFrag::from_input_terminal(at, plan));
             }
         }
@@ -894,9 +869,9 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         Err(refuse(at, "no C representation for this type"))
     }
 
-    fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &CFrag) -> Frag<Self> {
+    fn optional(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>, inner: &CFrag) -> Frag<Self> {
         let Some(elem) = at.crossing.value().optional_inner() else {
-            return Err(refuse(
+            return Err(wrong(
                 at,
                 "an optional recipe over a type that is not optional",
             ));
@@ -908,7 +883,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 .expect("Optional output markers accept every resolved inner");
             let mut fragment = CFrag::from_marker(at, marker);
             let absent = inner.value.effective_niches().carve().map(|(slot, _)| slot);
-            fragment.shape = optional_shape(&fragment.function, fragment_use(inner));
             fragment.value = CValue::Optional {
                 inner: Box::new(inner.value.clone()),
                 absent,
@@ -969,7 +943,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination: wire,
-            shape: optional_shape(&function, fragment_use(inner)),
+            shape: None,
             function,
             niches,
             subs: vec![elem.key()],
@@ -985,7 +959,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn sequence(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         _elements: Mode,
         inner: &CFrag,
@@ -1012,7 +986,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                         id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
                         source: at.crossing.spelled().clone(),
                         destination: syn::parse_quote!(()),
-                        shape: sequence_shape(&function, fragment_use(inner)),
+                        shape: None,
                         function,
                         niches: Niches::empty(),
                         subs: vec![element.key()],
@@ -1046,7 +1020,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                     .expect("Sequence output markers accept every resolved element"),
             ),
         };
-        fragment.shape = sequence_shape(&fragment.function, fragment_use(inner));
         if at.crossing.direction() == Direction::Deconstruct {
             fragment.value = CValue::BorrowedSequence {
                 element_wire: inner.destination.clone(),
@@ -1058,25 +1031,25 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn construct(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         _func: &Function,
         _args: Parts<'_, Self>,
     ) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen declares no constructor recipes"))
+        Err(wrong(at, "Cbindgen declares no constructor recipes"))
     }
 
     fn value_form(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         _func: &Function,
         _parts: Parts<'_, Self>,
     ) -> Frag<Self> {
-        Err(refuse(at, "Cbindgen declares no value-form recipes"))
+        Err(wrong(at, "Cbindgen declares no value-form recipes"))
     }
 
-    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+    fn fields(&mut self, cx: &mut Ctx<'_, Self>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
         let ty = at.crossing.spelled();
         let key = ty.key();
         // A tagged union's arm is a product whose parts do not assemble into a
@@ -1089,7 +1062,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             // the arm the way the declaration writes it.
             let arm_name = self
                 .gen
-                .union_arm_name(&key, self.registry, parts)
+                .union_arm_name(&key, cx.conversions(), parts)
                 .unwrap_or_default();
             // Acceptance is decided here, before a part is asked to convert:
             // `payload_field_wire` is where a union says what one of its fields
@@ -1135,7 +1108,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                         .payload_field_wire(&part.ty)
                         .unwrap_or_else(|_| frag.destination.clone());
                     ArmPart {
-                        use_: fragment_use(frag),
                         hold_uninit: at.crossing.direction() == Direction::Deconstruct
                             && held_uninit(&wire, &frag.destination),
                         wire,
@@ -1180,10 +1152,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
                 id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
                 source: at.crossing.spelled().clone(),
                 destination,
-                shape: product_shape(
-                    &function,
-                    parts.iter().map(|(_, frag)| fragment_use(frag)).collect(),
-                ),
+                shape: None,
                 function,
                 niches: Niches::empty(),
                 subs: subs.clone(),
@@ -1209,7 +1178,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             if declared.as_ref().is_some_and(|w| {
                 !same_wire(w, &frag.destination) && !held_uninit(w, &frag.destination)
             }) {
-                return Err(refuse(
+                return Err(wrong(
                     at,
                     &format!(
                         "field `{}` crosses as `{}` and its mirror declares `{}`",
@@ -1269,10 +1238,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination: wire,
-            shape: product_shape(
-                &function,
-                parts.iter().map(|(_, frag)| fragment_use(frag)).collect(),
-            ),
+            shape: None,
             function,
             niches: Niches::empty(),
             subs,
@@ -1288,7 +1254,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn choice(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Ctx<'_, Self>,
         at: At<'_>,
         arms: &[(&Alternative, &CFrag)],
     ) -> Frag<Self> {
@@ -1299,7 +1265,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         let mut planned_arms = Vec::with_capacity(arms.len());
         for (alternative, fragment) in arms {
             let Some(arm) = fragment.arm.as_ref() else {
-                return Err(refuse(at, "an arm that composed no payload"));
+                return Err(wrong(at, "an arm that composed no payload"));
             };
             if direction == Direction::Deconstruct
                 && arm.parts.iter().any(|part| part.child.fallible())
@@ -1333,19 +1299,6 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
         }
 
         let destination: syn::Type = syn::parse_quote!(::core::mem::MaybeUninit<#cname>);
-        let shape_arms = arms
-            .iter()
-            .map(|(_, fragment)| {
-                fragment
-                    .arm
-                    .as_ref()
-                    .expect("validated Choice arm")
-                    .parts
-                    .iter()
-                    .map(|part| part.use_.clone())
-                    .collect()
-            })
-            .collect();
         let operation = OperationId::choice_converter(
             at.crossing.value(),
             at.crossing.mode(),
@@ -1370,7 +1323,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: choice_shape(&function, shape_arms),
+            shape: None,
             function,
             niches: Niches::empty(),
             subs,
@@ -1386,13 +1339,13 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn callback(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Ctx<'_, Self>,
         at: At<'_>,
-        fragments: &[&CFrag],
+        _fragments: &[&CFrag],
         _result: Option<&CFrag>,
     ) -> Frag<Self> {
         let Some(args) = at.crossing.value().callback_args() else {
-            return Err(refuse(at, "a callback recipe over a type that is not one"));
+            return Err(wrong(at, "a callback recipe over a type that is not one"));
         };
         let key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
         if !self.gen.callbacks.contains_key(&key) {
@@ -1411,10 +1364,7 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
             id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
             source: at.crossing.spelled().clone(),
             destination,
-            shape: invoke_shape(
-                &function,
-                fragments.iter().map(|frag| fragment_use(frag)).collect(),
-            ),
+            shape: None,
             function,
             niches: Niches::empty(),
             subs: Vec::new(),
@@ -1442,13 +1392,13 @@ impl<R: Conversions> Compile for CCompile<'_, R> {
 
     fn plan(
         &mut self,
-        _cx: &mut Cx<'_>,
+        cx: &mut Ctx<'_, Self>,
         bound: &Bound,
         root: &CFrag,
     ) -> Result<SitePlan<CRepresentation>, String> {
         let failure_route = (root.value.failure() == Failure::Fallible).then(|| {
-            let function = self
-                .registry
+            let function = cx
+                .conversions()
                 .flat()
                 .function(&bound.site.owner)
                 .expect("site owner is a declared function");

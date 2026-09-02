@@ -903,9 +903,8 @@ fn classify_leaf(
     leaf_index: usize,
 ) -> Result<std::rc::Rc<PlanLeaf>, PlanError> {
     use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Site};
-    // `impl Fn(args)` never reaches the compiler, for the reason
-    // `JniGen::compile_crossing` gives: a callback is answered whole, because a
-    // JniGen callback ARGUMENT does not always have a conversion of its own —
+    // `impl Fn(args)` never reaches the compiler: a callback is answered whole,
+    // because a JniGen callback ARGUMENT has no conversion of its own —
     // a sealed class reaches the JVM as a selector plus the live arm's slots.
     // Driving the derived callback recipe here would ask for the one conversion
     // that does not exist. This carve-out goes when the arms are recipes a
@@ -1017,14 +1016,13 @@ fn classify_leaf(
     // rather than building them again — and the plan it wraps them in is the
     // one hook the registry calls per site rather than per crossing.
     let mut compiler = Compiler::resume(
-        registry.flat(),
+        registry,
         ext.recipe_table(),
         ext.site_bindings(),
         ext.compiled.borrow().clone(),
     );
     let mut adapter = crate::jni::compile::JCompile {
         decls: ext,
-        registry,
         declared_return: None,
         site: Some(crate::jni::compile::PlanSite::Param(
             crate::jni::compile::ParamSite {
@@ -1071,7 +1069,7 @@ fn classify_leaf(
             ty: Box::new(reading.clone()),
         }),
         Err(prebindgen_registry::recipe::CompileError::Adapter(
-            crate::jni::compile::JErr::Plan(e),
+            prebindgen_registry::recipe::Refusal::Error(crate::jni::compile::JErr::Plan(e)),
         )) => Err(*e),
         // A refusal or a table disagreement, which reach this path only for a
         // type with no conversion — the same failure the entry lookup reported.
@@ -1102,14 +1100,13 @@ fn return_site(
 ) -> Option<crate::jni::compile::JPlan> {
     use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
     let mut compiler = Compiler::resume(
-        registry.flat(),
+        registry,
         ext.recipe_table(),
         ext.site_bindings(),
         ext.compiled.borrow().clone(),
     );
     let mut adapter = crate::jni::compile::JCompile {
         decls: ext,
-        registry,
         declared_return: declared,
         site: Some(crate::jni::compile::PlanSite::Return),
     };

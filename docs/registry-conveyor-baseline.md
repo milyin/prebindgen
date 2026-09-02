@@ -48,7 +48,12 @@ In `prebindgen-jni/src/jni`: `chain.rs`, `compile.rs`, `emit/callback.rs`,
 `iface.rs` are Kotlin emission that names registry types.
 
 The plan's first figure is the production lines of those files, summed over
-both adapters. It is judged at the plan's end against this baseline.
+both adapters. At `eb4aa007` it is **28,348**, which is what the plan's end is
+judged against. Per-file production counts come from the same script:
+
+```
+cargo run --manifest-path tools/line-report/Cargo.toml -- --files prebindgen-c prebindgen-jni
+```
 
 ## Gates
 
