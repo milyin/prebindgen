@@ -31,6 +31,7 @@ use kotlin_codegen::{
 };
 
 use super::*;
+use crate::unfold;
 
 /// Banner line prepended to every generated `.kt` file, overriding
 /// `kotlin_codegen::KOTLIN_BANNER` so the file names the generator that
@@ -1197,12 +1198,12 @@ impl Declarations {
         /// single-leaf appender for a whole-element leaf fold. The wrapper
         /// references the singleton instead of taking a caller `build`/`fold`.
         enum FixedSingleton {
-            StructBuilder(std::rc::Rc<crate::unfold::DeconSpec>),
-            StructFolder(std::rc::Rc<crate::unfold::DeconSpec>),
+            StructBuilder(std::rc::Rc<unfold::DeconSpec>),
+            StructFolder(std::rc::Rc<unfold::DeconSpec>),
             /// A decomposed **sum**: the reassembly is a `when` over the tag
             /// picking the live group, not a `fromParts` over a fixed product.
-            SumBuilder(std::rc::Rc<crate::unfold::DeconSpec>),
-            SumFolder(std::rc::Rc<crate::unfold::DeconSpec>),
+            SumBuilder(std::rc::Rc<unfold::DeconSpec>),
+            SumFolder(std::rc::Rc<unfold::DeconSpec>),
             LeafFolder,
         }
         // The interface allocations and their use-site roles are already in
@@ -1406,7 +1407,7 @@ impl Declarations {
     fn value_struct_builder_singleton(
         &self,
         spec: &crate::jni::IfaceSpec,
-        decon: &crate::unfold::DeconSpec,
+        decon: &unfold::DeconSpec,
     ) -> KtDecl {
         let source = &decon.source;
         let class_fqn = self
@@ -1452,7 +1453,7 @@ impl Declarations {
     fn value_struct_folder_singleton(
         &self,
         spec: &crate::jni::IfaceSpec,
-        decon: &crate::unfold::DeconSpec,
+        decon: &unfold::DeconSpec,
     ) -> KtDecl {
         let source = &decon.source;
         let class_fqn = self
@@ -1512,7 +1513,7 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         spec: &crate::jni::IfaceSpec,
-        plan: &crate::unfold::DeconSpec,
+        plan: &unfold::DeconSpec,
     ) -> KtDecl {
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
@@ -1554,7 +1555,7 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         spec: &crate::jni::IfaceSpec,
-        plan: &crate::unfold::DeconSpec,
+        plan: &unfold::DeconSpec,
     ) -> KtDecl {
         let mut imports: BTreeSet<String> = BTreeSet::new();
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();

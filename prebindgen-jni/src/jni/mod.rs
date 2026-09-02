@@ -49,6 +49,7 @@ pub(crate) use prebindgen_registry::{
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
 
+use crate::unfold;
 pub(crate) use crate::{
     jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
     util::snake_to_camel,
@@ -480,7 +481,7 @@ pub(crate) type NamedWire = (
 /// How a reach renders: its field steps, joined — the accessor call every leaf
 /// hangs off is the site's, not the value's, so it is dropped.
 #[cfg(test)]
-fn reach_of(path: &[crate::unfold::PathStep]) -> String {
+fn reach_of(path: &[unfold::PathStep]) -> String {
     use crate::unfold::PathStep;
     path.iter()
         .filter_map(|step| match step {
@@ -495,7 +496,7 @@ fn reach_of(path: &[crate::unfold::PathStep]) -> String {
 /// the accessor call every leaf hangs off is the site's, not the value's, so it
 /// is dropped to line the two up.
 #[cfg(test)]
-fn leaf_reach(leaf: &crate::unfold::UnfoldLeaf) -> String {
+fn leaf_reach(leaf: &unfold::UnfoldLeaf) -> String {
     use crate::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
@@ -1394,7 +1395,7 @@ pub struct Declarations {
     /// callback argument comes apart. The registry holds none of this: it is
     /// told only which readings the decompositions need on the output side, and
     /// which leaves a callback argument's delivery depends on.
-    pub(crate) unfolded: std::cell::OnceCell<crate::unfold::Unfolded>,
+    pub(crate) unfolded: std::cell::OnceCell<unfold::Unfolded>,
 
     /// Present only after resolution has finished. All artifact writers reach
     /// derived JNI decisions through this one immutable store; the mutable

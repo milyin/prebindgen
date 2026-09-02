@@ -1,5 +1,5 @@
 //! Output (data) expansion — the dual of constructor expansion
-//! ([`crate::expand`]). A function returning a rich type is *decomposed* by a
+//! ([`prebindgen_registry::expand`]). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
 //! A **deconstructor** (a type-level `expand_return!` `.field*` list,
@@ -30,20 +30,15 @@ use std::collections::HashSet;
 use prebindgen_registry::{declared_target::check_declared_target, TypeKey};
 
 mod error;
-mod walk;
-pub(crate) use walk::{
-    bind_hoists, conditional_arm, reach_leaf, segment, segments, segments_at, DecomposedLeaf,
-    DeliveryBridge, LeafAt, LeafPlace, Reach, Slot,
-};
-
 mod plan;
+
+// The leaf model and the walk over it are the registry's; what stays here is
+// the delivery, which is a JVM answer (#680 review).
+pub use prebindgen_registry::leaf::*;
 
 pub use self::{
     error::{UnfoldDeclError, UnfoldError},
-    plan::{
-        steps_are_movable, DeconId, DeconSpec, Hoist, LeafSource, PathStep, UnfoldLeaf, UnfoldPlan,
-        UnfoldShape,
-    },
+    plan::{Delivery, UnfoldPlan},
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -55,7 +50,7 @@ pub use self::{
 ///
 /// The adapter that declared the decompositions owns this. It holds no
 /// registry: every `apply*` function here reads signatures from the model and
-/// writes plans and [`Requirement`]s into this, which is what lets the plans be
+/// writes plans and [`Requirement`](prebindgen_registry::Requirement)s into this, which is what lets the plans be
 /// built at declaration time.
 pub struct Unfolding<'f> {
     flat: &'f prebindgen_registry::flat::Flat,
@@ -113,7 +108,7 @@ impl<'f> Unfolding<'f> {
     }
 
     /// The registrations asked for, in the order they were asked. Hand these to
-    /// [`Decompositions::requirements`](crate::Decompositions::requirements).
+    /// [`Decompositions::requirements`](prebindgen_registry::Decompositions::requirements).
     pub fn requirements(&self) -> &[prebindgen_registry::Requirement] {
         &self.requirements
     }
@@ -124,7 +119,7 @@ impl<'f> Unfolding<'f> {
     /// delivered as leaves needs each leaf's own conversion before the
     /// callback's can be built, and a leaf is named by a plan rather than by the
     /// argument's syntax. Hand this to
-    /// [`Decompositions::callback_arg_leaves`](crate::Decompositions::callback_arg_leaves).
+    /// [`Decompositions::callback_arg_leaves`](prebindgen_registry::Decompositions::callback_arg_leaves).
     pub fn callback_arg_leaves(
         &self,
     ) -> std::collections::HashMap<TypeKey, Vec<prebindgen_registry::flat::TypeRef>> {
@@ -314,19 +309,6 @@ pub enum DeconSel {
 pub enum DeconTarget {
     Output,
     Error,
-}
-
-/// How the decomposed value(s) are delivered to the foreign side. Derived
-/// from the resolved leaf count (1 ⇒ `Return`, N ⇒ `Callback`); errors are
-/// always `Callback`-shaped.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Delivery {
-    /// Deliver the leaves to a foreign **callback** (builder / fold). Any
-    /// leaf count.
-    Callback,
-    /// **Return**/deliver the single decomposed value (no builder). Requires
-    /// exactly one leaf and a non-`Iterable` shape.
-    Return,
 }
 
 /// A per-fn output expansion (`.expand_return(expand_return!(T)…)`) —

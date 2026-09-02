@@ -14,6 +14,7 @@ use kotlin_codegen::KtType;
 use prebindgen_registry::{flat::TypeRef, Conversions};
 
 use super::*;
+use crate::unfold;
 
 /// The lowered plan for one bound function: one [`PlanParam`] per source
 /// `syn::Signature` parameter (non-`Typed`/non-`Ident` args — `self`,
@@ -42,7 +43,7 @@ pub(crate) struct JniFunctionPlan {
     /// Registry-resolved output decomposition selected for this function.
     /// Rust delivery, Kotlin surface/KDoc, and the report all consume this
     /// owned plan after the registry phase is closed.
-    pub unfold: Option<crate::unfold::UnfoldPlan>,
+    pub unfold: Option<unfold::UnfoldPlan>,
     /// Registry-resolved domain-error delivery selected for this function.
     /// The structural decomposition, exact outgoing JNI operations, and any
     /// composed converter are frozen together before either writer runs.
@@ -57,7 +58,7 @@ pub(crate) struct JniFunctionPlan {
 /// [`Self::wires`] and [`Self::chain`], so it cannot reconstruct converters
 /// from `TypeRef` while rendering the wrapper.
 pub(crate) struct ErrorOutputPlan {
-    pub unfold: crate::unfold::UnfoldPlan,
+    pub unfold: unfold::UnfoldPlan,
     pub wires: std::rc::Rc<Vec<crate::jni::compile::OutWire>>,
     pub chain: Option<crate::jni::compile::ComposedChain>,
     /// Origin qualification and sum shape for these leaves, frozen with them,
@@ -66,7 +67,7 @@ pub(crate) struct ErrorOutputPlan {
 }
 
 impl std::ops::Deref for ErrorOutputPlan {
-    type Target = crate::unfold::UnfoldPlan;
+    type Target = unfold::UnfoldPlan;
 
     fn deref(&self) -> &Self::Target {
         &self.unfold
@@ -305,7 +306,7 @@ pub(crate) enum HandleMode {
 }
 
 /// How the return value crosses the boundary. Mirrors the unfold plan's
-/// [`Delivery`](crate::unfold::Delivery), resolved per function:
+/// [`Delivery`](unfold::Delivery), resolved per function:
 /// `Unfold` = callback delivery (builder/fold lambda, erased `Any?` wire);
 /// `Value` = everything else, including the `Return`-delivery convert.
 pub(crate) enum FnOutputPlan {
@@ -344,7 +345,7 @@ pub(crate) struct UnfoldOutputPlan {
     /// Declaration-normalized decomposition used by fixed Kotlin
     /// builder/folder singletons. `None` for a whole-element fold, which has
     /// no deconstructor declaration.
-    pub decon: Option<std::rc::Rc<crate::unfold::DeconSpec>>,
+    pub decon: Option<std::rc::Rc<unfold::DeconSpec>>,
     /// Origin qualification and sum shape for these leaves, frozen with them,
     /// so rendering the delivery asks the registry nothing.
     pub delivery: crate::jni::emit::FrozenDelivery,
@@ -1129,7 +1130,7 @@ fn return_site(
 fn build_error_output(
     ext: &Declarations,
     registry: &Registry,
-    unfold: crate::unfold::UnfoldPlan,
+    unfold: unfold::UnfoldPlan,
 ) -> Result<ErrorOutputPlan, PlanError> {
     let wires = std::rc::Rc::new(
         crate::jni::compile::freeze_out_wires(ext, registry, &unfold.leaves).map_err(|_| {
@@ -1176,8 +1177,8 @@ fn build_output(
     ext: &Declarations,
     registry: &Registry,
     f: &prebindgen_registry::flat::Function,
-    unfold_plan: Option<&crate::unfold::UnfoldPlan>,
-    error_plan: Option<&crate::unfold::UnfoldPlan>,
+    unfold_plan: Option<&unfold::UnfoldPlan>,
+    error_plan: Option<&unfold::UnfoldPlan>,
 ) -> Result<FnOutputPlan, PlanError> {
     use crate::unfold::{Delivery, UnfoldShape};
     let ident = &f.name;
