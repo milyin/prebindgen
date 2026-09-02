@@ -43,9 +43,9 @@ impl DeclareAndResolve<()> for RegistryBuilder {
             .validate_with(&ext)?
             // The reading, not a spelling re-derived from the key: this is the
             // route a real generator takes, so the stub takes it too (#291).
-            .convert_with(|crossing, built| {
+            .answer_each(|crossing, built| {
                 let conv = ext.converter(&built.reading(&crossing.1)?)?;
-                Some(Answer::over(conv.subs))
+                Some(conv.subs)
             })?
             .build()?;
         ext.validate_resolved(&registry)
@@ -267,15 +267,15 @@ fn conversion_carriers_cannot_store_complete_rust_syntax() {
 #[test]
 fn conversion_planning_cannot_obtain_the_writer() {
     let source = include_str!("declare.rs");
-    let convert_with = source
-        .split_once("pub fn convert_with")
-        .expect("convert_with declaration")
+    let generate = source
+        .split_once("pub fn generate")
+        .expect("generate declaration")
         .1
-        .split_once("/// The scanned registry")
-        .expect("end of convert_with")
+        .split_once("/// Answer each crossing")
+        .expect("end of generate")
         .0;
-    assert!(!convert_with.contains("RustWriter"), "{convert_with}");
-    assert!(!convert_with.contains("spell_ty"), "{convert_with}");
+    assert!(!generate.contains("RustWriter"), "{generate}");
+    assert!(!generate.contains("spell_ty"), "{generate}");
 
     let recipes = include_str!("../recipe/compile.rs");
     let cx = recipes

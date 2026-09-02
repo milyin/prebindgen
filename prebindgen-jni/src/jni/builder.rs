@@ -101,7 +101,7 @@ impl Declarations {
     /// callers do that once; a renderer reads it back (#613 step 7).
     pub(crate) fn freeze_reading_of(
         &self,
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &syn::Type,
     ) -> Option<prebindgen_registry::flat::TypeRef> {
         let reading = registry.reading_of(ty)?;
@@ -133,7 +133,11 @@ impl Declarations {
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
     /// crates layered on the flat crate), else the registry's default
     /// module (first-seen stream origin), else `crate`.
-    pub(crate) fn fn_module(&self, registry: &impl Conversions, ident: &syn::Ident) -> syn::Path {
+    pub(crate) fn fn_module(
+        &self,
+        registry: &(impl Conversions + ?Sized),
+        ident: &syn::Ident,
+    ) -> syn::Path {
         registry
             .origin_module(ident)
             .or_else(|| registry.default_module())
@@ -893,7 +897,7 @@ impl Declarations {
     /// once, on the member), else the camel-cased Rust name.
     fn lower_fields(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
         fields: &[LocalField],
     ) -> Vec<crate::unfold::DeconRecord> {
@@ -950,7 +954,7 @@ impl Declarations {
     /// a field renamed upstream must not silently lose its adjustment.
     pub(crate) fn lower_value_form(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
         decl: &FieldsDecl,
     ) -> Vec<crate::unfold::FieldRecord> {
@@ -1028,7 +1032,7 @@ impl Declarations {
     #[allow(clippy::too_many_arguments)]
     fn walk_value_form(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
         decl: &FieldsDecl,
         st: &flat::Struct,
@@ -1216,7 +1220,7 @@ impl Declarations {
     /// output-flattened.
     pub(crate) fn build_deconstructors(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> crate::unfold::Deconstructors {
         use crate::unfold::{
             DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
@@ -1594,7 +1598,7 @@ impl Declarations {
     pub(crate) fn optional_niche_demand(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         direction: Direction,
     ) -> usize {
         registry
@@ -1625,7 +1629,7 @@ impl Declarations {
     pub(crate) fn enum_niches(
         &self,
         e: &prebindgen_registry::flat::Enum,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         direction: Direction,
     ) -> (Niches, Vec<String>) {
         let key = TypeKey::from_ident(&e.name);
@@ -1677,7 +1681,7 @@ impl Declarations {
     pub(crate) fn conversion_domain_niches(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         direction: Direction,
         wire: &syn::Type,
     ) -> (Niches, Vec<String>) {
@@ -1736,7 +1740,7 @@ impl Declarations {
     pub(crate) fn convert_target(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         dir: Direction,
     ) -> Option<syn::Type> {
         let decl = self.convert_decls.iter().find(|d| d.key() == key)?;

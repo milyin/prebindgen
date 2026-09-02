@@ -19,8 +19,8 @@
 //!
 //! * **Says how the language represents Rust types on the wire** — it builds a
 //!   [`ConverterImpl`] (a converter artifact identity plus its wire type) for
-//!   each crossing the registry hands it, and gives them all back through
-//!   `RegistryBuilder::convert_with`.
+//!   each crossing the registry hands it, through the `Compile` hooks
+//!   [`RegistryBuilder::generate`] drives.
 //! * **Plans what the generated file holds** — every wrapper, converter,
 //!   helper, mirror and constant is an artifact of the adapter's frozen
 //!   [`Assembly`](write::Assembly), which the registry orders and
@@ -54,7 +54,7 @@
 //! 1. [`flat::Flat::builder`] parses the declared sources into the model, and
 //!    [`Registry::builder`] starts describing a binding over it.
 //! 2. The generator states that binding, then
-//!    [`RegistryBuilder::convert_with`] walks every crossing needing a
+//!    [`RegistryBuilder::generate`] walks every crossing needing a
 //!    conversion — inner types first, so each one can be built from those
 //!    already done — and `build` names any gap.
 //! 3. The resolved registry becomes a field of the built generator, whose
@@ -144,7 +144,7 @@ pub use self::{
     niches::{NicheSlot, Niches},
     prebindgen::{ConverterImpl, NamePredicate, Prebindgen},
     registry::{
-        Answer, Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
+        Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
         NotExpressibleEntry, Registry, RegistryBuilder, Requirement, ScanError, TypeKey,
         TypeKeyParseError, WriteRustError,
     },

@@ -56,8 +56,8 @@ mod tests;
 
 pub use self::{
     compile::{
-        At, Carrier, Compile, CompileError, Compiled, Compiler, Cx, Frag, Part, PartSource, Parts,
-        Validity, Yield,
+        At, Carrier, Compile, CompileError, Compiled, Compiler, Ctx, Cx, Frag, Part, PartSource,
+        Parts, Refusal, Validity, Yield,
     },
     site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
 };
@@ -572,6 +572,8 @@ struct Entry {
     /// fields and alternatives off.
     ty: TypeRef,
     default: bool,
+    /// Compiled for every crossing that finds it, asked for or not.
+    unasked: bool,
 }
 
 /// The resolved table. Built by [`RecipesBuilder`], checked once, then
@@ -605,6 +607,19 @@ impl Recipes {
             .iter()
             .find(|e| e.key.name() == name)
             .map(|e| &e.key)
+    }
+
+    /// The rows of `crossing` declared through
+    /// [`RecipesBuilder::declare_unasked`], which are compiled whether or not a
+    /// site names them.
+    pub fn unasked_of(&self, crossing: &CrossingKey) -> Vec<RecipeKey> {
+        self.recipes
+            .get(crossing)
+            .into_iter()
+            .flatten()
+            .filter(|e| e.unasked)
+            .map(|e| e.key.clone())
+            .collect()
     }
 
     /// One row by its globally unique key.
@@ -724,7 +739,7 @@ impl RecipesBuilder {
         name: RecipeName,
         shape: Shape<OP>,
     ) -> &mut Self {
-        self.insert(ty, name, OP::into_recipe(shape), false)
+        self.insert(ty, name, OP::into_recipe(shape), false, false)
     }
 
     /// Add one recipe and make it the recipe used where a site names none.
@@ -737,7 +752,23 @@ impl RecipesBuilder {
         name: RecipeName,
         shape: Shape<OP>,
     ) -> &mut Self {
-        self.insert(ty, name, OP::into_recipe(shape), true)
+        self.insert(ty, name, OP::into_recipe(shape), true, false)
+    }
+
+    /// [`Self::declare`], for a row compiled whether or not a site asks for it.
+    ///
+    /// A second recipe is otherwise reached only through a site that names it,
+    /// so a row describing a type for something other than a site — what a
+    /// `data_class` is made of, say — would never be built. This says build it
+    /// for every crossing that finds it, which is what an adapter otherwise did
+    /// by compiling the row by name inside its own walk.
+    pub fn declare_unasked<OP: Operation>(
+        &mut self,
+        ty: TypeRef,
+        name: RecipeName,
+        shape: Shape<OP>,
+    ) -> &mut Self {
+        self.insert(ty, name, OP::into_recipe(shape), false, true)
     }
 
     fn insert(
@@ -746,6 +777,7 @@ impl RecipesBuilder {
         name: RecipeName,
         recipe: Recipe,
         default: bool,
+        unasked: bool,
     ) -> &mut Self {
         let crossing = Crossing::new(ty.clone(), recipe.direction()).key();
         let key = crossing.row(name);
@@ -759,6 +791,7 @@ impl RecipesBuilder {
             recipe,
             ty,
             default,
+            unasked,
         });
         self
     }
@@ -1383,8 +1416,7 @@ pub enum RecipeError {
     /// A caller named a recipe row the table does not have.
     ///
     /// Distinct from [`UnknownRecipe`](Self::UnknownRecipe), which is a **site**
-    /// asking for one. This is a caller compiling a named recipe directly through
-    /// [`Compiler::recipe_of`](crate::recipe::Compiler::recipe_of), where there is no
+    /// asking for one. This is a caller naming a row directly, where there is no
     /// site to name — an adapter checking a recipe it declared conditionally, and
     /// getting the condition wrong.
     NoSuchRecipe {

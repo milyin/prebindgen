@@ -617,66 +617,43 @@ impl JniGenBuilder {
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let mut decls = self.decls;
         let mut declared = decls.declare_into(registry)?.validate_with(&decls)?;
-        // A second holding of the model: `convert_with` consumes the builder,
-        // and the table outlives that call.
-        let model = declared.flat().clone();
-        let expansion_leaves: Vec<_> = declared.expansion_leaf_readings()?.cloned().collect();
-        let recipes = decls
-            .recipes(&model, &expansion_leaves, &declared)
-            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
+        let invariant = |errors: Vec<prebindgen_registry::recipe::RecipeError>| {
+            prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<_>>()
                     .join("; "),
-            })?;
+            }
+        };
+        let expansion_leaves: Vec<_> = declared.expansion_leaf_readings()?.cloned().collect();
+        let recipes = decls
+            .recipes(declared.flat(), &expansion_leaves, &declared)
+            .map_err(invariant)?;
         // A `data_class` field that is itself one takes the `parts` recipe rather
         // than its own default — see `Declarations::bindings`.
         let bindings = decls
-            .bindings(&model, &declared, &recipes)
-            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
-                message: errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            })?;
+            .bindings(declared.flat(), &declared, &recipes)
+            .map_err(invariant)?;
         // Both tables go on `decls`, because compiling a **site** happens after
         // this function has returned: the sites are `fn_plan`'s to enumerate,
         // and `Compiler::resume` needs these two beside the model.
         decls.tables = Some(std::rc::Rc::new(crate::jni::Tables { recipes, bindings }));
-        // The driver's state lives on `decls` rather than here, because the
-        // adapter reads it **while** it compiles: a conversion for one type is
-        // built out of the conversions for its inners, which are compiled
-        // first. That is the same order the converter table was filled in, so
-        // a fragment is there exactly when a table entry would have been.
-        // Compositions that refused. See `compile_crossing`: these are adapter
-        // invariants, reported together once the walk is done.
+        // The registry walks the crossings, compiles each crossing's default
+        // recipe and the `parts` rows declared unasked beside it, and hands
+        // back every fragment. The store lives on `decls` because the emitters
+        // read it after the walk, through `in_frag` and `out_frag`.
+        *decls.compiled.borrow_mut() = declared.generate(
+            &mut crate::jni::compile::JCompile {
+                decls: &decls,
+                declared_return: None,
+                site: None,
+            },
+            decls.recipe_table(),
+            decls.site_bindings(),
+        )?;
+        let registry = declared.build()?;
         let mut refusals: Vec<String> = Vec::new();
-        let registry = declared
-            .convert_with(|crossing, built| {
-                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                    &model,
-                    decls.recipe_table(),
-                    decls.site_bindings(),
-                    decls.compiled.borrow().clone(),
-                );
-                let compiled =
-                    decls.compile_crossing(&mut compiler, crossing, built, &mut refusals);
-                *decls.compiled.borrow_mut() = compiler.finish();
-                let conv = compiled?;
-                // The conversion stays here; what the registry gets back is
-                // which other crossings this one delegates to, which is what
-                // its reachability walk needs.
-                Some(prebindgen_registry::Answer::over(conv.subs))
-            })?
-            .build()?;
-        if !refusals.is_empty() {
-            return Err(prebindgen_registry::ScanError::AdapterInvariant {
-                message: refusals.join("; "),
-            }
-            .into());
-        }
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
         decls
@@ -689,7 +666,7 @@ impl JniGenBuilder {
         // no deconstructing whole-value crossing.
         for key in decls.declared_decompositions() {
             let Some(ident) = key.ident() else { continue };
-            let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
+            let Ok(ty) = registry.flat().classify(&syn::parse_quote!(#ident)) else {
                 continue;
             };
             // Only a type every part of which already crosses. One that does
@@ -697,7 +674,7 @@ impl JniGenBuilder {
             // the part — `Reading.Exact.v0 has no OUTPUT converter` — where
             // this could only say that composing failed.
             let part_types: Vec<&prebindgen_registry::flat::TypeRef> =
-                match model.declared_type(&ident) {
+                match registry.flat().declared_type(&ident) {
                     Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
                         .alternatives
                         .iter()
@@ -721,28 +698,25 @@ impl JniGenBuilder {
             // struct, or an enum with no alternatives. Asking for one by name
             // is refused now rather than answered with the default, so the
             // condition that declared it is the condition asked here.
-            if decls
+            let Some(row) = decls
                 .recipe_table()
                 .key_of(&crossing.key(), &crate::jni::recipes::parts())
-                .is_none()
-            {
+                .cloned()
+            else {
                 continue;
-            }
+            };
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                &model,
+                &registry,
                 decls.recipe_table(),
                 decls.site_bindings(),
                 decls.compiled.borrow().clone(),
             );
             let mut adapter = crate::jni::compile::JCompile {
                 decls: &decls,
-                registry: &registry,
                 declared_return: None,
                 site: None,
             };
-            if let Err(e) =
-                compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
-            {
+            if let Err(e) = compiler.row(&mut adapter, &crossing, &row) {
                 refusals.push(format!(
                     "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
@@ -762,77 +736,6 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
-    /// Build the conversion for one crossing by asking the table which recipe it
-    /// takes and the driver to compile that recipe.
-    ///
-    /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
-    /// so everything this could compose from is already in `built`.
-    fn compile_crossing<'v, R: Conversions>(
-        &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<
-            '_,
-            crate::jni::compile::JCompile<'v, R>,
-        >,
-        crossing: &Crossing,
-        built: &'v R,
-        refusals: &mut Vec<String>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let (dir, key) = crossing;
-        // The reading the scan already took for this crossing, fetched by the
-        // key the crossing IS.
-        let reading = built.reading(key)?;
-        let direction = *dir;
-        let mut adapter = crate::jni::compile::JCompile {
-            decls: self,
-            registry: built,
-            declared_return: None,
-            site: None,
-        };
-        let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
-        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        // A `data_class` also states a recipe that says what it is made of.
-        // Compiling that named recipe equips whole-value input, output and
-        // callback paths with the same registry-owned Product descriptor.
-        // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
-        // recipe too: all three spellings find one recipe and each gets its own
-        // fragment, which is what a site taking a wrapped spelling reads.
-        // A `data_class` with no fields states no `parts` recipe — there is
-        // nothing for it to be made of — so the recipe is asked for by name only
-        // where it was declared. `recipe_of` refuses an absent name rather than
-        // answering with the default, which is what makes that condition the
-        // one that has to match.
-        if (direction == prebindgen_registry::recipe::Direction::Construct
-            && matches!(
-                self.types
-                    .get(&crossing.value().stripped_key())
-                    .map(|c| &c.kind),
-                Some(DeclaredKind::Data)
-            )
-            || crossing.value().optional_inner().is_some())
-            && compiler
-                .recipes()
-                .key_of(&crossing.key(), &crate::jni::recipes::parts())
-                .is_some()
-        {
-            // A refusal is a bug in the composition, not a gap in the binding:
-            // every part of a `data_class` is a crossing that already resolved
-            // on its own, so nothing here can legitimately be missing.
-            // Returning `None` would report an unresolved crossing and blame
-            // the declaration, so the reason is collected and surfaced as an
-            // adapter invariant — beside whatever else the walk found, and
-            // through the same `Result` every other refusal takes.
-            if let Err(e) =
-                compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
-            {
-                refusals.push(format!(
-                    "`{}` crosses as its fields, but composing them failed: {e:?}",
-                    crossing.spelled().key()
-                ));
-            }
-        }
-        Some((*fragment).clone().conv)
-    }
-
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder,
@@ -953,7 +856,7 @@ impl Declarations {
 impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> Vec<crate::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
@@ -989,7 +892,7 @@ impl Declarations {
 
     pub(crate) fn build_sum_decons(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> Vec<crate::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -1024,7 +927,10 @@ impl Declarations {
         out
     }
 
-    pub(crate) fn build_leaf_vec_fold_elements(&self, registry: &impl Conversions) -> Vec<TypeKey> {
+    pub(crate) fn build_leaf_vec_fold_elements(
+        &self,
+        registry: &(impl Conversions + ?Sized),
+    ) -> Vec<TypeKey> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: &prebindgen_registry::flat::TypeRef| {
@@ -1083,7 +989,7 @@ fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_regist
 /// classification the model makes once, at parse time, and expresses as two
 /// different elements.
 pub(crate) fn flat_unit_enum<'r>(
-    registry: &'r impl Conversions,
+    registry: &'r (impl Conversions + ?Sized),
     name: &syn::Ident,
     declarator: &str,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
@@ -1113,7 +1019,7 @@ impl Declarations {
         operation: OperationId,
         source: &prebindgen_registry::flat::TypeRef,
         args: &[prebindgen_registry::flat::TypeRef],
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         arg_fragments: &[&crate::jni::compile::JFrag],
     ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
         let (wire, plan) = callback_input(

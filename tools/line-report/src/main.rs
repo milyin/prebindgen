@@ -55,21 +55,28 @@ fn main() {
         .nth(2)
         .expect("the repository root is two levels above this crate")
         .to_path_buf();
-    let requested: Vec<String> = std::env::args().skip(1).collect();
+    let mut requested: Vec<String> = std::env::args().skip(1).collect();
     if requested == ["--self-test"] {
         self_test();
         return;
     }
+    // Per file rather than per crate, so the plan's first figure — the
+    // adapters' production lines in registry-facing files — can be summed over
+    // a set `grep` selects.
+    let per_file = requested.iter().any(|arg| arg == "--files");
+    requested.retain(|arg| arg != "--files");
     let crates: Vec<&str> = if requested.is_empty() {
         CRATES.to_vec()
     } else {
         requested.iter().map(String::as_str).collect()
     };
 
-    println!(
-        "{:<24}{:>12}{:>12}{:>12}{:>12}",
-        "crate", "production", "test items", "test files", "total"
-    );
+    if !per_file {
+        println!(
+            "{:<24}{:>12}{:>12}{:>12}{:>12}",
+            "crate", "production", "test items", "test files", "total"
+        );
+    }
     let (mut all_production, mut all_items, mut all_files) = (0usize, 0usize, 0usize);
     for name in crates {
         let src = root.join(name).join("src");
@@ -85,14 +92,23 @@ fn main() {
                 continue;
             }
             let (file_production, file_items) = count(&text, &path.display().to_string());
+            if per_file {
+                let relative = path.strip_prefix(&root).unwrap_or(&path);
+                println!("{file_production:>8}  {}", relative.display());
+            }
             production += file_production;
             items += file_items;
         }
         let total = production + items + test_files;
-        println!("{name:<24}{production:>12}{items:>12}{test_files:>12}{total:>12}");
+        if !per_file {
+            println!("{name:<24}{production:>12}{items:>12}{test_files:>12}{total:>12}");
+        }
         all_production += production;
         all_items += items;
         all_files += test_files;
+    }
+    if per_file {
+        return;
     }
     println!(
         "{:<24}{:>12}{:>12}{:>12}{:>12}",

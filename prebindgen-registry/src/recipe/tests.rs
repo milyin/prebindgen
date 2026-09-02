@@ -993,7 +993,7 @@ impl Recorder {
         }
     }
 
-    fn hook(&mut self, at: At<'_>, hook: &str, detail: String) -> Result<Note, String> {
+    fn hook(&mut self, at: At<'_>, hook: &str, detail: String) -> Frag<Self> {
         let ty = at.crossing.value().stripped_key();
         Ok(self.note(
             at,
@@ -1024,18 +1024,18 @@ impl Compile for Recorder {
     type Plan = String;
     type Error = String;
 
-    fn atomic(&mut self, _cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+    fn atomic(&mut self, _cx: &mut Cx<'_, Note>, at: At<'_>) -> Frag<Self> {
         self.hook(at, "atomic", "model".to_owned())
     }
 
-    fn optional(&mut self, _cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
+    fn optional(&mut self, _cx: &mut Cx<'_, Note>, at: At<'_>, inner: &Note) -> Frag<Self> {
         let detail = inner.text.clone();
         self.hook(at, "optional", detail)
     }
 
     fn sequence(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_, Note>,
         at: At<'_>,
         elements: Mode,
         inner: &Note,
@@ -1046,7 +1046,7 @@ impl Compile for Recorder {
 
     fn construct(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_, Note>,
         at: At<'_>,
         func: &Function,
         args: Parts<'_, Self>,
@@ -1055,14 +1055,14 @@ impl Compile for Recorder {
         self.hook(at, "construct", detail)
     }
 
-    fn fields(&mut self, _cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+    fn fields(&mut self, _cx: &mut Cx<'_, Note>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
         let detail = part_names::<Self>(parts);
         self.hook(at, "fields", detail)
     }
 
     fn value_form(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_, Note>,
         at: At<'_>,
         func: &Function,
         parts: Parts<'_, Self>,
@@ -1073,7 +1073,7 @@ impl Compile for Recorder {
 
     fn choice(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_, Note>,
         at: At<'_>,
         arms: &[(&Alternative, &Note)],
     ) -> Frag<Self> {
@@ -1087,7 +1087,7 @@ impl Compile for Recorder {
 
     fn callback(
         &mut self,
-        _cx: &mut Cx<'_>,
+        _cx: &mut Cx<'_, Note>,
         at: At<'_>,
         args: &[&Note],
         result: Option<&Note>,
@@ -1103,7 +1103,12 @@ impl Compile for Recorder {
         self.hook(at, "callback", detail)
     }
 
-    fn plan(&mut self, _cx: &mut Cx<'_>, bound: &Bound, root: &Note) -> Result<String, String> {
+    fn plan(
+        &mut self,
+        _cx: &mut Cx<'_, Note>,
+        bound: &Bound,
+        root: &Note,
+    ) -> Result<String, String> {
         Ok(format!(
             "{} <- {} [{}]",
             bound.site, bound.recipe, root.text
@@ -1115,7 +1120,7 @@ impl Compile for Recorder {
 fn recipe_error(error: &CompileError<String>) -> &RecipeError {
     match error {
         CompileError::Recipe(e) => e,
-        CompileError::Adapter(a) => panic!("the adapter refused: {a}"),
+        CompileError::Adapter(a) => panic!("the adapter refused: {a:?}"),
     }
 }
 
@@ -1634,7 +1639,7 @@ fn a_crossing_can_be_compiled_without_a_site() {
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
-    let first = compiler
+    let (first, _) = compiler
         .crossing(
             &mut adapter,
             &Crossing::new(ty(&model, "Option<Sample>"), Direction::Deconstruct),
@@ -2389,15 +2394,15 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
         fn tolerates(&self, _role: &Role) -> Validity {
             Validity::Borrowed
         }
-        fn atomic(&mut self, cx: &mut Cx<'_>, at: At<'_>) -> Frag<Self> {
+        fn atomic(&mut self, cx: &mut Cx<'_, Note>, at: At<'_>) -> Frag<Self> {
             self.0.atomic(cx, at)
         }
-        fn optional(&mut self, cx: &mut Cx<'_>, at: At<'_>, inner: &Note) -> Frag<Self> {
+        fn optional(&mut self, cx: &mut Cx<'_, Note>, at: At<'_>, inner: &Note) -> Frag<Self> {
             self.0.optional(cx, at, inner)
         }
         fn sequence(
             &mut self,
-            cx: &mut Cx<'_>,
+            cx: &mut Cx<'_, Note>,
             at: At<'_>,
             elements: Mode,
             inner: &Note,
@@ -2406,19 +2411,24 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
         }
         fn construct(
             &mut self,
-            cx: &mut Cx<'_>,
+            cx: &mut Cx<'_, Note>,
             at: At<'_>,
             func: &Function,
             args: Parts<'_, Self>,
         ) -> Frag<Self> {
             self.0.construct(cx, at, func, args)
         }
-        fn fields(&mut self, cx: &mut Cx<'_>, at: At<'_>, parts: Parts<'_, Self>) -> Frag<Self> {
+        fn fields(
+            &mut self,
+            cx: &mut Cx<'_, Note>,
+            at: At<'_>,
+            parts: Parts<'_, Self>,
+        ) -> Frag<Self> {
             self.0.fields(cx, at, parts)
         }
         fn value_form(
             &mut self,
-            cx: &mut Cx<'_>,
+            cx: &mut Cx<'_, Note>,
             at: At<'_>,
             func: &Function,
             parts: Parts<'_, Self>,
@@ -2427,7 +2437,7 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
         }
         fn choice(
             &mut self,
-            cx: &mut Cx<'_>,
+            cx: &mut Cx<'_, Note>,
             at: At<'_>,
             arms: &[(&Alternative, &Note)],
         ) -> Frag<Self> {
@@ -2435,14 +2445,19 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
         }
         fn callback(
             &mut self,
-            cx: &mut Cx<'_>,
+            cx: &mut Cx<'_, Note>,
             at: At<'_>,
             args: &[&Note],
             result: Option<&Note>,
         ) -> Frag<Self> {
             self.0.callback(cx, at, args, result)
         }
-        fn plan(&mut self, cx: &mut Cx<'_>, bound: &Bound, root: &Note) -> Result<String, String> {
+        fn plan(
+            &mut self,
+            cx: &mut Cx<'_, Note>,
+            bound: &Bound,
+            root: &Note,
+        ) -> Result<String, String> {
             self.0.plan(cx, bound, root)
         }
     }
@@ -2767,20 +2782,22 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
     assert!(compiled.fragment(&key, Direction::Construct).is_none());
 }
 
-/// Compiling a recipe **by name** refuses a name the crossing does not have,
-/// rather than answering with the recipe it would have derived.
+/// A row is compiled by its **key**, which only the table can hand out, so a
+/// name the crossing does not have cannot be compiled at all.
 ///
-/// The two callers that reach [`Compiler::recipe`] with a name they got *from* the
-/// table — a crossing's default, and a site's binding — rely on that fallback,
-/// and it is right for them. [`Compiler::recipe_of`] takes the caller's own claim,
-/// so the same fallback would compile the default and file it under the asked-for
-/// name, leaving [`Compiled::recipe_fragment`] to answer for a recipe nobody declared.
+/// The two callers that reach [`Compiler::recipe`] with a name they got *from*
+/// the table — a crossing's default, and a site's binding — rely on its
+/// fallback to the derived recipe, and it is right for them. A caller's own
+/// claim must not reach that fallback: it would compile the default and file it
+/// under the asked-for name, leaving [`Compiled::recipe_fragment`] to answer for
+/// a recipe nobody declared. Taking a key rather than a name is what makes that
+/// unwritable.
 ///
 /// The shape that hits it is a conditionally-declared recipe: an adapter that
 /// declares `fields` only for a type that has some, then asks every declared
 /// type for `fields` anyway.
 #[test]
-fn compiling_a_row_by_name_refuses_a_name_the_crossing_lacks() {
+fn a_row_is_compiled_by_a_key_only_the_table_hands_out() {
     let model = model(&[SAMPLE]);
     let recipes = two_recipes(&model);
     let bindings = Bindings::default();
@@ -2788,25 +2805,28 @@ fn compiling_a_row_by_name_refuses_a_name_the_crossing_lacks() {
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
-    let err = compiler
-        .recipe_of(&mut adapter, &crossing, &recipe_name("nonesuch"))
-        .expect_err("`Sample` declares `whole` and `fields`, and nothing else");
-    let message = err.to_string();
-    assert!(message.contains("nonesuch"), "{message}");
-    assert!(message.contains("Sample"), "{message}");
+    assert!(
+        recipes
+            .key_of(&crossing.key(), &recipe_name("nonesuch"))
+            .is_none(),
+        "`Sample` declares `whole` and `fields`, and nothing else"
+    );
 
-    // And nothing was filed under the name, so no emitter can read one back.
+    // The two recipes that DO exist compile through the key the table gives.
+    for name in ["whole", "fields"] {
+        let key = recipes
+            .key_of(&crossing.key(), &recipe_name(name))
+            .unwrap_or_else(|| panic!("`{name}` is declared"))
+            .clone();
+        compiler
+            .row(&mut adapter, &crossing, &key)
+            .unwrap_or_else(|e| panic!("`{name}` is declared: {e}"));
+    }
+
+    // And nothing was filed under the name nobody declared.
     let compiled = compiler.finish();
     let missing = row(&crossing, "nonesuch");
     assert!(compiled
         .recipe_fragment(&ty(&model, "Sample").key(), &missing)
         .is_none());
-
-    // The two recipes that DO exist still compile by name.
-    let mut compiler = Compiler::new(&model, &recipes, &bindings);
-    for name in ["whole", "fields"] {
-        compiler
-            .recipe_of(&mut adapter, &crossing, &recipe_name(name))
-            .unwrap_or_else(|e| panic!("`{name}` is declared: {e}"));
-    }
 }

@@ -1,5 +1,4 @@
 use super::*;
-use crate::registry::Answer;
 
 /// Regression: when a required type is itself unresolved AND has fields
 /// that are also unresolved, the diagnostic must list both. Previously
@@ -51,7 +50,7 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
 /// that the resolved converter doesn't actually depend on.
 #[test]
 fn final_invariant_stops_at_resolved_nodes() {
-    use crate::registry::{Answer, Direction, Registry};
+    use crate::registry::{Direction, Registry};
 
     // Through the real scan, so the state under test is one the pipeline can
     // actually produce: `Unrelated` is a field type nothing declares.
@@ -68,12 +67,7 @@ fn final_invariant_stops_at_resolved_nodes() {
 
     reg.insert_crossing(Direction::Construct, &outer_ty, true, None);
 
-    reg.insert_crossing(
-        Direction::Construct,
-        &inner_ty,
-        false,
-        Some(Answer::over(vec![])),
-    );
+    reg.insert_crossing(Direction::Construct, &inner_ty, false, Some(vec![]));
 
     reg.insert_crossing(Direction::Construct, &unrelated_ty, false, None);
 
@@ -113,7 +107,7 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
         Direction::Construct,
         &outer,
         true,
-        Some(Answer::over(vec![TypeKey::from_type(&mid)])),
+        Some(vec![TypeKey::from_type(&mid)]),
     );
     // `Mid` is present, unresolved, and NOT a root.
     reg.insert_crossing(Direction::Construct, &mid, false, None);

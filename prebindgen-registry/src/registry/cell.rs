@@ -20,7 +20,7 @@ pub(crate) struct TypeCell {
     pub subject: Box<prebindgen_flat::flat::TypeRef>,
     /// The binding asks for this cell **directly** — a declared fn's signature, a
     /// declared type, a decomposition leaf — as opposed to reaching it through
-    /// another crossing's [`Answer::subs`].
+    /// another crossing's edges.
     ///
     /// A scan fact. Whether a converter is *needed* here is reachability from
     /// these roots, which [`crate::resolve`] derives rather than
@@ -28,39 +28,17 @@ pub(crate) struct TypeCell {
     /// position, every struct in both directions), so the roots are what say
     /// which of it has to work.
     pub root: bool,
-    /// What the adapter said about this crossing, once it answered.
+    /// The crossings this one's conversion is built out of, once the adapter
+    /// has answered.
     ///
     /// `Some` means the adapter has a conversion for it. The conversion itself
     /// stays in the adapter, which is the only thing that reads one; what the
-    /// registry keeps is in [`Answer`].
-    pub entry: Option<Answer>,
-}
-
-/// What the registry keeps of an adapter's answer for one crossing.
-///
-/// Not the conversion. An adapter emits from its own fragments and looks up its
-/// own answers, so generated Rust never travels through here. What the registry
-/// does with an answer is walk it: the resolver follows `subs` to decide which
-/// crossings a binding actually has to be able to make.
-#[derive(Clone, Default, Debug)]
-pub struct Answer {
-    /// The crossings this one is built out of — an `Option<T>` conversion names
-    /// `T`, a `Result<T, E>` names both. Empty for a terminal conversion.
+    /// registry keeps is the edges, because what it does with an answer is walk
+    /// it — the resolver follows them to decide which crossings a binding
+    /// actually has to be able to make.
     ///
     /// **Identities, not spellings**, so `T`, `&T` and `Box<T>` reach one cell.
-    pub subs: Vec<TypeKey>,
-}
-
-impl Answer {
-    /// An answer that delegates to no other crossing.
-    pub fn terminal() -> Self {
-        Self::default()
-    }
-
-    /// An answer built out of the crossings `subs` names.
-    pub fn over(subs: Vec<TypeKey>) -> Self {
-        Self { subs }
-    }
+    pub entry: Option<Vec<TypeKey>>,
 }
 
 pub use crate::recipe::Direction;

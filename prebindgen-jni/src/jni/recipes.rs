@@ -108,7 +108,7 @@ impl Declarations {
     /// needs.
     fn out_wire_count(
         &self,
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> usize {
         let prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() else {
@@ -138,7 +138,7 @@ impl Declarations {
     fn value_form_of(
         &self,
         model: &Flat,
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
         use crate::unfold::{FieldDecon, FieldRecord};
@@ -217,7 +217,7 @@ impl Declarations {
     /// makes when it declares the recipe.
     pub(crate) fn value_form_names(
         &self,
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<std::collections::HashMap<String, String>> {
         use crate::unfold::FieldDecon;
@@ -298,7 +298,7 @@ impl Declarations {
     fn parts_deconstruct(
         &self,
         model: &Flat,
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<Deconstruct> {
         let decl = self
@@ -341,7 +341,7 @@ impl Declarations {
         &self,
         model: &Flat,
         expansion_leaves: &[TypeRef],
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
     ) -> Result<Recipes, Vec<RecipeError>> {
         let mut recipes = Recipes::builder();
         // Which crossings already state a deconstructing `parts` row, so the
@@ -436,12 +436,12 @@ impl Declarations {
             match self.types.get(&ty.key()).map(|c| &c.kind) {
                 // A struct with no fields is nothing to be made of, so it
                 // states no `parts` recipe — the same condition the deconstructing
-                // side applies, and the reason `recipe_of` may be asked for the
-                // recipe by name.
+                // side applies, and the reason the row is looked up by name before
+                // it is compiled.
                 Some(DeclaredKind::Data) if !fields_of(model, &ty).is_empty() => {
                     recipes
                         .declare_default(ty.clone(), whole(), Constructing::Atomic)
-                        .declare(ty, parts(), Constructing::Product(Construct::Fields));
+                        .declare_unasked(ty, parts(), Constructing::Product(Construct::Fields));
                 }
                 // A `sealed_class` has one too, and it is a choice rather than
                 // a product: exactly one alternative is live, every one of them
@@ -544,12 +544,12 @@ impl Declarations {
             recipes
                 .declare_default(outer.clone(), whole(), Constructing::Optional)
                 .declare(outer.clone(), pair(), Constructing::Optional)
-                .declare(outer.clone(), parts(), Constructing::Optional);
+                .declare_unasked(outer.clone(), parts(), Constructing::Optional);
         }
         for (outer, _) in implicit.into_values() {
             recipes
                 .declare_default(outer.clone(), whole(), Deconstructing::Optional)
-                .declare(outer.clone(), parts(), Deconstructing::Optional);
+                .declare_unasked(outer.clone(), parts(), Deconstructing::Optional);
         }
 
         // A fixed-size array of JNI primitives is one Kotlin `ByteArray` or
@@ -649,7 +649,7 @@ impl Declarations {
     pub(crate) fn bindings(
         &self,
         model: &Flat,
-        registry: &impl prebindgen_registry::Conversions,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
         recipes: &prebindgen_registry::recipe::Recipes,
     ) -> Result<prebindgen_registry::recipe::Bindings, Vec<RecipeError>> {
         use prebindgen_registry::recipe::{

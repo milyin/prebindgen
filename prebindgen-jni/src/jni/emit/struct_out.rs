@@ -71,7 +71,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// for the list and why one such field declines the whole value.
 pub(crate) fn synth_value_struct_leaves(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     s: &prebindgen_registry::flat::Struct,
 ) -> Option<Vec<crate::unfold::UnfoldLeaf>> {
     use crate::unfold::{LeafSource, UnfoldLeaf};
@@ -171,7 +171,7 @@ pub(crate) fn render_struct_output_body(
 
 pub(crate) fn struct_module_path(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     name: &syn::Ident,
 ) -> syn::Path {
     // The module the struct is reachable under from the generated file: its

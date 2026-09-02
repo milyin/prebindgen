@@ -318,7 +318,7 @@ fn warn_derived_name_changes(ext: &Declarations, registry: &Registry) {
 /// `syn::ItemEnum`; the model states them as two elements, and both carry the
 /// names this asks for. `None` when `ident` names neither.
 fn declared_member_names(
-    registry: &impl prebindgen_registry::Conversions,
+    registry: &(impl prebindgen_registry::Conversions + ?Sized),
     ident: &syn::Ident,
 ) -> Option<Vec<syn::Ident>> {
     use prebindgen_registry::flat::Type;

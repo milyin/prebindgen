@@ -1,14 +1,14 @@
 //! Completeness: which conversions a binding actually needs, and whether it has
 //! them.
 //!
-//! What survives here is the completeness check. The generator answers the
-//! crossings itself, in `RegistryBuilder::convert_with`; this decides whether
-//! the set it answered covers everything reachable from an exported root.
+//! What survives here is the completeness check. `RegistryBuilder::generate`
+//! compiles the crossings; this decides whether what it answered covers
+//! everything reachable from an exported root.
 //!
-//! There is no loop. `convert_with` hands the demand out inner-first, so a
-//! generator answers each crossing once, with everything it composes from
-//! already built — including across the `impl Fn` seam, whose args cross in the
-//! opposite direction.
+//! There is no loop. `generate` walks the demand inner-first, so each crossing
+//! is answered once, with everything it composes from already built —
+//! including across the `impl Fn` seam, whose args cross in the opposite
+//! direction.
 //!
 //! After the loop, [`required_set`] performs a BFS from the **root** cells — the
 //! ones the binding asked for directly — through `subs` edges. It returns the
@@ -102,7 +102,7 @@ fn required_set(registry: &Registry) -> HashSet<(Direction, TypeKey)> {
         else {
             continue;
         };
-        for sub_key in &entry.subs {
+        for sub_key in entry {
             if required.insert((dir, sub_key.clone())) {
                 queue.push_back((dir, sub_key.clone()));
             }

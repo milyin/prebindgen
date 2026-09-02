@@ -41,7 +41,7 @@ pub(crate) const PRESENT_LEAF: &str = "present";
 /// walks agreeing was a property nothing checked.
 pub(crate) fn synth_sum_leaves(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     ident: &syn::Ident,
     sum: &prebindgen_registry::flat::Variant,
 ) -> Vec<crate::unfold::UnfoldLeaf> {

@@ -1233,7 +1233,7 @@ pub(crate) fn fixed_decon_ids(ext: &Declarations) -> std::collections::HashSet<D
 /// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
 fn derive_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     key: &SpecKey,
 ) -> Option<IfaceSpec> {
     match key {
@@ -1302,7 +1302,7 @@ impl Declarations {
 
     pub(crate) fn iface_spec(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         key: &SpecKey,
     ) -> Option<std::sync::Arc<IfaceSpec>> {
         if let Some(generation) = &self.generation {
@@ -1340,7 +1340,7 @@ impl Declarations {
 /// `when` over the tag that a sum-typed struct field gets.
 fn fixed_reassembly(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     source: &TypeKey,
     wires: &[crate::jni::compile::OutWire],
     class_fqn: &str,
@@ -1371,7 +1371,7 @@ fn fixed_reassembly(
 /// through [`fixed_reassembly`] where the whole delivered value is the sum.
 fn sum_segment_reassembly(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     source: &TypeKey,
     wires: &[crate::jni::compile::OutWire],
     first_slot: usize,
@@ -1419,7 +1419,7 @@ pub(crate) fn effective_callback_plan<'a>(
 /// placed in the first arg type's package (root for `Fn()`).
 pub(crate) fn callback_iface_spec(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     cb_args: &[prebindgen_registry::flat::TypeRef],
 ) -> Option<IfaceSpec> {
     // Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
@@ -1786,7 +1786,7 @@ pub(crate) fn whole_folder_iface_spec(
 /// against), not per this plan's own `fixed_builder` flag.
 pub(crate) fn folder_iface_for_plan(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     plan: &UnfoldPlan,
 ) -> Option<std::sync::Arc<IfaceSpec>> {
     debug_assert!(
@@ -1811,7 +1811,7 @@ pub(crate) fn folder_iface_for_plan(
 /// two stay in lockstep.
 pub(crate) fn fixed_folder_typed_groups(
     ext: &Declarations,
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = ext.unfolded().decon_plans.get(decon)?;

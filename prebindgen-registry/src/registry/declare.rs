@@ -6,9 +6,13 @@
 //! so that "still being described" and "finished, and answerable" cannot be
 //! confused for one another.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use super::*;
+use crate::recipe::{Bindings, Compile, CompileError, Compiled, Compiler, Recipes, Refusal};
 
 /// A registry under construction.
 ///
@@ -18,7 +22,7 @@ use super::*;
 /// let registry = Registry::builder(flat)?
 ///     .export(&name)
 ///     .decompose(decompositions)
-///     .convert_with(|crossing, built| my_gen.convert(crossing, built))?
+///     .generate(&mut my_adapter, &recipes, &bindings)?
 ///     .build()?;
 /// ```
 ///
@@ -27,11 +31,12 @@ use super::*;
 /// than a phase you have to be careful about.
 pub struct RegistryBuilder {
     registry: Registry,
-    /// What has been answered so far, applied at [`Self::build`]. Not the
-    /// conversions — those stay with the adapter; see [`Answer`].
-    built: HashMap<Crossing, Answer>,
+    /// Per crossing that has been answered, the crossings its conversion is
+    /// built out of, applied at [`Self::build`]. Not the conversions
+    /// themselves — those stay with the adapter.
+    built: HashMap<Crossing, Vec<TypeKey>>,
     /// The scan runs once, on demand: it needs every declaration, and
-    /// [`Self::convert_with`] and [`Self::build`] each need
+    /// [`Self::generate`] and [`Self::build`] each need
     /// it to have run. `Some` holds the derived demand, in order.
     order: Option<Vec<Crossing>>,
 }
@@ -177,7 +182,7 @@ impl RegistryBuilder {
 
     /// `from`'s conversion needs `on`'s to exist first.
     ///
-    /// [`Self::convert_with`] derives its order from the type structure, which
+    /// [`Self::generate`] derives its order from the type structure, which
     /// covers almost everything: an `Option<T>` visibly contains a `T`. It
     /// cannot see a dependency the *declaration* creates — a `convert!` whose
     /// body chains through a helper function's parameter type, say, where
@@ -380,28 +385,78 @@ impl RegistryBuilder {
         Ok(self)
     }
 
-    /// Build a conversion for each crossing, in dependency order.
+    /// Compile every crossing this binding makes, in dependency order.
     ///
-    /// `f` is called once per crossing, and answers with an [`Answer`] rather
-    /// than the conversion itself: the executable conversion belongs to the
-    /// adapter's frozen plan, and what the registry needs back is which other
-    /// crossings this one is built out of. Returning `None` records a gap
-    /// — whether that gap matters is decided by [`Self::build`], not here.
+    /// The walk is the registry's: it derives the crossings, hands each to one
+    /// [`Compiler`] it holds for the length of the walk, and records what the
+    /// answer delegates to. Inner types first, so by the time the adapter sees
+    /// `Option<Handle>` it has answered `Handle`. Each crossing's default recipe
+    /// is compiled, and so is every row marked
+    /// [`unasked`](crate::recipe::RecipesBuilder::declare_unasked).
     ///
-    /// The walk is inner types first, so by the time `f` sees `Option<Handle>`
-    /// it has already answered `Handle`.
+    /// A [`Refusal::Gap`](crate::recipe::Refusal::Gap) records a gap, and
+    /// whether that matters is [`Self::build`]'s call. Any other refusal is a
+    /// wrong declaration that no completeness check can diagnose, so every one is
+    /// collected and reported here. The fragments are handed back rather than
+    /// kept: an adapter emits from its own, and the registry keeps the edges.
+    pub fn generate<C: Compile<Error: fmt::Display>>(
+        &mut self,
+        adapter: &mut C,
+        recipes: &Recipes,
+        bindings: &Bindings,
+    ) -> Result<Compiled<C::Fragment>, WriteRustError> {
+        let order = self.derive()?.to_vec();
+        // Disjoint fields: the view reads the scanned registry while the
+        // answers are written beside it, so the walk needs no clone of either.
+        let view = Building::new(&self.registry, &order);
+        let mut compiler = Compiler::<C>::new(&view, recipes, bindings);
+        let mut refusals: Vec<String> = Vec::new();
+        for (direction, key) in &order {
+            let Some(ty) = view.reading(key) else {
+                continue;
+            };
+            let crossing = crate::recipe::Crossing::new(ty, *direction);
+            // The crossing's own recipe first: an unasked row answers nothing
+            // of its own, and a gap in the crossing is a gap in every row of it.
+            let unasked = recipes.unasked_of(&crossing.key());
+            for row in std::iter::once(None).chain(unasked.iter().map(Some)) {
+                let answered = match &row {
+                    None => compiler.crossing(adapter, &crossing).map(|(_, delegates)| {
+                        self.built.insert((*direction, key.clone()), delegates);
+                    }),
+                    Some(row) => compiler.row(adapter, &crossing, row).map(|_| ()),
+                };
+                match answered {
+                    Ok(()) => {}
+                    Err(CompileError::Adapter(Refusal::Gap(_))) => break,
+                    Err(e) => refusals.push(e.to_string()),
+                }
+            }
+        }
+        if !refusals.is_empty() {
+            return Err(ScanError::AdapterInvariant {
+                message: refusals.join("; "),
+            }
+            .into());
+        }
+        Ok(compiler.finish())
+    }
+
+    /// Answer each crossing without compiling anything — the scan-pipeline
+    /// tests' seam.
     ///
-    /// The one way to supply them. Nothing about it lets the registry choose
-    /// when to call back — the closure is yours, and the walk is finished
-    /// before this returns.
-    pub fn convert_with<F>(mut self, mut f: F) -> Result<Self, WriteRustError>
+    /// [`Self::generate`] is the real route, and it needs a `Compile` and two
+    /// tables. A test about which crossings the scan derives has no conversions
+    /// to build and needs only the edges each answer names.
+    #[cfg(test)]
+    pub(crate) fn answer_each<F>(mut self, mut f: F) -> Result<Self, WriteRustError>
     where
-        F: FnMut(&Crossing, &Building<'_>) -> Option<Answer>,
+        F: FnMut(&Crossing, &Building<'_>) -> Option<Vec<TypeKey>>,
     {
         let order = self.derive()?.to_vec();
         for crossing in &order {
-            if let Some(answer) = f(crossing, &self.view()) {
-                self.built.insert(crossing.clone(), answer);
+            if let Some(subs) = f(crossing, &self.view()) {
+                self.built.insert(crossing.clone(), subs);
             }
         }
         Ok(self)
@@ -432,9 +487,9 @@ impl RegistryBuilder {
     /// an export* with none, and the error names every one at once.
     pub fn build(mut self) -> Result<Registry, WriteRustError> {
         self.derive()?;
-        for ((dir, key), entry) in self.built {
+        for ((dir, key), subs) in self.built {
             if let Some(cell) = self.registry.type_table_mut(dir).get_mut(&key) {
-                cell.entry = Some(entry);
+                cell.entry = Some(subs);
             }
         }
         crate::resolve::check_complete(&self.registry)?;

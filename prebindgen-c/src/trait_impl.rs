@@ -1,4 +1,4 @@
-use prebindgen_registry::{recipe::Direction, Building, Conversions, Crossing, RegistryBuilder};
+use prebindgen_registry::{recipe::Direction, Building, Conversions, RegistryBuilder};
 
 use super::*;
 
@@ -47,7 +47,7 @@ impl CbindgenBuilder {
     pub(crate) fn in_terminal(
         &self,
         ty: &TypeRef,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> Option<crate::chain::InputTerminalPlan> {
         use crate::chain::InputTerminalOperation;
 
@@ -136,7 +136,7 @@ impl CbindgenBuilder {
     /// invalid `Box`) forces the full `gravestone()` write.
     fn nullable_owned_ptr_fields(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
     ) -> Option<Vec<syn::Ident>> {
         let cfg = self.value_opaque.get(key)?;
@@ -160,7 +160,7 @@ impl CbindgenBuilder {
     /// emitted public `_take` helper.
     fn value_opaque_writeback_plan(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         key: &TypeKey,
     ) -> Option<crate::chain::ValueOpaqueWriteback> {
         use crate::chain::ValueOpaqueWriteback;
@@ -219,10 +219,7 @@ impl CbindgenBuilder {
     /// an ordinary return consumes.
     fn compile_sites<'v>(
         &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<
-            '_,
-            crate::compile::CCompile<'v, Registry>,
-        >,
+        compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v>>,
         registry: &'v Registry,
     ) -> Result<CPlanParts, String> {
         use prebindgen_registry::{
@@ -235,10 +232,7 @@ impl CbindgenBuilder {
             inputs: Vec<ArtifactInput>,
         }
 
-        let mut adapter = crate::compile::CCompile {
-            gen: self,
-            registry,
-        };
+        let mut adapter = crate::compile::CCompile { gen: self };
         let mut plans = Vec::new();
         let mut callbacks = std::collections::BTreeMap::<String, PendingCallback>::new();
         let declared = self.declared_functions();
@@ -398,7 +392,7 @@ impl CbindgenBuilder {
     pub(crate) fn union_arm_name(
         &self,
         key: &TypeKey,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         parts: &[(
             prebindgen_registry::recipe::Part<'_>,
             &crate::compile::CFrag,
@@ -818,11 +812,8 @@ impl CbindgenBuilder {
         mut self,
         registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
-        let declared = self.declare_into(registry)?.validate_with(&self)?;
-        // A second holding of the model: `convert_with` consumes the builder,
-        // and the table outlives that call.
-        let model = declared.flat().clone();
-        let recipes = self.recipes(&model).map_err(|errors| {
+        let mut declared = self.declare_into(registry)?.validate_with(&self)?;
+        let invariant = |errors: Vec<prebindgen_registry::recipe::RecipeError>| {
             prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
@@ -830,35 +821,21 @@ impl CbindgenBuilder {
                     .collect::<Vec<_>>()
                     .join("; "),
             }
-        })?;
-        let bindings = self.bindings(&model, &recipes).map_err(|errors| {
-            prebindgen_registry::ScanError::AdapterInvariant {
-                message: errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            }
-        })?;
-        // The compiler resumes from the fragments produced while registry
-        // conversion resolution ran. It is cloned here as a map of `Rc`s`; the
-        // immutable generation plan below becomes the only rendering input.
-        let registry = declared
-            .convert_with(|crossing, built| {
-                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                    &model,
-                    &recipes,
-                    &bindings,
-                    self.compiled.borrow().clone(),
-                );
-                let conv = self.compile_crossing(&mut compiler, crossing, built);
-                *self.compiled.borrow_mut() = compiler.finish();
-                // The conversion stays here; what the registry gets back is
-                // which other crossings this one delegates to, which is what
-                // its reachability walk needs.
-                conv.map(|c| prebindgen_registry::Answer::over(c.subs))
-            })?
-            .build()?;
+        };
+        let recipes = self.recipes(declared.flat()).map_err(invariant)?;
+        let bindings = self
+            .bindings(declared.flat(), &recipes)
+            .map_err(invariant)?;
+        // The registry walks the crossings and drives the hooks; what comes
+        // back is every fragment they produced. The site phase below resumes
+        // from it, and the immutable generation plan is the only rendering
+        // input.
+        *self.compiled.borrow_mut() = declared.generate(
+            &mut crate::compile::CCompile { gen: &self },
+            &recipes,
+            &bindings,
+        )?;
+        let registry = declared.build()?;
         // Freeze every ordinary and callback position plus the callback artifacts
         // that consume those sites.
         let CPlanParts {
@@ -866,7 +843,7 @@ impl CbindgenBuilder {
             mut artifacts,
         } = {
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                &model,
+                &registry,
                 &recipes,
                 &bindings,
                 self.compiled.borrow().clone(),
@@ -1000,32 +977,6 @@ impl CbindgenBuilder {
         })
     }
 
-    /// Build the conversion for one crossing by asking the table which recipe it
-    /// takes and the driver to compile that recipe.
-    ///
-    /// `None` records a gap, exactly as the chain of guesses this replaced did:
-    /// whether the gap matters is the registry's call, and its report names the
-    /// crossing.
-    fn compile_crossing<'v, R: Conversions>(
-        &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<'_, crate::compile::CCompile<'v, R>>,
-        crossing: &Crossing,
-        built: &'v R,
-    ) -> Option<crate::compile::CFrag> {
-        let (dir, key) = crossing;
-        // The reading the scan already took for this crossing, fetched by the
-        // key the crossing IS.
-        let ty = built.reading(key)?;
-        let direction = *dir;
-        let mut adapter = crate::compile::CCompile {
-            gen: self,
-            registry: built,
-        };
-        let crossing = prebindgen_registry::recipe::Crossing::new(ty, direction);
-        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        Some((*fragment).clone())
-    }
-
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder,
@@ -1088,7 +1039,7 @@ impl CbindgenBuilder {
     pub(crate) fn out_terminal(
         &self,
         ty: &TypeRef,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> Option<crate::chain::OutputTerminalPlan> {
         let plan = |wire, operation| crate::chain::OutputTerminalPlan {
             source: ty.clone(),

@@ -25,9 +25,10 @@
 //!
 //! # What a conversion is
 //!
-//! The adapter's business. It keeps the conversion itself; what it hands back
-//! is an [`Answer`], naming the crossings this one delegates to. That is what
-//! reachability walks, and it is all the registry needs to know.
+//! The adapter's business. It keeps the conversion itself; what the registry
+//! keeps is the crossings that conversion delegates to, which its fragment
+//! names through [`Carrier::delegates_to`](crate::recipe::Carrier::delegates_to).
+//! That is what reachability walks, and all the registry needs to know.
 //!
 //! A composite need not cross whole. `Option<T>` may cross as a `T` carrying a
 //! niche value, as a `(bool, T)` pair, or as leaves delivered separately — which,
@@ -80,8 +81,8 @@
 //!      ↓
 //!   the demand  crossings()      → every crossing needing a conversion,
 //!      ↓                           sorted so each type's inners come first
-//!   the answers convert_with(f)  → one call per crossing, in that order
-//!      ↓        conversions(map) → or hand over a map you built yourself
+//!   the answers generate(a, ..)  → the adapter's `Compile` hooks, once per
+//!      ↓                           crossing, in that order
 //!      ↓
 //!   close       build()          → fails naming any reachable crossing with
 //!      ↓                           no conversion
@@ -105,25 +106,18 @@
 //! for name in &self.exported    { builder = builder.export(name); }
 //! for ty in &self.foreign_types { builder = builder.cross(Direction::Deconstruct, ty); }
 //!
-//! let registry = builder
-//!     .decompose(self.decompositions())
-//!     // `built` already holds everything this crossing composes from: that is
-//!     // what sorted means.
-//!     .convert_with(|crossing, built| self.convert(crossing, built))?
-//!     .build()?;
+//! builder.decompose(self.decompositions());
+//! // Every crossing this one composes from has already been compiled: that is
+//! // what sorted means.
+//! let compiled = builder.generate(&mut self.compiler(), &recipes, &bindings)?;
+//! let registry = builder.build()?;
 //!
 //! self.emit(&registry, out)   // read-only from here
 //! ```
 //!
-//! Prefer to drive the walk yourself? `crossings()` hands over the same list in
-//! the same order, and `conversions(map)` takes the result — the two compose,
-//! and neither is a second mechanism.
-//!
-//! **Nothing here calls back into the generator** — not by trait hook, and not
-//! by a `next_request`/`supply` pull loop either, which is the same protocol
-//! with the arrow flipped. `convert_with` is not that: the walk finishes before
-//! it returns, the closure is the caller's, and the builder chooses nothing
-//! about when it runs. It is `crossings()` plus a `for` loop, written once.
+//! The walk belongs to the registry, and `generate` finishes it before it
+//! returns: it calls the adapter's hooks, never a `next_request`/`supply` pull
+//! loop, and the adapter chooses nothing about the order.
 //!
 //! What makes a single hand-off possible is the **sort**. The demand's edges
 //! (`immediate_edges` — generic arguments, tuple/reference/slice targets,
@@ -178,7 +172,7 @@ mod view;
 pub use prebindgen_flat::flat::{TypeKey, TypeKeyParseError};
 
 pub use self::{
-    cell::{Answer, Direction},
+    cell::Direction,
     declare::RegistryBuilder,
     error::{DuplicateNameError, NotExpressibleEntry, ScanError, WriteRustError},
     view::{Building, Conversions, Crossing},
