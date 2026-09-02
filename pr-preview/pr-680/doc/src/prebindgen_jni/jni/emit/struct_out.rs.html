@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>    }
 <a href=#53 id=53 data-nosnippet>53</a>}
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a><span class="doccomment">/// The [`LeafSource::Reach`](prebindgen_registry::unfold::LeafSource) leaves of
+<a href=#55 id=55 data-nosnippet>55</a><span class="doccomment">/// The [`LeafSource::Reach`](crate::unfold::LeafSource) leaves of
 <a href=#56 id=56 data-nosnippet>56</a>/// a by-value `data_class`, as the fixed-builder output and callback paths want
 <a href=#57 id=57 data-nosnippet>57</a>/// them.
 <a href=#58 id=58 data-nosnippet>58</a>///
@@ -73,8 +73,8 @@
 <a href=#73 id=73 data-nosnippet>73</a>    ext: <span class="kw-2">&amp;</span>Declarations,
 <a href=#74 id=74 data-nosnippet>74</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#75 id=75 data-nosnippet>75</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
-<a href=#76 id=76 data-nosnippet>76</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;prebindgen_registry::unfold::UnfoldLeaf&gt;&gt; {
-<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">use </span>prebindgen_registry::unfold::{LeafSource, UnfoldLeaf};
+<a href=#76 id=76 data-nosnippet>76</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::unfold::UnfoldLeaf&gt;&gt; {
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::{LeafSource, UnfoldLeaf};
 <a href=#78 id=78 data-nosnippet>78</a>    <span class="prelude-val">Some</span>(
 <a href=#79 id=79 data-nosnippet>79</a>        ext.struct_out_wires_of(registry.flat(), <span class="kw-2">&amp;</span>s.name)<span class="question-mark">?
 <a href=#80 id=80 data-nosnippet>80</a>            </span>.into_iter()

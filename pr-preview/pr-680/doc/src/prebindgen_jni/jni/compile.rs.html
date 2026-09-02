@@ -13,7 +13,7 @@
 <a href=#13 id=13 data-nosnippet>13</a>        At, Bound, Carrier, Compile, Ctx, Direction, Frag, Mode, Part, Parts, Refusal, Validity,
 <a href=#14 id=14 data-nosnippet>14</a>        Yield,
 <a href=#15 id=15 data-nosnippet>15</a>    },
-<a href=#16 id=16 data-nosnippet>16</a>    unfold, Conversions,
+<a href=#16 id=16 data-nosnippet>16</a>    Conversions,
 <a href=#17 id=17 data-nosnippet>17</a>};
 <a href=#18 id=18 data-nosnippet>18</a>
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use super</span>::<span class="kw-2">*</span>;
@@ -792,7 +792,7 @@
 <a href=#792 id=792 data-nosnippet>792</a>    /// what they read of a leaf is exactly what a wire states, so the switch is
 <a href=#793 id=793 data-nosnippet>793</a>    /// per call site rather than all at once.
 <a href=#794 id=794 data-nosnippet>794</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_leaf(leaf: <span class="kw-2">&amp;</span>unfold::UnfoldLeaf) -&gt; <span class="self">Self </span>{
-<a href=#795 id=795 data-nosnippet>795</a>        <span class="kw">use </span>prebindgen_registry::unfold::LeafSource;
+<a href=#795 id=795 data-nosnippet>795</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::LeafSource;
 <a href=#796 id=796 data-nosnippet>796</a>        <span class="self">Self </span>{
 <a href=#797 id=797 data-nosnippet>797</a>            name: leaf.name.clone(),
 <a href=#798 id=798 data-nosnippet>798</a>            out_ty: leaf.out_ty.clone(),

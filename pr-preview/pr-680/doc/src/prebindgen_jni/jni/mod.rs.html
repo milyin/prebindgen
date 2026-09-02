@@ -39,17 +39,17 @@
 <a href=#39 id=39 data-nosnippet>39</a>    decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
 <a href=#40 id=40 data-nosnippet>40</a>    null_string, CachedIfaceMethod, JniBindingError,
 <a href=#41 id=41 data-nosnippet>41</a>};
-<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>prebindgen_registry::unfold;
-<a href=#43 id=43 data-nosnippet>43</a><span class="comment">// Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
-<a href=#44 id=44 data-nosnippet>44</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>prebindgen_registry::{
-<a href=#45 id=45 data-nosnippet>45</a>    flat::Origin,
-<a href=#46 id=46 data-nosnippet>46</a>    types_util::{option_inner_type, vec_inner_type},
-<a href=#47 id=47 data-nosnippet>47</a>    ArtifactId, ConverterImpl, Direction, NicheSlot, Niches, OperationId, Prebindgen, Registry,
-<a href=#48 id=48 data-nosnippet>48</a>    ScalarValue, TypeKey,
-<a href=#49 id=49 data-nosnippet>49</a>};
-<a href=#50 id=50 data-nosnippet>50</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>proc_macro2::{Span, TokenStream};
-<a href=#51 id=51 data-nosnippet>51</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>quote::{format_ident, quote, ToTokens};
-<a href=#52 id=52 data-nosnippet>52</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="comment">// Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>prebindgen_registry::{
+<a href=#44 id=44 data-nosnippet>44</a>    flat::Origin,
+<a href=#45 id=45 data-nosnippet>45</a>    types_util::{option_inner_type, vec_inner_type},
+<a href=#46 id=46 data-nosnippet>46</a>    ArtifactId, ConverterImpl, Direction, NicheSlot, Niches, OperationId, Prebindgen, Registry,
+<a href=#47 id=47 data-nosnippet>47</a>    ScalarValue, TypeKey,
+<a href=#48 id=48 data-nosnippet>48</a>};
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>proc_macro2::{Span, TokenStream};
+<a href=#50 id=50 data-nosnippet>50</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>quote::{format_ident, quote, ToTokens};
+<a href=#51 id=51 data-nosnippet>51</a>
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">use </span><span class="kw">crate</span>::unfold;
 <a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use crate</span>::{
 <a href=#54 id=54 data-nosnippet>54</a>    jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
 <a href=#55 id=55 data-nosnippet>55</a>    util::snake_to_camel,
@@ -482,7 +482,7 @@
 <a href=#482 id=482 data-nosnippet>482</a>/// hangs off is the site's, not the value's, so it is dropped.
 <a href=#483 id=483 data-nosnippet>483</a></span><span class="attr">#[cfg(test)]
 <a href=#484 id=484 data-nosnippet>484</a></span><span class="kw">fn </span>reach_of(path: <span class="kw-2">&amp;</span>[unfold::PathStep]) -&gt; String {
-<a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">use </span>prebindgen_registry::unfold::PathStep;
+<a href=#485 id=485 data-nosnippet>485</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::PathStep;
 <a href=#486 id=486 data-nosnippet>486</a>    path.iter()
 <a href=#487 id=487 data-nosnippet>487</a>        .filter_map(|step| <span class="kw">match </span>step {
 <a href=#488 id=488 data-nosnippet>488</a>            PathStep::Field { ident, .. } =&gt; <span class="prelude-val">Some</span>(ident.to_string()),
@@ -497,7 +497,7 @@
 <a href=#497 id=497 data-nosnippet>497</a>/// is dropped to line the two up.
 <a href=#498 id=498 data-nosnippet>498</a></span><span class="attr">#[cfg(test)]
 <a href=#499 id=499 data-nosnippet>499</a></span><span class="kw">fn </span>leaf_reach(leaf: <span class="kw-2">&amp;</span>unfold::UnfoldLeaf) -&gt; String {
-<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">use </span>prebindgen_registry::unfold::LeafSource;
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::LeafSource;
 <a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>leaf.source {
 <a href=#502 id=502 data-nosnippet>502</a>        LeafSource::SumTag =&gt; <span class="string">"tag"</span>.to_string(),
 <a href=#503 id=503 data-nosnippet>503</a>        LeafSource::Presence =&gt; <span class="macro">format!</span>(<span class="string">"present({})"</span>, reach_of(<span class="kw-2">&amp;</span>leaf.path)),

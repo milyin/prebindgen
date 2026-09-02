@@ -499,7 +499,7 @@
 <a href=#499 id=499 data-nosnippet>499</a><span class="doccomment">/// True for an `Iterable` fold delivery, including one wrapped in an
 <a href=#500 id=500 data-nosnippet>500</a>/// `Optional` layer (`Option&lt;Vec&lt;T&gt;&gt;` → a nullable delivery). Selects the fold
 <a href=#501 id=501 data-nosnippet>501</a>/// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
-<a href=#502 id=502 data-nosnippet>502</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_iterable_fold(shape: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::UnfoldShape) -&gt; bool {
+<a href=#502 id=502 data-nosnippet>502</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>is_iterable_fold(shape: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::UnfoldShape) -&gt; bool {
 <a href=#503 id=503 data-nosnippet>503</a>    shape.has_iterable_layer()
 <a href=#504 id=504 data-nosnippet>504</a>}
 <a href=#505 id=505 data-nosnippet>505</a>
@@ -2159,7 +2159,7 @@
 <a href=#2159 id=2159 data-nosnippet>2159</a>/// writes valid Kotlin identifiers) and no dedup (uniqueness is enforced in
 <a href=#2160 id=2160 data-nosnippet>2160</a>/// `core::unfold`).
 <a href=#2161 id=2161 data-nosnippet>2161</a>///
-<a href=#2162 id=2162 data-nosnippet>2162</a>/// [`UnfoldLeaf::name`]: prebindgen_registry::unfold::UnfoldLeaf::name
+<a href=#2162 id=2162 data-nosnippet>2162</a>/// [`UnfoldLeaf::name`]: crate::unfold::UnfoldLeaf::name
 <a href=#2163 id=2163 data-nosnippet>2163</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>plan_leaf_names(leaves: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire]) -&gt; Vec&lt;String&gt; {
 <a href=#2164 id=2164 data-nosnippet>2164</a>    leaves.iter().map(|leaf| leaf.name.clone()).collect()
 <a href=#2165 id=2165 data-nosnippet>2165</a>}
@@ -2384,14 +2384,14 @@
 <a href=#2384 id=2384 data-nosnippet>2384</a>        <span class="kw">let </span>source = plan.source.to_string();
 <a href=#2385 id=2385 data-nosnippet>2385</a>        <span class="kw">let </span>leaves: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = plan.leaves.iter().map(|l| l.name.as_str()).collect();
 <a href=#2386 id=2386 data-nosnippet>2386</a>        <span class="kw">match </span>plan.delivery {
-<a href=#2387 id=2387 data-nosnippet>2387</a>            prebindgen_registry::unfold::Delivery::Callback <span class="kw">if </span>!leaves.is_empty() =&gt; {
+<a href=#2387 id=2387 data-nosnippet>2387</a>            <span class="kw">crate</span>::unfold::Delivery::Callback <span class="kw">if </span>!leaves.is_empty() =&gt; {
 <a href=#2388 id=2388 data-nosnippet>2388</a>                notes.push(<span class="macro">format!</span>(
 <a href=#2389 id=2389 data-nosnippet>2389</a>                    <span class="string">"The Rust `{source}` result is delivered decomposed: the builder \
 <a href=#2390 id=2390 data-nosnippet>2390</a>                     callback receives (`{}`)."</span>,
 <a href=#2391 id=2391 data-nosnippet>2391</a>                    leaves.join(<span class="string">"`, `"</span>)
 <a href=#2392 id=2392 data-nosnippet>2392</a>                ));
 <a href=#2393 id=2393 data-nosnippet>2393</a>            }
-<a href=#2394 id=2394 data-nosnippet>2394</a>            prebindgen_registry::unfold::Delivery::Return =&gt; {
+<a href=#2394 id=2394 data-nosnippet>2394</a>            <span class="kw">crate</span>::unfold::Delivery::Return =&gt; {
 <a href=#2395 id=2395 data-nosnippet>2395</a>                notes.push(<span class="macro">format!</span>(
 <a href=#2396 id=2396 data-nosnippet>2396</a>                    <span class="string">"The Rust `{source}` result is converted and returned as a single value."
 <a href=#2397 id=2397 data-nosnippet>2397</a>                </span>));

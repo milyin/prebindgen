@@ -242,7 +242,7 @@
 <a href=#242 id=242 data-nosnippet>242</a>    ///
 <a href=#243 id=243 data-nosnippet>243</a>    /// Filled while this binding declares itself into the registry, which every
 <a href=#244 id=244 data-nosnippet>244</a>    /// caller here is downstream of.
-<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unfolded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_registry::unfold::Unfolded {
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unfolded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::Unfolded {
 <a href=#246 id=246 data-nosnippet>246</a>        <span class="self">self</span>.unfolded
 <a href=#247 id=247 data-nosnippet>247</a>            .get()
 <a href=#248 id=248 data-nosnippet>248</a>            .expect(<span class="string">"decompositions are applied while the binding is declared"</span>)
@@ -900,8 +900,8 @@
 <a href=#900 id=900 data-nosnippet>900</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#901 id=901 data-nosnippet>901</a>        key: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#902 id=902 data-nosnippet>902</a>        fields: <span class="kw-2">&amp;</span>[LocalField],
-<a href=#903 id=903 data-nosnippet>903</a>    ) -&gt; Vec&lt;prebindgen_registry::unfold::DeconRecord&gt; {
-<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">use </span>prebindgen_registry::unfold::DeconRecord;
+<a href=#903 id=903 data-nosnippet>903</a>    ) -&gt; Vec&lt;<span class="kw">crate</span>::unfold::DeconRecord&gt; {
+<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::DeconRecord;
 <a href=#905 id=905 data-nosnippet>905</a>        fields
 <a href=#906 id=906 data-nosnippet>906</a>            .iter()
 <a href=#907 id=907 data-nosnippet>907</a>            .map(|f| <span class="kw">match </span>f {
@@ -938,7 +938,7 @@
 <a href=#938 id=938 data-nosnippet>938</a>    }
 <a href=#939 id=939 data-nosnippet>939</a>
 <a href=#940 id=940 data-nosnippet>940</a>    <span class="doccomment">/// Expand a `.fields(fields!(f))` declaration into one
-<a href=#941 id=941 data-nosnippet>941</a>    /// [`FieldRecord`](prebindgen_registry::unfold::FieldRecord) per field of the
+<a href=#941 id=941 data-nosnippet>941</a>    /// [`FieldRecord`](crate::unfold::FieldRecord) per field of the
 <a href=#942 id=942 data-nosnippet>942</a>    /// struct `f` returns — the value form.
 <a href=#943 id=943 data-nosnippet>943</a>    ///
 <a href=#944 id=944 data-nosnippet>944</a>    /// The walk is the adapter's job because only it knows which structs are
@@ -957,7 +957,7 @@
 <a href=#957 id=957 data-nosnippet>957</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#958 id=958 data-nosnippet>958</a>        key: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#959 id=959 data-nosnippet>959</a>        decl: <span class="kw-2">&amp;</span>FieldsDecl,
-<a href=#960 id=960 data-nosnippet>960</a>    ) -&gt; Vec&lt;prebindgen_registry::unfold::FieldRecord&gt; {
+<a href=#960 id=960 data-nosnippet>960</a>    ) -&gt; Vec&lt;<span class="kw">crate</span>::unfold::FieldRecord&gt; {
 <a href=#961 id=961 data-nosnippet>961</a>        <span class="kw">let </span>func = decl.func();
 <a href=#962 id=962 data-nosnippet>962</a>        <span class="kw">let </span>accessor = registry.flat().function(<span class="kw-2">&amp;</span>func).unwrap_or_else(|| {
 <a href=#963 id=963 data-nosnippet>963</a>            <span class="macro">panic!</span>(
@@ -996,7 +996,7 @@
 <a href=#996 id=996 data-nosnippet>996</a>        // than a no-op.
 <a href=#997 id=997 data-nosnippet>997</a>        </span><span class="kw">let </span>named: std::collections::HashSet&lt;String&gt; = out
 <a href=#998 id=998 data-nosnippet>998</a>            .iter()
-<a href=#999 id=999 data-nosnippet>999</a>            .map(|r: <span class="kw-2">&amp;</span>prebindgen_registry::unfold::FieldRecord| {
+<a href=#999 id=999 data-nosnippet>999</a>            .map(|r: <span class="kw-2">&amp;</span><span class="kw">crate</span>::unfold::FieldRecord| {
 <a href=#1000 id=1000 data-nosnippet>1000</a>                r.members
 <a href=#1001 id=1001 data-nosnippet>1001</a>                    .iter()
 <a href=#1002 id=1002 data-nosnippet>1002</a>                    .map(|m| m.to_string())
@@ -1039,9 +1039,9 @@
 <a href=#1039 id=1039 data-nosnippet>1039</a>        members: <span class="kw-2">&amp;</span>[syn::Ident],
 <a href=#1040 id=1040 data-nosnippet>1040</a>        name_prefix: <span class="kw-2">&amp;</span>str,
 <a href=#1041 id=1041 data-nosnippet>1041</a>        depth: usize,
-<a href=#1042 id=1042 data-nosnippet>1042</a>        out: <span class="kw-2">&amp;mut </span>Vec&lt;prebindgen_registry::unfold::FieldRecord&gt;,
+<a href=#1042 id=1042 data-nosnippet>1042</a>        out: <span class="kw-2">&amp;mut </span>Vec&lt;<span class="kw">crate</span>::unfold::FieldRecord&gt;,
 <a href=#1043 id=1043 data-nosnippet>1043</a>    ) {
-<a href=#1044 id=1044 data-nosnippet>1044</a>        <span class="kw">use </span>prebindgen_registry::unfold::{FieldDecon, FieldRecord};
+<a href=#1044 id=1044 data-nosnippet>1044</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::{FieldDecon, FieldRecord};
 <a href=#1045 id=1045 data-nosnippet>1045</a>        <span class="comment">// A value form holding itself would expand forever; the cycle rule for
 <a href=#1046 id=1046 data-nosnippet>1046</a>        // everything reachable BELOW a field is core's `visited` check.
 <a href=#1047 id=1047 data-nosnippet>1047</a>        </span><span class="macro">assert!</span>(
@@ -1221,8 +1221,8 @@
 <a href=#1221 id=1221 data-nosnippet>1221</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>build_deconstructors(
 <a href=#1222 id=1222 data-nosnippet>1222</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1223 id=1223 data-nosnippet>1223</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
-<a href=#1224 id=1224 data-nosnippet>1224</a>    ) -&gt; prebindgen_registry::unfold::Deconstructors {
-<a href=#1225 id=1225 data-nosnippet>1225</a>        <span class="kw">use </span>prebindgen_registry::unfold::{
+<a href=#1224 id=1224 data-nosnippet>1224</a>    ) -&gt; <span class="kw">crate</span>::unfold::Deconstructors {
+<a href=#1225 id=1225 data-nosnippet>1225</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::{
 <a href=#1226 id=1226 data-nosnippet>1226</a>            DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
 <a href=#1227 id=1227 data-nosnippet>1227</a>        };
 <a href=#1228 id=1228 data-nosnippet>1228</a>        <span class="kw">let </span><span class="kw-2">mut </span>dec = Deconstructors {
