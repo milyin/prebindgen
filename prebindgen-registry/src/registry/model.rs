@@ -15,13 +15,16 @@
 //! Wire types an adapter authors are outside this rule — `*mut c_void` and
 //! `jlong` are the adapter's output vocabulary, not captured source syntax.
 //!
-//! For an adapter built on this crate the phase is structural: [`RustWriter`]'s
-//! constructor is private to the registry, callbacks receive one only during
-//! final file assembly, and this crate's model re-export omits
+//! In a normal build of an adapter built on this crate the phase is structural:
+//! [`RustWriter`]'s constructor is private to the registry, callbacks receive
+//! one only during final file assembly, and this crate's model re-export omits
 //! `prebindgen_flat::RustEmitter` so no receiver of the adapter's own can be
-//! supplied. A crate depending on `prebindgen-flat` directly can implement that
-//! trait itself, so for that case the rule is policy. `docs/model.md` states it
-//! in full.
+//! supplied. Two escapes are deliberate rather than closed: the non-default
+//! `testing` feature exposes `RustWriter::for_test` and
+//! `RustWriter::for_registry_test` for out-of-crate adapter test suites, and a
+//! crate depending on `prebindgen-flat` directly can implement the unsealed
+//! `RustEmitter` itself. For those the rule is policy. `docs/model.md` states
+//! it in full.
 //!
 //! [`TypeRef`]: prebindgen_flat::flat::TypeRef
 //! [`RustWriter`]: crate::RustWriter

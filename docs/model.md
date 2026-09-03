@@ -43,16 +43,25 @@ adapter's own output vocabulary rather than source syntax hidden behind a
 `TypeRef`. Source-side positions stay `TypeRef`s in plans until the final
 renderer spells them.
 
-**How much of this the compiler holds.** For an adapter built on
-`prebindgen-registry`, the phase rule is structural: `RustWriter`'s constructor
-is registry-private, emission callbacks receive one only during final file
-assembly, and the registry's model re-export deliberately omits `RustEmitter`,
-so such an adapter cannot supply a rendering receiver of its own. The private
-constructor and the omitted re-export are each pinned by a `compile_fail`
-example. A crate that depends on `prebindgen-flat`
-directly can implement the public `RustEmitter` trait itself — its default
-methods render from Flat facts — so for that case the phase rule is policy this
-document states rather than a boundary the compiler enforces.
+**How much of this the compiler holds.** In a normal build of an adapter built
+on `prebindgen-registry`, the phase rule is structural: `RustWriter`'s
+constructor is registry-private, emission callbacks receive one only during
+final file assembly, and the registry's model re-export deliberately omits
+`RustEmitter`, so such an adapter cannot supply a rendering receiver of its own.
+The private constructor and the omitted re-export are each pinned by a
+`compile_fail` example.
+
+Two escapes are deliberate rather than closed. `prebindgen-registry` has a
+non-default `testing` feature, outside semver, which exposes
+`RustWriter::for_test` and `RustWriter::for_registry_test` so the test suites of
+out-of-crate adapters can render a frozen plan directly; `prebindgen-c` and
+`prebindgen-jni` both take it as a dev-dependency, so it is absent from their
+normal builds, and a crate enabling it as an ordinary dependency would hold a
+rendering capability during planning. Separately, a crate depending on
+`prebindgen-flat` directly can implement the public, unsealed `RustEmitter`
+itself, whose default methods render from Flat facts. In both cases the phase
+rule is policy this document states rather than a boundary the compiler
+enforces.
 
 ## Where the crates sit
 
