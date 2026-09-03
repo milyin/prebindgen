@@ -17,6 +17,39 @@ turn those facts into an inert token fragment for the output file; it does not h
 the adapter a `syn::Type` that could be analyzed. If Flat cannot generate the
 required source type from its structure, the missing fact belongs in Flat.
 
+## Flat is the planning boundary
+
+**Invariant.** Planning must not reach the Rust type captured behind a
+`TypeRef`. Planning is everything up to final Rust emission: resolving
+declarations, compiling fragments, planning sites, and validating the result.
+If planning needs a fact it could only get by inspecting or rendering that
+captured type, the Flat model is incomplete, and the fix belongs in Flat —
+represented losslessly and tested there — rather than in the generator as a
+syntax escape.
+
+Before final emission, code may carry a `TypeRef` opaquely and use the answers
+the model gives about it: `TypeKind`, `TypeKey`, crossing mode, structural
+children, declared fields and functions, and source location. It may not:
+
+* turn a source-side `TypeRef` into a `syn::Type`, tokens, or text;
+* reparse or pattern-match the captured Rust spelling to reach a planning
+  decision; or
+* generate a converter or wrapper body merely to discover what that body
+  depends on.
+
+Adapter-authored **wire** types are a separate matter and are not restricted
+here. A C adapter states `*mut c_void`, and a JNI adapter `jlong`, as Rust
+syntax because those are the adapter's own output vocabulary rather than source
+syntax hidden behind a `TypeRef`. Source-side positions stay `TypeRef`s in
+plans until the final renderer spells them.
+
+The timing half of the invariant is enforced by construction: `RustWriter` is
+the capability proving final emission has begun, its constructor is
+registry-private, and emission callbacks receive one during final file assembly
+and at no other point. The classification half is a rule this document states
+and `TypeRef`'s own documentation repeats — classify off the model, never off
+the spelling.
+
 ## Where the crates sit
 
 Four take part.

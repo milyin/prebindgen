@@ -1,4 +1,25 @@
 //! Questions about the model, answered through the registry that projects it.
+//!
+//! # Flat is the planning boundary
+//!
+//! Planning must not reach the Rust type captured behind a [`TypeRef`].
+//! Planning is everything up to final Rust emission: resolving declarations,
+//! compiling fragments, planning sites, and validating the result. It may carry
+//! a `TypeRef` opaquely and use the semantic facts the model exposes, but it
+//! may not render that captured type into `syn`, tokens or text, and may not
+//! pattern-match its spelling to reach a decision. If a planner needs a fact
+//! available only from the syntax, Flat is incomplete: add the fact to Flat
+//! rather than opening an emission escape.
+//!
+//! Wire types an adapter authors are outside this rule — `*mut c_void` and
+//! `jlong` are the adapter's output vocabulary, not captured source syntax.
+//!
+//! The timing half holds by construction, through [`RustWriter`]'s private
+//! constructor: emission callbacks receive one during final file assembly and
+//! at no other point. `docs/model.md` states the rule in full.
+//!
+//! [`TypeRef`]: prebindgen_flat::flat::TypeRef
+//! [`RustWriter`]: crate::RustWriter
 
 use std::collections::HashMap;
 
