@@ -158,3 +158,32 @@ pub(crate) fn write_capture_dir(
     prebindgen::utils::write_to_jsonl_file(group_dir.join("captures.jsonl"), records).unwrap();
     dir
 }
+
+/// The recipe tests compile against a `Flat` they wrote, with no registry around
+/// it, so the model answers for itself: `reading` classifies the spelling the
+/// key came from, which is what a scanned cell would hold, and `crossing_keys`
+/// is empty because no population was scanned.
+impl crate::Conversions for prebindgen_flat::flat::Flat {
+    fn flat(&self) -> &prebindgen_flat::flat::Flat {
+        self
+    }
+    fn expansion_plans(
+        &self,
+    ) -> &std::collections::HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan> {
+        // A bare model has no binding around it, so nothing expanded.
+        thread_local! {
+            static NONE: &'static std::collections::HashMap<
+                (syn::Ident, syn::Ident),
+                crate::expand::FoldPlan,
+            > = Box::leak(Box::default());
+        }
+        NONE.with(|none| *none)
+    }
+    fn reading(&self, key: &prebindgen_flat::TypeKey) -> Option<prebindgen_flat::flat::TypeRef> {
+        let ty: syn::Type = syn::parse_str(key.as_str()).ok()?;
+        self.classify(&ty).ok()
+    }
+    fn crossing_keys(&self, _dir: crate::registry::Direction) -> Vec<prebindgen_flat::TypeKey> {
+        Vec::new()
+    }
+}

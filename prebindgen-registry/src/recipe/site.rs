@@ -141,6 +141,19 @@ pub enum Role {
     Const,
 }
 
+impl Role {
+    /// The source parameter position this role sits at, for the roles that have
+    /// one. `None` for a return, an error arm, a receiver, a constant or a part.
+    pub fn param_position(&self) -> Option<usize> {
+        match self {
+            Role::Param { index }
+            | Role::ExpansionLeaf { param: index, .. }
+            | Role::CallbackArg { param: index, .. } => Some(*index),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -327,6 +340,20 @@ impl Bindings {
     /// Start describing the sites of one binding crate.
     pub fn builder() -> BindingsBuilder {
         BindingsBuilder::default()
+    }
+
+    /// The crossing a declaration bound this site to, where one did.
+    ///
+    /// A site's crossing is usually the model's — a parameter crosses its own
+    /// type. It is not always: a declaration may bind a return to the value its
+    /// decomposition produces rather than to what the signature says. So a
+    /// caller enumerating sites asks here first and falls back to the model,
+    /// which is what keeps the two answers from disagreeing.
+    pub fn crossing_of(&self, site: &Site) -> Option<Crossing> {
+        self.bound
+            .get(site)?
+            .as_ref()
+            .map(|bound| bound.crossing.clone())
     }
 
     /// The recipe this site takes.

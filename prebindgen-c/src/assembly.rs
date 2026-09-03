@@ -7,16 +7,15 @@
 //! its own frozen state plus the boundary sites of its own function, which the
 //! same frozen plan holds.
 
-use std::rc::Rc;
-
 use prebindgen_registry::{
-    generation::GenerationPlan,
+    generation::ArtifactId,
     write::{ArtifactKey, RustArtifact},
 };
 
 use super::*;
 
 /// One final artifact of the generated Rust file.
+#[derive(Clone)]
 pub(crate) enum CFinalArtifact {
     /// A private converter, carrying one value across the boundary.
     Converter(Box<crate::chain::CFunction>),
@@ -35,9 +34,19 @@ pub(crate) enum CFinalArtifact {
     Enum(Box<CEnum>),
     /// One reserved representation value a generated sum-type ABI uses.
     DomainConstant(Box<CDomainConstant>),
-    /// One artifact the registry generation plan already holds: an opaque
-    /// handle, a value-opaque, a tagged union, or a callback.
-    Planned(Box<CPlanned>),
+    /// One opaque handle: its `#[repr(C)]` struct and its typed drop.
+    ///
+    /// These four carry the [`ArtifactId`] they are planned under, because an
+    /// artifact's key is its identity in the plan and the payload alone cannot
+    /// say it — the id is built from the declared type key, which is not a field
+    /// of what gets rendered.
+    OpaqueHandle(ArtifactId, Box<crate::chain::OpaqueHandleArtifact>),
+    /// One value-opaque: a declared type C sees only as bytes.
+    ValueOpaque(ArtifactId, Box<crate::chain::ValueOpaqueArtifact>),
+    /// One tagged union: its `#[repr(C)]` struct and its reader.
+    TaggedUnion(ArtifactId, Box<crate::chain::TaggedUnionArtifact>),
+    /// One callback: the trampoline C calls back through.
+    Callback(ArtifactId, Box<crate::chain::CallbackArtifact>),
 }
 
 impl RustArtifact for CFinalArtifact {
@@ -51,15 +60,21 @@ impl RustArtifact for CFinalArtifact {
             Self::DataStruct(item) => item.key(),
             Self::Enum(item) => item.key(),
             Self::DomainConstant(item) => item.key(),
-            Self::Planned(item) => item.key(),
+            Self::OpaqueHandle(id, _)
+            | Self::ValueOpaque(id, _)
+            | Self::TaggedUnion(id, _)
+            | Self::Callback(id, _) => ArtifactKey::Artifact(id.clone()),
         }
     }
 
     fn provides(&self) -> Vec<ArtifactKey> {
-        match self {
-            Self::Planned(item) => item.provides(),
-            _ => vec![self.key()],
+        let mut provided = vec![self.key()];
+        // A callback renders the Invoke helper of its converter operation, whose
+        // fragment deliberately carries no artifact of its own.
+        if let Self::Callback(_, callback) = self {
+            provided.push(ArtifactKey::Operation(callback.invoke.operation.clone()));
         }
+        provided
     }
 
     fn reachable(&self) -> bool {
@@ -83,7 +98,28 @@ impl RustArtifact for CFinalArtifact {
             Self::DataStruct(item) => item.calls(),
             Self::Enum(item) => item.calls(),
             Self::DomainConstant(item) => item.calls(),
-            Self::Planned(item) => item.calls(),
+            // The Invoke helper converts each argument on its way out.
+            Self::Callback(_, callback) => {
+                let mut calls = Vec::new();
+                for argument in &callback.arguments {
+                    argument.value.calls(&mut calls);
+                }
+                calls
+            }
+            // A tagged union's typed destructor frees what its live arm owns,
+            // which reaches a nested union's destructor and the memory helpers.
+            Self::TaggedUnion(_, union) => {
+                let mut calls = Vec::new();
+                for field in union.arms.iter().flat_map(|arm| &arm.fields) {
+                    if let Some(cleanup) = &field.cleanup {
+                        cleanup.calls(&mut calls);
+                    }
+                }
+                calls
+            }
+            // A handle is a pointer and a value-opaque is reinterpreted: neither
+            // converts nor frees anything of its own.
+            Self::OpaqueHandle(..) | Self::ValueOpaque(..) => Vec::new(),
         }
     }
 
@@ -97,15 +133,21 @@ impl RustArtifact for CFinalArtifact {
             Self::DataStruct(item) => item.render(emit),
             Self::Enum(item) => item.render(emit),
             Self::DomainConstant(item) => item.render(emit),
-            Self::Planned(item) => item.render(emit),
+            Self::Callback(_, callback) => callback.render(emit),
+            Self::OpaqueHandle(_, handle) => handle.render(emit),
+            Self::TaggedUnion(_, union) => union.render(emit),
+            Self::ValueOpaque(_, value) => value.render(emit),
         }
     }
 }
 
 /// One declared function's exported wrapper, frozen at the end of resolution.
+#[derive(Clone)]
 pub(crate) struct CWrapper {
-    /// The plan the wrapper's own boundary sites are read from.
-    generation: Rc<GenerationPlan<crate::compile::CRepresentation>>,
+    /// This function's own boundary sites, as the registry planned them. All a
+    /// wrapper reads of the plan, and taken by value so a wrapper can be stated
+    /// before the plan is built.
+    sites: Vec<prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>>,
     /// The `#[prebindgen]` function this wrapper exports.
     function: prebindgen_registry::flat::Function,
     /// The `#[no_mangle]` symbol the wrapper is exported under.
@@ -124,9 +166,13 @@ pub(crate) struct CWrapper {
 
 impl CWrapper {
     /// Plan the wrapper for one declared function.
+    /// `sites` are the boundary sites the registry planned for this function,
+    /// which is everything of the plan a wrapper reads. Taking them rather than
+    /// the plan is what lets a wrapper be stated as an `ArtifactPlan` before the
+    /// plan is built, since the sites exist first.
     pub(crate) fn new(
         decls: &CbindgenBuilder,
-        generation: &Rc<GenerationPlan<crate::compile::CRepresentation>>,
+        sites: &[prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>],
         function: &prebindgen_registry::flat::Function,
     ) -> Self {
         let name = &function.name;
@@ -143,7 +189,11 @@ impl CWrapper {
             );
         }
         Self {
-            generation: Rc::clone(generation),
+            sites: sites
+                .iter()
+                .filter(|site| site.id().site().owner == *name)
+                .cloned()
+                .collect(),
             function: function.clone(),
             symbol: decls.fn_symbol(name),
             call_path: decls.src_fn(name),
@@ -163,11 +213,7 @@ impl CWrapper {
         &self,
         role: prebindgen_registry::recipe::Role,
     ) -> Option<&prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation>> {
-        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
-            owner: self.function.name.clone(),
-            role,
-        });
-        self.generation.site(&id)
+        self.sites.iter().find(|site| site.id().site().role == role)
     }
 
     /// One boundary site of this wrapper's own function.
@@ -175,14 +221,11 @@ impl CWrapper {
         &self,
         role: prebindgen_registry::recipe::Role,
     ) -> &prebindgen_registry::generation::SitePlan<crate::compile::CRepresentation> {
-        let id = prebindgen_registry::generation::SiteId::new(prebindgen_registry::recipe::Site {
-            owner: self.function.name.clone(),
-            role,
-        });
+        let name = self.function.name.clone();
+        let described = role.to_string();
         let site = self
-            .generation
-            .site(&id)
-            .unwrap_or_else(|| panic!("C generation plan has no site {id}"));
+            .site_if_planned(role)
+            .unwrap_or_else(|| panic!("C generation plan has no {described} of `{name}`"));
         assert!(
             matches!(
                 site.cleanup(),
@@ -637,6 +680,7 @@ impl RustArtifact for CWrapper {
 /// an alias keeps a constant with a non-portable initializer valid here.
 /// cbindgen cannot evaluate a path initializer, so an aliased constant does
 /// not surface as a `#define` in the C header.
+#[derive(Clone)]
 pub(crate) struct CConst {
     /// The constant as the model holds it.
     constant: prebindgen_registry::flat::Constant,
@@ -702,97 +746,39 @@ fn artifact_id(kind: &str, name: impl Into<String>) -> ArtifactKey {
     )
 }
 
-/// One artifact the registry generation plan already holds.
-///
-/// Handles, value-opaques, tagged unions and callbacks are planned into the
-/// generation plan while their sites are compiled. This is the same artifact,
-/// placed in the file: the payload is the plan's, and rendering it is a lookup
-/// in a frozen plan.
-pub(crate) struct CPlanned {
-    generation: Rc<GenerationPlan<crate::compile::CRepresentation>>,
-    id: prebindgen_registry::generation::ArtifactId,
-}
-
-impl CPlanned {
-    /// Every planned artifact of one kind, in the plan's own order.
-    pub(crate) fn of_kind(
-        generation: &Rc<GenerationPlan<crate::compile::CRepresentation>>,
-        kind: &str,
-    ) -> Vec<Self> {
-        generation
-            .artifacts()
-            .filter(|artifact| artifact.id().kind() == kind)
-            .map(|artifact| Self {
-                generation: Rc::clone(generation),
-                id: artifact.id().clone(),
-            })
-            .collect()
-    }
-}
-
-impl CPlanned {
-    /// The plan's own artifact description.
-    fn payload(&self) -> &crate::chain::CArtifact {
-        self.generation
-            .artifact(&self.id)
-            .unwrap_or_else(|| panic!("the C generation plan lost artifact {}", self.id))
-            .payload()
-    }
-}
-
-impl RustArtifact for CPlanned {
-    fn provides(&self) -> Vec<ArtifactKey> {
-        let mut provided = vec![self.key()];
-        provided.extend(self.payload().provides());
-        provided
-    }
-
-    fn calls(&self) -> Vec<ArtifactKey> {
-        self.payload().calls()
-    }
-
-    fn key(&self) -> ArtifactKey {
-        ArtifactKey::Artifact(self.id.clone())
-    }
-
-    fn render(&self, emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
-        self.generation
-            .artifact(&self.id)
-            .unwrap_or_else(|| panic!("the C generation plan lost artifact {}", self.id))
-            .payload()
-            .render(emit)
-    }
-}
-
 /// The memory helpers: the C allocator the generated layer calls, the raw
 /// C-string block builder, the universal freer C calls back, and — when a
 /// `Vec<T>` return hands out a block — the array builder.
 ///
 /// Planned only when the layer actually hands memory to C, which is also when
 /// a declared `.free_memory_function` becomes required.
+#[derive(Clone)]
 pub(crate) struct CMemory {
     /// The declared freer's exported symbol.
-    free_ident: syn::Ident,
+    /// `None` when the binding declared no free function.
+    ///
+    /// Optional because these helpers are planned whether or not one is
+    /// declared, and kept only when something requires them. Whether that
+    /// happened is the plan's answer, and `build_with` reads it there — so a
+    /// rendered memory artifact always has a declaration.
+    free_ident: Option<syn::Ident>,
 }
 
 impl CMemory {
     /// Plan the memory helpers for a binding that hands memory to C.
     ///
     /// Whether it does is not asked here: the artifacts that allocate say so
-    /// through their own dependencies, and the caller plans this when one of
-    /// them names it.
+    /// through their own dependencies, and the plan keeps this only when one of
+    /// them requires it.
+    ///
+    /// So a binding with no free function still PLANS these helpers — it just
+    /// does not keep them. Whether it kept them is what `build_with` asks the
+    /// finished plan, and it refuses a binding that did without declaring a free
+    /// function. The refusal stays in the build phase: `write_rust` renders an
+    /// assembly that is already valid.
     pub(crate) fn new(decls: &CbindgenBuilder) -> Self {
-        let Some(free_fn) = &decls.free_fn else {
-            panic!(
-                "Cbindgen: the generated layer hands C memory it must free — a \
-                 `char*` block (a `String` return or a `String` data-struct \
-                 field) or an array block (a `Vec` returned or delivered to a \
-                 callback) — but no memory-freeing function is declared: add \
-                 `.free_memory_function(\"z_free\")`"
-            )
-        };
         Self {
-            free_ident: format_ident!("{}", free_fn),
+            free_ident: decls.free_fn.as_ref().map(|name| format_ident!("{name}")),
         }
     }
 
@@ -830,7 +816,12 @@ impl RustArtifact for CMemory {
     }
 
     fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
-        let free_ident = &self.free_ident;
+        // `build_with` rejected a binding that keeps these helpers without a
+        // free function, so by the time an assembly is rendered there is one.
+        let free_ident = self
+            .free_ident
+            .as_ref()
+            .expect("a retained memory artifact was validated when the generator was built");
         // C allocator (linked from the C runtime; no crate dependency).
         let items: Vec<syn::Item> = vec![
             syn::parse_quote!(
@@ -877,6 +868,7 @@ impl RustArtifact for CMemory {
 /// The mirror is a layout fact: each field is stated in its wire form, which
 /// is decided while planning, when the binding's declarations and the model
 /// are both available.
+#[derive(Clone)]
 pub(crate) struct CDataStruct {
     /// The C-facing struct name.
     c_struct: syn::Ident,
@@ -955,6 +947,7 @@ impl RustArtifact for CDataStruct {
 ///
 /// That is why the model's own values are retained here and spelled by the
 /// writer, rather than the mirror being spelled while planning.
+#[derive(Clone)]
 pub(crate) struct CEnum {
     /// The C-facing enum name.
     c_name: syn::Ident,
@@ -1015,6 +1008,7 @@ impl RustArtifact for CEnum {
 }
 
 /// One reserved representation value a generated sum-type ABI uses.
+#[derive(Clone)]
 pub(crate) struct CDomainConstant {
     /// The exported constant name.
     name: syn::Ident,

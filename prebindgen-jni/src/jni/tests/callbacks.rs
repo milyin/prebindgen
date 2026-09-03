@@ -782,7 +782,7 @@ fn generation_plan_freezes_and_drains_derivations() {
     // the plan had been frozen, and two stores are what let the two answers
     // differ. One store now serves both phases.
     assert!(
-        !ext.compiled.borrow().is_empty(),
+        !ext.compiled.borrow().fragments().is_empty(),
         "one store serves both phases, so freeze leaves it where the compiler did"
     );
     let (fragments, functions, interfaces, structs, sums, vec_builds) =
@@ -1113,6 +1113,21 @@ fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
         ],
         "the callback leaf is the expansion's second leaf, not a parameter: {roles:?}"
     );
+    // And it is the REGISTRY's answer, not one the adapter pushed beside it:
+    // `planned_sites` is what `Registry::compile_sites` returned. Asserting on
+    // `site_plans` alone would pass either way (#687 review).
+    assert!(
+        gen.declarations()
+            .planned_sites
+            .borrow()
+            .keys()
+            .any(|site| site.owner == "z_go"
+                && matches!(
+                    site.role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )),
+        "the expanded callback's delivered value is a site the registry planned"
+    );
 }
 
 /// A value a callback delivers by taking it apart states its own site, and
@@ -1217,6 +1232,23 @@ fn a_delivered_argument_names_the_row_it_crossed_on() {
                 )
         })
         .expect("the delivered ZReply states a site");
+
+    // That site is the REGISTRY's answer. `planned_sites` is exactly what
+    // `Registry::compile_sites` returned, so asserting on it tells a site the
+    // walk planned apart from one the adapter pushed beside it — which is what
+    // `site_plans` alone cannot distinguish (#687 review).
+    assert!(
+        decls
+            .planned_sites
+            .borrow()
+            .keys()
+            .any(|s| s.owner == "z_get"
+                && matches!(
+                    s.role,
+                    prebindgen_registry::recipe::Role::CallbackArg { param: 0, arg: 0 }
+                )),
+        "a plain callback parameter's delivered value is a site the registry planned"
+    );
 
     // The row is `site_bindings`' answer, and it is the decomposing one — not
     // the whole-value default, which for this crossing is a conversion that
@@ -1415,4 +1447,95 @@ fn param_reading(
         .params[index]
         .ty
         .clone()
+}
+
+/// Two callbacks under one expanded parameter are refused where the expansion
+/// is declared.
+///
+/// A delivered value's site is named by the SOURCE parameter it arrived on —
+/// `Role::CallbackArg { param, arg }` — not by the leaf the callback came in
+/// on, because a parameter delivers through at most one callback. Nothing had
+/// enforced that: a constructor taking two callbacks gave two distinct
+/// positions one identity, and with different signatures the second site would
+/// have read the first callback's edge (#687 review).
+#[test]
+fn two_callbacks_in_one_expanded_parameter_are_refused() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(on_tick: impl Fn(i64) + Send + Sync + 'static, on_text: impl Fn(bool) + Send + Sync + 'static) -> ZOpts { unimplemented!() }",
+        "pub fn z_go(opts: ZOpts) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let error = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_go)))
+        .expand(
+            prebindgen_registry::expand_param!(ZOpts)
+                .variant(prebindgen_registry::fun!(z_opts_new)),
+        )
+        .build_with(registry)
+        .expect_err("two callbacks under one parameter cannot both be named");
+    let message = error.to_string();
+    assert!(
+        message.contains("more than one callback"),
+        "the refusal names the shape and why: {message}"
+    );
+}
+
+/// A site the registry refuses fails the build, naming the parameter.
+///
+/// `fn_plan` re-diagnoses a missing site when it reads one, but only for the
+/// sites it reads: a `Role::CallbackArg` plan is frozen inside `JCompile::plan`
+/// and no later lookup consumes it, so a refusal there left a site that never
+/// existed rather than a diagnostic (#690 review).
+///
+/// No shape refuses at a site today, which is why discarding the refusals looked
+/// safe — a tuple, a nested `Vec`, a raw pointer, a handle and a borrow all
+/// plan. So the refusal is made, through a test-only seam, and what is under
+/// test is the path that carries it out.
+#[test]
+fn a_refused_callback_argument_fails_the_build_and_names_its_parameter() {
+    let loc = myflat_loc();
+    let items = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_watch(on_one: impl Fn(ZOne) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc,
+    )];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let builder = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZOne))
+                .fun(prebindgen_registry::fun!(z_watch)),
+        );
+    *builder.decls.refuse_role.borrow_mut() =
+        Some("argument 0 of the callback in parameter 0".to_string());
+
+    let Err(error) = builder.build_with(registry) else {
+        panic!("a refused site fails the build rather than vanishing")
+    };
+    let message = error.to_string();
+    assert!(
+        message.contains("could not be planned"),
+        "the refusal is reported: {message}"
+    );
+    assert!(
+        message.contains("on_one"),
+        "and names the parameter the author wrote, not only the position: {message}"
+    );
 }

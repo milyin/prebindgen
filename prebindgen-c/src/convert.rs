@@ -59,7 +59,7 @@ impl CbindgenBuilder {
     pub(crate) fn custom_plan(
         &self,
         ty: &TypeRef,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         direction: Direction,
     ) -> Option<(crate::chain::CustomPlan, Niches)> {
         let key = ty.key();
@@ -116,7 +116,7 @@ impl CbindgenBuilder {
         &self,
         decl: &ConvertDecl,
         spec: &ConvertSpec,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         direction: Direction,
     ) -> (syn::Type, crate::chain::CustomOperation) {
         match spec {
@@ -170,7 +170,7 @@ impl CbindgenBuilder {
     fn c_domain_niches(
         &self,
         decl: &ConvertDecl,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         direction: Direction,
     ) -> Niches {
         let Some(domain) = decl.domain() else {
@@ -217,7 +217,11 @@ impl CbindgenBuilder {
         )
     }
 
-    fn conversion_fn_path(&self, registry: &impl Conversions, ident: &syn::Ident) -> syn::Path {
+    fn conversion_fn_path(
+        &self,
+        registry: &(impl Conversions + ?Sized),
+        ident: &syn::Ident,
+    ) -> syn::Path {
         let Some(mut module) = registry.origin_module(ident) else {
             return self.src_fn(ident);
         };

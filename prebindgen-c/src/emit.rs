@@ -295,7 +295,7 @@ impl CbindgenBuilder {
     /// struct.
     pub(super) fn struct_fields<'r>(
         &self,
-        registry: &'r impl Conversions,
+        registry: &'r (impl Conversions + ?Sized),
         key: &TypeKey,
     ) -> Option<Vec<(syn::Ident, &'r TypeRef)>> {
         // The element, not its item. A `Struct` holds the field list the

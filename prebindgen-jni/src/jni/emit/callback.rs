@@ -404,7 +404,7 @@ pub(crate) fn callback_input(
     operation: prebindgen_registry::OperationId,
     source: &prebindgen_registry::flat::TypeRef,
     args: &[prebindgen_registry::flat::TypeRef],
-    registry: &impl Conversions,
+    registry: &(impl Conversions + ?Sized),
     arg_fragments: &[&crate::jni::compile::JFrag],
 ) -> Option<(syn::Type, JInvokePlan)> {
     // Human-readable tag for attach/log messages.

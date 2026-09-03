@@ -562,3 +562,70 @@ fn constant_named_runtime_form_matches_macro() {
 fn constant_named_invalid_ident_rejected() {
     let _ = crate::ConstDecl::named("NOT AN IDENT");
 }
+
+/// Every getter this binding puts in the model is claimed, whichever kind of
+/// constant it belongs to.
+///
+/// `declare_into` adds `const_get_<name>` to the model so the registry's walk
+/// reaches its return. Anything in the model the binding does not claim is
+/// reported to the build as an item it skipped — and a user cannot declare one
+/// of these, because the binding synthesised it. Registering without claiming
+/// therefore printed `skipping undeclared #[prebindgen] fn const_get_greeting`
+/// at every build (#695 review).
+///
+/// This checks the **registered set**, not a list rebuilt here: it takes every
+/// `const_get_*` function the finished model holds and asserts each is claimed.
+/// A getter registered by one path and named by another would fail it, which
+/// asserting on a hand-written list of idents would not. Both kinds are
+/// declared — a captured `#[prebindgen] const` and a `constant_expr` — because
+/// they reach registration by different routes.
+#[test]
+fn every_registered_constant_getter_is_claimed() {
+    let loc = myflat_loc();
+    let mut items = const_items();
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn tag_of(n: i64) -> String {
+                unimplemented!()
+            }
+        )),
+        loc,
+    ));
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("cfg")
+                .fun(prebindgen_registry::fun!(tag_of))
+                .constant(crate::constant!(MAX_LEN))
+                .constant(crate::constant!(GREETING).name("HELLO"))
+                .constant(crate::constant!(DEFAULT_TAG).expr(
+                    prebindgen_registry::ty!(String),
+                    prebindgen_registry::expr!(tag_of(7)),
+                )),
+        );
+    let claimed = jni.decls.claimed();
+    let gen = jni.build_with(registry).expect("resolve");
+
+    let registered: Vec<syn::Ident> = gen
+        .registry()
+        .flat()
+        .functions()
+        .map(|f| f.name.clone())
+        .filter(|name| name.to_string().starts_with("const_get_"))
+        .collect();
+    assert_eq!(
+        registered.len(),
+        3,
+        "two captured constants and one expression constant each register a getter: {registered:?}"
+    );
+    for ident in &registered {
+        assert!(
+            claimed.functions.contains(ident),
+            "`{ident}` is in the model, so it must be claimed: {:?}",
+            claimed.functions
+        );
+    }
+}

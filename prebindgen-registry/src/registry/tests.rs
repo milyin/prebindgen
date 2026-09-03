@@ -43,9 +43,9 @@ impl DeclareAndResolve<()> for RegistryBuilder {
             .validate_with(&ext)?
             // The reading, not a spelling re-derived from the key: this is the
             // route a real generator takes, so the stub takes it too (#291).
-            .convert_with(|crossing, built| {
+            .answer_each(|crossing, built| {
                 let conv = ext.converter(&built.reading(&crossing.1)?)?;
-                Some(Answer::over(conv.subs))
+                Some(conv.subs)
             })?
             .build()?;
         ext.validate_resolved(&registry)
@@ -267,15 +267,15 @@ fn conversion_carriers_cannot_store_complete_rust_syntax() {
 #[test]
 fn conversion_planning_cannot_obtain_the_writer() {
     let source = include_str!("declare.rs");
-    let convert_with = source
-        .split_once("pub fn convert_with")
-        .expect("convert_with declaration")
+    let generate = source
+        .split_once("pub fn generate")
+        .expect("generate declaration")
         .1
-        .split_once("/// The scanned registry")
-        .expect("end of convert_with")
+        .split_once("/// Answer each crossing")
+        .expect("end of generate")
         .0;
-    assert!(!convert_with.contains("RustWriter"), "{convert_with}");
-    assert!(!convert_with.contains("spell_ty"), "{convert_with}");
+    assert!(!generate.contains("RustWriter"), "{generate}");
+    assert!(!generate.contains("spell_ty"), "{generate}");
 
     let recipes = include_str!("../recipe/compile.rs");
     let cx = recipes
@@ -1770,5 +1770,504 @@ fn expansion_leaf_readings_derive_before_validation() {
             .count(),
         2,
         "both non-selector arms are nullable synthetic readings"
+    );
+}
+
+/// A marked row that refuses says nothing about the rows beside it.
+///
+/// `declare_unasked` states that a row is compiled whether or not a site names
+/// it, and two such rows on one crossing describe that crossing for two
+/// independent purposes. So `generate` compiles both and reports both hard
+/// refusals. Only the crossing's own recipe failing ends the crossing, because a
+/// row of a crossing that would not compile has nothing left to answer.
+#[test]
+fn one_marked_row_refusing_does_not_silence_the_next() {
+    use std::cell::RefCell;
+
+    use crate::recipe::{
+        At, Bindings, Carrier, Compile, Constructing, Ctx, Frag, Mode, Parts, RecipeName, Recipes,
+        Refusal, Validity, Yield,
+    };
+
+    /// Answers every hook, refusing the row named `refuses`, and records the
+    /// name of every row it was asked for.
+    struct Rows {
+        refuses: &'static str,
+        asked: RefCell<Vec<String>>,
+    }
+
+    #[derive(Clone)]
+    struct Answered(Yield);
+
+    impl Carrier for Answered {
+        fn yields(&self) -> Yield {
+            self.0.clone()
+        }
+
+        fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
+    }
+
+    impl Rows {
+        fn answer(&mut self, at: At<'_>) -> Frag<Self> {
+            let name = at.recipe.name().to_string();
+            self.asked.borrow_mut().push(name.clone());
+            if name == self.refuses {
+                return Err(Refusal::Error(format!("`{name}` refuses")));
+            }
+            Ok(Answered(Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            }))
+        }
+    }
+
+    impl Compile for Rows {
+        type Fragment = Answered;
+        type Plan = ();
+        type Error = String;
+
+        fn atomic(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn optional(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _inner: &Answered,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn sequence(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _elements: Mode,
+            _inner: &Answered,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn construct(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _func: &prebindgen_flat::flat::Function,
+            _args: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn fields(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn value_form(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _func: &prebindgen_flat::flat::Function,
+            _parts: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn choice(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _arms: &[(&prebindgen_flat::flat::Alternative, &Answered)],
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn callback(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _args: &[&Answered],
+            _result: Option<&Answered>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn plan(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            _bound: &crate::recipe::Bound,
+            _root: &Answered,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    let consume: syn::Ident = syn::parse_quote!(consume);
+    let mut builder = crate::test_util::reg_with(&["fn consume(id: u16) {}"]).export(&consume);
+    let model = builder.flat().clone();
+    let id = model
+        .classify(&syn::parse_quote!(u16))
+        .expect("the model classifies u16");
+    let mut recipes = Recipes::builder();
+    recipes
+        .declare_default(id.clone(), RecipeName::new("whole"), Constructing::Atomic)
+        .declare_unasked(id.clone(), RecipeName::new("first"), Constructing::Atomic)
+        .declare_unasked(id, RecipeName::new("second"), Constructing::Atomic);
+    let recipes = recipes.build(&model).expect("table");
+
+    let mut adapter = Rows {
+        refuses: "first",
+        asked: RefCell::new(Vec::new()),
+    };
+    let Err(error) = builder.generate(&mut adapter, &recipes, &Bindings::default()) else {
+        panic!("`first` refuses, and a refusal that is not a gap is reported")
+    };
+    let error = error.to_string();
+
+    assert!(error.contains("`first` refuses"), "{error}");
+    let asked = adapter.asked.borrow();
+    assert!(
+        asked.iter().any(|name| name == "second"),
+        "the row beside the one that refused was still compiled: {asked:?}"
+    );
+    assert!(
+        asked.iter().any(|name| name == "whole"),
+        "the crossing's own recipe answered first: {asked:?}"
+    );
+}
+
+/// Declining a callback **parameter** must not take its **arguments** with it.
+///
+/// An adapter that answers a callback parameter whole — JniGen does — says so
+/// through [`Compile::plans_site`], and a walk that treated that as "skip this
+/// parameter and everything inside it" would never offer the argument
+/// positions to anyone. Nothing in a generated file would necessarily change,
+/// because the adapter that declined the parameter is also the one that
+/// reconstructs its arguments; the omission only shows as a site the registry
+/// never enumerated (#687 review).
+#[test]
+fn declining_a_callback_parameter_still_enumerates_its_arguments() {
+    use std::cell::RefCell;
+
+    use crate::recipe::{
+        At, Bindings, Carrier, Compile, Compiled, Crossing, Ctx, Frag, Mode, Parts, Recipes, Role,
+        Site, Validity, Yield,
+    };
+
+    #[derive(Default)]
+    struct Sites {
+        /// Whether this adapter answers a callback parameter whole, and so
+        /// declines the position.
+        whole: bool,
+        planned: RefCell<Vec<String>>,
+        asked: RefCell<Vec<String>>,
+    }
+
+    #[derive(Clone)]
+    struct One(Yield);
+
+    impl Carrier for One {
+        fn yields(&self) -> Yield {
+            self.0.clone()
+        }
+        fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
+    }
+
+    impl Sites {
+        fn answer(&mut self, at: At<'_>) -> Frag<Self> {
+            Ok(One(Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            }))
+        }
+    }
+
+    impl Compile for Sites {
+        type Fragment = One;
+        type Plan = ();
+        type Error = String;
+
+        /// The rule under test: a callback parameter is answered whole.
+        fn plans_site(&self, site: &Site, crossing: &Crossing) -> bool {
+            self.asked.borrow_mut().push(format!("{:?}", site.role));
+            if self.whole && crossing.spelled().callback_args().is_some() {
+                return false;
+            }
+            self.planned.borrow_mut().push(format!("{:?}", site.role));
+            true
+        }
+
+        fn atomic(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn optional(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>, _i: &One) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn sequence(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _e: Mode,
+            _i: &One,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn construct(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _a: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn fields(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn value_form(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn choice(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[(&prebindgen_flat::flat::Alternative, &One)],
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn callback(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[&One],
+            _r: Option<&One>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn plan(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            _bound: &crate::recipe::Bound,
+            _root: &One,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    let subscribe: syn::Ident = syn::parse_quote!(subscribe);
+    let registry =
+        crate::test_util::reg_with(&["fn subscribe(cb: impl Fn(u16) + Send + Sync + 'static) {}"])
+            .export(&subscribe)
+            .scanned()
+            .expect("scan");
+
+    let recipes = Recipes::builder().build(registry.flat()).expect("table");
+    let mut adapter = Sites {
+        whole: true,
+        ..Sites::default()
+    };
+    let (_sited, _store) = registry.compile_sites(
+        &mut adapter,
+        &recipes,
+        &Bindings::default(),
+        Compiled::default(),
+    );
+
+    let asked = adapter.asked.borrow().clone();
+    let planned = adapter.planned.borrow().clone();
+    assert!(
+        asked.iter().any(|role| role.starts_with("Param")),
+        "the callback parameter is offered: {asked:?}"
+    );
+    assert!(
+        !planned.iter().any(|role| role.starts_with("Param")),
+        "and declined: {planned:?}"
+    );
+    assert!(
+        asked.iter().any(|role| role.starts_with("CallbackArg")),
+        "its argument is still offered even though the parameter was declined: {asked:?}"
+    );
+    // And an adapter that accepts the position gets a compiled plan for it, so
+    // "the walk offers it" and "the walk plans it" are not the same assertion.
+    let mut accepts = Sites::default();
+    let (sited, _) = registry.compile_sites(
+        &mut accepts,
+        &recipes,
+        &Bindings::default(),
+        Compiled::default(),
+    );
+    assert!(
+        sited
+            .plans
+            .iter()
+            .any(|(site, _)| matches!(site.role, Role::CallbackArg { .. })),
+        "an adapter that plans a callback argument gets a site plan for it"
+    );
+}
+
+/// A site an adapter refuses comes back in `Sited::refusals`, so an adapter can
+/// report it.
+///
+/// This is the channel, not a shape: with the two adapters as they stand no
+/// site refuses, which is why dropping the refusals looked safe. What made it
+/// unsafe is that the walk is authoritative now — a `Role::CallbackArg` plan is
+/// frozen inside `Compile::plan`, and no later lookup consumes it, so a refusal
+/// there would leave a site that never existed rather than a diagnostic (#676
+/// review).
+#[test]
+fn a_refused_site_comes_back_for_the_adapter_to_report() {
+    use std::cell::RefCell;
+
+    use crate::recipe::{
+        At, Bindings, Carrier, Compile, Compiled, Ctx, Frag, Mode, Parts, Recipes, Role, Validity,
+        Yield,
+    };
+
+    #[derive(Default)]
+    struct RefusesArgs(RefCell<usize>);
+
+    #[derive(Clone)]
+    struct One(Yield);
+
+    impl Carrier for One {
+        fn yields(&self) -> Yield {
+            self.0.clone()
+        }
+        fn composed(&mut self, _shape: crate::generation::ShapePlan) {}
+    }
+
+    impl RefusesArgs {
+        fn answer(&mut self, at: At<'_>) -> Frag<Self> {
+            Ok(One(Yield {
+                ty: at.crossing.value().stripped_key(),
+                mode: at.crossing.mode(),
+                validity: Validity::SelfSufficient,
+            }))
+        }
+    }
+
+    impl Compile for RefusesArgs {
+        type Fragment = One;
+        type Plan = ();
+        type Error = String;
+
+        fn atomic(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn optional(&mut self, _cx: &mut Ctx<'_, Self>, at: At<'_>, _i: &One) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn sequence(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _e: Mode,
+            _i: &One,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn construct(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _a: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn fields(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn value_form(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _f: &prebindgen_flat::flat::Function,
+            _p: Parts<'_, Self>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn choice(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[(&prebindgen_flat::flat::Alternative, &One)],
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+        fn callback(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            at: At<'_>,
+            _a: &[&One],
+            _r: Option<&One>,
+        ) -> Frag<Self> {
+            self.answer(at)
+        }
+
+        /// Refuse exactly the delivered value, which is the site whose plan
+        /// nothing else would miss.
+        fn plan(
+            &mut self,
+            _cx: &mut Ctx<'_, Self>,
+            bound: &crate::recipe::Bound,
+            _root: &One,
+        ) -> Result<(), String> {
+            if matches!(bound.site.role, Role::CallbackArg { .. }) {
+                *self.0.borrow_mut() += 1;
+                return Err("nothing crosses here".into());
+            }
+            Ok(())
+        }
+    }
+
+    let subscribe: syn::Ident = syn::parse_quote!(subscribe);
+    let registry =
+        crate::test_util::reg_with(&["fn subscribe(cb: impl Fn(u16) + Send + Sync + 'static) {}"])
+            .export(&subscribe)
+            .scanned()
+            .expect("scan");
+    let recipes = Recipes::builder().build(registry.flat()).expect("table");
+
+    let mut adapter = RefusesArgs::default();
+    let (sited, _) = registry.compile_sites(
+        &mut adapter,
+        &recipes,
+        &Bindings::default(),
+        Compiled::default(),
+    );
+
+    assert_eq!(*adapter.0.borrow(), 1, "the argument site was offered");
+    let refused: Vec<_> = sited
+        .refusals
+        .iter()
+        .filter(|(site, _)| matches!(site.role, Role::CallbackArg { .. }))
+        .collect();
+    assert_eq!(
+        refused.len(),
+        1,
+        "the refusal comes back rather than being swallowed by the walk"
+    );
+    assert!(
+        !sited
+            .plans
+            .iter()
+            .any(|(site, _)| matches!(site.role, Role::CallbackArg { .. })),
+        "and the refused site contributes no plan"
     );
 }

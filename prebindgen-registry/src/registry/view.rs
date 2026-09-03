@@ -1,6 +1,8 @@
 //! What a conversion is built against — the partial view during the fill, and
 //! the total one after it.
 
+use std::collections::HashMap;
+
 use prebindgen_flat::flat::{Flat, TypeRef};
 
 use super::*;
@@ -63,6 +65,16 @@ pub trait Conversions {
     /// sentinel values no sibling conversion can produce.
     fn crossing_keys(&self, dir: Direction) -> Vec<TypeKey>;
 
+    /// How a parameter of an exported function was expanded, keyed by the two
+    /// idents that name it.
+    ///
+    /// An adapter planning one site asks whether the parameter it belongs to
+    /// expanded, and into which leaves — the same question a
+    /// [`Role::ExpansionLeaf`](crate::recipe::Role::ExpansionLeaf) answers
+    /// positionally. Reading it here is what lets a per-site hook derive its
+    /// context from the `Bound` it is handed rather than being told it.
+    fn expansion_plans(&self) -> &HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan>;
+
     /// The origin crate's module path for an item, or `None` when unknown.
     fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
         origin_module_of(self.flat(), ident)
@@ -77,6 +89,9 @@ pub trait Conversions {
 impl Conversions for Building<'_> {
     fn flat(&self) -> &Flat {
         &self.registry.flat
+    }
+    fn expansion_plans(&self) -> &HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan> {
+        self.registry.expansion_plans()
     }
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         self.registry.reading(key)
@@ -93,6 +108,9 @@ impl Conversions for Building<'_> {
 impl Conversions for Registry {
     fn flat(&self) -> &Flat {
         &self.flat
+    }
+    fn expansion_plans(&self) -> &HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan> {
+        Registry::expansion_plans(self)
     }
     fn reading(&self, key: &TypeKey) -> Option<TypeRef> {
         Registry::reading(self, key)

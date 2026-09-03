@@ -55,6 +55,19 @@ pub(crate) fn generated_converter_attr() -> syn::Attribute {
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
+/// One nullary getter this binding emits a declared value through.
+pub(crate) struct ConstantGetter {
+    pub(crate) ident: syn::Ident,
+    pub(crate) ty: GetterType,
+}
+
+/// Where a getter's return type comes from: a captured constant carries its own
+/// reading, and a `constant_expr` names a type a build script wrote.
+pub(crate) enum GetterType {
+    OfConstant(syn::Ident),
+    Declared(syn::Type),
+}
+
 impl Declarations {
     /// Leaf metadata for an opaque handle: value-context name `Long` plus the
     /// projection that folds outward through wrappers. The corresponding
@@ -569,6 +582,33 @@ impl Declarations {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
+/// Where one site sorts in a function's canonical order: the return first, then
+/// each parameter position, and within a position its expansion leaves before
+/// the arguments of a callback that sits there.
+///
+/// `usize::MAX` is the position given to everything that is not attached to a
+/// parameter, which sorts it after every parameter that is.
+fn site_order(site: &prebindgen_registry::recipe::Site) -> (String, usize, usize, usize) {
+    use prebindgen_registry::recipe::Role;
+    let (position, kind, index) = match site.role {
+        Role::Return => (0, 0, 0),
+        Role::Error => (0, 1, 0),
+        // Parameter positions are numbered from one, so the return keeps zero.
+        Role::Param { index } => (index + 1, 0, 0),
+        Role::ExpansionLeaf { param, leaf } => (param + 1, 0, leaf),
+        Role::CallbackArg { param, arg } => (param + 1, 1, arg),
+        // A receiver is the value the call is made on, so it precedes every
+        // parameter and follows the return, which is numbered zero.
+        Role::Receiver => (0, 2, 0),
+        // Neither a constant's site nor a part of another crossing's recipe is
+        // attached to a parameter position, so both sort after every parameter
+        // that is. A part keeps its own numbering within that.
+        Role::Const => (usize::MAX, 0, 0),
+        Role::Part { arm, index, .. } => (usize::MAX, 1 + arm.unwrap_or(0), index),
+    };
+    (site.owner.to_string(), position, kind, index)
+}
+
 impl JniGenBuilder {
     /// State this binding into `registry`: what it exports, what crosses, and
     /// what it defines itself.
@@ -617,66 +657,86 @@ impl JniGenBuilder {
     ) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let mut decls = self.decls;
         let mut declared = decls.declare_into(registry)?.validate_with(&decls)?;
-        // A second holding of the model: `convert_with` consumes the builder,
-        // and the table outlives that call.
-        let model = declared.flat().clone();
-        let expansion_leaves: Vec<_> = declared.expansion_leaf_readings()?.cloned().collect();
-        let recipes = decls
-            .recipes(&model, &expansion_leaves, &declared)
-            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
+        let invariant = |errors: Vec<prebindgen_registry::recipe::RecipeError>| {
+            prebindgen_registry::ScanError::AdapterInvariant {
                 message: errors
                     .iter()
                     .map(|e| e.to_string())
                     .collect::<Vec<_>>()
                     .join("; "),
-            })?;
+            }
+        };
+        let expansion_leaves: Vec<_> = declared.expansion_leaf_readings()?.cloned().collect();
+        let recipes = decls
+            .recipes(declared.flat(), &expansion_leaves, &declared)
+            .map_err(invariant)?;
         // A `data_class` field that is itself one takes the `parts` recipe rather
         // than its own default — see `Declarations::bindings`.
         let bindings = decls
-            .bindings(&model, &declared, &recipes)
-            .map_err(|errors| prebindgen_registry::ScanError::AdapterInvariant {
-                message: errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            })?;
+            .bindings(declared.flat(), &declared, &recipes)
+            .map_err(invariant)?;
         // Both tables go on `decls`, because compiling a **site** happens after
         // this function has returned: the sites are `fn_plan`'s to enumerate,
         // and `Compiler::resume` needs these two beside the model.
         decls.tables = Some(std::rc::Rc::new(crate::jni::Tables { recipes, bindings }));
-        // The driver's state lives on `decls` rather than here, because the
-        // adapter reads it **while** it compiles: a conversion for one type is
-        // built out of the conversions for its inners, which are compiled
-        // first. That is the same order the converter table was filled in, so
-        // a fragment is there exactly when a table entry would have been.
-        // Compositions that refused. See `compile_crossing`: these are adapter
-        // invariants, reported together once the walk is done.
+        // The registry walks the crossings, compiles each crossing's default
+        // recipe and the `parts` rows declared unasked beside it, and hands
+        // back every fragment. The store lives on `decls` because the emitters
+        // read it after the walk, through `in_frag` and `out_frag`.
+        *decls.compiled.borrow_mut() = declared.generate(
+            &mut crate::jni::compile::JCompile {
+                decls: &decls,
+                declared_return: None,
+            },
+            decls.recipe_table(),
+            decls.site_bindings(),
+        )?;
+        let registry = declared.build()?;
         let mut refusals: Vec<String> = Vec::new();
-        let registry = declared
-            .convert_with(|crossing, built| {
-                let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                    &model,
-                    decls.recipe_table(),
-                    decls.site_bindings(),
-                    decls.compiled.borrow().clone(),
-                );
-                let compiled =
-                    decls.compile_crossing(&mut compiler, crossing, built, &mut refusals);
-                *decls.compiled.borrow_mut() = compiler.finish();
-                let conv = compiled?;
-                // The conversion stays here; what the registry gets back is
-                // which other crossings this one delegates to, which is what
-                // its reachability walk needs.
-                Some(prebindgen_registry::Answer::over(conv.subs))
-            })?
-            .build()?;
-        if !refusals.is_empty() {
+        // Every position a value crosses at, compiled once by the registry.
+        // `fn_plan` reads the answers off `decls` rather than driving a
+        // compiler of its own.
+        // Cloned into a local first: the hooks mirror the store back onto
+        // `decls` as they run, and a `borrow()` living in the argument list
+        // would still be held when the first one does.
+        let carried = decls.compiled.borrow().clone();
+        let (sited, store) = registry.compile_sites(
+            &mut crate::jni::compile::JCompile {
+                decls: &decls,
+                declared_return: None,
+            },
+            decls.recipe_table(),
+            decls.site_bindings(),
+            carried,
+        );
+        *decls.compiled.borrow_mut() = store;
+        // A site that will not compile is reported here, naming the parameter the
+        // model gives it as well as the position. `fn_plan` re-diagnoses a
+        // missing site when it reads one, but only for the sites it reads: a
+        // callback argument or an expansion leaf that refused, in a function
+        // whose plan never asks for it, would otherwise produce no diagnostic at
+        // all — and a refusal that vanishes looks like a site that was handled.
+        if let Some((site, error)) = sited.refusals.into_iter().next() {
             return Err(prebindgen_registry::ScanError::AdapterInvariant {
-                message: refusals.join("; "),
+                // `Site`'s own `Display` names the place — "parameter 1",
+                // "argument 0 of the callback in parameter 0" — which is exact
+                // but not what the author typed. The parameter's name is what
+                // makes the refusal actionable, and it is the model's to give.
+                message: match site
+                    .role
+                    .param_position()
+                    .and_then(|index| registry.flat().function(&site.owner)?.params.get(index))
+                {
+                    Some(param) => format!(
+                        "JniGen: {site} (`{}`) could not be planned: {error}",
+                        param.name
+                    ),
+                    None => format!("JniGen: {site} could not be planned: {error}"),
+                },
             }
             .into());
         }
+        *decls.planned_sites.borrow_mut() = sited.plans.into_iter().collect();
         // Post-resolve invariants, run once here so the writers are pure reads
         // and a `JniGen` is valid by construction.
         decls
@@ -689,7 +749,7 @@ impl JniGenBuilder {
         // no deconstructing whole-value crossing.
         for key in decls.declared_decompositions() {
             let Some(ident) = key.ident() else { continue };
-            let Ok(ty) = model.classify(&syn::parse_quote!(#ident)) else {
+            let Ok(ty) = registry.flat().classify(&syn::parse_quote!(#ident)) else {
                 continue;
             };
             // Only a type every part of which already crosses. One that does
@@ -697,7 +757,7 @@ impl JniGenBuilder {
             // the part — `Reading.Exact.v0 has no OUTPUT converter` — where
             // this could only say that composing failed.
             let part_types: Vec<&prebindgen_registry::flat::TypeRef> =
-                match model.declared_type(&ident) {
+                match registry.flat().declared_type(&ident) {
                     Some(prebindgen_registry::flat::Type::Variant(sum)) => sum
                         .alternatives
                         .iter()
@@ -721,28 +781,24 @@ impl JniGenBuilder {
             // struct, or an enum with no alternatives. Asking for one by name
             // is refused now rather than answered with the default, so the
             // condition that declared it is the condition asked here.
-            if decls
+            let Some(row) = decls
                 .recipe_table()
                 .key_of(&crossing.key(), &crate::jni::recipes::parts())
-                .is_none()
-            {
+                .cloned()
+            else {
                 continue;
-            }
+            };
             let mut compiler = prebindgen_registry::recipe::Compiler::resume(
-                &model,
+                &registry,
                 decls.recipe_table(),
                 decls.site_bindings(),
                 decls.compiled.borrow().clone(),
             );
             let mut adapter = crate::jni::compile::JCompile {
                 decls: &decls,
-                registry: &registry,
                 declared_return: None,
-                site: None,
             };
-            if let Err(e) =
-                compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
-            {
+            if let Err(e) = compiler.row(&mut adapter, &crossing, &row) {
                 refusals.push(format!(
                     "`{key}` hands out its parts, but composing them failed: {e:?}"
                 ));
@@ -755,6 +811,20 @@ impl JniGenBuilder {
             }
             .into());
         }
+        // One order for the canonical site set, whoever froze each site.
+        //
+        // The registry's walk freezes most of them, and JniGen freezes the rest
+        // while it emits — a whole return, whose final plan carries a delivery
+        // the hook's intermediate does not, and the two construct positions that
+        // never reach `Compiler::site`. Which of the two froze a site is an
+        // ordering nobody should be able to read off the plan, so the set is put
+        // back into the one order it has always had: per function, the return
+        // first, then each parameter position with the leaves and callback
+        // arguments that belong to it.
+        decls
+            .site_plans
+            .borrow_mut()
+            .sort_by_key(|plan| site_order(plan.id().site()));
         let generation = crate::jni::generation::JniGenerationPlan::freeze(&mut decls, &registry)?;
         decls.generation = Some(std::rc::Rc::new(generation));
         Ok(JniGen { decls, registry })
@@ -762,77 +832,6 @@ impl JniGenBuilder {
 }
 
 impl Declarations {
-    /// Build the conversion for one crossing by asking the table which recipe it
-    /// takes and the driver to compile that recipe.
-    ///
-    /// `None` is *cannot*, never *not yet*: the crossings arrive inner-first,
-    /// so everything this could compose from is already in `built`.
-    fn compile_crossing<'v, R: Conversions>(
-        &'v self,
-        compiler: &mut prebindgen_registry::recipe::Compiler<
-            '_,
-            crate::jni::compile::JCompile<'v, R>,
-        >,
-        crossing: &Crossing,
-        built: &'v R,
-        refusals: &mut Vec<String>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let (dir, key) = crossing;
-        // The reading the scan already took for this crossing, fetched by the
-        // key the crossing IS.
-        let reading = built.reading(key)?;
-        let direction = *dir;
-        let mut adapter = crate::jni::compile::JCompile {
-            decls: self,
-            registry: built,
-            declared_return: None,
-            site: None,
-        };
-        let crossing = prebindgen_registry::recipe::Crossing::new(reading, direction);
-        let fragment = compiler.crossing(&mut adapter, &crossing).ok()?;
-        // A `data_class` also states a recipe that says what it is made of.
-        // Compiling that named recipe equips whole-value input, output and
-        // callback paths with the same registry-owned Product descriptor.
-        // The **stripped** key, so `Box<Payload>` and `&Payload` compile the
-        // recipe too: all three spellings find one recipe and each gets its own
-        // fragment, which is what a site taking a wrapped spelling reads.
-        // A `data_class` with no fields states no `parts` recipe — there is
-        // nothing for it to be made of — so the recipe is asked for by name only
-        // where it was declared. `recipe_of` refuses an absent name rather than
-        // answering with the default, which is what makes that condition the
-        // one that has to match.
-        if (direction == prebindgen_registry::recipe::Direction::Construct
-            && matches!(
-                self.types
-                    .get(&crossing.value().stripped_key())
-                    .map(|c| &c.kind),
-                Some(DeclaredKind::Data)
-            )
-            || crossing.value().optional_inner().is_some())
-            && compiler
-                .recipes()
-                .key_of(&crossing.key(), &crate::jni::recipes::parts())
-                .is_some()
-        {
-            // A refusal is a bug in the composition, not a gap in the binding:
-            // every part of a `data_class` is a crossing that already resolved
-            // on its own, so nothing here can legitimately be missing.
-            // Returning `None` would report an unresolved crossing and blame
-            // the declaration, so the reason is collected and surfaced as an
-            // adapter invariant — beside whatever else the walk found, and
-            // through the same `Result` every other refusal takes.
-            if let Err(e) =
-                compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
-            {
-                refusals.push(format!(
-                    "`{}` crosses as its fields, but composing them failed: {e:?}",
-                    crossing.spelled().key()
-                ));
-            }
-        }
-        Some((*fragment).clone().conv)
-    }
-
     pub fn declare_into(
         &self,
         mut registry: RegistryBuilder,
@@ -854,6 +853,34 @@ impl Declarations {
         registry = registry.declares_consts();
         for ident in self.declared_consts().into_iter().flatten() {
             registry = registry.export_const(&ident);
+        }
+        // The nullary getter each declared constant is emitted through is a
+        // function of this binding, so it is registered as one. Until it was, it
+        // existed only at the emission site, sat in no export set, and its return
+        // was the one site the walk could not reach — which is what
+        // `fn_plan::return_site`'s private fallback was for.
+        //
+        // These are the same specifications `claimed` names, so a getter cannot
+        // be registered without being claimed.
+        for getter in self.constant_getters() {
+            let ty = match &getter.ty {
+                GetterType::OfConstant(name) => match registry.flat().constant(name) {
+                    Some(constant) => constant.ty.clone(),
+                    None => continue,
+                },
+                // A `constant_expr` names its type in a build script rather than
+                // carrying a reading, so the model classifies it here.
+                GetterType::Declared(ty) => match registry.flat().classify(ty) {
+                    Ok(reading) => reading,
+                    Err(_) => continue,
+                },
+            };
+            registry = registry.local_getter(
+                getter.ident.clone(),
+                ty,
+                "JniGen constant getter".to_string(),
+            )?;
+            registry = registry.export(&getter.ident);
         }
         for ty in self.declared_types().into_values() {
             registry = registry.export_type(ty);
@@ -953,7 +980,7 @@ impl Declarations {
 impl Declarations {
     pub(crate) fn build_value_struct_decons(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> Vec<crate::unfold::ValueDecon> {
         let mut out = Vec::new();
         for item_struct in registry.flat().types().filter_map(|t| match t {
@@ -989,7 +1016,7 @@ impl Declarations {
 
     pub(crate) fn build_sum_decons(
         &self,
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
     ) -> Vec<crate::unfold::SumDecon> {
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -1024,7 +1051,10 @@ impl Declarations {
         out
     }
 
-    pub(crate) fn build_leaf_vec_fold_elements(&self, registry: &impl Conversions) -> Vec<TypeKey> {
+    pub(crate) fn build_leaf_vec_fold_elements(
+        &self,
+        registry: &(impl Conversions + ?Sized),
+    ) -> Vec<TypeKey> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: &prebindgen_registry::flat::TypeRef| {
@@ -1083,7 +1113,7 @@ fn peel_one_borrow(t: &prebindgen_registry::flat::TypeRef) -> &prebindgen_regist
 /// classification the model makes once, at parse time, and expresses as two
 /// different elements.
 pub(crate) fn flat_unit_enum<'r>(
-    registry: &'r impl Conversions,
+    registry: &'r (impl Conversions + ?Sized),
     name: &syn::Ident,
     declarator: &str,
 ) -> Option<&'r prebindgen_registry::flat::Enum> {
@@ -1113,7 +1143,7 @@ impl Declarations {
         operation: OperationId,
         source: &prebindgen_registry::flat::TypeRef,
         args: &[prebindgen_registry::flat::TypeRef],
-        registry: &impl Conversions,
+        registry: &(impl Conversions + ?Sized),
         arg_fragments: &[&crate::jni::compile::JFrag],
     ) -> Option<(ConverterImpl<KotlinMeta>, crate::jni::chain::JFunction)> {
         let (wire, plan) = callback_input(
@@ -1515,9 +1545,46 @@ impl Declarations {
     /// claimed even though it is never emitted, and a boundary-only type even
     /// though it never crosses whole: both are deliberate, so neither is a
     /// skip worth reporting.
+    /// The nullary getters this binding emits its declared constants through,
+    /// each with where its return type comes from.
+    ///
+    /// **One list.** `declare_into` registers these as model functions and
+    /// `claimed` names them, and they read the same specifications rather than
+    /// each rebuilding a name: two lists that must agree is how a getter came to
+    /// be registered but not claimed (#695 review). The ident is
+    /// `emit::const_getter_ident`, which the Rust extern and the Kotlin `val`
+    /// also use.
+    pub(crate) fn constant_getters(&self) -> Vec<ConstantGetter> {
+        let captured = self
+            .declared_consts()
+            .into_iter()
+            .flatten()
+            .map(|name| ConstantGetter {
+                ident: crate::jni::emit::const_getter_ident(&name.to_string()),
+                ty: GetterType::OfConstant(name),
+            });
+        let expressions = self
+            .packages
+            .values()
+            .flat_map(|pkg| &pkg.constant_exprs)
+            .map(|decl| ConstantGetter {
+                ident: crate::jni::emit::const_getter_ident(&decl.kotlin_name),
+                ty: GetterType::Declared(decl.ty.clone()),
+            });
+        captured.chain(expressions).collect()
+    }
+
     pub(crate) fn claimed(&self) -> prebindgen_registry::Claimed {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
+        // The constant getters are this binding's own model functions, added by
+        // `declare_into`. A user cannot declare one, so an unclaimed report that
+        // named them would be asking for something impossible (#695 review).
+        functions.extend(
+            self.constant_getters()
+                .into_iter()
+                .map(|getter| getter.ident),
+        );
         // The report asks what was *claimed*, which is a set of identities —
         // the declarations' spellings are the scan's business, not this one's.
         let mut types: std::collections::HashSet<TypeKey> =

@@ -49,6 +49,7 @@ pub(crate) use prebindgen_registry::{
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
 
+use crate::unfold;
 pub(crate) use crate::{
     jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
     util::snake_to_camel,
@@ -480,7 +481,7 @@ pub(crate) type NamedWire = (
 /// How a reach renders: its field steps, joined — the accessor call every leaf
 /// hangs off is the site's, not the value's, so it is dropped.
 #[cfg(test)]
-fn reach_of(path: &[crate::unfold::PathStep]) -> String {
+fn reach_of(path: &[unfold::PathStep]) -> String {
     use crate::unfold::PathStep;
     path.iter()
         .filter_map(|step| match step {
@@ -495,7 +496,7 @@ fn reach_of(path: &[crate::unfold::PathStep]) -> String {
 /// the accessor call every leaf hangs off is the site's, not the value's, so it
 /// is dropped to line the two up.
 #[cfg(test)]
-fn leaf_reach(leaf: &crate::unfold::UnfoldLeaf) -> String {
+fn leaf_reach(leaf: &unfold::UnfoldLeaf) -> String {
     use crate::unfold::LeafSource;
     match &leaf.source {
         LeafSource::SumTag => "tag".to_string(),
@@ -548,21 +549,28 @@ impl JniGen {
             .map_err(|e| format!("the model does not classify {}: {e}", quote::quote!(#ty)))?;
         let crossing = Crossing::new(reading, direction);
         let mut compiler = Compiler::resume(
-            self.registry.flat(),
+            &self.registry,
             self.decls.recipe_table(),
             self.decls.site_bindings(),
             self.decls.compiled.borrow().clone(),
         );
         let mut adapter = crate::jni::compile::JCompile {
             decls: &self.decls,
-            registry: &self.registry,
             declared_return: None,
-            site: None,
         };
         let fragment = if parts {
-            compiler.recipe_of(&mut adapter, &crossing, &crate::jni::recipes::parts())
+            // By its row rather than by name: asking for a row the crossing does
+            // not have is the caller's own claim, and answering it with the
+            // default would file the default under a recipe that does not exist.
+            let row = self
+                .decls
+                .recipe_table()
+                .key_of(&crossing.key(), &crate::jni::recipes::parts())
+                .cloned()
+                .ok_or_else(|| format!("{} states no `parts` recipe", crossing.key()))?;
+            compiler.row(&mut adapter, &crossing, &row)
         } else {
-            compiler.crossing(&mut adapter, &crossing)
+            compiler.crossing(&mut adapter, &crossing).map(|(f, _)| f)
         }
         .map_err(|e| e.to_string())?;
         fragment.rust.mark_reachable();
@@ -1006,22 +1014,20 @@ impl JniGen {
             // through them.
             let steps = |chain: &prebindgen_registry::generation::ConversionChain<
                 crate::jni::compile::JRepresentation,
-            >| {
-                match chain {
-                    prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
-                    prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
-                        .iter()
-                        .map(|step| {
-                            format!(
-                                "{:?}:{:?}->{:?}:{:?}",
-                                step.operation(),
-                                step.from(),
-                                step.into(),
-                                step.failure()
-                            )
-                        })
-                        .collect(),
-                }
+            >| match chain {
+                prebindgen_registry::generation::ConversionChain::Direct => Vec::new(),
+                prebindgen_registry::generation::ConversionChain::Steps(steps) => steps
+                    .iter()
+                    .map(|step| {
+                        format!(
+                            "{:?}:{:?}->{:?}:{:?}",
+                            step.operation(),
+                            step.from(),
+                            step.into(),
+                            step.failure()
+                        )
+                    })
+                    .collect(),
             };
             assert_eq!(
                 steps(plan.converter().chain()),
@@ -1224,8 +1230,8 @@ pub struct Declarations {
     ///
     /// Shared and interior-mutable because JniGen reads it **while** it is
     /// being filled: unlike `prebindgen-c`, this adapter's emitters are also
-    /// its conversion builders, and `JniGen::build_with` calls them from inside
-    /// `convert_with`. A conversion for one type is built out of the
+    /// its conversion builders, and the registry calls them from inside
+    /// `generate`. A conversion for one type is built out of the
     /// conversions for its inners, which the resolver compiles first — the same
     /// order that filled the converter table, so a fragment is there exactly
     /// when a table entry would have been. Resolution drains it into
@@ -1363,6 +1369,24 @@ pub struct Declarations {
     /// set can be validated as one — which is where a duplicate site identity
     /// or a missing failure route shows up, neither being visible in a site
     /// compared against itself (#622 review).
+    /// What the registry's site walk compiled, by site.
+    ///
+    /// `Registry::compile_sites` enumerates every position a value crosses at
+    /// and compiles each through `Compile::plan`, so `fn_plan` reads the answer
+    /// off this rather than driving a compiler of its own.
+    pub(crate) planned_sites: std::cell::RefCell<
+        std::collections::HashMap<prebindgen_registry::recipe::Site, crate::jni::compile::JPlan>,
+    >,
+    /// A site role `JCompile::plan` refuses outright, so the reporting path can
+    /// be exercised.
+    ///
+    /// No shape in either adapter refuses at a site today — a tuple, a nested
+    /// `Vec`, a raw pointer, a handle and a borrow all plan — which is exactly
+    /// why discarding `Sited::refusals` looked safe and why the discard needs a
+    /// test that does not depend on finding one.
+    #[cfg(test)]
+    pub(crate) refuse_role: std::cell::RefCell<Option<String>>,
+
     pub(crate) site_plans: std::cell::RefCell<
         Vec<
             std::rc::Rc<
@@ -1388,7 +1412,7 @@ pub struct Declarations {
     /// callback argument comes apart. The registry holds none of this: it is
     /// told only which readings the decompositions need on the output side, and
     /// which leaves a callback argument's delivery depends on.
-    pub(crate) unfolded: std::cell::OnceCell<crate::unfold::Unfolded>,
+    pub(crate) unfolded: std::cell::OnceCell<unfold::Unfolded>,
 
     /// Present only after resolution has finished. All artifact writers reach
     /// derived JNI decisions through this one immutable store; the mutable

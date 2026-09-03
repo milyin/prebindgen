@@ -528,31 +528,19 @@ impl std::error::Error for IdentityError {}
 /// Rust syntax remains forbidden until final emission spells an opaque
 /// [`TypeRef`].
 pub trait Representation {
-    /// A syntax-free identity for a private Rust carrier in a converter graph.
-    type Intermediate: Clone + Eq;
-    /// One adapter-declared conversion between two graph values.
-    type Step;
+    /// A cleanup operation: what has to be released, not just when.
+    ///
+    /// `()` in both adapters today, which says only that neither has needed one
+    /// yet — a third with a pinned foreign buffer to free and a temporary handle
+    /// to destroy would have two, and could not tell them apart through a unit
+    /// (#679 review).
+    type Cleanup;
     /// Frozen adapter artifact that renders this fragment's private converter.
     ///
     /// The registry owns its dependency-ordered placement but treats the
     /// payload as opaque. [`FragmentPlan`] represents fragments without a
     /// standalone converter explicitly.
     type ConverterArtifact;
-    /// Terminal conversion at an [`Atomic`](ShapePlan::Atomic) shape.
-    type TerminalCodec;
-    /// The control flow of one composite shape.
-    ///
-    /// Packing a product, gating an optional, building or traversing a
-    /// sequence, selecting a choice arm, and constructing or invoking a
-    /// callable are all the same kind of answer: what the adapter does at a
-    /// shape whose children carry the values. The [`ShapePlan`] variant that
-    /// holds the bridge says which of those it is, so the adapter does not
-    /// need a separate type per variant to know.
-    type Bridge;
-    /// One semantic niche identity. Equal values denote the same bit domain.
-    type Niche: Clone + Eq + Hash;
-    /// A cleanup operation.
-    type Cleanup;
     /// A typed route for a failed site conversion.
     type FailureRoute;
     /// The ordered wire layout of one site.
@@ -711,9 +699,9 @@ pub enum ChainValue<I> {
 /// selected fragment, which is how conversions such as
 /// `jint -> i32 -> Percent` remain one recipe answer.
 pub struct ConverterStep<R: Representation> {
-    from: ChainValue<R::Intermediate>,
-    into: ChainValue<R::Intermediate>,
-    operation: R::Step,
+    from: ChainValue<TypeKey>,
+    into: ChainValue<TypeKey>,
+    operation: OperationId,
     failure: Failure,
     cleanup: Cleanup<R::Cleanup>,
 }
@@ -721,9 +709,9 @@ pub struct ConverterStep<R: Representation> {
 impl<R: Representation> ConverterStep<R> {
     /// Describe one directional conversion step.
     pub fn new(
-        from: ChainValue<R::Intermediate>,
-        into: ChainValue<R::Intermediate>,
-        operation: R::Step,
+        from: ChainValue<TypeKey>,
+        into: ChainValue<TypeKey>,
+        operation: OperationId,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
     ) -> Self {
@@ -737,17 +725,17 @@ impl<R: Representation> ConverterStep<R> {
     }
 
     /// Value consumed by this step.
-    pub fn from(&self) -> &ChainValue<R::Intermediate> {
+    pub fn from(&self) -> &ChainValue<TypeKey> {
         &self.from
     }
 
     /// Value produced by this step.
-    pub fn into(&self) -> &ChainValue<R::Intermediate> {
+    pub fn into(&self) -> &ChainValue<TypeKey> {
         &self.into
     }
 
     /// Adapter-owned semantic operation.
-    pub fn operation(&self) -> &R::Step {
+    pub fn operation(&self) -> &OperationId {
         &self.operation
     }
 
@@ -782,8 +770,6 @@ pub enum ConversionChain<R: Representation> {
 // marker type naming an adapter's associated types rather than a value.
 impl<R: Representation> Clone for ConversionChain<R>
 where
-    R::Intermediate: Clone,
-    R::Step: Clone,
     R::Cleanup: Clone,
 {
     fn clone(&self) -> Self {
@@ -796,8 +782,6 @@ where
 
 impl<R: Representation> Clone for ConverterStep<R>
 where
-    R::Intermediate: Clone,
-    R::Step: Clone,
     R::Cleanup: Clone,
 {
     fn clone(&self) -> Self {
@@ -822,86 +806,48 @@ impl<R: Representation> ConversionChain<R> {
 }
 
 /// The registry-composed converter operation for one fragment.
-pub enum ShapePlan<R: Representation> {
+#[derive(Clone)]
+pub enum ShapePlan {
     /// Convert one wire leaf to or from the fragment's intermediate.
-    ///
-    /// The codec remains present when the fragment has a staged
-    /// [`ConversionChain`]; it may be an identity operation at this boundary.
-    Atomic(R::TerminalCodec),
+    Atomic(OperationId),
     /// Pack or unpack all fixed positions.
     Product {
-        /// Adapter representation operation.
-        bridge: FixedArity<R::Bridge>,
+        /// This fragment's converter identity.
+        bridge: FixedArity<OperationId>,
         /// Ordered source parts.
         parts: Vec<FragmentUse>,
     },
     /// Absent/present control flow around one value.
     Optional {
-        /// Adapter representation operation.
-        bridge: R::Bridge,
+        /// This fragment's converter identity.
+        bridge: OperationId,
         /// The present value.
         value: FragmentUse,
     },
     /// Builder or traversal control flow around one element type.
     Sequence {
-        /// Adapter representation operation.
-        bridge: R::Bridge,
+        /// This fragment's converter identity.
+        bridge: OperationId,
         /// The repeated element.
         element: FragmentUse,
     },
     /// Tagged selection among ordered arms.
     Choice {
-        /// Adapter representation operation and arm contracts.
-        bridge: ChoiceArity<R::Bridge>,
+        /// This fragment's converter identity, and the arm contracts.
+        bridge: ChoiceArity<OperationId>,
         /// Parts in every arm, in tag and then position order.
         arms: Vec<Vec<FragmentUse>>,
     },
     /// Foreign callable construction and later argument delivery.
     Invoke {
-        /// Adapter callable operation.
-        bridge: FixedArity<R::Bridge>,
+        /// This fragment's converter identity.
+        bridge: FixedArity<OperationId>,
         /// Callback arguments. Their direction is opposite the callable's.
         arguments: Vec<FragmentUse>,
     },
 }
 
-// Cloned where a shape travels with the fragment that owns it — the same
-// reason, and the same shape of impl, as [`ConversionChain`]'s above:
-// `derive(Clone)` would ask `R: Clone`, and `R` names an adapter's associated
-// types rather than being a value.
-impl<R: Representation> Clone for ShapePlan<R>
-where
-    R::TerminalCodec: Clone,
-    R::Bridge: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Self::Atomic(codec) => Self::Atomic(codec.clone()),
-            Self::Product { bridge, parts } => Self::Product {
-                bridge: bridge.clone(),
-                parts: parts.clone(),
-            },
-            Self::Optional { bridge, value } => Self::Optional {
-                bridge: bridge.clone(),
-                value: value.clone(),
-            },
-            Self::Sequence { bridge, element } => Self::Sequence {
-                bridge: bridge.clone(),
-                element: element.clone(),
-            },
-            Self::Choice { bridge, arms } => Self::Choice {
-                bridge: bridge.clone(),
-                arms: arms.clone(),
-            },
-            Self::Invoke { bridge, arguments } => Self::Invoke {
-                bridge: bridge.clone(),
-                arguments: arguments.clone(),
-            },
-        }
-    }
-}
-
-impl<R: Representation> ShapePlan<R> {
+impl ShapePlan {
     fn uses(&self) -> Vec<&FragmentUse> {
         match self {
             Self::Atomic(_) => Vec::new(),
@@ -923,9 +869,9 @@ impl<R: Representation> ShapePlan<R> {
 
 /// Complete syntax-free converter graph for one fragment.
 pub struct ConverterPlan<R: Representation> {
-    shape: ShapePlan<R>,
+    shape: ShapePlan,
     chain: ConversionChain<R>,
-    niches: NichePlan<R::Niche>,
+    niches: NichePlan<String>,
     failure: Failure,
     cleanup: Cleanup<R::Cleanup>,
 }
@@ -933,8 +879,8 @@ pub struct ConverterPlan<R: Representation> {
 impl<R: Representation> ConverterPlan<R> {
     /// Freeze one converter operation graph.
     pub fn new(
-        shape: ShapePlan<R>,
-        niches: NichePlan<R::Niche>,
+        shape: ShapePlan,
+        niches: NichePlan<String>,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
     ) -> Self {
@@ -950,9 +896,9 @@ impl<R: Representation> ConverterPlan<R> {
     /// Freeze a converter whose selected shape is joined to the source by
     /// explicit adapter conversion steps.
     pub fn with_chain(
-        shape: ShapePlan<R>,
+        shape: ShapePlan,
         chain: ConversionChain<R>,
-        niches: NichePlan<R::Niche>,
+        niches: NichePlan<String>,
         failure: Failure,
         cleanup: Cleanup<R::Cleanup>,
     ) -> Self {
@@ -971,12 +917,12 @@ impl<R: Representation> ConverterPlan<R> {
     }
 
     /// The selected shape and representation operation.
-    pub fn shape(&self) -> &ShapePlan<R> {
+    pub fn shape(&self) -> &ShapePlan {
         &self.shape
     }
 
     /// Consumed and exposed niche domains.
-    pub fn niches(&self) -> &NichePlan<R::Niche> {
+    pub fn niches(&self) -> &NichePlan<String> {
         &self.niches
     }
 
@@ -995,7 +941,7 @@ impl<R: Representation> ConverterPlan<R> {
 pub struct FragmentPlan<R: Representation> {
     id: FragmentId,
     source: TypeRef,
-    intermediate: R::Intermediate,
+    intermediate: TypeKey,
     converter: ConverterPlan<R>,
     conversion: Option<R::ConverterArtifact>,
     /// Whether [`Self::conversion`] is also emitted into the file.
@@ -1008,7 +954,7 @@ impl<R: Representation> FragmentPlan<R> {
     pub fn new(
         id: FragmentId,
         source: TypeRef,
-        intermediate: R::Intermediate,
+        intermediate: TypeKey,
         converter: ConverterPlan<R>,
         yields: Yield,
     ) -> Self {
@@ -1057,7 +1003,7 @@ impl<R: Representation> FragmentPlan<R> {
     }
 
     /// Adapter-selected carrier adjacent to the shape.
-    pub fn intermediate(&self) -> &R::Intermediate {
+    pub fn intermediate(&self) -> &TypeKey {
         &self.intermediate
     }
 
@@ -1222,6 +1168,15 @@ pub struct ArtifactPlan<R: Representation> {
     prerequisites: Vec<ArtifactId>,
     inputs: Vec<ArtifactInput>,
     follows: Vec<FragmentId>,
+    /// Whether this artifact exists only because something else requires it.
+    ///
+    /// An ordinary artifact with no [`Self::follows`] is unconditional: the file
+    /// emits it whatever else it holds. A runtime helper is not — it exists
+    /// because another artifact **calls** it, which the plan already states as a
+    /// prerequisite, and emitting one into a binding that never reaches it is
+    /// dead code. `follows` cannot say this: it gates on a *fragment* being
+    /// reached, and a helper is reached through an artifact.
+    only_if_required: bool,
     payload: R::Artifact,
 }
 
@@ -1238,6 +1193,7 @@ impl<R: Representation> ArtifactPlan<R> {
             prerequisites,
             inputs,
             follows: Vec::new(),
+            only_if_required: false,
             payload,
         }
     }
@@ -1259,6 +1215,26 @@ impl<R: Representation> ArtifactPlan<R> {
     /// no fragment's fate withdraws it.
     pub fn follows(mut self, fragments: Vec<FragmentId>) -> Self {
         self.follows = fragments;
+        self
+    }
+
+    /// Replace this artifact's prerequisites.
+    ///
+    /// For an adapter that can only resolve what it calls once every artifact is
+    /// known — an identity may be answered by an artifact of another kind.
+    pub fn requires(mut self, prerequisites: Vec<ArtifactId>) -> Self {
+        self.prerequisites = prerequisites;
+        self
+    }
+
+    /// State that this artifact is kept only while another kept artifact names
+    /// it as a prerequisite.
+    ///
+    /// For the runtime helpers a binding emits because something calls them.
+    /// Without it they would have to be selected outside the plan, which is the
+    /// one ordering decision that cannot then be read off the plan.
+    pub fn only_if_required(mut self) -> Self {
+        self.only_if_required = true;
         self
     }
 
@@ -1396,7 +1372,10 @@ impl<R: Representation> GenerationPlanBuilder<R> {
             roots.extend(
                 self.artifacts
                     .values()
-                    .filter(|artifact| artifact.follows.is_empty() || kept.contains(&artifact.id))
+                    .filter(|artifact| {
+                        (artifact.follows.is_empty() && !artifact.only_if_required)
+                            || kept.contains(&artifact.id)
+                    })
                     .flat_map(|artifact| {
                         artifact.inputs.iter().filter_map(|input| match input {
                             ArtifactInput::Fragment(id) => Some(id.clone()),
@@ -1407,15 +1386,36 @@ impl<R: Representation> GenerationPlanBuilder<R> {
             roots.sort_by_cached_key(FragmentId::stable_key);
             roots.dedup();
             reachable = reachable_fragments(&self.fragments, roots);
-            let grown: HashSet<ArtifactId> = self
+            let mut grown: HashSet<ArtifactId> = self
                 .artifacts
                 .values()
                 .filter(|artifact| {
-                    artifact.follows.is_empty()
-                        || artifact.follows.iter().any(|id| reachable.contains(id))
+                    // An artifact kept only when required contributes nothing of
+                    // its own: the prerequisite closure below is what reaches it,
+                    // through whichever kept artifact calls it.
+                    !artifact.only_if_required
+                        && (artifact.follows.is_empty()
+                            || artifact.follows.iter().any(|id| reachable.contains(id)))
                 })
                 .map(|artifact| artifact.id.clone())
                 .collect();
+            // A kept artifact's prerequisites are kept with it. `follows` says
+            // an artifact exists only while a fragment is reached, and a
+            // prerequisite that follows an unreached one would otherwise be
+            // dropped while something placed after it stayed — leaving a plan
+            // that orders an artifact behind one it does not contain. Closed
+            // transitively, because a prerequisite has prerequisites of its own.
+            let mut frontier: Vec<ArtifactId> = grown.iter().cloned().collect();
+            while let Some(id) = frontier.pop() {
+                let Some(artifact) = self.artifacts.get(&id) else {
+                    continue;
+                };
+                for required in &artifact.prerequisites {
+                    if self.artifacts.contains_key(required) && grown.insert(required.clone()) {
+                        frontier.push(required.clone());
+                    }
+                }
+            }
             if grown == kept {
                 break;
             }
