@@ -101,7 +101,8 @@ production lines — because the walk, `Compile::plans_site`, `Compile::site_rec
 
 ## What landed
 
-Eleven children:
+The children, by what each did rather than by how many there were — a count
+drifts every time one lands, and this document has already corrected one:
 
 - **#677 + #678** — `RegistryBuilder::generate` walks the crossings and drives
   every `Compile` hook through one `Compiler` the registry holds, and the
