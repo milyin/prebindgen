@@ -1,5 +1,15 @@
 # What the generation plans say twice
 
+> **Superseded.** This is the baseline for #613 and records what was duplicated
+> before that work, so its present tense is that of a tree two umbrellas ago —
+> `unfold` sitting in the registry, among others. #676 removed much of what it
+> names: there is one crossing walk, one site walk, and one artifact type per
+> adapter now. The report that followed is
+> [`registry-conveyor-baseline.md`](registry-conveyor-baseline.md), whose own
+> closing section is superseded in turn — #676 reopened after it was written — so
+> read #676 for the live state until its close child rewrites that document. This
+> one is kept for what it recorded at the time.
+
 The baseline for #613, which converges Cbindgen and JniGen on one frozen
 generation-plan model. This records what is duplicated **before** any of that
 work, so a later reader can tell what was deleted from what was moved.

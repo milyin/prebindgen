@@ -1,5 +1,15 @@
 # Coherence report for #660
 
+> **Superseded.** This describes the tree at #660. Three of the things it
+> measures have moved since: `convert_with` and `Answer` were the registry's API
+> and #677 deleted them, and `unfold` left the registry for `prebindgen-jni` in
+> #666 before #680 returned its neutral half as `prebindgen_registry::leaf`.
+> The report that followed is
+> [`registry-conveyor-baseline.md`](registry-conveyor-baseline.md), and its own
+> closing section is superseded in turn: #676 reopened after it was written. For
+> the live state read #676 until its close child rewrites that document. This one
+> is kept for the measurements it took, which are still what they were.
+
 What the umbrella cost and where the lines went, measured with
 `tools/line-report` — the same tool `docs/production-line-report.md` used for
 #613, which counts production lines by asking `syn` where each `#[cfg(test)]`
