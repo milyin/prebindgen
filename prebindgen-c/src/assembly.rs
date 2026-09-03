@@ -811,15 +811,12 @@ impl RustArtifact for CMemory {
     }
 
     fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
-        let free_ident = self.free_ident.as_ref().unwrap_or_else(|| {
-            panic!(
-                "Cbindgen: the generated layer hands C memory it must free — a \
-                 `char*` block (a `String` return or a `String` data-struct \
-                 field) or an array block (a `Vec` returned or delivered to a \
-                 callback) — but no memory-freeing function is declared: add \
-                 `.free_memory_function(\"z_free\")`"
-            )
-        });
+        // `build_with` rejected a binding that keeps these helpers without a
+        // free function, so by the time an assembly is rendered there is one.
+        let free_ident = self
+            .free_ident
+            .as_ref()
+            .expect("a retained memory artifact was validated when the generator was built");
         // C allocator (linked from the C runtime; no crate dependency).
         let items: Vec<syn::Item> = vec![
             syn::parse_quote!(
