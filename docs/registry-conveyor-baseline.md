@@ -77,27 +77,47 @@ committed generated bindings under `examples/` are byte-for-byte unchanged.
 
 ## Closing figures
 
-The umbrella closed with step 7 merged (#687). Both figures, measured against the
-`eb4aa007` baselines by the method above:
+The umbrella closed after a final review reopened it. Both figures, measured
+against the `eb4aa007` baselines by the method above:
 
 | | baseline | close | |
 |---|---|---|---|
-| **figure 1** — adapter production lines in registry-facing files | 28,348 | **28,346** | **below**, the gate |
-| figure 2 — production lines across the three crates | 57,844 | 58,272 | +428, reported |
+| figure 1 — adapter production lines in registry-facing files | 28,348 | **28,576** | +228 |
+| figure 2 — production lines across the three crates | 57,844 | **58,589** | +745 |
 
-**Figure 1 is the gate, and it passes by two lines.** That margin is thin and
-worth stating plainly rather than reporting as a clearance. Step 7 moved site
-enumeration and compilation into the registry, and the hooks and `Bindings`
-entries that let each adapter state its own answers cost nearly as much adapter
-code as the two walks they replaced. What the umbrella bought is not fewer
-adapter lines; it is that there is now **one** walk, and an adapter that wants a
-position planned differently says so through a hook or a binding rather than by
-writing a walk of its own. A third adapter inherits that.
+**Both figures are indicators, and neither gates anything.** Figure 1 was the
+gate until the final review, and holding it as one had the effect the umbrella's
+first rule had: it made the umbrella's own remaining work disqualifying. The
+child that put every C artifact in the generation plan — which is what #675's
+step 7 asks for — raises figure 1, because stating twelve artifact kinds with
+their identities, resolving their prerequisites and declaring their retention is
+larger than the hand-written list it replaces. A number that answers that
+question wrongly should not decide it.
 
-**Figure 2 rose by 428, and the criterion reports it rather than gating it.** The
-rise is the registry growing — `prebindgen-registry` from 15,153 to 15,462
-production lines — because the walk, `Compile::plans_site`, `Compile::site_recipe`,
-`Sited` and `Bindings::crossing_of` live there now.
+So what the umbrella bought is not fewer adapter lines. It is that the decisions
+an adapter used to make by writing a walk are now made by stating something:
+
+- **one crossing walk and one site walk**, both the registry's, where each
+  adapter had its own;
+- an adapter that wants a position planned differently says so through
+  `Compile::plans_site`, `Compile::site_recipe`, or a `Bindings` entry, rather
+  than enumerating the functions itself;
+- **one artifact type per adapter**, and the generated file's layout is the order
+  its artifacts were stated in the plan, not a second list placed beside it;
+- a runtime helper is emitted because a kept artifact requires it, which the plan
+  decides, rather than because a scan over `calls()` said so.
+
+A third adapter inherits all of that, and writes **no crossing walk and no site
+walk**: the two enumerations each adapter used to write are the registry's.
+
+What a third adapter still copies is the **conveyor** — the sequence from
+declarations to assembly. `build_with` in each adapter builds its declarations and tables, calls
+`generate`, calls `build`, calls `compile_sites`, runs its own loops, builds the
+`GenerationPlan` and builds the assembly, and it is the adapter that holds the
+state between those calls, because `Registry` is adapter-neutral and immutable
+after `build`. #676 replaced the two walks inside that sequence and left the
+sequence. Making the conveyor itself the registry's is a successor's work,
+diagnosed in issue #689, "What #676 found".
 
 ## What landed
 
@@ -124,27 +144,68 @@ drifts every time one lands, and this document has already corrected one:
   registry ask which recipe a site takes, and `Bindings` is where a binding says
   it crosses something other than what the model states — a converted return, a
   decomposed one, a peeled error arm, C's ok arm.
+- **#690 – #696** — the final review's findings. JniGen stopped discarding the
+  site refusals the registry reports (#690); `prebindgen-c` went from two artifact
+  types and a lookup handle to one (#691) and then stated every artifact of its
+  file in the generation plan, runtime helpers included, so the assembly is
+  `plan.artifacts()` and the hand-written placement and the `calls()` scan are
+  gone (#696); a kept artifact keeps what it requires (#692); one `SiteWalk`
+  replaced four copies of the same five lines (#693); the documents describing a
+  tree the registry has moved past say so (#694); and a constant's getter is a
+  model function of this binding, so the walk reaches its return and
+  `return_site` is a lookup and nothing else (#695).
 
-## The waiver
+## What the adapters still plan privately
 
-Step 7 closed with **one exported return still planned by its adapter**, which
-the criterion waives by name: a callback-delivered expansion whose source has no
-`parts` row is planned on its default row, so the walk's plan carries no wires
-and `build_output` falls back to `freeze_out_wires`. `annotated_new` in
-`examples/perftest-flat` is one. Closing it needs step 6b's migration, which is
-deferred — `value_form_of` declines exactly those decompositions, so there is no
-`parts` row for the site to ask for.
+Issue #689 is the authoritative account, read off this branch; its property 2
+covers the conveyor above and its property 5 the delivery paths below. Two
+things are named here because they are what the site walk does not reach.
 
-Every other site of every exported function is enumerated and compiled by the
-registry. What still reaches `return_site`'s private fallback is a getter
-synthesised for a declared constant, which is not a `#[prebindgen]` function and
-so has no site for the walk to reach.
+**Delivery is not a registry concept.** The site walk enumerates the positions
+the model has; what a target *does* at one — return it, pass it through an
+out-parameter, throw it, push it through a callback — is not in the model, and
+the registry has no word for it. Adapters say it three ways: by declining a site
+through `Compile::plans_site`, by rebinding what a site crosses through
+`Bindings`, and by planning privately. The private paths are JniGen's
+`freeze_out_wires`, `freeze_output_pipeline` and `freeze_output_chain`, its
+`Delivery::{Return, Callback}` in `unfold`, and `DeliveryBridge`. So "the
+registry compiles every site" holds modulo what each adapter declined or
+rebound, and the two positions below are where even that does not hold.
+
+Both are named rather than quietly left:
+
+**A no-`parts` callback-delivered return.** A callback-delivered expansion whose
+source has no `parts` row is planned on its default row, so the walk's plan
+carries no wires and `build_output` falls back to `freeze_out_wires`.
+`annotated_new` in `examples/perftest-flat` is one. It closes with step 6b, which
+is deferred: `value_form_of` declines exactly those decompositions, so there is
+no `parts` row for the site to ask for.
+
+**JniGen's declared-decomposition loop.** `build_with` compiles a `parts` row for
+a `sealed_class` deconstruct crossing, because a sum hands out a tag and its
+groups — which is not a value — so it has no whole-value crossing for the derived
+order to offer. The final review asked for this to move into the walk, by letting
+a marked row add its crossing. Built, that widens the walk to construct crossings
+nothing else compiles and emits an unreferenced converter into
+`covertest-kotlin`. The loop's guard is why: it skips a type unless every part of
+it already crosses, which is a question about what has been compiled and can only
+be asked after the walk has run. Closing it needs either pruning what the widened
+walk compiles or a row that is compiled once its parts have crossed — a model
+change, recorded here for the successor.
+
+Every other site of every exported function is enumerated by the registry and
+compiled through its walk, with delivery still answered by the adapter as above.
 
 ## What a successor inherits
 
-Steps 3b, 4, 5 and 6b are deferred to a successor issue. Each was built or
-priced, and each rests on something #675 assumes that this code does not bear
-out:
+**Issue #689 is the successor's input**: five properties of
+the current design read off this branch, each with the direction a fix takes and
+no plan. Two of them are the scope this umbrella did not close — property 2, the
+adapter-owned conveyor, and property 5, delivery — and the rest of this section
+is the part of that diagnosis found by building the deferred steps.
+
+Steps 3b, 4, 5 and 6b are deferred. Each was built or priced, and each rests on
+something #675 assumes that this code does not bear out:
 
 1. **The registry cannot build a `Compile::Fragment`.** It is the adapter's type
    and the registry never looks inside one. Step 4's "the registry wraps the
@@ -195,7 +256,8 @@ accepted step 7's cost with the waiver above.
 | after #679 | 28,138 | 57,759 |
 | after #680 | 28,140 | 57,756 |
 | step 7 prototype, mid-review | 28,325 | 58,165 |
-| close | **28,346** | **58,272** |
+| step 7 merged (#687) | 28,346 | 58,272 |
+| close, after the final review | **28,576** | **58,589** |
 
 The shape those numbers showed, and the reason the criterion was amended: every
 remaining step moves complexity from an adapter into the registry, figure 1
