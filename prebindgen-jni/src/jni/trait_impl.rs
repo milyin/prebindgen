@@ -55,6 +55,19 @@ pub(crate) fn generated_converter_attr() -> syn::Attribute {
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
+/// One nullary getter this binding emits a declared value through.
+pub(crate) struct ConstantGetter {
+    pub(crate) ident: syn::Ident,
+    pub(crate) ty: GetterType,
+}
+
+/// Where a getter's return type comes from: a captured constant carries its own
+/// reading, and a `constant_expr` names a type a build script wrote.
+pub(crate) enum GetterType {
+    OfConstant(syn::Ident),
+    Declared(syn::Type),
+}
+
 impl Declarations {
     /// Leaf metadata for an opaque handle: value-context name `Long` plus the
     /// projection that folds outward through wrappers. The corresponding
@@ -846,38 +859,28 @@ impl Declarations {
         // existed only at the emission site, sat in no export set, and its return
         // was the one site the walk could not reach — which is what
         // `fn_plan::return_site`'s private fallback was for.
-        let mut getters: Vec<(syn::Ident, prebindgen_registry::flat::TypeRef)> = self
-            .declared_consts()
-            .into_iter()
-            .flatten()
-            .filter_map(|ident| {
-                let constant = registry.flat().constant(&ident)?;
-                Some((
-                    crate::jni::emit::const_getter_fn(constant).name,
-                    constant.ty.clone(),
-                ))
-            })
-            .collect();
-        // A `constant_expr` names its type in a build script rather than
-        // carrying a reading, so the model classifies it here. Its getter takes
-        // the same `const_get_<name>` shape and is a function of this binding
-        // just as much.
-        getters.extend(
-            self.packages
-                .values()
-                .flat_map(|pkg| &pkg.constant_exprs)
-                .filter_map(|decl| {
-                    let ty = registry.flat().classify(&decl.ty).ok()?;
-                    Some((
-                        quote::format_ident!("const_get_{}", decl.kotlin_name.to_lowercase()),
-                        ty,
-                    ))
-                }),
-        );
-        for (ident, ty) in getters {
-            registry =
-                registry.local_getter(ident.clone(), ty, "JniGen constant getter".to_string())?;
-            registry = registry.export(&ident);
+        //
+        // These are the same specifications `claimed` names, so a getter cannot
+        // be registered without being claimed.
+        for getter in self.constant_getters() {
+            let ty = match &getter.ty {
+                GetterType::OfConstant(name) => match registry.flat().constant(name) {
+                    Some(constant) => constant.ty.clone(),
+                    None => continue,
+                },
+                // A `constant_expr` names its type in a build script rather than
+                // carrying a reading, so the model classifies it here.
+                GetterType::Declared(ty) => match registry.flat().classify(ty) {
+                    Ok(reading) => reading,
+                    Err(_) => continue,
+                },
+            };
+            registry = registry.local_getter(
+                getter.ident.clone(),
+                ty,
+                "JniGen constant getter".to_string(),
+            )?;
+            registry = registry.export(&getter.ident);
         }
         for ty in self.declared_types().into_values() {
             registry = registry.export_type(ty);
@@ -1542,9 +1545,46 @@ impl Declarations {
     /// claimed even though it is never emitted, and a boundary-only type even
     /// though it never crosses whole: both are deliberate, so neither is a
     /// skip worth reporting.
+    /// The nullary getters this binding emits its declared constants through,
+    /// each with where its return type comes from.
+    ///
+    /// **One list.** `declare_into` registers these as model functions and
+    /// `claimed` names them, and they read the same specifications rather than
+    /// each rebuilding a name: two lists that must agree is how a getter came to
+    /// be registered but not claimed (#695 review). The ident is
+    /// `emit::const_getter_ident`, which the Rust extern and the Kotlin `val`
+    /// also use.
+    pub(crate) fn constant_getters(&self) -> Vec<ConstantGetter> {
+        let captured = self
+            .declared_consts()
+            .into_iter()
+            .flatten()
+            .map(|name| ConstantGetter {
+                ident: crate::jni::emit::const_getter_ident(&name.to_string()),
+                ty: GetterType::OfConstant(name),
+            });
+        let expressions = self
+            .packages
+            .values()
+            .flat_map(|pkg| &pkg.constant_exprs)
+            .map(|decl| ConstantGetter {
+                ident: crate::jni::emit::const_getter_ident(&decl.kotlin_name),
+                ty: GetterType::Declared(decl.ty.clone()),
+            });
+        captured.chain(expressions).collect()
+    }
+
     pub(crate) fn claimed(&self) -> prebindgen_registry::Claimed {
         let mut functions = self.declared_functions();
         functions.extend(self.helper_functions());
+        // The constant getters are this binding's own model functions, added by
+        // `declare_into`. A user cannot declare one, so an unclaimed report that
+        // named them would be asking for something impossible (#695 review).
+        functions.extend(
+            self.constant_getters()
+                .into_iter()
+                .map(|getter| getter.ident),
+        );
         // The report asks what was *claimed*, which is a set of identities —
         // the declarations' spellings are the scan's business, not this one's.
         let mut types: std::collections::HashSet<TypeKey> =
