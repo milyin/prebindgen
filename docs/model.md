@@ -11,44 +11,48 @@ table, sites, the `Compile` hooks and the error set are documented separately.
 ## Non-negotiable generation rule
 
 **Analyze the Flat model; generate Rust only.** A language adapter must never
-inspect, reparse, or walk the Rust syntax retained behind a `TypeRef`. Before
-final writing it may use only Flat facts. During final writing the stateful `RustWriter` can
-turn those facts into an inert token fragment for the output file; it does not hand
-the adapter a `syn::Type` that could be analyzed. If Flat cannot generate the
-required source type from its structure, the missing fact belongs in Flat.
+inspect, reparse, or walk the Rust syntax retained behind a `TypeRef`. If Flat
+cannot generate the required source type from its structure, the missing fact
+belongs in Flat.
 
-## Flat is the planning boundary
+**The rule is about a phase.** *Planning* is everything up to final Rust
+emission: resolving declarations, compiling fragments, planning sites, and
+validating the result. Planning may carry a `TypeRef` opaquely and use the
+answers the model gives about it — `TypeKind`, `TypeKey`, crossing mode,
+structural children, declared fields and functions, and source location. It may
+not:
 
-**Invariant.** Planning must not reach the Rust type captured behind a
-`TypeRef`. Planning is everything up to final Rust emission: resolving
-declarations, compiling fragments, planning sites, and validating the result.
-If planning needs a fact it could only get by inspecting or rendering that
-captured type, the Flat model is incomplete, and the fix belongs in Flat —
-represented losslessly and tested there — rather than in the generator as a
-syntax escape.
-
-Before final emission, code may carry a `TypeRef` opaquely and use the answers
-the model gives about it: `TypeKind`, `TypeKey`, crossing mode, structural
-children, declared fields and functions, and source location. It may not:
-
-* turn a source-side `TypeRef` into a `syn::Type`, tokens, or text;
-* reparse or pattern-match the captured Rust spelling to reach a planning
-  decision; or
+* obtain a `syn::Type` or tokens for a source-side `TypeRef`;
+* reparse the captured spelling, or branch on rendered text, to reach a
+  planning decision; or
 * generate a converter or wrapper body merely to discover what that body
   depends on.
 
-Adapter-authored **wire** types are a separate matter and are not restricted
-here. A C adapter states `*mut c_void`, and a JNI adapter `jlong`, as Rust
-syntax because those are the adapter's own output vocabulary rather than source
-syntax hidden behind a `TypeRef`. Source-side positions stay `TypeRef`s in
-plans until the final renderer spells them.
+Formatting a `TypeRef` for a message is not covered: `TypeRef` implements
+`Display` for diagnostics, and a panic naming an unsupported type is decision
+code reporting why it decided. The prohibition is on *deciding from* text, not
+on printing it.
 
-The timing half of the invariant is enforced by construction: `RustWriter` is
-the capability proving final emission has begun, its constructor is
-registry-private, and emission callbacks receive one during final file assembly
-and at no other point. The classification half is a rule this document states
-and `TypeRef`'s own documentation repeats — classify off the model, never off
-the spelling.
+During final writing the stateful `RustWriter` turns Flat facts into an inert
+token fragment for the output file; it does not hand the adapter a `syn::Type`
+that could be analyzed.
+
+Adapter-authored **wire** types are outside the rule. A C adapter states
+`*mut c_void`, and a JNI adapter `jlong`, as Rust syntax because those are the
+adapter's own output vocabulary rather than source syntax hidden behind a
+`TypeRef`. Source-side positions stay `TypeRef`s in plans until the final
+renderer spells them.
+
+**How much of this the compiler holds.** For an adapter built on
+`prebindgen-registry`, the phase rule is structural: `RustWriter`'s constructor
+is registry-private, emission callbacks receive one only during final file
+assembly, and the registry's model re-export deliberately omits `RustEmitter`,
+so such an adapter cannot supply a rendering receiver of its own. The private
+constructor and the omitted re-export are each pinned by a `compile_fail`
+example. A crate that depends on `prebindgen-flat`
+directly can implement the public `RustEmitter` trait itself — its default
+methods render from Flat facts — so for that case the phase rule is policy this
+document states rather than a boundary the compiler enforces.
 
 ## Where the crates sit
 

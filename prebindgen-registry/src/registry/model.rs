@@ -1,22 +1,27 @@
 //! Questions about the model, answered through the registry that projects it.
 //!
-//! # Flat is the planning boundary
+//! # The planning boundary
 //!
 //! Planning must not reach the Rust type captured behind a [`TypeRef`].
 //! Planning is everything up to final Rust emission: resolving declarations,
 //! compiling fragments, planning sites, and validating the result. It may carry
 //! a `TypeRef` opaquely and use the semantic facts the model exposes, but it
-//! may not render that captured type into `syn`, tokens or text, and may not
-//! pattern-match its spelling to reach a decision. If a planner needs a fact
-//! available only from the syntax, Flat is incomplete: add the fact to Flat
-//! rather than opening an emission escape.
+//! may not obtain a `syn::Type` or tokens for one, and may not branch on the
+//! captured spelling to reach a decision. Formatting a `TypeRef` for a
+//! diagnostic is not covered — deciding from that text is. If a planner needs a
+//! fact available only from the syntax, Flat is incomplete: add the fact to
+//! Flat rather than opening an emission escape.
 //!
 //! Wire types an adapter authors are outside this rule — `*mut c_void` and
 //! `jlong` are the adapter's output vocabulary, not captured source syntax.
 //!
-//! The timing half holds by construction, through [`RustWriter`]'s private
-//! constructor: emission callbacks receive one during final file assembly and
-//! at no other point. `docs/model.md` states the rule in full.
+//! For an adapter built on this crate the phase is structural: [`RustWriter`]'s
+//! constructor is private to the registry, callbacks receive one only during
+//! final file assembly, and this crate's model re-export omits
+//! `prebindgen_flat::RustEmitter` so no receiver of the adapter's own can be
+//! supplied. A crate depending on `prebindgen-flat` directly can implement that
+//! trait itself, so for that case the rule is policy. `docs/model.md` states it
+//! in full.
 //!
 //! [`TypeRef`]: prebindgen_flat::flat::TypeRef
 //! [`RustWriter`]: crate::RustWriter
