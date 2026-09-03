@@ -841,6 +841,44 @@ impl Declarations {
         for ident in self.declared_consts().into_iter().flatten() {
             registry = registry.export_const(&ident);
         }
+        // The nullary getter each declared constant is emitted through is a
+        // function of this binding, so it is registered as one. Until it was, it
+        // existed only at the emission site, sat in no export set, and its return
+        // was the one site the walk could not reach — which is what
+        // `fn_plan::return_site`'s private fallback was for.
+        let mut getters: Vec<(syn::Ident, prebindgen_registry::flat::TypeRef)> = self
+            .declared_consts()
+            .into_iter()
+            .flatten()
+            .filter_map(|ident| {
+                let constant = registry.flat().constant(&ident)?;
+                Some((
+                    crate::jni::emit::const_getter_fn(constant).name,
+                    constant.ty.clone(),
+                ))
+            })
+            .collect();
+        // A `constant_expr` names its type in a build script rather than
+        // carrying a reading, so the model classifies it here. Its getter takes
+        // the same `const_get_<name>` shape and is a function of this binding
+        // just as much.
+        getters.extend(
+            self.packages
+                .values()
+                .flat_map(|pkg| &pkg.constant_exprs)
+                .filter_map(|decl| {
+                    let ty = registry.flat().classify(&decl.ty).ok()?;
+                    Some((
+                        quote::format_ident!("const_get_{}", decl.kotlin_name.to_lowercase()),
+                        ty,
+                    ))
+                }),
+        );
+        for (ident, ty) in getters {
+            registry =
+                registry.local_getter(ident.clone(), ty, "JniGen constant getter".to_string())?;
+            registry = registry.export(&ident);
+        }
         for ty in self.declared_types().into_values() {
             registry = registry.export_type(ty);
         }

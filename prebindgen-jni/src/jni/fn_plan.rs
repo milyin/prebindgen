@@ -934,42 +934,19 @@ fn classify_leaf(
 /// `declared` is what the signature says the function returns, when that
 /// differs from the value that crosses — a `Return`-delivery convert crosses
 /// what its decomposition produced. `None` when the two are the same.
-fn return_site(
-    ext: &Declarations,
-    registry: &Registry,
-    func: &syn::Ident,
-    target: &TypeRef,
-    declared: Option<TypeRef>,
-) -> Option<crate::jni::compile::JPlan> {
-    use prebindgen_registry::recipe::{Compiler, Crossing, Direction, Role, Site};
-    let site = Site {
-        owner: func.clone(),
-        role: Role::Return,
-    };
-    // The registry's walk covers the exported functions, so its answer is read
-    // rather than remade wherever it has one.
-    if let Some(plan) = ext.planned_sites.borrow().get(&site).cloned() {
-        return Some(plan);
-    }
-    // The one thing the walk does not cover, and cannot: a getter this binding
-    // synthesised for a declared constant is not a `#[prebindgen]` function, so
-    // it is in no export set and there is no site for the walk to reach. Every
-    // return of every exported function is planned by the walk — checked, not
-    // assumed: an assertion here that the owner is not an export held across
-    // every fixture and every test.
-    //
-    // `declared_return` rides on the adapter for the same reason — it is the
-    // caller's intent, not a position the `Bound` could name.
-    let carried = ext.compiled.borrow().clone();
-    let mut compiler = Compiler::resume(registry, ext.recipe_table(), ext.site_bindings(), carried);
-    let mut adapter = crate::jni::compile::JCompile {
-        decls: ext,
-        declared_return: declared,
-    };
-    let crossing = Crossing::new(target.clone(), Direction::Deconstruct);
-    let planned = compiler.site(&mut adapter, site, crossing);
-    *ext.compiled.borrow_mut() = compiler.finish();
-    planned.ok().flatten()
+fn return_site(ext: &Declarations, func: &syn::Ident) -> Option<crate::jni::compile::JPlan> {
+    use prebindgen_registry::recipe::{Role, Site};
+    // The registry's walk covers every exported function, and the getters this
+    // binding synthesises for its declared constants are exported functions
+    // now — registered through `RegistryBuilder::local_getter`, which is what
+    // they always were. So the answer is read here and never remade.
+    ext.planned_sites
+        .borrow()
+        .get(&Site {
+            owner: func.clone(),
+            role: Role::Return,
+        })
+        .cloned()
 }
 
 /// Freeze the exact Rust-to-JNI delivery selected for one domain-error plan.
@@ -1100,7 +1077,7 @@ fn build_output(
             // the recipe gap this document's finding 4 records: `value_form_of`
             // declines exactly those decompositions, so no `parts` row exists
             // for the site to ask for.
-            let composed = return_site(ext, registry, ident, &plan.source, None)
+            let composed = return_site(ext, ident)
                 .and_then(|site| site.decomposed())
                 .filter(|wires| {
                     wires.len() == expected.len()
@@ -1157,8 +1134,9 @@ fn build_output(
 
     // Value return. The conversion target: the converted single value for a
     // `Return` delivery, the `Result` Ok type when an error plan peels, else
-    // the function's own return.
-    let is_convert = unfold_plan.is_some();
+    // the function's own return. It names the type a failure is reported
+    // against; the crossing itself is the walk's, stated through `Bindings`.
+    //
     // The element normalizes an elided return and a written `-> ()` to one
     // `Unit` reading, so there is no `ReturnType` match here.
     // The `Ok` side off `TypeKind::Fallible`, where `result_ok_type` found the
@@ -1197,17 +1175,11 @@ fn build_output(
     // error peel rides the conversion's `value_reading`, so the full
     // `Result<T, E>` is what the surface reads, and that is the one fact the
     // crossing cannot carry.
-    let plan = return_site(
-        ext,
-        registry,
-        ident,
-        &target,
-        is_convert.then(|| target_ty.clone()),
-    )
-    .and_then(|p| p.returned())
-    .ok_or_else(|| PlanError::UnresolvedOutput {
-        ty: Box::new(target.clone()),
-    })?;
+    let plan = return_site(ext, ident)
+        .and_then(|p| p.returned())
+        .ok_or_else(|| PlanError::UnresolvedOutput {
+            ty: Box::new(target.clone()),
+        })?;
     Ok(FnOutputPlan::Value(plan))
 }
 
