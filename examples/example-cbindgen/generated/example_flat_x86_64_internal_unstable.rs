@@ -164,6 +164,31 @@ pub unsafe extern "C" fn note_drop(this_: *mut ::core::mem::MaybeUninit<note_t>)
         _ => {}
     }
 }
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
+    v: f64,
+) -> f64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
+pub(crate) fn __c_out_convert_sequence_Vec_f64_to_wire_ad99887ef4e62c28(
+    v: ::std::vec::Vec<f64>,
+) -> ::std::vec::Vec<f64> {
+    {
+        let __sequence_source = v;
+        let mut __sequence_output: ::std::vec::Vec<f64> = ::std::vec::Vec::with_capacity(
+            (__sequence_source).len(),
+        );
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
+                __sequence_element,
+            );
+            __sequence_output.push(__sequence_part);
+        }
+        __sequence_output
+    }
+}
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct closure_history_batch_t {
@@ -211,6 +236,15 @@ pub(crate) unsafe fn __c_in_convert_wire_to_impl_Fn_Vec_f64_Send_Sync_static_c_i
             *__w0_1.as_mut_ptr() = __n;
             unsafe { __f(__w0_0, __w0_1, __ctx.context) }
         }
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Grade_c_terminal_output_enum_to_wire_a59c7b101e0a9e37(
+    v: example_flat::Grade,
+) -> grade_t {
+    match v {
+        example_flat::Grade::Low => grade_t::Low,
+        example_flat::Grade::High => grade_t::High,
     }
 }
 #[repr(C)]
@@ -425,16 +459,6 @@ pub(crate) fn __c_out_convert_Calculator_c_terminal_output_owned_handle_to_wire_
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut calculator_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_String_c_terminal_input_string_field_b6091e2e8553ccde(
-    v: *const ::core::ffi::c_char,
-) -> ::std::string::String {
-    if v.is_null() {
-        ::std::string::String::new()
-    } else {
-        ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_bool_c_terminal_input_bool_e48e0629cd6287b3(
     v: ::core::mem::MaybeUninit<bool>,
 ) -> bool {
@@ -445,6 +469,16 @@ pub(crate) fn __c_in_convert_wire_to_u64_c_terminal_input_scalar_4e87470ad83635c
     v: u64,
 ) -> u64 {
     v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_String_c_terminal_input_string_field_b6091e2e8553ccde(
+    v: *const ::core::ffi::c_char,
+) -> ::std::string::String {
+    if v.is_null() {
+        ::std::string::String::new()
+    } else {
+        ::std::ffi::CStr::from_ptr(v).to_string_lossy().into_owned()
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_Caption_c_product_intermediate_repr_c_struct_a9076d1a0d6740b3(
@@ -461,12 +495,6 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Caption_c_product_intermediate_repr_
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
-    v: ::std::string::String,
-) -> *mut ::core::ffi::c_char {
-    __cbg_alloc_cstr(v)
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_out_convert_bool_c_terminal_output_bool_field_to_wire_6a810eb4cb986700(
     v: bool,
 ) -> ::core::mem::MaybeUninit<bool> {
@@ -477,6 +505,12 @@ pub(crate) fn __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3
     v: u64,
 ) -> u64 {
     v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_String_c_terminal_output_string_to_wire_182528409f6ab8d3(
+    v: ::std::string::String,
+) -> *mut ::core::ffi::c_char {
+    __cbg_alloc_cstr(v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_out_convert_Caption_c_product_intermediate_repr_c_struct_to_wire_3bc5d236333a6e28(
@@ -642,12 +676,6 @@ pub(crate) fn __c_out_convert_Operation_c_terminal_output_enum_to_wire_457f60363
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
-    v: f64,
-) -> f64 {
-    v
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_out_convert_Shape_c_choice_intermediate_repr_c_tagged_union_to_wire_1c9175b2e9cd70a6(
     v: example_flat::Shape,
 ) -> ::core::mem::MaybeUninit<shape_t> {
@@ -735,15 +763,6 @@ pub(crate) fn __c_out_convert_Foo_c_product_intermediate_repr_c_struct_to_wire_0
         unstable_field: __c_out_convert_u64_c_terminal_output_scalar_to_wire_518245fe60cf3590(
             v.unstable_field,
         ),
-    }
-}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Grade_c_terminal_output_enum_to_wire_a59c7b101e0a9e37(
-    v: example_flat::Grade,
-) -> grade_t {
-    match v {
-        example_flat::Grade::Low => grade_t::Low,
-        example_flat::Grade::High => grade_t::High,
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -934,25 +953,6 @@ pub(crate) fn __c_out_convert_Note_c_choice_intermediate_repr_c_tagged_union_to_
 pub(crate) fn __c_out_convert_Option_Grade_c_marker_optional_to_wire_e2c04af90b0abd17() {}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_out_convert_Option_f64_c_marker_optional_to_wire_c1ba5adc99623ff4() {}
-#[allow(non_snake_case, unused_variables, dead_code)]
-#[inline(always)]
-pub(crate) fn __c_out_convert_sequence_Vec_f64_to_wire_ad99887ef4e62c28(
-    v: ::std::vec::Vec<f64>,
-) -> ::std::vec::Vec<f64> {
-    {
-        let __sequence_source = v;
-        let mut __sequence_output: ::std::vec::Vec<f64> = ::std::vec::Vec::with_capacity(
-            (__sequence_source).len(),
-        );
-        for __sequence_element in __sequence_source.into_iter() {
-            let __sequence_part = __c_out_convert_f64_c_terminal_output_scalar_to_wire_6aa94606ef14f673(
-                __sequence_element,
-            );
-            __sequence_output.push(__sequence_part);
-        }
-        __sequence_output
-    }
-}
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(
     v: bool,

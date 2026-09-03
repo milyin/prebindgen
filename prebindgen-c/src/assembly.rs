@@ -755,27 +755,25 @@ fn artifact_id(kind: &str, name: impl Into<String>) -> ArtifactKey {
 #[derive(Clone)]
 pub(crate) struct CMemory {
     /// The declared freer's exported symbol.
-    free_ident: syn::Ident,
+    /// `None` when the binding declared no free function. Checked at render,
+    /// which is where the binding has actually asked for memory it must free.
+    free_ident: Option<syn::Ident>,
 }
 
 impl CMemory {
     /// Plan the memory helpers for a binding that hands memory to C.
     ///
     /// Whether it does is not asked here: the artifacts that allocate say so
-    /// through their own dependencies, and the caller plans this when one of
-    /// them names it.
+    /// through their own dependencies, and the plan keeps this only when one of
+    /// them requires it.
+    ///
+    /// So a binding with no free function still PLANS these helpers — it just
+    /// does not keep them. The declaration is checked where they are rendered,
+    /// which is the point at which the binding has actually asked for memory it
+    /// must free.
     pub(crate) fn new(decls: &CbindgenBuilder) -> Self {
-        let Some(free_fn) = &decls.free_fn else {
-            panic!(
-                "Cbindgen: the generated layer hands C memory it must free — a \
-                 `char*` block (a `String` return or a `String` data-struct \
-                 field) or an array block (a `Vec` returned or delivered to a \
-                 callback) — but no memory-freeing function is declared: add \
-                 `.free_memory_function(\"z_free\")`"
-            )
-        };
         Self {
-            free_ident: format_ident!("{}", free_fn),
+            free_ident: decls.free_fn.as_ref().map(|name| format_ident!("{name}")),
         }
     }
 
@@ -813,7 +811,15 @@ impl RustArtifact for CMemory {
     }
 
     fn render(&self, _emit: &prebindgen_registry::RustWriter) -> Vec<syn::Item> {
-        let free_ident = &self.free_ident;
+        let free_ident = self.free_ident.as_ref().unwrap_or_else(|| {
+            panic!(
+                "Cbindgen: the generated layer hands C memory it must free — a \
+                 `char*` block (a `String` return or a `String` data-struct \
+                 field) or an array block (a `Vec` returned or delivered to a \
+                 callback) — but no memory-freeing function is declared: add \
+                 `.free_memory_function(\"z_free\")`"
+            )
+        });
         // C allocator (linked from the C runtime; no crate dependency).
         let items: Vec<syn::Item> = vec![
             syn::parse_quote!(

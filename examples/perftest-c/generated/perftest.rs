@@ -135,6 +135,12 @@ pub unsafe extern "C" fn payload_drop(this_: *mut payload_t) {
         );
     }
 }
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) unsafe fn __c_out_convert_Payload_c_borrow_shared_output_to_wire_5d954ba915ba18c7(
+    v: &perftest_flat::Payload,
+) -> *const payload_t {
+    v as *const perftest_flat::Payload as *const payload_t
+}
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct closure_payload_t {
@@ -174,6 +180,12 @@ pub(crate) unsafe fn __c_in_convert_wire_to_impl_Fn_Payload_Send_Sync_static_c_i
             unsafe { __f(__w0, __ctx.context) }
         }
     }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
+    v: perftest_flat::Payload,
+) -> payload_t {
+    <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(v)
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -224,12 +236,6 @@ pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_borrow_shared_input_9c9dcf
         );
     }
     ::core::result::Result::Ok(&*(v as *const perftest_flat::Payload))
-}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) unsafe fn __c_out_convert_Payload_c_borrow_shared_output_to_wire_5d954ba915ba18c7(
-    v: &perftest_flat::Payload,
-) -> *const payload_t {
-    v as *const perftest_flat::Payload as *const payload_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_PayloadHandler_c_borrow_shared_input_9caa5450154416a9<
@@ -286,29 +292,8 @@ pub(crate) unsafe fn __c_in_convert_wire_to_String_c_borrow_shared_input_1342bc2
     }
     ::core::result::Result::Ok(&*(v as *const ::std::string::String))
 }
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_terminal_input_value_opaque_1025354dd257d200(
-    v: *mut payload_t,
-) -> ::core::result::Result<perftest_flat::Payload, ::std::string::String> {
-    if v.is_null() {
-        return ::core::result::Result::Err(
-            ::std::string::String::from("null Payload value passed by value"),
-        );
-    }
-    let __live = <payload_t as ::prebindgen_c_runtime::Transmute>::into_rust(
-        ::core::ptr::read(v),
-    );
-    (*v).label = ::core::ptr::null_mut();
-    ::core::result::Result::Ok(__live)
-}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_in_convert_wire_to_Payload_c_slice_input_reinterpret_45029be4ad5be227() {}
-#[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
-    v: perftest_flat::Payload,
-) -> payload_t {
-    <payload_t as ::prebindgen_c_runtime::Transmute>::from_rust(v)
-}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_out_convert_Payload_c_marker_sequence_to_wire_2e9a65c76a50a9dc() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -375,27 +360,23 @@ pub(crate) unsafe fn __c_in_convert_wire_to_str_c_borrow_str_input_246c2b9955bb6
 }
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_out_convert_Option_Payload_c_marker_optional_to_wire_0d65bf71671af35a() {}
-#[allow(non_snake_case, unused_variables, dead_code)]
-#[inline(always)]
-pub(crate) fn __c_out_convert_sequence_Vec_Payload_to_wire_dc890ff48c52049e(
-    v: ::std::vec::Vec<perftest_flat::Payload>,
-) -> ::std::vec::Vec<payload_t> {
-    {
-        let __sequence_source = v;
-        let mut __sequence_output: ::std::vec::Vec<payload_t> = ::std::vec::Vec::with_capacity(
-            (__sequence_source).len(),
-        );
-        for __sequence_element in __sequence_source.into_iter() {
-            let __sequence_part = __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
-                __sequence_element,
-            );
-            __sequence_output.push(__sequence_part);
-        }
-        __sequence_output
-    }
-}
 #[allow(non_snake_case, dead_code, unused)]
 pub(crate) fn __c_out_convert_Option_Vec_Payload_c_marker_optional_to_wire_7a54934e42568ea6() {}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __c_in_convert_wire_to_Payload_c_terminal_input_value_opaque_1025354dd257d200(
+    v: *mut payload_t,
+) -> ::core::result::Result<perftest_flat::Payload, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload value passed by value"),
+        );
+    }
+    let __live = <payload_t as ::prebindgen_c_runtime::Transmute>::into_rust(
+        ::core::ptr::read(v),
+    );
+    (*v).label = ::core::ptr::null_mut();
+    ::core::result::Result::Ok(__live)
+}
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __c_in_convert_wire_to_PayloadHandler_c_terminal_input_owned_handle_bbf919ff94219da7(
     v: *mut payload_handler_t,
@@ -471,6 +452,25 @@ pub(crate) fn __c_out_convert_String_c_terminal_output_owned_handle_to_wire_da49
     v: ::std::string::String,
 ) -> *mut string_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut string_t
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+#[inline(always)]
+pub(crate) fn __c_out_convert_sequence_Vec_Payload_to_wire_dc890ff48c52049e(
+    v: ::std::vec::Vec<perftest_flat::Payload>,
+) -> ::std::vec::Vec<payload_t> {
+    {
+        let __sequence_source = v;
+        let mut __sequence_output: ::std::vec::Vec<payload_t> = ::std::vec::Vec::with_capacity(
+            (__sequence_source).len(),
+        );
+        for __sequence_element in __sequence_source.into_iter() {
+            let __sequence_part = __c_out_convert_Payload_c_terminal_output_value_opaque_to_wire_ce0f5eae80482d02(
+                __sequence_element,
+            );
+            __sequence_output.push(__sequence_part);
+        }
+        __sequence_output
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __c_out_convert_bool_c_terminal_output_scalar_to_wire_cc0ad9760da17efd(

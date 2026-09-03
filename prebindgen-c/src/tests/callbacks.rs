@@ -28,11 +28,15 @@ fn callback_artifact_consumes_frozen_argument_sites() {
         .filter(|site| matches!(site.id().site().role, Role::CallbackArg { .. }))
         .collect();
     assert_eq!(callback_sites.len(), 1);
-    let artifacts: Vec<_> = generation.artifacts().collect();
-    assert_eq!(artifacts.len(), 1);
-    assert_eq!(artifacts[0].id().kind(), "c-callback");
+    // The plan holds every artifact of the file now, not only the ones compiled
+    // from a crossing, so this asks for the callback's rather than for the
+    // plan's only one.
+    let callback = generation
+        .artifacts()
+        .find(|artifact| artifact.id().kind() == "c-callback")
+        .expect("the callback is an artifact of the plan");
     assert!(matches!(
-        artifacts[0].inputs(),
+        callback.inputs(),
         [ArtifactInput::Site { site, slots: 1 }] if site == callback_sites[0].id()
     ));
 }
