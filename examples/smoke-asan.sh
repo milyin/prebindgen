@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 #
-# Run the C smoke test against the generated `example_flat` ABI under
-# AddressSanitizer + LeakSanitizer + UndefinedBehaviorSanitizer.
+# Run the C behaviour tests against the generated ABIs under AddressSanitizer +
+# LeakSanitizer + UndefinedBehaviorSanitizer.
+#
+# Two programs, two generated surfaces:
+#
+#   example-cbindgen `c/smoke.c`  — the handle / tagged-union / error-channel /
+#                                   owned-return / closure surface, asserted
+#                                   value by value.
+#   perftest-c `c/perftest.c`     — the by-value `.repr_c_struct()` surface: its
+#                                   `correctness()` asserts the five
+#                                   parameter-passing semantics. Those asserts
+#                                   already existed but only ran when somebody
+#                                   benchmarked by hand; here they run at a tiny
+#                                   iteration count so CI executes them.
 #
 # `c/smoke.c` is the test that exists to prove the ownership contract — every
 # arm C receives is C's to release, and the typed drops release exactly the live
@@ -40,18 +52,10 @@ case "$arch" in
         ;;
 esac
 
-echo "== cargo build -p example-cbindgen (cdylib + regenerated header)"
-cargo build -p example-cbindgen
+echo "== cargo build -p example-cbindgen -p perftest-c (cdylibs + regenerated headers)"
+cargo build -p example-cbindgen -p perftest-c
 
 lib_dir="$repo_root/target/debug"
-case "$(uname -s)" in
-    Darwin) dylib="$lib_dir/libexample_cbindgen.dylib" ;;
-    *) dylib="$lib_dir/libexample_cbindgen.so" ;;
-esac
-if [[ ! -f "$dylib" ]]; then
-    echo "expected cdylib at $dylib" >&2
-    exit 1
-fi
 
 # `-fno-sanitize-recover=all` turns every UBSan finding into a non-zero exit;
 # without it an unaligned load or a signed overflow only prints and continues.
@@ -61,17 +65,50 @@ sanitizers=(
     -fno-omit-frame-pointer
 )
 
-echo "== compiling c/smoke.c for $header_arch under ASan/LSan/UBSan"
-"$cc" "${sanitizers[@]}" -g -O1 -std=c11 -Wall -Wextra -Werror \
-    -I "$repo_root/examples/example-cbindgen/include" \
+# Compile one C program against one generated cdylib and run it under the
+# sanitizers: $1 = cdylib crate name, $2 = C source, $3 = include dir.
+run_under_sanitizers() {
+    local libname="$1" src="$2" incdir="$3"
+    local name dylib
+    name="$(basename "${src%.c}")"
+
+    case "$(uname -s)" in
+        Darwin) dylib="$lib_dir/lib${libname}.dylib" ;;
+        *) dylib="$lib_dir/lib${libname}.so" ;;
+    esac
+    if [[ ! -f "$dylib" ]]; then
+        echo "expected cdylib at $dylib" >&2
+        exit 1
+    fi
+
+    # `-std=c11` is strict ISO, which hides POSIX declarations `perftest.c`
+    # needs (`clock_gettime`); `_POSIX_C_SOURCE` puts them back without
+    # loosening the language dialect to `gnu11`.
+    echo "== compiling $src under ASan/LSan/UBSan"
+    "$cc" "${sanitizers[@]}" -g -O1 -std=c11 -D_POSIX_C_SOURCE=200809L \
+        -Wall -Wextra -Werror \
+        -I "$incdir" "$src" -o "$out_dir/$name" \
+        -L "$lib_dir" -l"$libname" -lm \
+        -Wl,-rpath,"$lib_dir"
+
+    echo "== running $name"
+    ASAN_OPTIONS="detect_leaks=1:detect_stack_use_after_return=1:strict_string_checks=1" \
+        UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1" \
+        "$out_dir/$name"
+}
+
+echo "== example_flat header variant: $header_arch"
+run_under_sanitizers example_cbindgen \
     "$repo_root/examples/example-cbindgen/c/smoke.c" \
-    -o "$out_dir/smoke" \
-    -L "$lib_dir" -lexample_cbindgen -lm \
-    -Wl,-rpath,"$lib_dir"
+    "$repo_root/examples/example-cbindgen/include"
 
-echo "== running"
-ASAN_OPTIONS="detect_leaks=1:detect_stack_use_after_return=1:strict_string_checks=1" \
-    UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1" \
-    "$out_dir/smoke"
+# The benchmark's timings are meaningless under ASan and at this iteration
+# count — `correctness()` and the leak detector are what this run is for, so the
+# measured block goes to /dev/null and only the asserts (and any sanitizer
+# report) decide the exit status.
+export PERFTEST_N="${PERFTEST_N:-200}"
+run_under_sanitizers perftest_c \
+    "$repo_root/examples/perftest-c/c/perftest.c" \
+    "$repo_root/examples/perftest-c/include" >/dev/null
 
-echo "PASS - C smoke test clean under ASan/LSan/UBSan"
+echo "PASS - C behaviour tests clean under ASan/LSan/UBSan"
