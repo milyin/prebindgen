@@ -1,4 +1,33 @@
 //! Questions about the model, answered through the registry that projects it.
+//!
+//! # The planning boundary
+//!
+//! Planning must not reach the Rust type captured behind a [`TypeRef`].
+//! Planning is everything up to final Rust emission: resolving declarations,
+//! compiling fragments, planning sites, and validating the result. It may carry
+//! a `TypeRef` opaquely and use the semantic facts the model exposes, but it
+//! may not obtain a `syn::Type` or tokens for one, and may not branch on the
+//! captured spelling to reach a decision. Formatting a `TypeRef` for a
+//! diagnostic is not covered — deciding from that text is. If a planner needs a
+//! fact available only from the syntax, Flat is incomplete: add the fact to
+//! Flat rather than opening an emission escape.
+//!
+//! Wire types an adapter authors are outside this rule — `*mut c_void` and
+//! `jlong` are the adapter's output vocabulary, not captured source syntax.
+//!
+//! In a normal build of an adapter built on this crate the phase is structural:
+//! [`RustWriter`]'s constructor is private to the registry, callbacks receive
+//! one only during final file assembly, and this crate's model re-export omits
+//! `prebindgen_flat::RustEmitter` so no receiver of the adapter's own can be
+//! supplied. Two escapes are deliberate rather than closed: the non-default
+//! `testing` feature exposes `RustWriter::for_test` and
+//! `RustWriter::for_registry_test` for out-of-crate adapter test suites, and a
+//! crate depending on `prebindgen-flat` directly can implement the unsealed
+//! `RustEmitter` itself. For those the rule is policy. `docs/model.md` states
+//! it in full.
+//!
+//! [`TypeRef`]: prebindgen_flat::flat::TypeRef
+//! [`RustWriter`]: crate::RustWriter
 
 use std::collections::HashMap;
 
