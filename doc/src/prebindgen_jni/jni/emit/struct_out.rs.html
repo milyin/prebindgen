@@ -71,7 +71,7 @@
 <a href=#71 id=71 data-nosnippet>71</a>/// for the list and why one such field declines the whole value.
 <a href=#72 id=72 data-nosnippet>72</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>synth_value_struct_leaves(
 <a href=#73 id=73 data-nosnippet>73</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#74 id=74 data-nosnippet>74</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#74 id=74 data-nosnippet>74</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#75 id=75 data-nosnippet>75</a>    s: <span class="kw-2">&amp;</span>prebindgen_registry::flat::Struct,
 <a href=#76 id=76 data-nosnippet>76</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">crate</span>::unfold::UnfoldLeaf&gt;&gt; {
 <a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">use </span><span class="kw">crate</span>::unfold::{LeafSource, UnfoldLeaf};
@@ -171,7 +171,7 @@
 <a href=#171 id=171 data-nosnippet>171</a>
 <a href=#172 id=172 data-nosnippet>172</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>struct_module_path(
 <a href=#173 id=173 data-nosnippet>173</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#174 id=174 data-nosnippet>174</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#174 id=174 data-nosnippet>174</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#175 id=175 data-nosnippet>175</a>    name: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#176 id=176 data-nosnippet>176</a>) -&gt; syn::Path {
 <a href=#177 id=177 data-nosnippet>177</a>    <span class="comment">// The module the struct is reachable under from the generated file: its

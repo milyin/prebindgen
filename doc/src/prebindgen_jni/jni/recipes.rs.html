@@ -108,7 +108,7 @@
 <a href=#108 id=108 data-nosnippet>108</a>    /// needs.
 <a href=#109 id=109 data-nosnippet>109</a>    </span><span class="kw">fn </span>out_wire_count(
 <a href=#110 id=110 data-nosnippet>110</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#111 id=111 data-nosnippet>111</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#111 id=111 data-nosnippet>111</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#112 id=112 data-nosnippet>112</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#113 id=113 data-nosnippet>113</a>    ) -&gt; usize {
 <a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Named { id, .. } = ty.unwrapped().kind() <span class="kw">else </span>{
@@ -138,7 +138,7 @@
 <a href=#138 id=138 data-nosnippet>138</a>    </span><span class="kw">fn </span>value_form_of(
 <a href=#139 id=139 data-nosnippet>139</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#140 id=140 data-nosnippet>140</a>        model: <span class="kw-2">&amp;</span>Flat,
-<a href=#141 id=141 data-nosnippet>141</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#141 id=141 data-nosnippet>141</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#142 id=142 data-nosnippet>142</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#143 id=143 data-nosnippet>143</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;(syn::Ident, Vec&lt;Reach&gt;)&gt; {
 <a href=#144 id=144 data-nosnippet>144</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::{FieldDecon, FieldRecord};
@@ -217,7 +217,7 @@
 <a href=#217 id=217 data-nosnippet>217</a>    /// makes when it declares the recipe.
 <a href=#218 id=218 data-nosnippet>218</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>value_form_names(
 <a href=#219 id=219 data-nosnippet>219</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#220 id=220 data-nosnippet>220</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#220 id=220 data-nosnippet>220</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#221 id=221 data-nosnippet>221</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#222 id=222 data-nosnippet>222</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::collections::HashMap&lt;String, String&gt;&gt; {
 <a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">use </span><span class="kw">crate</span>::unfold::FieldDecon;
@@ -298,7 +298,7 @@
 <a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">fn </span>parts_deconstruct(
 <a href=#299 id=299 data-nosnippet>299</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#300 id=300 data-nosnippet>300</a>        model: <span class="kw-2">&amp;</span>Flat,
-<a href=#301 id=301 data-nosnippet>301</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#301 id=301 data-nosnippet>301</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#302 id=302 data-nosnippet>302</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#303 id=303 data-nosnippet>303</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Deconstruct&gt; {
 <a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">let </span>decl = <span class="self">self
@@ -341,7 +341,7 @@
 <a href=#341 id=341 data-nosnippet>341</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#342 id=342 data-nosnippet>342</a>        model: <span class="kw-2">&amp;</span>Flat,
 <a href=#343 id=343 data-nosnippet>343</a>        expansion_leaves: <span class="kw-2">&amp;</span>[TypeRef],
-<a href=#344 id=344 data-nosnippet>344</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#344 id=344 data-nosnippet>344</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#345 id=345 data-nosnippet>345</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Recipes, Vec&lt;RecipeError&gt;&gt; {
 <a href=#346 id=346 data-nosnippet>346</a>        <span class="kw">let </span><span class="kw-2">mut </span>recipes = Recipes::builder();
 <a href=#347 id=347 data-nosnippet>347</a>        <span class="comment">// Which crossings already state a deconstructing `parts` row, so the
@@ -436,12 +436,12 @@
 <a href=#436 id=436 data-nosnippet>436</a>            </span><span class="kw">match </span><span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>ty.key()).map(|c| <span class="kw-2">&amp;</span>c.kind) {
 <a href=#437 id=437 data-nosnippet>437</a>                <span class="comment">// A struct with no fields is nothing to be made of, so it
 <a href=#438 id=438 data-nosnippet>438</a>                // states no `parts` recipe — the same condition the deconstructing
-<a href=#439 id=439 data-nosnippet>439</a>                // side applies, and the reason `recipe_of` may be asked for the
-<a href=#440 id=440 data-nosnippet>440</a>                // recipe by name.
+<a href=#439 id=439 data-nosnippet>439</a>                // side applies, and the reason the row is looked up by name before
+<a href=#440 id=440 data-nosnippet>440</a>                // it is compiled.
 <a href=#441 id=441 data-nosnippet>441</a>                </span><span class="prelude-val">Some</span>(DeclaredKind::Data) <span class="kw">if </span>!fields_of(model, <span class="kw-2">&amp;</span>ty).is_empty() =&gt; {
 <a href=#442 id=442 data-nosnippet>442</a>                    recipes
 <a href=#443 id=443 data-nosnippet>443</a>                        .declare_default(ty.clone(), whole(), Constructing::Atomic)
-<a href=#444 id=444 data-nosnippet>444</a>                        .declare(ty, parts(), Constructing::Product(Construct::Fields));
+<a href=#444 id=444 data-nosnippet>444</a>                        .declare_unasked(ty, parts(), Constructing::Product(Construct::Fields));
 <a href=#445 id=445 data-nosnippet>445</a>                }
 <a href=#446 id=446 data-nosnippet>446</a>                <span class="comment">// A `sealed_class` has one too, and it is a choice rather than
 <a href=#447 id=447 data-nosnippet>447</a>                // a product: exactly one alternative is live, every one of them
@@ -544,12 +544,12 @@
 <a href=#544 id=544 data-nosnippet>544</a>            recipes
 <a href=#545 id=545 data-nosnippet>545</a>                .declare_default(outer.clone(), whole(), Constructing::Optional)
 <a href=#546 id=546 data-nosnippet>546</a>                .declare(outer.clone(), pair(), Constructing::Optional)
-<a href=#547 id=547 data-nosnippet>547</a>                .declare(outer.clone(), parts(), Constructing::Optional);
+<a href=#547 id=547 data-nosnippet>547</a>                .declare_unasked(outer.clone(), parts(), Constructing::Optional);
 <a href=#548 id=548 data-nosnippet>548</a>        }
 <a href=#549 id=549 data-nosnippet>549</a>        <span class="kw">for </span>(outer, <span class="kw">_</span>) <span class="kw">in </span>implicit.into_values() {
 <a href=#550 id=550 data-nosnippet>550</a>            recipes
 <a href=#551 id=551 data-nosnippet>551</a>                .declare_default(outer.clone(), whole(), Deconstructing::Optional)
-<a href=#552 id=552 data-nosnippet>552</a>                .declare(outer.clone(), parts(), Deconstructing::Optional);
+<a href=#552 id=552 data-nosnippet>552</a>                .declare_unasked(outer.clone(), parts(), Deconstructing::Optional);
 <a href=#553 id=553 data-nosnippet>553</a>        }
 <a href=#554 id=554 data-nosnippet>554</a>
 <a href=#555 id=555 data-nosnippet>555</a>        <span class="comment">// A fixed-size array of JNI primitives is one Kotlin `ByteArray` or
@@ -649,7 +649,7 @@
 <a href=#649 id=649 data-nosnippet>649</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>bindings(
 <a href=#650 id=650 data-nosnippet>650</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#651 id=651 data-nosnippet>651</a>        model: <span class="kw-2">&amp;</span>Flat,
-<a href=#652 id=652 data-nosnippet>652</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#652 id=652 data-nosnippet>652</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#653 id=653 data-nosnippet>653</a>        recipes: <span class="kw-2">&amp;</span>prebindgen_registry::recipe::Recipes,
 <a href=#654 id=654 data-nosnippet>654</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;prebindgen_registry::recipe::Bindings, Vec&lt;RecipeError&gt;&gt; {
 <a href=#655 id=655 data-nosnippet>655</a>        <span class="kw">use </span>prebindgen_registry::recipe::{
@@ -657,219 +657,284 @@
 <a href=#657 id=657 data-nosnippet>657</a>        };
 <a href=#658 id=658 data-nosnippet>658</a>
 <a href=#659 id=659 data-nosnippet>659</a>        <span class="kw">let </span><span class="kw-2">mut </span>bound = Bindings::builder();
-<a href=#660 id=660 data-nosnippet>660</a>        <span class="kw">let </span><span class="kw-2">mut </span>declared: Vec&lt;TypeKey&gt; = <span class="self">self
-<a href=#661 id=661 data-nosnippet>661</a>            </span>.types
-<a href=#662 id=662 data-nosnippet>662</a>            .iter()
-<a href=#663 id=663 data-nosnippet>663</a>            .filter(|(<span class="kw">_</span>, c)| <span class="macro">matches!</span>(c.kind, DeclaredKind::Data))
-<a href=#664 id=664 data-nosnippet>664</a>            .map(|(k, <span class="kw">_</span>)| k.clone())
-<a href=#665 id=665 data-nosnippet>665</a>            .collect();
-<a href=#666 id=666 data-nosnippet>666</a>        declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-<a href=#667 id=667 data-nosnippet>667</a>
-<a href=#668 id=668 data-nosnippet>668</a>        <span class="comment">// The named Optional row is the representation suitable inside another
-<a href=#669 id=669 data-nosnippet>669</a>        // composed shape. Where its child has a Product row it delegates to that
-<a href=#670 id=670 data-nosnippet>670</a>        // row; a scalar child stays on its default row and lets the JNI compiler
-<a href=#671 id=671 data-nosnippet>671</a>        // choose a niche or a `(present, value)` intermediate from the compiled
-<a href=#672 id=672 data-nosnippet>672</a>        // child facts. The whole/default Optional row remains untouched.
-<a href=#673 id=673 data-nosnippet>673</a>        //
-<a href=#674 id=674 data-nosnippet>674</a>        // Bind both directions: function inputs construct the Rust optional,
-<a href=#675 id=675 data-nosnippet>675</a>        // while returns and callback arguments deconstruct it.
-<a href=#676 id=676 data-nosnippet>676</a>        </span><span class="kw">for </span>(outer, inner) <span class="kw">in </span><span class="self">self</span>.implicit_optionals(model).into_values() {
-<a href=#677 id=677 data-nosnippet>677</a>            <span class="kw">for </span>direction <span class="kw">in </span>[Direction::Construct, Direction::Deconstruct] {
-<a href=#678 id=678 data-nosnippet>678</a>                <span class="kw">let </span>outer = Crossing::new(outer.clone(), direction);
-<a href=#679 id=679 data-nosnippet>679</a>                <span class="kw">let </span>row = outer.row(parts());
-<a href=#680 id=680 data-nosnippet>680</a>                <span class="kw">let </span>inner = Crossing::new(inner.clone(), direction);
-<a href=#681 id=681 data-nosnippet>681</a>                bound.bind(
-<a href=#682 id=682 data-nosnippet>682</a>                    Site::part(<span class="kw-2">&amp;</span>row, <span class="number">0</span>),
-<a href=#683 id=683 data-nosnippet>683</a>                    inner.clone(),
-<a href=#684 id=684 data-nosnippet>684</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>inner.key(), <span class="kw-2">&amp;</span>parts()).is_some() {
-<a href=#685 id=685 data-nosnippet>685</a>                        Ask::Recipe(parts())
-<a href=#686 id=686 data-nosnippet>686</a>                    } <span class="kw">else </span>{
-<a href=#687 id=687 data-nosnippet>687</a>                        Ask::Default
-<a href=#688 id=688 data-nosnippet>688</a>                    },
-<a href=#689 id=689 data-nosnippet>689</a>                    Origin::Part,
-<a href=#690 id=690 data-nosnippet>690</a>                );
-<a href=#691 id=691 data-nosnippet>691</a>            }
-<a href=#692 id=692 data-nosnippet>692</a>        }
-<a href=#693 id=693 data-nosnippet>693</a>
-<a href=#694 id=694 data-nosnippet>694</a>        <span class="kw">for </span>key <span class="kw">in </span>declared {
-<a href=#695 id=695 data-nosnippet>695</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ident) = key.ident() <span class="kw">else </span>{ <span class="kw">continue </span>};
-<a href=#696 id=696 data-nosnippet>696</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Struct(s)) = model.declared_type(<span class="kw-2">&amp;</span>ident)
-<a href=#697 id=697 data-nosnippet>697</a>            <span class="kw">else </span>{
-<a href=#698 id=698 data-nosnippet>698</a>                <span class="kw">continue</span>;
-<a href=#699 id=699 data-nosnippet>699</a>            };
-<a href=#700 id=700 data-nosnippet>700</a>            <span class="kw">let </span><span class="prelude-val">Ok</span>(ty) = model.classify(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(#ident)) <span class="kw">else </span>{
-<a href=#701 id=701 data-nosnippet>701</a>                <span class="kw">continue</span>;
-<a href=#702 id=702 data-nosnippet>702</a>            };
-<a href=#703 id=703 data-nosnippet>703</a>            <span class="kw">let </span>building = Crossing::new(ty.clone(), Direction::Construct);
-<a href=#704 id=704 data-nosnippet>704</a>            <span class="kw">let </span>handing_out = Crossing::new(ty, Direction::Deconstruct);
-<a href=#705 id=705 data-nosnippet>705</a>            <span class="kw">for </span>(index, field) <span class="kw">in </span>s.fields.iter().enumerate() {
-<a href=#706 id=706 data-nosnippet>706</a>                <span class="comment">// A field selects `parts` exactly when its crossing declares
-<a href=#707 id=707 data-nosnippet>707</a>                // that row AND the declaration says this occurrence decomposes.
-<a href=#708 id=708 data-nosnippet>708</a>                // Direct classes retain the existing `.jobject_input()` and
-<a href=#709 id=709 data-nosnippet>709</a>                // erased-wrapper boundaries; every implicit Optional selects its
-<a href=#710 id=710 data-nosnippet>710</a>                // part representation, which decides whether the child is
-<a href=#711 id=711 data-nosnippet>711</a>                // another composition or one scalar intermediate.
-<a href=#712 id=712 data-nosnippet>712</a>                </span><span class="kw">if </span>field.ty.optional_inner().is_none()
-<a href=#713 id=713 data-nosnippet>713</a>                    &amp;&amp; !<span class="self">self</span>.field_crosses_as_its_fields(<span class="kw-2">&amp;</span>field.ty)
-<a href=#714 id=714 data-nosnippet>714</a>                {
-<a href=#715 id=715 data-nosnippet>715</a>                    <span class="kw">continue</span>;
-<a href=#716 id=716 data-nosnippet>716</a>                }
-<a href=#717 id=717 data-nosnippet>717</a>                <span class="kw">for </span>(of, direction) <span class="kw">in </span>[
-<a href=#718 id=718 data-nosnippet>718</a>                    (<span class="kw-2">&amp;</span>building, Direction::Construct),
-<a href=#719 id=719 data-nosnippet>719</a>                    (<span class="kw-2">&amp;</span>handing_out, Direction::Deconstruct),
-<a href=#720 id=720 data-nosnippet>720</a>                ] {
-<a href=#721 id=721 data-nosnippet>721</a>                    <span class="kw">let </span>row = of.row(parts());
-<a href=#722 id=722 data-nosnippet>722</a>                    <span class="kw">let </span>field_crossing = Crossing::new(field.ty.clone(), direction);
-<a href=#723 id=723 data-nosnippet>723</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>field_crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
-<a href=#724 id=724 data-nosnippet>724</a>                        <span class="kw">continue</span>;
-<a href=#725 id=725 data-nosnippet>725</a>                    }
-<a href=#726 id=726 data-nosnippet>726</a>                    bound.bind(
-<a href=#727 id=727 data-nosnippet>727</a>                        Site::part(<span class="kw-2">&amp;</span>row, index),
-<a href=#728 id=728 data-nosnippet>728</a>                        field_crossing,
-<a href=#729 id=729 data-nosnippet>729</a>                        Ask::Recipe(parts()),
-<a href=#730 id=730 data-nosnippet>730</a>                        Origin::Part,
-<a href=#731 id=731 data-nosnippet>731</a>                    );
-<a href=#732 id=732 data-nosnippet>732</a>                }
-<a href=#733 id=733 data-nosnippet>733</a>            }
-<a href=#734 id=734 data-nosnippet>734</a>        }
-<a href=#735 id=735 data-nosnippet>735</a>        <span class="comment">// Every function whose return the binding takes apart, bound to the
-<a href=#736 id=736 data-nosnippet>736</a>        // `parts` recipe of its return type.
-<a href=#737 id=737 data-nosnippet>737</a>        //
-<a href=#738 id=738 data-nosnippet>738</a>        // This is what a site naming several values is: `Ask::Recipe` already
-<a href=#739 id=739 data-nosnippet>739</a>        // lets a site pick a recipe, and a `parts` fragment already occupies
-<a href=#740 id=740 data-nosnippet>740</a>        // several wires — the two facts stages 3 and 4 established, meeting.
-<a href=#741 id=741 data-nosnippet>741</a>        // The registry needs nothing new to express a decomposed return.
-<a href=#742 id=742 data-nosnippet>742</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
-<a href=#743 id=743 data-nosnippet>743</a>            <span class="comment">// The value that crosses, through the layers a decomposition looks
-<a href=#744 id=744 data-nosnippet>744</a>            // through: a `&amp;T` return decomposes T, and so does an `Option&lt;T&gt;`
-<a href=#745 id=745 data-nosnippet>745</a>            // or a `Vec&lt;T&gt;` — the shape rides the delivery, not the recipe.
-<a href=#746 id=746 data-nosnippet>746</a>            </span><span class="kw">let </span>ret = f.ret.borrow_target().unwrap_or(<span class="kw-2">&amp;</span>f.ret);
-<a href=#747 id=747 data-nosnippet>747</a>            <span class="kw">let </span>ret = ret.optional_inner().unwrap_or(ret);
-<a href=#748 id=748 data-nosnippet>748</a>            <span class="kw">let </span>ret = ret.sequence_elem().unwrap_or(ret);
-<a href=#749 id=749 data-nosnippet>749</a>            <span class="kw">let </span>ret = ret.borrow_target().unwrap_or(ret);
-<a href=#750 id=750 data-nosnippet>750</a>            <span class="kw">let </span>crossing = Crossing::new(ret.clone(), Direction::Deconstruct);
-<a href=#751 id=751 data-nosnippet>751</a>            <span class="comment">// Only where the type states one. A `sealed_class` always does; a
-<a href=#752 id=752 data-nosnippet>752</a>            // `data_class` states one unless a field of it declines, and a
-<a href=#753 id=753 data-nosnippet>753</a>            // return whose type states none crosses whole.
-<a href=#754 id=754 data-nosnippet>754</a>            </span><span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
-<a href=#755 id=755 data-nosnippet>755</a>                <span class="kw">continue</span>;
+<a href=#660 id=660 data-nosnippet>660</a>
+<a href=#661 id=661 data-nosnippet>661</a>        <span class="comment">// What crosses at a **convert** return is not the value the signature
+<a href=#662 id=662 data-nosnippet>662</a>        // names. The binding converts it first, and the converted value's type
+<a href=#663 id=663 data-nosnippet>663</a>        // is the function's own output expansion answer, which no model can
+<a href=#664 id=664 data-nosnippet>664</a>        // state. Bound here so the walk plans that crossing rather than the
+<a href=#665 id=665 data-nosnippet>665</a>        // return type, and so the site needs no adapter-private planning.
+<a href=#666 id=666 data-nosnippet>666</a>        // What an **expanded** return crosses. A return the binding converts or
+<a href=#667 id=667 data-nosnippet>667</a>        // takes apart does not cross the value its signature names, and only
+<a href=#668 id=668 data-nosnippet>668</a>        // the binding's own output expansion says what it does cross. Bound
+<a href=#669 id=669 data-nosnippet>669</a>        // here so the walk plans that crossing, which is what lets the site be
+<a href=#670 id=670 data-nosnippet>670</a>        // planned once rather than again at the emission site.
+<a href=#671 id=671 data-nosnippet>671</a>        //
+<a href=#672 id=672 data-nosnippet>672</a>        // One binding per function, in the same precedence `build_output`
+<a href=#673 id=673 data-nosnippet>673</a>        // applies: a function may have BOTH an output expansion and an error
+<a href=#674 id=674 data-nosnippet>674</a>        // plan, and the output expansion wins. Binding each in its own pass
+<a href=#675 id=675 data-nosnippet>675</a>        // would answer one site twice and be refused as a rebind.
+<a href=#676 id=676 data-nosnippet>676</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>owners: std::collections::BTreeSet&lt;String&gt; = Default::default();
+<a href=#677 id=677 data-nosnippet>677</a>        <span class="kw">let </span>unfolded = <span class="self">self</span>.unfolded();
+<a href=#678 id=678 data-nosnippet>678</a>        owners.extend(unfolded.unfold_plans.keys().map(|f| f.to_string()));
+<a href=#679 id=679 data-nosnippet>679</a>        owners.extend(unfolded.error_plans.keys().map(|f| f.to_string()));
+<a href=#680 id=680 data-nosnippet>680</a>        <span class="kw">for </span>owner <span class="kw">in </span>owners {
+<a href=#681 id=681 data-nosnippet>681</a>            <span class="kw">let </span>func = <span class="macro">quote::format_ident!</span>(<span class="string">"{owner}"</span>);
+<a href=#682 id=682 data-nosnippet>682</a>            <span class="kw">let </span>(crossed, ask) = <span class="kw">match </span>unfolded.unfold_plans.get(<span class="kw-2">&amp;</span>func) {
+<a href=#683 id=683 data-nosnippet>683</a>                <span class="comment">// A convert hands over one converted value and takes whatever
+<a href=#684 id=684 data-nosnippet>684</a>                // row that value has; a decomposition crosses the value it
+<a href=#685 id=685 data-nosnippet>685</a>                // takes apart and asks for the row that names its parts.
+<a href=#686 id=686 data-nosnippet>686</a>                </span><span class="prelude-val">Some</span>(plan) =&gt; <span class="kw">match </span>plan.delivery {
+<a href=#687 id=687 data-nosnippet>687</a>                    <span class="kw">crate</span>::unfold::Delivery::Return =&gt; <span class="kw">match </span>plan.convert_out_ty.as_ref() {
+<a href=#688 id=688 data-nosnippet>688</a>                        <span class="prelude-val">Some</span>(out) =&gt; (out.clone(), Ask::Default),
+<a href=#689 id=689 data-nosnippet>689</a>                        <span class="prelude-val">None </span>=&gt; <span class="kw">continue</span>,
+<a href=#690 id=690 data-nosnippet>690</a>                    },
+<a href=#691 id=691 data-nosnippet>691</a>                    <span class="kw">crate</span>::unfold::Delivery::Callback =&gt; {
+<a href=#692 id=692 data-nosnippet>692</a>                        <span class="kw">let </span>crossing = Crossing::new(plan.source.clone(), Direction::Deconstruct);
+<a href=#693 id=693 data-nosnippet>693</a>                        <span class="kw">let </span>ask = <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_some() {
+<a href=#694 id=694 data-nosnippet>694</a>                            Ask::Recipe(parts())
+<a href=#695 id=695 data-nosnippet>695</a>                        } <span class="kw">else </span>{
+<a href=#696 id=696 data-nosnippet>696</a>                            Ask::Default
+<a href=#697 id=697 data-nosnippet>697</a>                        };
+<a href=#698 id=698 data-nosnippet>698</a>                        (plan.source.clone(), ask)
+<a href=#699 id=699 data-nosnippet>699</a>                    }
+<a href=#700 id=700 data-nosnippet>700</a>                },
+<a href=#701 id=701 data-nosnippet>701</a>                <span class="comment">// No output expansion, but the binding peels the error: only
+<a href=#702 id=702 data-nosnippet>702</a>                // the ok arm crosses at the return, because the error is thrown
+<a href=#703 id=703 data-nosnippet>703</a>                // rather than crossed there.
+<a href=#704 id=704 data-nosnippet>704</a>                </span><span class="prelude-val">None </span>=&gt; {
+<a href=#705 id=705 data-nosnippet>705</a>                    <span class="kw">let </span><span class="prelude-val">Some</span>((ok, <span class="kw">_</span>)) = model
+<a href=#706 id=706 data-nosnippet>706</a>                        .function(<span class="kw-2">&amp;</span>func)
+<a href=#707 id=707 data-nosnippet>707</a>                        .and_then(|function| function.ret.fallible_parts())
+<a href=#708 id=708 data-nosnippet>708</a>                    <span class="kw">else </span>{
+<a href=#709 id=709 data-nosnippet>709</a>                        <span class="kw">continue</span>;
+<a href=#710 id=710 data-nosnippet>710</a>                    };
+<a href=#711 id=711 data-nosnippet>711</a>                    (ok.clone(), Ask::Default)
+<a href=#712 id=712 data-nosnippet>712</a>                }
+<a href=#713 id=713 data-nosnippet>713</a>            };
+<a href=#714 id=714 data-nosnippet>714</a>            bound.bind(
+<a href=#715 id=715 data-nosnippet>715</a>                Site {
+<a href=#716 id=716 data-nosnippet>716</a>                    owner: func,
+<a href=#717 id=717 data-nosnippet>717</a>                    role: prebindgen_registry::recipe::Role::Return,
+<a href=#718 id=718 data-nosnippet>718</a>                },
+<a href=#719 id=719 data-nosnippet>719</a>                Crossing::new(crossed, Direction::Deconstruct),
+<a href=#720 id=720 data-nosnippet>720</a>                ask,
+<a href=#721 id=721 data-nosnippet>721</a>                Origin::Function,
+<a href=#722 id=722 data-nosnippet>722</a>            );
+<a href=#723 id=723 data-nosnippet>723</a>        }
+<a href=#724 id=724 data-nosnippet>724</a>
+<a href=#725 id=725 data-nosnippet>725</a>        <span class="kw">let </span><span class="kw-2">mut </span>declared: Vec&lt;TypeKey&gt; = <span class="self">self
+<a href=#726 id=726 data-nosnippet>726</a>            </span>.types
+<a href=#727 id=727 data-nosnippet>727</a>            .iter()
+<a href=#728 id=728 data-nosnippet>728</a>            .filter(|(<span class="kw">_</span>, c)| <span class="macro">matches!</span>(c.kind, DeclaredKind::Data))
+<a href=#729 id=729 data-nosnippet>729</a>            .map(|(k, <span class="kw">_</span>)| k.clone())
+<a href=#730 id=730 data-nosnippet>730</a>            .collect();
+<a href=#731 id=731 data-nosnippet>731</a>        declared.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+<a href=#732 id=732 data-nosnippet>732</a>
+<a href=#733 id=733 data-nosnippet>733</a>        <span class="comment">// The named Optional row is the representation suitable inside another
+<a href=#734 id=734 data-nosnippet>734</a>        // composed shape. Where its child has a Product row it delegates to that
+<a href=#735 id=735 data-nosnippet>735</a>        // row; a scalar child stays on its default row and lets the JNI compiler
+<a href=#736 id=736 data-nosnippet>736</a>        // choose a niche or a `(present, value)` intermediate from the compiled
+<a href=#737 id=737 data-nosnippet>737</a>        // child facts. The whole/default Optional row remains untouched.
+<a href=#738 id=738 data-nosnippet>738</a>        //
+<a href=#739 id=739 data-nosnippet>739</a>        // Bind both directions: function inputs construct the Rust optional,
+<a href=#740 id=740 data-nosnippet>740</a>        // while returns and callback arguments deconstruct it.
+<a href=#741 id=741 data-nosnippet>741</a>        </span><span class="kw">for </span>(outer, inner) <span class="kw">in </span><span class="self">self</span>.implicit_optionals(model).into_values() {
+<a href=#742 id=742 data-nosnippet>742</a>            <span class="kw">for </span>direction <span class="kw">in </span>[Direction::Construct, Direction::Deconstruct] {
+<a href=#743 id=743 data-nosnippet>743</a>                <span class="kw">let </span>outer = Crossing::new(outer.clone(), direction);
+<a href=#744 id=744 data-nosnippet>744</a>                <span class="kw">let </span>row = outer.row(parts());
+<a href=#745 id=745 data-nosnippet>745</a>                <span class="kw">let </span>inner = Crossing::new(inner.clone(), direction);
+<a href=#746 id=746 data-nosnippet>746</a>                bound.bind(
+<a href=#747 id=747 data-nosnippet>747</a>                    Site::part(<span class="kw-2">&amp;</span>row, <span class="number">0</span>),
+<a href=#748 id=748 data-nosnippet>748</a>                    inner.clone(),
+<a href=#749 id=749 data-nosnippet>749</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>inner.key(), <span class="kw-2">&amp;</span>parts()).is_some() {
+<a href=#750 id=750 data-nosnippet>750</a>                        Ask::Recipe(parts())
+<a href=#751 id=751 data-nosnippet>751</a>                    } <span class="kw">else </span>{
+<a href=#752 id=752 data-nosnippet>752</a>                        Ask::Default
+<a href=#753 id=753 data-nosnippet>753</a>                    },
+<a href=#754 id=754 data-nosnippet>754</a>                    Origin::Part,
+<a href=#755 id=755 data-nosnippet>755</a>                );
 <a href=#756 id=756 data-nosnippet>756</a>            }
-<a href=#757 id=757 data-nosnippet>757</a>            <span class="comment">// And only where it is genuinely several. A decomposition that
-<a href=#758 id=758 data-nosnippet>758</a>            // yields ONE value takes `Delivery::Return`: the wrapper hands that
-<a href=#759 id=759 data-nosnippet>759</a>            // value back through its own conversion rather than through a
-<a href=#760 id=760 data-nosnippet>760</a>            // builder, so the return site's crossing is the value's, not this
-<a href=#761 id=761 data-nosnippet>761</a>            // type's. Asked of the composition, which is model and declaration
-<a href=#762 id=762 data-nosnippet>762</a>            // only and so answerable here — the same property that let one
-<a href=#763 id=763 data-nosnippet>763</a>            // composition serve both sides of `resolve`.
-<a href=#764 id=764 data-nosnippet>764</a>            </span><span class="kw">if </span><span class="self">self</span>.out_wire_count(registry, ret) &lt; <span class="number">2 </span>{
-<a href=#765 id=765 data-nosnippet>765</a>                <span class="kw">continue</span>;
-<a href=#766 id=766 data-nosnippet>766</a>            }
-<a href=#767 id=767 data-nosnippet>767</a>            bound.bind(
-<a href=#768 id=768 data-nosnippet>768</a>                Site {
-<a href=#769 id=769 data-nosnippet>769</a>                    owner: f.name.clone(),
-<a href=#770 id=770 data-nosnippet>770</a>                    role: prebindgen_registry::recipe::Role::Return,
-<a href=#771 id=771 data-nosnippet>771</a>                },
-<a href=#772 id=772 data-nosnippet>772</a>                crossing,
-<a href=#773 id=773 data-nosnippet>773</a>                Ask::Recipe(parts()),
-<a href=#774 id=774 data-nosnippet>774</a>                Origin::Adapter,
-<a href=#775 id=775 data-nosnippet>775</a>            );
-<a href=#776 id=776 data-nosnippet>776</a>        }
-<a href=#777 id=777 data-nosnippet>777</a>
-<a href=#778 id=778 data-nosnippet>778</a>        <span class="comment">// A callback's `Invoke` recipe owns its argument conversions. Bind a
-<a href=#779 id=779 data-nosnippet>779</a>        // model-derived data-class argument to `parts` so the Product fragment
-<a href=#780 id=780 data-nosnippet>780</a>        // reaches `Compile::callback` before the trampoline is rendered.
-<a href=#781 id=781 data-nosnippet>781</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
-<a href=#782 id=782 data-nosnippet>782</a>            <span class="kw">for </span>param <span class="kw">in </span><span class="kw-2">&amp;</span>f.params {
-<a href=#783 id=783 data-nosnippet>783</a>                <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Callback { args } =
-<a href=#784 id=784 data-nosnippet>784</a>                    param.ty.unwrapped().kind()
-<a href=#785 id=785 data-nosnippet>785</a>                <span class="kw">else </span>{
-<a href=#786 id=786 data-nosnippet>786</a>                    <span class="kw">continue</span>;
-<a href=#787 id=787 data-nosnippet>787</a>                };
-<a href=#788 id=788 data-nosnippet>788</a>                <span class="kw">let </span>callback = Crossing::new(param.ty.clone(), Direction::Construct);
-<a href=#789 id=789 data-nosnippet>789</a>                <span class="kw">let </span>row = callback.row(RecipeName::derived());
-<a href=#790 id=790 data-nosnippet>790</a>                <span class="kw">for </span>(index, arg) <span class="kw">in </span>args.iter().enumerate() {
-<a href=#791 id=791 data-nosnippet>791</a>                    <span class="kw">let </span>crossed = arg.borrow_target().unwrap_or(arg);
-<a href=#792 id=792 data-nosnippet>792</a>                    <span class="kw">let </span>core = crossed.optional_inner().unwrap_or(crossed);
-<a href=#793 id=793 data-nosnippet>793</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = core.sequence_elem() {
-<a href=#794 id=794 data-nosnippet>794</a>                        <span class="kw">let </span>element = element.borrow_target().unwrap_or(element);
-<a href=#795 id=795 data-nosnippet>795</a>                        <span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(element) {
-<a href=#796 id=796 data-nosnippet>796</a>                            <span class="kw">continue</span>;
-<a href=#797 id=797 data-nosnippet>797</a>                        }
-<a href=#798 id=798 data-nosnippet>798</a>                        <span class="kw">let </span>sequence = Crossing::new(arg.clone(), Direction::Deconstruct);
-<a href=#799 id=799 data-nosnippet>799</a>                        <span class="kw">let </span>element_crossing =
-<a href=#800 id=800 data-nosnippet>800</a>                            Crossing::new(element.borrowed(), Direction::Deconstruct);
-<a href=#801 id=801 data-nosnippet>801</a>                        <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>element_crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
-<a href=#802 id=802 data-nosnippet>802</a>                            <span class="kw">continue</span>;
-<a href=#803 id=803 data-nosnippet>803</a>                        }
-<a href=#804 id=804 data-nosnippet>804</a>                        bound.bind(
-<a href=#805 id=805 data-nosnippet>805</a>                            Site::part(<span class="kw-2">&amp;</span>sequence.row(RecipeName::derived()), <span class="number">0</span>),
-<a href=#806 id=806 data-nosnippet>806</a>                            element_crossing,
-<a href=#807 id=807 data-nosnippet>807</a>                            Ask::Recipe(parts()),
-<a href=#808 id=808 data-nosnippet>808</a>                            Origin::Adapter,
-<a href=#809 id=809 data-nosnippet>809</a>                        );
-<a href=#810 id=810 data-nosnippet>810</a>                        <span class="kw">continue</span>;
-<a href=#811 id=811 data-nosnippet>811</a>                    }
-<a href=#812 id=812 data-nosnippet>812</a>                    <span class="comment">// A model-derived data class, or a type whose deconstructor
-<a href=#813 id=813 data-nosnippet>813</a>                    // declaration earned the `parts` row above. Both take that
-<a href=#814 id=814 data-nosnippet>814</a>                    // row here, so the fragment the trampoline delivers and the
-<a href=#815 id=815 data-nosnippet>815</a>                    // one the argument's own `Role::CallbackArg` site names are
-<a href=#816 id=816 data-nosnippet>816</a>                    // one fragment rather than two rows over one crossing.
-<a href=#817 id=817 data-nosnippet>817</a>                    </span><span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(core)
-<a href=#818 id=818 data-nosnippet>818</a>                        &amp;&amp; !<span class="self">self</span>.unfolded().callback_arg_plans.contains_key(<span class="kw-2">&amp;</span>arg.key())
-<a href=#819 id=819 data-nosnippet>819</a>                    {
-<a href=#820 id=820 data-nosnippet>820</a>                        <span class="kw">continue</span>;
-<a href=#821 id=821 data-nosnippet>821</a>                    }
-<a href=#822 id=822 data-nosnippet>822</a>                    <span class="kw">let </span>crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
-<a href=#823 id=823 data-nosnippet>823</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
-<a href=#824 id=824 data-nosnippet>824</a>                        <span class="kw">continue</span>;
-<a href=#825 id=825 data-nosnippet>825</a>                    }
-<a href=#826 id=826 data-nosnippet>826</a>                    bound.bind(
-<a href=#827 id=827 data-nosnippet>827</a>                        Site::part(<span class="kw-2">&amp;</span>row, index),
-<a href=#828 id=828 data-nosnippet>828</a>                        crossing,
-<a href=#829 id=829 data-nosnippet>829</a>                        Ask::Recipe(parts()),
-<a href=#830 id=830 data-nosnippet>830</a>                        Origin::Adapter,
-<a href=#831 id=831 data-nosnippet>831</a>                    );
-<a href=#832 id=832 data-nosnippet>832</a>                }
-<a href=#833 id=833 data-nosnippet>833</a>            }
-<a href=#834 id=834 data-nosnippet>834</a>        }
-<a href=#835 id=835 data-nosnippet>835</a>
-<a href=#836 id=836 data-nosnippet>836</a>        <span class="comment">// Each value a callback delivers is a root site of its own — the
-<a href=#837 id=837 data-nosnippet>837</a>        // function-unique `Role::CallbackArg` the registry names, not the
-<a href=#838 id=838 data-nosnippet>838</a>        // `Role::Part` above, which is keyed by the callback recipe every
-<a href=#839 id=839 data-nosnippet>839</a>        // function with that signature shares.
-<a href=#840 id=840 data-nosnippet>840</a>        //
-<a href=#841 id=841 data-nosnippet>841</a>        // Bound to `parts` exactly where the argument's crossing states that
-<a href=#842 id=842 data-nosnippet>842</a>        // row, which is now every argument the trampoline takes apart: a
-<a href=#843 id=843 data-nosnippet>843</a>        // `data_class`, a `sealed_class`, an implicit Optional over one of
-<a href=#844 id=844 data-nosnippet>844</a>        // those, or a type whose deconstructor declaration earned the row
-<a href=#845 id=845 data-nosnippet>845</a>        // declared above. An argument that crosses whole names nothing here and
-<a href=#846 id=846 data-nosnippet>846</a>        // takes its crossing's default, attributed to the adapter.
-<a href=#847 id=847 data-nosnippet>847</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
-<a href=#848 id=848 data-nosnippet>848</a>            <span class="kw">for </span>(param, p) <span class="kw">in </span>f.params.iter().enumerate() {
-<a href=#849 id=849 data-nosnippet>849</a>                <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Callback { args } =
-<a href=#850 id=850 data-nosnippet>850</a>                    p.ty.unwrapped().kind()
-<a href=#851 id=851 data-nosnippet>851</a>                <span class="kw">else </span>{
-<a href=#852 id=852 data-nosnippet>852</a>                    <span class="kw">continue</span>;
-<a href=#853 id=853 data-nosnippet>853</a>                };
-<a href=#854 id=854 data-nosnippet>854</a>                <span class="kw">for </span>(arg, ty) <span class="kw">in </span>args.iter().enumerate() {
-<a href=#855 id=855 data-nosnippet>855</a>                    <span class="kw">let </span>crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
-<a href=#856 id=856 data-nosnippet>856</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
-<a href=#857 id=857 data-nosnippet>857</a>                        <span class="kw">continue</span>;
-<a href=#858 id=858 data-nosnippet>858</a>                    }
-<a href=#859 id=859 data-nosnippet>859</a>                    bound.bind(
-<a href=#860 id=860 data-nosnippet>860</a>                        Site {
-<a href=#861 id=861 data-nosnippet>861</a>                            owner: f.name.clone(),
-<a href=#862 id=862 data-nosnippet>862</a>                            role: prebindgen_registry::recipe::Role::CallbackArg { param, arg },
-<a href=#863 id=863 data-nosnippet>863</a>                        },
-<a href=#864 id=864 data-nosnippet>864</a>                        crossing,
-<a href=#865 id=865 data-nosnippet>865</a>                        Ask::Recipe(parts()),
-<a href=#866 id=866 data-nosnippet>866</a>                        Origin::Adapter,
-<a href=#867 id=867 data-nosnippet>867</a>                    );
-<a href=#868 id=868 data-nosnippet>868</a>                }
-<a href=#869 id=869 data-nosnippet>869</a>            }
-<a href=#870 id=870 data-nosnippet>870</a>        }
-<a href=#871 id=871 data-nosnippet>871</a>
-<a href=#872 id=872 data-nosnippet>872</a>        bound.build(recipes)
-<a href=#873 id=873 data-nosnippet>873</a>    }
-<a href=#874 id=874 data-nosnippet>874</a>}
+<a href=#757 id=757 data-nosnippet>757</a>        }
+<a href=#758 id=758 data-nosnippet>758</a>
+<a href=#759 id=759 data-nosnippet>759</a>        <span class="kw">for </span>key <span class="kw">in </span>declared {
+<a href=#760 id=760 data-nosnippet>760</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ident) = key.ident() <span class="kw">else </span>{ <span class="kw">continue </span>};
+<a href=#761 id=761 data-nosnippet>761</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(prebindgen_registry::flat::Type::Struct(s)) = model.declared_type(<span class="kw-2">&amp;</span>ident)
+<a href=#762 id=762 data-nosnippet>762</a>            <span class="kw">else </span>{
+<a href=#763 id=763 data-nosnippet>763</a>                <span class="kw">continue</span>;
+<a href=#764 id=764 data-nosnippet>764</a>            };
+<a href=#765 id=765 data-nosnippet>765</a>            <span class="kw">let </span><span class="prelude-val">Ok</span>(ty) = model.classify(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(#ident)) <span class="kw">else </span>{
+<a href=#766 id=766 data-nosnippet>766</a>                <span class="kw">continue</span>;
+<a href=#767 id=767 data-nosnippet>767</a>            };
+<a href=#768 id=768 data-nosnippet>768</a>            <span class="kw">let </span>building = Crossing::new(ty.clone(), Direction::Construct);
+<a href=#769 id=769 data-nosnippet>769</a>            <span class="kw">let </span>handing_out = Crossing::new(ty, Direction::Deconstruct);
+<a href=#770 id=770 data-nosnippet>770</a>            <span class="kw">for </span>(index, field) <span class="kw">in </span>s.fields.iter().enumerate() {
+<a href=#771 id=771 data-nosnippet>771</a>                <span class="comment">// A field selects `parts` exactly when its crossing declares
+<a href=#772 id=772 data-nosnippet>772</a>                // that row AND the declaration says this occurrence decomposes.
+<a href=#773 id=773 data-nosnippet>773</a>                // Direct classes retain the existing `.jobject_input()` and
+<a href=#774 id=774 data-nosnippet>774</a>                // erased-wrapper boundaries; every implicit Optional selects its
+<a href=#775 id=775 data-nosnippet>775</a>                // part representation, which decides whether the child is
+<a href=#776 id=776 data-nosnippet>776</a>                // another composition or one scalar intermediate.
+<a href=#777 id=777 data-nosnippet>777</a>                </span><span class="kw">if </span>field.ty.optional_inner().is_none()
+<a href=#778 id=778 data-nosnippet>778</a>                    &amp;&amp; !<span class="self">self</span>.field_crosses_as_its_fields(<span class="kw-2">&amp;</span>field.ty)
+<a href=#779 id=779 data-nosnippet>779</a>                {
+<a href=#780 id=780 data-nosnippet>780</a>                    <span class="kw">continue</span>;
+<a href=#781 id=781 data-nosnippet>781</a>                }
+<a href=#782 id=782 data-nosnippet>782</a>                <span class="kw">for </span>(of, direction) <span class="kw">in </span>[
+<a href=#783 id=783 data-nosnippet>783</a>                    (<span class="kw-2">&amp;</span>building, Direction::Construct),
+<a href=#784 id=784 data-nosnippet>784</a>                    (<span class="kw-2">&amp;</span>handing_out, Direction::Deconstruct),
+<a href=#785 id=785 data-nosnippet>785</a>                ] {
+<a href=#786 id=786 data-nosnippet>786</a>                    <span class="kw">let </span>row = of.row(parts());
+<a href=#787 id=787 data-nosnippet>787</a>                    <span class="kw">let </span>field_crossing = Crossing::new(field.ty.clone(), direction);
+<a href=#788 id=788 data-nosnippet>788</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>field_crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#789 id=789 data-nosnippet>789</a>                        <span class="kw">continue</span>;
+<a href=#790 id=790 data-nosnippet>790</a>                    }
+<a href=#791 id=791 data-nosnippet>791</a>                    bound.bind(
+<a href=#792 id=792 data-nosnippet>792</a>                        Site::part(<span class="kw-2">&amp;</span>row, index),
+<a href=#793 id=793 data-nosnippet>793</a>                        field_crossing,
+<a href=#794 id=794 data-nosnippet>794</a>                        Ask::Recipe(parts()),
+<a href=#795 id=795 data-nosnippet>795</a>                        Origin::Part,
+<a href=#796 id=796 data-nosnippet>796</a>                    );
+<a href=#797 id=797 data-nosnippet>797</a>                }
+<a href=#798 id=798 data-nosnippet>798</a>            }
+<a href=#799 id=799 data-nosnippet>799</a>        }
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="comment">// Every function whose return the binding takes apart, bound to the
+<a href=#801 id=801 data-nosnippet>801</a>        // `parts` recipe of its return type.
+<a href=#802 id=802 data-nosnippet>802</a>        //
+<a href=#803 id=803 data-nosnippet>803</a>        // This is what a site naming several values is: `Ask::Recipe` already
+<a href=#804 id=804 data-nosnippet>804</a>        // lets a site pick a recipe, and a `parts` fragment already occupies
+<a href=#805 id=805 data-nosnippet>805</a>        // several wires — the two facts stages 3 and 4 established, meeting.
+<a href=#806 id=806 data-nosnippet>806</a>        // The registry needs nothing new to express a decomposed return.
+<a href=#807 id=807 data-nosnippet>807</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
+<a href=#808 id=808 data-nosnippet>808</a>            <span class="comment">// The value that crosses, through the layers a decomposition looks
+<a href=#809 id=809 data-nosnippet>809</a>            // through: a `&amp;T` return decomposes T, and so does an `Option&lt;T&gt;`
+<a href=#810 id=810 data-nosnippet>810</a>            // or a `Vec&lt;T&gt;` — the shape rides the delivery, not the recipe.
+<a href=#811 id=811 data-nosnippet>811</a>            </span><span class="kw">let </span>ret = f.ret.borrow_target().unwrap_or(<span class="kw-2">&amp;</span>f.ret);
+<a href=#812 id=812 data-nosnippet>812</a>            <span class="kw">let </span>ret = ret.optional_inner().unwrap_or(ret);
+<a href=#813 id=813 data-nosnippet>813</a>            <span class="kw">let </span>ret = ret.sequence_elem().unwrap_or(ret);
+<a href=#814 id=814 data-nosnippet>814</a>            <span class="kw">let </span>ret = ret.borrow_target().unwrap_or(ret);
+<a href=#815 id=815 data-nosnippet>815</a>            <span class="kw">let </span>crossing = Crossing::new(ret.clone(), Direction::Deconstruct);
+<a href=#816 id=816 data-nosnippet>816</a>            <span class="comment">// Only where the type states one. A `sealed_class` always does; a
+<a href=#817 id=817 data-nosnippet>817</a>            // `data_class` states one unless a field of it declines, and a
+<a href=#818 id=818 data-nosnippet>818</a>            // return whose type states none crosses whole.
+<a href=#819 id=819 data-nosnippet>819</a>            </span><span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#820 id=820 data-nosnippet>820</a>                <span class="kw">continue</span>;
+<a href=#821 id=821 data-nosnippet>821</a>            }
+<a href=#822 id=822 data-nosnippet>822</a>            <span class="comment">// And only where it is genuinely several. A decomposition that
+<a href=#823 id=823 data-nosnippet>823</a>            // yields ONE value takes `Delivery::Return`: the wrapper hands that
+<a href=#824 id=824 data-nosnippet>824</a>            // value back through its own conversion rather than through a
+<a href=#825 id=825 data-nosnippet>825</a>            // builder, so the return site's crossing is the value's, not this
+<a href=#826 id=826 data-nosnippet>826</a>            // type's. Asked of the composition, which is model and declaration
+<a href=#827 id=827 data-nosnippet>827</a>            // only and so answerable here — the same property that let one
+<a href=#828 id=828 data-nosnippet>828</a>            // composition serve both sides of `resolve`.
+<a href=#829 id=829 data-nosnippet>829</a>            </span><span class="kw">if </span><span class="self">self</span>.out_wire_count(registry, ret) &lt; <span class="number">2 </span>{
+<a href=#830 id=830 data-nosnippet>830</a>                <span class="kw">continue</span>;
+<a href=#831 id=831 data-nosnippet>831</a>            }
+<a href=#832 id=832 data-nosnippet>832</a>            bound.bind(
+<a href=#833 id=833 data-nosnippet>833</a>                Site {
+<a href=#834 id=834 data-nosnippet>834</a>                    owner: f.name.clone(),
+<a href=#835 id=835 data-nosnippet>835</a>                    role: prebindgen_registry::recipe::Role::Return,
+<a href=#836 id=836 data-nosnippet>836</a>                },
+<a href=#837 id=837 data-nosnippet>837</a>                crossing,
+<a href=#838 id=838 data-nosnippet>838</a>                Ask::Recipe(parts()),
+<a href=#839 id=839 data-nosnippet>839</a>                Origin::Adapter,
+<a href=#840 id=840 data-nosnippet>840</a>            );
+<a href=#841 id=841 data-nosnippet>841</a>        }
+<a href=#842 id=842 data-nosnippet>842</a>
+<a href=#843 id=843 data-nosnippet>843</a>        <span class="comment">// A callback's `Invoke` recipe owns its argument conversions. Bind a
+<a href=#844 id=844 data-nosnippet>844</a>        // model-derived data-class argument to `parts` so the Product fragment
+<a href=#845 id=845 data-nosnippet>845</a>        // reaches `Compile::callback` before the trampoline is rendered.
+<a href=#846 id=846 data-nosnippet>846</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
+<a href=#847 id=847 data-nosnippet>847</a>            <span class="kw">for </span>param <span class="kw">in </span><span class="kw-2">&amp;</span>f.params {
+<a href=#848 id=848 data-nosnippet>848</a>                <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Callback { args } =
+<a href=#849 id=849 data-nosnippet>849</a>                    param.ty.unwrapped().kind()
+<a href=#850 id=850 data-nosnippet>850</a>                <span class="kw">else </span>{
+<a href=#851 id=851 data-nosnippet>851</a>                    <span class="kw">continue</span>;
+<a href=#852 id=852 data-nosnippet>852</a>                };
+<a href=#853 id=853 data-nosnippet>853</a>                <span class="kw">let </span>callback = Crossing::new(param.ty.clone(), Direction::Construct);
+<a href=#854 id=854 data-nosnippet>854</a>                <span class="kw">let </span>row = callback.row(RecipeName::derived());
+<a href=#855 id=855 data-nosnippet>855</a>                <span class="kw">for </span>(index, arg) <span class="kw">in </span>args.iter().enumerate() {
+<a href=#856 id=856 data-nosnippet>856</a>                    <span class="kw">let </span>crossed = arg.borrow_target().unwrap_or(arg);
+<a href=#857 id=857 data-nosnippet>857</a>                    <span class="kw">let </span>core = crossed.optional_inner().unwrap_or(crossed);
+<a href=#858 id=858 data-nosnippet>858</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(element) = core.sequence_elem() {
+<a href=#859 id=859 data-nosnippet>859</a>                        <span class="kw">let </span>element = element.borrow_target().unwrap_or(element);
+<a href=#860 id=860 data-nosnippet>860</a>                        <span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(element) {
+<a href=#861 id=861 data-nosnippet>861</a>                            <span class="kw">continue</span>;
+<a href=#862 id=862 data-nosnippet>862</a>                        }
+<a href=#863 id=863 data-nosnippet>863</a>                        <span class="kw">let </span>sequence = Crossing::new(arg.clone(), Direction::Deconstruct);
+<a href=#864 id=864 data-nosnippet>864</a>                        <span class="kw">let </span>element_crossing =
+<a href=#865 id=865 data-nosnippet>865</a>                            Crossing::new(element.borrowed(), Direction::Deconstruct);
+<a href=#866 id=866 data-nosnippet>866</a>                        <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>element_crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#867 id=867 data-nosnippet>867</a>                            <span class="kw">continue</span>;
+<a href=#868 id=868 data-nosnippet>868</a>                        }
+<a href=#869 id=869 data-nosnippet>869</a>                        bound.bind(
+<a href=#870 id=870 data-nosnippet>870</a>                            Site::part(<span class="kw-2">&amp;</span>sequence.row(RecipeName::derived()), <span class="number">0</span>),
+<a href=#871 id=871 data-nosnippet>871</a>                            element_crossing,
+<a href=#872 id=872 data-nosnippet>872</a>                            Ask::Recipe(parts()),
+<a href=#873 id=873 data-nosnippet>873</a>                            Origin::Adapter,
+<a href=#874 id=874 data-nosnippet>874</a>                        );
+<a href=#875 id=875 data-nosnippet>875</a>                        <span class="kw">continue</span>;
+<a href=#876 id=876 data-nosnippet>876</a>                    }
+<a href=#877 id=877 data-nosnippet>877</a>                    <span class="comment">// A model-derived data class, or a type whose deconstructor
+<a href=#878 id=878 data-nosnippet>878</a>                    // declaration earned the `parts` row above. Both take that
+<a href=#879 id=879 data-nosnippet>879</a>                    // row here, so the fragment the trampoline delivers and the
+<a href=#880 id=880 data-nosnippet>880</a>                    // one the argument's own `Role::CallbackArg` site names are
+<a href=#881 id=881 data-nosnippet>881</a>                    // one fragment rather than two rows over one crossing.
+<a href=#882 id=882 data-nosnippet>882</a>                    </span><span class="kw">if </span>!<span class="self">self</span>.field_crosses_as_its_fields(core)
+<a href=#883 id=883 data-nosnippet>883</a>                        &amp;&amp; !<span class="self">self</span>.unfolded().callback_arg_plans.contains_key(<span class="kw-2">&amp;</span>arg.key())
+<a href=#884 id=884 data-nosnippet>884</a>                    {
+<a href=#885 id=885 data-nosnippet>885</a>                        <span class="kw">continue</span>;
+<a href=#886 id=886 data-nosnippet>886</a>                    }
+<a href=#887 id=887 data-nosnippet>887</a>                    <span class="kw">let </span>crossing = Crossing::new(arg.clone(), Direction::Deconstruct);
+<a href=#888 id=888 data-nosnippet>888</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#889 id=889 data-nosnippet>889</a>                        <span class="kw">continue</span>;
+<a href=#890 id=890 data-nosnippet>890</a>                    }
+<a href=#891 id=891 data-nosnippet>891</a>                    bound.bind(
+<a href=#892 id=892 data-nosnippet>892</a>                        Site::part(<span class="kw-2">&amp;</span>row, index),
+<a href=#893 id=893 data-nosnippet>893</a>                        crossing,
+<a href=#894 id=894 data-nosnippet>894</a>                        Ask::Recipe(parts()),
+<a href=#895 id=895 data-nosnippet>895</a>                        Origin::Adapter,
+<a href=#896 id=896 data-nosnippet>896</a>                    );
+<a href=#897 id=897 data-nosnippet>897</a>                }
+<a href=#898 id=898 data-nosnippet>898</a>            }
+<a href=#899 id=899 data-nosnippet>899</a>        }
+<a href=#900 id=900 data-nosnippet>900</a>
+<a href=#901 id=901 data-nosnippet>901</a>        <span class="comment">// Each value a callback delivers is a root site of its own — the
+<a href=#902 id=902 data-nosnippet>902</a>        // function-unique `Role::CallbackArg` the registry names, not the
+<a href=#903 id=903 data-nosnippet>903</a>        // `Role::Part` above, which is keyed by the callback recipe every
+<a href=#904 id=904 data-nosnippet>904</a>        // function with that signature shares.
+<a href=#905 id=905 data-nosnippet>905</a>        //
+<a href=#906 id=906 data-nosnippet>906</a>        // Bound to `parts` exactly where the argument's crossing states that
+<a href=#907 id=907 data-nosnippet>907</a>        // row, which is now every argument the trampoline takes apart: a
+<a href=#908 id=908 data-nosnippet>908</a>        // `data_class`, a `sealed_class`, an implicit Optional over one of
+<a href=#909 id=909 data-nosnippet>909</a>        // those, or a type whose deconstructor declaration earned the row
+<a href=#910 id=910 data-nosnippet>910</a>        // declared above. An argument that crosses whole names nothing here and
+<a href=#911 id=911 data-nosnippet>911</a>        // takes its crossing's default, attributed to the adapter.
+<a href=#912 id=912 data-nosnippet>912</a>        </span><span class="kw">for </span>f <span class="kw">in </span>model.functions() {
+<a href=#913 id=913 data-nosnippet>913</a>            <span class="kw">for </span>(param, p) <span class="kw">in </span>f.params.iter().enumerate() {
+<a href=#914 id=914 data-nosnippet>914</a>                <span class="kw">let </span>prebindgen_registry::flat::TypeKind::Callback { args } =
+<a href=#915 id=915 data-nosnippet>915</a>                    p.ty.unwrapped().kind()
+<a href=#916 id=916 data-nosnippet>916</a>                <span class="kw">else </span>{
+<a href=#917 id=917 data-nosnippet>917</a>                    <span class="kw">continue</span>;
+<a href=#918 id=918 data-nosnippet>918</a>                };
+<a href=#919 id=919 data-nosnippet>919</a>                <span class="kw">for </span>(arg, ty) <span class="kw">in </span>args.iter().enumerate() {
+<a href=#920 id=920 data-nosnippet>920</a>                    <span class="kw">let </span>crossing = Crossing::new(ty.clone(), Direction::Deconstruct);
+<a href=#921 id=921 data-nosnippet>921</a>                    <span class="kw">if </span>recipes.key_of(<span class="kw-2">&amp;</span>crossing.key(), <span class="kw-2">&amp;</span>parts()).is_none() {
+<a href=#922 id=922 data-nosnippet>922</a>                        <span class="kw">continue</span>;
+<a href=#923 id=923 data-nosnippet>923</a>                    }
+<a href=#924 id=924 data-nosnippet>924</a>                    bound.bind(
+<a href=#925 id=925 data-nosnippet>925</a>                        Site {
+<a href=#926 id=926 data-nosnippet>926</a>                            owner: f.name.clone(),
+<a href=#927 id=927 data-nosnippet>927</a>                            role: prebindgen_registry::recipe::Role::CallbackArg { param, arg },
+<a href=#928 id=928 data-nosnippet>928</a>                        },
+<a href=#929 id=929 data-nosnippet>929</a>                        crossing,
+<a href=#930 id=930 data-nosnippet>930</a>                        Ask::Recipe(parts()),
+<a href=#931 id=931 data-nosnippet>931</a>                        Origin::Adapter,
+<a href=#932 id=932 data-nosnippet>932</a>                    );
+<a href=#933 id=933 data-nosnippet>933</a>                }
+<a href=#934 id=934 data-nosnippet>934</a>            }
+<a href=#935 id=935 data-nosnippet>935</a>        }
+<a href=#936 id=936 data-nosnippet>936</a>
+<a href=#937 id=937 data-nosnippet>937</a>        bound.build(recipes)
+<a href=#938 id=938 data-nosnippet>938</a>    }
+<a href=#939 id=939 data-nosnippet>939</a>}
 </code></pre></div></section></main></body></html>

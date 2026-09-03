@@ -589,7 +589,7 @@
 <a href=#589 id=589 data-nosnippet>589</a>        dir: Direction,
 <a href=#590 id=590 data-nosnippet>590</a>        ty: <span class="kw-2">&amp;</span>syn::Type,
 <a href=#591 id=591 data-nosnippet>591</a>        root: bool,
-<a href=#592 id=592 data-nosnippet>592</a>        entry: <span class="prelude-ty">Option</span>&lt;Answer&gt;,
+<a href=#592 id=592 data-nosnippet>592</a>        entry: <span class="prelude-ty">Option</span>&lt;Vec&lt;TypeKey&gt;&gt;,
 <a href=#593 id=593 data-nosnippet>593</a>    ) {
 <a href=#594 id=594 data-nosnippet>594</a>        <span class="self">self</span>.intern(dir, ty, root).unwrap_or_else(|e| {
 <a href=#595 id=595 data-nosnippet>595</a>            <span class="macro">panic!</span>(

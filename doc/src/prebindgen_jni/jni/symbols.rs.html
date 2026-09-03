@@ -318,7 +318,7 @@
 <a href=#318 id=318 data-nosnippet>318</a>/// `syn::ItemEnum`; the model states them as two elements, and both carry the
 <a href=#319 id=319 data-nosnippet>319</a>/// names this asks for. `None` when `ident` names neither.
 <a href=#320 id=320 data-nosnippet>320</a></span><span class="kw">fn </span>declared_member_names(
-<a href=#321 id=321 data-nosnippet>321</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#321 id=321 data-nosnippet>321</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#322 id=322 data-nosnippet>322</a>    ident: <span class="kw-2">&amp;</span>syn::Ident,
 <a href=#323 id=323 data-nosnippet>323</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;syn::Ident&gt;&gt; {
 <a href=#324 id=324 data-nosnippet>324</a>    <span class="kw">use </span>prebindgen_registry::flat::Type;

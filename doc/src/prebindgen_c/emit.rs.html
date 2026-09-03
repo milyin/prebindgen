@@ -295,7 +295,7 @@
 <a href=#295 id=295 data-nosnippet>295</a>    /// struct.
 <a href=#296 id=296 data-nosnippet>296</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>struct_fields&lt;<span class="lifetime">'r</span>&gt;(
 <a href=#297 id=297 data-nosnippet>297</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#298 id=298 data-nosnippet>298</a>        registry: <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw">impl </span>Conversions,
+<a href=#298 id=298 data-nosnippet>298</a>        registry: <span class="kw-2">&amp;</span><span class="lifetime">'r </span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#299 id=299 data-nosnippet>299</a>        key: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#300 id=300 data-nosnippet>300</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;(syn::Ident, <span class="kw-2">&amp;</span><span class="lifetime">'r </span>TypeRef)&gt;&gt; {
 <a href=#301 id=301 data-nosnippet>301</a>        <span class="comment">// The element, not its item. A `Struct` holds the field list the

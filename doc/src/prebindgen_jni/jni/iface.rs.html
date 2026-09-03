@@ -1233,7 +1233,7 @@
 <a href=#1233 id=1233 data-nosnippet>1233</a>/// typed-group view in per `DeconId` (see [`fixed_decon_ids`]).
 <a href=#1234 id=1234 data-nosnippet>1234</a></span><span class="kw">fn </span>derive_iface_spec(
 <a href=#1235 id=1235 data-nosnippet>1235</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1236 id=1236 data-nosnippet>1236</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1236 id=1236 data-nosnippet>1236</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1237 id=1237 data-nosnippet>1237</a>    key: <span class="kw-2">&amp;</span>SpecKey,
 <a href=#1238 id=1238 data-nosnippet>1238</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
 <a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="kw">match </span>key {
@@ -1302,7 +1302,7 @@
 <a href=#1302 id=1302 data-nosnippet>1302</a>
 <a href=#1303 id=1303 data-nosnippet>1303</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iface_spec(
 <a href=#1304 id=1304 data-nosnippet>1304</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1305 id=1305 data-nosnippet>1305</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1305 id=1305 data-nosnippet>1305</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1306 id=1306 data-nosnippet>1306</a>        key: <span class="kw-2">&amp;</span>SpecKey,
 <a href=#1307 id=1307 data-nosnippet>1307</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
 <a href=#1308 id=1308 data-nosnippet>1308</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(generation) = <span class="kw-2">&amp;</span><span class="self">self</span>.generation {
@@ -1340,7 +1340,7 @@
 <a href=#1340 id=1340 data-nosnippet>1340</a>/// `when` over the tag that a sum-typed struct field gets.
 <a href=#1341 id=1341 data-nosnippet>1341</a></span><span class="kw">fn </span>fixed_reassembly(
 <a href=#1342 id=1342 data-nosnippet>1342</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1343 id=1343 data-nosnippet>1343</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1343 id=1343 data-nosnippet>1343</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1344 id=1344 data-nosnippet>1344</a>    source: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#1345 id=1345 data-nosnippet>1345</a>    wires: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
 <a href=#1346 id=1346 data-nosnippet>1346</a>    class_fqn: <span class="kw-2">&amp;</span>str,
@@ -1371,7 +1371,7 @@
 <a href=#1371 id=1371 data-nosnippet>1371</a>/// through [`fixed_reassembly`] where the whole delivered value is the sum.
 <a href=#1372 id=1372 data-nosnippet>1372</a></span><span class="kw">fn </span>sum_segment_reassembly(
 <a href=#1373 id=1373 data-nosnippet>1373</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1374 id=1374 data-nosnippet>1374</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1374 id=1374 data-nosnippet>1374</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1375 id=1375 data-nosnippet>1375</a>    source: <span class="kw-2">&amp;</span>TypeKey,
 <a href=#1376 id=1376 data-nosnippet>1376</a>    wires: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::jni::compile::OutWire],
 <a href=#1377 id=1377 data-nosnippet>1377</a>    first_slot: usize,
@@ -1419,7 +1419,7 @@
 <a href=#1419 id=1419 data-nosnippet>1419</a>/// placed in the first arg type's package (root for `Fn()`).
 <a href=#1420 id=1420 data-nosnippet>1420</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_iface_spec(
 <a href=#1421 id=1421 data-nosnippet>1421</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1422 id=1422 data-nosnippet>1422</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1422 id=1422 data-nosnippet>1422</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1423 id=1423 data-nosnippet>1423</a>    cb_args: <span class="kw-2">&amp;</span>[prebindgen_registry::flat::TypeRef],
 <a href=#1424 id=1424 data-nosnippet>1424</a>) -&gt; <span class="prelude-ty">Option</span>&lt;IfaceSpec&gt; {
 <a href=#1425 id=1425 data-nosnippet>1425</a>    <span class="comment">// Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
@@ -1786,7 +1786,7 @@
 <a href=#1786 id=1786 data-nosnippet>1786</a>/// against), not per this plan's own `fixed_builder` flag.
 <a href=#1787 id=1787 data-nosnippet>1787</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>folder_iface_for_plan(
 <a href=#1788 id=1788 data-nosnippet>1788</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1789 id=1789 data-nosnippet>1789</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1789 id=1789 data-nosnippet>1789</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1790 id=1790 data-nosnippet>1790</a>    plan: <span class="kw-2">&amp;</span>UnfoldPlan,
 <a href=#1791 id=1791 data-nosnippet>1791</a>) -&gt; <span class="prelude-ty">Option</span>&lt;std::sync::Arc&lt;IfaceSpec&gt;&gt; {
 <a href=#1792 id=1792 data-nosnippet>1792</a>    <span class="macro">debug_assert!</span>(
@@ -1811,7 +1811,7 @@
 <a href=#1811 id=1811 data-nosnippet>1811</a>/// two stay in lockstep.
 <a href=#1812 id=1812 data-nosnippet>1812</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fixed_folder_typed_groups(
 <a href=#1813 id=1813 data-nosnippet>1813</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#1814 id=1814 data-nosnippet>1814</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>Conversions,
+<a href=#1814 id=1814 data-nosnippet>1814</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>Conversions + <span class="question-mark">?</span>Sized),
 <a href=#1815 id=1815 data-nosnippet>1815</a>    decon: <span class="kw-2">&amp;</span>DeconId,
 <a href=#1816 id=1816 data-nosnippet>1816</a>) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;TypedGroup&gt;&gt; {
 <a href=#1817 id=1817 data-nosnippet>1817</a>    <span class="kw">let </span>spec = ext.unfolded().decon_plans.get(decon)<span class="question-mark">?</span>;

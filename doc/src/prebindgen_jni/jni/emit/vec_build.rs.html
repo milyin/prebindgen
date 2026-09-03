@@ -56,7 +56,7 @@
 <a href=#56 id=56 data-nosnippet>56</a>/// four sites agree on which params take the handle path.
 <a href=#57 id=57 data-nosnippet>57</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>vec_build_elem(
 <a href=#58 id=58 data-nosnippet>58</a>    ext: <span class="kw-2">&amp;</span>Declarations,
-<a href=#59 id=59 data-nosnippet>59</a>    registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#59 id=59 data-nosnippet>59</a>    registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#60 id=60 data-nosnippet>60</a>    arg: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#61 id=61 data-nosnippet>61</a>) -&gt; <span class="prelude-ty">Option</span>&lt;VecBuildElem&gt; {
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="comment">// The run and its element off the MODEL. `&amp;mut [T]` is still refused —
@@ -197,7 +197,7 @@
 <a href=#197 id=197 data-nosnippet>197</a></span><span class="kw">impl </span>Declarations {
 <a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>vec_build_helpers(
 <a href=#199 id=199 data-nosnippet>199</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#200 id=200 data-nosnippet>200</a>        registry: <span class="kw-2">&amp;</span><span class="kw">impl </span>prebindgen_registry::Conversions,
+<a href=#200 id=200 data-nosnippet>200</a>        registry: <span class="kw-2">&amp;</span>(<span class="kw">impl </span>prebindgen_registry::Conversions + <span class="question-mark">?</span>Sized),
 <a href=#201 id=201 data-nosnippet>201</a>        elem: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#202 id=202 data-nosnippet>202</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;VecBuildHelpers&gt;&gt; {
 <a href=#203 id=203 data-nosnippet>203</a>        <span class="macro">assert!</span>(

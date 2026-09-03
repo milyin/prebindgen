@@ -13,9 +13,9 @@ artifact of the adapter’s frozen assembly — what is left is the two
 <p>What used to be here and is not any more: which items to build, how
 composites decompose, and the wire form of each type. A generator states the
 first two into the builder (<code>RegistryBuilder::export</code>,
-<code>RegistryBuilder::decompose</code>) and answers the third inside
-<code>RegistryBuilder::convert_with</code> — so nothing in core calls back to ask. Moving emission out too is what would delete this
-trait entirely (prebindgen#251 phase E).</p>
+<code>RegistryBuilder::decompose</code>) and answers the third in its <code>Compile</code> hooks —
+so nothing in core has to ask for it item by item. Moving emission out too is
+what would delete this trait entirely (prebindgen#251 phase E).</p>
 <p>Anything language-specific the rest of the pipeline must carry — a JNI
 adapter’s Kotlin class names and exception info, a C adapter’s header names,
 etc. — rides in <a href="struct.ConverterImpl.html#structfield.metadata" title="field prebindgen_registry::prebindgen::ConverterImpl::metadata"><code>ConverterImpl::metadata</code></a>, and is read back by the
