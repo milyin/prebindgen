@@ -1168,6 +1168,15 @@ pub struct ArtifactPlan<R: Representation> {
     prerequisites: Vec<ArtifactId>,
     inputs: Vec<ArtifactInput>,
     follows: Vec<FragmentId>,
+    /// Whether this artifact exists only because something else requires it.
+    ///
+    /// An ordinary artifact with no [`Self::follows`] is unconditional: the file
+    /// emits it whatever else it holds. A runtime helper is not — it exists
+    /// because another artifact **calls** it, which the plan already states as a
+    /// prerequisite, and emitting one into a binding that never reaches it is
+    /// dead code. `follows` cannot say this: it gates on a *fragment* being
+    /// reached, and a helper is reached through an artifact.
+    only_if_required: bool,
     payload: R::Artifact,
 }
 
@@ -1184,6 +1193,7 @@ impl<R: Representation> ArtifactPlan<R> {
             prerequisites,
             inputs,
             follows: Vec::new(),
+            only_if_required: false,
             payload,
         }
     }
@@ -1205,6 +1215,26 @@ impl<R: Representation> ArtifactPlan<R> {
     /// no fragment's fate withdraws it.
     pub fn follows(mut self, fragments: Vec<FragmentId>) -> Self {
         self.follows = fragments;
+        self
+    }
+
+    /// Replace this artifact's prerequisites.
+    ///
+    /// For an adapter that can only resolve what it calls once every artifact is
+    /// known — an identity may be answered by an artifact of another kind.
+    pub fn requires(mut self, prerequisites: Vec<ArtifactId>) -> Self {
+        self.prerequisites = prerequisites;
+        self
+    }
+
+    /// State that this artifact is kept only while another kept artifact names
+    /// it as a prerequisite.
+    ///
+    /// For the runtime helpers a binding emits because something calls them.
+    /// Without it they would have to be selected outside the plan, which is the
+    /// one ordering decision that cannot then be read off the plan.
+    pub fn only_if_required(mut self) -> Self {
+        self.only_if_required = true;
         self
     }
 
@@ -1342,7 +1372,10 @@ impl<R: Representation> GenerationPlanBuilder<R> {
             roots.extend(
                 self.artifacts
                     .values()
-                    .filter(|artifact| artifact.follows.is_empty() || kept.contains(&artifact.id))
+                    .filter(|artifact| {
+                        (artifact.follows.is_empty() && !artifact.only_if_required)
+                            || kept.contains(&artifact.id)
+                    })
                     .flat_map(|artifact| {
                         artifact.inputs.iter().filter_map(|input| match input {
                             ArtifactInput::Fragment(id) => Some(id.clone()),
@@ -1357,8 +1390,12 @@ impl<R: Representation> GenerationPlanBuilder<R> {
                 .artifacts
                 .values()
                 .filter(|artifact| {
-                    artifact.follows.is_empty()
-                        || artifact.follows.iter().any(|id| reachable.contains(id))
+                    // An artifact kept only when required contributes nothing of
+                    // its own: the prerequisite closure below is what reaches it,
+                    // through whichever kept artifact calls it.
+                    !artifact.only_if_required
+                        && (artifact.follows.is_empty()
+                            || artifact.follows.iter().any(|id| reachable.contains(id)))
                 })
                 .map(|artifact| artifact.id.clone())
                 .collect();

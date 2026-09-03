@@ -763,6 +763,33 @@ impl CbindgenBuilder {
     }
 }
 
+/// Where one artifact kind sits in the generated file.
+///
+/// The file reads the runtime helpers first, because anything may call them,
+/// then types before the values that use them and mirrors before the converters
+/// that fill them. Stated once here: the plan emits artifacts in the order they
+/// were stated, so this table is the file's layout rather than a description of
+/// it.
+fn file_order(kind: &str) -> usize {
+    match kind {
+        // Both runtime helpers share this kind, and keep the order they were
+        // stated in: the memory helpers, then the array builder that fills a
+        // block through them.
+        "c-runtime" => 0,
+        "c-opaque-handle" => 1,
+        "c-data-struct" => 2,
+        "c-value-opaque" => 3,
+        "c-enum" => 4,
+        "c-tagged-union" => 5,
+        "c-callback" => 6,
+        "c-domain-constant" => 7,
+        "c-converter" => 8,
+        "c-wrapper" => 9,
+        "c-const" => 10,
+        other => unreachable!("unplaced C artifact kind `{other}`"),
+    }
+}
+
 impl CbindgenBuilder {
     /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
@@ -808,6 +835,152 @@ impl CbindgenBuilder {
     }
 
     /// [`Self::build`] over a registry described elsewhere — the test seam.
+    /// Every artifact of the generated file the plan does not already hold,
+    /// stated as `ArtifactPlan`s so the plan orders them with the rest.
+    ///
+    /// The kinds here are the ones built from the declarations rather than from
+    /// a compiled crossing: the `#[repr(C)]` mirrors, the reserved sum-type
+    /// values, one wrapper per declared function, the constant aliases, and the
+    /// runtime helpers. A private converter is here too, stated as **following**
+    /// its own fragment — the file emits it because that fragment survived,
+    /// which is a consequence of the fragment being reached rather than a reason
+    /// to keep it.
+    fn file_artifact_plans(
+        &self,
+        registry: &Registry,
+        wrapper_sites: &[prebindgen_registry::generation::SitePlan<
+            crate::compile::CRepresentation,
+        >],
+    ) -> Result<
+        Vec<prebindgen_registry::generation::ArtifactPlan<crate::compile::CRepresentation>>,
+        String,
+    > {
+        use prebindgen_registry::{
+            generation::{ArtifactId, ArtifactPlan},
+            write::{ArtifactKey, RustArtifact as _},
+        };
+
+        // Each artifact already names itself: `RustArtifact::key` is the
+        // identity it answers to everywhere else, so the plan states it under
+        // that and not under a second name built here.
+        fn identity(artifact: &crate::assembly::CFinalArtifact) -> ArtifactId {
+            match artifact.key() {
+                ArtifactKey::Artifact(id) => id,
+                ArtifactKey::Operation(operation) => {
+                    ArtifactId::new("c-converter", operation.to_string())
+                        .expect("an operation identity is a non-empty artifact name")
+                }
+            }
+        }
+        let plan_of = |artifact: crate::assembly::CFinalArtifact| {
+            ArtifactPlan::new(identity(&artifact), Vec::new(), Vec::new(), artifact)
+        };
+
+        let mut out = Vec::new();
+        out.extend(
+            crate::assembly::CDataStruct::all(self, registry)
+                .into_iter()
+                .map(|m| plan_of(crate::assembly::CFinalArtifact::DataStruct(Box::new(m)))),
+        );
+        out.extend(
+            crate::assembly::CEnum::all(self, registry)
+                .into_iter()
+                .map(|m| plan_of(crate::assembly::CFinalArtifact::Enum(Box::new(m)))),
+        );
+        out.extend(
+            crate::assembly::CDomainConstant::all(self, registry)
+                .into_iter()
+                .map(|c| plan_of(crate::assembly::CFinalArtifact::DomainConstant(Box::new(c)))),
+        );
+        // A private converter follows its own fragment: the file emits it
+        // because that fragment survived, which is a consequence of the fragment
+        // being reached rather than a reason to keep it.
+        //
+        // Several fragments can render one operation — the same `bool` codec
+        // reached through two crossings — so a converter is stated once and
+        // follows every fragment that renders it. Emitting it twice is a
+        // duplicate artifact; following only the first would prune it when that
+        // one crossing is not reached.
+        let mut converters: std::collections::BTreeMap<
+            ArtifactId,
+            (
+                crate::assembly::CFinalArtifact,
+                Vec<prebindgen_registry::FragmentId>,
+            ),
+        > = Default::default();
+        let mut converter_order: Vec<ArtifactId> = Vec::new();
+        for fragment in self.compiled.borrow().fragments() {
+            let frozen = fragment.freeze();
+            let Some(converter) = frozen.artifact() else {
+                continue;
+            };
+            let artifact = crate::assembly::CFinalArtifact::Converter(Box::new(converter.clone()));
+            let id = identity(&artifact);
+            match converters.get_mut(&id) {
+                Some((_, follows)) => follows.push(frozen.id().clone()),
+                None => {
+                    converter_order.push(id.clone());
+                    converters.insert(id, (artifact, vec![frozen.id().clone()]));
+                }
+            }
+        }
+        // A converter that calls another is placed after it, stated rather than
+        // inherited: the order used to be the plan's fragment order, which is a
+        // dependency order for the fragments and only incidentally one for the
+        // artifacts they render.
+        let converter_ids: std::collections::HashSet<ArtifactId> =
+            converters.keys().cloned().collect();
+        for id in converter_order {
+            let (artifact, follows) = converters.remove(&id).expect("stated just above");
+            let mut prerequisites: Vec<ArtifactId> =
+                prebindgen_registry::write::RustArtifact::calls(&artifact)
+                    .into_iter()
+                    .filter_map(|call| match call {
+                        ArtifactKey::Operation(operation) => {
+                            ArtifactId::new("c-converter", operation.to_string()).ok()
+                        }
+                        ArtifactKey::Artifact(_) => None,
+                    })
+                    .filter(|required| converter_ids.contains(required) && *required != id)
+                    .collect();
+            prerequisites.sort();
+            prerequisites.dedup();
+            out.push(ArtifactPlan::new(id, prerequisites, Vec::new(), artifact).follows(follows));
+        }
+        let declared = self.declared_functions();
+        let mut wrapped: Vec<_> = registry
+            .flat()
+            .functions()
+            .filter(|function| declared.contains(&function.name))
+            .collect();
+        wrapped.sort_by_key(|function| function.name.to_string());
+        out.extend(wrapped.into_iter().map(|function| {
+            plan_of(crate::assembly::CFinalArtifact::Wrapper(Box::new(
+                crate::assembly::CWrapper::new(self, wrapper_sites, function),
+            )))
+        }));
+        let mut sorted_constants: Vec<_> = registry.flat().constants().collect();
+        sorted_constants.sort_by_key(|constant| constant.name.to_string());
+        out.extend(sorted_constants.into_iter().map(|constant| {
+            plan_of(crate::assembly::CFinalArtifact::Const(Box::new(
+                crate::assembly::CConst::new(self, constant),
+            )))
+        }));
+        // The runtime helpers, kept only while something requires them. They
+        // exist because another artifact calls them, which every artifact above
+        // states as a prerequisite, so the plan decides whether they are emitted
+        // and nothing asks a second time.
+        out.push(
+            plan_of(crate::assembly::CFinalArtifact::Memory(Box::new(
+                crate::assembly::CMemory::new(self),
+            )))
+            .only_if_required(),
+        );
+        out.push(plan_of(crate::assembly::CFinalArtifact::ArrayBuilder).only_if_required());
+
+        Ok(out)
+    }
+
     pub(crate) fn build_with(
         mut self,
         registry: prebindgen_registry::RegistryBuilder,
@@ -880,6 +1053,63 @@ impl CbindgenBuilder {
         for site in sites {
             generation.site(site);
         }
+        // The rest of the file's artifacts, stated to the plan in the order the
+        // file emits them. `topo_artifacts` walks artifacts in the order they
+        // were stated and emits each one's prerequisites first, so the plan's
+        // order is this order — the placement is declared once, here, rather
+        // than written out again beside the plan.
+        //
+        // A private converter is stated as following its own fragment, the way
+        // `prebindgen-jni` states its operations: the file emits it because the
+        // fragment that renders it survived, which is a consequence of that
+        // fragment being reached rather than a reason to keep it.
+        artifacts.extend(
+            self.file_artifact_plans(&registry, &wrapper_sites)
+                .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?,
+        );
+        // One order, declared once. `topo_artifacts` walks artifacts in the
+        // order they were stated and emits each one's prerequisites first, so
+        // stating them in the order the file reads them is what puts them in
+        // that order — rather than a second, hand-written placement beside the
+        // plan.
+        // What an artifact calls is what must precede it, and — for the runtime
+        // helpers — what keeps it at all. Resolved through what each artifact
+        // says it PROVIDES, because an identity is not always answered by the
+        // artifact whose name it looks like: a callback renders the Invoke
+        // helper of its own converter operation, so a wrapper calling that
+        // operation depends on the callback rather than on a converter that does
+        // not exist. Over every artifact, since the callbacks and the type
+        // mirrors are stated by their own passes.
+        let owner: std::collections::HashMap<
+            prebindgen_registry::write::ArtifactKey,
+            prebindgen_registry::generation::ArtifactId,
+        > = artifacts
+            .iter()
+            .flat_map(|artifact| {
+                let payload: &crate::assembly::CFinalArtifact = artifact.payload();
+                let id = artifact.id().clone();
+                prebindgen_registry::write::RustArtifact::provides(payload)
+                    .into_iter()
+                    .map(move |provided| (provided, id.clone()))
+            })
+            .collect();
+        artifacts = artifacts
+            .into_iter()
+            .map(|artifact| {
+                let payload: &crate::assembly::CFinalArtifact = artifact.payload();
+                let mut prerequisites: Vec<_> =
+                    prebindgen_registry::write::RustArtifact::calls(payload)
+                        .into_iter()
+                        .filter_map(|call| owner.get(&call).cloned())
+                        .filter(|required| required != artifact.id())
+                        .chain(artifact.prerequisites().iter().cloned())
+                        .collect();
+                prerequisites.sort();
+                prerequisites.dedup();
+                artifact.requires(prerequisites)
+            })
+            .collect();
+        artifacts.sort_by_key(|artifact| file_order(artifact.id().kind()));
         for artifact in artifacts {
             generation.artifact(artifact);
         }
@@ -896,81 +1126,23 @@ impl CbindgenBuilder {
         // The four kinds the plan already holds are read back from it by kind:
         // the payload IS the final artifact now, so this is a filter rather
         // than a wrapper around a lookup.
-        let planned = |kind: &str| {
-            generation
-                .artifacts()
-                .filter(|artifact| artifact.id().kind() == kind)
-                .map(|artifact| artifact.payload().clone())
-                .collect::<Vec<_>>()
-        };
-        let mut artifacts: Vec<crate::assembly::CFinalArtifact> = Vec::new();
-        artifacts.extend(planned("c-opaque-handle"));
-        artifacts.extend(
-            crate::assembly::CDataStruct::all(&self, &registry)
-                .into_iter()
-                .map(|mirror| crate::assembly::CFinalArtifact::DataStruct(Box::new(mirror))),
-        );
-        artifacts.extend(planned("c-value-opaque"));
-        artifacts.extend(
-            crate::assembly::CEnum::all(&self, &registry)
-                .into_iter()
-                .map(|mirror| crate::assembly::CFinalArtifact::Enum(Box::new(mirror))),
-        );
-        artifacts.extend(planned("c-tagged-union"));
-        artifacts.extend(planned("c-callback"));
-        artifacts.extend(
-            crate::assembly::CDomainConstant::all(&self, &registry)
-                .into_iter()
-                .map(|constant| {
-                    crate::assembly::CFinalArtifact::DomainConstant(Box::new(constant))
-                }),
-        );
-        artifacts.extend(
-            generation
-                .fragments()
-                .filter_map(|fragment| fragment.artifact())
-                .map(|converter| {
-                    crate::assembly::CFinalArtifact::Converter(Box::new(converter.clone()))
-                }),
-        );
-        let declared = self.declared_functions();
-        let mut wrapped: Vec<_> = registry
-            .flat()
-            .functions()
-            .filter(|function| declared.contains(&function.name))
-            .collect();
-        wrapped.sort_by_key(|function| function.name.to_string());
-        artifacts.extend(wrapped.into_iter().map(|function| {
-            crate::assembly::CFinalArtifact::Wrapper(Box::new(crate::assembly::CWrapper::new(
-                &self,
-                &wrapper_sites,
-                function,
-            )))
-        }));
-        let mut sorted_constants: Vec<_> = registry.flat().constants().collect();
-        sorted_constants.sort_by_key(|constant| constant.name.to_string());
-        artifacts.extend(sorted_constants.into_iter().map(|constant| {
-            crate::assembly::CFinalArtifact::Const(Box::new(crate::assembly::CConst::new(
-                &self, constant,
-            )))
-        }));
-
-        let calls: std::collections::HashSet<_> = artifacts
-            .iter()
-            .flat_map(prebindgen_registry::write::RustArtifact::calls)
-            .collect();
+        // The file IS the plan: every artifact it emits, in the plan's own
+        // order, taken from the plan's payloads. Nothing is assembled beside the
+        // plan and checked to agree with it.
+        //
+        // The runtime helpers are the exception, and are placed ahead of it. They
+        // exist because another artifact CALLS them, which the plan expresses as
+        // a prerequisite — and a prerequisite is a reason to place one artifact
+        // before another, not a reason to keep something that would otherwise be
+        // dropped. An artifact with no `follows` is kept unconditionally, so
+        // stating the helpers would emit them into every binding whether or not
+        // anything reaches them. Asking what the artifacts call is what makes the
+        // answer exact: a `Vec` delivered to a callback needs the array builder
+        // just as a `Vec` return does, which a gate over return types alone
+        // missed (#437).
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
-        let arrays = calls.contains(&crate::assembly::array_builder_key());
-        if arrays || calls.contains(&crate::assembly::memory_key()) {
-            assembly.artifact(crate::assembly::CFinalArtifact::Memory(Box::new(
-                crate::assembly::CMemory::new(&self),
-            )));
-        }
-        if arrays {
-            assembly.artifact(crate::assembly::CFinalArtifact::ArrayBuilder);
-        }
-        for artifact in artifacts {
-            assembly.artifact(artifact);
+        for artifact in generation.artifacts() {
+            assembly.artifact(artifact.payload().clone());
         }
         self.assembly = Some(assembly.build(&registry, self.source_module.as_ref()));
         self.generation = Some(generation);
