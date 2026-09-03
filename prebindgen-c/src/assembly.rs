@@ -755,8 +755,12 @@ fn artifact_id(kind: &str, name: impl Into<String>) -> ArtifactKey {
 #[derive(Clone)]
 pub(crate) struct CMemory {
     /// The declared freer's exported symbol.
-    /// `None` when the binding declared no free function. Checked at render,
-    /// which is where the binding has actually asked for memory it must free.
+    /// `None` when the binding declared no free function.
+    ///
+    /// Optional because these helpers are planned whether or not one is
+    /// declared, and kept only when something requires them. Whether that
+    /// happened is the plan's answer, and `build_with` reads it there — so a
+    /// rendered memory artifact always has a declaration.
     free_ident: Option<syn::Ident>,
 }
 
@@ -768,9 +772,10 @@ impl CMemory {
     /// them requires it.
     ///
     /// So a binding with no free function still PLANS these helpers — it just
-    /// does not keep them. The declaration is checked where they are rendered,
-    /// which is the point at which the binding has actually asked for memory it
-    /// must free.
+    /// does not keep them. Whether it kept them is what `build_with` asks the
+    /// finished plan, and it refuses a binding that did without declaring a free
+    /// function. The refusal stays in the build phase: `write_rust` renders an
+    /// assembly that is already valid.
     pub(crate) fn new(decls: &CbindgenBuilder) -> Self {
         Self {
             free_ident: decls.free_fn.as_ref().map(|name| format_ident!("{name}")),

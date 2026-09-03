@@ -1130,25 +1130,23 @@ impl CbindgenBuilder {
         // order, taken from the plan's payloads. Nothing is assembled beside the
         // plan and checked to agree with it.
         //
-        // The runtime helpers are the exception, and are placed ahead of it. They
-        // exist because another artifact CALLS them, which the plan expresses as
-        // a prerequisite — and a prerequisite is a reason to place one artifact
-        // before another, not a reason to keep something that would otherwise be
-        // dropped. An artifact with no `follows` is kept unconditionally, so
-        // stating the helpers would emit them into every binding whether or not
-        // anything reaches them. Asking what the artifacts call is what makes the
-        // answer exact: a `Vec` delivered to a callback needs the array builder
-        // just as a `Vec` return does, which a gate over return types alone
-        // missed (#437).
-        // The memory helpers survive the plan's pruning only when a kept
-        // artifact requires them, which is exactly when this binding hands C
-        // memory it must free. Checked here, while the generator is still being
-        // built: `write_rust` renders an assembly that is already valid, so a
-        // missing declaration must not reach it.
+        // The runtime helpers are in it like everything else, as dependency-only
+        // artifacts: they exist because another artifact CALLS them, the plan
+        // states that as a prerequisite, and the prerequisite closure keeps them
+        // when a caller is kept. So the plan decides whether they are emitted.
+        //
+        // Which makes it the thing to ask. The memory artifact survives pruning
+        // exactly when this binding hands C memory it must free — a `Vec`
+        // delivered to a callback as much as a `Vec` returned, which a gate over
+        // return types alone missed (#437) — so the declaration is checked
+        // against the plan's answer rather than recomputed. Here, while the
+        // generator is still being built: `write_rust` renders an assembly that
+        // is already valid, so a missing declaration must not reach it.
+        let memory = crate::assembly::memory_key();
         if self.free_fn.is_none()
-            && generation
-                .artifacts()
-                .any(|artifact| artifact.id().kind() == "c-runtime")
+            && generation.artifacts().any(|artifact| {
+                prebindgen_registry::write::ArtifactKey::Artifact(artifact.id().clone()) == memory
+            })
         {
             return Err(prebindgen_registry::ScanError::AdapterInvariant {
                 message: "Cbindgen: the generated layer hands C memory it must free — a \
