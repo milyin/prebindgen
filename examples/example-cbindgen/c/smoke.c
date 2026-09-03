@@ -483,6 +483,204 @@ static void test_optional_callback_arg(void) {
     calculator_drop(c);
 }
 
+static void test_handle_lifecycle(void) {
+    char *e = NULL;
+    double out = -1.0;
+    calculator_t *c = calculator_new();
+
+    CHECK(calculator_get_value(c) == 0.0);
+    CHECK(calculator_get_count(c) == 0);
+
+    CHECK(calculator_apply(c, Add, 2.0, &out, &e));
+    CHECK(e == NULL);
+    CHECK(out == 2.0);
+    CHECK(calculator_apply(c, Mul, 3.0, &out, &e));
+    CHECK(out == 6.0);
+
+    /* The mutation stuck on the Rust side of the handle, not on a copy. */
+    CHECK(calculator_get_value(c) == 6.0);
+    CHECK(calculator_get_count(c) == 2);
+    CHECK(calculator_is(c, 6.0));
+    CHECK(!calculator_is(c, 2.0));
+
+    /* The clone carries the state over and then diverges. */
+    calculator_t *clone = calculator_new_clone(c);
+    CHECK(calculator_get_value(clone) == 6.0);
+    CHECK(calculator_get_count(clone) == 2);
+    CHECK(calculator_apply(clone, Sub, 1.0, &out, &e));
+    CHECK(out == 5.0);
+    CHECK(calculator_get_value(clone) == 5.0);
+    CHECK(calculator_get_value(c) == 6.0);
+
+    calculator_drop(clone);
+    calculator_drop(c);
+}
+
+/* The `char **e` channel on a `Result`-returning function. Three sources of
+ * error reach it — a rejected input string, a domain error, and a discriminant
+ * `operation_t` has no variant for — and on the success path neither the error
+ * nor the out-param is touched by the other's convention. */
+static void test_error_channel(void) {
+    char *e = NULL;
+    double out = -1.0;
+
+    /* Ok arm: the handle comes back, `e` stays NULL. */
+    calculator_t *parsed = calculator_new_from_str("42.5", &e);
+    CHECK(parsed != NULL);
+    CHECK(e == NULL);
+    CHECK(calculator_get_value(parsed) == 42.5);
+    CHECK(calculator_get_count(parsed) == 1);
+
+    /* Err arm: NULL handle, message through `e`, and it is ours to free. */
+    calculator_t *bad = calculator_new_from_str("not a number", &e);
+    CHECK(bad == NULL);
+    CHECK(e != NULL);
+    CHECK(strstr(e, "parse error") != NULL);
+    example_free(e);
+    e = NULL;
+
+    /* A domain error leaves the out-param and the handle alone. */
+    CHECK(!calculator_apply(parsed, Div, 0.0, &out, &e));
+    CHECK(e != NULL);
+    CHECK(strstr(e, "division by zero") != NULL);
+    CHECK(out == -1.0);
+    CHECK(calculator_get_value(parsed) == 42.5);
+    CHECK(calculator_get_count(parsed) == 1);
+    example_free(e);
+    e = NULL;
+
+    /* A C caller can pass an `int` no `operation_t` enumerator names. Like the
+     * union tag, it is validated before a Rust `Operation` exists, and reported
+     * through the same channel rather than materialised. */
+    enum operation_t op;
+    int raw = 77;
+    memcpy(&op, &raw, sizeof raw);
+    CHECK(!calculator_apply(parsed, op, 1.0, &out, &e));
+    CHECK(e != NULL);
+    CHECK(strstr(e, "invalid discriminant 77") != NULL);
+    CHECK(out == -1.0);
+    CHECK(calculator_get_value(parsed) == 42.5);
+    example_free(e);
+
+    calculator_drop(parsed);
+}
+
+/* The two owned returns. Both are plain malloc'd blocks released by the single
+ * `example_free` the binding declares — the handles keep their typed `*_drop`,
+ * these do not. An empty `Vec` is the null/zero pair, not a block. */
+static void test_owned_returns(void) {
+    char *e = NULL;
+    double out = 0.0;
+    calculator_t *c = calculator_new();
+
+    /* A `String` return crosses as a NUL-terminated `char *`. */
+    char *empty_repr = calculator_to_string(c);
+    CHECK(strcmp(empty_repr, "Calculator(0)") == 0);
+    example_free(empty_repr);
+
+    /* No history yet: the array is (NULL, 0), with nothing to free. */
+    size_t len = 99;
+    double *none = calculator_get_history(c, &len);
+    CHECK(none == NULL);
+    CHECK(len == 0);
+
+    CHECK(calculator_apply(c, Add, 2.0, &out, &e));
+    CHECK(calculator_apply(c, Mul, 3.0, &out, &e));
+    CHECK(e == NULL);
+
+    char *repr = calculator_to_string(c);
+    CHECK(strcmp(repr, "Calculator(6)") == 0);
+    example_free(repr);
+
+    /* `Vec<f64>` crosses as a pointer + a length out-param, in order. */
+    double *history = calculator_get_history(c, &len);
+    CHECK(len == 2);
+    CHECK(history != NULL);
+    CHECK(history[0] == 2.0);
+    CHECK(history[1] == 6.0);
+    example_free(history);
+
+    calculator_drop(c);
+}
+
+/* The closure struct C fills in and Rust calls back through. `context` is C's
+ * allocation: the generated wrapper owns the closure for the duration and
+ * promises to call `drop` exactly once when it releases it. Both halves are
+ * checked — the count here, and the block itself by LeakSanitizer, which is
+ * what makes a missing `drop` a failure rather than a silent PASS. */
+#define CB_CTX_MAGIC 0xC0FFEEu
+
+static double g_seen[8];
+static size_t g_seen_n;
+static int g_drops;
+
+static void cb_call(double v, void *ctx) {
+    CHECK(ctx != NULL && *(uint32_t *)ctx == CB_CTX_MAGIC);
+    if (g_seen_n < sizeof g_seen / sizeof g_seen[0]) {
+        g_seen[g_seen_n] = v;
+    }
+    g_seen_n++;
+}
+
+static void cb_drop(void *ctx) {
+    CHECK(ctx != NULL && *(uint32_t *)ctx == CB_CTX_MAGIC);
+    free(ctx);
+    g_drops++;
+}
+
+static void test_callback(void) {
+    char *e = NULL;
+    double out = 0.0;
+    calculator_t *c = calculator_new();
+    CHECK(calculator_apply(c, Add, 2.0, &out, &e));
+    CHECK(calculator_apply(c, Mul, 3.0, &out, &e));
+    CHECK(e == NULL);
+
+    uint32_t *ctx = malloc(sizeof *ctx);
+    *ctx = CB_CTX_MAGIC;
+    closure_value_t f = {ctx, cb_call, cb_drop};
+
+    calculator_for_each(c, f);
+
+    /* One upcall per recorded value, in application order, and the context
+     * released once the call returned. */
+    CHECK(g_seen_n == 2);
+    CHECK(g_seen[0] == 2.0);
+    CHECK(g_seen[1] == 6.0);
+    CHECK(g_drops == 1);
+
+    calculator_drop(c);
+}
+
+/* Plain values: a `data_struct` and a fieldless enum crossing both ways. `Foo`'s
+ * field SET is target- and feature-dependent (only `id` is universal), so the
+ * checks are on `id` and on the round trip, not on a fixed layout. `caption_t`
+ * is the data struct with an owned `char *` field — no destructor is generated
+ * for a data struct, so the field is released by hand. */
+static void test_value_types(void) {
+    foo_t f = foo_new(9);
+    CHECK(f.id == 9);
+    CHECK(foo_get_id(f) == 9);
+
+    /* The discriminants differ per target arch, so compare against the
+     * enumerator the header defines for THIS build rather than a literal. */
+    enum inside_foo_t d = inside_foo_default();
+    CHECK(d == DouddleDee);
+    CHECK(inside_foo_value(d) == (int32_t)DouddleDee);
+    CHECK(inside_foo_value(DouddleDum) == (int32_t)DouddleDum);
+
+    caption_t cap = caption_new(3, "caption", true);
+    CHECK(cap.id == 3);
+    CHECK(strcmp(cap.text, "caption") == 0);
+    CHECK(cap.emphatic == true);
+    example_free(cap.text);
+
+    caption_t plain = caption_new(4, "", false);
+    CHECK(strcmp(plain.text, "") == 0);
+    CHECK(plain.emphatic == false);
+    example_free(plain.text);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
@@ -493,6 +691,11 @@ int main(void) {
     test_out_of_domain_bool_data_struct_field();
     test_nested_union_payload();
     test_alias_preflight();
+    test_handle_lifecycle();
+    test_error_channel();
+    test_owned_returns();
+    test_callback();
+    test_value_types();
     test_optional_callback_arg();
     test_optional_enum_callback_arg();
     test_allocating_callback_arg();
@@ -505,6 +708,8 @@ int main(void) {
            "converter-derived payloads, out-of-domain bool payload and "
            "data-struct field, nested union payload, alias preflight, "
            "optional callback argument (scalar and zero-less enum), "
-           "allocating callback argument with and without a call\n");
+           "allocating callback argument with and without a call; "
+           "handle lifecycle, error channel, owned returns, closure struct, "
+           "by-value structs and enums\n");
     return 0;
 }
