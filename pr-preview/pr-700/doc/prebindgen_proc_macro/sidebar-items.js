@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["prebindgen"],"macro":["features","manifest_dir","prebindgen_out_dir"]};
