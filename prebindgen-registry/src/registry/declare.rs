@@ -241,6 +241,40 @@ impl RegistryBuilder {
         Ok(self)
     }
 
+    /// A nullary getter this binding emits for a value it exposes, registered as
+    /// the model function it is.
+    ///
+    /// A binding that hands a constant across through
+    /// `pub fn get_<name>() -> T` has a function the model does not: nothing
+    /// captured it, so it is in no export set and no walk reaches its return.
+    /// Stated here, it is an ordinary function of the binding, and its return is
+    /// an ordinary site.
+    ///
+    /// Distinct from [`Self::local_function`], which lowers a signature a build
+    /// script wrote: this one is synthesised from a name and a type the binding
+    /// already holds, so there is no syntax to check and none to disagree with
+    /// what the emitter renders.
+    pub fn local_getter(
+        mut self,
+        ident: syn::Ident,
+        ty: prebindgen_flat::flat::TypeRef,
+        origin: String,
+    ) -> Result<Self, ScanError> {
+        if self.registry.flat.element(&ident).is_some() {
+            return Err(ScanError::AdapterInvariant {
+                message: format!(
+                    "binding-local getter `{ident}` collides with a `#[prebindgen]` item — \
+                     the generated call would resolve the wrong fn; rename the getter"
+                ),
+            });
+        }
+        self.registry.flat.add_local_function(
+            prebindgen_flat::flat::Function::synthetic_getter(ident, ty),
+            origin,
+        );
+        Ok(self)
+    }
+
     /// A function a decomposition reaches through rather than emits — excluded
     /// from constructor composition, and the only functions a decomposer record
     /// may name.
