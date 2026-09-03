@@ -76,6 +76,16 @@ impl JWrapper {
     }
 }
 
+/// The ident of the nullary getter a declared value is emitted through.
+///
+/// **The one derivation of that name.** Four things have to agree on it: the
+/// Rust extern, the Kotlin `val` initializer, the model function
+/// `declare_into` registers, and the claim that keeps it out of the unclaimed
+/// report. They agree because they all call this (#695 review).
+pub(crate) fn const_getter_ident(name: &str) -> syn::Ident {
+    format_ident!("const_get_{}", name.to_lowercase())
+}
+
 /// The synthetic nullary getter signature a declared const is emitted
 /// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
 /// the Rust extern (the constant artifact's getter, a [`JWrapper`] whose
@@ -85,7 +95,7 @@ impl JWrapper {
 pub(crate) fn const_getter_fn(
     c: &prebindgen_registry::flat::Constant,
 ) -> prebindgen_registry::flat::Function {
-    let ident = format_ident!("const_get_{}", c.name.to_string().to_lowercase());
+    let ident = const_getter_ident(&c.name.to_string());
     // No lookup: a constant element carries its own `TypeRef`.
     prebindgen_registry::flat::Function::synthetic_getter(ident, c.ty.clone())
 }
@@ -189,7 +199,7 @@ pub(crate) fn const_expr_getter_fn(
     ty: &syn::Type,
     ext: &crate::jni::Declarations,
 ) -> prebindgen_registry::flat::Function {
-    let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
+    let ident = const_getter_ident(kotlin_name);
     // The one lookup this path needs: the type is named by a build script, so
     // no element carries it. A miss means the declared type never entered the
     // pipeline, which is a binding error worth naming rather than a `None` to
