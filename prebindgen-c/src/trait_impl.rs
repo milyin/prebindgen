@@ -1140,6 +1140,26 @@ impl CbindgenBuilder {
         // answer exact: a `Vec` delivered to a callback needs the array builder
         // just as a `Vec` return does, which a gate over return types alone
         // missed (#437).
+        // The memory helpers survive the plan's pruning only when a kept
+        // artifact requires them, which is exactly when this binding hands C
+        // memory it must free. Checked here, while the generator is still being
+        // built: `write_rust` renders an assembly that is already valid, so a
+        // missing declaration must not reach it.
+        if self.free_fn.is_none()
+            && generation
+                .artifacts()
+                .any(|artifact| artifact.id().kind() == "c-runtime")
+        {
+            return Err(prebindgen_registry::ScanError::AdapterInvariant {
+                message: "Cbindgen: the generated layer hands C memory it must free — a \
+                          `char*` block (a `String` return or a `String` data-struct field) \
+                          or an array block (a `Vec` returned or delivered to a callback) — \
+                          but no memory-freeing function is declared: add \
+                          `.free_memory_function(\"z_free\")`"
+                    .to_string(),
+            }
+            .into());
+        }
         let mut assembly = prebindgen_registry::write::AssemblyBuilder::new();
         for artifact in generation.artifacts() {
             assembly.artifact(artifact.payload().clone());

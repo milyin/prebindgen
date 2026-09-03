@@ -96,15 +96,26 @@ fn free_memory_function_required() {
         .error()
         .function(syn::parse_quote!(z_describe));
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = cbindgen
-            .build_with(registry)
-            .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nofree.rs")));
+    // The failure must come from `build_with`, not from writing. `write_rust`
+    // renders an assembly that is already valid, so a binding missing the
+    // declaration must never reach it — asserting over both phases at once
+    // passes either way and would not notice the difference.
+    let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        cbindgen.build_with(registry)
     }));
-    assert!(
-        result.is_err(),
-        "expected a build error when string memory is produced without a free fn"
-    );
+    match built {
+        // A panic here is the older shape of the same refusal, and is still a
+        // refusal at build time.
+        Err(_) => {}
+        Ok(Err(error)) => assert!(
+            error.to_string().contains("free_memory_function"),
+            "the refusal names what to declare: {error}"
+        ),
+        Ok(Ok(_)) => panic!(
+            "a binding that hands C memory it must free, with no free function \
+             declared, was built rather than refused"
+        ),
+    }
 }
 
 /// The five manglers generate every C-facing name from the Rust types — the
