@@ -107,7 +107,17 @@ an adapter used to make by writing a walk are now made by stating something:
 - a runtime helper is emitted because a kept artifact requires it, which the plan
   decides, rather than because a scan over `calls()` said so.
 
-A third adapter inherits all of that, and inherits no walk to copy.
+A third adapter inherits all of that, and writes **no crossing walk and no site
+walk**: the two enumerations each adapter used to write are the registry's.
+
+What a third adapter still copies is the **conveyor** — the sequence from
+declarations to assembly. `build_with` in each adapter builds its declarations and tables, calls
+`generate`, calls `build`, calls `compile_sites`, runs its own loops, builds the
+`GenerationPlan` and builds the assembly, and it is the adapter that holds the
+state between those calls, because `Registry` is adapter-neutral and immutable
+after `build`. #676 replaced the two walks inside that sequence and left the
+sequence. Making the conveyor itself the registry's is a successor's work,
+diagnosed in issue #689, "What #676 found".
 
 ## What landed
 
@@ -145,10 +155,24 @@ drifts every time one lands, and this document has already corrected one:
   model function of this binding, so the walk reaches its return and
   `return_site` is a lookup and nothing else (#695).
 
-## The waivers
+## What the adapters still plan privately
 
-Two positions are still planned by their adapter, and both are named rather than
-quietly left:
+Issue #689 is the authoritative account, read off this branch; its property 2
+covers the conveyor above and its property 5 the delivery paths below. Two
+things are named here because they are what the site walk does not reach.
+
+**Delivery is not a registry concept.** The site walk enumerates the positions
+the model has; what a target *does* at one — return it, pass it through an
+out-parameter, throw it, push it through a callback — is not in the model, and
+the registry has no word for it. Adapters say it three ways: by declining a site
+through `Compile::plans_site`, by rebinding what a site crosses through
+`Bindings`, and by planning privately. The private paths are JniGen's
+`freeze_out_wires`, `freeze_output_pipeline` and `freeze_output_chain`, its
+`Delivery::{Return, Callback}` in `unfold`, and `DeliveryBridge`. So "the
+registry compiles every site" holds modulo what each adapter declined or
+rebound, and the two positions below are where even that does not hold.
+
+Both are named rather than quietly left:
 
 **A no-`parts` callback-delivered return.** A callback-delivered expansion whose
 source has no `parts` row is planned on its default row, so the walk's plan
@@ -169,14 +193,19 @@ be asked after the walk has run. Closing it needs either pruning what the widene
 walk compiles or a row that is compiled once its parts have crossed — a model
 change, recorded here for the successor.
 
-Every other site of every exported function is enumerated and compiled by the
-registry.
+Every other site of every exported function is enumerated by the registry and
+compiled through its walk, with delivery still answered by the adapter as above.
 
 ## What a successor inherits
 
-Steps 3b, 4, 5 and 6b are deferred to a successor issue. Each was built or
-priced, and each rests on something #675 assumes that this code does not bear
-out:
+**Issue #689 is the successor's input**: five properties of
+the current design read off this branch, each with the direction a fix takes and
+no plan. Two of them are the scope this umbrella did not close — property 2, the
+adapter-owned conveyor, and property 5, delivery — and the rest of this section
+is the part of that diagnosis found by building the deferred steps.
+
+Steps 3b, 4, 5 and 6b are deferred. Each was built or priced, and each rests on
+something #675 assumes that this code does not bear out:
 
 1. **The registry cannot build a `Compile::Fragment`.** It is the adapter's type
    and the registry never looks inside one. Step 4's "the registry wraps the
