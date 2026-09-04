@@ -75,10 +75,23 @@ impl UnfoldPolicy for JniUnfold<'_> {
         }
     }
 
-    fn arm_part_name(&self, variant: &syn::Ident, member: &syn::Member, _index: usize) -> String {
+    fn arm_part_name(
+        &self,
+        sum: &TypeRef,
+        variant: &syn::Ident,
+        member: &syn::Member,
+        _index: usize,
+    ) -> String {
         // The Kotlin variant class's name and the Kotlin property's, which is
         // what the slot is called on the far side — neither is the Rust name.
-        let kotlin = match self.decls.types.get(&self.key).and_then(|c| c.sum()) {
+        // Read off the SUM's own declaration: a sum reached as a part of
+        // something else renames its variants for itself.
+        let kotlin = match self
+            .decls
+            .types
+            .get(&sum.stripped_key())
+            .and_then(|c| c.sum())
+        {
             Some(cfg) => self.decls.sum_variant_class_name(cfg, variant),
             None => variant.to_string(),
         };
@@ -188,23 +201,31 @@ impl Declarations {
                 key: plan.source.stripped_key(),
             };
             let row = RecipeName::new("parts");
-            let (leaves, hoists, coverage) =
-                match folding.unfold(&policy, bindings, &plan.source, &row) {
-                    Ok(read) => read,
-                    // A shape the view does not represent yet — no row states
-                    // this decomposition, or it states one in a form still
-                    // being replaced. Step 3's remaining work rather than a
-                    // disagreement.
-                    Err(e) if e.is_not_yet_readable() => {
-                        skipped.push(format!("{what}: {}", e.code()));
-                        continue;
-                    }
-                    // Anything else is a row that is WRONG: two leaves of one
-                    // name, two identities, a cycle, an accessor or an
-                    // alternative the model does not have. Skipping those would
-                    // let a bad row disable the check that found it.
-                    Err(e) => return Err(format!("{what} has a row that cannot be read: {e}")),
-                };
+            // The reading as the decomposition holds it: a plan reached by
+            // reference is lent the value, and its root hands out a borrow
+            // rather than the value itself. `plan.source` is the owned core, so
+            // the borrow has to be put back for the walk to see it.
+            let reading = match plan.by_ref {
+                true => plan.source.borrowed(),
+                false => plan.source.clone(),
+            };
+            let (leaves, hoists, coverage) = match folding.unfold(&policy, bindings, &reading, &row)
+            {
+                Ok(read) => read,
+                // A shape the view does not represent yet — no row states
+                // this decomposition, or it states one in a form still
+                // being replaced. Step 3's remaining work rather than a
+                // disagreement.
+                Err(e) if e.is_not_yet_readable() => {
+                    skipped.push(format!("{what}: {}", e.code()));
+                    continue;
+                }
+                // Anything else is a row that is WRONG: two leaves of one
+                // name, two identities, a cycle, an accessor or an
+                // alternative the model does not have. Skipping those would
+                // let a bad row disable the check that found it.
+                Err(e) => return Err(format!("{what} has a row that cannot be read: {e}")),
+            };
             // The walk says where it stopped; nothing is inferred from the
             // SIZE of what came back. A measure that skips whenever one side is
             // smaller cannot tell a shape the rows do not state yet from a

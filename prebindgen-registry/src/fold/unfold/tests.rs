@@ -54,7 +54,13 @@ impl UnfoldPolicy for Jni {
         }
     }
 
-    fn arm_part_name(&self, variant: &syn::Ident, member: &syn::Member, _index: usize) -> String {
+    fn arm_part_name(
+        &self,
+        _sum: &TypeRef,
+        variant: &syn::Ident,
+        member: &syn::Member,
+        _index: usize,
+    ) -> String {
         let member = match member {
             syn::Member::Named(name) => name.to_string(),
             syn::Member::Unnamed(index) => format!("v{}", index.index),

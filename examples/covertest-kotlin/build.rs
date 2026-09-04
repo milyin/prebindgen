@@ -136,14 +136,9 @@ fn main() {
             "`annotated_new`'s return: optional-layer",
             "`boxed_latest`'s return: no-parts-row",
             "`duration_boundary_echo`'s return: optional-layer",
-            "`envelope_new`'s return: optional-layer",
-            "`frame_new`'s return: optional-layer",
-            "`hold_policy_echo`'s return: optional-layer",
             "`ledger_new`'s return: optional-part",
             "`maybe_holder_new`'s return: optional-layer",
-            "`observation_new`'s return: optional-layer",
             "`probe_new`'s return: row-states-no-parts",
-            "`rack_new`'s return: optional-layer",
             "`span_holder_new`'s return: no-parts-row",
             "`storage_get_vec`'s return: optional-layer",
             "`storage_get`'s return: optional-layer",
@@ -163,15 +158,12 @@ fn main() {
             "`vault_holder_new`'s return: no-parts-row",
             "the callback argument `& Payload`: optional-layer",
             "the callback argument `& [Payload]`: optional-layer",
-            "the callback argument `Envelope`: optional-layer",
-            "the callback argument `Frame`: optional-layer",
             "the callback argument `Ledger`: optional-part",
             "the callback argument `Option < Payload >`: optional-layer",
             "the callback argument `Probe`: row-states-no-parts",
-            "the callback argument `Rack`: optional-layer",
             "the callback argument `Report`: row-states-no-parts",
         ])
-        .expect_parity_compared(22)
+        .expect_parity_compared(30)
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
