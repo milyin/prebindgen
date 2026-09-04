@@ -209,7 +209,7 @@ pub struct Registry {
     pub(crate) output_types: HashMap<TypeKey, TypeCell>,
 
     /// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
-    /// Filled by [`crate::expand::apply`] before resolution; read
+    /// Filled from [`Decompositions::expansion_plans`] before resolution; read
     /// by language adapters at the parameter-emission site. Empty unless the
     /// adapter declared expansions.
     pub(crate) expansion_plans: HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan>,

@@ -686,7 +686,7 @@ impl JniGenBuilder {
     /// Shared by [`Self::accept_function`] (free package fns) and
     /// [`Self::accept_members`] (class members) — the overrides mean the same
     /// thing in both positions. Nothing is lowered here: variant/field lists
-    /// are interpreted at the point of use ([`Self::build_expansions`] /
+    /// are interpreted at the point of use ([`Self::expansion_rows`] /
     /// [`Self::build_deconstructors`]) so field-name inheritance and the
     /// rust-side-only checks see the complete declaration set.
     fn accept_fn_expands(&mut self, decl: FunctionDecl) {
@@ -829,7 +829,7 @@ impl Declarations {
     }
 
     /// Lower the raw [`ExpandParamDecl`]s into the core's immutable
-    /// [`Expansions`] record set at the point of use — a pure declaration →
+    /// rows at the point of use ([`Self::expansion_rows`]) — a pure declaration →
     /// record mapping. Building on demand keeps declarations
     /// order-independent — a `param_expand` may precede or follow the
     /// `package` that declares its constructors (which is also why the
@@ -1158,7 +1158,7 @@ impl Declarations {
 
     /// Lower the raw [`ExpandReturnDecl`]s into the core's immutable
     /// [`Deconstructors`] record set — the output-side peer of
-    /// [`Self::build_expansions`], a pure declaration → record mapping.
+    /// [`Self::expansion_rows`], a pure declaration → row mapping.
     /// Duplicate targets pass through unmerged; core `apply` diagnoses
     /// them. `skip_output` is derived from the class members: a
     /// `.constructor()` member's return is a factory, never

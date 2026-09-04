@@ -2,8 +2,8 @@
 //!
 //! Each test declares a row, folds it, and states the leaves it expects by
 //! name, in order, with their types — because the names and the order are the
-//! thing under test. They are the ones `expand::apply` produced before the row
-//! replaced it, checked against it while both existed (#701 step 2).
+//! thing under test. They are the ones the decomposition produced before the
+//! row replaced it, checked against it while both existed (#701 step 2).
 
 use prebindgen_flat::flat::{ScalarKind, TypeRef};
 
@@ -19,7 +19,8 @@ enum Variant {
     Identity,
 }
 
-/// The JVM's answers, which are the ones `expand::apply` hard-codes today.
+/// The JVM's answers, which `prebindgen-jni` states for itself in
+/// `jni::param_rows`. Repeated here so this crate's tests need no adapter.
 struct Jni;
 
 fn ident(s: &str) -> syn::Ident {

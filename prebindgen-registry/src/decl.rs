@@ -26,7 +26,7 @@ pub fn declared_origin(ty: syn::Type) -> Origin<syn::Type> {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Shared local accumulators (replayed into `Expansions`/`Deconstructors`
+// Shared local accumulators (replayed into an adapter's rows/`Deconstructors`
 // by the accept logic in `builder.rs` once a decl is handed to `Declarations`)
 // ──────────────────────────────────────────────────────────────────────
 

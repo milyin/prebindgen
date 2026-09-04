@@ -400,6 +400,62 @@ fn rust_side_only_error_type() {
     assert!(base_file.contains("funinterfaceZErrHandler"), "{all}");
 }
 
+/// An accessor reads a value out; it never builds one, so a per-function
+/// expansion on one is refused.
+///
+/// The refusal is for the declaration, not for what it happens to ask: an
+/// accessor is not composed whatever variants are listed, so even a list that
+/// would otherwise mean "pass the plain value" cannot mean anything here. The
+/// type-level `.default()` application skips accessors already, which is a
+/// different rule and does not cover this one.
+#[test]
+fn a_per_function_expansion_on_an_accessor_is_refused() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_make(s: String) -> ZThing { unimplemented!() }",
+        "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
+        "pub fn z_get() -> ZThing { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let error = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing))
+                // Reading `ZThing` through `z_thing_name` is what makes that
+                // function an accessor.
+                .fun(prebindgen_registry::fun!(z_get))
+                .fun(
+                    // ... and this asks for its `t` to be built from leaves.
+                    prebindgen_registry::fun!(z_thing_name).expand_param(
+                        "t",
+                        prebindgen_registry::expand_param!(ZThing)
+                            .variant(prebindgen_registry::fun!(z_thing_make)),
+                    ),
+                ),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZThing)
+                .field(prebindgen_registry::fun!(z_thing_name)),
+        )
+        .build_with(registry)
+        .expect_err("an accessor composes nothing");
+    let message = error.to_string();
+    assert!(
+        message.contains("z_thing_name") && message.contains("accessor"),
+        "the refusal names the function and why: {message}"
+    );
+}
+
 /// A `data_class` and a `sealed_class` both already state the row saying they
 /// cross whole, and both may also be expanded.
 ///

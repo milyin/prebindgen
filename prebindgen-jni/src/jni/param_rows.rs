@@ -8,10 +8,9 @@
 //! [`Folding::fold`](prebindgen_registry::fold::Folding::fold) can read a
 //! `FoldPlan` back off them.
 //!
-//! While `expand::apply` still builds the plans the emitters use, every plan
-//! read off a row is compared against the one it built and a build fails on any
-//! difference (#701 step 2). The comparison goes with the older path, once
-//! every declaration this binding makes has been through it.
+//! This is where the parameter side is decided. The plans the emitters read
+//! come from here, built before there is a registry, and the readings they
+//! deliver are handed over beside them (#701 step 2).
 
 use prebindgen_registry::{
     expand::{FoldLeaf, FoldPlan},
@@ -42,8 +41,9 @@ pub(crate) fn site_row(func: &syn::Ident, param: &str) -> RecipeName {
 
 /// What the JVM calls the values a parameter comes apart into.
 ///
-/// Every answer here is one `expand::apply` writes into a plan today, and the
-/// comparison below is what holds them to it.
+/// A row states none of this: what a selector and a presence flag are called
+/// and typed, how a leaf is named under a product, an arm or a nested build,
+/// and what a part's type becomes inside an arm are all the target's answers.
 pub(crate) struct JniFold;
 
 fn ident(name: &str) -> syn::Ident {
@@ -193,9 +193,8 @@ impl Declarations {
     /// Which parameters are built from leaves, derived from the declarations
     /// alone.
     ///
-    /// The rules are the ones `expand::apply` applies, and they are the half of
-    /// the parameter side a row cannot state: a row says how a type is built,
-    /// and this says where that happens. A per-function `.expand_param(...)`
+    /// This is the half of the parameter side a row cannot state: a row says
+    /// how a type is built, and this says where that happens. A per-function `.expand_param(...)`
     /// names its own position. A type-level `expand_param!` applies to every
     /// parameter of that type in every exported function — except an accessor,
     /// which is not a composer; except the receiver a method is called on,
@@ -270,8 +269,22 @@ impl Declarations {
     /// parameter the function does not have, or a type it does not take, is a
     /// declaration that would otherwise do nothing at all — the row would sit
     /// on a crossing nothing reaches.
-    fn check_param_expands(&self, model: &Flat) -> Result<(), String> {
+    fn check_param_expands(
+        &self,
+        model: &Flat,
+        accessors: &std::collections::HashSet<syn::Ident>,
+    ) -> Result<(), String> {
         for (func, param, decl) in &self.fn_param_expands {
+            // An accessor reads a value out; it never builds one. Refused for
+            // every such declaration, including one asking for the plain
+            // value: the answer is the same either way, and a declaration that
+            // cannot mean anything is worth saying so about.
+            if accessors.contains(func) {
+                return Err(format!(
+                    "`{func}` is an accessor, so its `{param}` is not built from leaves — an \
+                     accessor reads a value out rather than composing one"
+                ));
+            }
             let Some(function) = model.function(func) else {
                 return Err(format!(
                     "`{func}` has a parameter expansion, and no `#[prebindgen]` function of \
@@ -316,7 +329,7 @@ impl Declarations {
         exports: &std::collections::HashSet<syn::Ident>,
         accessors: &std::collections::HashSet<syn::Ident>,
     ) -> Result<(ExpansionPlans, Vec<TypeRef>), String> {
-        self.check_param_expands(model)?;
+        self.check_param_expands(model, accessors)?;
         let mut builder = Recipes::builder();
         let mut seen = std::collections::HashSet::new();
         for (ty, name, row) in self.expansion_rows(model) {
