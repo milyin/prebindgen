@@ -944,6 +944,58 @@ impl Declarations {
             }
         }
 
+        // Which accessor parts are taken apart further, which is a binding
+        // rather than a property of the row: a `data_class` states a `parts`
+        // row and still crosses whole as an accessor's return. The rule is the
+        // decomposition's own — splice where the part's type has a
+        // deconstructor DECLARATION — stated here so the leaf view and the
+        // compiler read one answer (#701 step 3, design decision 3).
+        for decl in &self.return_expand_decls {
+            let Some(owner) = registry.reading(decl.key()) else {
+                continue;
+            };
+            let row = Crossing::new(owner, Direction::Deconstruct).row(parts());
+            for (index, field) in decl.field_list().iter().enumerate() {
+                let crate::jni::LocalField::Named(func, _) = field else {
+                    continue;
+                };
+                let Some(ret) = model.function(func).map(|f| f.ret.clone()) else {
+                    continue;
+                };
+                // The part crosses as the accessor's return states it, layers
+                // included: an `Option<&Report>` part is an optional crossing,
+                // and binding the inner row there would hand the compiler a
+                // fragment of the wrong type. Only a part that is the value
+                // itself is bound to its `parts` row; a layered one waits for
+                // the layer to be a part of its own.
+                if ret.optional_inner().is_some() {
+                    continue;
+                }
+                let core = ret.borrow_target().unwrap_or(&ret);
+                // Two conditions, and both are needed. A DECLARATION is what
+                // says this part comes apart — a type may state a `parts` row
+                // and still cross whole here, which is the difference this
+                // binding carries. And the row has to exist to be named: a
+                // declared type whose row this table does not state yet is
+                // step 3's remaining work, not a binding to write now.
+                let part = Crossing::new(core.clone(), Direction::Deconstruct);
+                if !self
+                    .return_expand_decls
+                    .iter()
+                    .any(|d| *d.key() == core.stripped_key())
+                    || recipes.key_of(&part.key(), &parts()).is_none()
+                {
+                    continue;
+                }
+                bound.bind(
+                    Site::arm_part(&row, None, index),
+                    part,
+                    Ask::Recipe(parts()),
+                    Origin::Adapter,
+                );
+            }
+        }
+
         bound.build(recipes)
     }
 }

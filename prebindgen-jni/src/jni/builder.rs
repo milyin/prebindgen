@@ -835,6 +835,85 @@ impl Declarations {
     /// `package` that declares its constructors (which is also why the
     /// rust-side-only `_self` check lives here and not at accept time).
     /// Duplicate targets pass through unmerged; core `apply` diagnoses them.
+    /// What the decomposition of `key` calls the part at `index`, when that
+    /// part is reached by calling `func`.
+    ///
+    /// The declaration's answer rather than the function's: an explicit
+    /// `.name()` first, then the class member's Kotlin name, else the
+    /// camel-cased Rust name — the same precedence [`Self::lower_fields`]
+    /// applies, because it is the same question.
+    pub(crate) fn leaf_name_of(&self, key: &TypeKey, func: &syn::Ident, index: usize) -> String {
+        let declared = self
+            .return_expand_decls
+            .iter()
+            .find(|d| d.key() == key)
+            .and_then(|d| d.field_list().get(index).cloned());
+        match declared {
+            Some(LocalField::Named(_, Some(name))) => name,
+            Some(LocalField::Named(named, None)) => self
+                .class_method_kotlin_name(key, &named)
+                .unwrap_or_else(|| snake_to_camel(&named.to_string())),
+            _ => self
+                .class_method_kotlin_name(key, func)
+                .unwrap_or_else(|| snake_to_camel(&func.to_string())),
+        }
+    }
+
+    /// [`Self::leaf_name_of`], for a part reached without calling anything.
+    pub(crate) fn leaf_name_at(&self, key: &TypeKey, index: usize) -> String {
+        let declared = self
+            .return_expand_decls
+            .iter()
+            .find(|d| d.key() == key)
+            .and_then(|d| d.field_list().get(index).cloned());
+        match declared {
+            Some(LocalField::Named(func, None)) => self
+                .class_method_kotlin_name(key, &func)
+                .unwrap_or_else(|| snake_to_camel(&func.to_string())),
+            Some(LocalField::Named(_, Some(name))) => name,
+            Some(LocalField::Local {
+                path,
+                name_override,
+                ..
+            }) => self.local_field_name(key, &path, &name_override),
+            _ => format!("f{index}"),
+        }
+    }
+
+    /// What a value form's declaration calls the part at `index`.
+    ///
+    /// A value form lists its parts itself, so their names come from the
+    /// declaration rather than from the struct the call returns.
+    pub(crate) fn value_form_part_name(
+        &self,
+        registry: &dyn Conversions,
+        key: &TypeKey,
+        index: usize,
+    ) -> Option<String> {
+        let decl = self.return_expand_decls.iter().find(|d| d.key() == key)?;
+        let [LocalField::Fields(fields)] = decl.field_list() else {
+            return None;
+        };
+        // `lower_value_form` is where a value form's records get their names,
+        // with the same precedence every other field name takes. Asking it
+        // rather than re-deriving keeps the one answer in one place.
+        let records = self.lower_value_form(registry, key, fields);
+        Some(records.get(index)?.name.clone())
+    }
+
+    /// Whether this type carries an `expand_return!` declaration.
+    pub(crate) fn declares_return_expand(&self, ty: &prebindgen_registry::flat::TypeRef) -> bool {
+        let key = ty.stripped_key();
+        self.return_expand_decls.iter().any(|d| *d.key() == key)
+    }
+
+    /// Whether this type is declared as a `sealed_class`.
+    pub(crate) fn is_sum(&self, ty: &prebindgen_registry::flat::TypeRef) -> bool {
+        self.types
+            .get(&ty.stripped_key())
+            .is_some_and(|c| c.sum().is_some())
+    }
+
     /// Lower one raw [`LocalField`] list into core [`DeconRecord`]s with the
     /// UNIFORM field-name precedence resolved against the complete
     /// declaration set: explicit `.name()` first, then the class member's

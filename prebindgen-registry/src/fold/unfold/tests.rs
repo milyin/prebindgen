@@ -45,11 +45,21 @@ impl UnfoldPolicy for Jni {
         }
     }
 
-    fn part_name(&self, reach: &Reach, index: usize) -> String {
+    fn part_name(&self, reach: &Reach, index: usize, field: Option<&syn::Ident>) -> String {
         match reach {
             Reach::Accessor(func) => func.to_string(),
-            _ => format!("f{index}"),
+            // A field's own name where it has one, which is what a struct's
+            // slots are called on the far side.
+            _ => field.map_or_else(|| format!("f{index}"), |name| name.to_string()),
         }
+    }
+
+    fn arm_part_name(&self, variant: &syn::Ident, member: &syn::Member, _index: usize) -> String {
+        let member = match member {
+            syn::Member::Named(name) => name.to_string(),
+            syn::Member::Unnamed(index) => format!("v{}", index.index),
+        };
+        format!("{variant}__{member}")
     }
 
     fn identity_name(&self) -> String {
@@ -120,8 +130,51 @@ fn unfolds(sources: &[&str], rows: &[(&str, Deconstructing)], target: &str) -> V
         recipes.declare(ty(name), RecipeName::new("parts"), row.clone());
     }
     let recipes = recipes.build(&model).expect("the rows build");
+    // A part is taken apart further only where a binding says so, and these
+    // fixtures splice every part that has a row — so each row's parts are bound
+    // to the `parts` row of their own type.
+    let mut bound = crate::recipe::Bindings::builder();
+    for (name, row) in rows {
+        let owner = crate::recipe::Crossing::new(ty(name), crate::recipe::Direction::Deconstruct);
+        let key = owner.row(RecipeName::new("parts"));
+        let reaches = match row {
+            Deconstructing::Product(Deconstruct::Fields(r))
+            | Deconstructing::Product(Deconstruct::ValueForm { parts: r, .. }) => r.clone(),
+            _ => Vec::new(),
+        };
+        for (index, reach) in reaches.iter().enumerate() {
+            let Reach::Accessor(func) = reach else {
+                continue;
+            };
+            let Some(ret) = model.function(func).map(|f| f.ret.clone()) else {
+                continue;
+            };
+            let core = ret.optional_inner().unwrap_or(&ret);
+            let core = core.borrow_target().unwrap_or(core);
+            if recipes
+                .key_of(
+                    &crate::recipe::Crossing::new(
+                        core.clone(),
+                        crate::recipe::Direction::Deconstruct,
+                    )
+                    .key(),
+                    &RecipeName::new("parts"),
+                )
+                .is_none()
+            {
+                continue;
+            }
+            bound.bind(
+                crate::recipe::Site::arm_part(&key, None, index),
+                crate::recipe::Crossing::new(core.clone(), crate::recipe::Direction::Deconstruct),
+                crate::recipe::Ask::Recipe(RecipeName::new("parts")),
+                crate::recipe::Origin::Adapter,
+            );
+        }
+    }
+    let bindings = bound.build(&recipes).expect("bindings");
     let (leaves, hoists) = Folding::new(&recipes, &model)
-        .unfold(&Jni, &ty(target), &RecipeName::new("parts"))
+        .unfold(&Jni, &bindings, &ty(target), &RecipeName::new("parts"))
         .unwrap_or_else(|e| panic!("the row does not unfold: {e}"));
     render(&leaves, &hoists)
 }
@@ -139,16 +192,20 @@ fn fields_read_where_the_value_stands() {
     assert_eq!(
         unfolds(&[SAMPLE], &rows, "Sample"),
         [
-            "f0 : u32 path=[key] identity=false nullable=false groups=[]",
-            "f1 : u64 path=[payload] identity=false nullable=false groups=[]",
+            "key : u32 path=[key] identity=false nullable=false groups=[]",
+            "payload : u64 path=[payload] identity=false nullable=false groups=[]",
         ]
     );
 }
 
-/// The value itself is one of the parts, and it goes last — after every borrow
-/// taken off it has ended.
+/// The value itself may be one of the parts, and it keeps the position the row
+/// puts it in.
+///
+/// What goes last is its EMISSION — after every borrow taken off the value has
+/// ended — and that is the emitter's ordering rather than the leaf list's. The
+/// two were conflated here until the decomposition disagreed.
 #[test]
-fn the_value_itself_is_the_last_part() {
+fn the_value_itself_keeps_its_declared_position() {
     let rows = vec![(
         "Sample",
         Deconstructing::Product(Deconstruct::Fields(vec![Reach::Identity, Reach::Field(0)])),
@@ -156,8 +213,8 @@ fn the_value_itself_is_the_last_part() {
     assert_eq!(
         unfolds(&[SAMPLE], &rows, "Sample"),
         [
-            "f1 : u32 path=[key] identity=false nullable=false groups=[]",
             "handle : Sample path=[] identity=true nullable=false groups=[]",
+            "key : u32 path=[key] identity=false nullable=false groups=[]",
         ]
     );
 }
@@ -208,10 +265,10 @@ fn an_accessor_with_a_row_is_spliced() {
             "Holder"
         ),
         [
-            "holder_sample__f0 : u32 path=[holder_sample.key] identity=false nullable=false \
+            "holder_sample__key : u32 path=[holder_sample.key] identity=false nullable=false \
              groups=[]",
-            "holder_sample__f1 : u64 path=[holder_sample.payload] identity=false nullable=false \
-             groups=[]",
+            "holder_sample__payload : u64 path=[holder_sample.payload] identity=false \
+             nullable=false groups=[]",
         ]
     );
 }
@@ -238,8 +295,8 @@ fn a_value_form_is_bound_once() {
             "Sample"
         ),
         [
-            "f0 : u32 path=[sample_parts.a] identity=false nullable=false groups=[]",
-            "f1 : u64 path=[sample_parts.b] identity=false nullable=false groups=[]",
+            "a : u32 path=[sample_parts.a] identity=false nullable=false groups=[]",
+            "b : u64 path=[sample_parts.b] identity=false nullable=false groups=[]",
             "hoist [sample_parts] consuming=true",
         ]
     );
@@ -268,8 +325,8 @@ fn a_sum_writes_a_selector_and_every_arm() {
         unfolds(&["pub enum Reply { Ok(u32), Err(u64) }"], &rows, "Reply"),
         [
             "tag : Reply path=[] identity=false nullable=false groups=[]",
-            "Ok__f0 : u32 path=[] identity=false nullable=false groups=[0]",
-            "Err__f0 : u64 path=[] identity=false nullable=false groups=[1]",
+            "Ok__v0 : u32 path=[] identity=false nullable=false groups=[0]",
+            "Err__v0 : u64 path=[] identity=false nullable=false groups=[1]",
         ]
     );
 }

@@ -7,9 +7,14 @@
 //! [`UnfoldPolicy`]: what a selector and a presence flag are, what one part is
 //! called, and how a nested part's name joins its parent's.
 //!
+//! Which parts are taken apart further is a **binding**, not a property of the
+//! row: a part whose type states a row still crosses whole unless something
+//! says to read it in pieces. That is #701's design decision 3, and it is what
+//! `Bindings` carries here.
+//!
 //! Only what a row can already state is here. `Reach::Path` and `Reach::Nested`
-//! are the two forms #701's step 3 replaces with part bindings; until they are,
-//! a row using one is refused rather than read as something else.
+//! are the two forms step 3 replaces with part bindings; until they are, a row
+//! using one is refused rather than read as something else.
 
 use prebindgen_flat::flat::TypeRef;
 
@@ -35,11 +40,31 @@ pub trait UnfoldPolicy {
     /// through is present.
     fn presence(&self, name: &str) -> UnfoldLeaf;
 
+    /// Whether the parts being named are a value form's.
+    ///
+    /// A value form's parts are named by the declaration that lists them, and a
+    /// product's own by whatever the target calls the field. The two are
+    /// different lists, and only the caller knows which is being walked.
+    fn value_form_part(&self, _index: usize) -> Option<String> {
+        None
+    }
+
     /// What the part reached by `reach` is called.
     ///
     /// The declaration's answer, which is why the row cannot give it: two
-    /// bindings may read one accessor under two names.
-    fn part_name(&self, reach: &Reach, index: usize) -> String;
+    /// bindings may read one accessor under two names. `field` is the model's
+    /// name for the field a [`Reach::Field`] reads, which a target that names
+    /// its slots after the struct's own fields needs and one that names them
+    /// after the declaration ignores.
+    fn part_name(&self, reach: &Reach, index: usize, field: Option<&syn::Ident>) -> String;
+
+    /// What one payload of one alternative is called.
+    ///
+    /// Not [`Self::part_name`] with the alternative prefixed: a target names an
+    /// arm's payload after what the alternative is called on ITS side, which is
+    /// not the Rust variant's name, and after how it addresses the field. Both
+    /// are the target's, and neither is in the row.
+    fn arm_part_name(&self, variant: &syn::Ident, member: &syn::Member, index: usize) -> String;
 
     /// What the value itself is called when it is one of the parts.
     fn identity_name(&self) -> String;
@@ -112,6 +137,7 @@ impl std::fmt::Display for UnfoldViewError {
 /// taken apart, which is what catches a value reached from itself.
 struct Walk<'w> {
     policy: &'w dyn UnfoldPolicy,
+    bindings: &'w crate::recipe::Bindings,
     row: &'w RecipeName,
     leaves: Vec<UnfoldLeaf>,
     hoists: Vec<Hoist>,
@@ -125,6 +151,8 @@ struct At {
     path: Vec<PathStep>,
     name: Option<String>,
     nullable: bool,
+    /// Whether these parts are a value form's, which names them itself.
+    value_form: bool,
 }
 
 impl Folding<'_> {
@@ -137,6 +165,7 @@ impl Folding<'_> {
     pub fn unfold(
         &self,
         policy: &dyn UnfoldPolicy,
+        bindings: &crate::recipe::Bindings,
         reading: &TypeRef,
         row: &RecipeName,
     ) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>), UnfoldViewError> {
@@ -149,6 +178,7 @@ impl Folding<'_> {
             .clone();
         let mut walk = Walk {
             policy,
+            bindings,
             row,
             leaves: Vec::new(),
             hoists: Vec::new(),
@@ -158,6 +188,7 @@ impl Folding<'_> {
             path: Vec::new(),
             name: None,
             nullable: false,
+            value_form: false,
         };
         self.level(&mut walk, reading, &shape, &at)?;
         unique_names(&walk.leaves, reading)?;
@@ -187,6 +218,7 @@ impl Folding<'_> {
                     path: root,
                     name: at.name.clone(),
                     nullable: at.nullable,
+                    value_form: true,
                 };
                 // The parts are read off what the call RETURNS, not off the
                 // value it was called on: `Reach::Field(0)` here is the first
@@ -199,7 +231,16 @@ impl Folding<'_> {
                 // leaves are written, and the selector says which of them is
                 // live — an arm the value did not take fills its slots with the
                 // wire's default rather than being absent.
-                walk.leaves.push(walk.policy.selector(source));
+                let mut tag = walk.policy.selector(source);
+                // A sum reached AS A PART carries that part's path and name:
+                // its leaves are read out of the field the walk arrived
+                // through, not off the value the row belongs to.
+                tag.path = at.path.clone();
+                tag.nullable = at.nullable;
+                if let Some(outer) = &at.name {
+                    tag.name = walk.policy.nest(outer, &tag.name);
+                }
+                walk.leaves.push(tag);
                 for arm in arms {
                     let Some(alternative) = arm.alternative else {
                         return Err(UnfoldViewError::NotYetReadable {
@@ -236,22 +277,23 @@ impl Folding<'_> {
                         // the value, so the leaf carries no path.
                         // Named under the ALTERNATIVE: every arm writes its
                         // own slots, so two arms reading their first payload
-                        // field would otherwise be two leaves of one name.
-                        let name = walk
-                            .policy
-                            .nest(&variant.to_string(), &walk.policy.part_name(reach, index));
+                        // field would otherwise be two leaves of one name. What
+                        // that name is, is the target's — see
+                        // [`UnfoldPolicy::arm_part_name`].
+                        let member = member_of(payload, *field);
+                        let name = walk.policy.arm_part_name(variant, &member, index);
                         walk.leaves.push(UnfoldLeaf {
                             name: match &at.name {
                                 Some(outer) => walk.policy.nest(outer, &name),
                                 None => name,
                             },
-                            path: Vec::new(),
+                            path: at.path.clone(),
                             out_ty: payload.ty.clone(),
                             identity: false,
                             nullable: at.nullable,
                             source: LeafSource::VariantField {
                                 variant: variant.clone(),
-                                member: member_of(payload, *field),
+                                member,
                             },
                             groups: vec![alternative as i32],
                         });
@@ -275,27 +317,26 @@ impl Folding<'_> {
         reaches: &[Reach],
         at: &At,
     ) -> Result<(), UnfoldViewError> {
-        // One value to give, so one part may be it — and it goes last, after
-        // every borrow taken off the value has ended.
-        let mut identity: Option<usize> = None;
+        // One value to give, so one part may be it. It keeps the position the
+        // row puts it in: what goes last is its EMISSION, after every borrow
+        // taken off the value has ended, and that is the emitter's ordering
+        // rather than the leaf list's.
+        let mut seen_identity = false;
         for (index, reach) in reaches.iter().enumerate() {
-            if matches!(reach, Reach::Identity) {
-                if identity.is_some() {
-                    return Err(UnfoldViewError::ManyIdentities {
-                        ty: source.key().to_string(),
-                    });
-                }
-                identity = Some(index);
+            if !matches!(reach, Reach::Identity) {
+                self.part(walk, source, reach, index, at)?;
                 continue;
             }
-            self.part(walk, source, reach, index, at)?;
-        }
-        if let Some(index) = identity {
+            if seen_identity {
+                return Err(UnfoldViewError::ManyIdentities {
+                    ty: source.key().to_string(),
+                });
+            }
+            seen_identity = true;
             let name = match &at.name {
                 Some(outer) => outer.clone(),
                 None => walk.policy.identity_name(),
             };
-            let _ = index;
             walk.leaves.push(UnfoldLeaf {
                 name,
                 path: at.path.clone(),
@@ -325,7 +366,18 @@ impl Folding<'_> {
         index: usize,
         at: &At,
     ) -> Result<(), UnfoldViewError> {
-        let name = walk.policy.part_name(reach, index);
+        let name = match at
+            .value_form
+            .then(|| walk.policy.value_form_part(index))
+            .flatten()
+        {
+            Some(name) => name,
+            // A value form that names no part at this position falls back to
+            // the ordinary answer, the same as a product's own part.
+            None => walk
+                .policy
+                .part_name(reach, index, self.field_name(source, reach)),
+        };
         let full = match &at.name {
             Some(outer) => walk.policy.nest(outer, &name),
             None => name,
@@ -364,9 +416,11 @@ impl Folding<'_> {
         let mut path = at.path.clone();
         path.push(step);
 
-        // A part whose own type states a row of its own is taken apart the same
-        // way, and its leaves carry this part's name.
-        if let Some(child) = self.deconstructing(&ty, walk.row).cloned() {
+        // A part is taken apart further only where a binding says so. Having a
+        // row of its own is not enough — a `data_class` states one and still
+        // crosses whole as an accessor's return, which is the difference a
+        // binding carries and a row cannot (#701 decision 3).
+        if let Some(child) = self.bound_row(walk, source, index, &ty).cloned() {
             let key = ty.key().to_string();
             if walk.reading.contains(&key) {
                 return Err(UnfoldViewError::Cycle { ty: key });
@@ -376,6 +430,7 @@ impl Folding<'_> {
                 path,
                 name: Some(full),
                 nullable: at.nullable || optional,
+                value_form: false,
             };
             self.level(walk, &ty, &child, &inner)?;
             walk.reading.pop();
@@ -392,6 +447,38 @@ impl Folding<'_> {
             groups: Vec::new(),
         });
         Ok(())
+    }
+
+    /// The model's name for the field a reach reads, when it reads one.
+    fn field_name(&self, source: &TypeRef, reach: &Reach) -> Option<&syn::Ident> {
+        let Reach::Field(index) = reach else {
+            return None;
+        };
+        self.fields_of(source).get(*index)?.name.as_ref()
+    }
+
+    /// The row a part is taken apart by, if a binding names one.
+    ///
+    /// The site is the part's own position in the row being walked, which is
+    /// the key `Compiler::part_of` builds for the same part — so an adapter
+    /// writes one binding and both the compiler and this view find it.
+    fn bound_row(
+        &self,
+        walk: &Walk<'_>,
+        source: &TypeRef,
+        index: usize,
+        part: &TypeRef,
+    ) -> Option<&Shape<Deconstruct>> {
+        use crate::recipe::{Crossing, Direction, Site};
+
+        let owner = Crossing::new(source.clone(), Direction::Deconstruct);
+        let site = Site::arm_part(&owner.row(walk.row.clone()), None, index);
+        let crossing = Crossing::new(part.clone(), Direction::Deconstruct);
+        let bound = walk.bindings.resolve(&site, &crossing, self.recipes())?;
+        match self.recipes().get(&bound.recipe)? {
+            Recipe::Deconstructing(shape) => Some(shape),
+            Recipe::Constructing(_) => None,
+        }
     }
 
     /// One alternative of a declared sum: its name, and its payload fields.
