@@ -8,7 +8,7 @@
 use prebindgen_flat::flat::{ScalarKind, TypeRef};
 
 use super::*;
-use crate::recipe::{Arm, Deconstructing, Recipes};
+use crate::recipe::{Arm, ArmKey, Deconstructing, Recipes};
 
 /// The JVM's answers, which `prebindgen-jni` states for itself. Repeated here
 /// so this crate's tests need no adapter.
@@ -102,6 +102,72 @@ fn render(leaves: &[UnfoldLeaf], hoists: &[Hoist]) -> Vec<String> {
         ));
     }
     out
+}
+
+/// One part binding a fixture writes: the row it sits in, the arm, the part's
+/// position, and the row that part is taken to.
+struct Bind {
+    owner: &'static str,
+    owner_row: &'static str,
+    arm: Option<ArmKey>,
+    index: usize,
+    part: &'static str,
+    part_row: &'static str,
+}
+
+/// Unfold one value from its row, with the part bindings stated explicitly.
+fn unfolds_bound(
+    sources: &[&str],
+    rows: &[(&str, &str, Deconstructing)],
+    binds: &[Bind],
+    target: &str,
+    target_row: &str,
+) -> Result<Vec<String>, String> {
+    let items = sources
+        .iter()
+        .map(|src| {
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, prebindgen::SourceLocation::default())
+        })
+        .collect::<Vec<_>>();
+    let model = prebindgen_flat::flat::Flat::builder()
+        .items(crate::test_util::declare_referenced(items))
+        .build()
+        .expect("parse");
+    let ty = |spelling: &str| {
+        model
+            .classify(&syn::parse_str(spelling).expect("test type"))
+            .expect("a type the model accepts")
+    };
+    let mut recipes = Recipes::builder();
+    let mut defaulted = std::collections::HashSet::new();
+    for (name, row, shape) in rows {
+        if defaulted.insert(*name) {
+            recipes.declare_derived_default(ty(name), crate::recipe::Direction::Deconstruct);
+        }
+        recipes.declare(ty(name), RecipeName::new(*row), shape.clone());
+    }
+    let recipes = recipes.build(&model).expect("the rows build");
+    let mut bound = crate::recipe::Bindings::builder();
+    for bind in binds {
+        let owner =
+            crate::recipe::Crossing::new(ty(bind.owner), crate::recipe::Direction::Deconstruct);
+        bound.bind(
+            crate::recipe::Site::arm_part(
+                &owner.row(RecipeName::new(bind.owner_row)),
+                bind.arm,
+                bind.index,
+            ),
+            crate::recipe::Crossing::new(ty(bind.part), crate::recipe::Direction::Deconstruct),
+            crate::recipe::Ask::Recipe(RecipeName::new(bind.part_row)),
+            crate::recipe::Origin::Adapter,
+        );
+    }
+    let bindings = bound.build(&recipes).expect("bindings");
+    Folding::new(&recipes, &model)
+        .unfold(&Jni, &bindings, &ty(target), &RecipeName::new(target_row))
+        .map(|(leaves, hoists)| render(&leaves, &hoists))
+        .map_err(|e| e.to_string())
 }
 
 /// Unfold one value from its row.
@@ -329,4 +395,136 @@ fn a_sum_writes_a_selector_and_every_arm() {
             "Err__v0 : u64 path=[] identity=false nullable=false groups=[1]",
         ]
     );
+}
+
+/// A part taken to a row, whose own part is taken to another: the second
+/// binding is written against the row the first one landed in.
+///
+/// Carrying one root row name down the walk would look for the grandchild's
+/// binding under the root's name and miss it, and `Inner` would cross whole.
+/// `Compiler::part_of` keys the same part by the row it is actually at, so the
+/// view has to as well.
+#[test]
+fn a_binding_is_keyed_by_the_row_its_part_landed_in() {
+    let rows = &[
+        (
+            "Outer",
+            "root",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Accessor(ident(
+                "outer_middle",
+            ))])),
+        ),
+        (
+            "Middle",
+            "middle_parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Accessor(ident(
+                "middle_inner",
+            ))])),
+        ),
+        (
+            "Inner",
+            "inner_parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0)])),
+        ),
+    ];
+    let sources = &[
+        "pub struct Outer { pub a: u8 }",
+        "pub struct Middle { pub b: u8 }",
+        "pub struct Inner { pub deep: u32 }",
+        "pub fn outer_middle(o: &Outer) -> &Middle { todo!() }",
+        "pub fn middle_inner(m: &Middle) -> &Inner { todo!() }",
+    ];
+    let binds = &[
+        Bind {
+            owner: "Outer",
+            owner_row: "root",
+            arm: None,
+            index: 0,
+            part: "Middle",
+            part_row: "middle_parts",
+        },
+        // Written against `middle_parts`, which is where the part above landed
+        // — not against `root`.
+        Bind {
+            owner: "Middle",
+            owner_row: "middle_parts",
+            arm: None,
+            index: 0,
+            part: "Inner",
+            part_row: "inner_parts",
+        },
+    ];
+    assert_eq!(
+        unfolds_bound(sources, rows, binds, "Outer", "root").expect("unfolds"),
+        ["outer_middle__middle_inner__deep : u32 \
+          path=[outer_middle.middle_inner.deep] identity=false nullable=false groups=[]"]
+    );
+}
+
+/// A binding on one part of one ARM, which is the case `ArmKey` exists to tell
+/// from a part of the product itself.
+///
+/// The payload's own leaves stay live only in that arm, exactly as the payload
+/// would have been.
+#[test]
+fn a_binding_on_an_arms_part_is_followed() {
+    let rows = &[
+        (
+            "Reply",
+            "parts",
+            Deconstructing::Choice {
+                arms: vec![
+                    Arm {
+                        alternative: Some(0),
+                        op: Deconstruct::Fields(vec![Reach::Field(0)]),
+                    },
+                    Arm {
+                        alternative: Some(1),
+                        op: Deconstruct::Fields(vec![Reach::Field(0)]),
+                    },
+                ],
+            },
+        ),
+        (
+            "Payload",
+            "payload_parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+        ),
+    ];
+    let sources = &[
+        "pub struct Payload { pub lo: u32, pub hi: u64 }",
+        "pub enum Reply { Ok(Payload), Err(u64) }",
+    ];
+    let binds = &[Bind {
+        owner: "Reply",
+        owner_row: "parts",
+        arm: Some(ArmKey::Alternative(0)),
+        index: 0,
+        part: "Payload",
+        part_row: "payload_parts",
+    }];
+    assert_eq!(
+        unfolds_bound(sources, rows, binds, "Reply", "parts").expect("unfolds"),
+        [
+            "tag : Reply path=[] identity=false nullable=false groups=[]",
+            "Ok__v0__lo : u32 path=[lo] identity=false nullable=false groups=[0]",
+            "Ok__v0__hi : u64 path=[hi] identity=false nullable=false groups=[0]",
+            "Err__v0 : u64 path=[] identity=false nullable=false groups=[1]",
+        ]
+    );
+}
+
+/// A row that is WRONG is an error, not a shape the view has not reached: two
+/// leaves of one name would be two foreign arguments the emitter cannot tell
+/// apart, and a caller running this beside the older path must not skip it.
+#[test]
+fn a_duplicate_leaf_name_is_a_defect_not_a_deferral() {
+    let rows = &[(
+        "Sample",
+        "parts",
+        Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(0)])),
+    )];
+    let refusal =
+        unfolds_bound(&[SAMPLE], rows, &[], "Sample", "parts").expect_err("two leaves of one name");
+    assert!(refusal.contains("two of its leaves the name"), "{refusal}");
 }

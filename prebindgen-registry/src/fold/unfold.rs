@@ -21,7 +21,7 @@ use prebindgen_flat::flat::TypeRef;
 use super::Folding;
 use crate::{
     leaf::{Hoist, LeafSource, PathStep, UnfoldLeaf},
-    recipe::{Deconstruct, Reach, Recipe, RecipeName, Shape},
+    recipe::{ArmKey, Deconstruct, Reach, Recipe, RecipeName, Shape},
 };
 
 /// What a target decides when a row is taken apart into leaves.
@@ -80,6 +80,13 @@ pub enum UnfoldViewError {
     /// A row named a function the model does not have.
     UnknownAccessor(syn::Ident),
     /// A row states a form the view does not read yet.
+    ///
+    /// Not a defect in the row: these are the shapes #701's step 3 is still
+    /// replacing, and a caller running the view beside the older path skips
+    /// them. Every other variant here IS a defect, which is why they are
+    /// separate — [`Self::is_not_yet_readable`] is what a caller may skip on,
+    /// and skipping on any error would let a bad row disable the very check
+    /// that found it.
     NotYetReadable {
         /// The crossing whose row was walked.
         crossing: String,
@@ -103,6 +110,14 @@ pub enum UnfoldViewError {
         /// The type the walk came back to.
         ty: String,
     },
+}
+
+impl UnfoldViewError {
+    /// Whether this is a shape the view does not represent yet, rather than a
+    /// row that is wrong.
+    pub fn is_not_yet_readable(&self) -> bool {
+        matches!(self, UnfoldViewError::NotYetReadable { .. })
+    }
 }
 
 impl std::fmt::Display for UnfoldViewError {
@@ -138,7 +153,6 @@ impl std::fmt::Display for UnfoldViewError {
 struct Walk<'w> {
     policy: &'w dyn UnfoldPolicy,
     bindings: &'w crate::recipe::Bindings,
-    row: &'w RecipeName,
     leaves: Vec<UnfoldLeaf>,
     hoists: Vec<Hoist>,
     reading: Vec<String>,
@@ -153,6 +167,15 @@ struct At {
     nullable: bool,
     /// Whether these parts are a value form's, which names them itself.
     value_form: bool,
+    /// The row being read at this level, as a key.
+    ///
+    /// The KEY and not a name: a part's binding is written against the row its
+    /// product belongs to, and after a binding has taken a part to some other
+    /// row, that row is what its own parts are keyed by. Carrying one root name
+    /// down the walk would look for a grandchild's binding under the root's
+    /// name and miss it — while `Compiler::part_of` keys the same part by the
+    /// row it is actually at.
+    row: crate::recipe::RecipeKey,
 }
 
 impl Folding<'_> {
@@ -179,7 +202,6 @@ impl Folding<'_> {
         let mut walk = Walk {
             policy,
             bindings,
-            row,
             leaves: Vec::new(),
             hoists: Vec::new(),
             reading: vec![reading.key().to_string()],
@@ -189,6 +211,11 @@ impl Folding<'_> {
             name: None,
             nullable: false,
             value_form: false,
+            row: crate::recipe::Crossing::new(
+                reading.clone(),
+                crate::recipe::Direction::Deconstruct,
+            )
+            .row(row.clone()),
         };
         self.level(&mut walk, reading, &shape, &at)?;
         unique_names(&walk.leaves, reading)?;
@@ -219,6 +246,9 @@ impl Folding<'_> {
                     name: at.name.clone(),
                     nullable: at.nullable,
                     value_form: true,
+                    // A value form's parts belong to the row that states the
+                    // form, not to the struct the call returns.
+                    row: at.row.clone(),
                 };
                 // The parts are read off what the call RETURNS, not off the
                 // value it was called on: `Reach::Field(0)` here is the first
@@ -282,11 +312,47 @@ impl Folding<'_> {
                         // [`UnfoldPolicy::arm_part_name`].
                         let member = member_of(payload, *field);
                         let name = walk.policy.arm_part_name(variant, &member, index);
+                        let full = match &at.name {
+                            Some(outer) => walk.policy.nest(outer, &name),
+                            None => name,
+                        };
+                        // A payload may itself be taken apart, and a binding on
+                        // one part of one ARM is what says so — the case
+                        // `ArmKey` exists to tell from a part of the product
+                        // itself. `Compiler::part_of` follows the same key.
+                        let arm_key = ArmKey::Alternative(alternative);
+                        if let Some((row, child)) =
+                            self.bound_row(walk, at, Some(arm_key), index, &payload.ty)
+                        {
+                            let child = child.clone();
+                            let seen = payload.ty.key().to_string();
+                            if walk.reading.contains(&seen) {
+                                return Err(UnfoldViewError::Cycle { ty: seen });
+                            }
+                            walk.reading.push(seen);
+                            let inner = At {
+                                // Bound by a pattern in the arm, so the payload
+                                // is reached from the binding rather than from
+                                // the value: its own parts hang off no path.
+                                path: Vec::new(),
+                                name: Some(full),
+                                nullable: at.nullable,
+                                value_form: false,
+                                row,
+                            };
+                            let before = walk.leaves.len();
+                            self.level(walk, &payload.ty, &child, &inner)?;
+                            walk.reading.pop();
+                            // Everything the payload contributed is live only
+                            // in this arm, exactly as the payload itself would
+                            // have been.
+                            for leaf in &mut walk.leaves[before..] {
+                                leaf.groups.insert(0, alternative as i32);
+                            }
+                            continue;
+                        }
                         walk.leaves.push(UnfoldLeaf {
-                            name: match &at.name {
-                                Some(outer) => walk.policy.nest(outer, &name),
-                                None => name,
-                            },
+                            name: full,
                             path: at.path.clone(),
                             out_ty: payload.ty.clone(),
                             identity: false,
@@ -420,17 +486,21 @@ impl Folding<'_> {
         // row of its own is not enough — a `data_class` states one and still
         // crosses whole as an accessor's return, which is the difference a
         // binding carries and a row cannot (#701 decision 3).
-        if let Some(child) = self.bound_row(walk, source, index, &ty).cloned() {
-            let key = ty.key().to_string();
-            if walk.reading.contains(&key) {
-                return Err(UnfoldViewError::Cycle { ty: key });
+        if let Some((row, child)) = self.bound_row(walk, at, None, index, &ty) {
+            let child = child.clone();
+            let seen = ty.key().to_string();
+            if walk.reading.contains(&seen) {
+                return Err(UnfoldViewError::Cycle { ty: seen });
             }
-            walk.reading.push(key);
+            walk.reading.push(seen);
             let inner = At {
                 path,
                 name: Some(full),
                 nullable: at.nullable || optional,
                 value_form: false,
+                // The row the binding took this part to, so ITS parts are keyed
+                // by it rather than by the row above.
+                row,
             };
             self.level(walk, &ty, &child, &inner)?;
             walk.reading.pop();
@@ -465,18 +535,21 @@ impl Folding<'_> {
     fn bound_row(
         &self,
         walk: &Walk<'_>,
-        source: &TypeRef,
+        at: &At,
+        arm: Option<crate::recipe::ArmKey>,
         index: usize,
         part: &TypeRef,
-    ) -> Option<&Shape<Deconstruct>> {
+    ) -> Option<(crate::recipe::RecipeKey, &Shape<Deconstruct>)> {
         use crate::recipe::{Crossing, Direction, Site};
 
-        let owner = Crossing::new(source.clone(), Direction::Deconstruct);
-        let site = Site::arm_part(&owner.row(walk.row.clone()), None, index);
+        // Keyed by the row this level is AT, which is what `Compiler::part_of`
+        // keys the same part by — so an adapter writes one binding and both
+        // find it.
+        let site = Site::arm_part(&at.row, arm, index);
         let crossing = Crossing::new(part.clone(), Direction::Deconstruct);
         let bound = walk.bindings.resolve(&site, &crossing, self.recipes())?;
         match self.recipes().get(&bound.recipe)? {
-            Recipe::Deconstructing(shape) => Some(shape),
+            Recipe::Deconstructing(shape) => Some((bound.recipe, shape)),
             Recipe::Constructing(_) => None,
         }
     }

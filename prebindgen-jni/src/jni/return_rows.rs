@@ -173,11 +173,17 @@ impl Declarations {
                 key: plan.source.stripped_key(),
             };
             let row = RecipeName::new("parts");
-            let Ok((leaves, hoists)) = folding.unfold(&policy, bindings, &plan.source, &row) else {
-                // Either no row states this decomposition yet, or it states one
-                // in a form the view still refuses. Both are step 3's remaining
-                // work rather than a disagreement.
-                continue;
+            let (leaves, hoists) = match folding.unfold(&policy, bindings, &plan.source, &row) {
+                Ok(read) => read,
+                // A shape the view does not represent yet — no row states this
+                // decomposition, or it states one in a form still being
+                // replaced. Step 3's remaining work rather than a disagreement.
+                Err(e) if e.is_not_yet_readable() => continue,
+                // Anything else is a row that is WRONG: two leaves of one name,
+                // two identities, a cycle, an accessor or an alternative the
+                // model does not have. Skipping those would let a bad row
+                // disable the check that found it.
+                Err(e) => return Err(format!("{what} has a row that cannot be read: {e}")),
             };
             // A row that yields FEWER leaves than the decomposition has not
             // disagreed with it — it has not stated the whole decomposition
