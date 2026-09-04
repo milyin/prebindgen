@@ -1270,6 +1270,19 @@ pub struct Declarations {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
+    /// The decompositions this binding expects the row differential NOT to
+    /// compare, each with the reason — see `Declarations::check_unfold_parity`.
+    ///
+    /// Temporary, and deleted with the differential. Stated rather than
+    /// reported so that a decomposition quietly leaving the comparison fails
+    /// the build: the check exists to catch the rows and the decomposition
+    /// disagreeing, and one that compares nothing agrees with everything.
+    ///
+    /// `None` where a binding states nothing, which is every fixture written to
+    /// exercise one shape. The gate is for a binding whose reach is worth
+    /// holding — the four this workspace builds all state theirs.
+    pub(crate) parity_skips: Option<Vec<String>>,
+
     /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
     /// [`JniGenBuilder::expand`]), stored raw — merged into the expansion set
     /// at the point of use so declarations stay order-independent.

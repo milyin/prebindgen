@@ -222,16 +222,35 @@ impl Declarations {
                 ));
             }
         }
-        // Named on the build log rather than kept: a differential that quietly
-        // compares less than it did is the failure this whole check exists to
-        // avoid.
-        if !skipped.is_empty() && std::env::var_os("PREBINDGEN_REPORT_SKIPS").is_some() {
-            skipped.sort();
-            eprintln!(
-                "prebindgen: {} decomposition(s) not compared against their rows:\n  {}",
-                skipped.len(),
+        // A differential that quietly compares less than it did is the failure
+        // this whole check exists to avoid, so what it did NOT compare is
+        // pinned rather than printed. The binding states the set it expects,
+        // and any growth fails the build naming what appeared.
+        //
+        // Shrinking fails too, and deliberately: each entry is a binding #701's
+        // step 3 still owes, and removing one from the expectation is how that
+        // work is recorded as done.
+        skipped.sort();
+        // Only where the binding stated one: a fixture exercising a single
+        // shape has no reach worth holding, and the four bindings this
+        // workspace builds all state theirs.
+        let Some(expected) = self.parity_skips.clone() else {
+            return Ok(());
+        };
+        if skipped != expected {
+            let only = |a: &[String], b: &[String]| {
+                a.iter()
+                    .filter(|x| !b.contains(x))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("\n  ")
+            };
+            return Err(format!(
+                "the decompositions NOT compared against their rows have changed.\n                 newly skipped:\n  {}\nno longer skipped:\n  {}\n\n                 state the current set with `.expect_parity_skips([..])`:\n  {}",
+                only(&skipped, &expected),
+                only(&expected, &skipped),
                 skipped.join("\n  ")
-            );
+            ));
         }
         Ok(())
     }
@@ -265,26 +284,28 @@ impl Declarations {
             // read it, and which parts those are is a fact about their types
             // that no row states. A BORROWING form has no such fact, and
             // `Deconstruct::ValueForm` represents it completely.
-            if model
+            let consuming = model
                 .function(&form.func())
                 .and_then(|f| f.params.first())
-                .is_some_and(|p| p.ty.borrow_target().is_none())
-            {
-                return Some("a consuming value form, whose parts may be handed over");
-            }
-            // Per FIELD, not per form: a borrowing form of ordinary fields is
-            // represented completely by `Deconstruct::ValueForm`, and only a
-            // field that itself states parts is waiting on a binding —
-            // `bindings` writes none for a value form's fields yet.
+                .is_some_and(|p| p.ty.borrow_target().is_none());
+            // Per FIELD, not per form. A form of ordinary fields is represented
+            // completely by `Deconstruct::ValueForm` — the call, the hoist, each
+            // field's reach and leaf — whether or not it consumes. Only a field
+            // that is waiting on something is.
             for record in self.lower_value_form(registry, decl.key(), form) {
                 let core = record.ty.optional_inner().unwrap_or(&record.ty);
                 let core = core.borrow_target().unwrap_or(core);
-                if self
-                    .return_expand_decls
-                    .iter()
-                    .any(|d| *d.key() == core.stripped_key())
-                {
+                let key = core.stripped_key();
+                if self.return_expand_decls.iter().any(|d| *d.key() == key) {
                     return Some("a value form field that states parts of its own");
+                }
+                // A CONSUMING form hands a handle field over rather than
+                // reading it, which the decomposition records as an identity
+                // leaf. Whether a field is a handle is this adapter's answer
+                // about its type, and the row states the same reach either way.
+                // An ordinary field has no such fact and is compared.
+                if consuming && self.types.get(&key).is_some_and(|c| c.is_opaque()) {
+                    return Some("a handle field of a consuming value form, which is handed over");
                 }
             }
             return None;

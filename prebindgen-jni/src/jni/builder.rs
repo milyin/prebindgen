@@ -200,6 +200,7 @@ impl Default for Declarations {
             emit_handle_locks: true,
             jni_native_init: None,
             convert_decls: Vec::new(),
+            parity_skips: None,
             param_expand_decls: Vec::new(),
             return_expand_decls: Vec::new(),
             fn_param_expands: Vec::new(),
@@ -224,6 +225,26 @@ impl Default for Declarations {
 }
 
 impl JniGenBuilder {
+    /// State the decompositions the row differential is not expected to
+    /// compare, each as `"<what>: <reason>"`.
+    ///
+    /// Temporary, and deleted with the differential (#701 step 3). Every entry
+    /// is a part binding step 3 still owes; a build fails when the set changes
+    /// either way, so one leaving the comparison is noticed and one being
+    /// lowered is recorded here deliberately.
+    ///
+    /// The message on failure states the current set, ready to paste.
+    pub fn expect_parity_skips<I, S>(mut self, skips: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        let mut skips: Vec<String> = skips.into_iter().map(Into::into).collect();
+        skips.sort();
+        self.decls.parity_skips = Some(skips);
+        self
+    }
+
     /// Start a binding generator with default settings: empty base
     /// package, no `JNINative` init block, identity
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`

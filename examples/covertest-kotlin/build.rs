@@ -127,6 +127,16 @@ fn main() {
     let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
+        // The decompositions the row differential does not compare yet, each a
+        // part binding #701's step 3 still owes. A build fails if the set
+        // changes either way (see `expect_parity_skips`).
+        .expect_parity_skips([
+            "`ledger_new`'s return: a part reached through an `Option`",
+            "`probe_new`'s return: a row that states no parts",
+            "the callback argument `Ledger`: a part reached through an `Option`",
+            "the callback argument `Probe`: a row that states no parts",
+            "the callback argument `Report`: a row that states no parts",
+        ])
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
