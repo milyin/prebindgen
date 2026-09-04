@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["FoldError"],"struct":["Folding"],"trait":["FoldPolicy"]};
