@@ -724,14 +724,19 @@ fn unique_names(leaves: &[UnfoldLeaf], source: &TypeRef) -> Result<(), UnfoldVie
     Ok(())
 }
 
+/// The stable code for a shape the walk stops at.
+///
+/// Identifiers, not phrases, for the same reason [`UnfoldViewError::code`]
+/// exists: this reaches a caller's record of the outcome, and a record must not
+/// move when the wording does. `Display` renders the prose from the code.
 fn name_of(shape: &Shape<Deconstruct>) -> &'static str {
     match shape {
-        Shape::Atomic => "atomic",
-        Shape::Optional => "an optional layer",
-        Shape::Sequence => "a sequence",
-        Shape::Invoke => "a callable",
-        Shape::Product(_) => "a product",
-        Shape::Choice { .. } => "a choice",
+        Shape::Atomic => "atomic-row",
+        Shape::Optional => "optional-layer",
+        Shape::Sequence => "sequence-layer",
+        Shape::Invoke => "callable",
+        Shape::Product(_) => "product-row",
+        Shape::Choice { .. } => "choice-row",
     }
 }
 
