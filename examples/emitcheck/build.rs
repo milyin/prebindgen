@@ -64,6 +64,13 @@ fn main() {
         // there is no `#[prebindgen]` source crate. This is the entry point the
         // builder documents for "synthetic items in a test".
         .items(items)
+        // The two halves of what the row differential does with this binding's
+        // decompositions: the ones it does not compare, each named with a stable
+        // reason code, and how many it does. Every decomposition is in exactly one,
+        // so a build fails if either moves — a decomposition leaving the comparison,
+        // or leaving the population. Each entry is a part binding #701 step 3 owes.
+        .expect_parity_skips(["the callback argument `ZSample`: value-form-field-with-parts"])
+        .expect_parity_compared(0)
         .set_package_prefix("io.prebindgen.emitcheck")
         .package(
             package!()

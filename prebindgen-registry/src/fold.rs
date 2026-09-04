@@ -440,6 +440,32 @@ impl<'a> Folding<'a> {
         Ok(FoldArg::Leaf(index, passthrough))
     }
 
+    /// The rows this walk reads.
+    pub(crate) fn recipes(&self) -> &'a Recipes {
+        self.recipes
+    }
+
+    /// The model every signature comes from.
+    pub(crate) fn model(&self) -> &'a Flat {
+        self.model
+    }
+
+    /// The fields of a declared struct, or none if the type is not one.
+    ///
+    /// Peeled the same way the compiler peels before asking the model, so the
+    /// two cannot disagree about which type a part belongs to.
+    pub(crate) fn fields_of(&self, ty: &TypeRef) -> &'a [prebindgen_flat::flat::Field] {
+        let value = ty.borrow_target().unwrap_or(ty).unwrapped();
+        let declared = match value.kind() {
+            prebindgen_flat::flat::TypeKind::Named { id, .. } => self.model.resolve(id),
+            _ => None,
+        };
+        match declared {
+            Some(prebindgen_flat::flat::Type::Struct(s)) => s.fields.as_slice(),
+            _ => &[],
+        }
+    }
+
     /// This crossing's row under `row`, if it states one.
     ///
     /// By NAME rather than by default, and that is the whole reason an identity
@@ -503,6 +529,9 @@ fn name_of(shape: &Shape<Construct>) -> &'static str {
         Shape::Choice { .. } => "a choice",
     }
 }
+
+mod unfold;
+pub use self::unfold::{Coverage, UnfoldPolicy, UnfoldViewError};
 
 #[cfg(test)]
 mod tests;

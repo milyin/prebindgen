@@ -1270,6 +1270,29 @@ pub struct Declarations {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
+    /// The decompositions this binding expects the row differential NOT to
+    /// compare, each with the reason — see `Declarations::check_unfold_parity`.
+    ///
+    /// Temporary, and deleted with the differential. Stated rather than
+    /// reported so that a decomposition quietly leaving the comparison fails
+    /// the build: the check exists to catch the rows and the decomposition
+    /// disagreeing, and one that compares nothing agrees with everything.
+    ///
+    /// `Some(vec![])` by default, so a binding that states nothing is held to
+    /// comparing everything. `None` only under `cfg(test)`, where a fixture
+    /// exercises one shape and has no reach worth holding.
+    pub(crate) parity_skips: Option<Vec<String>>,
+
+    /// How many decompositions this binding expects the differential to
+    /// COMPARE — see `Declarations::check_unfold_parity`.
+    ///
+    /// The skip list names what left the comparison, which says nothing about
+    /// a decomposition leaving the population: one that stops being declared
+    /// contributes to neither side and the set is unchanged. This is the other
+    /// half of the partition, and the two move in opposite directions as
+    /// #701's step 3 lands its bindings.
+    pub(crate) parity_compared: Option<usize>,
+
     /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
     /// [`JniGenBuilder::expand`]), stored raw — merged into the expansion set
     /// at the point of use so declarations stay order-independent.
@@ -1456,6 +1479,7 @@ mod iface;
 mod prim;
 mod prim_array;
 mod recipes;
+mod return_rows;
 #[cfg(test)]
 mod tests;
 pub(crate) mod trait_impl;
