@@ -1773,6 +1773,51 @@ fn expansion_leaf_readings_derive_before_validation() {
     );
 }
 
+/// A reading in **both** output lists keeps its converter demand.
+///
+/// The two lists say different things about the same reading.
+/// [`Decompositions::replaced_outputs`] cancels the demand the signature scan
+/// made for a whole-value crossing. [`Decompositions::output_leaves`] is a
+/// plan's own demand for a leaf — one value crossing as a single foreign
+/// argument, which needs a converter whatever the scan said. So
+/// `apply_adapter_plans` applies the replacements first and the deliveries
+/// after.
+///
+/// This is the only test that puts one reading in both: reversing those two
+/// loops passes every other test in this workspace, because no in-repo example
+/// binding overlaps them. zenoh-flat-jni does — a `Vec<String>` that is a leaf
+/// of one return and the element-wise body of another.
+#[test]
+fn a_delivered_reading_outranks_a_replaced_one() {
+    let exported: syn::Ident = syn::parse_quote!(locators);
+    let builder = crate::test_util::reg_with(&["fn locators() -> Vec<String> { todo!() }"]);
+    let reading = builder
+        .flat()
+        .classify(&syn::parse_quote!(Vec<String>))
+        .expect("fixture type");
+    let key = reading.key();
+
+    let registry = builder
+        .export(&exported)
+        .decompose(Decompositions {
+            // The scan roots this crossing: `locators` returns it whole. One
+            // plan replaces that, delivering the list element by element;
+            // another delivers the same reading as one of its leaves.
+            replaced_outputs: vec![reading.clone()],
+            output_leaves: vec![reading],
+            ..Default::default()
+        })
+        .scanned()
+        .expect("scan");
+
+    assert_eq!(
+        registry.is_root_for_test(Direction::Deconstruct, &key),
+        Some(true),
+        "a delivered leaf keeps its demand through a replacement of the same \
+         reading"
+    );
+}
+
 /// A marked row that refuses says nothing about the rows beside it.
 ///
 /// `declare_unasked` states that a row is compiled whether or not a site names
