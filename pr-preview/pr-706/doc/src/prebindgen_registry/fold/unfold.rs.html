@@ -724,35 +724,40 @@
 <a href=#724 id=724 data-nosnippet>724</a>    <span class="prelude-val">Ok</span>(())
 <a href=#725 id=725 data-nosnippet>725</a>}
 <a href=#726 id=726 data-nosnippet>726</a>
-<a href=#727 id=727 data-nosnippet>727</a><span class="kw">fn </span>name_of(shape: <span class="kw-2">&amp;</span>Shape&lt;Deconstruct&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
-<a href=#728 id=728 data-nosnippet>728</a>    <span class="kw">match </span>shape {
-<a href=#729 id=729 data-nosnippet>729</a>        Shape::Atomic =&gt; <span class="string">"atomic"</span>,
-<a href=#730 id=730 data-nosnippet>730</a>        Shape::Optional =&gt; <span class="string">"an optional layer"</span>,
-<a href=#731 id=731 data-nosnippet>731</a>        Shape::Sequence =&gt; <span class="string">"a sequence"</span>,
-<a href=#732 id=732 data-nosnippet>732</a>        Shape::Invoke =&gt; <span class="string">"a callable"</span>,
-<a href=#733 id=733 data-nosnippet>733</a>        Shape::Product(<span class="kw">_</span>) =&gt; <span class="string">"a product"</span>,
-<a href=#734 id=734 data-nosnippet>734</a>        Shape::Choice { .. } =&gt; <span class="string">"a choice"</span>,
-<a href=#735 id=735 data-nosnippet>735</a>    }
-<a href=#736 id=736 data-nosnippet>736</a>}
-<a href=#737 id=737 data-nosnippet>737</a>
-<a href=#738 id=738 data-nosnippet>738</a><span class="doccomment">/// How a payload field is addressed in its arm's pattern: by name, or by
-<a href=#739 id=739 data-nosnippet>739</a>/// position for a tuple variant.
-<a href=#740 id=740 data-nosnippet>740</a></span><span class="kw">fn </span>member_of(field: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Field, index: usize) -&gt; syn::Member {
-<a href=#741 id=741 data-nosnippet>741</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>field.name {
-<a href=#742 id=742 data-nosnippet>742</a>        <span class="prelude-val">Some</span>(name) =&gt; syn::Member::Named(name.clone()),
-<a href=#743 id=743 data-nosnippet>743</a>        <span class="prelude-val">None </span>=&gt; syn::Member::Unnamed(syn::Index::from(index)),
-<a href=#744 id=744 data-nosnippet>744</a>    }
-<a href=#745 id=745 data-nosnippet>745</a>}
-<a href=#746 id=746 data-nosnippet>746</a>
-<a href=#747 id=747 data-nosnippet>747</a><span class="doccomment">/// The code for a reach the view does not read, and the message for it.
-<a href=#748 id=748 data-nosnippet>748</a></span><span class="kw">fn </span>reach_form(reach: <span class="kw-2">&amp;</span>Reach) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
-<a href=#749 id=749 data-nosnippet>749</a>    <span class="kw">match </span>reach {
-<a href=#750 id=750 data-nosnippet>750</a>        Reach::Path(<span class="kw">_</span>) =&gt; <span class="string">"field-of-a-field-chain"</span>,
-<a href=#751 id=751 data-nosnippet>751</a>        Reach::Nested { .. } =&gt; <span class="string">"field-taken-apart-in-place"</span>,
-<a href=#752 id=752 data-nosnippet>752</a>        <span class="kw">_ </span>=&gt; <span class="string">"unread-reach"</span>,
-<a href=#753 id=753 data-nosnippet>753</a>    }
-<a href=#754 id=754 data-nosnippet>754</a>}
-<a href=#755 id=755 data-nosnippet>755</a>
-<a href=#756 id=756 data-nosnippet>756</a><span class="attr">#[cfg(test)]
-<a href=#757 id=757 data-nosnippet>757</a></span><span class="kw">mod </span>tests;
+<a href=#727 id=727 data-nosnippet>727</a><span class="doccomment">/// The stable code for a shape the walk stops at.
+<a href=#728 id=728 data-nosnippet>728</a>///
+<a href=#729 id=729 data-nosnippet>729</a>/// Identifiers, not phrases, for the same reason [`UnfoldViewError::code`]
+<a href=#730 id=730 data-nosnippet>730</a>/// exists: this reaches a caller's record of the outcome, and a record must not
+<a href=#731 id=731 data-nosnippet>731</a>/// move when the wording does. `Display` renders the prose from the code.
+<a href=#732 id=732 data-nosnippet>732</a></span><span class="kw">fn </span>name_of(shape: <span class="kw-2">&amp;</span>Shape&lt;Deconstruct&gt;) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+<a href=#733 id=733 data-nosnippet>733</a>    <span class="kw">match </span>shape {
+<a href=#734 id=734 data-nosnippet>734</a>        Shape::Atomic =&gt; <span class="string">"atomic-row"</span>,
+<a href=#735 id=735 data-nosnippet>735</a>        Shape::Optional =&gt; <span class="string">"optional-layer"</span>,
+<a href=#736 id=736 data-nosnippet>736</a>        Shape::Sequence =&gt; <span class="string">"sequence-layer"</span>,
+<a href=#737 id=737 data-nosnippet>737</a>        Shape::Invoke =&gt; <span class="string">"callable"</span>,
+<a href=#738 id=738 data-nosnippet>738</a>        Shape::Product(<span class="kw">_</span>) =&gt; <span class="string">"product-row"</span>,
+<a href=#739 id=739 data-nosnippet>739</a>        Shape::Choice { .. } =&gt; <span class="string">"choice-row"</span>,
+<a href=#740 id=740 data-nosnippet>740</a>    }
+<a href=#741 id=741 data-nosnippet>741</a>}
+<a href=#742 id=742 data-nosnippet>742</a>
+<a href=#743 id=743 data-nosnippet>743</a><span class="doccomment">/// How a payload field is addressed in its arm's pattern: by name, or by
+<a href=#744 id=744 data-nosnippet>744</a>/// position for a tuple variant.
+<a href=#745 id=745 data-nosnippet>745</a></span><span class="kw">fn </span>member_of(field: <span class="kw-2">&amp;</span>prebindgen_flat::flat::Field, index: usize) -&gt; syn::Member {
+<a href=#746 id=746 data-nosnippet>746</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>field.name {
+<a href=#747 id=747 data-nosnippet>747</a>        <span class="prelude-val">Some</span>(name) =&gt; syn::Member::Named(name.clone()),
+<a href=#748 id=748 data-nosnippet>748</a>        <span class="prelude-val">None </span>=&gt; syn::Member::Unnamed(syn::Index::from(index)),
+<a href=#749 id=749 data-nosnippet>749</a>    }
+<a href=#750 id=750 data-nosnippet>750</a>}
+<a href=#751 id=751 data-nosnippet>751</a>
+<a href=#752 id=752 data-nosnippet>752</a><span class="doccomment">/// The code for a reach the view does not read, and the message for it.
+<a href=#753 id=753 data-nosnippet>753</a></span><span class="kw">fn </span>reach_form(reach: <span class="kw-2">&amp;</span>Reach) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+<a href=#754 id=754 data-nosnippet>754</a>    <span class="kw">match </span>reach {
+<a href=#755 id=755 data-nosnippet>755</a>        Reach::Path(<span class="kw">_</span>) =&gt; <span class="string">"field-of-a-field-chain"</span>,
+<a href=#756 id=756 data-nosnippet>756</a>        Reach::Nested { .. } =&gt; <span class="string">"field-taken-apart-in-place"</span>,
+<a href=#757 id=757 data-nosnippet>757</a>        <span class="kw">_ </span>=&gt; <span class="string">"unread-reach"</span>,
+<a href=#758 id=758 data-nosnippet>758</a>    }
+<a href=#759 id=759 data-nosnippet>759</a>}
+<a href=#760 id=760 data-nosnippet>760</a>
+<a href=#761 id=761 data-nosnippet>761</a><span class="attr">#[cfg(test)]
+<a href=#762 id=762 data-nosnippet>762</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
