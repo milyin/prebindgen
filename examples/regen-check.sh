@@ -17,6 +17,16 @@
 #       ../../zenoh-flat-jni relative to this script) and diff ITS committed
 #       generated files. Requires that checkout to be clean in those paths.
 #
+#       That build is patched to THIS working tree's crates, which is the whole
+#       point of running it: zenoh-flat-jni pins a prebindgen of its own, so an
+#       unpatched build regenerates with that one and passes for any branch,
+#       including a branch that changes the generated output.
+#
+#       The patch rewrites zenoh-flat-jni's Cargo.lock. That is resolution
+#       output rather than a generated artifact, so it is not diffed below;
+#       `git -C <path> checkout -- Cargo.lock` puts the checkout back to
+#       building the generator it pins.
+#
 # The in-repo check requires the `aarch64-unknown-linux-gnu` Rust target because
 # example-cbindgen commits target-specific golden Rust files.
 #
@@ -75,13 +85,21 @@ echo "ok: in-repo generated output matches committed goldens"
 
 if [[ "${1:-}" == "--with-zenoh-flat-jni" ]]; then
     jni_dir="${2:-$repo_root/../zenoh-flat-jni}"
-    echo "== regenerating zenoh-flat-jni at $jni_dir"
-    (cd "$jni_dir" && cargo build --release)
-    jni_drift="$(git -C "$jni_dir" status --porcelain -- src/generated_bindings.rs kotlin/generated)"
+    echo "== regenerating zenoh-flat-jni at $jni_dir (patched to $repo_root)"
+    # Every prebindgen crate zenoh-flat-jni resolves, pointed at this working
+    # tree. See the note in the usage block above.
+    jni_patch=()
+    for crate in prebindgen prebindgen-flat prebindgen-jni prebindgen-jni-runtime \
+                 prebindgen-proc-macro prebindgen-registry; do
+        jni_patch+=(--config "patch.crates-io.$crate.path=\"$repo_root/$crate\"")
+    done
+    (cd "$jni_dir" && cargo build --release "${jni_patch[@]}")
+    jni_paths=(src/generated_bindings.rs kotlin/generated kotlin/REPORT.md)
+    jni_drift="$(git -C "$jni_dir" status --porcelain -- "${jni_paths[@]}")"
     if [[ -n "$jni_drift" ]]; then
         echo "REGEN DRIFT — zenoh-flat-jni generated output changed:" >&2
         echo "$jni_drift" >&2
-        git -C "$jni_dir" --no-pager diff --stat -- src/generated_bindings.rs kotlin/generated >&2
+        git -C "$jni_dir" --no-pager diff --stat -- "${jni_paths[@]}" >&2
         exit 1
     fi
     echo "ok: zenoh-flat-jni generated output matches committed goldens"
