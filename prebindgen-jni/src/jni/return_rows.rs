@@ -10,7 +10,7 @@
 //! and zenoh-flat-jni, which is the whole declared surface.
 
 use prebindgen_registry::{
-    flat::{Flat, ScalarKind, TypeRef},
+    flat::{Flat, TypeRef},
     fold::{Folding, UnfoldPolicy},
     leaf::{Hoist, LeafSource, UnfoldLeaf},
     recipe::{Reach, RecipeName, Recipes},
@@ -47,11 +47,15 @@ impl UnfoldPolicy for JniUnfold<'_> {
         }
     }
 
-    fn presence(&self, name: &str) -> UnfoldLeaf {
+    fn presence(&self, name: &str, source: &TypeRef) -> UnfoldLeaf {
         UnfoldLeaf {
             name: format!("{name}__present"),
             path: Vec::new(),
-            out_ty: TypeRef::scalar(ScalarKind::Bool),
+            // The OPTIONAL as written: the emitter tests that value to set the
+            // flag, so the reading it names is the one it tests. It is not a
+            // `bool` on this side — what crosses is the presence of a value the
+            // JVM sees as nullable.
+            out_ty: source.clone(),
             identity: false,
             nullable: false,
             source: LeafSource::Presence,

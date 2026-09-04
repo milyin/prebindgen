@@ -5,7 +5,7 @@
 //! constructing tests beside it take, because the two answer one question in
 //! opposite directions.
 
-use prebindgen_flat::flat::{ScalarKind, TypeRef};
+use prebindgen_flat::flat::TypeRef;
 
 use super::*;
 use crate::recipe::{Arm, ArmKey, Deconstructing, Recipes};
@@ -33,11 +33,11 @@ impl UnfoldPolicy for Jni {
         }
     }
 
-    fn presence(&self, name: &str) -> UnfoldLeaf {
+    fn presence(&self, name: &str, source: &TypeRef) -> UnfoldLeaf {
         UnfoldLeaf {
             name: format!("{name}__present"),
             path: Vec::new(),
-            out_ty: TypeRef::scalar(ScalarKind::Bool),
+            out_ty: source.clone(),
             identity: false,
             nullable: false,
             source: LeafSource::Presence,

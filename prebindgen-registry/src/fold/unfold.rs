@@ -38,7 +38,12 @@ pub trait UnfoldPolicy {
 
     /// The leaf saying whether an optional value the decomposition looks
     /// through is present.
-    fn presence(&self, name: &str) -> UnfoldLeaf;
+    ///
+    /// `source` is the optional reading the flag reports on, which is what the
+    /// target needs to answer: the flag stands where that value does, and what
+    /// it carries is a choice about how absence crosses rather than a fact the
+    /// walk holds.
+    fn presence(&self, name: &str, source: &TypeRef) -> UnfoldLeaf;
 
     /// Whether the parts being named are a value form's.
     ///
@@ -469,13 +474,11 @@ impl Folding<'_> {
                 // leaves under it carry the wire default when it says absent.
                 // How absence is spent is the target's answer — see
                 // [`UnfoldPolicy::presence`] — and what it gates is this walk's.
-                let group = walk.leaves.len();
                 let name = at.name.clone().unwrap_or_default();
-                let mut flag = walk.policy.presence(&name);
+                let mut flag = walk.policy.presence(&name, source);
                 // The flag stands where the value does, and what it carries is
                 // the OPTIONAL as written: the emitter tests that value to set
                 // it, so the reading it names is the one it tests.
-                flag.out_ty = source.clone();
                 // The step that reaches the value is optional — the emitter
                 // unwraps it before going on — and the flag stands at the same
                 // place, because testing the value is reaching it.
@@ -508,10 +511,10 @@ impl Folding<'_> {
                 self.level(walk, inner, &child, &inner_at)?;
                 // Everything the inner contributed is live only when the flag
                 // says the value is there.
+                // Group 0: an optional has one arm, the one the flag admits.
                 for leaf in &mut walk.leaves[before..] {
                     leaf.groups.insert(0, 0);
                 }
-                let _ = group;
                 Ok(())
             }
             Shape::Atomic => {
