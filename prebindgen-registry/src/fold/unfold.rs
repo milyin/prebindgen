@@ -147,6 +147,39 @@ impl std::fmt::Display for UnfoldViewError {
     }
 }
 
+/// What one walk of a row did NOT read.
+///
+/// A caller running this beside an older decomposition needs to know where the
+/// two are not comparable, and needs to know it from the walk rather than by
+/// measuring the answers against each other. Measuring cannot tell a shape the
+/// rows do not state yet from a defect that made the read smaller — which is
+/// the same mistake in the small that a silent fallback is in the large.
+///
+/// Empty means the walk read everything the row states. Anything else names a
+/// place it stopped, and the leaves are that much short of the whole value.
+#[derive(Clone, Debug, Default)]
+pub struct Coverage {
+    unread: Vec<&'static str>,
+}
+
+impl Coverage {
+    /// Whether the walk read the whole of what the row states.
+    pub fn is_complete(&self) -> bool {
+        self.unread.is_empty()
+    }
+
+    /// The places it stopped, for a caller that reports them.
+    pub fn unread(&self) -> &[&'static str] {
+        &self.unread
+    }
+
+    fn note(&mut self, what: &'static str) {
+        if !self.unread.contains(&what) {
+            self.unread.push(what);
+        }
+    }
+}
+
 /// What one walk carries: the target's answers, the row name a nested part is
 /// looked up under, what has been read so far, and the chain of types being
 /// taken apart, which is what catches a value reached from itself.
@@ -156,6 +189,7 @@ struct Walk<'w> {
     leaves: Vec<UnfoldLeaf>,
     hoists: Vec<Hoist>,
     reading: Vec<String>,
+    coverage: Coverage,
 }
 
 /// Where one level of the walk stands: the path reached so far, the name
@@ -191,7 +225,7 @@ impl Folding<'_> {
         bindings: &crate::recipe::Bindings,
         reading: &TypeRef,
         row: &RecipeName,
-    ) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>), UnfoldViewError> {
+    ) -> Result<(Vec<UnfoldLeaf>, Vec<Hoist>, Coverage), UnfoldViewError> {
         let shape = self
             .deconstructing(reading, row)
             .ok_or_else(|| UnfoldViewError::NotYetReadable {
@@ -205,6 +239,7 @@ impl Folding<'_> {
             leaves: Vec::new(),
             hoists: Vec::new(),
             reading: vec![reading.key().to_string()],
+            coverage: Coverage::default(),
         };
         let at = At {
             path: Vec::new(),
@@ -219,7 +254,7 @@ impl Folding<'_> {
         };
         self.level(&mut walk, reading, &shape, &at)?;
         unique_names(&walk.leaves, reading)?;
-        Ok((walk.leaves, walk.hoists))
+        Ok((walk.leaves, walk.hoists, walk.coverage))
     }
 
     /// One row, at one place in the value.
@@ -237,9 +272,18 @@ impl Folding<'_> {
                 // call, which is what a hoist records.
                 let mut root = at.path.clone();
                 root.push(PathStep::call(func.clone(), false, true));
+                let consuming = self.consumes(func)?;
+                if consuming {
+                    // A part of a form that was handed the value may be moved
+                    // out rather than read, and which parts those are is the
+                    // target's answer about their types. A row states the same
+                    // reach either way, so the walk cannot say.
+                    walk.coverage
+                        .note("a consuming value form, whose parts may be handed over");
+                }
                 walk.hoists.push(Hoist {
                     prefix: root.clone(),
-                    consuming: self.consumes(func)?,
+                    consuming,
                 });
                 let inner = At {
                     path: root,
@@ -367,7 +411,13 @@ impl Folding<'_> {
                 }
                 Ok(())
             }
-            Shape::Atomic => Ok(()),
+            Shape::Atomic => {
+                // A placeholder a crossing carries so a site can select it: it
+                // says the adapter emits this conversion itself, and says
+                // nothing about parts.
+                walk.coverage.note("a row that states no parts");
+                Ok(())
+            }
             other => Err(UnfoldViewError::NotYetReadable {
                 crossing: source.to_string(),
                 form: name_of(other),
@@ -512,6 +562,16 @@ impl Folding<'_> {
             return Ok(());
         }
 
+        // Nothing bound this part, so it crosses whole. If its value states
+        // parts of its own, there was something here the walk did not look
+        // through — the binding for it is step 3's remaining work, and saying
+        // so is what keeps a caller from having to guess by measuring.
+        let value = ty.optional_inner().unwrap_or(&ty);
+        let value = value.borrow_target().unwrap_or(value);
+        if self.deconstructing_any(value) {
+            walk.coverage
+                .note("a part whose value states parts of its own, and no binding takes it apart");
+        }
         walk.leaves.push(UnfoldLeaf {
             name: full,
             path,
@@ -582,6 +642,20 @@ impl Folding<'_> {
         };
         let alternative = v.alternatives.get(index)?;
         Some((&alternative.name, alternative.fields.as_slice()))
+    }
+
+    /// Whether this type states any deconstructing row at all.
+    ///
+    /// Asked of a part the walk did not look through, to say whether there was
+    /// something there to look through — a plain field is read in full, and
+    /// only one whose value has parts of its own leaves the read short.
+    fn deconstructing_any(&self, ty: &TypeRef) -> bool {
+        let crossing =
+            crate::recipe::Crossing::new(ty.clone(), crate::recipe::Direction::Deconstruct).key();
+        self.recipes()
+            .names_of(&crossing)
+            .iter()
+            .any(|name| **name != crate::recipe::RecipeName::derived())
     }
 
     /// This crossing's deconstructing row under `row`, if it states one.

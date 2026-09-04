@@ -166,7 +166,7 @@ fn unfolds_bound(
     let bindings = bound.build(&recipes).expect("bindings");
     Folding::new(&recipes, &model)
         .unfold(&Jni, &bindings, &ty(target), &RecipeName::new(target_row))
-        .map(|(leaves, hoists)| render(&leaves, &hoists))
+        .map(|(leaves, hoists, _)| render(&leaves, &hoists))
         .map_err(|e| e.to_string())
 }
 
@@ -239,7 +239,7 @@ fn unfolds(sources: &[&str], rows: &[(&str, Deconstructing)], target: &str) -> V
         }
     }
     let bindings = bound.build(&recipes).expect("bindings");
-    let (leaves, hoists) = Folding::new(&recipes, &model)
+    let (leaves, hoists, _) = Folding::new(&recipes, &model)
         .unfold(&Jni, &bindings, &ty(target), &RecipeName::new("parts"))
         .unwrap_or_else(|e| panic!("the row does not unfold: {e}"));
     render(&leaves, &hoists)

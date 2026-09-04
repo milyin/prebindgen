@@ -173,44 +173,30 @@ impl Declarations {
                 key: plan.source.stripped_key(),
             };
             let row = RecipeName::new("parts");
-            let (leaves, hoists) = match folding.unfold(&policy, bindings, &plan.source, &row) {
-                Ok(read) => read,
-                // A shape the view does not represent yet — no row states this
-                // decomposition, or it states one in a form still being
-                // replaced. Step 3's remaining work rather than a disagreement.
-                Err(e) if e.is_not_yet_readable() => continue,
-                // Anything else is a row that is WRONG: two leaves of one name,
-                // two identities, a cycle, an accessor or an alternative the
-                // model does not have. Skipping those would let a bad row
-                // disable the check that found it.
-                Err(e) => return Err(format!("{what} has a row that cannot be read: {e}")),
-            };
-            // A row that reads LESS than the decomposition has not disagreed
-            // with it — it has not stated the whole decomposition yet. Three
-            // measures say so, and each names work step 3 has still to do.
+            let (leaves, hoists, coverage) =
+                match folding.unfold(&policy, bindings, &plan.source, &row) {
+                    Ok(read) => read,
+                    // A shape the view does not represent yet — no row states
+                    // this decomposition, or it states one in a form still
+                    // being replaced. Step 3's remaining work rather than a
+                    // disagreement.
+                    Err(e) if e.is_not_yet_readable() => continue,
+                    // Anything else is a row that is WRONG: two leaves of one
+                    // name, two identities, a cycle, an accessor or an
+                    // alternative the model does not have. Skipping those would
+                    // let a bad row disable the check that found it.
+                    Err(e) => return Err(format!("{what} has a row that cannot be read: {e}")),
+                };
+            // The walk says where it stopped; nothing is inferred from the
+            // SIZE of what came back. A measure that skips whenever one side is
+            // smaller cannot tell a shape the rows do not state yet from a
+            // defect that made the read smaller — and a defect of exactly that
+            // kind is what the previous commit fixed, invisible because it made
+            // one side smaller.
             //
-            // Fewer leaves: an `Atomic` placeholder, which a crossing carries
-            // so a site can select it and which says nothing about parts, or a
-            // row whose reaches the view still refuses.
-            //
-            // Shallower leaves: a part the decomposition takes apart further
-            // and no binding does, so the row stops where the decomposition
-            // goes through. Every part binding step 3 has yet to write is here,
-            // including looking THROUGH an optional field — the `Optional`
-            // part of #701's decision 3.
-            //
-            // Fewer parts handed over: a handle field of a CONSUMING value form
-            // moves out rather than being read, which the decomposition records
-            // as an identity leaf. Whether a part moves is the target's answer
-            // about its type, and the row states `Reach::Field` either way, so
-            // the view has no way to say it yet.
-            //
-            // A row that reads as far, as much and as strongly is compared, and
-            // any difference in it is a real one.
-            if leaves.len() < plan.leaves.len()
-                || depth(&leaves) < depth(&plan.leaves)
-                || identities(&leaves) < identities(&plan.leaves)
-            {
+            // So: an incomplete read is skipped and named, and a complete one
+            // is compared in full, with no exemptions.
+            if !coverage.is_complete() {
                 continue;
             }
             let from_row = describe(&leaves, &hoists);
@@ -224,16 +210,6 @@ impl Declarations {
         }
         Ok(())
     }
-}
-
-/// How far the deepest leaf is reached from the value.
-fn depth(leaves: &[UnfoldLeaf]) -> usize {
-    leaves.iter().map(|leaf| leaf.path.len()).max().unwrap_or(0)
-}
-
-/// How many parts are handed over rather than read.
-fn identities(leaves: &[UnfoldLeaf]) -> usize {
-    leaves.iter().filter(|leaf| leaf.identity).count()
 }
 
 /// One decomposition, flattened far enough that two can be compared.
