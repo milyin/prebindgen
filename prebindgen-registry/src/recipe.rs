@@ -769,24 +769,67 @@ impl RecipesBuilder {
         self.insert(ty, name, OP::into_recipe(shape), true, false)
     }
 
-    /// Keep the **derived** row as this crossing's default, while other rows
-    /// are declared beside it.
+    /// Whether this crossing already states a row under `name`.
     ///
-    /// A crossing with one declared row takes that row by default, which is
-    /// right until the row is one a site opts into rather than the way the
-    /// value ordinarily crosses. An `expand_param!` row is exactly that: a
-    /// parameter is built from leaves where a binding says so, and everywhere
-    /// else the value crosses whole. Saying so explicitly also gives an
-    /// identity arm somewhere to resolve — its part IS the value, so it takes
-    /// the default row, and a default that were the constructor row would make
-    /// the arm a part of the row it belongs to.
+    /// For a declaration that has to fit beside whatever another pass declared:
+    /// a row a site opts into needs the crossing to keep a default that is not
+    /// it, and whether one is already there is not something the declaring pass
+    /// can know on its own.
+    pub fn declares(&self, ty: &TypeRef, direction: Direction, name: RecipeName) -> bool {
+        let crossing = Crossing::new(ty.clone(), direction).key();
+        let key = crossing.row(name);
+        self.recipes
+            .get(&crossing)
+            .is_some_and(|entries| entries.iter().any(|entry| entry.key == key))
+    }
+
+    /// Keep the **derived** row as this crossing's default, for a crossing that
+    /// states no row of its own to keep.
     ///
-    /// The row this declares is the one [`Self::recipe`](Recipes::recipe) would
-    /// have derived, under the same name, so a crossing that had no rows at all
-    /// is unchanged by gaining this one.
+    /// The row this declares is the one [`Recipes::recipe`] would have derived,
+    /// under the same name, so a crossing that had no rows at all is unchanged
+    /// by gaining this one — which is what makes it safe to add beside a row a
+    /// site opts into.
     pub fn declare_derived_default(&mut self, ty: TypeRef, direction: Direction) -> &mut Self {
         let recipe = derive(&Crossing::new(ty.clone(), direction));
         self.insert(ty, RecipeName::derived(), recipe, true, false)
+    }
+
+    /// Say which of a crossing's already-declared rows is its default.
+    ///
+    /// A crossing with one row takes that row by default, which stops being
+    /// right the moment a second row is declared beside it — and the second row
+    /// may be declared far from the first. This names the default without
+    /// declaring anything, so the two declarations do not have to know about
+    /// each other or run in a particular order.
+    ///
+    /// What it is for: a row a site opts into is not how the value ordinarily
+    /// crosses. An `expand_param!` row builds a parameter from leaves where a
+    /// binding says so, and everywhere else the value crosses whole. Naming the
+    /// whole row also gives an identity arm somewhere to resolve — its part IS
+    /// the value, so it takes the default row, and a default that were the
+    /// constructor row would make the arm a part of the row it belongs to.
+    ///
+    /// Naming a row that is already the default changes nothing, and so does
+    /// naming one the crossing does not have — which leaves whatever default it
+    /// had, and leaves [`Self::build`] to report a crossing with several rows
+    /// and no default.
+    pub fn make_default(
+        &mut self,
+        ty: &TypeRef,
+        direction: Direction,
+        name: RecipeName,
+    ) -> &mut Self {
+        let crossing = Crossing::new(ty.clone(), direction).key();
+        let key = crossing.row(name);
+        if let Some(entries) = self.recipes.get_mut(&crossing) {
+            if entries.iter().any(|entry| entry.key == key) {
+                for entry in entries {
+                    entry.default = entry.key == key;
+                }
+            }
+        }
+        self
     }
 
     /// [`Self::declare`], for a row compiled whether or not a site asks for it.

@@ -168,6 +168,78 @@ impl Declarations {
         }
     }
 
+    /// Which parameters are built from leaves, derived from the declarations
+    /// alone.
+    ///
+    /// The rules are the ones `expand::apply` applies, and they are the half of
+    /// the parameter side a row cannot state: a row says how a type is built,
+    /// and this says where that happens. A per-function `.expand_param(...)`
+    /// names its own position. A type-level `expand_param!` applies to every
+    /// parameter of that type in every exported function — except an accessor,
+    /// which is not a composer; except the receiver a method is called on,
+    /// which binds to `this`; and except a position whose own declaration
+    /// asked for the plain value instead.
+    pub(crate) fn expanded_positions(
+        &self,
+        model: &Flat,
+        exports: &std::collections::HashSet<syn::Ident>,
+        accessors: &std::collections::HashSet<syn::Ident>,
+    ) -> std::collections::BTreeSet<(String, String)> {
+        // The value a declaration is about, under the layers a parameter may
+        // wear: `Option<&T>` is a way of passing a `T`.
+        let core = |ty: &TypeRef| {
+            let after_opt = ty.optional_inner().unwrap_or(ty);
+            after_opt.borrow_target().unwrap_or(after_opt).key()
+        };
+        let mut positions = std::collections::BTreeSet::new();
+        // A per-function declaration that asked for the plain value is not an
+        // expansion, and it also stops the type-level one from applying there.
+        let mut plain = std::collections::BTreeSet::new();
+        for (func, param, decl) in &self.fn_param_expands {
+            let position = (func.to_string(), param.clone());
+            if states_a_row(decl.variants()) {
+                positions.insert(position);
+            } else {
+                plain.insert(position);
+            }
+        }
+        let receivers = self.method_receivers();
+        for decl in &self.param_expand_decls {
+            if !states_a_row(decl.variants()) {
+                continue;
+            }
+            let target = decl.key().clone();
+            let mut names: Vec<&syn::Ident> = exports.iter().collect();
+            names.sort_by_key(|name| name.to_string());
+            for func in names {
+                if accessors.contains(func) {
+                    continue;
+                }
+                let Some(function) = model.function(func) else {
+                    continue;
+                };
+                let receiver = receivers.get(func);
+                let mut took_receiver = false;
+                for param in &function.params {
+                    let bare = core(&param.ty);
+                    if !took_receiver && receiver == Some(&bare) {
+                        took_receiver = true;
+                        continue;
+                    }
+                    if bare != target {
+                        continue;
+                    }
+                    let position = (func.to_string(), param.name.to_string());
+                    if plain.contains(&position) {
+                        continue;
+                    }
+                    positions.insert(position);
+                }
+            }
+        }
+        positions
+    }
+
     /// Read every expanded parameter's plan back off its row, and hold the
     /// older path to it.
     ///
@@ -179,8 +251,34 @@ impl Declarations {
         model: &Flat,
         recipes: &Recipes,
         bindings: &Bindings,
+        exports: &std::collections::HashSet<syn::Ident>,
+        accessors: &std::collections::HashSet<syn::Ident>,
         plans: &std::collections::HashMap<(syn::Ident, syn::Ident), FoldPlan>,
     ) -> Result<(), String> {
+        // WHICH positions expand, derived here rather than read off the plans.
+        // Reading them off would check the rows only where the older path
+        // already chose to expand, and say nothing about a position this side
+        // adds, drops, or names differently — which is most of what the
+        // deletion has to be safe against.
+        let mine = self.expanded_positions(model, exports, accessors);
+        let theirs: std::collections::BTreeSet<(String, String)> = plans
+            .keys()
+            .map(|(func, param)| (func.to_string(), param.to_string()))
+            .collect();
+        if mine != theirs {
+            let only = |a: &std::collections::BTreeSet<(String, String)>,
+                        b: &std::collections::BTreeSet<(String, String)>| {
+                a.difference(b)
+                    .map(|(func, param)| format!("`{func}`'s `{param}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            return Err(format!(
+                "the rows expand a different set of parameters.\nonly from the rows: {}\nonly from the declarations: {}",
+                only(&mine, &theirs),
+                only(&theirs, &mine)
+            ));
+        }
         let folding = Folding::new(recipes, bindings, model);
         // Sorted, so a binding with two differences reports the same one every
         // time rather than whichever the hash order reached first.
@@ -254,9 +352,15 @@ fn describe_arg(arg: &FoldArg) -> String {
                 build.selector
             );
             for variant in &build.variants {
+                // Every field, not just the constructor. `fallible` routes the
+                // error and `clone` decides whether a borrowed value survives
+                // the call, so a difference in either is a difference in
+                // behaviour.
                 out.push_str(&format!(
-                    "\n      variant ctor={:?}",
-                    variant.ctor.as_ref().map(|c| c.to_string())
+                    "\n      variant ctor={:?} fallible={} clone={}",
+                    variant.ctor.as_ref().map(|c| c.to_string()),
+                    variant.fallible,
+                    variant.clone
                 ));
                 for arg in &variant.inputs {
                     out.push_str(&format!("\n        {}", describe_arg(arg)));

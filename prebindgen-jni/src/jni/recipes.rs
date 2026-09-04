@@ -347,18 +347,6 @@ impl Declarations {
         // How each `expand_param!`-declared type is built. Named rather than
         // defaulted: the crossing's default stays the value's own conversion,
         // which is what an identity arm is handed (#701 step 2).
-        let mut expanded: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();
-        for (ty, name, row) in self.expansion_rows(model) {
-            // The value still crosses whole everywhere a binding does not say
-            // otherwise, so the derived row stays the default beside these.
-            if expanded.insert(ty.key()) {
-                recipes.declare_derived_default(
-                    ty.clone(),
-                    prebindgen_registry::recipe::Direction::Construct,
-                );
-            }
-            recipes.declare(ty, name, row);
-        }
         // Which crossings already state a deconstructing `parts` row, so the
         // decomposition block below adds one only where none was declared.
         let mut parts_out: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();
@@ -592,6 +580,28 @@ impl Declarations {
                 .declare(ty.clone(), whole(), Constructing::Atomic);
         }
 
+        // How each `expand_param!`-declared type is built, last so the `whole`
+        // row every class kind declares above is already there to be named.
+        //
+        // Named rather than defaulted: a parameter is built from leaves where a
+        // binding says so, and everywhere else the value crosses whole. That is
+        // also what an identity arm's part resolves to, so the whole row has to
+        // stay the default beside these — for a `data_class` and a
+        // `sealed_class` it already is, and for every other kind it becomes so
+        // here rather than by a second default being declared (#701 step 2).
+        for (ty, name, row) in self.expansion_rows(model) {
+            let construct = prebindgen_registry::recipe::Direction::Construct;
+            // Whichever row says the value crosses whole has to stay the
+            // default. Every class kind declares one; a type declared nowhere
+            // else has none, and takes the row the registry would have derived.
+            if recipes.declares(&ty, construct, whole()) {
+                recipes.declare(ty.clone(), name, row);
+                recipes.make_default(&ty, construct, whole());
+            } else {
+                recipes.declare_derived_default(ty.clone(), construct);
+                recipes.declare(ty, name, row);
+            }
+        }
         recipes.build(model)
     }
 }

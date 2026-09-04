@@ -106,9 +106,15 @@ fn render_arg(arg: &FoldArg) -> String {
                 build.selector
             );
             for variant in &build.variants {
+                // Every field, not just the constructor. `fallible` routes the
+                // error and `clone` decides whether a borrowed value survives
+                // the call, so a difference in either is a difference in
+                // behaviour.
                 out.push_str(&format!(
-                    "\n      variant ctor={:?}",
-                    variant.ctor.as_ref().map(|c| c.to_string())
+                    "\n      variant ctor={:?} fallible={} clone={}",
+                    variant.ctor.as_ref().map(|c| c.to_string()),
+                    variant.fallible,
+                    variant.clone
                 ));
                 for arg in &variant.inputs {
                     out.push_str(&format!("\n        {}", render_arg(arg)));
@@ -432,6 +438,57 @@ fn an_optional_choice() {
         "key",
     );
     assert_eq!(decl, row);
+}
+
+/// A nested build whose own constructor is fallible carries that through: the
+/// inner call's error is routed, and the flag saying so is part of the plan.
+#[test]
+fn a_nested_build_keeps_its_constructors_fallibility() {
+    let (decl, row) = both(
+        &[
+            "fn key_try(s: &str) -> Result<KeyExpr, Error> { todo!() }",
+            "fn sel_new(key: KeyExpr, n: i32) -> Selector { todo!() }",
+            "fn query(selector: Selector) {}",
+        ],
+        &[
+            ("KeyExpr", vec![Variant::Ctor(ident("key_try"))]),
+            ("Selector", vec![Variant::Ctor(ident("sel_new"))]),
+        ],
+        "query",
+        "selector",
+    );
+    assert_eq!(decl, row);
+    assert!(
+        row.contains("fallible=true"),
+        "the fixture must actually nest a fallible constructor: {row}"
+    );
+}
+
+/// A nested build reached through a borrowed argument clones on its identity
+/// arm, the same as a borrowed parameter does at the top level.
+#[test]
+fn a_nested_build_clones_a_borrowed_identity_arm() {
+    let (decl, row) = both(
+        &[
+            "fn key_new(s: &str) -> KeyExpr { todo!() }",
+            "fn sel_new(key: &KeyExpr, n: i32) -> Selector { todo!() }",
+            "fn query(selector: Selector) {}",
+        ],
+        &[
+            (
+                "KeyExpr",
+                vec![Variant::Ctor(ident("key_new")), Variant::Identity],
+            ),
+            ("Selector", vec![Variant::Ctor(ident("sel_new"))]),
+        ],
+        "query",
+        "selector",
+    );
+    assert_eq!(decl, row);
+    assert!(
+        row.contains("clone=true"),
+        "the fixture must actually clone a borrowed identity arm: {row}"
+    );
 }
 
 /// A constructor argument whose own type states a constructor row is built the

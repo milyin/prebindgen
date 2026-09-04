@@ -684,6 +684,8 @@ impl JniGenBuilder {
                 declared.flat(),
                 &recipes,
                 &bindings,
+                &declared.exports().clone(),
+                &declared.accessors().clone(),
                 prebindgen_registry::Conversions::expansion_plans(&declared),
             )
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;

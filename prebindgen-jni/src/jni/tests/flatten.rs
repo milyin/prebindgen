@@ -400,6 +400,83 @@ fn rust_side_only_error_type() {
     assert!(base_file.contains("funinterfaceZErrHandler"), "{all}");
 }
 
+/// A `data_class` and a `sealed_class` both already state the row saying they
+/// cross whole, and both may also be expanded.
+///
+/// The expansion row is one a site opts into, so the crossing has to keep a
+/// default that is not it. Adding a second default instead of naming the
+/// existing one is a table with two, which `Recipes::build` refuses — and
+/// neither class kind is reached by a fixture built from opaque handles alone,
+/// which is how that went unnoticed.
+#[test]
+fn a_declared_class_can_be_expanded_and_still_cross_whole() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Span {
+                    pub lo: i64,
+                    pub hi: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Bound {
+                    Exact(i64),
+                    Any,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    for src in [
+        "pub fn span_new(lo: i64, hi: i64) -> Span { unimplemented!() }",
+        "pub fn bound_new(at: i64) -> Bound { unimplemented!() }",
+        "pub fn z_span(span: Span) -> i64 { unimplemented!() }",
+        "pub fn z_bound(bound: Bound) -> i64 { unimplemented!() }",
+    ] {
+        let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+        items.push((syn::Item::Fn(f), loc.clone()));
+    }
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::data_class!(Span))
+                .class(crate::sealed_class!(Bound))
+                .fun(prebindgen_registry::fun!(z_span))
+                .fun(prebindgen_registry::fun!(z_bound)),
+        )
+        // Both take a constructor AND the value itself, so each row is a choice
+        // with an identity arm — the arm whose part resolves to the default.
+        .expand(
+            prebindgen_registry::expand_param!(Span)
+                .variant(prebindgen_registry::fun!(span_new))
+                .variant_self(),
+        )
+        .expand(
+            prebindgen_registry::expand_param!(Bound)
+                .variant(prebindgen_registry::fun!(bound_new))
+                .variant_self(),
+        );
+
+    let gen = jni.build_with(registry).expect("both classes resolve");
+
+    let dir = unique_test_dir("jnigen_expanded_declared_classes");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(rc.contains("myflat::span_new("), "{rust}");
+    assert!(rc.contains("myflat::bound_new("), "{rust}");
+}
+
 /// A **rust-side-only** input type: `expand_param!` with NO class
 /// declaration. Every param of the type is built from the ctor's ingredients
 /// (no selector — single variant); the type never surfaces in Kotlin.
