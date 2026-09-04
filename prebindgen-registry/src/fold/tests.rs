@@ -148,6 +148,46 @@ fn both(
     func: &str,
     param: &str,
 ) -> (String, String) {
+    let (decl, row) = run(sources, constructors, func, param);
+    (
+        decl.unwrap_or_else(|e| panic!("the declarations were rejected: {e}")),
+        row.unwrap_or_else(|e| panic!("the row was rejected: {e}")),
+    )
+}
+
+/// Both paths must refuse this declaration, and neither may quietly answer
+/// with a different boundary instead.
+fn rejects(
+    sources: &[&str],
+    constructors: &[(&str, Vec<Variant>)],
+    func: &str,
+    param: &str,
+    because: &str,
+) {
+    let (decl, row) = run(sources, constructors, func, param);
+    let decl = decl.err().unwrap_or_else(|| {
+        panic!("the declarations accepted {because}, so there is no parity to hold")
+    });
+    let row = row
+        .err()
+        .unwrap_or_else(|| panic!("the row accepted {because}, which the declarations refuse"));
+    assert!(
+        decl.contains("recursive") || decl.contains("Recursive"),
+        "the declarations refuse it as unsupported nesting: {decl}"
+    );
+    assert!(
+        row.contains("built from leaves of its own"),
+        "the row refuses it as unsupported nesting: {row}"
+    );
+}
+
+/// Build both plans for one parameter, keeping whichever refusal came back.
+fn run(
+    sources: &[&str],
+    constructors: &[(&str, Vec<Variant>)],
+    func: &str,
+    param: &str,
+) -> (Result<String, String>, Result<String, String>) {
     // ── the decomposition ───────────────────────────────────────────────
     let decls = Expansions {
         constructors: constructors
@@ -181,16 +221,18 @@ fn both(
             ..Default::default()
         });
     // Derives the plans; the readings themselves are not what this reads back.
-    let _ = builder
+    let applied = builder
         .expansion_leaf_readings()
-        .expect("apply the declarations")
-        .count();
-    let from_declarations = {
-        let plans = crate::Conversions::expansion_plans(&builder);
-        let expanded = plans
-            .get(&(ident(func), ident(param)))
-            .expect("a plan for the parameter");
-        render(expanded)
+        .map(|readings| readings.count());
+    let from_declarations = match applied {
+        Err(e) => Err(e.to_string()),
+        Ok(_) => {
+            let plans = crate::Conversions::expansion_plans(&builder);
+            match plans.get(&(ident(func), ident(param))) {
+                Some(expanded) => Ok(render(expanded)),
+                None => Err("no plan for the parameter".to_string()),
+            }
+        }
     };
 
     // ── the row ─────────────────────────────────────────────────────────
@@ -217,12 +259,56 @@ fn both(
         .expect("the parameter")
         .ty
         .clone();
-    let from_row = render(
-        &Folding::new(&recipes, &bindings, &model)
-            .fold(&Jni, param, &reading, &RecipeName::new("parts"))
-            .expect("the row folds"),
-    );
+    let from_row = Folding::new(&recipes, &bindings, &model)
+        .fold(&Jni, param, &reading, &RecipeName::new("parts"))
+        .map(|plan| render(&plan))
+        .map_err(|e| e.to_string());
     (from_declarations, from_row)
+}
+
+/// A constructor argument that builds from leaves of its own, standing inside
+/// an arm. Both paths refuse it: the arm's leaves are live only when the
+/// selector picks that arm, and a nested build's leaves would have to be live
+/// on that condition too.
+#[test]
+fn a_nested_build_inside_an_arm_is_refused() {
+    rejects(
+        &[
+            "fn key_new(s: &str) -> KeyExpr { todo!() }",
+            "fn sel_new(key: KeyExpr, n: i32) -> Selector { todo!() }",
+            "fn query(selector: Selector) {}",
+        ],
+        &[
+            ("KeyExpr", vec![Variant::Ctor(ident("key_new"))]),
+            (
+                "Selector",
+                vec![Variant::Ctor(ident("sel_new")), Variant::Identity],
+            ),
+        ],
+        "query",
+        "selector",
+        "a nested build inside an arm",
+    );
+}
+
+/// The same argument, optional. Both paths refuse it: the value's own absence
+/// and the argument's would need two answers on one wire.
+#[test]
+fn an_optional_nested_build_is_refused() {
+    rejects(
+        &[
+            "fn key_new(s: &str) -> KeyExpr { todo!() }",
+            "fn sel_new(key: Option<KeyExpr>, n: i32) -> Selector { todo!() }",
+            "fn query(selector: Selector) {}",
+        ],
+        &[
+            ("KeyExpr", vec![Variant::Ctor(ident("key_new"))]),
+            ("Selector", vec![Variant::Ctor(ident("sel_new"))]),
+        ],
+        "query",
+        "selector",
+        "an optional nested build",
+    );
 }
 
 /// One constructor taking one argument: the parameter keeps its own name.

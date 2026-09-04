@@ -1974,6 +1974,105 @@ fn a_nested_layer_is_a_row_of_its_own() {
     assert!(adapter.calls[2].starts_with("optional"));
 }
 
+/// A part binding names the ALTERNATIVE its arm takes, not where that arm sits.
+///
+/// A row may state a subset of a sum's alternatives, or state them in another
+/// order, so the two numbers differ. Keying by position would leave a binding
+/// written for alternative 1 resolving against the arm at position 0 — silently,
+/// because a part with no binding falls back to its crossing's default row and
+/// compiles fine.
+///
+/// Both fixtures give `Sample` two rows: an atomic default, and a `fields` row
+/// the binding asks for. Which hook the recorder saw is which row the part took.
+#[test]
+fn a_part_binding_finds_its_arm_in_a_sparse_row() {
+    let (calls, _) = compile_arm_bound(
+        // Only the second alternative crosses, so its arm sits at position 0.
+        vec![Arm {
+            alternative: Some(1),
+            op: Deconstruct::Fields(vec![Reach::Field(0)]),
+        }],
+        ArmKey::Alternative(1),
+    );
+    assert!(
+        calls.iter().any(|c| c.starts_with("fields Sample")),
+        "the arm's part takes the row bound for alternative 1: {calls:?}"
+    );
+}
+
+/// The same, with both alternatives present but stated back to front: the
+/// binding for alternative 0 has to reach the arm at position 1.
+#[test]
+fn a_part_binding_finds_its_arm_in_a_reordered_row() {
+    let (calls, _) = compile_arm_bound(
+        vec![
+            Arm {
+                alternative: Some(1),
+                op: Deconstruct::Fields(vec![Reach::Field(0)]),
+            },
+            Arm {
+                alternative: Some(0),
+                op: Deconstruct::Fields(vec![Reach::Field(0)]),
+            },
+        ],
+        ArmKey::Alternative(0),
+    );
+    assert!(
+        calls.iter().any(|c| c.starts_with("fields Sample")),
+        "the arm's part takes the row bound for alternative 0: {calls:?}"
+    );
+}
+
+/// Compile a `Reply` choice with `arms`, binding the part at `key` to
+/// `Sample`'s non-default row. Returns the recorded hooks and the plan.
+fn compile_arm_bound(arms: Vec<Arm<Deconstruct>>, key: ArmKey) -> (Vec<String>, String) {
+    let model = model(&[SAMPLE, "pub enum Reply { Ok(Sample), Err(Sample) }"]);
+    let mut builder = Recipes::builder();
+    builder
+        .declare_default(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Deconstructing::Atomic,
+        )
+        .declare(
+            ty(&model, "Sample"),
+            recipe_name("fields"),
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+        )
+        .declare(
+            ty(&model, "Reply"),
+            recipe_name("variants"),
+            Deconstructing::Choice { arms },
+        );
+    let recipes = builder.build(&model).expect("table");
+
+    let reply = Crossing::new(ty(&model, "Reply"), Direction::Deconstruct);
+    let row = reply.row(recipe_name("variants"));
+    let mut bound = Bindings::builder();
+    bound.bind(
+        Site::arm_part(&row, Some(key), 0),
+        Crossing::new(ty(&model, "Sample"), Direction::Deconstruct),
+        Ask::Recipe(recipe_name("fields")),
+        Origin::Adapter,
+    );
+    let bindings = bound.build(&recipes).expect("bindings");
+
+    let mut adapter = Recorder::default();
+    let mut compiler = Compiler::new(&model, &recipes, &bindings);
+    let plan = compiler
+        .site(
+            &mut adapter,
+            Site {
+                owner: ident("z_get"),
+                role: Role::Return,
+            },
+            reply,
+        )
+        .expect("compile")
+        .expect("not omitted");
+    (adapter.calls.clone(), plan)
+}
+
 #[test]
 fn every_arm_of_a_choice_reaches_the_hook_already_composed() {
     let model = model(&["pub enum Reply { Ok(u32), Err(u64) }"]);

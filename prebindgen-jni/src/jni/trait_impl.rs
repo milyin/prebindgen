@@ -604,7 +604,7 @@ fn site_order(site: &prebindgen_registry::recipe::Site) -> (String, usize, usize
         // attached to a parameter position, so both sort after every parameter
         // that is. A part keeps its own numbering within that.
         Role::Const => (usize::MAX, 0, 0),
-        Role::Part { arm, index, .. } => (usize::MAX, 1 + arm.unwrap_or(0), index),
+        Role::Part { arm, index, .. } => (usize::MAX, 1 + arm.map_or(0, |arm| arm.number()), index),
     };
     (site.owner.to_string(), position, kind, index)
 }

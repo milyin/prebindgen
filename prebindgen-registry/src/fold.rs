@@ -78,6 +78,14 @@ pub enum FoldError {
         /// The type the walk came back to.
         ty: String,
     },
+    /// A part whose own type builds from leaves stands somewhere its leaves
+    /// cannot be read back.
+    UnsupportedNesting {
+        /// The part's type.
+        ty: String,
+        /// The position it stood in.
+        position: &'static str,
+    },
 }
 
 impl std::fmt::Display for FoldError {
@@ -93,6 +101,10 @@ impl std::fmt::Display for FoldError {
             FoldError::Cycle { ty } => {
                 write!(f, "`{ty}` is built from a part that is built from it")
             }
+            FoldError::UnsupportedNesting { ty, position } => write!(
+                f,
+                "`{ty}` is built from leaves of its own, which {position} cannot carry"
+            ),
         }
     }
 }
@@ -343,27 +355,41 @@ impl<'a> Folding<'a> {
         dispatched: bool,
     ) -> Result<FoldArg, FoldError> {
         let (optional, by_ref, core) = layers(ty);
-        // Only outside an arm and outside an `Option`: a nested build under a
-        // selector would need leaves that are live only when two things hold at
-        // once, and one under an `Option` would need a second absence.
-        if !dispatched && !optional {
-            if let Some(shape) = self.constructing(&core, walk.row).cloned() {
-                if builds_from_leaves(&shape) {
-                    let key = core.key().to_string();
-                    if walk.building.contains(&key) {
-                        return Err(FoldError::Cycle { ty: key });
-                    }
-                    walk.building.push(key);
-                    let (selector, variants) =
-                        self.core(walk, &name.to_string(), &core, by_ref, &shape)?;
-                    walk.building.pop();
-                    return Ok(FoldArg::Build(Box::new(FoldBuild {
-                        target: core,
-                        by_ref,
-                        selector,
-                        variants,
-                    })));
+        // Whether the part builds from leaves is asked FIRST, and refused
+        // after. Asking it only where a nested build is supported would turn a
+        // declaration this cannot represent into a different boundary — the
+        // part would quietly cross whole instead — and a caller reading the
+        // signature would never learn its declaration stopped applying.
+        if let Some(shape) = self.constructing(&core, walk.row).cloned() {
+            if builds_from_leaves(&shape) {
+                if dispatched {
+                    return Err(FoldError::UnsupportedNesting {
+                        ty: core.key().to_string(),
+                        position: "an argument of an arm, whose leaves are live only when the \
+                                   selector picks that arm",
+                    });
                 }
+                if optional {
+                    return Err(FoldError::UnsupportedNesting {
+                        ty: core.key().to_string(),
+                        position: "an optional argument, which would need a second absence \
+                                   beside the value's own",
+                    });
+                }
+                let key = core.key().to_string();
+                if walk.building.contains(&key) {
+                    return Err(FoldError::Cycle { ty: key });
+                }
+                walk.building.push(key);
+                let (selector, variants) =
+                    self.core(walk, &name.to_string(), &core, by_ref, &shape)?;
+                walk.building.pop();
+                return Ok(FoldArg::Build(Box::new(FoldBuild {
+                    target: core,
+                    by_ref,
+                    selector,
+                    variants,
+                })));
             }
         }
         let index = walk.leaves.len();

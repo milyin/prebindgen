@@ -59,7 +59,7 @@ pub use self::{
         At, Carrier, Compile, CompileError, Compiled, Compiler, Ctx, Cx, Frag, Part, PartSource,
         Parts, Refusal, Validity, Yield,
     },
-    site::{Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
+    site::{ArmKey, Ask, Bindings, BindingsBuilder, Bound, Origin, Role, Site},
 };
 
 // ── The two directions ──────────────────────────────────────────────────────────

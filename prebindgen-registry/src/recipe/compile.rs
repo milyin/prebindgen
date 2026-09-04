@@ -30,14 +30,26 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
-    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Origin, Reach, Recipe,
-    RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
+    ArmKey, Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Origin, Reach,
+    Recipe, RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Function, Type, TypeKey, TypeKind, TypeRef},
     generation::{ChoiceArity, FixedArity, FragmentUse, OperationId, ShapePlan},
     Conversions, FragmentId,
 };
+
+/// How one arm of a choice is keyed.
+///
+/// An arm naming an alternative is keyed by that alternative, so a row stating
+/// a subset of a sum, or stating it in another order, still meets a binding
+/// written for the alternative. An arm naming none has only where it sits.
+fn arm_key(alternative: Option<usize>, position: usize) -> ArmKey {
+    match alternative {
+        Some(index) => ArmKey::Alternative(index),
+        None => ArmKey::Position(position),
+    }
+}
 
 /// What a fragment produces, which is the only thing the registry reads out of
 /// one.
@@ -759,7 +771,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         direction: Direction,
-        arm: Option<usize>,
+        arm: Option<ArmKey>,
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
@@ -859,7 +871,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     let alternative = self.alternative_of(at, arm.alternative)?;
                     let (kind, parts) =
                         self.construct_parts(at, &arm.op, alternative.map(|a| &*a.fields))?;
-                    let (fragment, uses) = self.product(adapter, at, Some(at_arm), kind, parts)?;
+                    let key = arm_key(arm.alternative, at_arm);
+                    let (fragment, uses) = self.product(adapter, at, Some(key), kind, parts)?;
                     built.push((alternative, fragment));
                     arm_uses.push(uses);
                 }
@@ -891,7 +904,8 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     let alternative = self.alternative_of(at, arm.alternative)?;
                     let (kind, parts) =
                         self.deconstruct_parts(at, &arm.op, alternative.map(|a| &*a.fields))?;
-                    let (fragment, uses) = self.product(adapter, at, Some(at_arm), kind, parts)?;
+                    let key = arm_key(arm.alternative, at_arm);
+                    let (fragment, uses) = self.product(adapter, at, Some(key), kind, parts)?;
                     built.push((alternative, fragment));
                     arm_uses.push(uses);
                 }
@@ -994,7 +1008,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        arm: Option<usize>,
+        arm: Option<ArmKey>,
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
     ) -> Assembled<C> {
