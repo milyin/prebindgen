@@ -1296,7 +1296,7 @@ fn an_unstated_parity_expectation_refuses_a_skipped_decomposition() {
     let message = error.to_string();
     assert!(
         message.contains("NOT compared against their rows have changed")
-            && message.contains("a value form field that states parts of its own"),
+            && message.contains("value-form-field-with-parts"),
         "the refusal names the decomposition and why it was skipped: {message}"
     );
 }

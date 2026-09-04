@@ -650,7 +650,9 @@ fn a_row_that_states_no_parts_is_an_incomplete_read() {
     let rows = &[("Sample", "parts", Deconstructing::Atomic)];
     let (leaves, coverage) = unfolds_bound(sources, rows, &[], "Sample", "parts").expect("unfolds");
     assert!(leaves.is_empty());
-    assert_eq!(coverage.unread(), ["a row that states no parts"]);
+    // A stable code rather than a sentence: a caller that records this and
+    // compares the record later must not have it move when the wording does.
+    assert_eq!(coverage.unread(), ["row-states-no-parts"]);
 }
 
 /// The same rule inside an arm: an arm's payload crosses whole until a binding

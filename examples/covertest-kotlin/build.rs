@@ -170,6 +170,51 @@ fn main() {
             "the callback argument `Rack`: `Option < Meter >`'s row uses an optional layer, which the leaf view does not read yet",
             "the callback argument `Report`: a row that states no parts",
         ])
+        // The two halves of what the row differential does with this binding's
+        // decompositions: the ones it does not compare, each named with a stable
+        // reason code, and how many it does. Every decomposition is in exactly one,
+        // so a build fails if either moves — a decomposition leaving the comparison,
+        // or leaving the population. Each entry is a part binding #701 step 3 owes.
+        .expect_parity_skips([
+            "`annotated_new`'s return: an optional layer",
+            "`boxed_latest`'s return: no-parts-row",
+            "`duration_boundary_echo`'s return: an optional layer",
+            "`envelope_new`'s return: an optional layer",
+            "`frame_new`'s return: an optional layer",
+            "`hold_policy_echo`'s return: an optional layer",
+            "`ledger_new`'s return: optional-part",
+            "`maybe_holder_new`'s return: an optional layer",
+            "`observation_new`'s return: an optional layer",
+            "`probe_new`'s return: row-states-no-parts",
+            "`rack_new`'s return: an optional layer",
+            "`span_holder_new`'s return: no-parts-row",
+            "`storage_get_vec`'s return: an optional layer",
+            "`storage_get`'s return: an optional layer",
+            "`storage_labels`'s return: whole-element-fold",
+            "`storage_shards_opt`'s return: whole-element-fold",
+            "`storage_shards`'s return: whole-element-fold",
+            "`storage_summary_full`'s return: per-function-expand-return",
+            "`storage_summary_probe`'s return: per-function-expand-return",
+            "`storage_summary`'s return: no-parts-row",
+            "`storage_try_from_stamp`'s error: no-parts-row",
+            "`storage_try_with_label`'s error: no-parts-row",
+            "`summary_merge`'s return: no-parts-row",
+            "`summary_series_opt`'s return: no-parts-row",
+            "`summary_series`'s return: no-parts-row",
+            "`unsigned_round_trip`'s return: an optional layer",
+            "`unsigned_series`'s return: whole-element-fold",
+            "`vault_holder_new`'s return: no-parts-row",
+            "the callback argument `& Payload`: an optional layer",
+            "the callback argument `& [Payload]`: an optional layer",
+            "the callback argument `Envelope`: an optional layer",
+            "the callback argument `Frame`: an optional layer",
+            "the callback argument `Ledger`: optional-part",
+            "the callback argument `Option < Payload >`: an optional layer",
+            "the callback argument `Probe`: row-states-no-parts",
+            "the callback argument `Rack`: an optional layer",
+            "the callback argument `Report`: row-states-no-parts",
+        ])
+        .expect_parity_compared(22)
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a

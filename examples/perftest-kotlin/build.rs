@@ -38,6 +38,18 @@ fn main() {
             "the callback argument `& Payload`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
             "the callback argument `& [Payload]`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
         ])
+        // The two halves of what the row differential does with this binding's
+        // decompositions: the ones it does not compare, each named with a stable
+        // reason code, and how many it does. Every decomposition is in exactly one,
+        // so a build fails if either moves — a decomposition leaving the comparison,
+        // or leaving the population. Each entry is a part binding #701 step 3 owes.
+        .expect_parity_skips([
+            "`storage_get_vec`'s return: an optional layer",
+            "`storage_get`'s return: an optional layer",
+            "the callback argument `& Payload`: an optional layer",
+            "the callback argument `& [Payload]`: an optional layer",
+        ])
+        .expect_parity_compared(0)
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).

@@ -118,6 +118,23 @@ impl UnfoldViewError {
     pub fn is_not_yet_readable(&self) -> bool {
         matches!(self, UnfoldViewError::NotYetReadable { .. })
     }
+
+    /// A short, stable name for what went wrong.
+    ///
+    /// Separate from [`Display`](std::fmt::Display) because the two are read by
+    /// different things. A message is for a person and says which type and
+    /// which row; a code is for a caller that records this outcome and compares
+    /// the record later, and such a record should not move when the wording
+    /// improves or when a type is spelled differently.
+    pub fn code(&self) -> &'static str {
+        match self {
+            UnfoldViewError::UnknownAccessor(_) => "unknown-accessor",
+            UnfoldViewError::NotYetReadable { form, .. } => form,
+            UnfoldViewError::ManyIdentities { .. } => "many-identities",
+            UnfoldViewError::DuplicateName { .. } => "duplicate-leaf-name",
+            UnfoldViewError::Cycle { .. } => "cycle",
+        }
+    }
 }
 
 impl std::fmt::Display for UnfoldViewError {
@@ -128,7 +145,7 @@ impl std::fmt::Display for UnfoldViewError {
             }
             UnfoldViewError::NotYetReadable { crossing, form } => write!(
                 f,
-                "`{crossing}`'s row uses {form}, which the leaf view does not read yet"
+                "`{crossing}`'s row uses `{form}`, which the leaf view does not read yet"
             ),
             UnfoldViewError::ManyIdentities { ty } => write!(
                 f,
@@ -234,7 +251,7 @@ impl Folding<'_> {
             .deconstructing(reading, row)
             .ok_or_else(|| UnfoldViewError::NotYetReadable {
                 crossing: reading.to_string(),
-                form: "no row that takes the value apart",
+                form: "no-parts-row",
             })?
             .clone();
         let mut walk = Walk {
@@ -314,19 +331,19 @@ impl Folding<'_> {
                     let Some(alternative) = arm.alternative else {
                         return Err(UnfoldViewError::NotYetReadable {
                             crossing: source.to_string(),
-                            form: "an arm naming no alternative, which only a parameter builds",
+                            form: "arm-without-alternative",
                         });
                     };
                     let Deconstruct::Fields(reaches) = &arm.op else {
                         return Err(UnfoldViewError::NotYetReadable {
                             crossing: source.to_string(),
-                            form: "an arm read through a value form",
+                            form: "arm-through-value-form",
                         });
                     };
                     let Some((variant, fields)) = self.alternative(source, alternative) else {
                         return Err(UnfoldViewError::NotYetReadable {
                             crossing: source.to_string(),
-                            form: "an alternative the model does not have",
+                            form: "unknown-alternative",
                         });
                     };
                     for (index, reach) in reaches.iter().enumerate() {
@@ -339,7 +356,7 @@ impl Folding<'_> {
                         let Some(payload) = fields.get(*field) else {
                             return Err(UnfoldViewError::NotYetReadable {
                                 crossing: source.to_string(),
-                                form: "a payload field the alternative does not have",
+                                form: "unknown-payload-field",
                             });
                         };
                         // Bound by a pattern in the arm rather than reached off
@@ -413,7 +430,7 @@ impl Folding<'_> {
                 // Asked for parts and got none: a placeholder a crossing
                 // carries so a site can select it, which says the adapter emits
                 // this conversion itself.
-                walk.coverage.note("a row that states no parts");
+                walk.coverage.note("row-states-no-parts");
                 Ok(())
             }
             other => Err(UnfoldViewError::NotYetReadable {
@@ -512,7 +529,7 @@ impl Folding<'_> {
                 let ty = self.field_ty(source, *field).ok_or_else(|| {
                     UnfoldViewError::NotYetReadable {
                         crossing: source.to_string(),
-                        form: "a field the model does not have",
+                        form: "unknown-field",
                     }
                 })?;
                 let ident = self.field_ident(source, *field);
@@ -727,11 +744,12 @@ fn member_of(field: &prebindgen_flat::flat::Field, index: usize) -> syn::Member 
     }
 }
 
+/// The code for a reach the view does not read, and the message for it.
 fn reach_form(reach: &Reach) -> &'static str {
     match reach {
-        Reach::Path(_) => "a field-of-a-field chain",
-        Reach::Nested { .. } => "a field taken apart in place",
-        _ => "a reach the view does not read",
+        Reach::Path(_) => "field-of-a-field-chain",
+        Reach::Nested { .. } => "field-taken-apart-in-place",
+        _ => "unread-reach",
     }
 }
 

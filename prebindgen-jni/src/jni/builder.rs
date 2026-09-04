@@ -209,6 +209,7 @@ impl Default for Declarations {
             // each fixture: a test written to exercise one shape has no reach
             // worth holding, and there are hundreds of them.
             parity_skips: (!cfg!(test)).then(Vec::new),
+            parity_compared: (!cfg!(test)).then_some(0),
             param_expand_decls: Vec::new(),
             return_expand_decls: Vec::new(),
             fn_param_expands: Vec::new(),
@@ -241,6 +242,19 @@ impl JniGenBuilder {
     /// either way, so one leaving the comparison is noticed and one being
     /// lowered is recorded here deliberately.
     ///
+    /// State how many decompositions the row differential is expected to
+    /// COMPARE.
+    ///
+    /// The companion of [`Self::expect_parity_skips`], and the other half of
+    /// the partition: the skip set names what left the comparison, and a
+    /// decomposition leaving the POPULATION shows up in neither. Together the
+    /// two account for every decomposition the binding declares, and they move
+    /// in opposite directions as #701's step 3 lands its bindings.
+    pub fn expect_parity_compared(mut self, compared: usize) -> Self {
+        self.decls.parity_compared = Some(compared);
+        self
+    }
+
     /// The message on failure states the current set, ready to paste.
     pub fn expect_parity_skips<I, S>(mut self, skips: I) -> Self
     where

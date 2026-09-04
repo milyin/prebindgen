@@ -125,6 +125,7 @@ impl Declarations {
         // skip is work #701's step 3 still owes, and a list of them is how a
         // reader sees the differential's reach shrink or grow.
         let mut skipped: Vec<String> = Vec::new();
+        let mut compared = 0usize;
         let unfolded = self.unfolded();
         let mut plans: Vec<(String, &crate::unfold::UnfoldPlan)> = unfolded
             .unfold_plans
@@ -159,9 +160,7 @@ impl Declarations {
             // through its own converter, so there is no row and nothing to
             // compare.
             let Some(decon) = &plan.decon else {
-                skipped.push(format!(
-                    "{what}: a whole-element fold, which takes nothing apart"
-                ));
+                skipped.push(format!("{what}: whole-element-fold"));
                 continue;
             };
             // A per-function `.expand_return(...)` states a decomposition of
@@ -170,9 +169,7 @@ impl Declarations {
             // work here. The type's row does not describe it, so comparing the
             // two would compare two different decompositions.
             if !matches!(decon, prebindgen_registry::leaf::DeconId::Default(_)) {
-                skipped.push(format!(
-                    "{what}: a per-function `.expand_return`, which states a row of its own"
-                ));
+                skipped.push(format!("{what}: per-function-expand-return"));
                 continue;
             }
             // A `sealed_class` that ALSO carries an `expand_return!` states two
@@ -182,10 +179,7 @@ impl Declarations {
             // describe different things and comparing them says nothing. One
             // row name for two meanings is step 3's to resolve.
             if self.is_sum(&plan.source) && self.declares_return_expand(&plan.source) {
-                skipped.push(format!(
-                    "{what}: a sum that also declares an `expand_return!`, which is two \
-                     decompositions under one row name"
-                ));
+                skipped.push(format!("{what}: sum-and-expand-return"));
                 continue;
             }
             let policy = JniUnfold {
@@ -202,7 +196,7 @@ impl Declarations {
                     // being replaced. Step 3's remaining work rather than a
                     // disagreement.
                     Err(e) if e.is_not_yet_readable() => {
-                        skipped.push(format!("{what}: {e}"));
+                        skipped.push(format!("{what}: {}", e.code()));
                         continue;
                     }
                     // Anything else is a row that is WRONG: two leaves of one
@@ -233,6 +227,7 @@ impl Declarations {
                 skipped.push(format!("{what}: {unlowered}"));
                 continue;
             }
+            compared += 1;
             let from_row = describe(&leaves, &hoists);
             let from_decl = describe(&plan.leaves, &plan.hoists);
             if from_row != from_decl {
@@ -250,6 +245,18 @@ impl Declarations {
         // Shrinking fails too, and deliberately: each entry is a binding #701's
         // step 3 still owes, and removing one from the expectation is how that
         // work is recorded as done.
+        // How many decompositions the differential actually compared. The skip
+        // set names what left the comparison; this names what stayed, and one
+        // leaving the POPULATION shows up in neither.
+        if let Some(expected) = self.parity_compared {
+            if compared != expected {
+                return Err(format!(
+                    "the differential compared {compared} decomposition(s), and this binding \
+                     states {expected}. State the current count with \
+                     `.expect_parity_compared({compared})`."
+                ));
+            }
+        }
         skipped.sort();
         // Only where the binding stated one: a fixture exercising a single
         // shape has no reach worth holding, and the four bindings this
@@ -317,7 +324,7 @@ impl Declarations {
                 let core = core.borrow_target().unwrap_or(core);
                 let key = core.stripped_key();
                 if self.return_expand_decls.iter().any(|d| *d.key() == key) {
-                    return Some("a value form field that states parts of its own");
+                    return Some("value-form-field-with-parts");
                 }
                 // A CONSUMING form hands a handle field over rather than
                 // reading it, which the decomposition records as an identity
@@ -325,7 +332,7 @@ impl Declarations {
                 // about its type, and the row states the same reach either way.
                 // An ordinary field has no such fact and is compared.
                 if consuming && self.types.get(&key).is_some_and(|c| c.is_opaque()) {
-                    return Some("a handle field of a consuming value form, which is handed over");
+                    return Some("consuming-value-form-handle-field");
                 }
             }
             return None;
@@ -347,7 +354,7 @@ impl Declarations {
                 continue;
             };
             if ret.optional_inner().is_some() {
-                return Some("a part reached through an `Option`");
+                return Some("optional-part");
             }
             // `bindings` writes a binding only where the row it would name
             // exists. A declared type whose `parts` row this table does not
@@ -360,7 +367,7 @@ impl Declarations {
                 .key_of(&part.key(), &crate::jni::recipes::parts())
                 .is_none()
             {
-                return Some("a part whose type states no `parts` row yet");
+                return Some("part-without-parts-row");
             }
         }
         None
