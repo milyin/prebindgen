@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FoldError","UnfoldViewError"],"struct":["Folding"],"trait":["FoldPolicy","UnfoldPolicy"]};
