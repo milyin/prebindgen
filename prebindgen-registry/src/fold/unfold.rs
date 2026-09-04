@@ -468,6 +468,11 @@ impl Folding<'_> {
                     }
                 })?;
                 let ident = self.field_ident(source, *field);
+                // A field's own `Option` rides the leaf's own converter: a part
+                // that crosses whole takes the `Option` with it. Looking
+                // THROUGH one — the nesting step a decomposition makes of an
+                // optional nested class — is the `Optional` part #701's
+                // decision 3 describes, and waits for it.
                 (PathStep::field(ident, false), ty)
             }
             Reach::Identity => unreachable!("handled by the caller"),
@@ -546,6 +551,14 @@ impl Folding<'_> {
         // keys the same part by — so an adapter writes one binding and both
         // find it.
         let site = Site::arm_part(&at.row, arm, index);
+        // DECLARED, not merely resolved. `Bindings::resolve` answers for every
+        // site, falling back to the crossing's default row — which is the whole
+        // value crossing, and following it here would take a part apart because
+        // its type has a row rather than because something said to. That is the
+        // opposite of the rule: only a binding takes a part apart.
+        if !walk.bindings.is_declared(&site) {
+            return None;
+        }
         let crossing = Crossing::new(part.clone(), Direction::Deconstruct);
         let bound = walk.bindings.resolve(&site, &crossing, self.recipes())?;
         match self.recipes().get(&bound.recipe)? {

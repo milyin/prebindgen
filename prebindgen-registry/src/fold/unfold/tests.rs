@@ -528,3 +528,105 @@ fn a_duplicate_leaf_name_is_a_defect_not_a_deferral() {
         unfolds_bound(&[SAMPLE], rows, &[], "Sample", "parts").expect_err("two leaves of one name");
     assert!(refusal.contains("two of its leaves the name"), "{refusal}");
 }
+
+/// A part whose type states rows of its own still crosses whole unless a
+/// binding says otherwise — and comes apart when one does.
+///
+/// The two halves are one test because the difference between them is the whole
+/// rule. `Child` here is what a declared Kotlin class looks like in the table:
+/// an explicit `whole` row that IS its default, and a `parts` row beside it.
+/// Resolving the part site rather than asking whether it was declared finds
+/// that `whole` row, reads no leaves off it, and drops the part entirely — the
+/// opposite of the rule, and invisible to a differential that skips a plan
+/// yielding fewer leaves.
+#[test]
+fn a_part_crosses_whole_until_a_binding_takes_it_apart() {
+    let sources = &[
+        "pub struct Parent { pub n: u8 }",
+        "pub struct Child { pub lo: u32, pub hi: u64 }",
+        "pub fn parent_child(p: &Parent) -> &Child { todo!() }",
+    ];
+    let rows = &[
+        (
+            "Parent",
+            "parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Accessor(ident(
+                "parent_child",
+            ))])),
+        ),
+        // An explicit default, the way a declared class states one.
+        ("Child", "whole", Deconstructing::Atomic),
+        (
+            "Child",
+            "parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+        ),
+    ];
+
+    // Unbound: one leaf, the child as it stands.
+    assert_eq!(
+        unfolds_bound(sources, rows, &[], "Parent", "parts").expect("unfolds"),
+        // `& Child`, the accessor's return as written: an unspliced leaf
+        // carries the type its converter takes.
+        ["parent_child : & Child path=[parent_child] identity=false nullable=false groups=[]"]
+    );
+
+    // Bound: the child's own parts, under the part's name.
+    let binds = &[Bind {
+        owner: "Parent",
+        owner_row: "parts",
+        arm: None,
+        index: 0,
+        part: "Child",
+        part_row: "parts",
+    }];
+    assert_eq!(
+        unfolds_bound(sources, rows, binds, "Parent", "parts").expect("unfolds"),
+        [
+            "parent_child__lo : u32 path=[parent_child.lo] identity=false nullable=false groups=[]",
+            "parent_child__hi : u64 path=[parent_child.hi] identity=false nullable=false groups=[]",
+        ]
+    );
+}
+
+/// The same rule inside an arm: an arm's payload crosses whole until a binding
+/// on that arm's part takes it apart.
+#[test]
+fn an_arms_payload_crosses_whole_until_its_part_is_bound() {
+    let sources = &[
+        "pub struct Payload { pub lo: u32, pub hi: u64 }",
+        "pub enum Reply { Ok(Payload), Err(u64) }",
+    ];
+    let rows = &[
+        (
+            "Reply",
+            "parts",
+            Deconstructing::Choice {
+                arms: vec![
+                    Arm {
+                        alternative: Some(0),
+                        op: Deconstruct::Fields(vec![Reach::Field(0)]),
+                    },
+                    Arm {
+                        alternative: Some(1),
+                        op: Deconstruct::Fields(vec![Reach::Field(0)]),
+                    },
+                ],
+            },
+        ),
+        ("Payload", "whole", Deconstructing::Atomic),
+        (
+            "Payload",
+            "parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Field(0), Reach::Field(1)])),
+        ),
+    ];
+    assert_eq!(
+        unfolds_bound(sources, rows, &[], "Reply", "parts").expect("unfolds"),
+        [
+            "tag : Reply path=[] identity=false nullable=false groups=[]",
+            "Ok__v0 : Payload path=[] identity=false nullable=false groups=[0]",
+            "Err__v0 : u64 path=[] identity=false nullable=false groups=[1]",
+        ]
+    );
+}
