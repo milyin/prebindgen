@@ -68,7 +68,7 @@ fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
     v.alternatives
         .iter()
         .map(|alt| Arm {
-            alternative: alt.index,
+            alternative: Some(alt.index),
             op: Construct::Fields,
         })
         .collect()
@@ -94,7 +94,7 @@ fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
     v.alternatives
         .iter()
         .map(|alt| Arm {
-            alternative: alt.index,
+            alternative: Some(alt.index),
             op: Deconstruct::Fields((0..alt.fields.len()).map(Reach::Field).collect()),
         })
         .collect()

@@ -133,7 +133,7 @@ impl CbindgenBuilder {
                     .iter()
                     .enumerate()
                     .map(|(alternative, count)| Arm {
-                        alternative,
+                        alternative: Some(alternative),
                         op: Deconstruct::Fields((0..*count).map(Reach::Field).collect()),
                     })
                     .collect();
@@ -141,7 +141,7 @@ impl CbindgenBuilder {
                     .iter()
                     .enumerate()
                     .map(|(alternative, _)| Arm {
-                        alternative,
+                        alternative: Some(alternative),
                         op: Construct::Fields,
                     })
                     .collect();

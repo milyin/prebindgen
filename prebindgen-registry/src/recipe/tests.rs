@@ -358,11 +358,11 @@ fn an_arms_payload_supplies_the_field_indices() {
         Deconstructing::Choice {
             arms: vec![
                 Arm {
-                    alternative: 0,
+                    alternative: Some(0),
                     op: Deconstruct::Fields(vec![Reach::Field(0)]),
                 },
                 Arm {
-                    alternative: 1,
+                    alternative: Some(1),
                     op: Deconstruct::Fields(vec![Reach::Field(0)]),
                 },
             ],
@@ -376,7 +376,7 @@ fn an_arms_payload_supplies_the_field_indices() {
         recipe_name("variants"),
         Deconstructing::Choice {
             arms: vec![Arm {
-                alternative: 0,
+                alternative: Some(0),
                 op: Deconstruct::Fields(vec![Reach::Field(1)]),
             }],
         },
@@ -402,7 +402,7 @@ fn an_arms_payload_supplies_the_field_indices() {
         recipe_name("variants"),
         Deconstructing::Choice {
             arms: vec![Arm {
-                alternative: 4,
+                alternative: Some(4),
                 op: Deconstruct::Fields(vec![]),
             }],
         },
@@ -767,7 +767,7 @@ fn an_adapter_can_select_one_declared_row_for_one_site() {
             &mut self,
             cx: &mut Ctx<'_, Self>,
             at: At<'_>,
-            arms: &[(&Alternative, &Note)],
+            arms: &[(Option<&Alternative>, &Note)],
         ) -> Frag<Self> {
             self.0.choice(cx, at, arms)
         }
@@ -1155,11 +1155,14 @@ impl Compile for Recorder {
         &mut self,
         _cx: &mut Cx<'_, Note>,
         at: At<'_>,
-        arms: &[(&Alternative, &Note)],
+        arms: &[(Option<&Alternative>, &Note)],
     ) -> Frag<Self> {
         let detail = arms
             .iter()
-            .map(|(a, f)| format!("{}#{} [{}]", a.name, a.index, f.text))
+            .map(|(a, f)| match a {
+                Some(a) => format!("{}#{} [{}]", a.name, a.index, f.text),
+                None => format!("_ [{}]", f.text),
+            })
             .collect::<Vec<_>>()
             .join(" | ");
         self.hook(at, "choice", detail)
@@ -1981,11 +1984,11 @@ fn every_arm_of_a_choice_reaches_the_hook_already_composed() {
         Deconstructing::Choice {
             arms: vec![
                 Arm {
-                    alternative: 0,
+                    alternative: Some(0),
                     op: Deconstruct::Fields(vec![Reach::Field(0)]),
                 },
                 Arm {
-                    alternative: 1,
+                    alternative: Some(1),
                     op: Deconstruct::Fields(vec![Reach::Field(0)]),
                 },
             ],
@@ -2519,7 +2522,7 @@ fn what_a_role_tolerates_is_the_adapters_own_answer() {
             &mut self,
             cx: &mut Cx<'_, Note>,
             at: At<'_>,
-            arms: &[(&Alternative, &Note)],
+            arms: &[(Option<&Alternative>, &Note)],
         ) -> Frag<Self> {
             self.0.choice(cx, at, arms)
         }
@@ -2733,11 +2736,11 @@ fn an_arm_is_built_from_its_own_payload_fields() {
         Constructing::Choice {
             arms: vec![
                 Arm {
-                    alternative: 0,
+                    alternative: Some(0),
                     op: Construct::Fields,
                 },
                 Arm {
-                    alternative: 1,
+                    alternative: Some(1),
                     op: Construct::Fields,
                 },
             ],

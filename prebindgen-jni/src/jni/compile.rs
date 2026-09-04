@@ -3837,8 +3837,20 @@ impl Compile for JCompile<'_> {
         &mut self,
         cx: &mut Ctx<'_, Self>,
         at: At<'_>,
-        arms: &[(&Alternative, &JFrag)],
+        arms: &[(Option<&Alternative>, &JFrag)],
     ) -> Frag<Self> {
+        // Every choice JniGen declares is over a declared sum, and each of the
+        // helpers below reads the alternative's own name and index. An arm
+        // naming none is a choice between ways to obtain a value, which this
+        // adapter does not declare here.
+        let arms: Vec<(&Alternative, &JFrag)> = arms
+            .iter()
+            .map(|(alternative, fragment)| match alternative {
+                Some(alternative) => Ok((*alternative, *fragment)),
+                None => Err(wrong(at, "an arm that names no alternative of a sum")),
+            })
+            .collect::<Result<_, _>>()?;
+        let arms = arms.as_slice();
         let registry = self.enter(cx);
         match at.crossing.direction() {
             Direction::Construct => match self.selected(at, arms) {

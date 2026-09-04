@@ -1922,7 +1922,7 @@ fn one_marked_row_refusing_does_not_silence_the_next() {
             &mut self,
             _cx: &mut Ctx<'_, Self>,
             at: At<'_>,
-            _arms: &[(&prebindgen_flat::flat::Alternative, &Answered)],
+            _arms: &[(Option<&prebindgen_flat::flat::Alternative>, &Answered)],
         ) -> Frag<Self> {
             self.answer(at)
         }
@@ -2086,7 +2086,7 @@ fn declining_a_callback_parameter_still_enumerates_its_arguments() {
             &mut self,
             _cx: &mut Ctx<'_, Self>,
             at: At<'_>,
-            _a: &[(&prebindgen_flat::flat::Alternative, &One)],
+            _a: &[(Option<&prebindgen_flat::flat::Alternative>, &One)],
         ) -> Frag<Self> {
             self.answer(at)
         }
@@ -2251,7 +2251,7 @@ fn a_refused_site_comes_back_for_the_adapter_to_report() {
             &mut self,
             _cx: &mut Ctx<'_, Self>,
             at: At<'_>,
-            _a: &[(&prebindgen_flat::flat::Alternative, &One)],
+            _a: &[(Option<&prebindgen_flat::flat::Alternative>, &One)],
         ) -> Frag<Self> {
             self.answer(at)
         }

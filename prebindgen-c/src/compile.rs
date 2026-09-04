@@ -1271,7 +1271,7 @@ impl Compile for CCompile<'_> {
         &mut self,
         _cx: &mut Ctx<'_, Self>,
         at: At<'_>,
-        arms: &[(&Alternative, &CFrag)],
+        arms: &[(Option<&Alternative>, &CFrag)],
     ) -> Frag<Self> {
         let key = at.crossing.spelled().key();
         let cname = self.gen.c_type_ident(&key);
@@ -1279,6 +1279,13 @@ impl Compile for CCompile<'_> {
         let mut subs = Vec::new();
         let mut planned_arms = Vec::with_capacity(arms.len());
         for (alternative, fragment) in arms {
+            // Every choice this adapter declares is over a declared sum, and a
+            // C tagged union numbers its arms by the alternative's own index.
+            // An arm naming none is a choice between ways to obtain a value,
+            // which `prebindgen-c` does not declare.
+            let Some(alternative) = alternative else {
+                return Err(wrong(at, "an arm that names no alternative of a sum"));
+            };
             let Some(arm) = fragment.arm.as_ref() else {
                 return Err(wrong(at, "an arm that composed no payload"));
             };

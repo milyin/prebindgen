@@ -129,6 +129,14 @@ pub enum Construct {
     ///
     /// Inside a [`Shape::Choice`] arm the fields are that alternative's.
     Fields,
+    /// The value itself, arriving already built as one part.
+    ///
+    /// The construct-side mirror of [`Reach::Identity`], and the arm a
+    /// [`Shape::Choice`] needs when one of the ways to obtain a value is to be
+    /// handed it. Whether that part is cloned or moved follows from the
+    /// crossing's [`Mode`]: a borrowed crossing lends the value and the arm
+    /// clones, an owned one gives it away.
+    Identity,
 }
 
 impl Operation for Construct {
@@ -519,8 +527,14 @@ pub enum Shape<OP> {
 /// is stated here.
 #[derive(Clone, Debug)]
 pub struct Arm<OP> {
-    /// Position of the alternative within its sum.
-    pub alternative: usize,
+    /// Position of the alternative within its sum, when the arm takes one.
+    ///
+    /// `None` when the arm names no alternative because the value is not a
+    /// sum: one of several constructors that build it, or
+    /// [`Construct::Identity`], which is handed the value already built. A
+    /// parameter a binding offers three ways to supply is a [`Shape::Choice`]
+    /// whose three arms all answer `None` here.
+    pub alternative: Option<usize>,
     /// What assembles this arm's payload from its parts, or takes it out.
     pub op: OP,
 }
@@ -964,19 +978,33 @@ impl<'a> Check<'a, '_> {
             Shape::Invoke => Vec::new(),
             Shape::Product(op) => self.construct(ty, op),
             Shape::Choice { arms } => {
-                let Some(alternatives) = self.alternatives(ty) else {
+                // Only an arm that names an alternative needs the type to be a
+                // sum. A choice between ways to obtain a value — several
+                // constructors, or being handed one already built — names none,
+                // and its value is an ordinary type.
+                let alternatives = self.alternatives(ty);
+                if alternatives.is_none() && arms.iter().any(|a| a.alternative.is_some()) {
                     self.not_a_product();
                     return Vec::new();
-                };
+                }
+                let alternatives = alternatives.unwrap_or_default();
                 let mut parts = Vec::new();
                 for arm in arms {
-                    let Some(fields) = alternatives.get(arm.alternative) else {
-                        self.out_of_range(arm.alternative, alternatives.len());
-                        continue;
+                    let fields = match arm.alternative {
+                        Some(index) => match alternatives.get(index) {
+                            Some(fields) => Some(fields.clone()),
+                            None => {
+                                self.out_of_range(index, alternatives.len());
+                                continue;
+                            }
+                        },
+                        None => None,
                     };
                     // The arm's payload stands in for the sum's own fields,
-                    // which the model gives a sum none of.
-                    let outer = self.arm_fields.replace(fields.clone());
+                    // which the model gives a sum none of. An arm that names no
+                    // alternative has no payload to stand in, and reads the
+                    // value's own fields if its operation asks for them.
+                    let outer = std::mem::replace(&mut self.arm_fields, fields);
                     parts.extend(self.construct(ty, &arm.op));
                     self.arm_fields = outer;
                 }
@@ -994,19 +1022,33 @@ impl<'a> Check<'a, '_> {
             Shape::Invoke => Vec::new(),
             Shape::Product(op) => self.deconstruct(ty, op),
             Shape::Choice { arms } => {
-                let Some(alternatives) = self.alternatives(ty) else {
+                // Only an arm that names an alternative needs the type to be a
+                // sum. A choice between ways to obtain a value — several
+                // constructors, or being handed one already built — names none,
+                // and its value is an ordinary type.
+                let alternatives = self.alternatives(ty);
+                if alternatives.is_none() && arms.iter().any(|a| a.alternative.is_some()) {
                     self.not_a_product();
                     return Vec::new();
-                };
+                }
+                let alternatives = alternatives.unwrap_or_default();
                 let mut parts = Vec::new();
                 for arm in arms {
-                    let Some(fields) = alternatives.get(arm.alternative) else {
-                        self.out_of_range(arm.alternative, alternatives.len());
-                        continue;
+                    let fields = match arm.alternative {
+                        Some(index) => match alternatives.get(index) {
+                            Some(fields) => Some(fields.clone()),
+                            None => {
+                                self.out_of_range(index, alternatives.len());
+                                continue;
+                            }
+                        },
+                        None => None,
                     };
                     // The arm's payload stands in for the sum's own fields,
-                    // which the model gives a sum none of.
-                    let outer = self.arm_fields.replace(fields.clone());
+                    // which the model gives a sum none of. An arm that names no
+                    // alternative has no payload to stand in, and reads the
+                    // value's own fields if its operation asks for them.
+                    let outer = std::mem::replace(&mut self.arm_fields, fields);
                     parts.extend(self.deconstruct(ty, &arm.op));
                     self.arm_fields = outer;
                 }
@@ -1030,6 +1072,11 @@ impl<'a> Check<'a, '_> {
                 }
                 None => Vec::new(),
             },
+            // The value itself, as one part. Its mode is the crossing's:
+            // a borrowed crossing lends it and the arm clones, an owned one
+            // gives it away — so the part carries the reading as spelled
+            // rather than a stripped one.
+            Construct::Identity => vec![ty.clone()],
             Construct::Fields => match self.fields(ty) {
                 Some(fields) => fields.into_iter().map(|f| f.ty).collect(),
                 None => {

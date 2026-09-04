@@ -308,7 +308,7 @@ pub trait Compile {
         &mut self,
         cx: &mut Ctx<'_, Self>,
         at: At<'_>,
-        arms: &[(&Alternative, &Self::Fragment)],
+        arms: &[(Option<&Alternative>, &Self::Fragment)],
     ) -> Frag<Self>;
 
     /// A callback, taken apart into the values that pass through it.
@@ -852,12 +852,14 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
                 let mut arm_uses = Vec::new();
-                for arm in arms {
-                    let alternative = self.alternative(at, arm.alternative)?;
+                // Numbered by POSITION, not by the alternative an arm may name.
+                // An arm that names none still has to key its parts' bindings,
+                // and for a sum every arm names its own position anyway.
+                for (at_arm, arm) in arms.iter().enumerate() {
+                    let alternative = self.alternative_of(at, arm.alternative)?;
                     let (kind, parts) =
-                        self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    let at_arm = Some(arm.alternative);
-                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                        self.construct_parts(at, &arm.op, alternative.map(|a| &*a.fields))?;
+                    let (fragment, uses) = self.product(adapter, at, Some(at_arm), kind, parts)?;
                     built.push((alternative, fragment));
                     arm_uses.push(uses);
                 }
@@ -885,12 +887,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
                 let mut arm_uses = Vec::new();
-                for arm in arms {
-                    let alternative = self.alternative(at, arm.alternative)?;
+                for (at_arm, arm) in arms.iter().enumerate() {
+                    let alternative = self.alternative_of(at, arm.alternative)?;
                     let (kind, parts) =
-                        self.deconstruct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    let at_arm = Some(arm.alternative);
-                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                        self.deconstruct_parts(at, &arm.op, alternative.map(|a| &*a.fields))?;
+                    let (fragment, uses) = self.product(adapter, at, Some(at_arm), kind, parts)?;
                     built.push((alternative, fragment));
                     arm_uses.push(uses);
                 }
@@ -1038,10 +1039,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        arms: Vec<(&'a Alternative, C::Fragment)>,
+        arms: Vec<(Option<&'a Alternative>, C::Fragment)>,
         arm_uses: Vec<Vec<FragmentUse>>,
     ) -> Composed<C> {
-        let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
+        let paired: Vec<(Option<&Alternative>, &C::Fragment)> =
+            arms.iter().map(|(a, f)| (*a, f)).collect();
         let mut cx = self.cx();
         let fragment = adapter
             .choice(&mut cx, at, &paired)
@@ -1086,6 +1088,19 @@ impl<'a, C: Compile> Compiler<'a, C> {
                         name: field_name(field, index),
                     })
                     .collect();
+                Ok((ProductKind::Fields, parts))
+            }
+            Construct::Identity => {
+                // The value itself, exactly as `Reach::Identity` states it on
+                // the other side: the SPELLED crossing's mode, so a borrowed
+                // crossing records `Borrowed` and the adapter clones rather
+                // than moving out of a reference.
+                let parts = vec![Part {
+                    from: PartSource::Identity,
+                    mode: at.crossing.mode(),
+                    ty: at.crossing.value().clone(),
+                    name: "self".to_string(),
+                }];
                 Ok((ProductKind::Fields, parts))
             }
             Construct::Call(name) => {
@@ -1243,6 +1258,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
                 func: name.clone(),
             }))
         })
+    }
+
+    /// The alternative an arm names, or `None` when it names none.
+    fn alternative_of(
+        &self,
+        at: At<'_>,
+        index: Option<usize>,
+    ) -> Result<Option<&'a Alternative>, CompileError<C::Error>> {
+        index.map(|i| self.alternative(at, i)).transpose()
     }
 
     fn alternative(
