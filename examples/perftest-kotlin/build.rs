@@ -34,10 +34,10 @@ fn main() {
         // so a build fails if either moves — a decomposition leaving the comparison,
         // or leaving the population. Each entry is a part binding #701 step 3 owes.
         .expect_parity_skips([
-            "`storage_get_vec`'s return: optional-layer",
-            "`storage_get`'s return: optional-layer",
-            "the callback argument `& Payload`: optional-layer",
-            "the callback argument `& [Payload]`: optional-layer",
+            "`storage_get_vec`'s return: no-parts-row",
+            "`storage_get`'s return: no-parts-row",
+            "the callback argument `& Payload`: no-parts-row",
+            "the callback argument `& [Payload]`: no-parts-row",
         ])
         .expect_parity_compared(0)
         .set_package_prefix("io.prebindgen.perftest")

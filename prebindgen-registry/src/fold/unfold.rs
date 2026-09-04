@@ -464,9 +464,14 @@ impl Folding<'_> {
                     });
                 };
                 let Some(child) = self.deconstructing(inner, at.row.name()).cloned() else {
+                    // The layer is peeled by now: what is missing is the row
+                    // for what it HOLDS. Naming the optional here would file
+                    // this under a shape the walk reads, and a later row
+                    // declaration closing it would then read as the optional
+                    // support having been finished by something else.
                     return Err(UnfoldViewError::NotYetReadable {
-                        crossing: source.to_string(),
-                        form: "optional-layer",
+                        crossing: inner.to_string(),
+                        form: "no-parts-row",
                     });
                 };
                 // A presence flag ahead of the leaves it gates, and the leaves
