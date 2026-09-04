@@ -1072,11 +1072,12 @@ impl<'a> Check<'a, '_> {
                 }
                 None => Vec::new(),
             },
-            // The value itself, as one part. Its mode is the crossing's:
-            // a borrowed crossing lends it and the arm clones, an owned one
-            // gives it away — so the part carries the reading as spelled
-            // rather than a stripped one.
-            Construct::Identity => vec![ty.clone()],
+            // The value itself, as one part — and no edge. Pushing `ty` here
+            // would read as the crossing depending on itself and be reported
+            // as a cycle, exactly as `Reach::Identity` says on the other side:
+            // the arm is handed the value its own default row builds, which is
+            // a different recipe.
+            Construct::Identity => Vec::new(),
             Construct::Fields => match self.fields(ty) {
                 Some(fields) => fields.into_iter().map(|f| f.ty).collect(),
                 None => {

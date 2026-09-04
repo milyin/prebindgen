@@ -108,6 +108,7 @@ pub mod diagnostics;
 pub mod domain;
 mod emit;
 pub mod expand;
+pub mod fold;
 pub mod generation;
 pub mod leaf;
 pub mod niches;
