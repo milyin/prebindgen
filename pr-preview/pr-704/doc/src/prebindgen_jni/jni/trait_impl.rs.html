@@ -604,7 +604,7 @@
 <a href=#604 id=604 data-nosnippet>604</a>        // attached to a parameter position, so both sort after every parameter
 <a href=#605 id=605 data-nosnippet>605</a>        // that is. A part keeps its own numbering within that.
 <a href=#606 id=606 data-nosnippet>606</a>        </span>Role::Const =&gt; (usize::MAX, <span class="number">0</span>, <span class="number">0</span>),
-<a href=#607 id=607 data-nosnippet>607</a>        Role::Part { arm, index, .. } =&gt; (usize::MAX, <span class="number">1 </span>+ arm.unwrap_or(<span class="number">0</span>), index),
+<a href=#607 id=607 data-nosnippet>607</a>        Role::Part { arm, index, .. } =&gt; (usize::MAX, <span class="number">1 </span>+ arm.map_or(<span class="number">0</span>, |arm| arm.number()), index),
 <a href=#608 id=608 data-nosnippet>608</a>    };
 <a href=#609 id=609 data-nosnippet>609</a>    (site.owner.to_string(), position, kind, index)
 <a href=#610 id=610 data-nosnippet>610</a>}
