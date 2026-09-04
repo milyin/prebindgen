@@ -133,20 +133,15 @@ fn main() {
         // so a build fails if either moves — a decomposition leaving the comparison,
         // or leaving the population. Each entry is a part binding #701 step 3 owes.
         .expect_parity_skips([
-            "`annotated_new`'s return: optional-layer",
+            "`annotated_new`'s return: no-parts-row",
             "`boxed_latest`'s return: no-parts-row",
-            "`duration_boundary_echo`'s return: optional-layer",
-            "`envelope_new`'s return: optional-layer",
-            "`frame_new`'s return: optional-layer",
-            "`hold_policy_echo`'s return: optional-layer",
+            "`duration_boundary_echo`'s return: no-parts-row",
             "`ledger_new`'s return: optional-part",
-            "`maybe_holder_new`'s return: optional-layer",
-            "`observation_new`'s return: optional-layer",
+            "`maybe_holder_new`'s return: no-parts-row",
             "`probe_new`'s return: row-states-no-parts",
-            "`rack_new`'s return: optional-layer",
             "`span_holder_new`'s return: no-parts-row",
-            "`storage_get_vec`'s return: optional-layer",
-            "`storage_get`'s return: optional-layer",
+            "`storage_get_vec`'s return: no-parts-row",
+            "`storage_get`'s return: no-parts-row",
             "`storage_labels`'s return: whole-element-fold",
             "`storage_shards_opt`'s return: whole-element-fold",
             "`storage_shards`'s return: whole-element-fold",
@@ -158,20 +153,17 @@ fn main() {
             "`summary_merge`'s return: no-parts-row",
             "`summary_series_opt`'s return: no-parts-row",
             "`summary_series`'s return: no-parts-row",
-            "`unsigned_round_trip`'s return: optional-layer",
+            "`unsigned_round_trip`'s return: no-parts-row",
             "`unsigned_series`'s return: whole-element-fold",
             "`vault_holder_new`'s return: no-parts-row",
-            "the callback argument `& Payload`: optional-layer",
-            "the callback argument `& [Payload]`: optional-layer",
-            "the callback argument `Envelope`: optional-layer",
-            "the callback argument `Frame`: optional-layer",
+            "the callback argument `& Payload`: no-parts-row",
+            "the callback argument `& [Payload]`: no-parts-row",
             "the callback argument `Ledger`: optional-part",
-            "the callback argument `Option < Payload >`: optional-layer",
+            "the callback argument `Option < Payload >`: no-parts-row",
             "the callback argument `Probe`: row-states-no-parts",
-            "the callback argument `Rack`: optional-layer",
             "the callback argument `Report`: row-states-no-parts",
         ])
-        .expect_parity_compared(22)
+        .expect_parity_compared(30)
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a

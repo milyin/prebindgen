@@ -38,7 +38,12 @@ pub trait UnfoldPolicy {
 
     /// The leaf saying whether an optional value the decomposition looks
     /// through is present.
-    fn presence(&self, name: &str) -> UnfoldLeaf;
+    ///
+    /// `source` is the optional reading the flag reports on, which is what the
+    /// target needs to answer: the flag stands where that value does, and what
+    /// it carries is a choice about how absence crosses rather than a fact the
+    /// walk holds.
+    fn presence(&self, name: &str, source: &TypeRef) -> UnfoldLeaf;
 
     /// Whether the parts being named are a value form's.
     ///
@@ -64,7 +69,17 @@ pub trait UnfoldPolicy {
     /// arm's payload after what the alternative is called on ITS side, which is
     /// not the Rust variant's name, and after how it addresses the field. Both
     /// are the target's, and neither is in the row.
-    fn arm_part_name(&self, variant: &syn::Ident, member: &syn::Member, index: usize) -> String;
+    /// `sum` is the type the alternative belongs to, which is not the type the
+    /// walk started from: a sum reached as a part of something else carries its
+    /// own naming, and reading the root's would name a nested sum's slots after
+    /// whatever the outer type happens to say.
+    fn arm_part_name(
+        &self,
+        sum: &TypeRef,
+        variant: &syn::Ident,
+        member: &syn::Member,
+        index: usize,
+    ) -> String;
 
     /// What the value itself is called when it is one of the parts.
     fn identity_name(&self) -> String;
@@ -207,6 +222,8 @@ impl Coverage {
 struct Walk<'w> {
     policy: &'w dyn UnfoldPolicy,
     bindings: &'w crate::recipe::Bindings,
+    /// Whether the value this walk started from is lent rather than given.
+    lent: bool,
     leaves: Vec<UnfoldLeaf>,
     hoists: Vec<Hoist>,
     reading: Vec<String>,
@@ -257,6 +274,7 @@ impl Folding<'_> {
         let mut walk = Walk {
             policy,
             bindings,
+            lent: reading.borrow_target().is_some(),
             leaves: Vec::new(),
             hoists: Vec::new(),
             reading: vec![reading.key().to_string()],
@@ -317,7 +335,12 @@ impl Folding<'_> {
                 // leaves are written, and the selector says which of them is
                 // live — an arm the value did not take fills its slots with the
                 // wire's default rather than being absent.
-                let mut tag = walk.policy.selector(source);
+                // The selector names WHICH sum it chooses between, so it takes
+                // the sum itself however the value was reached — a borrow is
+                // how this walk holds the value, not what the selector is about.
+                let mut tag = walk
+                    .policy
+                    .selector(source.borrow_target().unwrap_or(source));
                 // A sum reached AS A PART carries that part's path and name:
                 // its leaves are read out of the field the walk arrived
                 // through, not off the value the row belongs to.
@@ -367,7 +390,12 @@ impl Folding<'_> {
                         // that name is, is the target's — see
                         // [`UnfoldPolicy::arm_part_name`].
                         let member = member_of(payload, *field);
-                        let name = walk.policy.arm_part_name(variant, &member, index);
+                        let name = walk.policy.arm_part_name(
+                            source.borrow_target().unwrap_or(source),
+                            variant,
+                            &member,
+                            index,
+                        );
                         let full = match &at.name {
                             Some(outer) => walk.policy.nest(outer, &name),
                             None => name,
@@ -423,10 +451,78 @@ impl Folding<'_> {
                 }
                 Ok(())
             }
+            Shape::Optional => {
+                // The decomposition looks THROUGH an optional value: what comes
+                // apart is what the `Option` holds, and every leaf under it is
+                // null when the value is absent. The layer is the model's, so
+                // the row states it and the walk peels it rather than every row
+                // restating what it wraps.
+                let Some(inner) = source.optional_inner() else {
+                    return Err(UnfoldViewError::NotYetReadable {
+                        crossing: source.to_string(),
+                        form: "optional-layer-without-inner",
+                    });
+                };
+                let Some(child) = self.deconstructing(inner, at.row.name()).cloned() else {
+                    // The layer is peeled by now: what is missing is the row
+                    // for what it HOLDS. Naming the optional here would file
+                    // this under a shape the walk reads, and a later row
+                    // declaration closing it would then read as the optional
+                    // support having been finished by something else.
+                    return Err(UnfoldViewError::NotYetReadable {
+                        crossing: inner.to_string(),
+                        form: "no-parts-row",
+                    });
+                };
+                // A presence flag ahead of the leaves it gates, and the leaves
+                // in its group: the value's absence is one wire slot, and the
+                // leaves under it carry the wire default when it says absent.
+                // How absence is spent is the target's answer — see
+                // [`UnfoldPolicy::presence`] — and what it gates is this walk's.
+                let name = at.name.clone().unwrap_or_default();
+                let mut flag = walk.policy.presence(&name, source);
+                // The flag stands where the value does, and what it carries is
+                // the OPTIONAL as written: the emitter tests that value to set
+                // it, so the reading it names is the one it tests.
+                // The step that reaches the value is optional — the emitter
+                // unwraps it before going on — and the flag stands at the same
+                // place, because testing the value is reaching it.
+                let mut path = at.path.clone();
+                if let Some(last) = path.last_mut() {
+                    *last = match last {
+                        PathStep::Call { ident, owned, .. } => {
+                            PathStep::call(ident.clone(), true, *owned)
+                        }
+                        PathStep::Field { ident, .. } => PathStep::field(ident.clone(), true),
+                    };
+                }
+                flag.path = path.clone();
+                walk.leaves.push(flag);
+                let inner_at = At {
+                    path,
+                    nullable: at.nullable,
+                    // The row the INNER crossing states, so its parts are keyed
+                    // by it: a binding written for a part of `Option<T>` is not
+                    // one written for a part of `T`, and the compiler keys them
+                    // apart the same way.
+                    row: crate::recipe::Crossing::new(
+                        inner.clone(),
+                        crate::recipe::Direction::Deconstruct,
+                    )
+                    .row(at.row.name().clone()),
+                    ..at.clone()
+                };
+                let before = walk.leaves.len();
+                self.level(walk, inner, &child, &inner_at)?;
+                // Everything the inner contributed is live only when the flag
+                // says the value is there.
+                // Group 0: an optional has one arm, the one the flag admits.
+                for leaf in &mut walk.leaves[before..] {
+                    leaf.groups.insert(0, 0);
+                }
+                Ok(())
+            }
             Shape::Atomic => {
-                // A placeholder a crossing carries so a site can select it: it
-                // says the adapter emits this conversion itself, and says
-                // nothing about parts.
                 // Asked for parts and got none: a placeholder a crossing
                 // carries so a site can select it, which says the adapter emits
                 // this conversion itself.
@@ -471,10 +567,12 @@ impl Folding<'_> {
             walk.leaves.push(UnfoldLeaf {
                 name,
                 path: at.path.clone(),
-                // The value as it stands: owned where it is ours to give,
-                // borrowed where it is lent and the leaf clones through its own
-                // converter.
-                out_ty: if at.path.is_empty() {
+                // The value as it stands: owned where it is OURS to give — the
+                // root of a decomposition that was handed the value — and
+                // borrowed everywhere else, where the leaf clones through its
+                // own converter. A root reached by reference is lent, not
+                // given, which the reading says and the row cannot.
+                out_ty: if at.path.is_empty() && !walk.lent {
                     source.clone()
                 } else {
                     source.borrowed()
