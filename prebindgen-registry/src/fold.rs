@@ -531,7 +531,7 @@ fn name_of(shape: &Shape<Construct>) -> &'static str {
 }
 
 mod unfold;
-pub use self::unfold::{UnfoldPolicy, UnfoldViewError};
+pub use self::unfold::{Coverage, UnfoldPolicy, UnfoldViewError};
 
 #[cfg(test)]
 mod tests;
