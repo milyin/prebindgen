@@ -383,8 +383,10 @@ fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
 /// the `.fun_accessor` subset — the only functions a decomposer record may
 /// reference.
 ///
-/// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
-/// converters resolve through the normal rank machinery.
+/// Runs while the binding declares itself into the registry, before `resolve`,
+/// so leaf converters resolve through the normal rank machinery. The parameter
+/// side is planned beside it, in `jni::param_rows`; neither reads the other,
+/// and the registry is handed both.
 pub fn apply(
     registry: &mut Unfolding<'_>,
     acc: &Deconstructors,
