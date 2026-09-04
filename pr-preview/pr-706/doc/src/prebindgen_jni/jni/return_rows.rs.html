@@ -222,164 +222,185 @@
 <a href=#222 id=222 data-nosnippet>222</a>                </span>));
 <a href=#223 id=223 data-nosnippet>223</a>            }
 <a href=#224 id=224 data-nosnippet>224</a>        }
-<a href=#225 id=225 data-nosnippet>225</a>        <span class="comment">// Named on the build log rather than kept: a differential that quietly
-<a href=#226 id=226 data-nosnippet>226</a>        // compares less than it did is the failure this whole check exists to
-<a href=#227 id=227 data-nosnippet>227</a>        // avoid.
-<a href=#228 id=228 data-nosnippet>228</a>        </span><span class="kw">if </span>!skipped.is_empty() &amp;&amp; std::env::var_os(<span class="string">"PREBINDGEN_REPORT_SKIPS"</span>).is_some() {
-<a href=#229 id=229 data-nosnippet>229</a>            skipped.sort();
-<a href=#230 id=230 data-nosnippet>230</a>            <span class="macro">eprintln!</span>(
-<a href=#231 id=231 data-nosnippet>231</a>                <span class="string">"prebindgen: {} decomposition(s) not compared against their rows:\n  {}"</span>,
-<a href=#232 id=232 data-nosnippet>232</a>                skipped.len(),
-<a href=#233 id=233 data-nosnippet>233</a>                skipped.join(<span class="string">"\n  "</span>)
-<a href=#234 id=234 data-nosnippet>234</a>            );
-<a href=#235 id=235 data-nosnippet>235</a>        }
-<a href=#236 id=236 data-nosnippet>236</a>        <span class="prelude-val">Ok</span>(())
-<a href=#237 id=237 data-nosnippet>237</a>    }
-<a href=#238 id=238 data-nosnippet>238</a>}
-<a href=#239 id=239 data-nosnippet>239</a>
-<a href=#240 id=240 data-nosnippet>240</a><span class="kw">impl </span>Declarations {
-<a href=#241 id=241 data-nosnippet>241</a>    <span class="doccomment">/// Which part of this type's decomposition declaration has no binding yet,
-<a href=#242 id=242 data-nosnippet>242</a>    /// if any.
-<a href=#243 id=243 data-nosnippet>243</a>    ///
-<a href=#244 id=244 data-nosnippet>244</a>    /// `Declarations::bindings` writes a part binding for an accessor part
-<a href=#245 id=245 data-nosnippet>245</a>    /// whose type carries a declaration of its own, and only where that part is
-<a href=#246 id=246 data-nosnippet>246</a>    /// the value itself. Three shapes are left, each waiting on work #701's
-<a href=#247 id=247 data-nosnippet>247</a>    /// step 3 still has: a part reached through an `Option`, which is the
-<a href=#248 id=248 data-nosnippet>248</a>    /// `Optional` part of its decision 3; a part of a value form, whose fields
-<a href=#249 id=249 data-nosnippet>249</a>    /// the row states as the returned struct's; and a value form that CONSUMES
-<a href=#250 id=250 data-nosnippet>250</a>    /// its receiver, whose parts may be handed over rather than read.
-<a href=#251 id=251 data-nosnippet>251</a>    ///
-<a href=#252 id=252 data-nosnippet>252</a>    /// Named here rather than guessed at from the leaves, because this is where
-<a href=#253 id=253 data-nosnippet>253</a>    /// the declaration is.
-<a href=#254 id=254 data-nosnippet>254</a>    </span><span class="kw">fn </span>unlowered_parts(
-<a href=#255 id=255 data-nosnippet>255</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#256 id=256 data-nosnippet>256</a>        model: <span class="kw-2">&amp;</span>Flat,
-<a href=#257 id=257 data-nosnippet>257</a>        registry: <span class="kw-2">&amp;</span><span class="kw">dyn </span>prebindgen_registry::Conversions,
-<a href=#258 id=258 data-nosnippet>258</a>        recipes: <span class="kw-2">&amp;</span>Recipes,
-<a href=#259 id=259 data-nosnippet>259</a>        source: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
-<a href=#260 id=260 data-nosnippet>260</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
-<a href=#261 id=261 data-nosnippet>261</a>        <span class="kw">let </span>key = source.stripped_key();
-<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span>decl = <span class="self">self</span>.return_expand_decls.iter().find(|d| <span class="kw-2">*</span>d.key() == key)<span class="question-mark">?</span>;
-<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">if let </span>[<span class="kw">crate</span>::jni::LocalField::Fields(form)] = decl.field_list() {
-<a href=#264 id=264 data-nosnippet>264</a>            <span class="comment">// A form that was handed the value may move a part out rather than
-<a href=#265 id=265 data-nosnippet>265</a>            // read it, and which parts those are is a fact about their types
-<a href=#266 id=266 data-nosnippet>266</a>            // that no row states. A BORROWING form has no such fact, and
-<a href=#267 id=267 data-nosnippet>267</a>            // `Deconstruct::ValueForm` represents it completely.
-<a href=#268 id=268 data-nosnippet>268</a>            </span><span class="kw">if </span>model
-<a href=#269 id=269 data-nosnippet>269</a>                .function(<span class="kw-2">&amp;</span>form.func())
-<a href=#270 id=270 data-nosnippet>270</a>                .and_then(|f| f.params.first())
-<a href=#271 id=271 data-nosnippet>271</a>                .is_some_and(|p| p.ty.borrow_target().is_none())
-<a href=#272 id=272 data-nosnippet>272</a>            {
-<a href=#273 id=273 data-nosnippet>273</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a consuming value form, whose parts may be handed over"</span>);
-<a href=#274 id=274 data-nosnippet>274</a>            }
-<a href=#275 id=275 data-nosnippet>275</a>            <span class="comment">// Per FIELD, not per form: a borrowing form of ordinary fields is
-<a href=#276 id=276 data-nosnippet>276</a>            // represented completely by `Deconstruct::ValueForm`, and only a
-<a href=#277 id=277 data-nosnippet>277</a>            // field that itself states parts is waiting on a binding —
-<a href=#278 id=278 data-nosnippet>278</a>            // `bindings` writes none for a value form's fields yet.
-<a href=#279 id=279 data-nosnippet>279</a>            </span><span class="kw">for </span>record <span class="kw">in </span><span class="self">self</span>.lower_value_form(registry, decl.key(), form) {
-<a href=#280 id=280 data-nosnippet>280</a>                <span class="kw">let </span>core = record.ty.optional_inner().unwrap_or(<span class="kw-2">&amp;</span>record.ty);
-<a href=#281 id=281 data-nosnippet>281</a>                <span class="kw">let </span>core = core.borrow_target().unwrap_or(core);
-<a href=#282 id=282 data-nosnippet>282</a>                <span class="kw">if </span><span class="self">self
-<a href=#283 id=283 data-nosnippet>283</a>                    </span>.return_expand_decls
-<a href=#284 id=284 data-nosnippet>284</a>                    .iter()
-<a href=#285 id=285 data-nosnippet>285</a>                    .any(|d| <span class="kw-2">*</span>d.key() == core.stripped_key())
-<a href=#286 id=286 data-nosnippet>286</a>                {
-<a href=#287 id=287 data-nosnippet>287</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a value form field that states parts of its own"</span>);
-<a href=#288 id=288 data-nosnippet>288</a>                }
-<a href=#289 id=289 data-nosnippet>289</a>            }
-<a href=#290 id=290 data-nosnippet>290</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#291 id=291 data-nosnippet>291</a>        }
-<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">for </span>field <span class="kw">in </span>decl.field_list() {
-<a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">let </span><span class="kw">crate</span>::jni::LocalField::Named(func, <span class="kw">_</span>) = field <span class="kw">else </span>{
-<a href=#294 id=294 data-nosnippet>294</a>                <span class="kw">continue</span>;
-<a href=#295 id=295 data-nosnippet>295</a>            };
-<a href=#296 id=296 data-nosnippet>296</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ret) = model.function(func).map(|f| f.ret.clone()) <span class="kw">else </span>{
-<a href=#297 id=297 data-nosnippet>297</a>                <span class="kw">continue</span>;
-<a href=#298 id=298 data-nosnippet>298</a>            };
-<a href=#299 id=299 data-nosnippet>299</a>            <span class="kw">let </span>core = ret.optional_inner().unwrap_or(<span class="kw-2">&amp;</span>ret);
-<a href=#300 id=300 data-nosnippet>300</a>            <span class="kw">let </span>core = core.borrow_target().unwrap_or(core);
-<a href=#301 id=301 data-nosnippet>301</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(_child) = <span class="self">self
-<a href=#302 id=302 data-nosnippet>302</a>                </span>.return_expand_decls
-<a href=#303 id=303 data-nosnippet>303</a>                .iter()
-<a href=#304 id=304 data-nosnippet>304</a>                .find(|d| <span class="kw-2">*</span>d.key() == core.stripped_key())
-<a href=#305 id=305 data-nosnippet>305</a>            <span class="kw">else </span>{
-<a href=#306 id=306 data-nosnippet>306</a>                <span class="kw">continue</span>;
-<a href=#307 id=307 data-nosnippet>307</a>            };
-<a href=#308 id=308 data-nosnippet>308</a>            <span class="kw">if </span>ret.optional_inner().is_some() {
-<a href=#309 id=309 data-nosnippet>309</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a part reached through an `Option`"</span>);
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="comment">// A differential that quietly compares less than it did is the failure
+<a href=#226 id=226 data-nosnippet>226</a>        // this whole check exists to avoid, so what it did NOT compare is
+<a href=#227 id=227 data-nosnippet>227</a>        // pinned rather than printed. The binding states the set it expects,
+<a href=#228 id=228 data-nosnippet>228</a>        // and any growth fails the build naming what appeared.
+<a href=#229 id=229 data-nosnippet>229</a>        //
+<a href=#230 id=230 data-nosnippet>230</a>        // Shrinking fails too, and deliberately: each entry is a binding #701's
+<a href=#231 id=231 data-nosnippet>231</a>        // step 3 still owes, and removing one from the expectation is how that
+<a href=#232 id=232 data-nosnippet>232</a>        // work is recorded as done.
+<a href=#233 id=233 data-nosnippet>233</a>        </span>skipped.sort();
+<a href=#234 id=234 data-nosnippet>234</a>        <span class="comment">// Only where the binding stated one: a fixture exercising a single
+<a href=#235 id=235 data-nosnippet>235</a>        // shape has no reach worth holding, and the four bindings this
+<a href=#236 id=236 data-nosnippet>236</a>        // workspace builds all state theirs.
+<a href=#237 id=237 data-nosnippet>237</a>        </span><span class="kw">let </span><span class="prelude-val">Some</span>(expected) = <span class="self">self</span>.parity_skips.clone() <span class="kw">else </span>{
+<a href=#238 id=238 data-nosnippet>238</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#239 id=239 data-nosnippet>239</a>        };
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="kw">if </span>skipped != expected {
+<a href=#241 id=241 data-nosnippet>241</a>            <span class="kw">let </span>only = |a: <span class="kw-2">&amp;</span>[String], b: <span class="kw-2">&amp;</span>[String]| {
+<a href=#242 id=242 data-nosnippet>242</a>                a.iter()
+<a href=#243 id=243 data-nosnippet>243</a>                    .filter(|x| !b.contains(x))
+<a href=#244 id=244 data-nosnippet>244</a>                    .cloned()
+<a href=#245 id=245 data-nosnippet>245</a>                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#246 id=246 data-nosnippet>246</a>                    .join(<span class="string">"\n  "</span>)
+<a href=#247 id=247 data-nosnippet>247</a>            };
+<a href=#248 id=248 data-nosnippet>248</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(
+<a href=#249 id=249 data-nosnippet>249</a>                <span class="string">"the decompositions NOT compared against their rows have changed.\n                 newly skipped:\n  {}\nno longer skipped:\n  {}\n\n                 state the current set with `.expect_parity_skips([..])`:\n  {}"</span>,
+<a href=#250 id=250 data-nosnippet>250</a>                only(<span class="kw-2">&amp;</span>skipped, <span class="kw-2">&amp;</span>expected),
+<a href=#251 id=251 data-nosnippet>251</a>                only(<span class="kw-2">&amp;</span>expected, <span class="kw-2">&amp;</span>skipped),
+<a href=#252 id=252 data-nosnippet>252</a>                skipped.join(<span class="string">"\n  "</span>)
+<a href=#253 id=253 data-nosnippet>253</a>            ));
+<a href=#254 id=254 data-nosnippet>254</a>        }
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="prelude-val">Ok</span>(())
+<a href=#256 id=256 data-nosnippet>256</a>    }
+<a href=#257 id=257 data-nosnippet>257</a>}
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a><span class="kw">impl </span>Declarations {
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="doccomment">/// Which part of this type's decomposition declaration has no binding yet,
+<a href=#261 id=261 data-nosnippet>261</a>    /// if any.
+<a href=#262 id=262 data-nosnippet>262</a>    ///
+<a href=#263 id=263 data-nosnippet>263</a>    /// `Declarations::bindings` writes a part binding for an accessor part
+<a href=#264 id=264 data-nosnippet>264</a>    /// whose type carries a declaration of its own, and only where that part is
+<a href=#265 id=265 data-nosnippet>265</a>    /// the value itself. Three shapes are left, each waiting on work #701's
+<a href=#266 id=266 data-nosnippet>266</a>    /// step 3 still has: a part reached through an `Option`, which is the
+<a href=#267 id=267 data-nosnippet>267</a>    /// `Optional` part of its decision 3; a part of a value form, whose fields
+<a href=#268 id=268 data-nosnippet>268</a>    /// the row states as the returned struct's; and a value form that CONSUMES
+<a href=#269 id=269 data-nosnippet>269</a>    /// its receiver, whose parts may be handed over rather than read.
+<a href=#270 id=270 data-nosnippet>270</a>    ///
+<a href=#271 id=271 data-nosnippet>271</a>    /// Named here rather than guessed at from the leaves, because this is where
+<a href=#272 id=272 data-nosnippet>272</a>    /// the declaration is.
+<a href=#273 id=273 data-nosnippet>273</a>    </span><span class="kw">fn </span>unlowered_parts(
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#275 id=275 data-nosnippet>275</a>        model: <span class="kw-2">&amp;</span>Flat,
+<a href=#276 id=276 data-nosnippet>276</a>        registry: <span class="kw-2">&amp;</span><span class="kw">dyn </span>prebindgen_registry::Conversions,
+<a href=#277 id=277 data-nosnippet>277</a>        recipes: <span class="kw-2">&amp;</span>Recipes,
+<a href=#278 id=278 data-nosnippet>278</a>        source: <span class="kw-2">&amp;</span>prebindgen_registry::flat::TypeRef,
+<a href=#279 id=279 data-nosnippet>279</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+<a href=#280 id=280 data-nosnippet>280</a>        <span class="kw">let </span>key = source.stripped_key();
+<a href=#281 id=281 data-nosnippet>281</a>        <span class="kw">let </span>decl = <span class="self">self</span>.return_expand_decls.iter().find(|d| <span class="kw-2">*</span>d.key() == key)<span class="question-mark">?</span>;
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">if let </span>[<span class="kw">crate</span>::jni::LocalField::Fields(form)] = decl.field_list() {
+<a href=#283 id=283 data-nosnippet>283</a>            <span class="comment">// A form that was handed the value may move a part out rather than
+<a href=#284 id=284 data-nosnippet>284</a>            // read it, and which parts those are is a fact about their types
+<a href=#285 id=285 data-nosnippet>285</a>            // that no row states. A BORROWING form has no such fact, and
+<a href=#286 id=286 data-nosnippet>286</a>            // `Deconstruct::ValueForm` represents it completely.
+<a href=#287 id=287 data-nosnippet>287</a>            </span><span class="kw">let </span>consuming = model
+<a href=#288 id=288 data-nosnippet>288</a>                .function(<span class="kw-2">&amp;</span>form.func())
+<a href=#289 id=289 data-nosnippet>289</a>                .and_then(|f| f.params.first())
+<a href=#290 id=290 data-nosnippet>290</a>                .is_some_and(|p| p.ty.borrow_target().is_none());
+<a href=#291 id=291 data-nosnippet>291</a>            <span class="comment">// Per FIELD, not per form. A form of ordinary fields is represented
+<a href=#292 id=292 data-nosnippet>292</a>            // completely by `Deconstruct::ValueForm` — the call, the hoist, each
+<a href=#293 id=293 data-nosnippet>293</a>            // field's reach and leaf — whether or not it consumes. Only a field
+<a href=#294 id=294 data-nosnippet>294</a>            // that is waiting on something is.
+<a href=#295 id=295 data-nosnippet>295</a>            </span><span class="kw">for </span>record <span class="kw">in </span><span class="self">self</span>.lower_value_form(registry, decl.key(), form) {
+<a href=#296 id=296 data-nosnippet>296</a>                <span class="kw">let </span>core = record.ty.optional_inner().unwrap_or(<span class="kw-2">&amp;</span>record.ty);
+<a href=#297 id=297 data-nosnippet>297</a>                <span class="kw">let </span>core = core.borrow_target().unwrap_or(core);
+<a href=#298 id=298 data-nosnippet>298</a>                <span class="kw">let </span>key = core.stripped_key();
+<a href=#299 id=299 data-nosnippet>299</a>                <span class="kw">if </span><span class="self">self</span>.return_expand_decls.iter().any(|d| <span class="kw-2">*</span>d.key() == key) {
+<a href=#300 id=300 data-nosnippet>300</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a value form field that states parts of its own"</span>);
+<a href=#301 id=301 data-nosnippet>301</a>                }
+<a href=#302 id=302 data-nosnippet>302</a>                <span class="comment">// A CONSUMING form hands a handle field over rather than
+<a href=#303 id=303 data-nosnippet>303</a>                // reading it, which the decomposition records as an identity
+<a href=#304 id=304 data-nosnippet>304</a>                // leaf. Whether a field is a handle is this adapter's answer
+<a href=#305 id=305 data-nosnippet>305</a>                // about its type, and the row states the same reach either way.
+<a href=#306 id=306 data-nosnippet>306</a>                // An ordinary field has no such fact and is compared.
+<a href=#307 id=307 data-nosnippet>307</a>                </span><span class="kw">if </span>consuming &amp;&amp; <span class="self">self</span>.types.get(<span class="kw-2">&amp;</span>key).is_some_and(|c| c.is_opaque()) {
+<a href=#308 id=308 data-nosnippet>308</a>                    <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a handle field of a consuming value form, which is handed over"</span>);
+<a href=#309 id=309 data-nosnippet>309</a>                }
 <a href=#310 id=310 data-nosnippet>310</a>            }
-<a href=#311 id=311 data-nosnippet>311</a>            <span class="comment">// `bindings` writes a binding only where the row it would name
-<a href=#312 id=312 data-nosnippet>312</a>            // exists. A declared type whose `parts` row this table does not
-<a href=#313 id=313 data-nosnippet>313</a>            // state yet is the same unfinished work, seen from the other side.
-<a href=#314 id=314 data-nosnippet>314</a>            </span><span class="kw">let </span>part = prebindgen_registry::recipe::Crossing::new(
-<a href=#315 id=315 data-nosnippet>315</a>                core.clone(),
-<a href=#316 id=316 data-nosnippet>316</a>                prebindgen_registry::recipe::Direction::Deconstruct,
-<a href=#317 id=317 data-nosnippet>317</a>            );
-<a href=#318 id=318 data-nosnippet>318</a>            <span class="kw">if </span>recipes
-<a href=#319 id=319 data-nosnippet>319</a>                .key_of(<span class="kw-2">&amp;</span>part.key(), <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::recipes::parts())
-<a href=#320 id=320 data-nosnippet>320</a>                .is_none()
-<a href=#321 id=321 data-nosnippet>321</a>            {
-<a href=#322 id=322 data-nosnippet>322</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a part whose type states no `parts` row yet"</span>);
-<a href=#323 id=323 data-nosnippet>323</a>            }
-<a href=#324 id=324 data-nosnippet>324</a>        }
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="prelude-val">None
-<a href=#326 id=326 data-nosnippet>326</a>    </span>}
-<a href=#327 id=327 data-nosnippet>327</a>}
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a><span class="doccomment">/// One decomposition, flattened far enough that two can be compared.
-<a href=#330 id=330 data-nosnippet>330</a></span><span class="kw">fn </span>describe(leaves: <span class="kw-2">&amp;</span>[UnfoldLeaf], hoists: <span class="kw-2">&amp;</span>[Hoist]) -&gt; String {
-<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">use </span>std::fmt::Write;
-<a href=#332 id=332 data-nosnippet>332</a>    <span class="kw">let </span>path_of = |steps: <span class="kw-2">&amp;</span>[prebindgen_registry::leaf::PathStep]| {
-<a href=#333 id=333 data-nosnippet>333</a>        steps
-<a href=#334 id=334 data-nosnippet>334</a>            .iter()
-<a href=#335 id=335 data-nosnippet>335</a>            .map(|step| {
-<a href=#336 id=336 data-nosnippet>336</a>                <span class="macro">format!</span>(
-<a href=#337 id=337 data-nosnippet>337</a>                    <span class="string">"{}{}"</span>,
-<a href=#338 id=338 data-nosnippet>338</a>                    step.ident(),
-<a href=#339 id=339 data-nosnippet>339</a>                    <span class="kw">if </span>step.is_optional() { <span class="string">"?" </span>} <span class="kw">else </span>{ <span class="string">"" </span>}
-<a href=#340 id=340 data-nosnippet>340</a>                )
-<a href=#341 id=341 data-nosnippet>341</a>            })
-<a href=#342 id=342 data-nosnippet>342</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#343 id=343 data-nosnippet>343</a>            .join(<span class="string">"."</span>)
-<a href=#344 id=344 data-nosnippet>344</a>    };
-<a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = String::new();
-<a href=#346 id=346 data-nosnippet>346</a>    <span class="kw">for </span>leaf <span class="kw">in </span>leaves {
-<a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">let _ </span>= <span class="macro">writeln!</span>(
-<a href=#348 id=348 data-nosnippet>348</a>            out,
-<a href=#349 id=349 data-nosnippet>349</a>            <span class="string">"  {} : {} path=[{}] identity={} nullable={} source={} groups={:?}"</span>,
-<a href=#350 id=350 data-nosnippet>350</a>            leaf.name,
-<a href=#351 id=351 data-nosnippet>351</a>            leaf.out_ty.key(),
-<a href=#352 id=352 data-nosnippet>352</a>            path_of(<span class="kw-2">&amp;</span>leaf.path),
-<a href=#353 id=353 data-nosnippet>353</a>            leaf.identity,
-<a href=#354 id=354 data-nosnippet>354</a>            leaf.nullable,
-<a href=#355 id=355 data-nosnippet>355</a>            source_of(<span class="kw-2">&amp;</span>leaf.source),
-<a href=#356 id=356 data-nosnippet>356</a>            leaf.groups
-<a href=#357 id=357 data-nosnippet>357</a>        );
-<a href=#358 id=358 data-nosnippet>358</a>    }
-<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">for </span>hoist <span class="kw">in </span>hoists {
-<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">let _ </span>= <span class="macro">writeln!</span>(
-<a href=#361 id=361 data-nosnippet>361</a>            out,
-<a href=#362 id=362 data-nosnippet>362</a>            <span class="string">"  hoist [{}] consuming={}"</span>,
-<a href=#363 id=363 data-nosnippet>363</a>            path_of(<span class="kw-2">&amp;</span>hoist.prefix),
-<a href=#364 id=364 data-nosnippet>364</a>            hoist.consuming
-<a href=#365 id=365 data-nosnippet>365</a>        );
-<a href=#366 id=366 data-nosnippet>366</a>    }
-<a href=#367 id=367 data-nosnippet>367</a>    out
-<a href=#368 id=368 data-nosnippet>368</a>}
-<a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a><span class="doccomment">/// How a leaf is reached, for the comparison.
-<a href=#371 id=371 data-nosnippet>371</a>///
-<a href=#372 id=372 data-nosnippet>372</a>/// A nested sum's payload is deliberately not distinguished from a plain reach.
-<a href=#373 id=373 data-nosnippet>373</a>/// The two paths record it differently — `synth_value_struct_leaves` maps a
-<a href=#374 id=374 data-nosnippet>374</a>/// rebased payload wire to `Reach`, dropping the alternative, where the view
-<a href=#375 id=375 data-nosnippet>375</a>/// keeps `VariantField` — and which of the two is right is not this check's
-<a href=#376 id=376 data-nosnippet>376</a>/// question. What the emitter reads off such a leaf is its `groups`, which both
-<a href=#377 id=377 data-nosnippet>377</a>/// paths agree on and this compares.
-<a href=#378 id=378 data-nosnippet>378</a></span><span class="kw">fn </span>source_of(source: <span class="kw-2">&amp;</span>LeafSource) -&gt; String {
-<a href=#379 id=379 data-nosnippet>379</a>    <span class="kw">match </span>source {
-<a href=#380 id=380 data-nosnippet>380</a>        LeafSource::VariantField { .. } | LeafSource::Reach =&gt; <span class="string">"reach"</span>.to_string(),
-<a href=#381 id=381 data-nosnippet>381</a>        LeafSource::SumTag =&gt; <span class="string">"tag"</span>.to_string(),
-<a href=#382 id=382 data-nosnippet>382</a>        LeafSource::Presence =&gt; <span class="string">"present"</span>.to_string(),
-<a href=#383 id=383 data-nosnippet>383</a>    }
-<a href=#384 id=384 data-nosnippet>384</a>}
+<a href=#311 id=311 data-nosnippet>311</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#312 id=312 data-nosnippet>312</a>        }
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">for </span>field <span class="kw">in </span>decl.field_list() {
+<a href=#314 id=314 data-nosnippet>314</a>            <span class="kw">let </span><span class="kw">crate</span>::jni::LocalField::Named(func, <span class="kw">_</span>) = field <span class="kw">else </span>{
+<a href=#315 id=315 data-nosnippet>315</a>                <span class="kw">continue</span>;
+<a href=#316 id=316 data-nosnippet>316</a>            };
+<a href=#317 id=317 data-nosnippet>317</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ret) = model.function(func).map(|f| f.ret.clone()) <span class="kw">else </span>{
+<a href=#318 id=318 data-nosnippet>318</a>                <span class="kw">continue</span>;
+<a href=#319 id=319 data-nosnippet>319</a>            };
+<a href=#320 id=320 data-nosnippet>320</a>            <span class="kw">let </span>core = ret.optional_inner().unwrap_or(<span class="kw-2">&amp;</span>ret);
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">let </span>core = core.borrow_target().unwrap_or(core);
+<a href=#322 id=322 data-nosnippet>322</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(_child) = <span class="self">self
+<a href=#323 id=323 data-nosnippet>323</a>                </span>.return_expand_decls
+<a href=#324 id=324 data-nosnippet>324</a>                .iter()
+<a href=#325 id=325 data-nosnippet>325</a>                .find(|d| <span class="kw-2">*</span>d.key() == core.stripped_key())
+<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw">else </span>{
+<a href=#327 id=327 data-nosnippet>327</a>                <span class="kw">continue</span>;
+<a href=#328 id=328 data-nosnippet>328</a>            };
+<a href=#329 id=329 data-nosnippet>329</a>            <span class="kw">if </span>ret.optional_inner().is_some() {
+<a href=#330 id=330 data-nosnippet>330</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a part reached through an `Option`"</span>);
+<a href=#331 id=331 data-nosnippet>331</a>            }
+<a href=#332 id=332 data-nosnippet>332</a>            <span class="comment">// `bindings` writes a binding only where the row it would name
+<a href=#333 id=333 data-nosnippet>333</a>            // exists. A declared type whose `parts` row this table does not
+<a href=#334 id=334 data-nosnippet>334</a>            // state yet is the same unfinished work, seen from the other side.
+<a href=#335 id=335 data-nosnippet>335</a>            </span><span class="kw">let </span>part = prebindgen_registry::recipe::Crossing::new(
+<a href=#336 id=336 data-nosnippet>336</a>                core.clone(),
+<a href=#337 id=337 data-nosnippet>337</a>                prebindgen_registry::recipe::Direction::Deconstruct,
+<a href=#338 id=338 data-nosnippet>338</a>            );
+<a href=#339 id=339 data-nosnippet>339</a>            <span class="kw">if </span>recipes
+<a href=#340 id=340 data-nosnippet>340</a>                .key_of(<span class="kw-2">&amp;</span>part.key(), <span class="kw-2">&amp;</span><span class="kw">crate</span>::jni::recipes::parts())
+<a href=#341 id=341 data-nosnippet>341</a>                .is_none()
+<a href=#342 id=342 data-nosnippet>342</a>            {
+<a href=#343 id=343 data-nosnippet>343</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="string">"a part whose type states no `parts` row yet"</span>);
+<a href=#344 id=344 data-nosnippet>344</a>            }
+<a href=#345 id=345 data-nosnippet>345</a>        }
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="prelude-val">None
+<a href=#347 id=347 data-nosnippet>347</a>    </span>}
+<a href=#348 id=348 data-nosnippet>348</a>}
+<a href=#349 id=349 data-nosnippet>349</a>
+<a href=#350 id=350 data-nosnippet>350</a><span class="doccomment">/// One decomposition, flattened far enough that two can be compared.
+<a href=#351 id=351 data-nosnippet>351</a></span><span class="kw">fn </span>describe(leaves: <span class="kw-2">&amp;</span>[UnfoldLeaf], hoists: <span class="kw-2">&amp;</span>[Hoist]) -&gt; String {
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">use </span>std::fmt::Write;
+<a href=#353 id=353 data-nosnippet>353</a>    <span class="kw">let </span>path_of = |steps: <span class="kw-2">&amp;</span>[prebindgen_registry::leaf::PathStep]| {
+<a href=#354 id=354 data-nosnippet>354</a>        steps
+<a href=#355 id=355 data-nosnippet>355</a>            .iter()
+<a href=#356 id=356 data-nosnippet>356</a>            .map(|step| {
+<a href=#357 id=357 data-nosnippet>357</a>                <span class="macro">format!</span>(
+<a href=#358 id=358 data-nosnippet>358</a>                    <span class="string">"{}{}"</span>,
+<a href=#359 id=359 data-nosnippet>359</a>                    step.ident(),
+<a href=#360 id=360 data-nosnippet>360</a>                    <span class="kw">if </span>step.is_optional() { <span class="string">"?" </span>} <span class="kw">else </span>{ <span class="string">"" </span>}
+<a href=#361 id=361 data-nosnippet>361</a>                )
+<a href=#362 id=362 data-nosnippet>362</a>            })
+<a href=#363 id=363 data-nosnippet>363</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#364 id=364 data-nosnippet>364</a>            .join(<span class="string">"."</span>)
+<a href=#365 id=365 data-nosnippet>365</a>    };
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">let </span><span class="kw-2">mut </span>out = String::new();
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">for </span>leaf <span class="kw">in </span>leaves {
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw">let _ </span>= <span class="macro">writeln!</span>(
+<a href=#369 id=369 data-nosnippet>369</a>            out,
+<a href=#370 id=370 data-nosnippet>370</a>            <span class="string">"  {} : {} path=[{}] identity={} nullable={} source={} groups={:?}"</span>,
+<a href=#371 id=371 data-nosnippet>371</a>            leaf.name,
+<a href=#372 id=372 data-nosnippet>372</a>            leaf.out_ty.key(),
+<a href=#373 id=373 data-nosnippet>373</a>            path_of(<span class="kw-2">&amp;</span>leaf.path),
+<a href=#374 id=374 data-nosnippet>374</a>            leaf.identity,
+<a href=#375 id=375 data-nosnippet>375</a>            leaf.nullable,
+<a href=#376 id=376 data-nosnippet>376</a>            source_of(<span class="kw-2">&amp;</span>leaf.source),
+<a href=#377 id=377 data-nosnippet>377</a>            leaf.groups
+<a href=#378 id=378 data-nosnippet>378</a>        );
+<a href=#379 id=379 data-nosnippet>379</a>    }
+<a href=#380 id=380 data-nosnippet>380</a>    <span class="kw">for </span>hoist <span class="kw">in </span>hoists {
+<a href=#381 id=381 data-nosnippet>381</a>        <span class="kw">let _ </span>= <span class="macro">writeln!</span>(
+<a href=#382 id=382 data-nosnippet>382</a>            out,
+<a href=#383 id=383 data-nosnippet>383</a>            <span class="string">"  hoist [{}] consuming={}"</span>,
+<a href=#384 id=384 data-nosnippet>384</a>            path_of(<span class="kw-2">&amp;</span>hoist.prefix),
+<a href=#385 id=385 data-nosnippet>385</a>            hoist.consuming
+<a href=#386 id=386 data-nosnippet>386</a>        );
+<a href=#387 id=387 data-nosnippet>387</a>    }
+<a href=#388 id=388 data-nosnippet>388</a>    out
+<a href=#389 id=389 data-nosnippet>389</a>}
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a><span class="doccomment">/// How a leaf is reached, for the comparison.
+<a href=#392 id=392 data-nosnippet>392</a>///
+<a href=#393 id=393 data-nosnippet>393</a>/// A nested sum's payload is deliberately not distinguished from a plain reach.
+<a href=#394 id=394 data-nosnippet>394</a>/// The two paths record it differently — `synth_value_struct_leaves` maps a
+<a href=#395 id=395 data-nosnippet>395</a>/// rebased payload wire to `Reach`, dropping the alternative, where the view
+<a href=#396 id=396 data-nosnippet>396</a>/// keeps `VariantField` — and which of the two is right is not this check's
+<a href=#397 id=397 data-nosnippet>397</a>/// question. What the emitter reads off such a leaf is its `groups`, which both
+<a href=#398 id=398 data-nosnippet>398</a>/// paths agree on and this compares.
+<a href=#399 id=399 data-nosnippet>399</a></span><span class="kw">fn </span>source_of(source: <span class="kw-2">&amp;</span>LeafSource) -&gt; String {
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">match </span>source {
+<a href=#401 id=401 data-nosnippet>401</a>        LeafSource::VariantField { .. } | LeafSource::Reach =&gt; <span class="string">"reach"</span>.to_string(),
+<a href=#402 id=402 data-nosnippet>402</a>        LeafSource::SumTag =&gt; <span class="string">"tag"</span>.to_string(),
+<a href=#403 id=403 data-nosnippet>403</a>        LeafSource::Presence =&gt; <span class="string">"present"</span>.to_string(),
+<a href=#404 id=404 data-nosnippet>404</a>    }
+<a href=#405 id=405 data-nosnippet>405</a>}
 </code></pre></div></section></main></body></html>
