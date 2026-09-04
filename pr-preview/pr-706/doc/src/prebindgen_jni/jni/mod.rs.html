@@ -1278,9 +1278,9 @@
 <a href=#1278 id=1278 data-nosnippet>1278</a>    /// the build: the check exists to catch the rows and the decomposition
 <a href=#1279 id=1279 data-nosnippet>1279</a>    /// disagreeing, and one that compares nothing agrees with everything.
 <a href=#1280 id=1280 data-nosnippet>1280</a>    ///
-<a href=#1281 id=1281 data-nosnippet>1281</a>    /// `None` where a binding states nothing, which is every fixture written to
-<a href=#1282 id=1282 data-nosnippet>1282</a>    /// exercise one shape. The gate is for a binding whose reach is worth
-<a href=#1283 id=1283 data-nosnippet>1283</a>    /// holding — the four this workspace builds all state theirs.
+<a href=#1281 id=1281 data-nosnippet>1281</a>    /// `Some(vec![])` by default, so a binding that states nothing is held to
+<a href=#1282 id=1282 data-nosnippet>1282</a>    /// comparing everything. `None` only under `cfg(test)`, where a fixture
+<a href=#1283 id=1283 data-nosnippet>1283</a>    /// exercises one shape and has no reach worth holding.
 <a href=#1284 id=1284 data-nosnippet>1284</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) parity_skips: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
 <a href=#1285 id=1285 data-nosnippet>1285</a>
 <a href=#1286 id=1286 data-nosnippet>1286</a>    <span class="doccomment">/// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
