@@ -1,18 +1,23 @@
-//! The view against the decomposition it replaces.
+//! What a row says a parameter comes apart into.
 //!
-//! Every test here builds the same construction twice — once through
-//! `expand::apply`, from the declarations, and once through [`Folding::fold`],
-//! from a row — and asserts the two plans agree. That is the question #701 step
-//! 2 turns on: whether a row tree can carry what the decomposition carried,
-//! down to the leaf names and their order.
+//! Each test declares a row, folds it, and states the leaves it expects by
+//! name, in order, with their types — because the names and the order are the
+//! thing under test. They are the ones `expand::apply` produced before the row
+//! replaced it, checked against it while both existed (#701 step 2).
 
 use prebindgen_flat::flat::{ScalarKind, TypeRef};
 
 use super::*;
-use crate::{
-    expand::{ExpandDecl, ExpandSel, Expansions, Variant},
-    recipe::{Arm, Constructing, RecipeName},
-};
+use crate::recipe::{Arm, Constructing, RecipeName};
+
+/// One way of obtaining a value, as a declaration writes it.
+#[derive(Clone)]
+enum Variant {
+    /// Call this constructor.
+    Ctor(syn::Ident),
+    /// Take the value already built.
+    Identity,
+}
 
 /// The JVM's answers, which are the ones `expand::apply` hard-codes today.
 struct Jni;
@@ -144,118 +149,36 @@ fn row_of(variants: &[Variant]) -> Constructing {
     }
 }
 
-/// Build both plans for one parameter and return them rendered.
-///
-/// `sources` is the model; `expansions` names the constructors for each type,
-/// in the form the declarations take; `func`/`param` is the position.
-fn both(
+/// Fold one parameter from its row and render the plan.
+fn plan_of(
     sources: &[&str],
-    constructors: &[(&str, Vec<Variant>)],
+    rows: &[(&str, Vec<Variant>)],
     func: &str,
     param: &str,
-) -> (String, String) {
-    let (decl, row) = run(sources, constructors, func, param);
-    (
-        decl.unwrap_or_else(|e| panic!("the declarations were rejected: {e}")),
-        row.unwrap_or_else(|e| panic!("the row was rejected: {e}")),
-    )
-}
-
-/// Both paths must refuse this declaration, and neither may quietly answer
-/// with a different boundary instead.
-fn rejects(
-    sources: &[&str],
-    constructors: &[(&str, Vec<Variant>)],
-    func: &str,
-    param: &str,
-    because: &str,
-) {
-    let (decl, row) = run(sources, constructors, func, param);
-    let decl = decl.err().unwrap_or_else(|| {
-        panic!("the declarations accepted {because}, so there is no parity to hold")
-    });
-    let row = row
-        .err()
-        .unwrap_or_else(|| panic!("the row accepted {because}, which the declarations refuse"));
-    assert!(
-        decl.contains("recursive") || decl.contains("Recursive"),
-        "the declarations refuse it as unsupported nesting: {decl}"
-    );
-    assert!(
-        row.contains("built from leaves of its own"),
-        "the row refuses it as unsupported nesting: {row}"
-    );
-}
-
-/// Build both plans for one parameter, keeping whichever refusal came back.
-fn run(
-    sources: &[&str],
-    constructors: &[(&str, Vec<Variant>)],
-    func: &str,
-    param: &str,
-) -> (Result<String, String>, Result<String, String>) {
-    // ── the decomposition ───────────────────────────────────────────────
-    let decls = Expansions {
-        constructors: constructors
-            .iter()
-            .map(|(target, variants)| crate::expand::ConstructorDecl {
-                target: crate::TypeKey::parse(target).expect("test type"),
-                variants: variants.clone(),
-                default: true,
-            })
-            .collect(),
-        expands: vec![ExpandDecl {
-            func: ident(func),
-            param: ident(param),
-            declared_target: None,
-            sel: ExpandSel::TopLevel,
-        }],
-        ..Default::default()
-    };
-    let mut builder = crate::test_util::reg_with(sources);
-    for (_, variants) in constructors {
-        for variant in variants {
-            if let Variant::Ctor(name) = variant {
-                builder = builder.export(name);
-            }
-        }
-    }
-    let mut builder = builder
-        .export(&ident(func))
-        .decompose(crate::Decompositions {
-            expansions: Some(decls),
-            ..Default::default()
-        });
-    // Derives the plans; the readings themselves are not what this reads back.
-    let applied = builder
-        .expansion_leaf_readings()
-        .map(|readings| readings.count());
-    let from_declarations = match applied {
-        Err(e) => Err(e.to_string()),
-        Ok(_) => {
-            let plans = crate::Conversions::expansion_plans(&builder);
-            match plans.get(&(ident(func), ident(param))) {
-                Some(expanded) => Ok(render(expanded)),
-                None => Err("no plan for the parameter".to_string()),
-            }
-        }
-    };
-
-    // ── the row ─────────────────────────────────────────────────────────
-    let model = crate::Conversions::flat(&builder).clone();
+) -> Result<String, String> {
+    let items = sources
+        .iter()
+        .map(|src| {
+            let item: syn::Item = syn::parse_str(src).expect("parse item");
+            (item, prebindgen::SourceLocation::default())
+        })
+        .collect::<Vec<_>>();
+    let model = prebindgen_flat::flat::Flat::builder()
+        .items(crate::test_util::declare_referenced(items))
+        .build()
+        .expect("parse");
     let mut recipes = Recipes::builder();
-    for (target, variants) in constructors {
+    for (target, variants) in rows {
         let ty = model
             .classify(&syn::parse_str(target).expect("test type"))
             .expect("a type the model accepts");
         // DECLARED, not defaulted: the crossing's default row stays its own
         // conversion, which is what an identity arm's part takes.
+        recipes.declare_derived_default(ty.clone(), Direction::Construct);
         recipes.declare(ty, RecipeName::new("parts"), row_of(variants));
     }
     let recipes = recipes.build(&model).expect("the rows build");
-    let bindings = Bindings::builder()
-        .build(&recipes)
-        .expect("no bindings to resolve");
+    let bindings = Bindings::default();
     let reading = model
         .function(&ident(func))
         .expect("the function")
@@ -265,7 +188,7 @@ fn run(
         .expect("the parameter")
         .ty
         .clone();
-    let from_row = Folding::new(&recipes, &bindings, &model)
+    Folding::new(&recipes, &bindings, &model)
         .fold(
             &Jni,
             param,
@@ -274,8 +197,34 @@ fn run(
             &RecipeName::new("parts"),
         )
         .map(|plan| render(&plan))
-        .map_err(|e| e.to_string());
-    (from_declarations, from_row)
+        .map_err(|e| e.to_string())
+}
+
+/// [`plan_of`], for a row that must fold.
+fn folds(sources: &[&str], rows: &[(&str, Vec<Variant>)], func: &str, param: &str) -> String {
+    plan_of(sources, rows, func, param).unwrap_or_else(|e| panic!("the row does not fold: {e}"))
+}
+
+/// The rendered plan as lines, so a test states its leaves one per line.
+fn lines(plan: &str) -> Vec<&str> {
+    plan.lines().collect()
+}
+
+/// A declaration the row form refuses, and the reason it gives.
+fn rejects(
+    sources: &[&str],
+    rows: &[(&str, Vec<Variant>)],
+    func: &str,
+    param: &str,
+    because: &str,
+) {
+    let refusal = plan_of(sources, rows, func, param)
+        .err()
+        .unwrap_or_else(|| panic!("{because} was accepted"));
+    assert!(
+        refusal.contains("built from leaves of its own"),
+        "refused as unsupported nesting: {refusal}"
+    );
 }
 
 /// A constructor argument that builds from leaves of its own, standing inside
@@ -326,7 +275,7 @@ fn an_optional_nested_build_is_refused() {
 /// One constructor taking one argument: the parameter keeps its own name.
 #[test]
 fn a_single_argument_constructor() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn publish(key: KeyExpr) {}",
@@ -335,13 +284,21 @@ fn a_single_argument_constructor() {
         "publish",
         "key",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=KeyExpr by_ref=false optional=false selector=None present=None",
+            "  leaf 0: key : & str",
+            "  variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "    leaf 0 passthrough=false",
+        ]
+    );
 }
 
 /// One constructor taking several: each leaf is named after its parameter.
 #[test]
 fn a_multi_argument_constructor() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn enc_new(id: i32, schema: u64) -> Encoding { todo!() }",
             "fn put(encoding: Encoding) {}",
@@ -350,13 +307,23 @@ fn a_multi_argument_constructor() {
         "put",
         "encoding",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=Encoding by_ref=false optional=false selector=None present=None",
+            "  leaf 0: encoding_id : i32",
+            "  leaf 1: encoding_schema : u64",
+            "  variant ctor=Some(\"enc_new\") fallible=false clone=false",
+            "    leaf 0 passthrough=false",
+            "    leaf 1 passthrough=false",
+        ]
+    );
 }
 
 /// A constructor and the value itself: a selector, then one leaf per arm.
 #[test]
 fn a_choice_of_constructor_and_identity() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn publish(key: KeyExpr) {}",
@@ -368,13 +335,25 @@ fn a_choice_of_constructor_and_identity() {
         "publish",
         "key",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=KeyExpr by_ref=false optional=false selector=Some(0) present=None",
+            "  leaf 0: key_sel : i32",
+            "  leaf 1: key_0 : Option < & str >",
+            "  leaf 2: key_1 : Option < KeyExpr >",
+            "  variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "    leaf 1 passthrough=false",
+            "  variant ctor=None fallible=false clone=false",
+            "    leaf 2 passthrough=false",
+        ]
+    );
 }
 
 /// A borrowed parameter: the identity arm clones, and its leaf is a borrow.
 #[test]
 fn a_borrowed_choice_clones_its_identity_arm() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn publish(key: &KeyExpr) {}",
@@ -386,14 +365,26 @@ fn a_borrowed_choice_clones_its_identity_arm() {
         "publish",
         "key",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=KeyExpr by_ref=true optional=false selector=Some(0) present=None",
+            "  leaf 0: key_sel : i32",
+            "  leaf 1: key_0 : Option < & str >",
+            "  leaf 2: key_1 : Option < & KeyExpr >",
+            "  variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "    leaf 1 passthrough=false",
+            "  variant ctor=None fallible=false clone=true",
+            "    leaf 2 passthrough=false",
+        ]
+    );
 }
 
 /// An optional parameter built by a one-argument constructor: one nullable
 /// leaf carries both the value and its absence.
 #[test]
 fn an_optional_single_argument_constructor() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn publish(key: Option<KeyExpr>) {}",
@@ -402,14 +393,22 @@ fn an_optional_single_argument_constructor() {
         "publish",
         "key",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=KeyExpr by_ref=false optional=true selector=None present=None",
+            "  leaf 0: key : Option < & str >",
+            "  variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "    leaf 0 passthrough=false",
+        ]
+    );
 }
 
 /// An optional parameter built by a multi-argument constructor: a presence
 /// flag in front, and the arguments stay plain.
 #[test]
 fn an_optional_multi_argument_constructor() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn enc_new(id: i32, schema: u64) -> Encoding { todo!() }",
             "fn put(encoding: Option<Encoding>) {}",
@@ -418,14 +417,25 @@ fn an_optional_multi_argument_constructor() {
         "put",
         "encoding",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=Encoding by_ref=false optional=true selector=None present=Some(0)",
+            "  leaf 0: encoding_present : bool",
+            "  leaf 1: encoding_id : i32",
+            "  leaf 2: encoding_schema : u64",
+            "  variant ctor=Some(\"enc_new\") fallible=false clone=false",
+            "    leaf 1 passthrough=false",
+            "    leaf 2 passthrough=false",
+        ]
+    );
 }
 
 /// An optional parameter with several arms: the selector carries absence, and
 /// no presence flag joins it.
 #[test]
 fn an_optional_choice() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn publish(key: Option<KeyExpr>) {}",
@@ -437,14 +447,26 @@ fn an_optional_choice() {
         "publish",
         "key",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=KeyExpr by_ref=false optional=true selector=Some(0) present=None",
+            "  leaf 0: key_sel : i32",
+            "  leaf 1: key_0 : Option < & str >",
+            "  leaf 2: key_1 : Option < KeyExpr >",
+            "  variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "    leaf 1 passthrough=false",
+            "  variant ctor=None fallible=false clone=false",
+            "    leaf 2 passthrough=false",
+        ]
+    );
 }
 
 /// A nested build whose own constructor is fallible carries that through: the
 /// inner call's error is routed, and the flag saying so is part of the plan.
 #[test]
 fn a_nested_build_keeps_its_constructors_fallibility() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_try(s: &str) -> Result<KeyExpr, Error> { todo!() }",
             "fn sel_new(key: KeyExpr, n: i32) -> Selector { todo!() }",
@@ -457,10 +479,22 @@ fn a_nested_build_keeps_its_constructors_fallibility() {
         "query",
         "selector",
     );
-    assert_eq!(decl, row);
     assert!(
         row.contains("fallible=true"),
         "the fixture must actually nest a fallible constructor: {row}"
+    );
+    assert_eq!(
+        lines(&row),
+        [
+            "target=Selector by_ref=false optional=false selector=None present=None",
+            "  leaf 0: selector_key : & str",
+            "  leaf 1: selector_n : i32",
+            "  variant ctor=Some(\"sel_new\") fallible=false clone=false",
+            "    build KeyExpr by_ref=false selector=None",
+            "      variant ctor=Some(\"key_try\") fallible=true clone=false",
+            "        leaf 0 passthrough=false",
+            "    leaf 1 passthrough=false",
+        ]
     );
 }
 
@@ -468,7 +502,7 @@ fn a_nested_build_keeps_its_constructors_fallibility() {
 /// arm, the same as a borrowed parameter does at the top level.
 #[test]
 fn a_nested_build_clones_a_borrowed_identity_arm() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn sel_new(key: &KeyExpr, n: i32) -> Selector { todo!() }",
@@ -484,10 +518,26 @@ fn a_nested_build_clones_a_borrowed_identity_arm() {
         "query",
         "selector",
     );
-    assert_eq!(decl, row);
     assert!(
         row.contains("clone=true"),
         "the fixture must actually clone a borrowed identity arm: {row}"
+    );
+    assert_eq!(
+        lines(&row),
+        [
+            "target=Selector by_ref=false optional=false selector=None present=None",
+            "  leaf 0: selector_key_sel : i32",
+            "  leaf 1: selector_key_0 : Option < & str >",
+            "  leaf 2: selector_key_1 : Option < & KeyExpr >",
+            "  leaf 3: selector_n : i32",
+            "  variant ctor=Some(\"sel_new\") fallible=false clone=false",
+            "    build KeyExpr by_ref=true selector=Some(0)",
+            "      variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "        leaf 1 passthrough=false",
+            "      variant ctor=None fallible=false clone=true",
+            "        leaf 2 passthrough=false",
+            "    leaf 3 passthrough=false",
+        ]
     );
 }
 
@@ -495,7 +545,7 @@ fn a_nested_build_clones_a_borrowed_identity_arm() {
 /// same way, and its leaves are named under the argument's name.
 #[test]
 fn a_nested_build() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn key_new(s: &str) -> KeyExpr { todo!() }",
             "fn sel_new(key: KeyExpr, n: i32) -> Selector { todo!() }",
@@ -508,7 +558,19 @@ fn a_nested_build() {
         "query",
         "selector",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=Selector by_ref=false optional=false selector=None present=None",
+            "  leaf 0: selector_key : & str",
+            "  leaf 1: selector_n : i32",
+            "  variant ctor=Some(\"sel_new\") fallible=false clone=false",
+            "    build KeyExpr by_ref=false selector=None",
+            "      variant ctor=Some(\"key_new\") fallible=false clone=false",
+            "        leaf 0 passthrough=false",
+            "    leaf 1 passthrough=false",
+        ]
+    );
 }
 
 /// An argument that is itself optional passes through an arm unwrapped: the
@@ -516,7 +578,7 @@ fn a_nested_build() {
 /// arm is live.
 #[test]
 fn an_optional_argument_inside_an_arm() {
-    let (decl, row) = both(
+    let row = folds(
         &[
             "fn enc_new(id: i32, schema: Option<u64>) -> Encoding { todo!() }",
             "fn put(encoding: Encoding) {}",
@@ -528,5 +590,19 @@ fn an_optional_argument_inside_an_arm() {
         "put",
         "encoding",
     );
-    assert_eq!(decl, row);
+    assert_eq!(
+        lines(&row),
+        [
+            "target=Encoding by_ref=false optional=false selector=Some(0) present=None",
+            "  leaf 0: encoding_sel : i32",
+            "  leaf 1: encoding_0_0 : Option < i32 >",
+            "  leaf 2: encoding_0_1 : Option < u64 >",
+            "  leaf 3: encoding_1 : Option < Encoding >",
+            "  variant ctor=Some(\"enc_new\") fallible=false clone=false",
+            "    leaf 1 passthrough=false",
+            "    leaf 2 passthrough=true",
+            "  variant ctor=None fallible=false clone=false",
+            "    leaf 3 passthrough=false",
+        ]
+    );
 }

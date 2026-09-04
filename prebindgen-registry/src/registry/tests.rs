@@ -1723,30 +1723,55 @@ fn a_recursive_type_is_handed_out_once_and_terminates() {
     assert!(revisited, "fixture must actually be recursive");
 }
 
+/// The accessor derives before it reads.
+///
+/// `expansion_leaf_readings` is reached with no `validate` or `build` call in
+/// front of it, and has to run the derivation itself rather than hand back the
+/// builder's empty store. The plans come from the adapter now, so what this
+/// pins is that they reach the registry at all — a store that was never
+/// applied answers with nothing, and nothing is what this test would see.
 #[test]
 fn expansion_leaf_readings_derive_before_validation() {
     let consumer: syn::Ident = syn::parse_quote!(consume);
     let constructor: syn::Ident = syn::parse_quote!(build);
-    let expansions = crate::expand::Expansions {
-        expands: vec![crate::expand::ExpandDecl {
-            func: consumer.clone(),
-            param: syn::parse_quote!(value),
-            declared_target: Some(TypeKey::parse("Value").expect("test type")),
-            sel: crate::expand::ExpandSel::Subset(vec![
-                crate::expand::Variant::Ctor(constructor.clone()),
-                crate::expand::Variant::Identity,
-            ]),
-        }],
-        ..Default::default()
-    };
     let mut registry = crate::test_util::reg_with(&[
         "fn build(id: u16) -> Value { todo!() }",
         "fn consume(value: &Value) {}",
     ])
     .export(&consumer)
-    .export(&constructor)
-    .decompose(Decompositions {
-        expansions: Some(expansions),
+    .export(&constructor);
+    let reading = |spelling: &str| {
+        crate::Conversions::flat(&registry)
+            .classify(&syn::parse_str(spelling).expect("test type"))
+            .expect("a type the model accepts")
+    };
+    let leaves = vec![reading("u16"), reading("Option<Value>")];
+    let plan = crate::expand::FoldPlan {
+        target: reading("Value"),
+        by_ref: true,
+        shape: crate::expand::FoldShape::Base,
+        leaves: leaves
+            .iter()
+            .enumerate()
+            .map(|(index, ty)| crate::expand::FoldLeaf {
+                name: syn::Ident::new(&format!("leaf{index}"), proc_macro2::Span::call_site()),
+                ty: ty.clone(),
+            })
+            .collect(),
+        selector: None,
+        present: None,
+        variants: vec![crate::expand::FoldVariant {
+            ctor: Some(constructor.clone()),
+            fallible: false,
+            clone: false,
+            inputs: vec![crate::expand::FoldArg::Leaf(0, false)],
+        }],
+    };
+    registry = registry.decompose(Decompositions {
+        expansion_plans: [((consumer.clone(), syn::parse_quote!(value)), plan)]
+            .into_iter()
+            .collect(),
+        input_leaves: leaves,
         ..Default::default()
     });
 
@@ -1758,63 +1783,14 @@ fn expansion_leaf_readings_derive_before_validation() {
         .cloned()
         .collect();
 
-    assert_eq!(
-        readings.len(),
-        3,
-        "selector, constructor leaf, identity leaf"
-    );
+    assert_eq!(readings.len(), 2, "both leaves of the one plan");
     assert_eq!(
         readings
             .iter()
             .filter(|reading| reading.optional_inner().is_some())
             .count(),
-        2,
-        "both non-selector arms are nullable synthetic readings"
-    );
-}
-
-/// A reading in **both** output lists keeps its converter demand.
-///
-/// The two lists say different things about the same reading.
-/// [`Decompositions::replaced_outputs`] cancels the demand the signature scan
-/// made for a whole-value crossing. [`Decompositions::output_leaves`] is a
-/// plan's own demand for a leaf — one value crossing as a single foreign
-/// argument, which needs a converter whatever the scan said. So
-/// `apply_adapter_plans` applies the replacements first and the deliveries
-/// after.
-///
-/// This is the only test that puts one reading in both: reversing those two
-/// loops passes every other test in this workspace, because no in-repo example
-/// binding overlaps them. zenoh-flat-jni does — a `Vec<String>` that is a leaf
-/// of one return and the element-wise body of another.
-#[test]
-fn a_delivered_reading_outranks_a_replaced_one() {
-    let exported: syn::Ident = syn::parse_quote!(locators);
-    let builder = crate::test_util::reg_with(&["fn locators() -> Vec<String> { todo!() }"]);
-    let reading = builder
-        .flat()
-        .classify(&syn::parse_quote!(Vec<String>))
-        .expect("fixture type");
-    let key = reading.key();
-
-    let registry = builder
-        .export(&exported)
-        .decompose(Decompositions {
-            // The scan roots this crossing: `locators` returns it whole. One
-            // plan replaces that, delivering the list element by element;
-            // another delivers the same reading as one of its leaves.
-            replaced_outputs: vec![reading.clone()],
-            output_leaves: vec![reading],
-            ..Default::default()
-        })
-        .scanned()
-        .expect("scan");
-
-    assert_eq!(
-        registry.is_root_for_test(Direction::Deconstruct, &key),
-        Some(true),
-        "a delivered leaf keeps its demand through a replacement of the same \
-         reading"
+        1,
+        "the second leaf is the nullable one"
     );
 }
 

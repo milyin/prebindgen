@@ -824,7 +824,7 @@ impl Declarations {
     /// value is always built from ingredients / decomposed into fields at the
     /// boundary and never materializes in Kotlin — so the `_self` arms are
     /// structurally impossible for it.
-    fn is_class_declared(&self, key: &TypeKey) -> bool {
+    pub(crate) fn is_class_declared(&self, key: &TypeKey) -> bool {
         self.types.contains_key(key)
     }
 
@@ -835,64 +835,6 @@ impl Declarations {
     /// `package` that declares its constructors (which is also why the
     /// rust-side-only `_self` check lives here and not at accept time).
     /// Duplicate targets pass through unmerged; core `apply` diagnoses them.
-    pub(crate) fn build_expansions(&self) -> prebindgen_registry::expand::Expansions {
-        use prebindgen_registry::expand::{ExpandDecl, ExpandSel, Expansions, Variant};
-        let lower = |v: &LocalVariant| match v {
-            LocalVariant::Ctor(f) => Variant::Ctor(f.clone()),
-            LocalVariant::SelfIdentity => Variant::Identity,
-        };
-        let mut exp = Expansions::default();
-        for decl in &self.param_expand_decls {
-            assert!(
-                self.is_class_declared(decl.key())
-                    || !decl
-                        .variants()
-                        .iter()
-                        .any(|v| matches!(v, LocalVariant::SelfIdentity)),
-                "expand_param!({k}).variant_self(): `{k}` has no class declaration, so there is \
-                 no Kotlin object to pass — drop .variant_self() (the type is rust-side-only) \
-                 or declare the type in a package",
-                k = decl.key().as_str()
-            );
-            // Identity-only normalization: `.variant_self()` alone declares
-            // the plain-handle form — exactly the default when nothing is
-            // declared, so registering it would only add a degenerate
-            // 1-variant selector to every param of this type.
-            if matches!(decl.variants(), [LocalVariant::SelfIdentity]) {
-                continue;
-            }
-            exp.constructors
-                .push(prebindgen_registry::expand::ConstructorDecl {
-                    target: decl.rust_type().key(),
-                    variants: decl.variants().iter().map(lower).collect(),
-                    default: true,
-                });
-        }
-        // Per-fn overrides: same decl shape, complete-set semantics; the
-        // param-name/type cross-check and the identity-only lowering happen
-        // in `core/expand.rs`'s `apply` (which sees the fn signatures).
-        for (func, param, decl) in &self.fn_param_expands {
-            assert!(
-                self.is_class_declared(decl.key())
-                    || !decl
-                        .variants()
-                        .iter()
-                        .any(|v| matches!(v, LocalVariant::SelfIdentity)),
-                "fun!({func}).expand_param(\"{param}\", expand_param!({k}).variant_self()): `{k}` \
-                 has no class declaration, so there is no Kotlin object to pass — drop \
-                 .variant_self() (the type is rust-side-only) or declare the type in a package",
-                k = decl.key().as_str()
-            );
-            exp.expands.push(ExpandDecl {
-                func: func.clone(),
-                param: syn::Ident::new(param, Span::call_site()),
-                declared_target: Some(decl.rust_type().key()),
-                sel: ExpandSel::Subset(decl.variants().iter().map(lower).collect()),
-            });
-        }
-        exp
-    }
-
     /// Lower one raw [`LocalField`] list into core [`DeconRecord`]s with the
     /// UNIFORM field-name precedence resolved against the complete
     /// declaration set: explicit `.name()` first, then the class member's

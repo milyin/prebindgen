@@ -192,7 +192,6 @@ impl std::error::Error for ScanError {}
 #[derive(Debug)]
 pub enum WriteRustError {
     Scan(ScanError),
-    Expand(crate::expand::ExpandError),
     Resolve(crate::resolve::ResolveError),
     Write(crate::write::WriteError),
 }
@@ -201,7 +200,6 @@ impl fmt::Display for WriteRustError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WriteRustError::Scan(e) => write!(f, "{}", e),
-            WriteRustError::Expand(e) => write!(f, "{}", e),
             WriteRustError::Resolve(e) => write!(f, "{}", e),
             WriteRustError::Write(e) => write!(f, "{}", e),
         }
@@ -213,12 +211,6 @@ impl std::error::Error for WriteRustError {}
 impl From<ScanError> for WriteRustError {
     fn from(e: ScanError) -> Self {
         WriteRustError::Scan(e)
-    }
-}
-
-impl From<crate::expand::ExpandError> for WriteRustError {
-    fn from(e: crate::expand::ExpandError) -> Self {
-        WriteRustError::Expand(e)
     }
 }
 

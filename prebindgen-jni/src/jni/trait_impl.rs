@@ -675,20 +675,6 @@ impl JniGenBuilder {
         let bindings = decls
             .bindings(declared.flat(), &declared, &recipes)
             .map_err(invariant)?;
-        // Every expanded parameter, read back off its row and held to the plan
-        // the declarations produced. Temporary, and deleted with
-        // `expand::apply`: while both paths exist this binding's own
-        // declarations are the comparison (#701 step 2).
-        decls
-            .check_expansion_parity(
-                declared.flat(),
-                &recipes,
-                &bindings,
-                &declared.exports().clone(),
-                &declared.accessors().clone(),
-                prebindgen_registry::Conversions::expansion_plans(&declared),
-            )
-            .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         // Both tables go on `decls`, because compiling a **site** happens after
         // this function has returned: the sites are `fn_plan`'s to enumerate,
         // and `Compiler::resume` needs these two beside the model.
@@ -977,8 +963,15 @@ impl Declarations {
             self.build_leaf_vec_fold_elements(&registry),
             &exports,
         )?;
+        // The parameter side, planned the same way the output side above is:
+        // from the model and this binding's declarations, before there is a
+        // registry to ask.
+        let (expansion_plans, input_leaves) = self
+            .expansion_plans(registry.flat(), &exports, &accessors)
+            .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         let decompositions = prebindgen_registry::Decompositions {
-            expansions: Some(self.build_expansions()),
+            expansion_plans,
+            input_leaves,
             callback_arg_leaves: unfolding.callback_arg_leaves(),
             output_leaves: unfolding.output_leaves().to_vec(),
             replaced_outputs: unfolding.replaced_outputs().to_vec(),

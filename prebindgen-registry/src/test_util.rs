@@ -119,18 +119,6 @@ pub(crate) fn unique_test_dir(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
 }
 
-/// Test-only adapter exposing the same model-generated source tokens as a
-/// production emission callback.
-pub(crate) trait EmitSourceForTest {
-    fn emit_source(&self) -> proc_macro2::TokenStream;
-}
-
-impl EmitSourceForTest for prebindgen_flat::flat::TypeRef {
-    fn emit_source(&self) -> proc_macro2::TokenStream {
-        crate::RustWriter::for_test().emit_source_type(self)
-    }
-}
-
 /// Write a capture directory holding `records`, the way a source crate's build
 /// script and the `#[prebindgen]` macro write one: a `prebindgen_output.toml`
 /// naming the crate, and the captures under the `default` group's directory.

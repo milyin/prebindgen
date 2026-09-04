@@ -323,22 +323,25 @@ pub(crate) struct Declared {
 /// separate hooks the registry used to call back for. Everything here reads the
 /// model alone, which is what makes stating it up front possible.
 ///
-/// The output side is stated as its **effects** rather than as its
+/// Both sides are stated as their **effects** rather than as their
 /// declarations: an adapter plans how its values come apart, keeps those plans,
 /// and hands over what a registry needs from them — which readings the plans
-/// deliver, which whole-value crossings they replace, and the leaf readings a
-/// callback argument's delivery depends on. The parameter side is still stated
-/// as declarations, because `expand::apply` still mutates the registry
-/// directly.
+/// deliver on each side, which whole-value crossings they replace, and the leaf
+/// readings a callback argument's delivery depends on.
 ///
 /// Each of those is an unordered list, and the registry fixes what happens when
 /// two of them name the same reading. An adapter states facts about its plans;
 /// it does not sequence registry mutations.
 #[derive(Default)]
 pub struct Decompositions {
-    /// Parameter-side: values built on the Rust side from ingredients that
-    /// cross separately.
-    pub expansions: Option<crate::expand::Expansions>,
+    /// Parameter-side: what the adapter's plans build on the Rust side from
+    /// ingredients that cross separately, keyed by the position each belongs
+    /// to. Read back through
+    /// [`Conversions::expansion_plans`].
+    pub expansion_plans: HashMap<(syn::Ident, syn::Ident), crate::expand::FoldPlan>,
+    /// Readings those plans deliver on the input side: each must resolve to a
+    /// converter, for the same reason [`Self::output_leaves`] must.
+    pub input_leaves: Vec<prebindgen_flat::flat::TypeRef>,
     /// Per callback-argument type, the readings its decomposition delivers.
     ///
     /// The ordering fact no syntax shows: each leaf's own conversion has to

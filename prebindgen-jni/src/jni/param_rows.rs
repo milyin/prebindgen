@@ -14,10 +14,10 @@
 //! every declaration this binding makes has been through it.
 
 use prebindgen_registry::{
-    expand::{FoldArg, FoldLeaf, FoldPlan},
+    expand::{FoldLeaf, FoldPlan},
     flat::{Flat, ScalarKind, TypeRef},
     fold::{FoldPolicy, Folding},
-    recipe::{Arm, Bindings, Construct, Constructing, RecipeName, Recipes, Shape},
+    recipe::{Arm, Bindings, Construct, Constructing, Direction, RecipeName, Recipes, Shape},
     LocalVariant, TypeKey,
 };
 
@@ -135,6 +135,17 @@ impl Declarations {
         };
         let mut rows = Vec::new();
         for decl in &self.param_expand_decls {
+            assert!(
+                self.is_class_declared(decl.key())
+                    || !decl
+                        .variants()
+                        .iter()
+                        .any(|v| matches!(v, LocalVariant::SelfIdentity)),
+                "expand_param!({k}).variant_self(): `{k}` has no class declaration, so there is \
+                 no Kotlin object to pass — drop .variant_self() (the type is rust-side-only) \
+                 or declare the type in a package",
+                k = decl.key().as_str()
+            );
             if !states_a_row(decl.variants()) {
                 continue;
             }
@@ -143,6 +154,17 @@ impl Declarations {
             }
         }
         for (func, param, decl) in &self.fn_param_expands {
+            assert!(
+                self.is_class_declared(decl.key())
+                    || !decl
+                        .variants()
+                        .iter()
+                        .any(|v| matches!(v, LocalVariant::SelfIdentity)),
+                "fun!({func}).expand_param(\"{param}\", expand_param!({k}).variant_self()): `{k}` \
+                 has no class declaration, so there is no Kotlin object to pass — drop \
+                 .variant_self() (the type is rust-side-only) or declare the type in a package",
+                k = decl.key().as_str()
+            );
             if !states_a_row(decl.variants()) {
                 continue;
             }
@@ -240,133 +262,116 @@ impl Declarations {
         positions
     }
 
-    /// Read every expanded parameter's plan back off its row, and hold the
-    /// older path to it.
+    /// What a per-function `.expand_param(...)` says about a position, checked
+    /// against the position itself.
     ///
-    /// Temporary, and deleted with `expand::apply`: while both exist, every
-    /// declaration this binding makes is a comparison, which is far more of the
-    /// surface than a fixture written by hand reaches.
-    pub(crate) fn check_expansion_parity(
-        &self,
-        model: &Flat,
-        recipes: &Recipes,
-        bindings: &Bindings,
-        exports: &std::collections::HashSet<syn::Ident>,
-        accessors: &std::collections::HashSet<syn::Ident>,
-        plans: &std::collections::HashMap<(syn::Ident, syn::Ident), FoldPlan>,
-    ) -> Result<(), String> {
-        // WHICH positions expand, derived here rather than read off the plans.
-        // Reading them off would check the rows only where the older path
-        // already chose to expand, and say nothing about a position this side
-        // adds, drops, or names differently — which is most of what the
-        // deletion has to be safe against.
-        let mine = self.expanded_positions(model, exports, accessors);
-        let theirs: std::collections::BTreeSet<(String, String)> = plans
-            .keys()
-            .map(|(func, param)| (func.to_string(), param.to_string()))
-            .collect();
-        if mine != theirs {
-            let only = |a: &std::collections::BTreeSet<(String, String)>,
-                        b: &std::collections::BTreeSet<(String, String)>| {
-                a.difference(b)
-                    .map(|(func, param)| format!("`{func}`'s `{param}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
-            return Err(format!(
-                "the rows expand a different set of parameters.\nonly from the rows: {}\nonly from the declarations: {}",
-                only(&mine, &theirs),
-                only(&theirs, &mine)
-            ));
-        }
-        let folding = Folding::new(recipes, bindings, model);
-        // Sorted, so a binding with two differences reports the same one every
-        // time rather than whichever the hash order reached first.
-        let mut positions: Vec<_> = plans.keys().collect();
-        positions.sort_by_key(|(func, param)| (func.to_string(), param.to_string()));
-        for (func, param) in positions {
-            let expected = &plans[&(func.clone(), param.clone())];
-            let Some(reading) = model
-                .function(func)
-                .and_then(|f| f.params.iter().find(|p| &p.name == param))
-                .map(|p| p.ty.clone())
-            else {
-                continue;
-            };
-            let row = self.row_for(func, param);
-            let actual = folding
-                .fold(&JniFold, &param.to_string(), &reading, &row, &type_row())
-                .map_err(|e| format!("`{func}`'s `{param}` does not fold from its row: {e}"))?;
-            if describe(&actual) != describe(expected) {
+    /// Neither check belongs to a row: a row says how a TYPE is built, and
+    /// these are about the parameter the declaration was written for. Naming a
+    /// parameter the function does not have, or a type it does not take, is a
+    /// declaration that would otherwise do nothing at all — the row would sit
+    /// on a crossing nothing reaches.
+    fn check_param_expands(&self, model: &Flat) -> Result<(), String> {
+        for (func, param, decl) in &self.fn_param_expands {
+            let Some(function) = model.function(func) else {
                 return Err(format!(
-                    "`{func}`'s `{param}` reads back differently from its row.\n\
-                     from the row:\n{}\nfrom the declarations:\n{}",
-                    describe(&actual),
-                    describe(expected)
+                    "`{func}` has a parameter expansion, and no `#[prebindgen]` function of \
+                     that name"
+                ));
+            };
+            let Some(found) = function.params.iter().find(|p| p.name == ident(param)) else {
+                let names = function
+                    .params
+                    .iter()
+                    .map(|p| format!("`{}`", p.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(format!(
+                    "`{func}` has no parameter `{param}` to expand; it takes {names}"
+                ));
+            };
+            let after_opt = found.ty.optional_inner().unwrap_or(&found.ty);
+            let bare = after_opt.borrow_target().unwrap_or(after_opt).key();
+            if bare != *decl.key() {
+                return Err(format!(
+                    "`{func}`'s `{param}` is a `{bare}`, and its expansion is declared for \
+                     `{declared}`",
+                    declared = decl.key().as_str()
                 ));
             }
         }
         Ok(())
     }
-}
 
-/// One plan, flattened far enough that two can be compared by equality.
-fn describe(plan: &FoldPlan) -> String {
-    use std::fmt::Write;
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "target={} by_ref={} optional={} selector={:?} present={:?}",
-        plan.target.key(),
-        plan.by_ref,
-        plan.produces_option(),
-        plan.selector,
-        plan.present
-    );
-    for (index, leaf) in plan.leaves.iter().enumerate() {
-        let _ = writeln!(out, "  leaf {index}: {} : {}", leaf.name, leaf.ty.key());
-    }
-    for variant in &plan.variants {
-        let _ = writeln!(
-            out,
-            "  variant ctor={:?} fallible={} clone={}",
-            variant.ctor.as_ref().map(|c| c.to_string()),
-            variant.fallible,
-            variant.clone
-        );
-        for arg in &variant.inputs {
-            let _ = writeln!(out, "    {}", describe_arg(arg));
-        }
-    }
-    out
-}
-
-fn describe_arg(arg: &FoldArg) -> String {
-    match arg {
-        FoldArg::Leaf(index, passthrough) => format!("leaf {index} passthrough={passthrough}"),
-        FoldArg::Build(build) => {
-            let mut out = format!(
-                "build {} by_ref={} selector={:?}",
-                build.target.key(),
-                build.by_ref,
-                build.selector
-            );
-            for variant in &build.variants {
-                // Every field, not just the constructor. `fallible` routes the
-                // error and `clone` decides whether a borrowed value survives
-                // the call, so a difference in either is a difference in
-                // behaviour.
-                out.push_str(&format!(
-                    "\n      variant ctor={:?} fallible={} clone={}",
-                    variant.ctor.as_ref().map(|c| c.to_string()),
-                    variant.fallible,
-                    variant.clone
-                ));
-                for arg in &variant.inputs {
-                    out.push_str(&format!("\n        {}", describe_arg(arg)));
-                }
+    /// Every expanded parameter's plan, read off its row, and the readings
+    /// those plans deliver.
+    ///
+    /// Read from the declarations and the model, so this can be answered before
+    /// there is a registry — which is what lets the leaves be handed over as a
+    /// fact rather than asked for mid-resolve. The rows go in a table of their
+    /// own for the same reason: the binding's own table is built later, from a
+    /// registry this runs before.
+    pub(crate) fn expansion_plans(
+        &self,
+        model: &Flat,
+        exports: &std::collections::HashSet<syn::Ident>,
+        accessors: &std::collections::HashSet<syn::Ident>,
+    ) -> Result<(ExpansionPlans, Vec<TypeRef>), String> {
+        self.check_param_expands(model)?;
+        let mut builder = Recipes::builder();
+        let mut seen = std::collections::HashSet::new();
+        for (ty, name, row) in self.expansion_rows(model) {
+            // Nothing else declares a row here, so the value's own crossing is
+            // the derived one — see `Declarations::recipes` for the same
+            // arrangement beside the rows a class declares.
+            if seen.insert(ty.key()) {
+                builder.declare_derived_default(ty.clone(), Direction::Construct);
             }
-            out
+            builder.declare(ty, name, row);
         }
+        let recipes = builder.build(model).map_err(|errors| {
+            errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("; ")
+        })?;
+        let bindings = Bindings::default();
+        let folding = Folding::new(&recipes, &bindings, model);
+
+        let mut plans = ExpansionPlans::new();
+        let mut leaves = Vec::new();
+        for (func, param) in self.expanded_positions(model, exports, accessors) {
+            let (func, param) = (ident(&func), ident(&param));
+            let reading = model
+                .function(&func)
+                .and_then(|f| f.params.iter().find(|p| p.name == param))
+                .map(|p| p.ty.clone())
+                .ok_or_else(|| format!("`{func}` has no parameter `{param}` to expand"))?;
+            let row = self.row_for(&func, &param);
+            let plan = folding
+                .fold(&JniFold, &param.to_string(), &reading, &row, &type_row())
+                .map_err(|e| format!("`{func}`'s `{param}` does not fold from its row: {e}"))?;
+            // One callback per expanded parameter. A delivered value's site is
+            // named by the parameter it arrived on rather than by the leaf, so
+            // two callbacks here would give two positions one identity.
+            if plan
+                .leaves
+                .iter()
+                .filter(|leaf| leaf.ty.callback_args().is_some())
+                .count()
+                > 1
+            {
+                return Err(format!(
+                    "`{func}`'s `{param}` is built from more than one callback, and one \
+                     parameter has no way to name them apart"
+                ));
+            }
+            leaves.extend(plan.leaves.iter().map(|leaf| leaf.ty.clone()));
+            plans.insert((func, param), plan);
+        }
+        Ok((plans, leaves))
     }
 }
+
+/// Every expanded parameter's plan, keyed by the position it belongs to.
+pub(crate) type ExpansionPlans = std::collections::HashMap<(syn::Ident, syn::Ident), FoldPlan>;
