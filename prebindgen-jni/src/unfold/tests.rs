@@ -1880,14 +1880,17 @@ fn sum_return_is_a_fixed_builder_plan() {
     // requirement into a binding that has no `i32` crossing of its own.
     assert!(!plan.leaves[0].has_converter());
     assert!(plan.leaves[1].has_converter());
-    // #282's invariant, stated over the plan rather than over one type name:
-    // a converter-bearing leaf demands its converter, and the selector demands
-    // nothing — its `out_ty` is the sum it chooses between, and a sum has no
-    // whole-value output converter at all. The assertion this replaced could
-    // state neither half — it read `!...is_some_and(|c| c.root)` on `Reading`,
-    // which is also true when the cell is ABSENT, and absent is what it was:
-    // this fixture's registry declares nothing, so it passed for the wrong
-    // reason.
+    // #282's plan half, stated over the plan rather than over one type name:
+    // a converter-bearing leaf is delivered as a required output, and the
+    // selector is not — its `out_ty` is the sum it chooses between, and a sum
+    // has no whole-value output converter at all.
+    //
+    // The *cell* half is not here and cannot be: this fixture declares no
+    // binding, and a cell is what a declaration makes. It is pinned against a
+    // real registry in
+    // `jni::tests::sealed::a_sums_registry_cells_are_registered_but_not_required`,
+    // which fails on an absent cell and on a cell still marked required,
+    // separately.
     for leaf in &plan.leaves {
         assert_eq!(
             required(&reg, &leaf.out_ty.key()) == Some(true),

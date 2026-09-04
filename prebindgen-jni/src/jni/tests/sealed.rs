@@ -672,21 +672,18 @@ fn sum_is_its_own_type_kind() {
 ///   decodes a whole `JObject`), absent OUTPUT-side, and that asymmetry is the
 ///   design, not an accident.
 ///
-/// Asserted against a real `Registry` rather than a hand-assembled one, because
-/// the claim is about what a *declaration* produces — and that is the limit of
-/// what it can claim. It does **not** pin #282: `sealed_class!(Reading)` creates
-/// the output cell through `export_type` whether or not the selector registers
-/// anything, so this passes against the filtered loop too. The selector's own
-/// half is pinned in `core::unfold`'s `sum_return_is_a_fixed_builder_plan`,
-/// whose fixture carries the sum as the tag's `out_ty` exactly so it can fail
-/// when the leaf stops registering it.
+/// Asserted against a real `Registry` rather than a hand-assembled one, and
+/// that is the point: `sealed_class!(Reading)` is what produces the cell,
+/// through `export_type`. Nothing else can. A plan states which readings it
+/// delivers and which whole-value crossings it replaces, and a selector's
+/// `out_ty` is in neither set.
 ///
-/// BLOCKED by the prebindgen-jni crate split: reads `Registry::input_types` /
-/// `output_types`, `pub(crate)` fields of `prebindgen_registry::Registry` —
-/// reachable when this test lived inside the `prebindgen` crate, not from the
-/// separate `prebindgen-jni` crate it moved to. Left in place, not deleted,
-/// pending a `prebindgen` accessor for these fields (see the
-/// carve-prebindgen-jni report).
+/// So this test is the oracle for the cell and the root, and it separates
+/// them: an absent cell fails the `expect` below, a cell that is still a root
+/// fails the assertion after it. What a *plan* says about a selector leaf —
+/// that it demands nothing — is pinned in `unfold`'s
+/// `sum_return_is_a_fixed_builder_plan`, whose fixture declares no binding and
+/// so can reach neither claim here.
 #[test]
 fn a_sums_registry_cells_are_registered_but_not_required() {
     let loc = myflat_loc();
@@ -722,12 +719,14 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
     let reg = gen.registry();
     let key = TypeKey::from_type(&syn::parse_quote!(Reading));
 
+    // `None` here is a missing cell — the type never entered the pipeline —
+    // which is the failure a cleared root is easy to mistake for.
     let input_root = reg
         .is_root_for_test(Direction::Construct, &key)
-        .expect("input cell");
+        .expect("a declared sum has an input cell");
     let output_root = reg
         .is_root_for_test(Direction::Deconstruct, &key)
-        .expect("output cell");
+        .expect("a declared sum has an output cell");
 
     // Registered both ways — the declaration put them there.
     // Required neither way — `boundary_only_types` clears the root, because the
