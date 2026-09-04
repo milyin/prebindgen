@@ -13,15 +13,13 @@ impl Registry {
         // constructor composition and the only fns a decomposer record may
         // reference.
         let d = &mut declared.decompositions;
-        if let Some(exp) = &d.expansions {
-            crate::expand::apply(
-                self,
-                exp,
-                &declared.functions,
-                &declared.accessors,
-                &declared.method_receivers,
-            )?;
+        // What the adapter's plans build on the input side. Planning reads the
+        // model alone, so the plans arrive whole and the registry is told only
+        // the one thing it needs from them: which readings must resolve.
+        for reading in &d.input_leaves {
+            self.require_input(reading);
         }
+        self.expansion_plans = std::mem::take(&mut d.expansion_plans);
         // A plan delivers these leaf-by-leaf, so the whole-value output demand
         // the signature scan recorded for them is stale. Unlike `replaces`
         // below, which names bare declared types, these are the layered
@@ -31,8 +29,8 @@ impl Registry {
             self.unrequire_output(reading);
         }
         // What the adapter's plans deliver on the output side. Planning how a
-        // value comes apart reads the model alone, so these are stated as
-        // readings and applied here, after `expand::apply`.
+        // value comes apart reads the model alone, so both sides arrive as
+        // readings and this function is where all of them reach the tables.
         //
         // AFTER the replacements, and that order is the rule rather than an
         // accident: replacing a crossing cancels the demand the *scan* made for

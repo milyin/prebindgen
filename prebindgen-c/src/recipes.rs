@@ -133,7 +133,7 @@ impl CbindgenBuilder {
                     .iter()
                     .enumerate()
                     .map(|(alternative, count)| Arm {
-                        alternative,
+                        alternative: Some(alternative),
                         op: Deconstruct::Fields((0..*count).map(Reach::Field).collect()),
                     })
                     .collect();
@@ -141,7 +141,7 @@ impl CbindgenBuilder {
                     .iter()
                     .enumerate()
                     .map(|(alternative, _)| Arm {
-                        alternative,
+                        alternative: Some(alternative),
                         op: Construct::Fields,
                     })
                     .collect();
@@ -337,7 +337,14 @@ impl CbindgenBuilder {
                         let of = Crossing::new(ty.clone(), direction);
                         let row = of.row(parts());
                         bound.bind(
-                            Site::arm_part(&row, Some(arm), index),
+                            // Keyed by the alternative, which is what this
+                            // adapter's arms name: a C tagged union numbers its
+                            // arms by the sum's own indices.
+                            Site::arm_part(
+                                &row,
+                                Some(prebindgen_registry::recipe::ArmKey::Alternative(arm)),
+                                index,
+                            ),
                             Crossing::new(field.ty.clone(), direction),
                             Ask::Recipe(recipe.clone()),
                             Asked::Part,

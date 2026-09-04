@@ -68,7 +68,7 @@ fn alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Construct>> {
     v.alternatives
         .iter()
         .map(|alt| Arm {
-            alternative: alt.index,
+            alternative: Some(alt.index),
             op: Construct::Fields,
         })
         .collect()
@@ -94,7 +94,7 @@ fn out_alternatives(model: &Flat, ty: &TypeRef) -> Vec<Arm<Deconstruct>> {
     v.alternatives
         .iter()
         .map(|alt| Arm {
-            alternative: alt.index,
+            alternative: Some(alt.index),
             op: Deconstruct::Fields((0..alt.fields.len()).map(Reach::Field).collect()),
         })
         .collect()
@@ -344,6 +344,9 @@ impl Declarations {
         registry: &(impl prebindgen_registry::Conversions + ?Sized),
     ) -> Result<Recipes, Vec<RecipeError>> {
         let mut recipes = Recipes::builder();
+        // How each `expand_param!`-declared type is built. Named rather than
+        // defaulted: the crossing's default stays the value's own conversion,
+        // which is what an identity arm is handed (#701 step 2).
         // Which crossings already state a deconstructing `parts` row, so the
         // decomposition block below adds one only where none was declared.
         let mut parts_out: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();
@@ -577,6 +580,13 @@ impl Declarations {
                 .declare(ty.clone(), whole(), Constructing::Atomic);
         }
 
+        // The `expand_param!` rows are NOT declared here. They live in the
+        // table `Declarations::expansion_plans` builds for itself, because the
+        // readings they deliver have to be known while the binding declares
+        // itself — before this table can exist. Declaring them here as well
+        // would put a second copy in front of a walk that never reaches them:
+        // no site names one, and both adapters' `choice` refuse the arm shape
+        // they use. They move here when something reads them, in #701's step 3.
         recipes.build(model)
     }
 }

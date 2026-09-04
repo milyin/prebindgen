@@ -44,7 +44,7 @@ impl Site {
     ///
     /// A part of a [`Shape::Choice`](super::Shape::Choice) recipe needs the
     /// alternative stated, because every arm numbers its parts from zero.
-    pub fn arm_part(recipe: &RecipeKey, arm: Option<usize>, index: usize) -> Self {
+    pub fn arm_part(recipe: &RecipeKey, arm: Option<ArmKey>, index: usize) -> Self {
         Self {
             owner: recipe
                 .crossing()
@@ -63,6 +63,48 @@ impl Site {
 impl fmt::Display for Site {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}'s {}", self.owner, self.role)
+    }
+}
+
+/// Which arm of a [`Shape::Choice`](super::Shape::Choice) a part belongs to.
+///
+/// Two arms can be told apart two ways, and they are not interchangeable. An
+/// arm that takes an alternative of a declared sum is named by THAT
+/// alternative: a row may state a subset of a sum's alternatives, or state them
+/// in another order, and a binding written for alternative 1 has to find the arm
+/// that takes alternative 1 wherever it sits in the row. An arm that takes no
+/// alternative — one of several constructors, or the value already built — has
+/// only its position in the row to be named by.
+///
+/// Keeping them apart is what stops the second kind from colliding with the
+/// first: position 0 and alternative 0 are different arms, and a single integer
+/// could not say which one a binding meant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ArmKey {
+    /// The arm taking this alternative of the model's sum.
+    Alternative(usize),
+    /// The arm at this position in the row, for a choice whose arms name no
+    /// alternative.
+    Position(usize),
+}
+
+impl ArmKey {
+    /// The number this key carries, for an ordering that only needs one.
+    ///
+    /// **Not an identity**: two keys with the same number are different arms.
+    pub fn number(self) -> usize {
+        match self {
+            ArmKey::Alternative(index) | ArmKey::Position(index) => index,
+        }
+    }
+}
+
+impl fmt::Display for ArmKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ArmKey::Alternative(index) => write!(f, "alternative {index}"),
+            ArmKey::Position(index) => write!(f, "position {index}"),
+        }
     }
 }
 
@@ -133,7 +175,7 @@ pub enum Role {
         /// parts of two different types. Without the alternative there is no
         /// key that tells them apart, and a binding written for one silently
         /// collides with the other.
-        arm: Option<usize>,
+        arm: Option<ArmKey>,
         /// The part's position within the recipe — or within its arm.
         index: usize,
     },

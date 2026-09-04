@@ -604,7 +604,7 @@ fn site_order(site: &prebindgen_registry::recipe::Site) -> (String, usize, usize
         // attached to a parameter position, so both sort after every parameter
         // that is. A part keeps its own numbering within that.
         Role::Const => (usize::MAX, 0, 0),
-        Role::Part { arm, index, .. } => (usize::MAX, 1 + arm.unwrap_or(0), index),
+        Role::Part { arm, index, .. } => (usize::MAX, 1 + arm.map_or(0, |arm| arm.number()), index),
     };
     (site.owner.to_string(), position, kind, index)
 }
@@ -963,8 +963,15 @@ impl Declarations {
             self.build_leaf_vec_fold_elements(&registry),
             &exports,
         )?;
+        // The parameter side, planned the same way the output side above is:
+        // from the model and this binding's declarations, before there is a
+        // registry to ask.
+        let (expansion_plans, input_leaves) = self
+            .expansion_plans(registry.flat(), &exports, &accessors)
+            .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         let decompositions = prebindgen_registry::Decompositions {
-            expansions: Some(self.build_expansions()),
+            expansion_plans,
+            input_leaves,
             callback_arg_leaves: unfolding.callback_arg_leaves(),
             output_leaves: unfolding.output_leaves().to_vec(),
             replaced_outputs: unfolding.replaced_outputs().to_vec(),

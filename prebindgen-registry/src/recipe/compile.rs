@@ -30,14 +30,26 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
 use super::{
-    Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Origin, Reach, Recipe,
-    RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
+    ArmKey, Bindings, Bound, Construct, Crossing, Deconstruct, Direction, Mode, Origin, Reach,
+    Recipe, RecipeError, RecipeKey, RecipeName, Recipes, Role, Shape, Site,
 };
 use crate::{
     flat::{Alternative, Field, Function, Type, TypeKey, TypeKind, TypeRef},
     generation::{ChoiceArity, FixedArity, FragmentUse, OperationId, ShapePlan},
     Conversions, FragmentId,
 };
+
+/// How one arm of a choice is keyed.
+///
+/// An arm naming an alternative is keyed by that alternative, so a row stating
+/// a subset of a sum, or stating it in another order, still meets a binding
+/// written for the alternative. An arm naming none has only where it sits.
+fn arm_key(alternative: Option<usize>, position: usize) -> ArmKey {
+    match alternative {
+        Some(index) => ArmKey::Alternative(index),
+        None => ArmKey::Position(position),
+    }
+}
 
 /// What a fragment produces, which is the only thing the registry reads out of
 /// one.
@@ -308,8 +320,30 @@ pub trait Compile {
         &mut self,
         cx: &mut Ctx<'_, Self>,
         at: At<'_>,
-        arms: &[(&Alternative, &Self::Fragment)],
+        arms: &[(Option<&Alternative>, &Self::Fragment)],
     ) -> Frag<Self>;
+
+    /// The value itself, arriving already built as the one part.
+    ///
+    /// One arm of a [`Shape::Choice`](super::Shape::Choice) whose other arms
+    /// build the value: this is the arm handed it instead. Whether the part is
+    /// cloned or moved follows from the crossing's mode, which `part` carries.
+    ///
+    /// Refused by default, because a target that declares no such arm has no
+    /// answer for one — and a target that does is saying something specific
+    /// about how a value it did not build reaches the call.
+    fn identity(
+        &mut self,
+        cx: &mut Ctx<'_, Self>,
+        at: At<'_>,
+        part: Parts<'_, Self>,
+    ) -> Frag<Self> {
+        let _ = (cx, part);
+        Err(Refusal::Gap(format!(
+            "{}: an arm handed the value already built",
+            at.recipe
+        )))
+    }
 
     /// A callback, taken apart into the values that pass through it.
     ///
@@ -759,7 +793,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         adapter: &mut C,
         at: At<'_>,
         direction: Direction,
-        arm: Option<usize>,
+        arm: Option<ArmKey>,
         index: usize,
         ty: &TypeRef,
         wanted: Mode,
@@ -852,12 +886,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
                 let mut arm_uses = Vec::new();
-                for arm in arms {
-                    let alternative = self.alternative(at, arm.alternative)?;
+                // Numbered by POSITION, not by the alternative an arm may name.
+                // An arm that names none still has to key its parts' bindings,
+                // and for a sum every arm names its own position anyway.
+                for (at_arm, arm) in arms.iter().enumerate() {
+                    let alternative = self.alternative_of(at, arm.alternative)?;
                     let (kind, parts) =
-                        self.construct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    let at_arm = Some(arm.alternative);
-                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                        self.construct_parts(at, &arm.op, alternative.map(|a| &*a.fields))?;
+                    let key = arm_key(arm.alternative, at_arm);
+                    let (fragment, uses) = self.product(adapter, at, Some(key), kind, parts)?;
                     built.push((alternative, fragment));
                     arm_uses.push(uses);
                 }
@@ -885,12 +922,12 @@ impl<'a, C: Compile> Compiler<'a, C> {
             Shape::Choice { arms } => {
                 let mut built = Vec::new();
                 let mut arm_uses = Vec::new();
-                for arm in arms {
-                    let alternative = self.alternative(at, arm.alternative)?;
+                for (at_arm, arm) in arms.iter().enumerate() {
+                    let alternative = self.alternative_of(at, arm.alternative)?;
                     let (kind, parts) =
-                        self.deconstruct_parts(at, &arm.op, Some(&alternative.fields))?;
-                    let at_arm = Some(arm.alternative);
-                    let (fragment, uses) = self.product(adapter, at, at_arm, kind, parts)?;
+                        self.deconstruct_parts(at, &arm.op, alternative.map(|a| &*a.fields))?;
+                    let key = arm_key(arm.alternative, at_arm);
+                    let (fragment, uses) = self.product(adapter, at, Some(key), kind, parts)?;
                     built.push((alternative, fragment));
                     arm_uses.push(uses);
                 }
@@ -993,7 +1030,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        arm: Option<usize>,
+        arm: Option<ArmKey>,
         kind: ProductKind<'p>,
         parts: Vec<Part<'p>>,
     ) -> Assembled<C> {
@@ -1028,6 +1065,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let fragment = match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
+            ProductKind::Identity => adapter.identity(&mut cx, at, &paired),
             ProductKind::ValueForm(func) => adapter.value_form(&mut cx, at, func, &paired),
         }
         .map_err(CompileError::Adapter)?;
@@ -1038,10 +1076,11 @@ impl<'a, C: Compile> Compiler<'a, C> {
         &mut self,
         adapter: &mut C,
         at: At<'_>,
-        arms: Vec<(&'a Alternative, C::Fragment)>,
+        arms: Vec<(Option<&'a Alternative>, C::Fragment)>,
         arm_uses: Vec<Vec<FragmentUse>>,
     ) -> Composed<C> {
-        let paired: Vec<(&Alternative, &C::Fragment)> = arms.iter().map(|(a, f)| (*a, f)).collect();
+        let paired: Vec<(Option<&Alternative>, &C::Fragment)> =
+            arms.iter().map(|(a, f)| (*a, f)).collect();
         let mut cx = self.cx();
         let fragment = adapter
             .choice(&mut cx, at, &paired)
@@ -1087,6 +1126,19 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     })
                     .collect();
                 Ok((ProductKind::Fields, parts))
+            }
+            Construct::Identity => {
+                // The value itself, exactly as `Reach::Identity` states it on
+                // the other side: the SPELLED crossing's mode, so a borrowed
+                // crossing records `Borrowed` and the adapter clones rather
+                // than moving out of a reference.
+                let parts = vec![Part {
+                    from: PartSource::Identity,
+                    mode: at.crossing.mode(),
+                    ty: at.crossing.value().clone(),
+                    name: "self".to_string(),
+                }];
+                Ok((ProductKind::Identity, parts))
             }
             Construct::Call(name) => {
                 let func = self.function(at, name)?;
@@ -1245,6 +1297,15 @@ impl<'a, C: Compile> Compiler<'a, C> {
         })
     }
 
+    /// The alternative an arm names, or `None` when it names none.
+    fn alternative_of(
+        &self,
+        at: At<'_>,
+        index: Option<usize>,
+    ) -> Result<Option<&'a Alternative>, CompileError<C::Error>> {
+        index.map(|i| self.alternative(at, i)).transpose()
+    }
+
     fn alternative(
         &self,
         at: At<'_>,
@@ -1302,6 +1363,13 @@ fn field_name(field: &Field, index: usize) -> String {
 enum ProductKind<'a> {
     Construct(&'a Function),
     Fields,
+    /// The value itself, handed over already built — [`Construct::Identity`].
+    ///
+    /// Its own kind rather than [`Self::Fields`] with one identity part: an
+    /// arm that is handed the value has no fields, and calling the fields hook
+    /// for it would leave every adapter recognising a fields-less product and
+    /// answering something else.
+    Identity,
     ValueForm(&'a Function),
 }
 
