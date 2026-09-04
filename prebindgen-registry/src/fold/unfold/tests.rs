@@ -122,7 +122,7 @@ fn unfolds_bound(
     binds: &[Bind],
     target: &str,
     target_row: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<(Vec<String>, Coverage), String> {
     let items = sources
         .iter()
         .map(|src| {
@@ -166,7 +166,7 @@ fn unfolds_bound(
     let bindings = bound.build(&recipes).expect("bindings");
     Folding::new(&recipes, &model)
         .unfold(&Jni, &bindings, &ty(target), &RecipeName::new(target_row))
-        .map(|(leaves, hoists, _)| render(&leaves, &hoists))
+        .map(|(leaves, hoists, coverage)| (render(&leaves, &hoists), coverage))
         .map_err(|e| e.to_string())
 }
 
@@ -455,7 +455,9 @@ fn a_binding_is_keyed_by_the_row_its_part_landed_in() {
         },
     ];
     assert_eq!(
-        unfolds_bound(sources, rows, binds, "Outer", "root").expect("unfolds"),
+        unfolds_bound(sources, rows, binds, "Outer", "root")
+            .expect("unfolds")
+            .0,
         ["outer_middle__middle_inner__deep : u32 \
           path=[outer_middle.middle_inner.deep] identity=false nullable=false groups=[]"]
     );
@@ -504,7 +506,9 @@ fn a_binding_on_an_arms_part_is_followed() {
         part_row: "payload_parts",
     }];
     assert_eq!(
-        unfolds_bound(sources, rows, binds, "Reply", "parts").expect("unfolds"),
+        unfolds_bound(sources, rows, binds, "Reply", "parts")
+            .expect("unfolds")
+            .0,
         [
             "tag : Reply path=[] identity=false nullable=false groups=[]",
             "Ok__v0__lo : u32 path=[lo] identity=false nullable=false groups=[0]",
@@ -563,9 +567,19 @@ fn a_part_crosses_whole_until_a_binding_takes_it_apart() {
         ),
     ];
 
-    // Unbound: one leaf, the child as it stands.
+    // Unbound: one leaf, the child as it stands — and a COMPLETE read.
+    // Crossing whole is the answer here, not a place the walk stopped: `Child`
+    // states a `whole` row and a `parts` row, and reporting that as unread
+    // parts would take the whole plan out of any comparison a caller is making.
+    let (unbound, coverage) =
+        unfolds_bound(sources, rows, &[], "Parent", "parts").expect("unfolds");
+    assert!(
+        coverage.is_complete(),
+        "an unbound part is read, not skipped: {:?}",
+        coverage.unread()
+    );
     assert_eq!(
-        unfolds_bound(sources, rows, &[], "Parent", "parts").expect("unfolds"),
+        unbound,
         // `& Child`, the accessor's return as written: an unspliced leaf
         // carries the type its converter takes.
         ["parent_child : & Child path=[parent_child] identity=false nullable=false groups=[]"]
@@ -580,13 +594,63 @@ fn a_part_crosses_whole_until_a_binding_takes_it_apart() {
         part: "Child",
         part_row: "parts",
     }];
+    let (bound, coverage) =
+        unfolds_bound(sources, rows, binds, "Parent", "parts").expect("unfolds");
+    assert!(coverage.is_complete(), "{:?}", coverage.unread());
     assert_eq!(
-        unfolds_bound(sources, rows, binds, "Parent", "parts").expect("unfolds"),
+        bound,
         [
             "parent_child__lo : u32 path=[parent_child.lo] identity=false nullable=false groups=[]",
             "parent_child__hi : u64 path=[parent_child.hi] identity=false nullable=false groups=[]",
         ]
     );
+}
+
+/// A child with ONLY a `whole`/`Atomic` row states no parts at all, and an
+/// unbound part of it is still a complete read.
+///
+/// The fixture above has a `parts` row beside the `whole` one; this one does
+/// not, which is what tells a rule that asks "does this type state any row"
+/// from one that asks "did the walk stop here". The first reports parts that do
+/// not exist.
+#[test]
+fn a_child_with_only_a_whole_row_is_read_completely() {
+    let sources = &[
+        "pub struct Parent { pub n: u8 }",
+        "pub struct Child { pub lo: u32 }",
+        "pub fn parent_child(p: &Parent) -> &Child { todo!() }",
+    ];
+    let rows = &[
+        (
+            "Parent",
+            "parts",
+            Deconstructing::Product(Deconstruct::Fields(vec![Reach::Accessor(ident(
+                "parent_child",
+            ))])),
+        ),
+        ("Child", "whole", Deconstructing::Atomic),
+    ];
+    let (leaves, coverage) = unfolds_bound(sources, rows, &[], "Parent", "parts").expect("unfolds");
+    assert!(
+        coverage.is_complete(),
+        "a `whole` row is not unread parts: {:?}",
+        coverage.unread()
+    );
+    assert_eq!(
+        leaves,
+        ["parent_child : & Child path=[parent_child] identity=false nullable=false groups=[]"]
+    );
+}
+
+/// A row that states no parts IS a place the walk stopped: it was asked for
+/// parts and had none to give.
+#[test]
+fn a_row_that_states_no_parts_is_an_incomplete_read() {
+    let sources = &["pub struct Sample { pub key: u32, pub payload: u64 }"];
+    let rows = &[("Sample", "parts", Deconstructing::Atomic)];
+    let (leaves, coverage) = unfolds_bound(sources, rows, &[], "Sample", "parts").expect("unfolds");
+    assert!(leaves.is_empty());
+    assert_eq!(coverage.unread(), ["a row that states no parts"]);
 }
 
 /// The same rule inside an arm: an arm's payload crosses whole until a binding
@@ -622,7 +686,9 @@ fn an_arms_payload_crosses_whole_until_its_part_is_bound() {
         ),
     ];
     assert_eq!(
-        unfolds_bound(sources, rows, &[], "Reply", "parts").expect("unfolds"),
+        unfolds_bound(sources, rows, &[], "Reply", "parts")
+            .expect("unfolds")
+            .0,
         [
             "tag : Reply path=[] identity=false nullable=false groups=[]",
             "Ok__v0 : Payload path=[] identity=false nullable=false groups=[0]",

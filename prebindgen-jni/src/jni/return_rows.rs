@@ -199,6 +199,15 @@ impl Declarations {
             if !coverage.is_complete() {
                 continue;
             }
+            // What THIS adapter has not lowered to a binding yet. The walk read
+            // what the rows say; whether the older statement says more is a
+            // question about the declarations, which only this side can answer
+            // — and answering it here names the exact declaration rather than
+            // inferring from what came back.
+            if let Some(unlowered) = self.unlowered_parts(model, recipes, &plan.source) {
+                let _ = unlowered;
+                continue;
+            }
             let from_row = describe(&leaves, &hoists);
             let from_decl = describe(&plan.leaves, &plan.hoists);
             if from_row != from_decl {
@@ -209,6 +218,87 @@ impl Declarations {
             }
         }
         Ok(())
+    }
+}
+
+impl Declarations {
+    /// Which part of this type's decomposition declaration has no binding yet,
+    /// if any.
+    ///
+    /// `Declarations::bindings` writes a part binding for an accessor part
+    /// whose type carries a declaration of its own, and only where that part is
+    /// the value itself. Three shapes are left, each waiting on work #701's
+    /// step 3 still has: a part reached through an `Option`, which is the
+    /// `Optional` part of its decision 3; a part of a value form, whose fields
+    /// the row states as the returned struct's; and a value form that CONSUMES
+    /// its receiver, whose parts may be handed over rather than read.
+    ///
+    /// Named here rather than guessed at from the leaves, because this is where
+    /// the declaration is.
+    fn unlowered_parts(
+        &self,
+        model: &Flat,
+        recipes: &Recipes,
+        source: &prebindgen_registry::flat::TypeRef,
+    ) -> Option<&'static str> {
+        let key = source.stripped_key();
+        let decl = self.return_expand_decls.iter().find(|d| *d.key() == key)?;
+        if let [crate::jni::LocalField::Fields(form)] = decl.field_list() {
+            return match model
+                .function(&form.func())
+                .and_then(|f| f.params.first())
+                .is_some_and(|p| p.ty.borrow_target().is_none())
+            {
+                true => Some("a consuming value form, whose parts may be handed over"),
+                false => Some("a value form, whose parts the row states as its result's fields"),
+            };
+        }
+        for field in decl.field_list() {
+            let crate::jni::LocalField::Named(func, _) = field else {
+                continue;
+            };
+            let Some(ret) = model.function(func).map(|f| f.ret.clone()) else {
+                continue;
+            };
+            let core = ret.optional_inner().unwrap_or(&ret);
+            let core = core.borrow_target().unwrap_or(core);
+            let Some(child) = self
+                .return_expand_decls
+                .iter()
+                .find(|d| *d.key() == core.stripped_key())
+            else {
+                continue;
+            };
+            if ret.optional_inner().is_some() {
+                return Some("a part reached through an `Option`");
+            }
+            // A child that hands ITSELF over as one of its parts states an
+            // ownership fact the row does not carry: the part is moved or
+            // cloned rather than read. `bindings` writes no binding for that,
+            // so the row stops at the part where the declaration goes through
+            // it and hands the value over as well.
+            if child
+                .field_list()
+                .iter()
+                .any(|f| matches!(f, crate::jni::LocalField::SelfField))
+            {
+                return Some("a part whose own declaration hands the value over");
+            }
+            // `bindings` writes a binding only where the row it would name
+            // exists. A declared type whose `parts` row this table does not
+            // state yet is the same unfinished work, seen from the other side.
+            let part = prebindgen_registry::recipe::Crossing::new(
+                core.clone(),
+                prebindgen_registry::recipe::Direction::Deconstruct,
+            );
+            if recipes
+                .key_of(&part.key(), &crate::jni::recipes::parts())
+                .is_none()
+            {
+                return Some("a part whose type states no `parts` row yet");
+            }
+        }
+        None
     }
 }
 
