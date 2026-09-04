@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["FoldError"],"struct":["Folding"],"trait":["FoldPolicy"]};
+window.SIDEBAR_ITEMS = {"enum":["FoldError","UnfoldViewError"],"struct":["Coverage","Folding"],"trait":["FoldPolicy","UnfoldPolicy"]};
