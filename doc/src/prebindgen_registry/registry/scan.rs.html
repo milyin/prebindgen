@@ -643,89 +643,67 @@
 <a href=#643 id=643 data-nosnippet>643</a>
 <a href=#644 id=644 data-nosnippet>644</a>    <span class="doccomment">/// Register `ty` (and its nested positions) as a required **output** so the
 <a href=#645 id=645 data-nosnippet>645</a>    /// resolver produces a converter for it. The output-side peer of
-<a href=#646 id=646 data-nosnippet>646</a>    /// [`Self::require_input`]; replayed from
-<a href=#647 id=647 data-nosnippet>647</a>    /// [`Requirement::Output`](crate::Requirement::Output) to pull in the leaf
-<a href=#648 id=648 data-nosnippet>648</a>    /// types an adapter's decomposition delivers.
+<a href=#646 id=646 data-nosnippet>646</a>    /// [`Self::require_input`]; applied from
+<a href=#647 id=647 data-nosnippet>647</a>    /// [`Decompositions::output_leaves`](crate::Decompositions::output_leaves)
+<a href=#648 id=648 data-nosnippet>648</a>    /// to pull in the leaf types an adapter's decomposition delivers.
 <a href=#649 id=649 data-nosnippet>649</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>require_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reading: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef) {
 <a href=#650 id=650 data-nosnippet>650</a>        <span class="self">self</span>.register_type_recursive(Direction::Deconstruct, reading, <span class="bool-val">true</span>);
 <a href=#651 id=651 data-nosnippet>651</a>    }
 <a href=#652 id=652 data-nosnippet>652</a>
-<a href=#653 id=653 data-nosnippet>653</a>    <span class="doccomment">/// Register `reading` (and its nested positions) as an **output cell without
-<a href=#654 id=654 data-nosnippet>654</a>    /// demanding a converter** — a type some plan *names* rather than one that
-<a href=#655 id=655 data-nosnippet>655</a>    /// crosses.
-<a href=#656 id=656 data-nosnippet>656</a>    ///
-<a href=#657 id=657 data-nosnippet>657</a>    /// The third thing a table cell can mean, now said out loud. A cell records
-<a href=#658 id=658 data-nosnippet>658</a>    /// that a type **entered the pipeline**; `root` records that the binding
-<a href=#659 id=659 data-nosnippet>659</a>    /// asked for it *directly*; `entry` records that a converter resolved. This
-<a href=#660 id=660 data-nosnippet>660</a>    /// makes the first without the second, which is exactly what a sum-type
-<a href=#661 id=661 data-nosnippet>661</a>    /// selector leaf needs: it names *which* sum it chooses between, and that sum
-<a href=#662 id=662 data-nosnippet>662</a>    /// has no whole-value output converter at all, so requiring one would fail
-<a href=#663 id=663 data-nosnippet>663</a>    /// resolution (#282). Replayed from
-<a href=#664 id=664 data-nosnippet>664</a>    /// [`Requirement::Reference`](crate::Requirement::Reference).
-<a href=#665 id=665 data-nosnippet>665</a>    ///
-<a href=#666 id=666 data-nosnippet>666</a>    /// **Not [`require_output`](Self::require_output) with a flag.** That one is
-<a href=#667 id=667 data-nosnippet>667</a>    /// `root = true` by definition — its whole job is to say a converter must
-<a href=#668 id=668 data-nosnippet>668</a>    /// exist. Registration and demand are separable facts and this is the door
-<a href=#669 id=669 data-nosnippet>669</a>    /// for the first alone; `ensure_entry`'s `root |= root` means calling it for
-<a href=#670 id=670 data-nosnippet>670</a>    /// a type the binding did declare cannot weaken anything.
-<a href=#671 id=671 data-nosnippet>671</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>reference_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reading: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef) {
-<a href=#672 id=672 data-nosnippet>672</a>        <span class="self">self</span>.register_type_recursive(Direction::Deconstruct, reading, <span class="bool-val">false</span>);
-<a href=#673 id=673 data-nosnippet>673</a>    }
-<a href=#674 id=674 data-nosnippet>674</a>
-<a href=#675 id=675 data-nosnippet>675</a>    <span class="doccomment">/// Drop `ty` from the required-output scan set. The type's table entry is
-<a href=#676 id=676 data-nosnippet>676</a>    /// left intact (so [`crate::resolve`]'s PASS A still resolves it
-<a href=#677 id=677 data-nosnippet>677</a>    /// if it can, and emits it when resolved), but a `None` resolution no longer
-<a href=#678 id=678 data-nosnippet>678</a>    /// counts as an unresolved-required error. Replayed from
-<a href=#679 id=679 data-nosnippet>679</a>    /// [`Requirement::Unrequire`](crate::Requirement::Unrequire): when a `Vec&lt;T&gt;`
-<a href=#680 id=680 data-nosnippet>680</a>    /// / `Option&lt;Vec&lt;T&gt;&gt;` return is delivered element-by-element through a fold,
-<a href=#681 id=681 data-nosnippet>681</a>    /// the whole-collection converter is genuinely not needed — and for a
-<a href=#682 id=682 data-nosnippet>682</a>    /// `Vec&lt;opaque-handle&gt;` it cannot resolve at all (a `jlong` wire is not
-<a href=#683 id=683 data-nosnippet>683</a>    /// JObject-shaped), so requiring it would wrongly fail resolution.
-<a href=#684 id=684 data-nosnippet>684</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unrequire_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reading: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef) {
-<a href=#685 id=685 data-nosnippet>685</a>        <span class="self">self</span>.clear_root(Direction::Deconstruct, <span class="kw-2">&amp;</span>reading.key());
+<a href=#653 id=653 data-nosnippet>653</a>    <span class="doccomment">/// Drop `ty` from the required-output scan set. The type's table entry is
+<a href=#654 id=654 data-nosnippet>654</a>    /// left intact (so [`crate::resolve`]'s PASS A still resolves it
+<a href=#655 id=655 data-nosnippet>655</a>    /// if it can, and emits it when resolved), but a `None` resolution no longer
+<a href=#656 id=656 data-nosnippet>656</a>    /// counts as an unresolved-required error. Applied from
+<a href=#657 id=657 data-nosnippet>657</a>    /// [`Decompositions::replaced_outputs`](crate::Decompositions::replaced_outputs):
+<a href=#658 id=658 data-nosnippet>658</a>    /// when a `Vec&lt;T&gt;` / `Option&lt;Vec&lt;T&gt;&gt;` return is delivered element-by-element through a fold,
+<a href=#659 id=659 data-nosnippet>659</a>    /// the whole-collection converter is genuinely not needed — and for a
+<a href=#660 id=660 data-nosnippet>660</a>    /// `Vec&lt;opaque-handle&gt;` it cannot resolve at all (a `jlong` wire is not
+<a href=#661 id=661 data-nosnippet>661</a>    /// JObject-shaped), so requiring it would wrongly fail resolution.
+<a href=#662 id=662 data-nosnippet>662</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>unrequire_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reading: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef) {
+<a href=#663 id=663 data-nosnippet>663</a>        <span class="self">self</span>.clear_root(Direction::Deconstruct, <span class="kw-2">&amp;</span>reading.key());
+<a href=#664 id=664 data-nosnippet>664</a>    }
+<a href=#665 id=665 data-nosnippet>665</a>
+<a href=#666 id=666 data-nosnippet>666</a>    <span class="doccomment">/// Stop treating `key` as a root. The cell stays, so the resolver still
+<a href=#667 id=667 data-nosnippet>667</a>    /// fills it if it can — only the demand that it *must* resolve is dropped.
+<a href=#668 id=668 data-nosnippet>668</a>    ///
+<a href=#669 id=669 data-nosnippet>669</a>    /// Keyed, because that is genuinely all this needs: un-requiring creates no
+<a href=#670 id=670 data-nosnippet>670</a>    /// cell and classifies nothing, so it is the one registration-adjacent
+<a href=#671 id=671 data-nosnippet>671</a>    /// operation with no reading to carry. `unrequire_*` take a `TypeRef` anyway
+<a href=#672 id=672 data-nosnippet>672</a>    /// — they pair with `require_*`, and a caller holding one should not have to
+<a href=#673 id=673 data-nosnippet>673</a>    /// know which of the two wants a key.
+<a href=#674 id=674 data-nosnippet>674</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>clear_root(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dir: Direction, key: <span class="kw-2">&amp;</span>TypeKey) {
+<a href=#675 id=675 data-nosnippet>675</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(cell) = <span class="self">self</span>.type_table_mut(dir).get_mut(key) {
+<a href=#676 id=676 data-nosnippet>676</a>            cell.root = <span class="bool-val">false</span>;
+<a href=#677 id=677 data-nosnippet>677</a>        }
+<a href=#678 id=678 data-nosnippet>678</a>    }
+<a href=#679 id=679 data-nosnippet>679</a>
+<a href=#680 id=680 data-nosnippet>680</a>    <span class="doccomment">/// Direction-indexed read access to the type-resolution tables.
+<a href=#681 id=681 data-nosnippet>681</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>type_table(<span class="kw-2">&amp;</span><span class="self">self</span>, dir: Direction) -&gt; <span class="kw-2">&amp;</span>HashMap&lt;TypeKey, TypeCell&gt; {
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">match </span>dir {
+<a href=#683 id=683 data-nosnippet>683</a>            Direction::Construct =&gt; <span class="kw-2">&amp;</span><span class="self">self</span>.input_types,
+<a href=#684 id=684 data-nosnippet>684</a>            Direction::Deconstruct =&gt; <span class="kw-2">&amp;</span><span class="self">self</span>.output_types,
+<a href=#685 id=685 data-nosnippet>685</a>        }
 <a href=#686 id=686 data-nosnippet>686</a>    }
 <a href=#687 id=687 data-nosnippet>687</a>
-<a href=#688 id=688 data-nosnippet>688</a>    <span class="doccomment">/// Stop treating `key` as a root. The cell stays, so the resolver still
-<a href=#689 id=689 data-nosnippet>689</a>    /// fills it if it can — only the demand that it *must* resolve is dropped.
-<a href=#690 id=690 data-nosnippet>690</a>    ///
-<a href=#691 id=691 data-nosnippet>691</a>    /// Keyed, because that is genuinely all this needs: un-requiring creates no
-<a href=#692 id=692 data-nosnippet>692</a>    /// cell and classifies nothing, so it is the one registration-adjacent
-<a href=#693 id=693 data-nosnippet>693</a>    /// operation with no reading to carry. `unrequire_*` take a `TypeRef` anyway
-<a href=#694 id=694 data-nosnippet>694</a>    /// — they pair with `require_*`, and a caller holding one should not have to
-<a href=#695 id=695 data-nosnippet>695</a>    /// know which of the two wants a key.
-<a href=#696 id=696 data-nosnippet>696</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>clear_root(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dir: Direction, key: <span class="kw-2">&amp;</span>TypeKey) {
-<a href=#697 id=697 data-nosnippet>697</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(cell) = <span class="self">self</span>.type_table_mut(dir).get_mut(key) {
-<a href=#698 id=698 data-nosnippet>698</a>            cell.root = <span class="bool-val">false</span>;
-<a href=#699 id=699 data-nosnippet>699</a>        }
-<a href=#700 id=700 data-nosnippet>700</a>    }
-<a href=#701 id=701 data-nosnippet>701</a>
-<a href=#702 id=702 data-nosnippet>702</a>    <span class="doccomment">/// Direction-indexed read access to the type-resolution tables.
-<a href=#703 id=703 data-nosnippet>703</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>type_table(<span class="kw-2">&amp;</span><span class="self">self</span>, dir: Direction) -&gt; <span class="kw-2">&amp;</span>HashMap&lt;TypeKey, TypeCell&gt; {
-<a href=#704 id=704 data-nosnippet>704</a>        <span class="kw">match </span>dir {
-<a href=#705 id=705 data-nosnippet>705</a>            Direction::Construct =&gt; <span class="kw-2">&amp;</span><span class="self">self</span>.input_types,
-<a href=#706 id=706 data-nosnippet>706</a>            Direction::Deconstruct =&gt; <span class="kw-2">&amp;</span><span class="self">self</span>.output_types,
-<a href=#707 id=707 data-nosnippet>707</a>        }
-<a href=#708 id=708 data-nosnippet>708</a>    }
-<a href=#709 id=709 data-nosnippet>709</a>
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="doccomment">/// Every reading the table holds in one direction.
-<a href=#711 id=711 data-nosnippet>711</a>    ///
-<a href=#712 id=712 data-nosnippet>712</a>    /// The adapter-facing view of the type table: a back-end asking what types
-<a href=#713 id=713 data-nosnippet>713</a>    /// crossed, and in what shape, wants the readings — not the cells they are
-<a href=#714 id=714 data-nosnippet>714</a>    /// stored in. Handing out the cells instead would make the registry's
-<a href=#715 id=715 data-nosnippet>715</a>    /// storage part of the public API for the sake of one caller.
-<a href=#716 id=716 data-nosnippet>716</a>    </span><span class="kw">pub fn </span>readings(
-<a href=#717 id=717 data-nosnippet>717</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#718 id=718 data-nosnippet>718</a>        dir: Direction,
-<a href=#719 id=719 data-nosnippet>719</a>    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef&gt; {
-<a href=#720 id=720 data-nosnippet>720</a>        <span class="self">self</span>.type_table(dir).values().map(|cell| <span class="kw-2">&amp;*</span>cell.subject)
-<a href=#721 id=721 data-nosnippet>721</a>    }
-<a href=#722 id=722 data-nosnippet>722</a>
-<a href=#723 id=723 data-nosnippet>723</a>    <span class="doccomment">/// Direction-indexed mutable access to the type-resolution tables.
-<a href=#724 id=724 data-nosnippet>724</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>type_table_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dir: Direction) -&gt; <span class="kw-2">&amp;mut </span>HashMap&lt;TypeKey, TypeCell&gt; {
-<a href=#725 id=725 data-nosnippet>725</a>        <span class="kw">match </span>dir {
-<a href=#726 id=726 data-nosnippet>726</a>            Direction::Construct =&gt; <span class="kw-2">&amp;mut </span><span class="self">self</span>.input_types,
-<a href=#727 id=727 data-nosnippet>727</a>            Direction::Deconstruct =&gt; <span class="kw-2">&amp;mut </span><span class="self">self</span>.output_types,
-<a href=#728 id=728 data-nosnippet>728</a>        }
-<a href=#729 id=729 data-nosnippet>729</a>    }
-<a href=#730 id=730 data-nosnippet>730</a>}
+<a href=#688 id=688 data-nosnippet>688</a>    <span class="doccomment">/// Every reading the table holds in one direction.
+<a href=#689 id=689 data-nosnippet>689</a>    ///
+<a href=#690 id=690 data-nosnippet>690</a>    /// The adapter-facing view of the type table: a back-end asking what types
+<a href=#691 id=691 data-nosnippet>691</a>    /// crossed, and in what shape, wants the readings — not the cells they are
+<a href=#692 id=692 data-nosnippet>692</a>    /// stored in. Handing out the cells instead would make the registry's
+<a href=#693 id=693 data-nosnippet>693</a>    /// storage part of the public API for the sake of one caller.
+<a href=#694 id=694 data-nosnippet>694</a>    </span><span class="kw">pub fn </span>readings(
+<a href=#695 id=695 data-nosnippet>695</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#696 id=696 data-nosnippet>696</a>        dir: Direction,
+<a href=#697 id=697 data-nosnippet>697</a>    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef&gt; {
+<a href=#698 id=698 data-nosnippet>698</a>        <span class="self">self</span>.type_table(dir).values().map(|cell| <span class="kw-2">&amp;*</span>cell.subject)
+<a href=#699 id=699 data-nosnippet>699</a>    }
+<a href=#700 id=700 data-nosnippet>700</a>
+<a href=#701 id=701 data-nosnippet>701</a>    <span class="doccomment">/// Direction-indexed mutable access to the type-resolution tables.
+<a href=#702 id=702 data-nosnippet>702</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>type_table_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, dir: Direction) -&gt; <span class="kw-2">&amp;mut </span>HashMap&lt;TypeKey, TypeCell&gt; {
+<a href=#703 id=703 data-nosnippet>703</a>        <span class="kw">match </span>dir {
+<a href=#704 id=704 data-nosnippet>704</a>            Direction::Construct =&gt; <span class="kw-2">&amp;mut </span><span class="self">self</span>.input_types,
+<a href=#705 id=705 data-nosnippet>705</a>            Direction::Deconstruct =&gt; <span class="kw-2">&amp;mut </span><span class="self">self</span>.output_types,
+<a href=#706 id=706 data-nosnippet>706</a>        }
+<a href=#707 id=707 data-nosnippet>707</a>    }
+<a href=#708 id=708 data-nosnippet>708</a>}
 </code></pre></div></section></main></body></html>

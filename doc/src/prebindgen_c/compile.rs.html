@@ -1271,7 +1271,7 @@
 <a href=#1271 id=1271 data-nosnippet>1271</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
 <a href=#1272 id=1272 data-nosnippet>1272</a>        _cx: <span class="kw-2">&amp;mut </span>Ctx&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
 <a href=#1273 id=1273 data-nosnippet>1273</a>        at: At&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1274 id=1274 data-nosnippet>1274</a>        arms: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Alternative, <span class="kw-2">&amp;</span>CFrag)],
+<a href=#1274 id=1274 data-nosnippet>1274</a>        arms: <span class="kw-2">&amp;</span>[(<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Alternative&gt;, <span class="kw-2">&amp;</span>CFrag)],
 <a href=#1275 id=1275 data-nosnippet>1275</a>    ) -&gt; Frag&lt;<span class="self">Self</span>&gt; {
 <a href=#1276 id=1276 data-nosnippet>1276</a>        <span class="kw">let </span>key = at.crossing.spelled().key();
 <a href=#1277 id=1277 data-nosnippet>1277</a>        <span class="kw">let </span>cname = <span class="self">self</span>.<span class="kw">gen</span>.c_type_ident(<span class="kw-2">&amp;</span>key);
@@ -1279,162 +1279,169 @@
 <a href=#1279 id=1279 data-nosnippet>1279</a>        <span class="kw">let </span><span class="kw-2">mut </span>subs = Vec::new();
 <a href=#1280 id=1280 data-nosnippet>1280</a>        <span class="kw">let </span><span class="kw-2">mut </span>planned_arms = Vec::with_capacity(arms.len());
 <a href=#1281 id=1281 data-nosnippet>1281</a>        <span class="kw">for </span>(alternative, fragment) <span class="kw">in </span>arms {
-<a href=#1282 id=1282 data-nosnippet>1282</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(arm) = fragment.arm.as_ref() <span class="kw">else </span>{
-<a href=#1283 id=1283 data-nosnippet>1283</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(wrong(at, <span class="string">"an arm that composed no payload"</span>));
-<a href=#1284 id=1284 data-nosnippet>1284</a>            };
-<a href=#1285 id=1285 data-nosnippet>1285</a>            <span class="kw">if </span>direction == Direction::Deconstruct
-<a href=#1286 id=1286 data-nosnippet>1286</a>                &amp;&amp; arm.parts.iter().any(|part| part.child.fallible())
-<a href=#1287 id=1287 data-nosnippet>1287</a>            {
-<a href=#1288 id=1288 data-nosnippet>1288</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(refuse(
-<a href=#1289 id=1289 data-nosnippet>1289</a>                    at,
-<a href=#1290 id=1290 data-nosnippet>1290</a>                    <span class="string">"a payload whose encode can fail, which a union has no way to report"</span>,
-<a href=#1291 id=1291 data-nosnippet>1291</a>                ));
-<a href=#1292 id=1292 data-nosnippet>1292</a>            }
-<a href=#1293 id=1293 data-nosnippet>1293</a>            subs.extend(arm.subs.iter().cloned());
-<a href=#1294 id=1294 data-nosnippet>1294</a>            planned_arms.push(prebindgen_registry::chain::ChoiceArm {
-<a href=#1295 id=1295 data-nosnippet>1295</a>                alternative: (<span class="kw-2">*</span>alternative).clone(),
-<a href=#1296 id=1296 data-nosnippet>1296</a>                tag: {
-<a href=#1297 id=1297 data-nosnippet>1297</a>                    <span class="kw">let </span>tag =
-<a href=#1298 id=1298 data-nosnippet>1298</a>                        syn::LitInt::new(<span class="kw-2">&amp;</span>alternative.index.to_string(), alternative.name.span());
-<a href=#1299 id=1299 data-nosnippet>1299</a>                    <span class="macro">syn::parse_quote!</span>(#tag)
-<a href=#1300 id=1300 data-nosnippet>1300</a>                },
-<a href=#1301 id=1301 data-nosnippet>1301</a>                bridge: prebindgen_registry::chain::TupleProduct {
-<a href=#1302 id=1302 data-nosnippet>1302</a>                    parts: arm.parts.iter().map(|part| part.wire.clone()).collect(),
-<a href=#1303 id=1303 data-nosnippet>1303</a>                },
-<a href=#1304 id=1304 data-nosnippet>1304</a>                parts: arm
-<a href=#1305 id=1305 data-nosnippet>1305</a>                    .parts
-<a href=#1306 id=1306 data-nosnippet>1306</a>                    .iter()
-<a href=#1307 id=1307 data-nosnippet>1307</a>                    .map(|part| prebindgen_registry::chain::ChoicePart {
-<a href=#1308 id=1308 data-nosnippet>1308</a>                        child: part.child.clone(),
-<a href=#1309 id=1309 data-nosnippet>1309</a>                        mode: part.mode,
-<a href=#1310 id=1310 data-nosnippet>1310</a>                        hold_uninit: part.hold_uninit,
-<a href=#1311 id=1311 data-nosnippet>1311</a>                    })
-<a href=#1312 id=1312 data-nosnippet>1312</a>                    .collect(),
-<a href=#1313 id=1313 data-nosnippet>1313</a>            });
-<a href=#1314 id=1314 data-nosnippet>1314</a>        }
-<a href=#1315 id=1315 data-nosnippet>1315</a>
-<a href=#1316 id=1316 data-nosnippet>1316</a>        <span class="kw">let </span>destination: syn::Type = <span class="macro">syn::parse_quote!</span>(::core::mem::MaybeUninit&lt;#cname&gt;);
-<a href=#1317 id=1317 data-nosnippet>1317</a>        <span class="kw">let </span>operation = OperationId::choice_converter(
-<a href=#1318 id=1318 data-nosnippet>1318</a>            at.crossing.value(),
-<a href=#1319 id=1319 data-nosnippet>1319</a>            at.crossing.mode(),
-<a href=#1320 id=1320 data-nosnippet>1320</a>            c_artifact(<span class="string">"c-choice-intermediate"</span>, <span class="string">"repr-c-tagged-union"</span>),
-<a href=#1321 id=1321 data-nosnippet>1321</a>            at.crossing.direction(),
-<a href=#1322 id=1322 data-nosnippet>1322</a>        );
-<a href=#1323 id=1323 data-nosnippet>1323</a>        <span class="kw">let </span>function = CFunction::choice(
-<a href=#1324 id=1324 data-nosnippet>1324</a>            operation,
-<a href=#1325 id=1325 data-nosnippet>1325</a>            ChoicePlan {
-<a href=#1326 id=1326 data-nosnippet>1326</a>                source: at.crossing.spelled().clone(),
-<a href=#1327 id=1327 data-nosnippet>1327</a>                wire: cname,
-<a href=#1328 id=1328 data-nosnippet>1328</a>                direction,
-<a href=#1329 id=1329 data-nosnippet>1329</a>                arms: planned_arms,
-<a href=#1330 id=1330 data-nosnippet>1330</a>            },
-<a href=#1331 id=1331 data-nosnippet>1331</a>        );
-<a href=#1332 id=1332 data-nosnippet>1332</a>        <span class="kw">let </span>value = CValue::Direct {
-<a href=#1333 id=1333 data-nosnippet>1333</a>            wire: destination.clone(),
-<a href=#1334 id=1334 data-nosnippet>1334</a>            converter: function.call().clone(),
-<a href=#1335 id=1335 data-nosnippet>1335</a>            niches: Niches::empty(),
-<a href=#1336 id=1336 data-nosnippet>1336</a>        };
-<a href=#1337 id=1337 data-nosnippet>1337</a>        <span class="prelude-val">Ok</span>(CFrag {
-<a href=#1338 id=1338 data-nosnippet>1338</a>            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
-<a href=#1339 id=1339 data-nosnippet>1339</a>            source: at.crossing.spelled().clone(),
-<a href=#1340 id=1340 data-nosnippet>1340</a>            destination,
-<a href=#1341 id=1341 data-nosnippet>1341</a>            shape: <span class="prelude-val">None</span>,
-<a href=#1342 id=1342 data-nosnippet>1342</a>            function,
-<a href=#1343 id=1343 data-nosnippet>1343</a>            niches: Niches::empty(),
-<a href=#1344 id=1344 data-nosnippet>1344</a>            subs,
-<a href=#1345 id=1345 data-nosnippet>1345</a>            arm: <span class="prelude-val">None</span>,
-<a href=#1346 id=1346 data-nosnippet>1346</a>            yields: Yield {
-<a href=#1347 id=1347 data-nosnippet>1347</a>                ty: at.crossing.value().stripped_key(),
-<a href=#1348 id=1348 data-nosnippet>1348</a>                mode: at.crossing.mode(),
-<a href=#1349 id=1349 data-nosnippet>1349</a>                validity: Validity::SelfSufficient,
-<a href=#1350 id=1350 data-nosnippet>1350</a>            },
-<a href=#1351 id=1351 data-nosnippet>1351</a>            value,
-<a href=#1352 id=1352 data-nosnippet>1352</a>        })
-<a href=#1353 id=1353 data-nosnippet>1353</a>    }
-<a href=#1354 id=1354 data-nosnippet>1354</a>
-<a href=#1355 id=1355 data-nosnippet>1355</a>    <span class="kw">fn </span>callback(
-<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1357 id=1357 data-nosnippet>1357</a>        _cx: <span class="kw-2">&amp;mut </span>Ctx&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
-<a href=#1358 id=1358 data-nosnippet>1358</a>        at: At&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1359 id=1359 data-nosnippet>1359</a>        _fragments: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>CFrag],
-<a href=#1360 id=1360 data-nosnippet>1360</a>        _result: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>CFrag&gt;,
-<a href=#1361 id=1361 data-nosnippet>1361</a>    ) -&gt; Frag&lt;<span class="self">Self</span>&gt; {
-<a href=#1362 id=1362 data-nosnippet>1362</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(args) = at.crossing.value().callback_args() <span class="kw">else </span>{
-<a href=#1363 id=1363 data-nosnippet>1363</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(wrong(at, <span class="string">"a callback recipe over a type that is not one"</span>));
-<a href=#1364 id=1364 data-nosnippet>1364</a>        };
-<a href=#1365 id=1365 data-nosnippet>1365</a>        <span class="kw">let </span>key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
-<a href=#1366 id=1366 data-nosnippet>1366</a>        <span class="kw">if </span>!<span class="self">self</span>.<span class="kw">gen</span>.callbacks.contains_key(<span class="kw-2">&amp;</span>key) {
-<a href=#1367 id=1367 data-nosnippet>1367</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(refuse(at, <span class="string">"undeclared callback signature"</span>));
-<a href=#1368 id=1368 data-nosnippet>1368</a>        }
-<a href=#1369 id=1369 data-nosnippet>1369</a>        <span class="kw">let </span>c_struct = <span class="self">self</span>.<span class="kw">gen</span>.callback_c_ident(<span class="kw-2">&amp;</span>key);
-<a href=#1370 id=1370 data-nosnippet>1370</a>        <span class="kw">let </span>destination: syn::Type = <span class="macro">syn::parse_quote!</span>(#c_struct);
-<a href=#1371 id=1371 data-nosnippet>1371</a>        <span class="kw">let </span>operation = callback_operation(at.crossing.value());
-<a href=#1372 id=1372 data-nosnippet>1372</a>        <span class="kw">let </span>function = CFunction::deferred_invoke(operation);
-<a href=#1373 id=1373 data-nosnippet>1373</a>        <span class="kw">let </span>value = CValue::Direct {
-<a href=#1374 id=1374 data-nosnippet>1374</a>            wire: destination.clone(),
-<a href=#1375 id=1375 data-nosnippet>1375</a>            converter: function.call().clone(),
-<a href=#1376 id=1376 data-nosnippet>1376</a>            niches: Niches::empty(),
-<a href=#1377 id=1377 data-nosnippet>1377</a>        };
-<a href=#1378 id=1378 data-nosnippet>1378</a>        <span class="prelude-val">Ok</span>(CFrag {
-<a href=#1379 id=1379 data-nosnippet>1379</a>            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
-<a href=#1380 id=1380 data-nosnippet>1380</a>            source: at.crossing.spelled().clone(),
-<a href=#1381 id=1381 data-nosnippet>1381</a>            destination,
-<a href=#1382 id=1382 data-nosnippet>1382</a>            shape: <span class="prelude-val">None</span>,
-<a href=#1383 id=1383 data-nosnippet>1383</a>            function,
-<a href=#1384 id=1384 data-nosnippet>1384</a>            niches: Niches::empty(),
-<a href=#1385 id=1385 data-nosnippet>1385</a>            subs: Vec::new(),
-<a href=#1386 id=1386 data-nosnippet>1386</a>            arm: <span class="prelude-val">None</span>,
-<a href=#1387 id=1387 data-nosnippet>1387</a>            yields: Yield {
-<a href=#1388 id=1388 data-nosnippet>1388</a>                ty: at.crossing.value().stripped_key(),
-<a href=#1389 id=1389 data-nosnippet>1389</a>                mode: at.crossing.mode(),
-<a href=#1390 id=1390 data-nosnippet>1390</a>                validity: Validity::SelfSufficient,
-<a href=#1391 id=1391 data-nosnippet>1391</a>            },
-<a href=#1392 id=1392 data-nosnippet>1392</a>            value,
-<a href=#1393 id=1393 data-nosnippet>1393</a>        })
-<a href=#1394 id=1394 data-nosnippet>1394</a>    }
-<a href=#1395 id=1395 data-nosnippet>1395</a>
-<a href=#1396 id=1396 data-nosnippet>1396</a>    <span class="doccomment">/// C hands out borrows deliberately, so a returned one is not an error.
-<a href=#1397 id=1397 data-nosnippet>1397</a>    ///
-<a href=#1398 id=1398 data-nosnippet>1398</a>    /// A zero-copy accessor — `fn(&amp;Sample) -&gt; &amp;ZBytes` — crosses as
-<a href=#1399 id=1399 data-nosnippet>1399</a>    /// `*const zbytes_t`, and C's own contract is that a `const` pointer is
-<a href=#1400 id=1400 data-nosnippet>1400</a>    /// non-owning: the caller neither frees it nor outlives the value it points
-<a href=#1401 id=1401 data-nosnippet>1401</a>    /// into. That is the target's ownership model rather than a weaker check,
-<a href=#1402 id=1402 data-nosnippet>1402</a>    /// and it is why the default strict reading belongs to the JVM and not
-<a href=#1403 id=1403 data-nosnippet>1403</a>    /// here.
-<a href=#1404 id=1404 data-nosnippet>1404</a>    </span><span class="kw">fn </span>tolerates(<span class="kw-2">&amp;</span><span class="self">self</span>, _role: <span class="kw-2">&amp;</span>Role) -&gt; Validity {
-<a href=#1405 id=1405 data-nosnippet>1405</a>        Validity::Borrowed
-<a href=#1406 id=1406 data-nosnippet>1406</a>    }
-<a href=#1407 id=1407 data-nosnippet>1407</a>
-<a href=#1408 id=1408 data-nosnippet>1408</a>    <span class="kw">fn </span>plan(
-<a href=#1409 id=1409 data-nosnippet>1409</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#1410 id=1410 data-nosnippet>1410</a>        cx: <span class="kw-2">&amp;mut </span>Ctx&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
-<a href=#1411 id=1411 data-nosnippet>1411</a>        bound: <span class="kw-2">&amp;</span>Bound,
-<a href=#1412 id=1412 data-nosnippet>1412</a>        root: <span class="kw-2">&amp;</span>CFrag,
-<a href=#1413 id=1413 data-nosnippet>1413</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;SitePlan&lt;CRepresentation&gt;, String&gt; {
-<a href=#1414 id=1414 data-nosnippet>1414</a>        <span class="kw">let </span>failure_route = (root.value.failure() == Failure::Fallible).then(|| {
-<a href=#1415 id=1415 data-nosnippet>1415</a>            <span class="kw">let </span>function = cx
-<a href=#1416 id=1416 data-nosnippet>1416</a>                .conversions()
-<a href=#1417 id=1417 data-nosnippet>1417</a>                .flat()
-<a href=#1418 id=1418 data-nosnippet>1418</a>                .function(<span class="kw-2">&amp;</span>bound.site.owner)
-<a href=#1419 id=1419 data-nosnippet>1419</a>                .expect(<span class="string">"site owner is a declared function"</span>);
-<a href=#1420 id=1420 data-nosnippet>1420</a>            <span class="kw">if </span>function.ret.fallible_parts().is_some() {
-<a href=#1421 id=1421 data-nosnippet>1421</a>                CFailureRoute::Error(SiteId::new(prebindgen_registry::recipe::Site {
-<a href=#1422 id=1422 data-nosnippet>1422</a>                    owner: bound.site.owner.clone(),
-<a href=#1423 id=1423 data-nosnippet>1423</a>                    role: Role::Error,
-<a href=#1424 id=1424 data-nosnippet>1424</a>                }))
-<a href=#1425 id=1425 data-nosnippet>1425</a>            } <span class="kw">else </span>{
-<a href=#1426 id=1426 data-nosnippet>1426</a>                CFailureRoute::Panic
-<a href=#1427 id=1427 data-nosnippet>1427</a>            }
-<a href=#1428 id=1428 data-nosnippet>1428</a>        });
-<a href=#1429 id=1429 data-nosnippet>1429</a>        <span class="prelude-val">Ok</span>(SitePlan::new(
-<a href=#1430 id=1430 data-nosnippet>1430</a>            SiteId::new(bound.site.clone()),
-<a href=#1431 id=1431 data-nosnippet>1431</a>            bound.clone(),
-<a href=#1432 id=1432 data-nosnippet>1432</a>            root.id.clone(),
-<a href=#1433 id=1433 data-nosnippet>1433</a>            root.yields.clone(),
-<a href=#1434 id=1434 data-nosnippet>1434</a>            AbiLayout::new(root.value.slots(), root.value.clone()),
-<a href=#1435 id=1435 data-nosnippet>1435</a>            failure_route,
-<a href=#1436 id=1436 data-nosnippet>1436</a>            Cleanup::None,
-<a href=#1437 id=1437 data-nosnippet>1437</a>        ))
-<a href=#1438 id=1438 data-nosnippet>1438</a>    }
-<a href=#1439 id=1439 data-nosnippet>1439</a>}
+<a href=#1282 id=1282 data-nosnippet>1282</a>            <span class="comment">// Every choice this adapter declares is over a declared sum, and a
+<a href=#1283 id=1283 data-nosnippet>1283</a>            // C tagged union numbers its arms by the alternative's own index.
+<a href=#1284 id=1284 data-nosnippet>1284</a>            // An arm naming none is a choice between ways to obtain a value,
+<a href=#1285 id=1285 data-nosnippet>1285</a>            // which `prebindgen-c` does not declare.
+<a href=#1286 id=1286 data-nosnippet>1286</a>            </span><span class="kw">let </span><span class="prelude-val">Some</span>(alternative) = alternative <span class="kw">else </span>{
+<a href=#1287 id=1287 data-nosnippet>1287</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(wrong(at, <span class="string">"an arm that names no alternative of a sum"</span>));
+<a href=#1288 id=1288 data-nosnippet>1288</a>            };
+<a href=#1289 id=1289 data-nosnippet>1289</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(arm) = fragment.arm.as_ref() <span class="kw">else </span>{
+<a href=#1290 id=1290 data-nosnippet>1290</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(wrong(at, <span class="string">"an arm that composed no payload"</span>));
+<a href=#1291 id=1291 data-nosnippet>1291</a>            };
+<a href=#1292 id=1292 data-nosnippet>1292</a>            <span class="kw">if </span>direction == Direction::Deconstruct
+<a href=#1293 id=1293 data-nosnippet>1293</a>                &amp;&amp; arm.parts.iter().any(|part| part.child.fallible())
+<a href=#1294 id=1294 data-nosnippet>1294</a>            {
+<a href=#1295 id=1295 data-nosnippet>1295</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(refuse(
+<a href=#1296 id=1296 data-nosnippet>1296</a>                    at,
+<a href=#1297 id=1297 data-nosnippet>1297</a>                    <span class="string">"a payload whose encode can fail, which a union has no way to report"</span>,
+<a href=#1298 id=1298 data-nosnippet>1298</a>                ));
+<a href=#1299 id=1299 data-nosnippet>1299</a>            }
+<a href=#1300 id=1300 data-nosnippet>1300</a>            subs.extend(arm.subs.iter().cloned());
+<a href=#1301 id=1301 data-nosnippet>1301</a>            planned_arms.push(prebindgen_registry::chain::ChoiceArm {
+<a href=#1302 id=1302 data-nosnippet>1302</a>                alternative: (<span class="kw-2">*</span>alternative).clone(),
+<a href=#1303 id=1303 data-nosnippet>1303</a>                tag: {
+<a href=#1304 id=1304 data-nosnippet>1304</a>                    <span class="kw">let </span>tag =
+<a href=#1305 id=1305 data-nosnippet>1305</a>                        syn::LitInt::new(<span class="kw-2">&amp;</span>alternative.index.to_string(), alternative.name.span());
+<a href=#1306 id=1306 data-nosnippet>1306</a>                    <span class="macro">syn::parse_quote!</span>(#tag)
+<a href=#1307 id=1307 data-nosnippet>1307</a>                },
+<a href=#1308 id=1308 data-nosnippet>1308</a>                bridge: prebindgen_registry::chain::TupleProduct {
+<a href=#1309 id=1309 data-nosnippet>1309</a>                    parts: arm.parts.iter().map(|part| part.wire.clone()).collect(),
+<a href=#1310 id=1310 data-nosnippet>1310</a>                },
+<a href=#1311 id=1311 data-nosnippet>1311</a>                parts: arm
+<a href=#1312 id=1312 data-nosnippet>1312</a>                    .parts
+<a href=#1313 id=1313 data-nosnippet>1313</a>                    .iter()
+<a href=#1314 id=1314 data-nosnippet>1314</a>                    .map(|part| prebindgen_registry::chain::ChoicePart {
+<a href=#1315 id=1315 data-nosnippet>1315</a>                        child: part.child.clone(),
+<a href=#1316 id=1316 data-nosnippet>1316</a>                        mode: part.mode,
+<a href=#1317 id=1317 data-nosnippet>1317</a>                        hold_uninit: part.hold_uninit,
+<a href=#1318 id=1318 data-nosnippet>1318</a>                    })
+<a href=#1319 id=1319 data-nosnippet>1319</a>                    .collect(),
+<a href=#1320 id=1320 data-nosnippet>1320</a>            });
+<a href=#1321 id=1321 data-nosnippet>1321</a>        }
+<a href=#1322 id=1322 data-nosnippet>1322</a>
+<a href=#1323 id=1323 data-nosnippet>1323</a>        <span class="kw">let </span>destination: syn::Type = <span class="macro">syn::parse_quote!</span>(::core::mem::MaybeUninit&lt;#cname&gt;);
+<a href=#1324 id=1324 data-nosnippet>1324</a>        <span class="kw">let </span>operation = OperationId::choice_converter(
+<a href=#1325 id=1325 data-nosnippet>1325</a>            at.crossing.value(),
+<a href=#1326 id=1326 data-nosnippet>1326</a>            at.crossing.mode(),
+<a href=#1327 id=1327 data-nosnippet>1327</a>            c_artifact(<span class="string">"c-choice-intermediate"</span>, <span class="string">"repr-c-tagged-union"</span>),
+<a href=#1328 id=1328 data-nosnippet>1328</a>            at.crossing.direction(),
+<a href=#1329 id=1329 data-nosnippet>1329</a>        );
+<a href=#1330 id=1330 data-nosnippet>1330</a>        <span class="kw">let </span>function = CFunction::choice(
+<a href=#1331 id=1331 data-nosnippet>1331</a>            operation,
+<a href=#1332 id=1332 data-nosnippet>1332</a>            ChoicePlan {
+<a href=#1333 id=1333 data-nosnippet>1333</a>                source: at.crossing.spelled().clone(),
+<a href=#1334 id=1334 data-nosnippet>1334</a>                wire: cname,
+<a href=#1335 id=1335 data-nosnippet>1335</a>                direction,
+<a href=#1336 id=1336 data-nosnippet>1336</a>                arms: planned_arms,
+<a href=#1337 id=1337 data-nosnippet>1337</a>            },
+<a href=#1338 id=1338 data-nosnippet>1338</a>        );
+<a href=#1339 id=1339 data-nosnippet>1339</a>        <span class="kw">let </span>value = CValue::Direct {
+<a href=#1340 id=1340 data-nosnippet>1340</a>            wire: destination.clone(),
+<a href=#1341 id=1341 data-nosnippet>1341</a>            converter: function.call().clone(),
+<a href=#1342 id=1342 data-nosnippet>1342</a>            niches: Niches::empty(),
+<a href=#1343 id=1343 data-nosnippet>1343</a>        };
+<a href=#1344 id=1344 data-nosnippet>1344</a>        <span class="prelude-val">Ok</span>(CFrag {
+<a href=#1345 id=1345 data-nosnippet>1345</a>            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+<a href=#1346 id=1346 data-nosnippet>1346</a>            source: at.crossing.spelled().clone(),
+<a href=#1347 id=1347 data-nosnippet>1347</a>            destination,
+<a href=#1348 id=1348 data-nosnippet>1348</a>            shape: <span class="prelude-val">None</span>,
+<a href=#1349 id=1349 data-nosnippet>1349</a>            function,
+<a href=#1350 id=1350 data-nosnippet>1350</a>            niches: Niches::empty(),
+<a href=#1351 id=1351 data-nosnippet>1351</a>            subs,
+<a href=#1352 id=1352 data-nosnippet>1352</a>            arm: <span class="prelude-val">None</span>,
+<a href=#1353 id=1353 data-nosnippet>1353</a>            yields: Yield {
+<a href=#1354 id=1354 data-nosnippet>1354</a>                ty: at.crossing.value().stripped_key(),
+<a href=#1355 id=1355 data-nosnippet>1355</a>                mode: at.crossing.mode(),
+<a href=#1356 id=1356 data-nosnippet>1356</a>                validity: Validity::SelfSufficient,
+<a href=#1357 id=1357 data-nosnippet>1357</a>            },
+<a href=#1358 id=1358 data-nosnippet>1358</a>            value,
+<a href=#1359 id=1359 data-nosnippet>1359</a>        })
+<a href=#1360 id=1360 data-nosnippet>1360</a>    }
+<a href=#1361 id=1361 data-nosnippet>1361</a>
+<a href=#1362 id=1362 data-nosnippet>1362</a>    <span class="kw">fn </span>callback(
+<a href=#1363 id=1363 data-nosnippet>1363</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1364 id=1364 data-nosnippet>1364</a>        _cx: <span class="kw-2">&amp;mut </span>Ctx&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
+<a href=#1365 id=1365 data-nosnippet>1365</a>        at: At&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1366 id=1366 data-nosnippet>1366</a>        _fragments: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>CFrag],
+<a href=#1367 id=1367 data-nosnippet>1367</a>        _result: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>CFrag&gt;,
+<a href=#1368 id=1368 data-nosnippet>1368</a>    ) -&gt; Frag&lt;<span class="self">Self</span>&gt; {
+<a href=#1369 id=1369 data-nosnippet>1369</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(args) = at.crossing.value().callback_args() <span class="kw">else </span>{
+<a href=#1370 id=1370 data-nosnippet>1370</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(wrong(at, <span class="string">"a callback recipe over a type that is not one"</span>));
+<a href=#1371 id=1371 data-nosnippet>1371</a>        };
+<a href=#1372 id=1372 data-nosnippet>1372</a>        <span class="kw">let </span>key: CallbackKey = args.iter().map(|arg| arg.key()).collect();
+<a href=#1373 id=1373 data-nosnippet>1373</a>        <span class="kw">if </span>!<span class="self">self</span>.<span class="kw">gen</span>.callbacks.contains_key(<span class="kw-2">&amp;</span>key) {
+<a href=#1374 id=1374 data-nosnippet>1374</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(refuse(at, <span class="string">"undeclared callback signature"</span>));
+<a href=#1375 id=1375 data-nosnippet>1375</a>        }
+<a href=#1376 id=1376 data-nosnippet>1376</a>        <span class="kw">let </span>c_struct = <span class="self">self</span>.<span class="kw">gen</span>.callback_c_ident(<span class="kw-2">&amp;</span>key);
+<a href=#1377 id=1377 data-nosnippet>1377</a>        <span class="kw">let </span>destination: syn::Type = <span class="macro">syn::parse_quote!</span>(#c_struct);
+<a href=#1378 id=1378 data-nosnippet>1378</a>        <span class="kw">let </span>operation = callback_operation(at.crossing.value());
+<a href=#1379 id=1379 data-nosnippet>1379</a>        <span class="kw">let </span>function = CFunction::deferred_invoke(operation);
+<a href=#1380 id=1380 data-nosnippet>1380</a>        <span class="kw">let </span>value = CValue::Direct {
+<a href=#1381 id=1381 data-nosnippet>1381</a>            wire: destination.clone(),
+<a href=#1382 id=1382 data-nosnippet>1382</a>            converter: function.call().clone(),
+<a href=#1383 id=1383 data-nosnippet>1383</a>            niches: Niches::empty(),
+<a href=#1384 id=1384 data-nosnippet>1384</a>        };
+<a href=#1385 id=1385 data-nosnippet>1385</a>        <span class="prelude-val">Ok</span>(CFrag {
+<a href=#1386 id=1386 data-nosnippet>1386</a>            id: FragmentId::new(at.crossing.spelled().key(), at.recipe.clone()),
+<a href=#1387 id=1387 data-nosnippet>1387</a>            source: at.crossing.spelled().clone(),
+<a href=#1388 id=1388 data-nosnippet>1388</a>            destination,
+<a href=#1389 id=1389 data-nosnippet>1389</a>            shape: <span class="prelude-val">None</span>,
+<a href=#1390 id=1390 data-nosnippet>1390</a>            function,
+<a href=#1391 id=1391 data-nosnippet>1391</a>            niches: Niches::empty(),
+<a href=#1392 id=1392 data-nosnippet>1392</a>            subs: Vec::new(),
+<a href=#1393 id=1393 data-nosnippet>1393</a>            arm: <span class="prelude-val">None</span>,
+<a href=#1394 id=1394 data-nosnippet>1394</a>            yields: Yield {
+<a href=#1395 id=1395 data-nosnippet>1395</a>                ty: at.crossing.value().stripped_key(),
+<a href=#1396 id=1396 data-nosnippet>1396</a>                mode: at.crossing.mode(),
+<a href=#1397 id=1397 data-nosnippet>1397</a>                validity: Validity::SelfSufficient,
+<a href=#1398 id=1398 data-nosnippet>1398</a>            },
+<a href=#1399 id=1399 data-nosnippet>1399</a>            value,
+<a href=#1400 id=1400 data-nosnippet>1400</a>        })
+<a href=#1401 id=1401 data-nosnippet>1401</a>    }
+<a href=#1402 id=1402 data-nosnippet>1402</a>
+<a href=#1403 id=1403 data-nosnippet>1403</a>    <span class="doccomment">/// C hands out borrows deliberately, so a returned one is not an error.
+<a href=#1404 id=1404 data-nosnippet>1404</a>    ///
+<a href=#1405 id=1405 data-nosnippet>1405</a>    /// A zero-copy accessor — `fn(&amp;Sample) -&gt; &amp;ZBytes` — crosses as
+<a href=#1406 id=1406 data-nosnippet>1406</a>    /// `*const zbytes_t`, and C's own contract is that a `const` pointer is
+<a href=#1407 id=1407 data-nosnippet>1407</a>    /// non-owning: the caller neither frees it nor outlives the value it points
+<a href=#1408 id=1408 data-nosnippet>1408</a>    /// into. That is the target's ownership model rather than a weaker check,
+<a href=#1409 id=1409 data-nosnippet>1409</a>    /// and it is why the default strict reading belongs to the JVM and not
+<a href=#1410 id=1410 data-nosnippet>1410</a>    /// here.
+<a href=#1411 id=1411 data-nosnippet>1411</a>    </span><span class="kw">fn </span>tolerates(<span class="kw-2">&amp;</span><span class="self">self</span>, _role: <span class="kw-2">&amp;</span>Role) -&gt; Validity {
+<a href=#1412 id=1412 data-nosnippet>1412</a>        Validity::Borrowed
+<a href=#1413 id=1413 data-nosnippet>1413</a>    }
+<a href=#1414 id=1414 data-nosnippet>1414</a>
+<a href=#1415 id=1415 data-nosnippet>1415</a>    <span class="kw">fn </span>plan(
+<a href=#1416 id=1416 data-nosnippet>1416</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#1417 id=1417 data-nosnippet>1417</a>        cx: <span class="kw-2">&amp;mut </span>Ctx&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;,
+<a href=#1418 id=1418 data-nosnippet>1418</a>        bound: <span class="kw-2">&amp;</span>Bound,
+<a href=#1419 id=1419 data-nosnippet>1419</a>        root: <span class="kw-2">&amp;</span>CFrag,
+<a href=#1420 id=1420 data-nosnippet>1420</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;SitePlan&lt;CRepresentation&gt;, String&gt; {
+<a href=#1421 id=1421 data-nosnippet>1421</a>        <span class="kw">let </span>failure_route = (root.value.failure() == Failure::Fallible).then(|| {
+<a href=#1422 id=1422 data-nosnippet>1422</a>            <span class="kw">let </span>function = cx
+<a href=#1423 id=1423 data-nosnippet>1423</a>                .conversions()
+<a href=#1424 id=1424 data-nosnippet>1424</a>                .flat()
+<a href=#1425 id=1425 data-nosnippet>1425</a>                .function(<span class="kw-2">&amp;</span>bound.site.owner)
+<a href=#1426 id=1426 data-nosnippet>1426</a>                .expect(<span class="string">"site owner is a declared function"</span>);
+<a href=#1427 id=1427 data-nosnippet>1427</a>            <span class="kw">if </span>function.ret.fallible_parts().is_some() {
+<a href=#1428 id=1428 data-nosnippet>1428</a>                CFailureRoute::Error(SiteId::new(prebindgen_registry::recipe::Site {
+<a href=#1429 id=1429 data-nosnippet>1429</a>                    owner: bound.site.owner.clone(),
+<a href=#1430 id=1430 data-nosnippet>1430</a>                    role: Role::Error,
+<a href=#1431 id=1431 data-nosnippet>1431</a>                }))
+<a href=#1432 id=1432 data-nosnippet>1432</a>            } <span class="kw">else </span>{
+<a href=#1433 id=1433 data-nosnippet>1433</a>                CFailureRoute::Panic
+<a href=#1434 id=1434 data-nosnippet>1434</a>            }
+<a href=#1435 id=1435 data-nosnippet>1435</a>        });
+<a href=#1436 id=1436 data-nosnippet>1436</a>        <span class="prelude-val">Ok</span>(SitePlan::new(
+<a href=#1437 id=1437 data-nosnippet>1437</a>            SiteId::new(bound.site.clone()),
+<a href=#1438 id=1438 data-nosnippet>1438</a>            bound.clone(),
+<a href=#1439 id=1439 data-nosnippet>1439</a>            root.id.clone(),
+<a href=#1440 id=1440 data-nosnippet>1440</a>            root.yields.clone(),
+<a href=#1441 id=1441 data-nosnippet>1441</a>            AbiLayout::new(root.value.slots(), root.value.clone()),
+<a href=#1442 id=1442 data-nosnippet>1442</a>            failure_route,
+<a href=#1443 id=1443 data-nosnippet>1443</a>            Cleanup::None,
+<a href=#1444 id=1444 data-nosnippet>1444</a>        ))
+<a href=#1445 id=1445 data-nosnippet>1445</a>    }
+<a href=#1446 id=1446 data-nosnippet>1446</a>}
 </code></pre></div></section></main></body></html>
