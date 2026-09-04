@@ -769,6 +769,26 @@ impl RecipesBuilder {
         self.insert(ty, name, OP::into_recipe(shape), true, false)
     }
 
+    /// Keep the **derived** row as this crossing's default, while other rows
+    /// are declared beside it.
+    ///
+    /// A crossing with one declared row takes that row by default, which is
+    /// right until the row is one a site opts into rather than the way the
+    /// value ordinarily crosses. An `expand_param!` row is exactly that: a
+    /// parameter is built from leaves where a binding says so, and everywhere
+    /// else the value crosses whole. Saying so explicitly also gives an
+    /// identity arm somewhere to resolve — its part IS the value, so it takes
+    /// the default row, and a default that were the constructor row would make
+    /// the arm a part of the row it belongs to.
+    ///
+    /// The row this declares is the one [`Self::recipe`](Recipes::recipe) would
+    /// have derived, under the same name, so a crossing that had no rows at all
+    /// is unchanged by gaining this one.
+    pub fn declare_derived_default(&mut self, ty: TypeRef, direction: Direction) -> &mut Self {
+        let recipe = derive(&Crossing::new(ty.clone(), direction));
+        self.insert(ty, RecipeName::derived(), recipe, true, false)
+    }
+
     /// [`Self::declare`], for a row compiled whether or not a site asks for it.
     ///
     /// A second recipe is otherwise reached only through a site that names it,

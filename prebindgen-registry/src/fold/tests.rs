@@ -260,7 +260,13 @@ fn run(
         .ty
         .clone();
     let from_row = Folding::new(&recipes, &bindings, &model)
-        .fold(&Jni, param, &reading, &RecipeName::new("parts"))
+        .fold(
+            &Jni,
+            param,
+            &reading,
+            &RecipeName::new("parts"),
+            &RecipeName::new("parts"),
+        )
         .map(|plan| render(&plan))
         .map_err(|e| e.to_string());
     (from_declarations, from_row)

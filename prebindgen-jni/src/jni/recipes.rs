@@ -344,6 +344,21 @@ impl Declarations {
         registry: &(impl prebindgen_registry::Conversions + ?Sized),
     ) -> Result<Recipes, Vec<RecipeError>> {
         let mut recipes = Recipes::builder();
+        // How each `expand_param!`-declared type is built. Named rather than
+        // defaulted: the crossing's default stays the value's own conversion,
+        // which is what an identity arm is handed (#701 step 2).
+        let mut expanded: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();
+        for (ty, name, row) in self.expansion_rows(model) {
+            // The value still crosses whole everywhere a binding does not say
+            // otherwise, so the derived row stays the default beside these.
+            if expanded.insert(ty.key()) {
+                recipes.declare_derived_default(
+                    ty.clone(),
+                    prebindgen_registry::recipe::Direction::Construct,
+                );
+            }
+            recipes.declare(ty, name, row);
+        }
         // Which crossings already state a deconstructing `parts` row, so the
         // decomposition block below adds one only where none was declared.
         let mut parts_out: std::collections::HashSet<TypeKey> = std::collections::HashSet::new();

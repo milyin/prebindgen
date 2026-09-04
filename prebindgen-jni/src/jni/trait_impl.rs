@@ -675,6 +675,18 @@ impl JniGenBuilder {
         let bindings = decls
             .bindings(declared.flat(), &declared, &recipes)
             .map_err(invariant)?;
+        // Every expanded parameter, read back off its row and held to the plan
+        // the declarations produced. Temporary, and deleted with
+        // `expand::apply`: while both paths exist this binding's own
+        // declarations are the comparison (#701 step 2).
+        decls
+            .check_expansion_parity(
+                declared.flat(),
+                &recipes,
+                &bindings,
+                prebindgen_registry::Conversions::expansion_plans(&declared),
+            )
+            .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         // Both tables go on `decls`, because compiling a **site** happens after
         // this function has returned: the sites are `fn_plan`'s to enumerate,
         // and `Compiler::resume` needs these two beside the model.

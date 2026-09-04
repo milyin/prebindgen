@@ -143,17 +143,25 @@ impl<'a> Folding<'a> {
     /// says both that the value may be absent and that the call borrows it.
     /// The row walked is the one declared for `T`, since the layers are the
     /// model's answer and not something a row restates.
+    ///
+    /// Two names, because a position and a part answer different questions.
+    /// `row` is the row THIS position takes, which a site may name for itself.
+    /// `nested` is the row a constructor argument takes when its own type
+    /// states one, and that is the type's row rather than the site's: a
+    /// parameter built one way here does not change how its arguments are
+    /// built.
     pub fn fold(
         &self,
         policy: &dyn FoldPolicy,
         prefix: &str,
         reading: &TypeRef,
         row: &RecipeName,
+        nested: &RecipeName,
     ) -> Result<FoldPlan, FoldError> {
         let (optional, by_ref, target) = layers(reading);
         let mut walk = Walk {
             policy,
-            row,
+            row: nested,
             leaves: Vec::new(),
             building: vec![target.key().to_string()],
         };
