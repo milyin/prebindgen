@@ -682,10 +682,12 @@ pub fn apply_sum_returns(
 /// Every converter-bearing leaf of a plan is a reading the resolver must
 /// produce a converter for.
 ///
-/// A leaf **without** a converter is the synthesized sum selector, whose
-/// `out_ty` is the sum it chooses between — a type that has no whole-value
-/// output converter by construction, so demanding one would fail resolution
-/// (#282).
+/// A leaf **without** a converter is one the emitter assigns rather than
+/// converts, and there are two: a [`LeafSource::SumTag`] selector, whose
+/// `out_ty` is the sum it chooses between — a type with no whole-value output
+/// converter by construction, so demanding one would fail resolution (#282) —
+/// and a [`LeafSource::Presence`] flag, whose `out_ty` is the optional field it
+/// reports on, delivered by the leaves after it rather than by this one.
 fn register_leaves(registry: &mut Unfolding<'_>, leaves: &[UnfoldLeaf]) {
     for leaf in leaves.iter().filter(|l| l.has_converter()) {
         registry.require_output(&leaf.out_ty);

@@ -29,10 +29,10 @@ fn tref(ty: syn::Type) -> prebindgen_registry::flat::TypeRef {
 
 /// Whether the plans built so far leave `key` a required output.
 ///
-/// The two sets are unordered and the registry fixes their precedence:
-/// everything a plan delivers is required, and a crossing the plan replaced is
-/// then not. `None` = neither set mentions it, which is a different fact from
-/// "delivered and then replaced" — the distinction the registry's
+/// Both lists are unordered and the registry fixes their precedence: a reading
+/// a plan delivers as a leaf is required, and a crossing the plan replaced —
+/// and does not also deliver — is not. `None` = neither list mentions it, which
+/// is a different fact from "replaced", the distinction the registry's
 /// `output_types[key].root` could not state on its own (#282).
 fn required(reg: &Unfolding<'_>, key: &prebindgen_registry::TypeKey) -> Option<bool> {
     let mentions =
@@ -41,8 +41,8 @@ fn required(reg: &Unfolding<'_>, key: &prebindgen_registry::TypeKey) -> Option<b
         mentions(reg.output_leaves()),
         mentions(reg.replaced_outputs()),
     ) {
-        (_, true) => Some(false),
-        (true, false) => Some(true),
+        (true, _) => Some(true),
+        (false, true) => Some(false),
         (false, false) => None,
     }
 }
@@ -1932,11 +1932,15 @@ fn sum_return_layers_ride_the_shape_fold() {
     assert!(matches!(&vec_plan.shape,
         UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Base)));
     assert!(vec_plan.element.is_none(), "decomposed-leaf fold");
+    // Positively, not as an absence: every layer must be *replaced*, which
+    // `Some(false)` says and `!= Some(true)` would also say of a layer the
+    // plans never mentioned at all.
     for ty in ["Option<Reading>", "Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
-        assert!(
-            required_ty(&reg, &ty) != Some(true),
-            "no layer of a sum return may require a whole-value converter: {}",
+        assert_eq!(
+            required_ty(&reg, &ty),
+            Some(false),
+            "every layer of a sum return replaces its whole-value crossing: {}",
             ty.to_token_stream()
         );
     }
@@ -1944,36 +1948,26 @@ fn sum_return_layers_ride_the_shape_fold() {
 
 /// A `Vec<sum>` return **on its own** — no bare or `Option`-wrapped return of
 /// the same sum anywhere in the binding. The test above cannot state this: its
-/// `Option<Reading>` fixture unrequires the bare type through a *different*
-/// layer, so it would keep passing if the `Vec` element were left required.
+/// `Option<Reading>` fixture replaces the bare type through a *different*
+/// layer, so it would keep passing if the `Vec` element were left alone.
 ///
-/// The bare requirement is **seeded explicitly**. A scan registers only the
-/// top-level return, so `Reading` would not be in the set to begin with and the
-/// assertion would hold whether or not `wire_fixed_returns` unrequired the
-/// peeled element — passing while testing nothing. Seeding reproduces what an
-/// adapter that does require the element leaves behind, which is the state the
-/// unrequire exists for.
+/// The peeled element is the point. `wire_fixed_returns` walks every layer the
+/// shape fold peels, so a `Vec<Reading>` return must replace `Reading` as well
+/// as `Vec<Reading>` — nothing else in this fixture would.
 #[test]
-fn a_vec_only_sum_return_drops_the_bare_requirement() {
+fn a_vec_only_sum_return_replaces_the_bare_crossing() {
     let flat = flat_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
     let mut reg = Unfolding::new(&flat);
-    let bare: syn::Type = syn::parse_quote!(Reading);
-    let bare_reading = flat.classify(&bare).expect("fixture type");
-    reg.require_output(&bare_reading);
-    assert!(
-        required_ty(&reg, &bare) == Some(true),
-        "fixture precondition: the bare element starts out required"
-    );
-
     let declared: std::collections::HashSet<syn::Ident> =
         ["read_all"].iter().map(|s| ident(s)).collect();
     apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
 
     for ty in ["Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
-        assert!(
-            required_ty(&reg, &ty) != Some(true),
-            "no layer of a sum return may require a whole-value converter: {}",
+        assert_eq!(
+            required_ty(&reg, &ty),
+            Some(false),
+            "every layer of a sum return replaces its whole-value crossing: {}",
             ty.to_token_stream()
         );
     }

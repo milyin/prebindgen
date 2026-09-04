@@ -331,10 +331,9 @@ pub(crate) struct Declared {
 /// as declarations, because `expand::apply` still mutates the registry
 /// directly.
 ///
-/// Each of those is a **set**, and the registry fixes what happens when two of
-/// them name the same reading — everything delivered is required, and then what
-/// a plan replaced is not. An adapter states facts about its plans; it does not
-/// sequence registry mutations.
+/// Each of those is an unordered list, and the registry fixes what happens when
+/// two of them name the same reading. An adapter states facts about its plans;
+/// it does not sequence registry mutations.
 #[derive(Default)]
 pub struct Decompositions {
     /// Parameter-side: values built on the Rust side from ingredients that
@@ -347,12 +346,14 @@ pub struct Decompositions {
     /// rather than by the argument's type.
     pub callback_arg_leaves: HashMap<TypeKey, Vec<prebindgen_flat::flat::TypeRef>>,
     /// Readings the adapter's plans deliver on the output side: each must
-    /// resolve to a converter.
+    /// resolve to a converter. A leaf is one value that crosses as a single
+    /// argument of the generated foreign signature, so a converter for it is
+    /// what makes the crossing possible at all.
     ///
-    /// A **set**, not a script. The registry fixes the precedence — everything
-    /// here is required, and then [`Self::replaced_outputs`] and
-    /// [`Self::replaces`] drop what a plan took over — so an adapter states two
-    /// facts about its plans instead of sequencing three registry verbs.
+    /// An unordered list, not a script: a reading named twice is required once.
+    /// It **outranks** [`Self::replaced_outputs`] — see there for why — and is
+    /// outranked by [`Self::replaces`], which says a type cannot cross whole at
+    /// all rather than that one crossing of it need not.
     pub output_leaves: Vec<prebindgen_flat::flat::TypeRef>,
     /// Output crossings a plan **replaces**: a value delivered leaf-by-leaf
     /// needs no whole-value converter, so the scan's demand for one is dropped.
@@ -366,7 +367,13 @@ pub struct Decompositions {
     /// type and the plan is what knows an `Option<T>` or `Vec<T>` of it also
     /// stopped crossing whole.
     ///
-    /// Unordered, because dropping a demand twice is dropping it once.
+    /// An unordered list, because dropping a demand twice is dropping it once.
+    ///
+    /// It ranks **below** [`Self::output_leaves`], and the two say different
+    /// things about the same reading: replacing a crossing cancels the demand
+    /// the signature scan made for it, while delivering a reading as a leaf is
+    /// the plan's own demand and does not come from the scan. So a reading in
+    /// both is required.
     pub replaced_outputs: Vec<prebindgen_flat::flat::TypeRef>,
     /// The whole-value crossings these decompositions make unnecessary.
     ///

@@ -22,18 +22,26 @@ impl Registry {
                 &declared.method_receivers,
             )?;
         }
+        // A plan delivers these leaf-by-leaf, so the whole-value output demand
+        // the signature scan recorded for them is stale. Unlike `replaces`
+        // below, which names bare declared types, these are the layered
+        // readings a plan peeled — the `Option<T>` / `Vec<T>` / `&T` a
+        // decomposed `T` was reached through.
+        for reading in &d.replaced_outputs {
+            self.unrequire_output(reading);
+        }
         // What the adapter's plans deliver on the output side. Planning how a
         // value comes apart reads the model alone, so these are stated as
         // readings and applied here, after `expand::apply`.
+        //
+        // AFTER the replacements, and that order is the rule rather than an
+        // accident: replacing a crossing cancels the demand the *scan* made for
+        // it, while a delivered leaf's demand is the plan's own. A reading in
+        // both sets — zenoh-flat-jni has one, a `Vec<String>` that is a leaf of
+        // one return and the element-wise body of another — is delivered, so it
+        // keeps the converter every leaf needs.
         for reading in &d.output_leaves {
             self.require_output(reading);
-        }
-        // A plan delivers these leaf-by-leaf, so the scan's whole-value output
-        // demand on them is stale. Unlike `replaces` below, which names bare
-        // declared types, these are the layered readings a plan peeled — the
-        // `Option<T>` / `Vec<T>` / `&T` a decomposed `T` was reached through.
-        for reading in &d.replaced_outputs {
-            self.unrequire_output(reading);
         }
         // Every crossing these types make is now covered by a plan, so the
         // scan-time direct converter requirement is stale — and typically
