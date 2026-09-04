@@ -27,21 +27,24 @@ fn tref(ty: syn::Type) -> prebindgen_registry::flat::TypeRef {
         .expect("a fixture type the language accepts")
 }
 
-/// Whether the asks recorded so far leave `key` a required output.
+/// Whether the plans built so far leave `key` a required output.
 ///
-/// The replay is ordered, so this reads them in order: an `Output` ask makes a
-/// reading a root, an `Unrequire` drops that, and a `Reference` registers it
-/// without demanding a converter. `None` = never asked for at all, which is a
-/// different fact from "asked for and then un-required" — the distinction the
-/// registry's `output_types[key].root` could not state on its own (#282).
+/// Both lists are unordered and the registry fixes their precedence: a reading
+/// a plan delivers as a leaf is required, and a crossing the plan replaced —
+/// and does not also deliver — is not. `None` = neither list mentions it, which
+/// is a different fact from "replaced", the distinction the registry's
+/// `output_types[key].root` could not state on its own (#282).
 fn required(reg: &Unfolding<'_>, key: &prebindgen_registry::TypeKey) -> Option<bool> {
-    use prebindgen_registry::Requirement;
-    reg.requirements().iter().fold(None, |seen, ask| match ask {
-        Requirement::Output(t) if t.key() == *key => Some(true),
-        Requirement::Reference(t) if t.key() == *key => Some(seen.unwrap_or(false)),
-        Requirement::Unrequire(t) if t.key() == *key => Some(false),
-        _ => seen,
-    })
+    let mentions =
+        |readings: &[prebindgen_registry::flat::TypeRef]| readings.iter().any(|t| t.key() == *key);
+    match (
+        mentions(reg.output_leaves()),
+        mentions(reg.replaced_outputs()),
+    ) {
+        (true, _) => Some(true),
+        (false, true) => Some(false),
+        (false, false) => None,
+    }
 }
 
 /// [`required`], for a type a fixture spells inline.
@@ -1838,7 +1841,7 @@ fn reading_sum_decon() -> SumDecon {
 
 /// A sum returned by a function decomposes into a **fixed-builder** plan over
 /// its tag and groups — the same delivery a by-value `data_class` gets, with
-/// the selector added. The declared return's own output requirement is dropped:
+/// the selector added. The declared return's own output crossing is replaced:
 /// a sum has no whole-value converter by construction, so leaving it required
 /// would fail the resolve on a converter that must not exist.
 #[test]
@@ -1877,21 +1880,22 @@ fn sum_return_is_a_fixed_builder_plan() {
     // requirement into a binding that has no `i32` crossing of its own.
     assert!(!plan.leaves[0].has_converter());
     assert!(plan.leaves[1].has_converter());
-    // #282's invariant, stated over the plan rather than over one type name:
-    // EVERY leaf's `out_ty` is registered, and only a converter-bearing leaf is
-    // a root. The assertion this replaced could state neither half — it read
-    // `!...is_some_and(|c| c.root)` on `Reading`, which is also true when the
-    // cell is ABSENT, and absent is what it was: this fixture's registry
-    // declares nothing, so it passed for the wrong reason.
+    // #282's plan half, stated over the plan rather than over one type name:
+    // a converter-bearing leaf is delivered as a required output, and the
+    // selector is not — its `out_ty` is the sum it chooses between, and a sum
+    // has no whole-value output converter at all.
+    //
+    // The *cell* half is not here and cannot be: this fixture declares no
+    // binding, and a cell is what a declaration makes. It is pinned against a
+    // real registry in
+    // `jni::tests::sealed::a_sums_registry_cells_are_registered_but_not_required`,
+    // which fails on an absent cell and on a cell still marked required,
+    // separately.
     for leaf in &plan.leaves {
-        let asked = required(&reg, &leaf.out_ty.key())
-            .unwrap_or_else(|| panic!("leaf `{}` registers its out_ty", leaf.name));
         assert_eq!(
-            asked,
+            required(&reg, &leaf.out_ty.key()) == Some(true),
             leaf.has_converter(),
-            "leaf `{}`: a cell says the type entered the pipeline, a root says \
-             the binding demands its converter — the selector makes only the \
-             first, because a sum has no whole-value output converter",
+            "leaf `{}`: only a converter-bearing leaf demands a converter",
             leaf.name
         );
     }
@@ -1928,11 +1932,15 @@ fn sum_return_layers_ride_the_shape_fold() {
     assert!(matches!(&vec_plan.shape,
         UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Base)));
     assert!(vec_plan.element.is_none(), "decomposed-leaf fold");
+    // Positively, not as an absence: every layer must be *replaced*, which
+    // `Some(false)` says and `!= Some(true)` would also say of a layer the
+    // plans never mentioned at all.
     for ty in ["Option<Reading>", "Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
-        assert!(
-            required_ty(&reg, &ty) != Some(true),
-            "no layer of a sum return may require a whole-value converter: {}",
+        assert_eq!(
+            required_ty(&reg, &ty),
+            Some(false),
+            "every layer of a sum return replaces its whole-value crossing: {}",
             ty.to_token_stream()
         );
     }
@@ -1940,36 +1948,26 @@ fn sum_return_layers_ride_the_shape_fold() {
 
 /// A `Vec<sum>` return **on its own** — no bare or `Option`-wrapped return of
 /// the same sum anywhere in the binding. The test above cannot state this: its
-/// `Option<Reading>` fixture unrequires the bare type through a *different*
-/// layer, so it would keep passing if the `Vec` element were left required.
+/// `Option<Reading>` fixture replaces the bare type through a *different*
+/// layer, so it would keep passing if the `Vec` element were left alone.
 ///
-/// The bare requirement is **seeded explicitly**. A scan registers only the
-/// top-level return, so `Reading` would not be in the set to begin with and the
-/// assertion would hold whether or not `wire_fixed_returns` unrequired the
-/// peeled element — passing while testing nothing. Seeding reproduces what an
-/// adapter that does require the element leaves behind, which is the state the
-/// unrequire exists for.
+/// The peeled element is the point. `wire_fixed_returns` walks every layer the
+/// shape fold peels, so a `Vec<Reading>` return must replace `Reading` as well
+/// as `Vec<Reading>` — nothing else in this fixture would.
 #[test]
-fn a_vec_only_sum_return_drops_the_bare_requirement() {
+fn a_vec_only_sum_return_replaces_the_bare_crossing() {
     let flat = flat_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
     let mut reg = Unfolding::new(&flat);
-    let bare: syn::Type = syn::parse_quote!(Reading);
-    let bare_reading = flat.classify(&bare).expect("fixture type");
-    reg.require_output(&bare_reading);
-    assert!(
-        required_ty(&reg, &bare) == Some(true),
-        "fixture precondition: the bare element starts out required"
-    );
-
     let declared: std::collections::HashSet<syn::Ident> =
         ["read_all"].iter().map(|s| ident(s)).collect();
     apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
 
     for ty in ["Vec<Reading>", "Reading"] {
         let ty: syn::Type = syn::parse_str(ty).unwrap();
-        assert!(
-            required_ty(&reg, &ty) != Some(true),
-            "no layer of a sum return may require a whole-value converter: {}",
+        assert_eq!(
+            required_ty(&reg, &ty),
+            Some(false),
+            "every layer of a sum return replaces its whole-value crossing: {}",
             ty.to_token_stream()
         );
     }

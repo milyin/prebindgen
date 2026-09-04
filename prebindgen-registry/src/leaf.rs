@@ -331,12 +331,13 @@ impl UnfoldLeaf {
     /// a converter for one would make every sum depend on an unrelated `i32`
     /// crossing existing in the binding.
     ///
-    /// **This is the root question, not the registration question.** Every
-    /// leaf's `out_ty` gets a table cell; this decides which of them the
-    /// binding additionally *demands* a converter for. A cell says the type
-    /// entered the pipeline, a root says the binding asked for it directly, and
-    /// an entry says one resolved — three separate claims, and a `SumTag` leaf
-    /// makes only the first (#282).
+    /// **This is the root question, not the registration question.** A cell
+    /// says the type entered the pipeline, a root says the binding asked for it
+    /// directly, and an entry says one resolved — three separate claims, and
+    /// this answers only the second: a leaf that answers `true` is handed over
+    /// as a delivered output and demands a converter. A `SumTag` leaf makes no
+    /// root, and its `out_ty` gets its cell from the binding's own declaration
+    /// of the sum rather than from the plan (#282).
     pub fn has_converter(&self) -> bool {
         // A presence flag is synthesized like a tag: it says whether the
         // leaves after it carry anything, and the value it tests crosses

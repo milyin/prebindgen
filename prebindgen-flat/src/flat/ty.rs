@@ -73,8 +73,8 @@ use super::{
 /// it is in a type table is the registry's business, and the registry states it
 /// in three parts — a **cell** (the type entered the pipeline), a **root** (the
 /// binding asked for it directly), an **entry** (a converter resolved). A
-/// `SumTag` leaf's type makes the first and not the second, deliberately
-/// (#282); see `Registry::reference_output` in the registry layer above.
+/// `SumTag` leaf's type has the first and not the second, deliberately
+/// (#282).
 #[derive(Clone, Debug)]
 pub struct TypeRef {
     /// The accepted syntax this type is — the closed grammar, not an
