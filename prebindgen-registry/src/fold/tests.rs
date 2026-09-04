@@ -58,6 +58,24 @@ impl FoldPolicy for Jni {
         ident(&format!("{prefix}_{arm}_{index}"))
     }
 
+    fn presence_leaf(&self, parts: usize) -> bool {
+        // One part carries absence itself. Past one it cannot, and a flag in
+        // front is cheaper than boxing a nullable primitive per part — an
+        // `Option<i32>` argument would arrive as an `Integer?`.
+        parts > 1
+    }
+
+    fn identity_leaf_ty(&self, ty: &TypeRef, borrowed: bool) -> TypeRef {
+        // Optional because the selector decides whether this arm is live; a
+        // borrowed crossing lends the value, so the leaf carries the borrow and
+        // the arm clones out of it.
+        if borrowed {
+            ty.borrowed().optional()
+        } else {
+            ty.optional()
+        }
+    }
+
     fn arm_leaf_ty(&self, ty: &TypeRef) -> (TypeRef, bool) {
         // An argument already optional passes through: the wire cannot carry a
         // second absence, and `None` is a legitimate value for the arm the
@@ -179,7 +197,6 @@ fn plan_of(
         recipes.declare(ty, RecipeName::new("parts"), row_of(variants));
     }
     let recipes = recipes.build(&model).expect("the rows build");
-    let bindings = Bindings::default();
     let reading = model
         .function(&ident(func))
         .expect("the function")
@@ -189,7 +206,7 @@ fn plan_of(
         .expect("the parameter")
         .ty
         .clone();
-    Folding::new(&recipes, &bindings, &model)
+    Folding::new(&recipes, &model)
         .fold(
             &Jni,
             param,

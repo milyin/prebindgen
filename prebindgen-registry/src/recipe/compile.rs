@@ -323,6 +323,28 @@ pub trait Compile {
         arms: &[(Option<&Alternative>, &Self::Fragment)],
     ) -> Frag<Self>;
 
+    /// The value itself, arriving already built as the one part.
+    ///
+    /// One arm of a [`Shape::Choice`](super::Shape::Choice) whose other arms
+    /// build the value: this is the arm handed it instead. Whether the part is
+    /// cloned or moved follows from the crossing's mode, which `part` carries.
+    ///
+    /// Refused by default, because a target that declares no such arm has no
+    /// answer for one — and a target that does is saying something specific
+    /// about how a value it did not build reaches the call.
+    fn identity(
+        &mut self,
+        cx: &mut Ctx<'_, Self>,
+        at: At<'_>,
+        part: Parts<'_, Self>,
+    ) -> Frag<Self> {
+        let _ = (cx, part);
+        Err(Refusal::Gap(format!(
+            "{}: an arm handed the value already built",
+            at.recipe
+        )))
+    }
+
     /// A callback, taken apart into the values that pass through it.
     ///
     /// `result` is `None` for every callback the model can describe today; it
@@ -1043,6 +1065,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
         let fragment = match kind {
             ProductKind::Construct(func) => adapter.construct(&mut cx, at, func, &paired),
             ProductKind::Fields => adapter.fields(&mut cx, at, &paired),
+            ProductKind::Identity => adapter.identity(&mut cx, at, &paired),
             ProductKind::ValueForm(func) => adapter.value_form(&mut cx, at, func, &paired),
         }
         .map_err(CompileError::Adapter)?;
@@ -1115,7 +1138,7 @@ impl<'a, C: Compile> Compiler<'a, C> {
                     ty: at.crossing.value().clone(),
                     name: "self".to_string(),
                 }];
-                Ok((ProductKind::Fields, parts))
+                Ok((ProductKind::Identity, parts))
             }
             Construct::Call(name) => {
                 let func = self.function(at, name)?;
@@ -1340,6 +1363,13 @@ fn field_name(field: &Field, index: usize) -> String {
 enum ProductKind<'a> {
     Construct(&'a Function),
     Fields,
+    /// The value itself, handed over already built — [`Construct::Identity`].
+    ///
+    /// Its own kind rather than [`Self::Fields`] with one identity part: an
+    /// arm that is handed the value has no fields, and calling the fields hook
+    /// for it would leave every adapter recognising a fields-less product and
+    /// answering something else.
+    Identity,
     ValueForm(&'a Function),
 }
 

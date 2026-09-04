@@ -16,9 +16,7 @@ use prebindgen_flat::flat::{Flat, TypeRef};
 
 use crate::{
     expand::{FoldArg, FoldBuild, FoldLeaf, FoldPlan, FoldShape, FoldVariant},
-    recipe::{
-        Bindings, Construct, Crossing, Direction, Recipe, RecipeKey, RecipeName, Recipes, Shape,
-    },
+    recipe::{Construct, Crossing, Direction, Recipe, RecipeName, Recipes, Shape},
 };
 
 /// What a target decides when a row tree is flattened into leaves.
@@ -49,6 +47,25 @@ pub trait FoldPolicy {
     /// Name for one part of an arm with more than one.
     fn arm_part(&self, prefix: &str, arm: usize, index: usize) -> syn::Ident;
 
+    /// Whether an optional value built from `parts` parts needs a leaf of its
+    /// own to say it is present.
+    ///
+    /// `false` means the parts carry absence themselves, which only one part
+    /// can do — a value built from several has nowhere to put it, and a target
+    /// answering `false` there is refused rather than quietly given a shape it
+    /// cannot read. A target free to make a nullable leaf of every part may
+    /// answer `false` always; one that would pay for that by boxing a nullable
+    /// primitive answers `true` past one part.
+    fn presence_leaf(&self, parts: usize) -> bool;
+
+    /// The type an identity arm's leaf carries, given the value's own type and
+    /// whether the crossing lends it.
+    ///
+    /// The arm is handed the value already built, so what crosses is the value
+    /// — but only when the selector picks this arm, which is what a target has
+    /// to encode here.
+    fn identity_leaf_ty(&self, ty: &TypeRef, borrowed: bool) -> TypeRef;
+
     /// The type a leaf carries inside an arm, given the part's own type.
     ///
     /// An arm's parts are only live when the selector picks that arm, so a
@@ -76,6 +93,14 @@ pub enum FoldError {
         /// The type the walk came back to.
         ty: String,
     },
+    /// An optional value's parts were asked to carry absence, and there is more
+    /// than one of them.
+    NoRoomForAbsence {
+        /// The value being built.
+        ty: String,
+        /// How many parts it is built from.
+        parts: usize,
+    },
     /// A part whose own type builds from leaves stands somewhere its leaves
     /// cannot be read back.
     UnsupportedNesting {
@@ -99,6 +124,11 @@ impl std::fmt::Display for FoldError {
             FoldError::Cycle { ty } => {
                 write!(f, "`{ty}` is built from a part that is built from it")
             }
+            FoldError::NoRoomForAbsence { ty, parts } => write!(
+                f,
+                "`{ty}` is built from {parts} parts, and absence was left to them to carry — \
+                 which only one part can do"
+            ),
             FoldError::UnsupportedNesting { ty, position } => write!(
                 f,
                 "`{ty}` is built from leaves of its own, which {position} cannot carry"
@@ -117,22 +147,23 @@ struct Walk<'w> {
     building: Vec<String>,
 }
 
-/// The tables a walk reads: the rows, the bindings that say which row a part
-/// takes, and the model every signature comes from.
+/// What a walk reads: the rows, and the model every signature comes from.
+///
+/// **No bindings.** #701's design decision 3 makes a part binding the one
+/// nesting mechanism, and on the parameter side that is not yet what happens: a
+/// constructor argument takes its own type's row by name, and a per-function
+/// override is chosen from the declaration rather than from a binding. Taking a
+/// `Bindings` here to leave it unread would say otherwise. It arrives when the
+/// rows do, in #701's step 3.
 pub struct Folding<'a> {
     recipes: &'a Recipes,
-    bindings: &'a Bindings,
     model: &'a Flat,
 }
 
 impl<'a> Folding<'a> {
-    /// Read the leaves off these tables.
-    pub fn new(recipes: &'a Recipes, bindings: &'a Bindings, model: &'a Flat) -> Self {
-        Self {
-            recipes,
-            bindings,
-            model,
-        }
+    /// Read the leaves off these rows.
+    pub fn new(recipes: &'a Recipes, model: &'a Flat) -> Self {
+        Self { recipes, model }
     }
 
     /// The leaves one parameter crosses as, and how they rebuild its value.
@@ -199,10 +230,9 @@ impl<'a> Folding<'a> {
 
     /// An optional value built by one constructor.
     ///
-    /// One part and the part carries absence itself; more than one and the
-    /// parts stay plain, with a flag in front deciding. A target that boxed a
-    /// nullable primitive for every part would pay for the second case in the
-    /// common one.
+    /// Whether a leaf of its own says the value is present, or the parts carry
+    /// absence themselves, is the target's answer — see
+    /// [`FoldPolicy::presence_leaf`].
     fn optional_call(
         &self,
         walk: &mut Walk<'_>,
@@ -227,7 +257,13 @@ impl<'a> Folding<'a> {
                 inputs,
             }],
         };
-        if let [(_, ty)] = params.as_slice() {
+        if !walk.policy.presence_leaf(params.len()) {
+            let [(_, ty)] = params.as_slice() else {
+                return Err(FoldError::NoRoomForAbsence {
+                    ty: target.key().to_string(),
+                    parts: params.len(),
+                });
+            };
             walk.leaves.push(FoldLeaf {
                 name: walk.policy.sole(prefix),
                 ty: ty.optional(),
@@ -289,13 +325,9 @@ impl<'a> Folding<'a> {
                         Construct::Identity => {
                             let index = walk.leaves.len();
                             // The value itself, as one leaf. A borrowed
-                            // crossing lends it, so the arm clones and the leaf
-                            // carries the borrow; an owned one gives it away.
-                            let ty = if by_ref {
-                                target.borrowed().optional()
-                            } else {
-                                target.optional()
-                            };
+                            // crossing lends it, so the arm clones; what that
+                            // leaf carries is the target's answer.
+                            let ty = walk.policy.identity_leaf_ty(target, by_ref);
                             walk.leaves.push(FoldLeaf {
                                 name: walk.policy.arm_sole(prefix, arm),
                                 ty,
@@ -441,19 +473,6 @@ impl<'a> Folding<'a> {
             .function(func)
             .ok_or_else(|| FoldError::UnknownConstructor(func.clone()))?;
         Ok(f.ret.fallible_parts().is_some())
-    }
-
-    /// Kept so a later step can resolve a part through its binding rather than
-    /// through the crossing's default row (#701 step 3).
-    #[allow(dead_code)]
-    fn bindings(&self) -> &Bindings {
-        self.bindings
-    }
-
-    /// Likewise, for a row named rather than defaulted.
-    #[allow(dead_code)]
-    fn row(&self, key: &RecipeKey) -> Option<&Recipe> {
-        self.recipes.get(key)
     }
 }
 

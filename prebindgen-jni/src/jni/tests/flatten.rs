@@ -456,14 +456,13 @@ fn a_per_function_expansion_on_an_accessor_is_refused() {
     );
 }
 
-/// A `data_class` and a `sealed_class` both already state the row saying they
-/// cross whole, and both may also be expanded.
+/// A `data_class` and a `sealed_class` may each be expanded, with a
+/// constructor and the value itself.
 ///
-/// The expansion row is one a site opts into, so the crossing has to keep a
-/// default that is not it. Adding a second default instead of naming the
-/// existing one is a table with two, which `Recipes::build` refuses — and
-/// neither class kind is reached by a fixture built from opaque handles alone,
-/// which is how that went unnoticed.
+/// Every other fixture that expands a type expands an opaque handle, so the
+/// two kinds that declare a Kotlin shape of their own were reached by nothing.
+/// Both have a valid whole input conversion and both may also be built from
+/// leaves, and this is where that is said.
 #[test]
 fn a_declared_class_can_be_expanded_and_still_cross_whole() {
     let loc = myflat_loc();

@@ -16,7 +16,7 @@ use prebindgen_registry::{
     expand::{FoldLeaf, FoldPlan},
     flat::{Flat, ScalarKind, TypeRef},
     fold::{FoldPolicy, Folding},
-    recipe::{Arm, Bindings, Construct, Constructing, Direction, RecipeName, Recipes, Shape},
+    recipe::{Arm, Construct, Constructing, Direction, RecipeName, Recipes, Shape},
     LocalVariant, TypeKey,
 };
 
@@ -79,6 +79,24 @@ impl FoldPolicy for JniFold {
 
     fn arm_part(&self, prefix: &str, arm: usize, index: usize) -> syn::Ident {
         ident(&format!("{prefix}_{arm}_{index}"))
+    }
+
+    fn presence_leaf(&self, parts: usize) -> bool {
+        // One part carries absence itself. Past one it cannot, and a flag in
+        // front is cheaper than boxing a nullable primitive per part — an
+        // `Option<i32>` argument would arrive as an `Integer?`.
+        parts > 1
+    }
+
+    fn identity_leaf_ty(&self, ty: &TypeRef, borrowed: bool) -> TypeRef {
+        // Optional because the selector decides whether this arm is live; a
+        // borrowed crossing lends the value, so the leaf carries the borrow and
+        // the arm clones out of it.
+        if borrowed {
+            ty.borrowed().optional()
+        } else {
+            ty.optional()
+        }
     }
 
     fn arm_leaf_ty(&self, ty: &TypeRef) -> (TypeRef, bool) {
@@ -348,8 +366,7 @@ impl Declarations {
                 .collect::<Vec<_>>()
                 .join("; ")
         })?;
-        let bindings = Bindings::default();
-        let folding = Folding::new(&recipes, &bindings, model);
+        let folding = Folding::new(&recipes, model);
 
         let mut plans = ExpansionPlans::new();
         let mut leaves = Vec::new();
