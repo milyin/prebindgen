@@ -6,7 +6,7 @@
 //! arm choice are encoded. Those are the target's answers, and this module
 //! takes them as a [`FoldPolicy`] the adapter supplies.
 //!
-//! What comes out is a [`FoldPlan`](crate::expand::FoldPlan) — the same plan
+//! What comes out is a [`FoldPlan`] — the same plan
 //! `expand::apply` builds from the older decomposition declarations, with the
 //! same leaf names, order and types, so the two can be compared value for
 //! value while both exist.
