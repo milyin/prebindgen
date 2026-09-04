@@ -127,14 +127,47 @@ fn main() {
     let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
         .source_named(cov_helpers::PREBINDGEN_OUT_DIR, "cov_helpers")
-        // The decompositions the row differential does not compare yet, each a
-        // part binding #701's step 3 still owes. A build fails if the set
-        // changes either way (see `expect_parity_skips`).
+        // What the row differential does NOT compare, one entry per
+        // decomposition, each a part binding #701's step 3 still owes. The
+        // build fails if the set changes either way, so a decomposition
+        // leaving the comparison is seen and one being lowered is recorded.
         .expect_parity_skips([
+            "`annotated_new`'s return: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`boxed_latest`'s return: `Summary`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`duration_boundary_echo`'s return: `Option < Duration >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`envelope_new`'s return: `Option < Stamp >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`frame_new`'s return: `Option < Window >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`hold_policy_echo`'s return: `Option < Hold >`'s row uses an optional layer, which the leaf view does not read yet",
             "`ledger_new`'s return: a part reached through an `Option`",
+            "`maybe_holder_new`'s return: `Option < Summary >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`observation_new`'s return: `Option < Reading >`'s row uses an optional layer, which the leaf view does not read yet",
             "`probe_new`'s return: a row that states no parts",
+            "`rack_new`'s return: `Option < Meter >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`span_holder_new`'s return: `SpanHolder`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`storage_get_vec`'s return: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`storage_get`'s return: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`storage_labels`'s return: a whole-element fold, which takes nothing apart",
+            "`storage_shards_opt`'s return: a whole-element fold, which takes nothing apart",
+            "`storage_shards`'s return: a whole-element fold, which takes nothing apart",
+            "`storage_summary_full`'s return: a per-function `.expand_return`, which states a row of its own",
+            "`storage_summary_probe`'s return: a per-function `.expand_return`, which states a row of its own",
+            "`storage_summary`'s return: `Summary`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`storage_try_from_stamp`'s error: `StorageError`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`storage_try_with_label`'s error: `StorageError`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`summary_merge`'s return: `Summary`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`summary_series_opt`'s return: `Summary`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`summary_series`'s return: `Summary`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "`unsigned_round_trip`'s return: `Option < u64 >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`unsigned_series`'s return: a whole-element fold, which takes nothing apart",
+            "`vault_holder_new`'s return: `VaultHolder`'s row uses no row that takes the value apart, which the leaf view does not read yet",
+            "the callback argument `& Payload`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "the callback argument `& [Payload]`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "the callback argument `Envelope`: `Option < Stamp >`'s row uses an optional layer, which the leaf view does not read yet",
+            "the callback argument `Frame`: `Option < Window >`'s row uses an optional layer, which the leaf view does not read yet",
             "the callback argument `Ledger`: a part reached through an `Option`",
+            "the callback argument `Option < Payload >`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
             "the callback argument `Probe`: a row that states no parts",
+            "the callback argument `Rack`: `Option < Meter >`'s row uses an optional layer, which the leaf view does not read yet",
             "the callback argument `Report`: a row that states no parts",
         ])
         .set_package_prefix("io.prebindgen.covertest")

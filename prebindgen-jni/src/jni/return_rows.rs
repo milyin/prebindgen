@@ -148,10 +148,20 @@ impl Declarations {
         plans.sort_by(|(a, _), (b, _)| a.cmp(b));
 
         for (what, plan) in plans {
+            // EVERY decomposition lands in exactly one bucket: compared, or
+            // named in the skip list. A `continue` before the list is a
+            // decomposition leaving the comparison with nothing to say so, and
+            // the pinned set then covers a part of the surface rather than all
+            // of it — which is this check disabling itself one level up from
+            // where it looks.
+            //
             // A whole-element fold takes nothing apart: each element crosses
             // through its own converter, so there is no row and nothing to
             // compare.
             let Some(decon) = &plan.decon else {
+                skipped.push(format!(
+                    "{what}: a whole-element fold, which takes nothing apart"
+                ));
                 continue;
             };
             // A per-function `.expand_return(...)` states a decomposition of
@@ -160,6 +170,9 @@ impl Declarations {
             // work here. The type's row does not describe it, so comparing the
             // two would compare two different decompositions.
             if !matches!(decon, prebindgen_registry::leaf::DeconId::Default(_)) {
+                skipped.push(format!(
+                    "{what}: a per-function `.expand_return`, which states a row of its own"
+                ));
                 continue;
             }
             // A `sealed_class` that ALSO carries an `expand_return!` states two
@@ -169,6 +182,10 @@ impl Declarations {
             // describe different things and comparing them says nothing. One
             // row name for two meanings is step 3's to resolve.
             if self.is_sum(&plan.source) && self.declares_return_expand(&plan.source) {
+                skipped.push(format!(
+                    "{what}: a sum that also declares an `expand_return!`, which is two \
+                     decompositions under one row name"
+                ));
                 continue;
             }
             let policy = JniUnfold {
@@ -184,7 +201,10 @@ impl Declarations {
                     // this decomposition, or it states one in a form still
                     // being replaced. Step 3's remaining work rather than a
                     // disagreement.
-                    Err(e) if e.is_not_yet_readable() => continue,
+                    Err(e) if e.is_not_yet_readable() => {
+                        skipped.push(format!("{what}: {e}"));
+                        continue;
+                    }
                     // Anything else is a row that is WRONG: two leaves of one
                     // name, two identities, a cycle, an accessor or an
                     // alternative the model does not have. Skipping those would

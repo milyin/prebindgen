@@ -28,10 +28,16 @@ fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
     let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
-        // Every decomposition here is compared against its rows. Stated
-        // rather than left to the default so that one leaving the
-        // comparison fails the build (see `expect_parity_skips`).
-        .expect_parity_skips::<[&str; 0], &str>([])
+        // What the row differential does NOT compare, one entry per
+        // decomposition, each a part binding #701's step 3 still owes. The
+        // build fails if the set changes either way, so a decomposition
+        // leaving the comparison is seen and one being lowered is recorded.
+        .expect_parity_skips([
+            "`storage_get_vec`'s return: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "`storage_get`'s return: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "the callback argument `& Payload`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+            "the callback argument `& [Payload]`: `Option < Box < String > >`'s row uses an optional layer, which the leaf view does not read yet",
+        ])
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).
