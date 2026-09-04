@@ -59,10 +59,12 @@ impl FoldPolicy for Jni {
     }
 
     fn presence_leaf(&self, parts: usize) -> bool {
-        // One part carries absence itself. Past one it cannot, and a flag in
-        // front is cheaper than boxing a nullable primitive per part — an
-        // `Option<i32>` argument would arrive as an `Integer?`.
-        parts > 1
+        // EXACTLY one part carries absence itself, by being nullable. Past one
+        // it cannot, and a flag in front is cheaper than boxing a nullable
+        // primitive per part — an `Option<i32>` argument would arrive as an
+        // `Integer?`. Below one there is nothing to carry it at all: a value
+        // built by a nullary constructor has no leaf but the flag.
+        parts != 1
     }
 
     fn identity_leaf_ty(&self, ty: &TypeRef, borrowed: bool) -> TypeRef {
@@ -445,6 +447,35 @@ fn an_optional_multi_argument_constructor() {
             "  variant ctor=Some(\"enc_new\") fallible=false clone=false",
             "    leaf 1 passthrough=false",
             "    leaf 2 passthrough=false",
+        ]
+    );
+}
+
+/// An optional parameter built by a constructor taking nothing: the presence
+/// flag is the only leaf.
+///
+/// The flag is not an optimisation here, it is the whole crossing — there is
+/// no part to be nullable, so a target leaving absence to the parts would have
+/// nowhere to put it. Sits between the one-argument case, where the sole part
+/// carries absence, and the multi-argument one, where a flag joins the plain
+/// parts.
+#[test]
+fn an_optional_nullary_constructor() {
+    let row = folds(
+        &[
+            "fn key_new() -> KeyExpr { todo!() }",
+            "fn publish(key: Option<KeyExpr>) {}",
+        ],
+        &[("KeyExpr", vec![Variant::Ctor(ident("key_new"))])],
+        "publish",
+        "key",
+    );
+    assert_eq!(
+        lines(&row),
+        [
+            "target=KeyExpr by_ref=false optional=true selector=None present=Some(0)",
+            "  leaf 0: key_present : bool",
+            "  variant ctor=Some(\"key_new\") fallible=false clone=false",
         ]
     );
 }

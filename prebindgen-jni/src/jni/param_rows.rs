@@ -82,10 +82,12 @@ impl FoldPolicy for JniFold {
     }
 
     fn presence_leaf(&self, parts: usize) -> bool {
-        // One part carries absence itself. Past one it cannot, and a flag in
-        // front is cheaper than boxing a nullable primitive per part — an
-        // `Option<i32>` argument would arrive as an `Integer?`.
-        parts > 1
+        // EXACTLY one part carries absence itself, by being nullable. Past one
+        // it cannot, and a flag in front is cheaper than boxing a nullable
+        // primitive per part — an `Option<i32>` argument would arrive as an
+        // `Integer?`. Below one there is nothing to carry it at all: a value
+        // built by a nullary constructor has no leaf but the flag.
+        parts != 1
     }
 
     fn identity_leaf_ty(&self, ty: &TypeRef, borrowed: bool) -> TypeRef {
