@@ -121,6 +121,10 @@ impl Declarations {
         bindings: &prebindgen_registry::recipe::Bindings,
     ) -> Result<(), String> {
         let folding = Folding::new(recipes, model);
+        // What was NOT compared, and why. Reported rather than discarded: a
+        // skip is work #701's step 3 still owes, and a list of them is how a
+        // reader sees the differential's reach shrink or grow.
+        let mut skipped: Vec<String> = Vec::new();
         let unfolded = self.unfolded();
         let mut plans: Vec<(String, &crate::unfold::UnfoldPlan)> = unfolded
             .unfold_plans
@@ -197,6 +201,7 @@ impl Declarations {
             // So: an incomplete read is skipped and named, and a complete one
             // is compared in full, with no exemptions.
             if !coverage.is_complete() {
+                skipped.push(format!("{what}: {}", coverage.unread().join(", ")));
                 continue;
             }
             // What THIS adapter has not lowered to a binding yet. The walk read
@@ -204,8 +209,8 @@ impl Declarations {
             // question about the declarations, which only this side can answer
             // — and answering it here names the exact declaration rather than
             // inferring from what came back.
-            if let Some(unlowered) = self.unlowered_parts(model, recipes, &plan.source) {
-                let _ = unlowered;
+            if let Some(unlowered) = self.unlowered_parts(model, registry, recipes, &plan.source) {
+                skipped.push(format!("{what}: {unlowered}"));
                 continue;
             }
             let from_row = describe(&leaves, &hoists);
@@ -216,6 +221,17 @@ impl Declarations {
                      from the declarations:\n{from_decl}"
                 ));
             }
+        }
+        // Named on the build log rather than kept: a differential that quietly
+        // compares less than it did is the failure this whole check exists to
+        // avoid.
+        if !skipped.is_empty() && std::env::var_os("PREBINDGEN_REPORT_SKIPS").is_some() {
+            skipped.sort();
+            eprintln!(
+                "prebindgen: {} decomposition(s) not compared against their rows:\n  {}",
+                skipped.len(),
+                skipped.join("\n  ")
+            );
         }
         Ok(())
     }
@@ -238,20 +254,40 @@ impl Declarations {
     fn unlowered_parts(
         &self,
         model: &Flat,
+        registry: &dyn prebindgen_registry::Conversions,
         recipes: &Recipes,
         source: &prebindgen_registry::flat::TypeRef,
     ) -> Option<&'static str> {
         let key = source.stripped_key();
         let decl = self.return_expand_decls.iter().find(|d| *d.key() == key)?;
         if let [crate::jni::LocalField::Fields(form)] = decl.field_list() {
-            return match model
+            // A form that was handed the value may move a part out rather than
+            // read it, and which parts those are is a fact about their types
+            // that no row states. A BORROWING form has no such fact, and
+            // `Deconstruct::ValueForm` represents it completely.
+            if model
                 .function(&form.func())
                 .and_then(|f| f.params.first())
                 .is_some_and(|p| p.ty.borrow_target().is_none())
             {
-                true => Some("a consuming value form, whose parts may be handed over"),
-                false => Some("a value form, whose parts the row states as its result's fields"),
-            };
+                return Some("a consuming value form, whose parts may be handed over");
+            }
+            // Per FIELD, not per form: a borrowing form of ordinary fields is
+            // represented completely by `Deconstruct::ValueForm`, and only a
+            // field that itself states parts is waiting on a binding —
+            // `bindings` writes none for a value form's fields yet.
+            for record in self.lower_value_form(registry, decl.key(), form) {
+                let core = record.ty.optional_inner().unwrap_or(&record.ty);
+                let core = core.borrow_target().unwrap_or(core);
+                if self
+                    .return_expand_decls
+                    .iter()
+                    .any(|d| *d.key() == core.stripped_key())
+                {
+                    return Some("a value form field that states parts of its own");
+                }
+            }
+            return None;
         }
         for field in decl.field_list() {
             let crate::jni::LocalField::Named(func, _) = field else {
@@ -262,7 +298,7 @@ impl Declarations {
             };
             let core = ret.optional_inner().unwrap_or(&ret);
             let core = core.borrow_target().unwrap_or(core);
-            let Some(child) = self
+            let Some(_child) = self
                 .return_expand_decls
                 .iter()
                 .find(|d| *d.key() == core.stripped_key())
@@ -271,18 +307,6 @@ impl Declarations {
             };
             if ret.optional_inner().is_some() {
                 return Some("a part reached through an `Option`");
-            }
-            // A child that hands ITSELF over as one of its parts states an
-            // ownership fact the row does not carry: the part is moved or
-            // cloned rather than read. `bindings` writes no binding for that,
-            // so the row stops at the part where the declaration goes through
-            // it and hands the value over as well.
-            if child
-                .field_list()
-                .iter()
-                .any(|f| matches!(f, crate::jni::LocalField::SelfField))
-            {
-                return Some("a part whose own declaration hands the value over");
             }
             // `bindings` writes a binding only where the row it would name
             // exists. A declared type whose `parts` row this table does not
