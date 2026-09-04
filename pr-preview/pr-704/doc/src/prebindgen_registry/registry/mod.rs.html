@@ -323,71 +323,74 @@
 <a href=#323 id=323 data-nosnippet>323</a>/// separate hooks the registry used to call back for. Everything here reads the
 <a href=#324 id=324 data-nosnippet>324</a>/// model alone, which is what makes stating it up front possible.
 <a href=#325 id=325 data-nosnippet>325</a>///
-<a href=#326 id=326 data-nosnippet>326</a>/// The output side is stated as its **effects** rather than as its
+<a href=#326 id=326 data-nosnippet>326</a>/// Both sides are stated as their **effects** rather than as their
 <a href=#327 id=327 data-nosnippet>327</a>/// declarations: an adapter plans how its values come apart, keeps those plans,
 <a href=#328 id=328 data-nosnippet>328</a>/// and hands over what a registry needs from them — which readings the plans
-<a href=#329 id=329 data-nosnippet>329</a>/// deliver, which whole-value crossings they replace, and the leaf readings a
-<a href=#330 id=330 data-nosnippet>330</a>/// callback argument's delivery depends on. The parameter side is still stated
-<a href=#331 id=331 data-nosnippet>331</a>/// as declarations, because `expand::apply` still mutates the registry
-<a href=#332 id=332 data-nosnippet>332</a>/// directly.
-<a href=#333 id=333 data-nosnippet>333</a>///
-<a href=#334 id=334 data-nosnippet>334</a>/// Each of those is an unordered list, and the registry fixes what happens when
-<a href=#335 id=335 data-nosnippet>335</a>/// two of them name the same reading. An adapter states facts about its plans;
-<a href=#336 id=336 data-nosnippet>336</a>/// it does not sequence registry mutations.
-<a href=#337 id=337 data-nosnippet>337</a></span><span class="attr">#[derive(Default)]
-<a href=#338 id=338 data-nosnippet>338</a></span><span class="kw">pub struct </span>Decompositions {
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="doccomment">/// Parameter-side: values built on the Rust side from ingredients that
-<a href=#340 id=340 data-nosnippet>340</a>    /// cross separately.
-<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="kw">pub </span>expansions: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::expand::Expansions&gt;,
-<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// Per callback-argument type, the readings its decomposition delivers.
-<a href=#343 id=343 data-nosnippet>343</a>    ///
-<a href=#344 id=344 data-nosnippet>344</a>    /// The ordering fact no syntax shows: each leaf's own conversion has to
-<a href=#345 id=345 data-nosnippet>345</a>    /// exist before the callback's can be built, and a leaf is named by a plan
-<a href=#346 id=346 data-nosnippet>346</a>    /// rather than by the argument's type.
-<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="kw">pub </span>callback_arg_leaves: HashMap&lt;TypeKey, Vec&lt;prebindgen_flat::flat::TypeRef&gt;&gt;,
-<a href=#348 id=348 data-nosnippet>348</a>    <span class="doccomment">/// Readings the adapter's plans deliver on the output side: each must
-<a href=#349 id=349 data-nosnippet>349</a>    /// resolve to a converter. A leaf is one value that crosses as a single
-<a href=#350 id=350 data-nosnippet>350</a>    /// argument of the generated foreign signature, so a converter for it is
-<a href=#351 id=351 data-nosnippet>351</a>    /// what makes the crossing possible at all.
-<a href=#352 id=352 data-nosnippet>352</a>    ///
-<a href=#353 id=353 data-nosnippet>353</a>    /// An unordered list, not a script: a reading named twice is required once.
-<a href=#354 id=354 data-nosnippet>354</a>    /// It **outranks** [`Self::replaced_outputs`] — see there for why — and is
-<a href=#355 id=355 data-nosnippet>355</a>    /// outranked by [`Self::replaces`], which says a type cannot cross whole at
-<a href=#356 id=356 data-nosnippet>356</a>    /// all rather than that one crossing of it need not.
-<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="kw">pub </span>output_leaves: Vec&lt;prebindgen_flat::flat::TypeRef&gt;,
-<a href=#358 id=358 data-nosnippet>358</a>    <span class="doccomment">/// Output crossings a plan **replaces**: a value delivered leaf-by-leaf
-<a href=#359 id=359 data-nosnippet>359</a>    /// needs no whole-value converter, so the scan's demand for one is dropped.
-<a href=#360 id=360 data-nosnippet>360</a>    /// The table cell stays, so a converter is still produced if one happens to
-<a href=#361 id=361 data-nosnippet>361</a>    /// resolve.
-<a href=#362 id=362 data-nosnippet>362</a>    ///
-<a href=#363 id=363 data-nosnippet>363</a>    /// The output-side peer of [`Self::replaces`], and stated as readings
-<a href=#364 id=364 data-nosnippet>364</a>    /// rather than as build-script spellings: these come off a plan, which
-<a href=#365 id=365 data-nosnippet>365</a>    /// holds the model's own reading of every layer it peeled — the layers
-<a href=#366 id=366 data-nosnippet>366</a>    /// [`Self::replaces`] cannot reach, since a build script declares the bare
-<a href=#367 id=367 data-nosnippet>367</a>    /// type and the plan is what knows an `Option&lt;T&gt;` or `Vec&lt;T&gt;` of it also
-<a href=#368 id=368 data-nosnippet>368</a>    /// stopped crossing whole.
-<a href=#369 id=369 data-nosnippet>369</a>    ///
-<a href=#370 id=370 data-nosnippet>370</a>    /// An unordered list, because dropping a demand twice is dropping it once.
-<a href=#371 id=371 data-nosnippet>371</a>    ///
-<a href=#372 id=372 data-nosnippet>372</a>    /// It ranks **below** [`Self::output_leaves`], and the two say different
-<a href=#373 id=373 data-nosnippet>373</a>    /// things about the same reading: replacing a crossing cancels the demand
-<a href=#374 id=374 data-nosnippet>374</a>    /// the signature scan made for it, while delivering a reading as a leaf is
-<a href=#375 id=375 data-nosnippet>375</a>    /// the plan's own demand and does not come from the scan. So a reading in
-<a href=#376 id=376 data-nosnippet>376</a>    /// both is required.
-<a href=#377 id=377 data-nosnippet>377</a>    </span><span class="kw">pub </span>replaced_outputs: Vec&lt;prebindgen_flat::flat::TypeRef&gt;,
-<a href=#378 id=378 data-nosnippet>378</a>    <span class="doccomment">/// The whole-value crossings these decompositions make unnecessary.
-<a href=#379 id=379 data-nosnippet>379</a>    ///
-<a href=#380 id=380 data-nosnippet>380</a>    /// Stated **with** the decompositions rather than beside them: a type
-<a href=#381 id=381 data-nosnippet>381</a>    /// crosses only in pieces *because* something decomposes it, and once the
-<a href=#382 id=382 data-nosnippet>382</a>    /// plans are applied its own direct converter is genuinely not needed — for
-<a href=#383 id=383 data-nosnippet>383</a>    /// a type with no destination representation, not even resolvable.
-<a href=#384 id=384 data-nosnippet>384</a>    ///
-<a href=#385 id=385 data-nosnippet>385</a>    /// Carries each declaration's own spelling for the same reason the declared
-<a href=#386 id=386 data-nosnippet>386</a>    /// types do — these are build-script-authored types the scan diagnoses
-<a href=#387 id=387 data-nosnippet>387</a>    /// before anything has classified them.
-<a href=#388 id=388 data-nosnippet>388</a>    </span><span class="kw">pub </span>replaces: HashMap&lt;TypeKey, Origin&lt;syn::Type&gt;&gt;,
-<a href=#389 id=389 data-nosnippet>389</a>}
-<a href=#390 id=390 data-nosnippet>390</a>
-<a href=#391 id=391 data-nosnippet>391</a><span class="attr">#[cfg(test)]
-<a href=#392 id=392 data-nosnippet>392</a></span><span class="kw">mod </span>tests;
+<a href=#329 id=329 data-nosnippet>329</a>/// deliver on each side, which whole-value crossings they replace, and the leaf
+<a href=#330 id=330 data-nosnippet>330</a>/// readings a callback argument's delivery depends on.
+<a href=#331 id=331 data-nosnippet>331</a>///
+<a href=#332 id=332 data-nosnippet>332</a>/// Each of those is an unordered list, and the registry fixes what happens when
+<a href=#333 id=333 data-nosnippet>333</a>/// two of them name the same reading. An adapter states facts about its plans;
+<a href=#334 id=334 data-nosnippet>334</a>/// it does not sequence registry mutations.
+<a href=#335 id=335 data-nosnippet>335</a></span><span class="attr">#[derive(Default)]
+<a href=#336 id=336 data-nosnippet>336</a></span><span class="kw">pub struct </span>Decompositions {
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="doccomment">/// Parameter-side: what the adapter's plans build on the Rust side from
+<a href=#338 id=338 data-nosnippet>338</a>    /// ingredients that cross separately, keyed by the position each belongs
+<a href=#339 id=339 data-nosnippet>339</a>    /// to. Read back through
+<a href=#340 id=340 data-nosnippet>340</a>    /// [`Conversions::expansion_plans`].
+<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="kw">pub </span>expansion_plans: HashMap&lt;(syn::Ident, syn::Ident), <span class="kw">crate</span>::expand::FoldPlan&gt;,
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// Readings those plans deliver on the input side: each must resolve to a
+<a href=#343 id=343 data-nosnippet>343</a>    /// converter, for the same reason [`Self::output_leaves`] must.
+<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="kw">pub </span>input_leaves: Vec&lt;prebindgen_flat::flat::TypeRef&gt;,
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="doccomment">/// Per callback-argument type, the readings its decomposition delivers.
+<a href=#346 id=346 data-nosnippet>346</a>    ///
+<a href=#347 id=347 data-nosnippet>347</a>    /// The ordering fact no syntax shows: each leaf's own conversion has to
+<a href=#348 id=348 data-nosnippet>348</a>    /// exist before the callback's can be built, and a leaf is named by a plan
+<a href=#349 id=349 data-nosnippet>349</a>    /// rather than by the argument's type.
+<a href=#350 id=350 data-nosnippet>350</a>    </span><span class="kw">pub </span>callback_arg_leaves: HashMap&lt;TypeKey, Vec&lt;prebindgen_flat::flat::TypeRef&gt;&gt;,
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// Readings the adapter's plans deliver on the output side: each must
+<a href=#352 id=352 data-nosnippet>352</a>    /// resolve to a converter. A leaf is one value that crosses as a single
+<a href=#353 id=353 data-nosnippet>353</a>    /// argument of the generated foreign signature, so a converter for it is
+<a href=#354 id=354 data-nosnippet>354</a>    /// what makes the crossing possible at all.
+<a href=#355 id=355 data-nosnippet>355</a>    ///
+<a href=#356 id=356 data-nosnippet>356</a>    /// An unordered list, not a script: a reading named twice is required once.
+<a href=#357 id=357 data-nosnippet>357</a>    /// It **outranks** [`Self::replaced_outputs`] — see there for why — and is
+<a href=#358 id=358 data-nosnippet>358</a>    /// outranked by [`Self::replaces`], which says a type cannot cross whole at
+<a href=#359 id=359 data-nosnippet>359</a>    /// all rather than that one crossing of it need not.
+<a href=#360 id=360 data-nosnippet>360</a>    </span><span class="kw">pub </span>output_leaves: Vec&lt;prebindgen_flat::flat::TypeRef&gt;,
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="doccomment">/// Output crossings a plan **replaces**: a value delivered leaf-by-leaf
+<a href=#362 id=362 data-nosnippet>362</a>    /// needs no whole-value converter, so the scan's demand for one is dropped.
+<a href=#363 id=363 data-nosnippet>363</a>    /// The table cell stays, so a converter is still produced if one happens to
+<a href=#364 id=364 data-nosnippet>364</a>    /// resolve.
+<a href=#365 id=365 data-nosnippet>365</a>    ///
+<a href=#366 id=366 data-nosnippet>366</a>    /// The output-side peer of [`Self::replaces`], and stated as readings
+<a href=#367 id=367 data-nosnippet>367</a>    /// rather than as build-script spellings: these come off a plan, which
+<a href=#368 id=368 data-nosnippet>368</a>    /// holds the model's own reading of every layer it peeled — the layers
+<a href=#369 id=369 data-nosnippet>369</a>    /// [`Self::replaces`] cannot reach, since a build script declares the bare
+<a href=#370 id=370 data-nosnippet>370</a>    /// type and the plan is what knows an `Option&lt;T&gt;` or `Vec&lt;T&gt;` of it also
+<a href=#371 id=371 data-nosnippet>371</a>    /// stopped crossing whole.
+<a href=#372 id=372 data-nosnippet>372</a>    ///
+<a href=#373 id=373 data-nosnippet>373</a>    /// An unordered list, because dropping a demand twice is dropping it once.
+<a href=#374 id=374 data-nosnippet>374</a>    ///
+<a href=#375 id=375 data-nosnippet>375</a>    /// It ranks **below** [`Self::output_leaves`], and the two say different
+<a href=#376 id=376 data-nosnippet>376</a>    /// things about the same reading: replacing a crossing cancels the demand
+<a href=#377 id=377 data-nosnippet>377</a>    /// the signature scan made for it, while delivering a reading as a leaf is
+<a href=#378 id=378 data-nosnippet>378</a>    /// the plan's own demand and does not come from the scan. So a reading in
+<a href=#379 id=379 data-nosnippet>379</a>    /// both is required.
+<a href=#380 id=380 data-nosnippet>380</a>    </span><span class="kw">pub </span>replaced_outputs: Vec&lt;prebindgen_flat::flat::TypeRef&gt;,
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="doccomment">/// The whole-value crossings these decompositions make unnecessary.
+<a href=#382 id=382 data-nosnippet>382</a>    ///
+<a href=#383 id=383 data-nosnippet>383</a>    /// Stated **with** the decompositions rather than beside them: a type
+<a href=#384 id=384 data-nosnippet>384</a>    /// crosses only in pieces *because* something decomposes it, and once the
+<a href=#385 id=385 data-nosnippet>385</a>    /// plans are applied its own direct converter is genuinely not needed — for
+<a href=#386 id=386 data-nosnippet>386</a>    /// a type with no destination representation, not even resolvable.
+<a href=#387 id=387 data-nosnippet>387</a>    ///
+<a href=#388 id=388 data-nosnippet>388</a>    /// Carries each declaration's own spelling for the same reason the declared
+<a href=#389 id=389 data-nosnippet>389</a>    /// types do — these are build-script-authored types the scan diagnoses
+<a href=#390 id=390 data-nosnippet>390</a>    /// before anything has classified them.
+<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub </span>replaces: HashMap&lt;TypeKey, Origin&lt;syn::Type&gt;&gt;,
+<a href=#392 id=392 data-nosnippet>392</a>}
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a><span class="attr">#[cfg(test)]
+<a href=#395 id=395 data-nosnippet>395</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
