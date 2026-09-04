@@ -200,7 +200,15 @@ impl Default for Declarations {
             emit_handle_locks: true,
             jni_native_init: None,
             convert_decls: Vec::new(),
-            parity_skips: None,
+            // GATED by default, with the empty set expected: a binding that
+            // says nothing is one whose whole differential can quietly stop
+            // comparing, which is the failure the check exists to prevent. A
+            // production build states its set or has none.
+            //
+            // Ungated only under `cfg(test)`, centrally here rather than at
+            // each fixture: a test written to exercise one shape has no reach
+            // worth holding, and there are hundreds of them.
+            parity_skips: (!cfg!(test)).then(Vec::new),
             param_expand_decls: Vec::new(),
             return_expand_decls: Vec::new(),
             fn_param_expands: Vec::new(),

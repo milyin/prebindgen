@@ -1278,9 +1278,9 @@ pub struct Declarations {
     /// the build: the check exists to catch the rows and the decomposition
     /// disagreeing, and one that compares nothing agrees with everything.
     ///
-    /// `None` where a binding states nothing, which is every fixture written to
-    /// exercise one shape. The gate is for a binding whose reach is worth
-    /// holding — the four this workspace builds all state theirs.
+    /// `Some(vec![])` by default, so a binding that states nothing is held to
+    /// comparing everything. `None` only under `cfg(test)`, where a fixture
+    /// exercises one shape and has no reach worth holding.
     pub(crate) parity_skips: Option<Vec<String>>,
 
     /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by

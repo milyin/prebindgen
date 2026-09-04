@@ -1234,6 +1234,73 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
     );
 }
 
+/// A binding that states which decompositions the row differential does not
+/// compare is held to that set, and an unstated one is held to comparing
+/// everything.
+///
+/// The check is what keeps the differential honest, so it must not be possible
+/// to disable by omission: a binding that says nothing gets the empty set, and
+/// a decomposition leaving the comparison fails the build. Here `ZChild` is a
+/// handle field of a CONSUMING value form, which the decomposition hands over
+/// states parts of its own — a `.field_self()` declaration no binding lowers
+/// yet — so it is skipped, and an empty expectation refuses it.
+#[test]
+fn an_unstated_parity_expectation_refuses_a_skipped_decomposition() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZEnvelopeStruct {
+                    pub child: ZChild,
+                    pub tag: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_envelope_into_struct(e: ZEnvelope) -> ZEnvelopeStruct {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_envelope_sub(cb: impl Fn(ZEnvelope) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let error = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        // What a production build gets by default: nothing skipped.
+        .expect_parity_skips::<[&str; 0], &str>([])
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZEnvelope))
+                .class(crate::ptr_class!(ZChild))
+                .fun(prebindgen_registry::fun!(z_envelope_sub)),
+        )
+        .expand(prebindgen_registry::expand_return!(ZChild).field_self())
+        .expand(
+            prebindgen_registry::expand_return!(ZEnvelope)
+                .fields_self_into(prebindgen_registry::fields!(z_envelope_into_struct)),
+        )
+        .build_with(registry)
+        .expect_err("a skipped decomposition against an empty expectation");
+    let message = error.to_string();
+    assert!(
+        message.contains("NOT compared against their rows have changed")
+            && message.contains("a value form field that states parts of its own"),
+        "the refusal names the decomposition and why it was skipped: {message}"
+    );
+}
+
 /// A handle field of a consuming value form is the value form's field like any
 /// other: the form gave its value away, so the handle **moves** into its Box
 /// rather than being cloned through the borrowed-opaque converter — which also

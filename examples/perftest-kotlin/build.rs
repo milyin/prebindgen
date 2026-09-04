@@ -28,6 +28,10 @@ fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
     let binding = JniGen::builder()
         .source(perftest_flat::PREBINDGEN_OUT_DIR)
+        // Every decomposition here is compared against its rows. Stated
+        // rather than left to the default so that one leaving the
+        // comparison fails the build (see `expect_parity_skips`).
+        .expect_parity_skips::<[&str; 0], &str>([])
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).
