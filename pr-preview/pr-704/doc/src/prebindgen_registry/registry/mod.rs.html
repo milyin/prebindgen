@@ -209,7 +209,7 @@
 <a href=#209 id=209 data-nosnippet>209</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) output_types: HashMap&lt;TypeKey, TypeCell&gt;,
 <a href=#210 id=210 data-nosnippet>210</a>
 <a href=#211 id=211 data-nosnippet>211</a>    <span class="doccomment">/// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
-<a href=#212 id=212 data-nosnippet>212</a>    /// Filled by [`crate::expand::apply`] before resolution; read
+<a href=#212 id=212 data-nosnippet>212</a>    /// Filled from [`Decompositions::expansion_plans`] before resolution; read
 <a href=#213 id=213 data-nosnippet>213</a>    /// by language adapters at the parameter-emission site. Empty unless the
 <a href=#214 id=214 data-nosnippet>214</a>    /// adapter declared expansions.
 <a href=#215 id=215 data-nosnippet>215</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) expansion_plans: HashMap&lt;(syn::Ident, syn::Ident), <span class="kw">crate</span>::expand::FoldPlan&gt;,
