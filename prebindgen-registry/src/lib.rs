@@ -146,8 +146,8 @@ pub use self::{
     prebindgen::{ConverterImpl, NamePredicate, Prebindgen},
     registry::{
         Building, Conversions, Crossing, Decompositions, Direction, DuplicateNameError,
-        NotExpressibleEntry, Registry, RegistryBuilder, Requirement, ScanError, TypeKey,
-        TypeKeyParseError, WriteRustError,
+        NotExpressibleEntry, Registry, RegistryBuilder, ScanError, TypeKey, TypeKeyParseError,
+        WriteRustError,
     },
 };
 

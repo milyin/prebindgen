@@ -45,16 +45,17 @@ pub use self::{
 // Where applying the declarations puts its answers
 // ──────────────────────────────────────────────────────────────────────
 
-/// Applying decomposition declarations: the model they are read against, the
-/// plans they produce, and the registrations they ask for.
+/// Applying decomposition declarations: the model they are read against and
+/// the plans they produce.
 ///
 /// The adapter that declared the decompositions owns this. It holds no
 /// registry: every `apply*` function here reads signatures from the model and
-/// writes plans and [`Requirement`](prebindgen_registry::Requirement)s into this, which is what lets the plans be
-/// built at declaration time.
+/// writes plans into this, which is what lets the plans be built at declaration
+/// time.
 pub struct Unfolding<'f> {
     flat: &'f prebindgen_registry::flat::Flat,
-    requirements: Vec<prebindgen_registry::Requirement>,
+    output_leaves: Vec<prebindgen_registry::flat::TypeRef>,
+    replaced_outputs: Vec<prebindgen_registry::flat::TypeRef>,
 
     /// The plans built so far.
     pub plans: Unfolded,
@@ -97,7 +98,8 @@ impl<'f> Unfolding<'f> {
     pub fn new(flat: &'f prebindgen_registry::flat::Flat) -> Self {
         Self {
             flat,
-            requirements: Vec::new(),
+            output_leaves: Vec::new(),
+            replaced_outputs: Vec::new(),
             plans: Unfolded::default(),
         }
     }
@@ -105,12 +107,6 @@ impl<'f> Unfolding<'f> {
     /// The model the declarations are read against.
     pub fn flat(&self) -> &'f prebindgen_registry::flat::Flat {
         self.flat
-    }
-
-    /// The registrations asked for, in the order they were asked. Hand these to
-    /// [`Decompositions::requirements`](prebindgen_registry::Decompositions::requirements).
-    pub fn requirements(&self) -> &[prebindgen_registry::Requirement] {
-        &self.requirements
     }
 
     /// Per callback-argument type, the readings its decomposition delivers.
@@ -135,36 +131,36 @@ impl<'f> Unfolding<'f> {
             .collect()
     }
 
-    /// Take the plans, leaving the requirements behind.
+    /// The readings these plans deliver on the output side. Hand these to
+    /// [`Decompositions::output_leaves`](prebindgen_registry::Decompositions::output_leaves).
+    pub fn output_leaves(&self) -> &[prebindgen_registry::flat::TypeRef] {
+        &self.output_leaves
+    }
+
+    /// The output crossings these plans replace. Hand these to
+    /// [`Decompositions::replaced_outputs`](prebindgen_registry::Decompositions::replaced_outputs).
+    pub fn replaced_outputs(&self) -> &[prebindgen_registry::flat::TypeRef] {
+        &self.replaced_outputs
+    }
+
+    /// Take the plans, leaving the output-side registration sets behind.
     pub fn into_plans(self) -> Unfolded {
         self.plans
     }
 
-    /// Register `reading` (and its nested positions) as a required **output** so
-    /// the resolver produces a converter for it.
+    /// Record that a plan delivers `reading` on the output side, so the
+    /// resolver must produce a converter for it.
     fn require_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
-        self.requirements
-            .push(prebindgen_registry::Requirement::Output(reading.clone()));
+        self.output_leaves.push(reading.clone());
     }
 
-    /// Register `reading` as an output cell **without** demanding a converter —
-    /// a type some plan names rather than one that crosses. What a
-    /// [`SumTag`](LeafSource::SumTag) selector needs: it names *which* sum it
-    /// chooses between, and that sum has no whole-value output converter at all,
-    /// so requiring one would fail resolution (#282).
-    fn reference_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
-        self.requirements
-            .push(prebindgen_registry::Requirement::Reference(reading.clone()));
-    }
-
-    /// Drop `reading` from the required-output set. Used by
-    /// [`apply_leaf_vec_folds`]: when a `Vec<T>` / `Option<Vec<T>>` return is
-    /// delivered element-by-element through a fold, the whole-collection
-    /// converter is genuinely not needed — and for a `Vec` of opaque handles it
-    /// cannot resolve at all, so requiring it would wrongly fail resolution.
-    fn unrequire_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
-        self.requirements
-            .push(prebindgen_registry::Requirement::Unrequire(reading.clone()));
+    /// Record that `reading` no longer crosses whole: a plan delivers it
+    /// leaf-by-leaf (or element-by-element), so the whole-value output
+    /// converter the scan demanded is not needed — and for a sum, or a `Vec` of
+    /// opaque handles, cannot exist at all, so leaving the demand would fail
+    /// resolution over a converter that must not be written.
+    fn replace_output(&mut self, reading: &prebindgen_registry::flat::TypeRef) {
+        self.replaced_outputs.push(reading.clone());
     }
 }
 
@@ -573,9 +569,7 @@ pub fn apply(
                 if plan.leaves.is_empty() {
                     continue;
                 }
-                for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_leaves(registry, &plan.leaves);
                 registry.plans.callback_arg_plans.insert(key, plan);
             }
         }
@@ -655,46 +649,17 @@ pub struct SumDecon {
     pub leaves: Vec<UnfoldLeaf>,
 }
 
-/// Wire the synthesized **sum** decompositions into the registry — the
+/// Wire the synthesized **sum** decompositions into the plans — the
 /// [`apply_value_structs`] analog for a value whose alternatives are chosen at
 /// runtime instead of being a fixed product.
 ///
 /// For every declared function returning the sum (`E` / `&E` / `Option<E>` /
 /// `Vec<E>`) and every `impl Fn(E)` / `impl Fn(&E)` callback parameter, builds a
-/// **fixed-builder** [`UnfoldPlan`] over the tag + group leaves, registering
-/// each leaf's `out_ty` as a required output.
+/// **fixed-builder** [`UnfoldPlan`] over the tag + group leaves.
 ///
 /// A sum has no converter of its own (it is boundary-only: a tag plus groups is
-/// not a single wire), so the declared return's scan-time output requirement —
-/// including the `Option<E>` / `Vec<E>` layers, which the boundary-only pass
-/// does not reach — is dropped here as the plan takes over.
+/// not a single wire); the plan is what says how it crosses.
 ///
-/// Put every leaf's `out_ty` in the table, and demand a converter for the ones
-/// that need one.
-///
-/// **Every leaf is registered; only a converter-bearing leaf is a root** (#282).
-/// The two are separate facts and this is the one place a sum plan states both:
-/// a cell says the type entered the pipeline, a root says the binding needs its
-/// conversion to resolve. The `SumTag` selector is registered and not required —
-/// it names *which* sum it chooses between, and a sum has no whole-value output
-/// converter, so requiring one would fail resolution over a type that never
-/// crosses whole.
-///
-/// This used to `filter` the selector out entirely, which left its `out_ty`
-/// with a cell only when the adapter happened to declare the sum separately —
-/// true for jnigen via `export_type`, and not true at all for a registry
-/// assembled without declarations. The invariant holds by construction now
-/// rather than by declaration order.
-fn register_leaves(registry: &mut Unfolding<'_>, leaves: &[UnfoldLeaf]) {
-    for leaf in leaves {
-        if leaf.has_converter() {
-            registry.require_output(&leaf.out_ty);
-        } else {
-            registry.reference_output(&leaf.out_ty);
-        }
-    }
-}
-
 /// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
 pub fn apply_sum_returns(
     registry: &mut Unfolding<'_>,
@@ -712,6 +677,19 @@ pub fn apply_sum_returns(
         wire_fixed_callbacks(registry, &vd, &decon, declared_fns)?;
     }
     Ok(())
+}
+
+/// Every converter-bearing leaf of a plan is a reading the resolver must
+/// produce a converter for.
+///
+/// A leaf **without** a converter is the synthesized sum selector, whose
+/// `out_ty` is the sum it chooses between — a type that has no whole-value
+/// output converter by construction, so demanding one would fail resolution
+/// (#282).
+fn register_leaves(registry: &mut Unfolding<'_>, leaves: &[UnfoldLeaf]) {
+    for leaf in leaves.iter().filter(|l| l.has_converter()) {
+        registry.require_output(&leaf.out_ty);
+    }
 }
 
 /// Register the declaration-canonical [`DeconSpec`] of a synthesized
@@ -768,18 +746,11 @@ fn wire_fixed_returns(
         // — so there is nothing to rebuild here.
         let shape = layers.shape.clone();
         if no_converter {
-            // The plan delivers the return leaf-by-leaf, so no converter is
-            // needed for the declared return — and for a sum none can exist.
-            // Drop the scan-time registrations of every layer (the boundary-only
-            // pass only reaches the bare type), so the missing converters are not
-            // flagged as unresolved-required.
-            // EVERY layer, the `Vec` element included. The shape fold peels here,
-            // so the matching unrequire belongs here; leaving the element out made
-            // the invariant depend on the adapter's `boundary_only_types` covering
-            // it — true for JniGenBuilder today, and the only reason a
-            // `Vec<sum>`-only declaration resolves.
+            // Every layer, the `Vec` element included: the shape fold peels
+            // here, and `Decompositions::replaces` only reaches the bare type a
+            // build script declared.
             for layer in &layers.layer_types {
-                registry.unrequire_output(layer);
+                registry.replace_output(layer);
             }
         }
         register_leaves(registry, &vd.leaves);
@@ -928,12 +899,7 @@ pub fn apply_leaf_vec_folds(
                     registry.require_output(vec_elem);
                     // The fold delivers the return element-by-element, so the
                     // whole `Vec<T>` / `Option<Vec<T>>` converter is not needed.
-                    // De-require it: for String / scalar elements it still
-                    // resolves (and is emitted as harmless dead code); for an
-                    // opaque-handle element it cannot resolve (`jlong` wire isn't
-                    // JObject-shaped), and de-requiring keeps that `None` from
-                    // being flagged as an unresolved-required error.
-                    registry.unrequire_output(&ret);
+                    registry.replace_output(&ret);
                     registry
                         .plans
                         .unfold_plans
@@ -1165,14 +1131,13 @@ fn process_decl(
             // The fold delivers the return element-by-element, so the
             // whole-collection converter is not needed — and for an
             // opaque-handle element it cannot resolve at all (a `jlong` wire
-            // isn't JObject-shaped). De-require the scan-time registrations
-            // (the declared return and, under `Option`, the inner `Vec` its
-            // recursive registration also required) — same reasoning as
-            // [`apply_leaf_vec_folds`] for the fixed folds.
+            // isn't JObject-shaped). Drop the scan-time demand on the declared
+            // return and, under `Option`, on the inner `Vec` its recursive
+            // registration also required.
             if ed.target == DeconTarget::Output {
-                registry.unrequire_output(&ret_ty);
+                registry.replace_output(&ret_ty);
                 if optional {
-                    registry.unrequire_output(after_opt);
+                    registry.replace_output(after_opt);
                 }
             }
             // Element type peeled of a leading `&` (accessors take `&Element`).
@@ -1184,9 +1149,7 @@ fn process_decl(
                 let decon = decl_id(&ekey, d);
                 register_decon_spec(registry, acc, &decon, &records, element)?;
                 let plan = build_plan(acc, registry, ed, by_ref, element, shape, &records, decon)?;
-                for leaf in &plan.leaves {
-                    registry.require_output(&leaf.out_ty);
-                }
+                register_leaves(registry, &plan.leaves);
                 plan
             } else {
                 // Whole element: keep the type exactly as written so the
@@ -1230,9 +1193,7 @@ fn process_decl(
             let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
             register_decon_spec(registry, acc, &decon, &records, source)?;
             let plan = build_plan(acc, registry, ed, by_ref, source, shape, &records, decon)?;
-            for leaf in &plan.leaves {
-                registry.require_output(&leaf.out_ty);
-            }
+            register_leaves(registry, &plan.leaves);
             plan
         };
         // Delivery is by **leaf count**, not a per-decl flag:

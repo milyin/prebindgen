@@ -74,7 +74,7 @@ use super::{
 /// in three parts — a **cell** (the type entered the pipeline), a **root** (the
 /// binding asked for it directly), an **entry** (a converter resolved). A
 /// `SumTag` leaf's type makes the first and not the second, deliberately
-/// (#282); see `Registry::reference_output` in the registry layer above.
+/// (#282).
 #[derive(Clone, Debug)]
 pub struct TypeRef {
     /// The accepted syntax this type is — the closed grammar, not an

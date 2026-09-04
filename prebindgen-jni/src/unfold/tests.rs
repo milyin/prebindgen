@@ -27,21 +27,24 @@ fn tref(ty: syn::Type) -> prebindgen_registry::flat::TypeRef {
         .expect("a fixture type the language accepts")
 }
 
-/// Whether the asks recorded so far leave `key` a required output.
+/// Whether the plans built so far leave `key` a required output.
 ///
-/// The replay is ordered, so this reads them in order: an `Output` ask makes a
-/// reading a root, an `Unrequire` drops that, and a `Reference` registers it
-/// without demanding a converter. `None` = never asked for at all, which is a
-/// different fact from "asked for and then un-required" — the distinction the
-/// registry's `output_types[key].root` could not state on its own (#282).
+/// The two sets are unordered and the registry fixes their precedence:
+/// everything a plan delivers is required, and a crossing the plan replaced is
+/// then not. `None` = neither set mentions it, which is a different fact from
+/// "delivered and then replaced" — the distinction the registry's
+/// `output_types[key].root` could not state on its own (#282).
 fn required(reg: &Unfolding<'_>, key: &prebindgen_registry::TypeKey) -> Option<bool> {
-    use prebindgen_registry::Requirement;
-    reg.requirements().iter().fold(None, |seen, ask| match ask {
-        Requirement::Output(t) if t.key() == *key => Some(true),
-        Requirement::Reference(t) if t.key() == *key => Some(seen.unwrap_or(false)),
-        Requirement::Unrequire(t) if t.key() == *key => Some(false),
-        _ => seen,
-    })
+    let mentions =
+        |readings: &[prebindgen_registry::flat::TypeRef]| readings.iter().any(|t| t.key() == *key);
+    match (
+        mentions(reg.output_leaves()),
+        mentions(reg.replaced_outputs()),
+    ) {
+        (_, true) => Some(false),
+        (true, false) => Some(true),
+        (false, false) => None,
+    }
 }
 
 /// [`required`], for a type a fixture spells inline.
@@ -1838,7 +1841,7 @@ fn reading_sum_decon() -> SumDecon {
 
 /// A sum returned by a function decomposes into a **fixed-builder** plan over
 /// its tag and groups — the same delivery a by-value `data_class` gets, with
-/// the selector added. The declared return's own output requirement is dropped:
+/// the selector added. The declared return's own output crossing is replaced:
 /// a sum has no whole-value converter by construction, so leaving it required
 /// would fail the resolve on a converter that must not exist.
 #[test]
@@ -1878,20 +1881,18 @@ fn sum_return_is_a_fixed_builder_plan() {
     assert!(!plan.leaves[0].has_converter());
     assert!(plan.leaves[1].has_converter());
     // #282's invariant, stated over the plan rather than over one type name:
-    // EVERY leaf's `out_ty` is registered, and only a converter-bearing leaf is
-    // a root. The assertion this replaced could state neither half — it read
-    // `!...is_some_and(|c| c.root)` on `Reading`, which is also true when the
-    // cell is ABSENT, and absent is what it was: this fixture's registry
-    // declares nothing, so it passed for the wrong reason.
+    // a converter-bearing leaf demands its converter, and the selector demands
+    // nothing — its `out_ty` is the sum it chooses between, and a sum has no
+    // whole-value output converter at all. The assertion this replaced could
+    // state neither half — it read `!...is_some_and(|c| c.root)` on `Reading`,
+    // which is also true when the cell is ABSENT, and absent is what it was:
+    // this fixture's registry declares nothing, so it passed for the wrong
+    // reason.
     for leaf in &plan.leaves {
-        let asked = required(&reg, &leaf.out_ty.key())
-            .unwrap_or_else(|| panic!("leaf `{}` registers its out_ty", leaf.name));
         assert_eq!(
-            asked,
+            required(&reg, &leaf.out_ty.key()) == Some(true),
             leaf.has_converter(),
-            "leaf `{}`: a cell says the type entered the pipeline, a root says \
-             the binding demands its converter — the selector makes only the \
-             first, because a sum has no whole-value output converter",
+            "leaf `{}`: only a converter-bearing leaf demands a converter",
             leaf.name
         );
     }

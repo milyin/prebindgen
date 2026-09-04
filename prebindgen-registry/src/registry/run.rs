@@ -22,16 +22,18 @@ impl Registry {
                 &declared.method_receivers,
             )?;
         }
-        // What the adapter's decompositions asked the output tables for,
-        // replayed in the order it asked. Planning how a value comes apart reads
-        // the model alone, so this is every effect those plans have on a
-        // registry — after `expand::apply`, which is where the asks were made.
-        for requirement in &d.requirements {
-            match requirement {
-                Requirement::Output(reading) => self.require_output(reading),
-                Requirement::Reference(reading) => self.reference_output(reading),
-                Requirement::Unrequire(reading) => self.unrequire_output(reading),
-            }
+        // What the adapter's plans deliver on the output side. Planning how a
+        // value comes apart reads the model alone, so these are stated as
+        // readings and applied here, after `expand::apply`.
+        for reading in &d.output_leaves {
+            self.require_output(reading);
+        }
+        // A plan delivers these leaf-by-leaf, so the scan's whole-value output
+        // demand on them is stale. Unlike `replaces` below, which names bare
+        // declared types, these are the layered readings a plan peeled — the
+        // `Option<T>` / `Vec<T>` / `&T` a decomposed `T` was reached through.
+        for reading in &d.replaced_outputs {
+            self.unrequire_output(reading);
         }
         // Every crossing these types make is now covered by a plan, so the
         // scan-time direct converter requirement is stale — and typically

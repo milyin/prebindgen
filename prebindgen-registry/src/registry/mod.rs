@@ -317,30 +317,6 @@ pub(crate) struct Declared {
     pub(crate) edges: Vec<(Crossing, Crossing)>,
 }
 
-/// One output-side registration a decomposition asks the registry for.
-///
-/// An adapter that plans how a value comes apart reads the model alone; the one
-/// thing it needs the registry for is to say which readings must cross on the
-/// output side. It states those asks as a list, in the order it made them, and
-/// the registry replays them onto its type tables in one place — so the
-/// planning can happen before a registry exists, and nothing but the replay
-/// mutates it.
-///
-/// The order is part of the meaning: [`Self::Unrequire`] drops a demand an
-/// earlier [`Self::Output`] made.
-#[derive(Clone, Debug)]
-pub enum Requirement {
-    /// This reading must cross on the output side, and a converter for it must
-    /// resolve.
-    Output(prebindgen_flat::flat::TypeRef),
-    /// This reading enters the output table without demanding a converter — a
-    /// type a plan *names* rather than one that crosses.
-    Reference(prebindgen_flat::flat::TypeRef),
-    /// Drop an earlier demand that this reading's converter must resolve. The
-    /// table entry stays, so a converter is still produced if one resolves.
-    Unrequire(prebindgen_flat::flat::TypeRef),
-}
-
 /// How a binding's composites cross **in pieces** instead of whole.
 ///
 /// One value, pushed once through `RegistryBuilder::decompose`, in place of the
@@ -349,24 +325,49 @@ pub enum Requirement {
 ///
 /// The output side is stated as its **effects** rather than as its
 /// declarations: an adapter plans how its values come apart, keeps those plans,
-/// and hands over the two things a registry needs from them — the output
-/// registrations to replay, and the leaf readings a callback argument's
-/// delivery depends on. The parameter side is still stated as declarations,
-/// because `expand::apply` still mutates the registry directly.
+/// and hands over what a registry needs from them — which readings the plans
+/// deliver, which whole-value crossings they replace, and the leaf readings a
+/// callback argument's delivery depends on. The parameter side is still stated
+/// as declarations, because `expand::apply` still mutates the registry
+/// directly.
+///
+/// Each of those is a **set**, and the registry fixes what happens when two of
+/// them name the same reading — everything delivered is required, and then what
+/// a plan replaced is not. An adapter states facts about its plans; it does not
+/// sequence registry mutations.
 #[derive(Default)]
 pub struct Decompositions {
     /// Parameter-side: values built on the Rust side from ingredients that
     /// cross separately.
     pub expansions: Option<crate::expand::Expansions>,
-    /// Output-side registrations the adapter's decompositions asked for, in the
-    /// order they were asked.
-    pub requirements: Vec<Requirement>,
     /// Per callback-argument type, the readings its decomposition delivers.
     ///
     /// The ordering fact no syntax shows: each leaf's own conversion has to
     /// exist before the callback's can be built, and a leaf is named by a plan
     /// rather than by the argument's type.
     pub callback_arg_leaves: HashMap<TypeKey, Vec<prebindgen_flat::flat::TypeRef>>,
+    /// Readings the adapter's plans deliver on the output side: each must
+    /// resolve to a converter.
+    ///
+    /// A **set**, not a script. The registry fixes the precedence — everything
+    /// here is required, and then [`Self::replaced_outputs`] and
+    /// [`Self::replaces`] drop what a plan took over — so an adapter states two
+    /// facts about its plans instead of sequencing three registry verbs.
+    pub output_leaves: Vec<prebindgen_flat::flat::TypeRef>,
+    /// Output crossings a plan **replaces**: a value delivered leaf-by-leaf
+    /// needs no whole-value converter, so the scan's demand for one is dropped.
+    /// The table cell stays, so a converter is still produced if one happens to
+    /// resolve.
+    ///
+    /// The output-side peer of [`Self::replaces`], and stated as readings
+    /// rather than as build-script spellings: these come off a plan, which
+    /// holds the model's own reading of every layer it peeled — the layers
+    /// [`Self::replaces`] cannot reach, since a build script declares the bare
+    /// type and the plan is what knows an `Option<T>` or `Vec<T>` of it also
+    /// stopped crossing whole.
+    ///
+    /// Unordered, because dropping a demand twice is dropping it once.
+    pub replaced_outputs: Vec<prebindgen_flat::flat::TypeRef>,
     /// The whole-value crossings these decompositions make unnecessary.
     ///
     /// Stated **with** the decompositions rather than beside them: a type

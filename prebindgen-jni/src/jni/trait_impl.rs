@@ -965,8 +965,9 @@ impl Declarations {
         )?;
         let decompositions = prebindgen_registry::Decompositions {
             expansions: Some(self.build_expansions()),
-            requirements: unfolding.requirements().to_vec(),
             callback_arg_leaves: unfolding.callback_arg_leaves(),
+            output_leaves: unfolding.output_leaves().to_vec(),
+            replaced_outputs: unfolding.replaced_outputs().to_vec(),
             replaces: self.boundary_only_types(),
         };
         self.unfolded

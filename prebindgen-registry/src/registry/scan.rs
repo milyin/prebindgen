@@ -643,41 +643,19 @@ impl Registry {
 
     /// Register `ty` (and its nested positions) as a required **output** so the
     /// resolver produces a converter for it. The output-side peer of
-    /// [`Self::require_input`]; replayed from
-    /// [`Requirement::Output`](crate::Requirement::Output) to pull in the leaf
-    /// types an adapter's decomposition delivers.
+    /// [`Self::require_input`]; applied from
+    /// [`Decompositions::output_leaves`](crate::Decompositions::output_leaves)
+    /// to pull in the leaf types an adapter's decomposition delivers.
     pub(crate) fn require_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
         self.register_type_recursive(Direction::Deconstruct, reading, true);
-    }
-
-    /// Register `reading` (and its nested positions) as an **output cell without
-    /// demanding a converter** — a type some plan *names* rather than one that
-    /// crosses.
-    ///
-    /// The third thing a table cell can mean, now said out loud. A cell records
-    /// that a type **entered the pipeline**; `root` records that the binding
-    /// asked for it *directly*; `entry` records that a converter resolved. This
-    /// makes the first without the second, which is exactly what a sum-type
-    /// selector leaf needs: it names *which* sum it chooses between, and that sum
-    /// has no whole-value output converter at all, so requiring one would fail
-    /// resolution (#282). Replayed from
-    /// [`Requirement::Reference`](crate::Requirement::Reference).
-    ///
-    /// **Not [`require_output`](Self::require_output) with a flag.** That one is
-    /// `root = true` by definition — its whole job is to say a converter must
-    /// exist. Registration and demand are separable facts and this is the door
-    /// for the first alone; `ensure_entry`'s `root |= root` means calling it for
-    /// a type the binding did declare cannot weaken anything.
-    pub(crate) fn reference_output(&mut self, reading: &prebindgen_flat::flat::TypeRef) {
-        self.register_type_recursive(Direction::Deconstruct, reading, false);
     }
 
     /// Drop `ty` from the required-output scan set. The type's table entry is
     /// left intact (so [`crate::resolve`]'s PASS A still resolves it
     /// if it can, and emits it when resolved), but a `None` resolution no longer
-    /// counts as an unresolved-required error. Replayed from
-    /// [`Requirement::Unrequire`](crate::Requirement::Unrequire): when a `Vec<T>`
-    /// / `Option<Vec<T>>` return is delivered element-by-element through a fold,
+    /// counts as an unresolved-required error. Applied from
+    /// [`Decompositions::replaced_outputs`](crate::Decompositions::replaced_outputs):
+    /// when a `Vec<T>` / `Option<Vec<T>>` return is delivered element-by-element through a fold,
     /// the whole-collection converter is genuinely not needed — and for a
     /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
     /// JObject-shaped), so requiring it would wrongly fail resolution.
