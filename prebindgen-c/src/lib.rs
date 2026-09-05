@@ -334,7 +334,7 @@ pub struct Cbindgen {
 /// registry it never built.
 pub(crate) enum Engine {
     /// The v1 engine's resolved registry.
-    V1(prebindgen_registry::Registry),
+    V1(Box<prebindgen_registry::Registry>),
     /// The v2 engine's finished run — see `prebindgen-registry-v2`.
     #[cfg(feature = "v2")]
     V2(Box<prebindgen_registry_v2::Generation>),

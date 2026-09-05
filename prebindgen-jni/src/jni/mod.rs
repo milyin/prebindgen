@@ -470,7 +470,7 @@ pub struct JniGen {
 pub(crate) enum Engine {
     /// Every crossing this binding needs, each with its conversion — the v1
     /// engine's resolution.
-    V1(prebindgen_registry::Registry),
+    V1(Box<prebindgen_registry::Registry>),
     /// The v2 engine's finished run — see `prebindgen-registry-v2`.
     #[cfg(feature = "v2")]
     V2(Box<prebindgen_registry_v2::Generation>),
@@ -1144,7 +1144,7 @@ impl JniGen {
     pub(crate) fn from_v1(decls: Declarations, registry: prebindgen_registry::Registry) -> Self {
         JniGen {
             decls,
-            engine: Engine::V1(registry),
+            engine: Engine::V1(Box::new(registry)),
         }
     }
 

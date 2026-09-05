@@ -1254,7 +1254,7 @@ impl CbindgenBuilder {
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {
             gen: self,
-            engine: crate::Engine::V1(registry),
+            engine: crate::Engine::V1(Box::new(registry)),
         })
     }
 
