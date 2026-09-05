@@ -257,6 +257,10 @@ struct At {
     nullable: bool,
     /// Whether these parts are a value form's, which names them itself.
     value_form: bool,
+    /// Whether the value was GIVEN to a form that moves its fields out, rather
+    /// than lent to one that clones what it hands over. A part that is the
+    /// value itself crosses owned in the first case and borrowed in the second.
+    moved: bool,
     /// The row being read at this level, as a key.
     ///
     /// The KEY and not a name: a part's binding is written against the row its
@@ -303,6 +307,7 @@ impl Folding<'_> {
             name: None,
             nullable: false,
             value_form: false,
+            moved: false,
             row: crate::recipe::Crossing::new(
                 reading.clone(),
                 crate::recipe::Direction::Deconstruct,
@@ -338,11 +343,18 @@ impl Folding<'_> {
                     prefix: root.clone(),
                     consuming: self.consumes(func)?,
                 });
+                let consuming = self.consumes(func)?;
                 let inner = At {
                     path: root,
                     name: at.name.clone(),
                     nullable: at.nullable,
                     value_form: true,
+                    // A CONSUMING form is given the value and moves its fields
+                    // out; a borrowing one clones what it hands over. So a part
+                    // that is the value itself crosses owned here and borrowed
+                    // there, which is the one thing a `ValueForm` row does not
+                    // say and the accessor's own signature does.
+                    moved: at.moved || consuming,
                     // A value form's parts belong to the row that states the
                     // form, not to the struct the call returns.
                     row: at.row.clone(),
@@ -445,6 +457,7 @@ impl Folding<'_> {
                                 name: Some(full),
                                 nullable: at.nullable,
                                 value_form: false,
+                                moved: at.moved,
                                 row,
                             };
                             let before = walk.leaves.len();
@@ -635,7 +648,7 @@ impl Folding<'_> {
                 // borrowed everywhere else, where the leaf clones through its
                 // own converter. A root reached by reference is lent, not
                 // given, which the reading says and the row cannot.
-                out_ty: if at.path.is_empty() && !walk.lent {
+                out_ty: if (at.path.is_empty() && !walk.lent) || at.moved {
                     source.clone()
                 } else {
                     // A borrow of the VALUE. A part reached through a layer is
@@ -737,6 +750,7 @@ impl Folding<'_> {
             }
             walk.reading.push(seen);
             let inner = At {
+                moved: at.moved,
                 path,
                 name: Some(full),
                 nullable: at.nullable || optional,

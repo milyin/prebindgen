@@ -165,6 +165,68 @@ impl Declarations {
         Some((func, reaches))
     }
 
+    /// Each field of a value form whose declaration OVERRODE how it comes
+    /// apart: the field's name, the type it reaches, and the reaches that
+    /// override states.
+    ///
+    /// `FieldDecon::Records` is a list written at this site, replacing the
+    /// field type's own decomposition for this occurrence. It says exactly what
+    /// a `Deconstruct::Fields` row says, so it becomes one — under a name of
+    /// its own, since the type's own row is a different statement.
+    fn field_overrides(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Vec<(String, TypeRef, Vec<Reach>)> {
+        use crate::unfold::{DeconRecord, FieldDecon};
+
+        let mut out = Vec::new();
+        let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
+            return out;
+        };
+        let Some(st) = model.function(fields.func()).map(|f| f.ret.clone()) else {
+            return out;
+        };
+        let st = st.borrow_target().unwrap_or(&st);
+        let Some(ident) = st.stripped_key().ident() else {
+            return out;
+        };
+        let Some(prebindgen_registry::flat::Type::Struct(st)) = model.declared_type(&ident) else {
+            return out;
+        };
+        let _ = ty;
+        for record in self.lower_value_form(registry, decl.key(), fields) {
+            let FieldDecon::Records(records) = &record.decon else {
+                continue;
+            };
+            let Some(member) = record.members.first() else {
+                continue;
+            };
+            let Some(field) = st.fields.iter().find(|f| f.name.as_ref() == Some(member)) else {
+                continue;
+            };
+            let reaches: Option<Vec<Reach>> = records
+                .iter()
+                .map(|r| match r {
+                    DeconRecord::Acc { func, .. } => Some(Reach::Accessor(func.clone())),
+                    DeconRecord::LocalAcc { path, .. } => {
+                        Some(Reach::Accessor(path.segments.last()?.ident.clone()))
+                    }
+                    DeconRecord::Identity => Some(Reach::Identity),
+                    // A value form inside an override is a row of a shape this
+                    // one does not hold; it waits, rather than being stated
+                    // wrongly.
+                    _ => None,
+                })
+                .collect();
+            let Some(reaches) = reaches else { continue };
+            out.push((member.to_string(), field.ty.clone(), reaches));
+        }
+        out
+    }
+
     /// [`Self::value_form_in`], with the answer it drops: whether each part is
     /// SPLICED, taken apart by a binding on it, or crosses as one leaf.
     ///
@@ -201,16 +263,11 @@ impl Declarations {
         // — collapse to the single part that child is.
         let mut reached: Vec<usize> = Vec::new();
         for record in &records {
-            // A field the ADAPTER took apart — a decomposed sum, a selector
-            // plus one group per alternative — is a plain reach here, and the
+            // A field the DECLARATION took apart — a decomposed sum, or an
+            // override written at this site — is a plain reach here, and the
             // taking-apart is a part binding on it (design decision 3). The row
             // says which field; the binding says that it comes apart, and to
-            // what. Only `Records`, which replaces the field's type default
-            // wholesale with a list written at this site, is a statement no row
-            // makes yet.
-            if matches!(record.decon, FieldDecon::Records(_)) {
-                return None;
-            }
+            // which row.
             // A record with several members is an INLINED nested class: each
             // member is one hop of a field-access chain. `Reach::Path` states
             // that; before it existed this row declined and fell back to a
@@ -399,6 +456,17 @@ pub(crate) fn parts() -> RecipeName {
 /// this is the same shape at the other end (#701 step 3).
 pub(crate) fn site_row(func: &syn::Ident) -> RecipeName {
     RecipeName::new(format!("expand-return@{func}"))
+}
+
+/// The row one FIELD's override declares — `fields!(f).field("x", expand_return!(X))`.
+///
+/// A name of its own, for the reason a per-function `.expand_return(..)` has
+/// one: it sits on the same crossing as the field type's own row and says
+/// something different, namely how this occurrence comes apart. The shape is
+/// the same one step 2 gave the parameter side and #709 gave the return site,
+/// one level further in (#701 decision 3).
+pub(crate) fn field_row(owner: &TypeKey, field: &str) -> RecipeName {
+    RecipeName::new(format!("expand-return@{}#{field}", owner.as_str()))
 }
 
 /// The allocation-free `(present, value)` input row for an Optional whose
@@ -711,6 +779,26 @@ impl Declarations {
                 decomposed.entry(decl.key().clone()).or_insert(ty);
             }
         }
+        // A per-FIELD override states how ONE occurrence of a field's type
+        // comes apart, which is a row under a name of its own on that type's
+        // crossing — beside whatever row the type itself states.
+        for decl in self
+            .return_expand_decls
+            .iter()
+            .chain(self.fn_return_expands.iter().map(|(_, d)| d))
+        {
+            let Some(owner) = registry.reading(decl.key()) else {
+                continue;
+            };
+            for (field, child, reaches) in self.field_overrides(model, registry, &owner, decl) {
+                recipes.declare(
+                    child,
+                    field_row(decl.key(), &field),
+                    Deconstructing::Product(Deconstruct::Fields(reaches)),
+                );
+            }
+        }
+
         // A plan that states NO decomposition still states a crossing: a
         // whole-element fold hands each element over through its own converter.
         // The derived row is what that reads as, and declaring it here is what
@@ -1374,14 +1462,30 @@ impl Declarations {
                 let Some(field) = st.fields.get(*field) else {
                     continue;
                 };
+                // The row this occurrence comes apart by: the one the
+                // declaration wrote for THIS field where it wrote one, and the
+                // field type's own `parts` otherwise.
+                let overridden = field
+                    .name
+                    .as_ref()
+                    .map(|n| field_row(decl.key(), &n.to_string()))
+                    .filter(|r| {
+                        recipes
+                            .key_of(
+                                &Crossing::new(field.ty.clone(), Direction::Deconstruct).key(),
+                                r,
+                            )
+                            .is_some()
+                    });
+                let name = overridden.unwrap_or_else(parts);
                 let crossing = Crossing::new(field.ty.clone(), Direction::Deconstruct);
-                if recipes.key_of(&crossing.key(), &parts()).is_none() {
+                if recipes.key_of(&crossing.key(), &name).is_none() {
                     continue;
                 }
                 bound.bind(
                     Site::part(&row, index),
                     crossing,
-                    Ask::Recipe(parts()),
+                    Ask::Recipe(name),
                     Origin::Adapter,
                 );
             }

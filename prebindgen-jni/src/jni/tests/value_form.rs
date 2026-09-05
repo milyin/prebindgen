@@ -1240,26 +1240,17 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
 ///
 /// The check is what keeps the differential honest, so it must not be possible
 /// to disable by omission: a binding that says nothing gets the empty set, and
-/// a decomposition leaving the comparison fails the build. Here `ZChild` is a
-/// handle field of a CONSUMING value form, which the decomposition hands over
-/// states parts of its own — a `.field_self()` declaration no binding lowers
-/// yet — so it is skipped, and an empty expectation refuses it.
+/// a decomposition leaving the comparison fails the build. Here `ZEnvelope`
+/// has a field reaching its OWN type — the conditional-handle idiom — so its
+/// row declines rather than reaching its own crossing, the read stops at the
+/// placeholder, and an empty expectation refuses the skip.
 #[test]
 fn an_unstated_parity_expectation_refuses_a_skipped_decomposition() {
     let loc = myflat_loc();
     let items = vec![
         (
-            syn::Item::Struct(syn::parse_quote!(
-                pub struct ZEnvelopeStruct {
-                    pub child: ZChild,
-                    pub tag: i64,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
             syn::Item::Fn(syn::parse_quote!(
-                pub fn z_envelope_into_struct(e: ZEnvelope) -> ZEnvelopeStruct {
+                pub fn z_envelope_tag(e: &ZEnvelope) -> i64 {
                     unimplemented!()
                 }
             )),
@@ -1282,21 +1273,26 @@ fn an_unstated_parity_expectation_refuses_a_skipped_decomposition() {
         .expect_parity_skips::<[&str; 0], &str>([])
         .package(
             crate::package!()
-                .class(crate::ptr_class!(ZEnvelope))
-                .class(crate::ptr_class!(ZChild))
+                .class(
+                    crate::ptr_class!(ZEnvelope).method(prebindgen_registry::fun!(z_envelope_tag)),
+                )
                 .fun(prebindgen_registry::fun!(z_envelope_sub)),
         )
-        .expand(prebindgen_registry::expand_return!(ZChild).field_self())
         .expand(
             prebindgen_registry::expand_return!(ZEnvelope)
-                .fields_self_into(prebindgen_registry::fields!(z_envelope_into_struct)),
+                .field(prebindgen_registry::fun!(z_envelope_tag))
+                .field(
+                    prebindgen_registry::fun!(crate::z_envelope_self)
+                        .sig(prebindgen_registry::sig!((e: &ZEnvelope) -> Option<&ZEnvelope>))
+                        .name("handle"),
+                ),
         )
         .build_with(registry)
         .expect_err("a skipped decomposition against an empty expectation");
     let message = error.to_string();
     assert!(
         message.contains("NOT compared against their rows have changed")
-            && message.contains("consuming-value-form-handle-field"),
+            && message.contains("row-states-no-parts"),
         "the refusal names the decomposition and why it was skipped: {message}"
     );
 }
