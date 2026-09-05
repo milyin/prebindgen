@@ -99,3 +99,6 @@ pub use jni::{
 // aliases the model's `KtFile`).
 pub use kotlin_codegen::KtFile as KotlinFile;
 pub use kotlin_codegen::WriteKotlinError;
+/// Which engine a build script runs, and where each one writes — re-exported
+/// so a build script names this crate for the whole binding.
+pub use prebindgen_registry::pipeline;

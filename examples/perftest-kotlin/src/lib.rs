@@ -6,4 +6,6 @@
 // #[prebindgen] surface. The generated code refers to source types fully
 // qualified through the `source_module` (e.g. `perftest_flat::Payload`), so no
 // extra `use` is needed here.
-include!("generated_bindings.rs");
+// The path is chosen by build.rs, so the engine that generated the file is
+// the one whose file is compiled.
+include!(env!("PERFTEST_BINDINGS"));

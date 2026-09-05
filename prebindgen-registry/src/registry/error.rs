@@ -189,7 +189,6 @@ impl std::error::Error for ScanError {}
 
 /// Combined error surfaced by `RegistryBuilder::build` and by a generator's
 /// own `build` / `write_rust`.
-#[derive(Debug)]
 pub enum WriteRustError {
     Scan(ScanError),
     Resolve(crate::resolve::ResolveError),
@@ -221,6 +220,15 @@ impl fmt::Display for WriteRustError {
                 write!(f, "{pipeline} engine: {message}")
             }
         }
+    }
+}
+
+// A build script reads this through `expect`/`unwrap`, which print `Debug`.
+// The derived one prints the variant and its fields, hiding the sentence that
+// says what to do — so `Debug` says exactly what `Display` says.
+impl fmt::Debug for WriteRustError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 

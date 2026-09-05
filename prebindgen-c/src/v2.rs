@@ -119,7 +119,51 @@ impl BindingDeclarations for CbindgenBuilder {
 }
 
 /// A callback signature as its own name: `impl Fn(&Payload)`.
+///
+/// A canonical type key spells a generic with spaces around its brackets
+/// (`Option < Grade >`), which is right for a key and unreadable in a report, so
+/// the argument list is closed up here. The result is still derived only from
+/// the keys, and so is still stable across runs.
 fn describe_callback(key: &[prebindgen_registry::TypeKey]) -> String {
-    let args: Vec<&str> = key.iter().map(|k| k.as_str()).collect();
+    let args: Vec<String> = key.iter().map(|k| close_up(k.as_str())).collect();
     format!("impl Fn({})", args.join(", "))
+}
+
+/// A canonical key with the spaces a reader does not want: `Option < Grade >`
+/// becomes `Option<Grade>` and `& [Payload]` becomes `&[Payload]`, while the
+/// space in `dyn Error` — the only kind that separates two words — stays.
+fn close_up(key: &str) -> String {
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    let characters: Vec<char> = key.chars().collect();
+    let mut out = String::with_capacity(key.len());
+    for (index, &character) in characters.iter().enumerate() {
+        if character == ' ' {
+            let before = index.checked_sub(1).map(|i| characters[i]);
+            let after = characters.get(index + 1).copied();
+            let separates_words = before.is_some_and(word) && after.is_some_and(word);
+            if !separates_words {
+                continue;
+            }
+        }
+        out.push(character);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn punctuation_closes_up_and_words_stay_apart() {
+        for (key, expected) in [
+            ("Option < Grade >", "Option<Grade>"),
+            ("& [Payload]", "&[Payload]"),
+            ("dyn Error", "dyn Error"),
+            (
+                "Result < Box < dyn Error > , u8 >",
+                "Result<Box<dyn Error>,u8>",
+            ),
+        ] {
+            assert_eq!(super::close_up(key), expected, "{key}");
+        }
+    }
 }

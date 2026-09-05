@@ -5,6 +5,10 @@ edition = { workspace = true }
 build = "build.rs"
 
 [features]
+# Forward `prebindgen-c`'s v2 engine feature, so `PREBINDGEN_PIPELINE=v2` has an
+# engine to select. Additive: enabling it does not change what an unset selector
+# generates.
+v2 = ["prebindgen-c/v2"]
 unstable = ["example-flat/unstable"]
 internal = ["example-flat/internal"]
 

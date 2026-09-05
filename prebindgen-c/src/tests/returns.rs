@@ -670,7 +670,7 @@ fn a_unit_parameter_is_reported_by_the_resolver() {
         let _ = write(cbindgen, registry, "unitparam");
     });
     assert!(
-        message.contains("Unresolved") && message.contains("()"),
+        message.contains("unresolved prebindgen input type") && message.contains("()"),
         "a unit parameter is reported by the resolver, not by a missing site: {message}"
     );
 }

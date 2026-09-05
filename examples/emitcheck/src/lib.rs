@@ -13,4 +13,6 @@
 // (`build.rs`'s `SOURCE_CRATE`).
 pub mod myflat;
 
-include!("generated_bindings.rs");
+// The path is chosen by build.rs, so the engine that generated the file is the
+// one whose file is compiled.
+include!(env!("EMITCHECK_BINDINGS"));
