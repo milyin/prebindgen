@@ -139,15 +139,14 @@ fn main() {
             "`storage_labels`'s return: whole-element-fold",
             "`storage_shards_opt`'s return: whole-element-fold",
             "`storage_shards`'s return: whole-element-fold",
-            "`storage_summary_full`'s return: per-function-expand-return",
-            "`storage_summary_probe`'s return: per-function-expand-return",
+            "`storage_summary_probe`'s return: row-states-no-parts",
             "`unsigned_series`'s return: whole-element-fold",
             "`vault_holder_new`'s return: optional-part",
             "the callback argument `Ledger`: optional-part",
             "the callback argument `Probe`: row-states-no-parts",
             "the callback argument `Report`: row-states-no-parts",
         ])
-        .expect_parity_compared(46)
+        .expect_parity_compared(47)
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a

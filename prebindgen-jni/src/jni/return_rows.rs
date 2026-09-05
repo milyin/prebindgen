@@ -13,7 +13,7 @@ use prebindgen_registry::{
     flat::{Flat, TypeRef},
     fold::{Folding, UnfoldPolicy},
     leaf::{Hoist, LeafSource, UnfoldLeaf},
-    recipe::{Reach, RecipeName, Recipes},
+    recipe::{Reach, Recipes},
 };
 
 use super::Declarations;
@@ -181,14 +181,15 @@ impl Declarations {
                 continue;
             };
             // A per-function `.expand_return(...)` states a decomposition of
-            // its own, which is a row of its own under a name of its own —
-            // the shape step 2 gave the parameter side, and step 3's remaining
-            // work here. The type's row does not describe it, so comparing the
-            // two would compare two different decompositions.
-            if !matches!(decon, prebindgen_registry::leaf::DeconId::Default(_)) {
-                skipped.push(format!("{what}: per-function-expand-return"));
-                continue;
-            }
+            // its own, and now has a row of its own under a name of its own —
+            // the shape step 2 gave the parameter side. The comparison reads
+            // THAT row, so the two sides describe the same decomposition.
+            let row = match decon {
+                prebindgen_registry::leaf::DeconId::PerFn(_, func) => {
+                    crate::jni::recipes::site_row(&quote::format_ident!("{func}"))
+                }
+                prebindgen_registry::leaf::DeconId::Default(_) => crate::jni::recipes::parts(),
+            };
             // A `sealed_class` that ALSO carries an `expand_return!` states two
             // decompositions under one row name: the sum's arms, declared by
             // the class, and the fields, declared by the author. The row table
@@ -204,7 +205,7 @@ impl Declarations {
                 registry,
                 key: plan.source.stripped_key(),
             };
-            let row = RecipeName::new("parts");
+
             // The reading as the decomposition holds it: a plan reached by
             // reference is lent the value, and its root hands out a borrow
             // rather than the value itself. `plan.source` is the owned core, so
