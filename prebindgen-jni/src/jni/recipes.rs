@@ -599,6 +599,18 @@ impl Declarations {
             }
             decomposed.entry(key).or_insert_with(|| plan.source.clone());
         }
+        for decl in &self.return_expand_decls {
+            if parts_out.contains(decl.key()) {
+                continue;
+            }
+            if let Some(ty) = decl
+                .key()
+                .ident()
+                .and_then(|ident| model.classify(&syn::parse_quote!(#ident)).ok())
+            {
+                decomposed.entry(decl.key().clone()).or_insert(ty);
+            }
+        }
         for ty in decomposed.into_values() {
             // A real row where the declaration can state one. #622 wrote
             // `Atomic` here because `Reach` could not spell an identity leaf;

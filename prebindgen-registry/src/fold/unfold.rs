@@ -61,7 +61,17 @@ pub trait UnfoldPolicy {
     /// name for the field a [`Reach::Field`] reads, which a target that names
     /// its slots after the struct's own fields needs and one that names them
     /// after the declaration ignores.
-    fn part_name(&self, reach: &Reach, index: usize, field: Option<&syn::Ident>) -> String;
+    /// `owner` is the type whose row states this part — NOT the root the walk
+    /// started from. A row splices a child's decomposition into its parent's,
+    /// and the child's declaration is what names the child's parts, so a policy
+    /// asked under the root would miss every name the child declared.
+    fn part_name(
+        &self,
+        owner: &TypeRef,
+        reach: &Reach,
+        index: usize,
+        field: Option<&syn::Ident>,
+    ) -> String;
 
     /// What one payload of one alternative is called.
     ///
@@ -610,7 +620,7 @@ impl Folding<'_> {
             // the ordinary answer, the same as a product's own part.
             None => walk
                 .policy
-                .part_name(reach, index, self.field_name(source, reach)),
+                .part_name(source, reach, index, self.field_name(source, reach)),
         };
         let full = match &at.name {
             Some(outer) => walk.policy.nest(outer, &name),
