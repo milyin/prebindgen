@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["snake_case"],"struct":["Cbindgen","CbindgenBuilder"]};
