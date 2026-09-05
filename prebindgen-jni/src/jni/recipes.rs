@@ -465,8 +465,8 @@ pub(crate) fn site_row(func: &syn::Ident) -> RecipeName {
 /// something different, namely how this occurrence comes apart. The shape is
 /// the same one step 2 gave the parameter side and #709 gave the return site,
 /// one level further in (#701 decision 3).
-pub(crate) fn field_row(owner: &TypeKey, field: &str) -> RecipeName {
-    RecipeName::new(format!("expand-return@{}#{field}", owner.as_str()))
+pub(crate) fn field_row(parent: &RecipeName, owner: &TypeKey, field: &str) -> RecipeName {
+    RecipeName::new(format!("{}@{}#{field}", parent.as_str(), owner.as_str()))
 }
 
 /// The allocation-free `(present, value)` input row for an Optional whose
@@ -782,18 +782,19 @@ impl Declarations {
         // A per-FIELD override states how ONE occurrence of a field's type
         // comes apart, which is a row under a name of its own on that type's
         // crossing — beside whatever row the type itself states.
-        for decl in self
-            .return_expand_decls
+        let type_forms = self.return_expand_decls.iter().map(|decl| (decl, parts()));
+        let fn_forms = self
+            .fn_return_expands
             .iter()
-            .chain(self.fn_return_expands.iter().map(|(_, d)| d))
-        {
+            .map(|(func, decl)| (decl, site_row(func)));
+        for (decl, parent) in type_forms.chain(fn_forms) {
             let Some(owner) = registry.reading(decl.key()) else {
                 continue;
             };
             for (field, child, reaches) in self.field_overrides(model, registry, &owner, decl) {
                 recipes.declare(
                     child,
-                    field_row(decl.key(), &field),
+                    field_row(&parent, decl.key(), &field),
                     Deconstructing::Product(Deconstruct::Fields(reaches)),
                 );
             }
@@ -1451,7 +1452,7 @@ impl Declarations {
             else {
                 continue;
             };
-            let row = Crossing::new(owner, Direction::Deconstruct).row(name);
+            let row = Crossing::new(owner, Direction::Deconstruct).row(name.clone());
             for (index, reach) in reaches.iter().enumerate() {
                 let prebindgen_registry::recipe::Reach::Field(field) = reach else {
                     continue;
@@ -1468,7 +1469,7 @@ impl Declarations {
                 let overridden = field
                     .name
                     .as_ref()
-                    .map(|n| field_row(decl.key(), &n.to_string()))
+                    .map(|n| field_row(&name, decl.key(), &n.to_string()))
                     .filter(|r| {
                         recipes
                             .key_of(
