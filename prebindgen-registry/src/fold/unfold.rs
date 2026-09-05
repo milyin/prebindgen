@@ -573,6 +573,25 @@ impl Folding<'_> {
                 walk.coverage.note("row-states-no-parts");
                 Ok(())
             }
+            Shape::Sequence => {
+                // A run is delivered ELEMENT BY ELEMENT: the emitter folds over
+                // it and each element crosses through its own converter, so the
+                // run itself spends no wire slot and contributes no leaf. The
+                // layer is the model's and the row states it, exactly as
+                // `Shape::Optional` does one layer over.
+                //
+                // Taking an element APART is a binding on it, and no binding
+                // names one today — a run of decomposed elements is a shape the
+                // fold plan has no form for either, so it is a gap in both
+                // statements rather than a difference between them.
+                if source.sequence_elem().is_none() {
+                    return Err(UnfoldViewError::NotYetReadable {
+                        crossing: source.to_string(),
+                        form: "sequence-layer-without-element",
+                    });
+                }
+                Ok(())
+            }
             other => Err(UnfoldViewError::NotYetReadable {
                 crossing: source.to_string(),
                 form: name_of(other),

@@ -188,22 +188,28 @@ impl Declarations {
             // of it — which is this check disabling itself one level up from
             // where it looks.
             //
-            // A whole-element fold takes nothing apart: each element crosses
-            // through its own converter, so there is no row and nothing to
-            // compare.
-            let Some(decon) = &plan.decon else {
-                skipped.push(format!("{what}: whole-element-fold"));
-                continue;
-            };
+            // A whole-element fold takes nothing apart: the emitter folds over
+            // the run and each element crosses through its own converter. That
+            // is a decomposition with nothing IN it rather than one the rows do
+            // not reach, so it is compared like any other — against the
+            // crossing's own derived row, which states the run as a `Sequence`
+            // layer and yields the empty leaf list the plan carries.
+            //
             // A per-function `.expand_return(...)` states a decomposition of
-            // its own, and now has a row of its own under a name of its own —
-            // the shape step 2 gave the parameter side. The comparison reads
-            // THAT row, so the two sides describe the same decomposition.
-            let row = match decon {
-                prebindgen_registry::leaf::DeconId::PerFn(_, func) => {
+            // its own, under a row of its own; the type's `parts` answers the
+            // rest.
+            let row = match &plan.decon {
+                Some(prebindgen_registry::leaf::DeconId::PerFn(_, func)) => {
                     crate::jni::recipes::site_row(&quote::format_ident!("{func}"))
                 }
-                prebindgen_registry::leaf::DeconId::Default(_) => crate::jni::recipes::parts(),
+                Some(prebindgen_registry::leaf::DeconId::Default(_)) => {
+                    crate::jni::recipes::parts()
+                }
+                // Whatever this crossing's DEFAULT row is: the element of a
+                // whole-element fold reads as the row it already has, which is
+                // the declared class's `whole` where it is one and the derived
+                // row where nothing declared it.
+                None => prebindgen_registry::recipe::RecipeName::derived(),
             };
             // A `sealed_class` that ALSO carries an `expand_return!` states two
             // decompositions under one row name: the sum's arms, declared by
@@ -227,6 +233,17 @@ impl Declarations {
             let reading = match plan.by_ref {
                 true => plan.source.borrowed(),
                 false => plan.source.clone(),
+            };
+            let row = match plan.decon {
+                Some(_) => row,
+                None => recipes
+                    .recipe(&prebindgen_registry::recipe::Crossing::new(
+                        reading.clone(),
+                        prebindgen_registry::recipe::Direction::Deconstruct,
+                    ))
+                    .0
+                    .name()
+                    .clone(),
             };
             let (leaves, hoists, coverage) = match folding.unfold(&policy, bindings, &reading, &row)
             {
@@ -254,7 +271,14 @@ impl Declarations {
             //
             // So: an incomplete read is skipped and named, and a complete one
             // is compared in full, with no exemptions.
-            if !coverage.is_complete() {
+            //
+            // The one place a stop is the ANSWER rather than a shortfall is a
+            // plan that states no decomposition. `Atomic` there says "the
+            // adapter emits this conversion itself", which is exactly what a
+            // whole-element fold does, and the declaration states no parts for
+            // it to have compared less than. Both leaf lists are still compared
+            // in full below.
+            if !coverage.is_complete() && plan.decon.is_some() {
                 skipped.push(format!("{what}: {}", coverage.unread().join(", ")));
                 continue;
             }

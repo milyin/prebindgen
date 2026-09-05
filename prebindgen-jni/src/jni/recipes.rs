@@ -711,6 +711,26 @@ impl Declarations {
                 decomposed.entry(decl.key().clone()).or_insert(ty);
             }
         }
+        // A plan that states NO decomposition still states a crossing: a
+        // whole-element fold hands each element over through its own converter.
+        // The derived row is what that reads as, and declaring it here is what
+        // lets the differential compare such a plan instead of naming it.
+        let mut derived: std::collections::BTreeSet<TypeKey> = Default::default();
+        for plan in unfolded
+            .callback_arg_plans
+            .values()
+            .chain(unfolded.unfold_plans.values())
+            .chain(unfolded.error_plans.values())
+        {
+            // Once per crossing, and only where nothing else states one: a
+            // DECLARED class already has its `whole` default, and a second
+            // default is refused. Several functions fold runs of one element
+            // type, so the row they read is the element's, not each plan's.
+            let key = plan.source.stripped_key();
+            if plan.decon.is_none() && !self.types.contains_key(&key) && derived.insert(key) {
+                recipes.declare_derived_default(plan.source.clone(), Direction::Deconstruct);
+            }
+        }
         for ty in decomposed.into_values() {
             // A real row where the declaration can state one. #622 wrote
             // `Atomic` here because `Reach` could not spell an identity leaf;
