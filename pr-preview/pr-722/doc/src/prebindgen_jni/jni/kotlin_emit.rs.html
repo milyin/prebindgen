@@ -160,8 +160,8 @@
 <a href=#160 id=160 data-nosnippet>160</a>    /// package).
 <a href=#161 id=161 data-nosnippet>161</a>    </span><span class="kw">pub fn </span>write_kotlin(<span class="kw-2">&amp;</span><span class="self">self</span>, kotlin_root: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;PathBuf&gt;, WriteKotlinError&gt; {
 <a href=#162 id=162 data-nosnippet>162</a>        <span class="comment">// An engine with no Kotlin lowering writes no Kotlin. The root is still
-<a href=#163 id=163 data-nosnippet>163</a>        // created, so a Gradle source set pointed at it resolves to an empty
-<a href=#164 id=164 data-nosnippet>164</a>        // set rather than to a missing directory.
+<a href=#163 id=163 data-nosnippet>163</a>        // created, so a Gradle source set pointed at it resolves to an empty set
+<a href=#164 id=164 data-nosnippet>164</a>        // rather than to a missing directory.
 <a href=#165 id=165 data-nosnippet>165</a>        </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
 <a href=#166 id=166 data-nosnippet>166</a>        </span><span class="kw">if </span><span class="self">self</span>.pipeline() != prebindgen_registry::pipeline::Pipeline::V1 {
 <a href=#167 id=167 data-nosnippet>167</a>            std::fs::create_dir_all(kotlin_root)<span class="question-mark">?</span>;
