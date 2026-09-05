@@ -85,15 +85,46 @@ pub struct DeclaredElement {
     /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …).
     /// The adapter's word, printed back verbatim.
     pub representation: String,
-    /// Whether [`Self::rust_origin`] is **required** to name a captured
-    /// `#[prebindgen]` item.
+    /// What [`Self::rust_origin`] must name in the captured source.
     ///
-    /// `false` for the things a binding may define itself — a callback
-    /// signature, a binding-local conversion helper, a type the target
-    /// represents but the source never exported (`String` as an opaque handle).
-    /// A `true` element that resolves to nothing is an error, so this is stated
-    /// by the adapter rather than guessed from the kind.
-    pub must_resolve: bool,
+    /// Not the same question as [`Self::kind`], which says what the *target*
+    /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
+    /// [`ElementKind::Const`] backed by a captured **function**. Stated by the
+    /// adapter, because only the adapter knows which declarator produced the
+    /// element.
+    pub source: SourceKind,
+}
+
+/// What a declared element's Rust origin must name in the captured source.
+///
+/// Captured items live in one flat namespace, but the namespace holds three
+/// kinds and a declaration means one of them: `.fun(fun!(x))` naming a captured
+/// `const x` is a mistake, not a shape v2 has yet to implement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceKind {
+    /// A captured `#[prebindgen]` function.
+    Function,
+    /// A captured `#[prebindgen]` type.
+    Type,
+    /// A captured `#[prebindgen]` constant.
+    Const,
+    /// Nothing: the binding defines this itself. A callback signature, a
+    /// binding-local conversion helper, or a type the target represents
+    /// although the source never exported it (`String` as an opaque handle).
+    BindingLocal,
+}
+
+impl SourceKind {
+    /// The word a refusal uses for this kind.
+    pub(crate) fn describe(self) -> &'static str {
+        match self {
+            SourceKind::Function => "function",
+            SourceKind::Type => "type",
+            SourceKind::Const => "constant",
+            SourceKind::BindingLocal => "binding-local item",
+        }
+    }
 }
 
 impl DeclaredElement {
@@ -111,15 +142,27 @@ impl DeclaredElement {
             rust_origin,
             placement: placement.into(),
             representation: representation.into(),
-            must_resolve: true,
+            // The usual case: the element is named after the item it is built
+            // from. `sourced_as` states the exceptions.
+            source: match kind {
+                ElementKind::Function => SourceKind::Function,
+                ElementKind::Type => SourceKind::Type,
+                ElementKind::Const => SourceKind::Const,
+                ElementKind::Callback | ElementKind::Conversion => SourceKind::BindingLocal,
+            },
         }
     }
 
-    /// The same, for something the binding may define itself rather than
-    /// something it must select out of the captured source — see
-    /// [`Self::must_resolve`].
-    pub fn local(mut self) -> Self {
-        self.must_resolve = false;
+    /// The same, for something the binding defines itself rather than something
+    /// it selects out of the captured source — see [`SourceKind::BindingLocal`].
+    pub fn local(self) -> Self {
+        self.sourced_as(SourceKind::BindingLocal)
+    }
+
+    /// The same, for an element whose target kind and source kind differ — see
+    /// [`Self::source`].
+    pub fn sourced_as(mut self, source: SourceKind) -> Self {
+        self.source = source;
         self
     }
 }

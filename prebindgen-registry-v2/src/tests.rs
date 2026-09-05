@@ -3,7 +3,7 @@
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::{BindingDeclarations, DeclaredElement, ElementKind},
+    decl::{BindingDeclarations, DeclaredElement, ElementKind, SourceKind},
     outcome::{EngineError, Outcome},
     run::plan,
 };
@@ -131,15 +131,45 @@ fn one_id_may_name_only_one_element() {
     assert!(matches!(error, EngineError::DuplicateElement { .. }));
     assert!(error.to_string().contains("fn:handle_new"), "{error}");
 
-    // The same name under two kinds is two elements, and legal.
+    // The same name under two target kinds is two elements, and legal: the
+    // captured function may back both a callable and a `val`.
     let stated = Stated {
         declared: vec![
             element(ElementKind::Function, "handle_new"),
-            element(ElementKind::Const, "handle_new"),
+            element(ElementKind::Const, "handle_new").sourced_as(SourceKind::Function),
         ],
         ignored: Vec::new(),
     };
     plan(&stated, sources(), "fixture-crate").expect("two kinds, two ids");
+}
+
+/// A declaration names one of the three captured kinds, and naming the wrong
+/// one is a mistake rather than a shape v2 has yet to implement.
+#[test]
+fn a_declaration_must_name_the_kind_it_says_it_does() {
+    // `handle_new` is a captured function, so declaring it as a constant is as
+    // wrong as declaring a name nothing captured.
+    let stated = Stated {
+        declared: vec![element(ElementKind::Const, "handle_new")],
+        ignored: Vec::new(),
+    };
+    let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
+    assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
+    assert!(
+        error
+            .to_string()
+            .contains("no captured constant `handle_new`"),
+        "the refusal names the kind it looked for: {error}"
+    );
+
+    // And a constant-shaped output backed by a captured function resolves,
+    // because the element says which kind to look for.
+    let stated = Stated {
+        declared: vec![element(ElementKind::Const, "handle_new").sourced_as(SourceKind::Function)],
+        ignored: Vec::new(),
+    };
+    let generation = plan(&stated, sources(), "fixture-crate").expect("a function-backed constant");
+    assert_eq!(generation.report().counts().skipped, 1);
 }
 
 /// The manifest groups by cause, so one missing capability is stated once with

@@ -183,10 +183,7 @@ fn the_generated_rust_is_stamped_with_its_pipeline() {
 fn the_manifest_is_written_as_json_and_markdown() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let dir = unique_test_dir("cbindgen_v2_manifest");
-    let written = generated
-        .write_manifest(&dir)
-        .expect("write_manifest")
-        .expect("v2 has a manifest to write");
+    let written = generated.write_manifest(&dir).expect("write_manifest");
     assert_eq!(written.len(), 2);
     let json = std::fs::read_to_string(&written[0]).unwrap();
     assert!(json.contains("\"schema_version\": 1"), "{json}");

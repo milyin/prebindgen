@@ -41,7 +41,7 @@ pub mod run;
 #[cfg(test)]
 mod tests;
 
-pub use decl::{BindingDeclarations, DeclaredElement, ElementId, ElementKind};
+pub use decl::{BindingDeclarations, DeclaredElement, ElementId, ElementKind, SourceKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use report::{Counts, Report, SCHEMA_VERSION};
 pub use run::{plan, Generation, PIPELINE};

@@ -11,7 +11,7 @@
 //! a declared element lands is the frontend's settings applied to it, which is
 //! the same answer v1 would give.
 
-use prebindgen_registry_v2::{BindingDeclarations, DeclaredElement, ElementKind};
+use prebindgen_registry_v2::{BindingDeclarations, DeclaredElement, ElementKind, SourceKind};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
 
@@ -22,6 +22,20 @@ impl BindingDeclarations for Declarations {
 
     fn declared_elements(&self) -> Vec<DeclaredElement> {
         let mut out = Vec::new();
+
+        // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
+        // other, as a class member or as a package function, but the binding
+        // defines it, so the source never captured it. It is stated where it is
+        // bound and nowhere else: a second entry for the helper itself would
+        // give one id to two elements.
+        let is_local = |ident: &syn::Ident| self.local_fns.iter().any(|(local, ..)| local == ident);
+        let stated = |element: DeclaredElement, ident: &syn::Ident| {
+            if is_local(ident) {
+                element.local()
+            } else {
+                element
+            }
+        };
 
         // Declared classes. Which declarator a type came from is this
         // adapter's word for its representation, and the engine prints it back
@@ -43,11 +57,14 @@ impl BindingDeclarations for Declarations {
             // Members are separately selected: a class can be emitted with one
             // of its methods skipped, so each is an element of its own.
             for member in self.class_members.get(key).into_iter().flatten() {
-                out.push(DeclaredElement::new(
-                    ElementKind::Function,
-                    member.rust_ident.to_string(),
-                    format!("{placement}.{}", self.effective_method_name(key, member)),
-                    member_representation(member),
+                out.push(stated(
+                    DeclaredElement::new(
+                        ElementKind::Function,
+                        member.rust_ident.to_string(),
+                        format!("{placement}.{}", self.effective_method_name(key, member)),
+                        member_representation(member),
+                    ),
+                    &member.rust_ident,
                 ));
             }
         }
@@ -62,11 +79,14 @@ impl BindingDeclarations for Declarations {
                 )
             };
             for entry in &config.functions {
-                out.push(DeclaredElement::new(
-                    ElementKind::Function,
-                    entry.rust_ident.to_string(),
-                    placed(entry),
-                    "fun",
+                out.push(stated(
+                    DeclaredElement::new(
+                        ElementKind::Function,
+                        entry.rust_ident.to_string(),
+                        placed(entry),
+                        "fun",
+                    ),
+                    &entry.rust_ident,
                 ));
             }
             // A `constant!(X)` names the `#[prebindgen]` const it reads.
@@ -78,13 +98,19 @@ impl BindingDeclarations for Declarations {
                     "constant",
                 ));
             }
-            // A `constant!(X).fun(..)` names the nullary function behind it.
+            // A `constant!(X).fun(..)` is a Kotlin `val` backed by a nullary
+            // captured **function**, so its target kind and its source kind
+            // differ — and a binding-local one names no captured item at all.
             for entry in &config.constant_functions {
-                out.push(DeclaredElement::new(
+                let element = DeclaredElement::new(
                     ElementKind::Const,
                     entry.rust_ident.to_string(),
                     placed(entry),
                     "constant_fun",
+                );
+                out.push(stated(
+                    element.sourced_as(SourceKind::Function),
+                    &entry.rust_ident,
                 ));
             }
             // A `constant!(X).expr(..)` has no Rust item behind it at all.

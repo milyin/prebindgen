@@ -418,24 +418,27 @@ impl Cbindgen {
 
     /// Write the manifest into `dir`, and print its summary as cargo warnings.
     ///
-    /// Returns the paths written, or `None` under an engine that produces no
-    /// report.
-    #[cfg(feature = "v2")]
+    /// Returns the paths written — empty under an engine that produces no
+    /// manifest, so a build script can call this unconditionally. It cannot ask
+    /// `cfg(feature = "v2")`: cargo passes a package's features to a build
+    /// script as environment variables, not as cfgs.
     pub fn write_manifest(
         &self,
         dir: impl AsRef<std::path::Path>,
-    ) -> Result<Option<Vec<std::path::PathBuf>>, prebindgen_registry::WriteRustError> {
-        let Some(report) = self.manifest() else {
-            return Ok(None);
-        };
-        report.warn();
-        report
-            .write(dir)
-            .map(Some)
-            .map_err(|error| prebindgen_registry::WriteRustError::Engine {
-                pipeline: prebindgen_registry_v2::PIPELINE,
-                message: error.to_string(),
-            })
+    ) -> Result<Vec<std::path::PathBuf>, prebindgen_registry::WriteRustError> {
+        #[cfg(feature = "v2")]
+        if let Engine::V2(generation) = &self.engine {
+            let report = generation.report();
+            report.warn();
+            return report.write(dir).map_err(|error| {
+                prebindgen_registry::WriteRustError::Engine {
+                    pipeline: prebindgen_registry_v2::PIPELINE,
+                    message: error.to_string(),
+                }
+            });
+        }
+        let _ = dir;
+        Ok(Vec::new())
     }
 
     /// What the binding declared.

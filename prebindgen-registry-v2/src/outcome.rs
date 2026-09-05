@@ -9,7 +9,7 @@
 
 use serde::Serialize;
 
-use crate::decl::ElementId;
+use crate::decl::{ElementId, SourceKind};
 
 /// A stable code naming *what* is not implemented, dotted from general to
 /// specific: `unsupported.string`, `unsupported.handle.borrowed_input`.
@@ -104,7 +104,9 @@ pub enum EngineError {
     /// declaration is a statement of intent; its target being absent is a typo
     /// or a source-crate rename, and never a capability question. All of them
     /// are collected before failing.
-    DeclaredNotFound { entries: Vec<(ElementId, String)> },
+    DeclaredNotFound {
+        entries: Vec<(ElementId, SourceKind, String)>,
+    },
     /// Two declared elements answering to one id. An id identifies an element,
     /// and a manifest that gave one id to two entries could not account for
     /// either — so this is a contradiction in the declarations, not a gap in
@@ -124,8 +126,8 @@ impl std::fmt::Display for EngineError {
                     "v2: {} declared item(s) match no captured `#[prebindgen]` item:",
                     entries.len()
                 )?;
-                for (id, origin) in entries {
-                    writeln!(f, "  {id} (`{origin}`)")?;
+                for (id, source, origin) in entries {
+                    writeln!(f, "  {id} — no captured {} `{origin}`", source.describe())?;
                 }
                 write!(
                     f,

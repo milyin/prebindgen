@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use prebindgen_flat::flat::{Flat, FlatBuilder};
 
 use crate::{
-    decl::{BindingDeclarations, ElementKind},
+    decl::{BindingDeclarations, ElementKind, SourceKind},
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
 };
@@ -54,7 +54,21 @@ impl Generation {
     /// Rust: a consumer's `include!` compiles whether this run generated
     /// anything or not.
     pub fn write_rust(&self, out_path: impl AsRef<Path>) -> Result<PathBuf, EngineError> {
-        let out_path = out_path.as_ref().to_path_buf();
+        // A relative path is resolved against `OUT_DIR`, as v1 resolves one: a
+        // build script that writes `"perftest.rs"` must not land a file in the
+        // crate root under one engine and in `OUT_DIR` under the other.
+        let out_path = out_path.as_ref();
+        let out_path = if out_path.is_relative() {
+            PathBuf::from(std::env::var("OUT_DIR").map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "a relative output path needs OUT_DIR, which only a build script sets",
+                )
+            })?)
+            .join(out_path)
+        } else {
+            out_path.to_path_buf()
+        };
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -84,15 +98,31 @@ pub fn plan(
     let declared = declarations.declared_elements();
     // A declaration is a statement of intent, so a declared item the source
     // never captured is an error and not a capability question — the same rule
-    // v1 holds, and the reason `must_resolve` is stated per element.
-    // Captured items live in one flat namespace, so this is one lookup and not
-    // one per kind: a Kotlin `val` may be backed by a nullary function, and
-    // asking the constant table for it would report a typo that is not there.
+    // v1 holds.
+    //
+    // Each element says which of the three captured kinds its origin must name
+    // — which is not always its own kind, since a Kotlin `val` may be backed by
+    // a nullary function. Looking a function up among the constants reported a
+    // typo that was not there; looking it up in the whole namespace let a
+    // `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
     let missing: Vec<_> = declared
         .iter()
-        .filter(|element| element.must_resolve)
-        .filter(|element| flat.element(element.rust_origin.as_str()).is_none())
-        .map(|element| (element.id.clone(), element.rust_origin.clone()))
+        .filter(|element| {
+            let origin = element.rust_origin.as_str();
+            match element.source {
+                SourceKind::Function => flat.function(origin).is_none(),
+                SourceKind::Type => flat.declared_type(origin).is_none(),
+                SourceKind::Const => flat.constant(origin).is_none(),
+                SourceKind::BindingLocal => false,
+            }
+        })
+        .map(|element| {
+            (
+                element.id.clone(),
+                element.source,
+                element.rust_origin.clone(),
+            )
+        })
         .collect();
     if !missing.is_empty() {
         return Err(EngineError::DeclaredNotFound { entries: missing });
