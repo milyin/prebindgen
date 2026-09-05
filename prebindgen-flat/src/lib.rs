@@ -24,6 +24,7 @@
 /// the unconstructable `RustWriter` it hands to final callbacks.
 pub use crate::flat::emit::RustEmitter;
 pub mod flat;
+pub mod pipeline;
 pub mod shape;
 pub mod types_util;
 

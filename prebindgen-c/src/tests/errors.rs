@@ -28,7 +28,7 @@ fn result_error_not_declared_is_build_error() {
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = cbindgen
-            .build_with(registry)
+            .build_over(registry)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope.rs")));
     }));
     assert!(
@@ -59,7 +59,7 @@ fn fallible_input_without_result_needs_panic() {
         .function(syn::parse_quote!(z_log));
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = cb1
-            .build_with(reg1)
+            .build_over(reg1)
             .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope2.rs")));
     }));
     assert!(err.is_err(), "expected a build error without .panic()");

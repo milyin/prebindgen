@@ -12,7 +12,7 @@ use super::*;
 /// here and no `JniGen` is produced (nothing can be written). On success,
 /// a real `write_rust` confirms the valid binding also emits.
 fn resolve_result(tag: &str, registry: RegistryBuilder, jni: JniGenBuilder) -> Result<(), String> {
-    match jni.build_with(registry) {
+    match jni.build_over(registry) {
         Ok(gen) => {
             let dir = unique_test_dir(tag);
             let _ = std::fs::remove_dir_all(&dir);
@@ -134,7 +134,7 @@ fn keyword_struct_field_is_sanitized_not_error() {
     let dir = unique_test_dir("jni_sym_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs"))
         .expect("keyword field sanitized, not an error");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");

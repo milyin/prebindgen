@@ -458,8 +458,22 @@ pub struct JniGen {
     /// mutators would otherwise ride into the finished object, and "finished"
     /// would be a comment rather than a type.
     decls: Declarations,
-    /// Every crossing this binding needs, each with its conversion.
-    registry: prebindgen_registry::Registry,
+    /// The engine that produced this binding, and everything it produced.
+    engine: Engine,
+}
+
+/// What generated a [`JniGen`].
+///
+/// One variant per pipeline, so "which engine ran" is a fact of the value
+/// rather than a flag beside it, and a v2 binding cannot be asked for a v1
+/// registry it never built.
+pub(crate) enum Engine {
+    /// Every crossing this binding needs, each with its conversion — the v1
+    /// engine's resolution.
+    V1(Box<prebindgen_registry::Registry>),
+    /// The v2 engine's finished run — see `prebindgen-registry-v2`.
+    #[cfg(feature = "v2")]
+    V2(Box<prebindgen_registry_v2::Generation>),
 }
 
 /// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
@@ -543,13 +557,13 @@ impl JniGen {
         use prebindgen_registry::recipe::{Compiler, Crossing};
 
         let reading = self
-            .registry
+            .registry()
             .flat()
             .classify(&ty)
             .map_err(|e| format!("the model does not classify {}: {e}", quote::quote!(#ty)))?;
         let crossing = Crossing::new(reading, direction);
         let mut compiler = Compiler::resume(
-            &self.registry,
+            self.registry(),
             self.decls.recipe_table(),
             self.decls.site_bindings(),
             self.decls.compiled.borrow().clone(),
@@ -578,7 +592,7 @@ impl JniGen {
             fragment
                 .rust
                 .render_fn(&prebindgen_registry::RustWriter::for_registry_test(
-                    &self.registry,
+                    self.registry(),
                 ));
         Ok((
             fragment.composed_only,
@@ -635,7 +649,7 @@ impl JniGen {
         use prebindgen_registry::recipe::Direction;
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
         let ty: syn::Type = syn::parse_quote!(#ident);
-        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let reading = prebindgen_registry::Conversions::reading_of(self.registry(), &ty)?;
         let row =
             prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Deconstruct)
                 .row(crate::jni::recipes::parts());
@@ -676,12 +690,12 @@ impl JniGen {
     /// `synth_value_struct_leaves` for a `data_class`.
     pub(crate) fn walk_lines_for_test(&self, short: &str) -> Option<Vec<String>> {
         let ident = syn::Ident::new(short, proc_macro2::Span::call_site());
-        let leaves = match self.registry.flat().declared_type(&ident)? {
+        let leaves = match self.registry().flat().declared_type(&ident)? {
             prebindgen_registry::flat::Type::Variant(sum) => {
-                crate::jni::synth_sum_leaves(&self.decls, &self.registry, &ident, sum)
+                crate::jni::synth_sum_leaves(&self.decls, self.registry(), &ident, sum)
             }
             prebindgen_registry::flat::Type::Struct(s) => {
-                crate::jni::synth_value_struct_leaves(&self.decls, &self.registry, s)?
+                crate::jni::synth_value_struct_leaves(&self.decls, self.registry(), s)?
             }
             _ => return None,
         };
@@ -827,7 +841,7 @@ impl JniGen {
     ) -> Option<Vec<crate::jni::compile::Wire>> {
         use prebindgen_registry::recipe::Direction;
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
-        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let reading = prebindgen_registry::Conversions::reading_of(self.registry(), &ty)?;
         let key = reading.key();
         let row = prebindgen_registry::recipe::Crossing::new(reading.clone(), Direction::Construct)
             .row(crate::jni::recipes::parts());
@@ -852,7 +866,7 @@ impl JniGen {
         use prebindgen_registry::recipe::Direction;
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
-        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let reading = prebindgen_registry::Conversions::reading_of(self.registry(), &ty)?;
         let fragment = self
             .decls
             .compiled
@@ -867,7 +881,7 @@ impl JniGen {
         use prebindgen_registry::recipe::Direction;
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
-        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let reading = prebindgen_registry::Conversions::reading_of(self.registry(), &ty)?;
         let fragment = self
             .decls
             .compiled
@@ -882,7 +896,7 @@ impl JniGen {
         use prebindgen_registry::recipe::Direction;
 
         let ty: syn::Type = syn::parse_str(spelling).ok()?;
-        let reading = prebindgen_registry::Conversions::reading_of(&self.registry, &ty)?;
+        let reading = prebindgen_registry::Conversions::reading_of(self.registry(), &ty)?;
         let key = reading.key();
         let fragment = self
             .decls
@@ -920,6 +934,15 @@ impl JniGen {
         &self,
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, prebindgen_registry::WriteRustError> {
+        #[cfg(feature = "v2")]
+        if let Engine::V2(generation) = &self.engine {
+            return generation.write_rust(out_path).map_err(|error| {
+                prebindgen_registry::WriteRustError::Engine {
+                    pipeline: prebindgen_registry_v2::PIPELINE,
+                    message: error.to_string(),
+                }
+            });
+        }
         // Every binding a test writes also freezes each compiled fragment into
         // its canonical plan and checks the two describe the same fragment.
         // Nothing renders from that plan yet — #613 step 4 is what moves JNI
@@ -1126,9 +1149,86 @@ impl JniGen {
         }
     }
 
+    /// The binding the v1 engine resolved.
+    pub(crate) fn from_v1(decls: Declarations, registry: prebindgen_registry::Registry) -> Self {
+        JniGen {
+            decls,
+            engine: Engine::V1(Box::new(registry)),
+        }
+    }
+
+    /// The binding the v2 engine ran.
+    #[cfg(feature = "v2")]
+    pub(crate) fn from_v2(
+        decls: Declarations,
+        generation: prebindgen_registry_v2::Generation,
+    ) -> Self {
+        JniGen {
+            decls,
+            engine: Engine::V2(Box::new(generation)),
+        }
+    }
+
     /// The resolved registry — conversions, decompositions, and the model.
+    ///
+    /// V1 only: it *is* the v1 engine's resolution, and v2 builds none. Panics
+    /// under v2, which is why [`Self::pipeline`] answers first.
     pub fn registry(&self) -> &prebindgen_registry::Registry {
-        &self.registry
+        match &self.engine {
+            Engine::V1(registry) => registry,
+            #[cfg(feature = "v2")]
+            Engine::V2(_) => panic!(
+                "`JniGen::registry` is the v1 engine's resolution; this binding was \
+                 generated by v2. Read `JniGen::manifest()` instead"
+            ),
+        }
+    }
+
+    /// Which engine generated this binding.
+    pub fn pipeline(&self) -> prebindgen_registry::pipeline::Pipeline {
+        match &self.engine {
+            Engine::V1(_) => prebindgen_registry::pipeline::Pipeline::V1,
+            #[cfg(feature = "v2")]
+            Engine::V2(_) => prebindgen_registry::pipeline::Pipeline::V2,
+        }
+    }
+
+    /// What was generated and what was skipped, per declared element.
+    ///
+    /// `None` under v1: its answer is "everything declared, or the build
+    /// failed", so it has no partial surface to manifest. Producing one for v1
+    /// too is #719 §4 and follows this change.
+    #[cfg(feature = "v2")]
+    pub fn manifest(&self) -> Option<&prebindgen_registry_v2::Report> {
+        match &self.engine {
+            Engine::V1(_) => None,
+            Engine::V2(generation) => Some(generation.report()),
+        }
+    }
+
+    /// Write the manifest into `dir`, and print its summary as cargo warnings.
+    ///
+    /// Returns the paths written — empty under an engine that produces no
+    /// manifest, so a build script can call this unconditionally. It cannot ask
+    /// `cfg(feature = "v2")`: cargo passes a package's features to a build
+    /// script as environment variables, not as cfgs.
+    pub fn write_manifest(
+        &self,
+        dir: impl AsRef<std::path::Path>,
+    ) -> Result<Vec<std::path::PathBuf>, prebindgen_registry::WriteRustError> {
+        #[cfg(feature = "v2")]
+        if let Engine::V2(generation) = &self.engine {
+            let report = generation.report();
+            report.warn();
+            return report.write(dir).map_err(|error| {
+                prebindgen_registry::WriteRustError::Engine {
+                    pipeline: prebindgen_registry_v2::PIPELINE,
+                    message: error.to_string(),
+                }
+            });
+        }
+        let _ = dir;
+        Ok(Vec::new())
     }
 
     /// What the binding declared.

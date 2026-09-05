@@ -194,6 +194,20 @@ pub enum WriteRustError {
     Scan(ScanError),
     Resolve(crate::resolve::ResolveError),
     Write(crate::write::WriteError),
+    /// Which engine to run could not be settled — an unreadable
+    /// `PREBINDGEN_PIPELINE`, or one asked for that this build did not compile
+    /// in. Raised before any generation runs, and never by falling back to the
+    /// other engine. See [`pipeline`](crate::pipeline).
+    Pipeline(::prebindgen_flat::pipeline::PipelineError),
+    /// A generation engine other than v1 failed.
+    ///
+    /// The message is that engine's own, printed verbatim: this crate is the v1
+    /// engine and deliberately does not depend on the others, so it carries
+    /// their diagnostics rather than their types.
+    Engine {
+        pipeline: &'static str,
+        message: String,
+    },
 }
 
 impl fmt::Display for WriteRustError {
@@ -202,11 +216,21 @@ impl fmt::Display for WriteRustError {
             WriteRustError::Scan(e) => write!(f, "{}", e),
             WriteRustError::Resolve(e) => write!(f, "{}", e),
             WriteRustError::Write(e) => write!(f, "{}", e),
+            WriteRustError::Pipeline(e) => write!(f, "{}", e),
+            WriteRustError::Engine { pipeline, message } => {
+                write!(f, "{pipeline} engine: {message}")
+            }
         }
     }
 }
 
 impl std::error::Error for WriteRustError {}
+
+impl From<::prebindgen_flat::pipeline::PipelineError> for WriteRustError {
+    fn from(e: ::prebindgen_flat::pipeline::PipelineError) -> Self {
+        WriteRustError::Pipeline(e)
+    }
+}
 
 impl From<ScanError> for WriteRustError {
     fn from(e: ScanError) -> Self {

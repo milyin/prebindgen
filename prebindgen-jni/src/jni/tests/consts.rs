@@ -43,7 +43,7 @@ fn declared_consts_emit_getter_and_val() {
     let dir = unique_test_dir("jnigen_consts_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // Path-alias const re-emission (the initializer tokens are never
@@ -124,7 +124,7 @@ fn unsigned_const_uses_ulong_surface() {
     let dir = unique_test_dir("jnigen_consts_unsigned");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let kotlin = paths
@@ -157,7 +157,7 @@ fn undeclared_const_not_emitted() {
     let dir = unique_test_dir("jnigen_consts_undeclared");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("pub const MAX_LEN"), "{rust}");
@@ -201,7 +201,7 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
     let dir = unique_test_dir("jnigen_constant_fun_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // Ordinary declared-function wrapper: an extern calling `myflat::tag()`.
@@ -255,7 +255,7 @@ fn constant_fun_source_non_nullary_rejected() {
     let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
@@ -298,7 +298,7 @@ fn constant_fun_source_handle_return_rejected() {
     let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
@@ -337,7 +337,7 @@ fn constant_expr_emits_getter_and_val() {
     let dir = unique_test_dir("jnigen_constant_expr_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -414,7 +414,7 @@ fn constant_expr_handle_type_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .build_with(registry)
+        .build_over(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -464,7 +464,7 @@ fn handle_const_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .build_with(registry)
+        .build_over(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -498,7 +498,7 @@ fn constant_with_source_calls_path_verbatim() {
     let dir = unique_test_dir("jnigen_constant_with_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -607,7 +607,7 @@ fn every_registered_constant_getter_is_claimed() {
                 )),
         );
     let claimed = jni.decls.claimed();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let registered: Vec<syn::Ident> = gen
         .registry()

@@ -58,7 +58,7 @@ fn inline_output_gets_own_builder() {
     let dir = unique_test_dir("jnigen_inline_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     assert_eq!(
         gen.output_freeze_for_test("z_make_a"),
         Some((2, true, false)),
@@ -164,7 +164,7 @@ fn error_unwrap_universal_records() {
     let dir = unique_test_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     assert_eq!(
         gen.error_freeze_for_test("z_fallible"),
         Some((3, true, false)),
@@ -300,7 +300,7 @@ fn method_constructor_and_inline_field_self() {
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -361,7 +361,7 @@ fn rust_side_only_error_type() {
     let dir = unique_test_dir("jnigen_rust_side_only_err");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -447,7 +447,7 @@ fn a_per_function_expansion_on_an_accessor_is_refused() {
             prebindgen_registry::expand_return!(ZThing)
                 .field(prebindgen_registry::fun!(z_thing_name)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("an accessor composes nothing");
     let message = error.to_string();
     assert!(
@@ -520,7 +520,7 @@ fn a_declared_class_can_be_expanded_and_still_cross_whole() {
                 .variant_self(),
         );
 
-    let gen = jni.build_with(registry).expect("both classes resolve");
+    let gen = jni.build_over(registry).expect("both classes resolve");
 
     let dir = unique_test_dir("jnigen_expanded_declared_classes");
     let _ = std::fs::remove_dir_all(&dir);
@@ -569,7 +569,7 @@ fn rust_side_only_input_type() {
     let dir = unique_test_dir("jnigen_rust_side_only_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -617,7 +617,7 @@ fn rust_side_only_variant_self_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .build_with(registry)
+        .build_over(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -638,7 +638,7 @@ fn rust_side_only_field_self_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .build_with(registry)
+        .build_over(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -678,7 +678,7 @@ fn fn_expand_param_type_mismatch_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("type mismatch must fail");
     let msg = format!("{err}");
     assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
@@ -719,7 +719,7 @@ fn fn_expand_return_type_mismatch_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("type mismatch must fail");
     let msg = format!("{err}");
     assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
@@ -758,7 +758,7 @@ fn fn_expand_param_unknown_param_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("unknown param must fail");
     assert!(format!("{err}").contains("typo"), "{err}");
 }
@@ -798,7 +798,7 @@ fn typo_in_expand_decl_is_hard_error() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("typo'd expand accessor must fail the scan");
     // Reported by the decomposition, not by the scan's declared-name check:
     // this binding applies its own output decompositions while it declares
@@ -855,7 +855,7 @@ fn ignore_matching_acknowledges_naming_family() {
     let dir = unique_test_dir("jnigen_ignore_funs_where");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("Java_io_test_jni_JNINative_zLen"), "{rust}");
@@ -950,7 +950,7 @@ fn method_without_receiver_rejected() {
                     .constructor(prebindgen_registry::fun!(z_make)),
             ),
         );
-    let err = jni.build_with(registry).expect_err("receiver-less member");
+    let err = jni.build_over(registry).expect_err("receiver-less member");
     let msg = format!("{err}");
     assert!(
         msg.contains("method `z_thing_free_standing`") && msg.contains("`ZThing`"),
@@ -984,7 +984,7 @@ fn constructor_with_wrong_return_rejected() {
                     .constructor(prebindgen_registry::fun!(z_make_number)),
             ),
         );
-    let err = jni.build_with(registry).expect_err("wrong ctor return");
+    let err = jni.build_over(registry).expect_err("wrong ctor return");
     let msg = format!("{err}");
     assert!(
         msg.contains("constructor `z_make_number`") && msg.contains("it returns `i64`"),
@@ -1040,7 +1040,7 @@ fn binding_local_field_conditional_handle() {
     let dir = unique_test_dir("jnigen_local_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1123,7 +1123,7 @@ fn binding_local_field_name_collision_rejected() {
             ),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("collision must be rejected");
     let msg = format!("{err}");
     assert!(msg.contains("collides"), "{msg}");
@@ -1193,7 +1193,7 @@ fn binding_local_field_splices_through_parent() {
     let dir = unique_test_dir("jnigen_local_field_splice");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1278,7 +1278,7 @@ fn binding_local_functions_all_positions() {
     let dir = unique_test_dir("jnigen_local_funs");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let function_plan = gen
         .generation_plan()
         .function(&syn::parse_quote!(z_use))
@@ -1399,7 +1399,7 @@ fn binding_local_fn_names_flow_through_manglers() {
                 .field_self(),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_local_mangle",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1461,7 +1461,7 @@ fn binding_local_fun_name_collision_rejected() {
             ),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("collision must be rejected");
     assert!(format!("{err}").contains("collides"), "{err}");
 }
@@ -1524,7 +1524,7 @@ fn gc_managed_handle_lifecycle() {
                 .fun(prebindgen_registry::fun!(z_other_use)),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_gc_managed",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1635,7 +1635,7 @@ fn split_on_param_emits_typed_overloads() {
                 .variant_self(),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_one",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1672,7 +1672,7 @@ fn split_on_param_cartesian_product() {
                 .variant_self(),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_prod",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1738,7 +1738,7 @@ fn split_on_param_preserves_wrapper_generics() {
                 .field(prebindgen_registry::fun!(z_summary_total)),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_generic",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1807,7 +1807,7 @@ fn split_on_param_product_ambiguous_rejected() {
                 .variant(prebindgen_registry::fun!(z_thing_two)),
         );
     let _ = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_ambig",
     );
 }
@@ -1848,7 +1848,7 @@ fn split_declaration_colliding_variants_rejected() {
                 .variant(prebindgen_registry::fun!(z_name_from_label)),
         );
     let _ = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_decl",
     );
 }
@@ -1889,7 +1889,7 @@ fn split_declaration_collision_fails_resolve() {
                 .variant(prebindgen_registry::fun!(z_name_from_label)),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("colliding split declaration must fail resolve");
     assert!(
         err.to_string().contains("same JVM signature"),
@@ -1934,7 +1934,7 @@ fn split_no_split_suppresses_check() {
         );
     // No panic: the colliding variants are tolerated as selector-only.
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_no_split",
     );
     let all: String = raw.split_whitespace().collect();
@@ -1960,7 +1960,7 @@ fn split_on_unknown_param_rejected() {
                 .variant_self(),
         );
     let _ = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_typo",
     );
 }
@@ -1987,7 +1987,7 @@ fn split_on_option_param_emits_nullable_arm() {
                 .variant_self(),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_opt",
     );
     let all: String = raw.split_whitespace().collect();
@@ -2025,7 +2025,7 @@ fn split_on_option_param_without_single_leaf_arm_rejected() {
                 .variant(prebindgen_registry::fun!(z_summary_scaled)),
         );
     let _ = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_opt_no_arm",
     );
 }
@@ -2056,7 +2056,7 @@ fn split_on_param_optional_cartesian_with_plain() {
                 .variant_self(),
         );
     let raw = write_all(
-        jni.build_with(registry).expect("resolve"),
+        jni.build_over(registry).expect("resolve"),
         "jnigen_split_opt_prod",
     );
     let all: String = raw.split_whitespace().collect();
@@ -2159,7 +2159,7 @@ fn optional_selector_dispatch_end_to_end() {
     let dir = unique_test_dir("jnigen_opt_selector");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let function_plan = gen
         .generation_plan()
         .function(&syn::parse_quote!(z_put))
@@ -2277,7 +2277,7 @@ fn constructor_member_skips_default_output_expand() {
                 .field_self()
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let unfolded = gen.declarations().unfolded();
     // …the free fn is decomposed…
     assert!(
@@ -2340,7 +2340,7 @@ fn qualified_signature_spelling_matches_bare_ptr_class() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("qualified spellings resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
@@ -2410,7 +2410,7 @@ fn a_data_class_crosses_as_its_fields_and_a_nested_one_as_its_own() {
                 .class(crate::data_class!(Holder))
                 .fun(prebindgen_registry::fun!(holder_tag)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let wires = gen
         .parts_wires_for_test("Holder")
@@ -2489,7 +2489,7 @@ fn a_gate_inside_a_gate_supplies_one_absent_value() {
                 .class(crate::data_class!(Outer))
                 .fun(prebindgen_registry::fun!(outer_use)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     assert_eq!(
         wire_lines(&gen, "Outer", "o"),
         vec![
@@ -2574,7 +2574,7 @@ fn the_two_derivations_agree_on_a_nested_data_class() {
                 .class(crate::data_class!(Page))
                 .fun(prebindgen_registry::fun!(page_count)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     // Two levels of inlining, so the comparison sees depth 0, 1 and 2.
     let page: syn::Ident = syn::parse_quote!(Page);
@@ -2648,7 +2648,7 @@ fn a_sum_field_decomposes_into_its_tag_and_groups() {
                 .class(crate::data_class!(Holder))
                 .fun(prebindgen_registry::fun!(holder_id)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let holder: syn::Ident = syn::parse_quote!(Holder);
     let wires = gen
@@ -2734,7 +2734,7 @@ fn a_selector_inside_a_gated_group_is_a_segment_of_its_own() {
                 .class(crate::data_class!(Outer))
                 .fun(prebindgen_registry::fun!(outer_new)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     // `Mid` decomposes: one selector, its own group.
     let mid: syn::Ident = syn::parse_quote!(Mid);
@@ -2838,7 +2838,7 @@ fn a_field_named_like_the_arm_marker_is_just_a_field() {
                 .class(crate::data_class!(Holder))
                 .fun(prebindgen_registry::fun!(holder_id)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let holder: syn::Ident = syn::parse_quote!(Holder);
     let wires = gen
@@ -2908,7 +2908,7 @@ fn an_optional_nested_class_decomposes_behind_its_presence() {
                 .class(crate::data_class!(Holder))
                 .fun(prebindgen_registry::fun!(holder_id)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let holder: syn::Ident = syn::parse_quote!(Holder);
     let wires = gen
@@ -2974,7 +2974,7 @@ fn a_nullable_primitive_field_crosses_as_a_pair() {
                 .class(crate::data_class!(Scal))
                 .fun(prebindgen_registry::fun!(scal_use)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     assert_eq!(
         wire_lines(&gen, "Scal", "s"),
         vec![
@@ -3053,7 +3053,7 @@ fn a_sealed_class_field_crosses_as_a_tag_and_every_arm_s_slots() {
                 .class(crate::data_class!(Observation))
                 .fun(prebindgen_registry::fun!(observation_which)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     // The whole signature, in the order the three coordinated sites read it.
     // Between them the alternatives cover a scalar payload, a two-field
@@ -3186,7 +3186,7 @@ fn every_spelling_the_walk_flattens_states_the_same_row() {
                 .fun(prebindgen_registry::fun!(boxed))
                 .fun(prebindgen_registry::fun!(boxed_optional)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     for spelling in [
         "Holder",
@@ -3312,7 +3312,7 @@ fn every_field_shape_the_walk_reads_specially_states_the_same_row() {
                 .fun(prebindgen_registry::fun!(bits_use))
                 .fun(prebindgen_registry::fun!(bits_opt)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     assert_eq!(
         wire_lines(&gen, "Bits", "b"),
         vec![
@@ -3433,7 +3433,7 @@ fn a_flattened_leaf_names_the_classes_it_is_put_back_through() {
                 .class(crate::data_class!(TTop))
                 .fun(prebindgen_registry::fun!(ttop_new)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
     let top: syn::Ident = syn::parse_quote!(TTop);
     let leaves: Vec<(String, Vec<String>)> = gen
@@ -3496,7 +3496,7 @@ fn an_expansion_leaf_is_a_place_within_the_parameter_that_expanded() {
             prebindgen_registry::expand_param!(ZOpts)
                 .variant(prebindgen_registry::fun!(z_opts_new)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let roles: Vec<String> = gen
@@ -3563,7 +3563,7 @@ fn a_decomposed_return_shares_one_wire_list_with_its_site() {
                 .class(crate::data_class!(Pair))
                 .fun(prebindgen_registry::fun!(pair_new)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     // The wires the site plan froze for the callback's decomposed delivery…
@@ -3659,7 +3659,7 @@ fn a_whole_return_site_holds_the_plan_the_emitters_read() {
             prebindgen_registry::expand_return!(ZOne)
                 .fields(prebindgen_registry::fields!(z_one_to_struct)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let function = gen

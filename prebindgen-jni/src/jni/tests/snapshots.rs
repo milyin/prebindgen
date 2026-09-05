@@ -64,7 +64,7 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
@@ -351,7 +351,7 @@ fn a_subpackage_without_a_base_package_is_refused() {
     let dir = unique_test_dir("jnigen_no_base_package");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let err = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect_err("a subpackage without a base package must be refused");
@@ -413,7 +413,7 @@ fn handler_interfaces_carry_split_contract_kdoc() {
     let dir = unique_test_dir("jnigen_handler_kdoc");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let typed = paths
@@ -485,7 +485,7 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -565,7 +565,7 @@ fn slice_input_builds_vec_handle() {
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -696,7 +696,7 @@ fn native_symbols_are_jni_escaped() {
     let dir = unique_test_dir("jnigen_symbol_escaping");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -759,7 +759,7 @@ fn jni_native_init_emits_init_block() {
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let native = paths

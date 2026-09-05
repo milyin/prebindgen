@@ -52,5 +52,7 @@ mod flatten;
 mod sealed;
 mod snapshots;
 mod symbols;
+#[cfg(feature = "v2")]
+mod v2;
 mod value_form;
 mod values;

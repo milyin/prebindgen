@@ -49,11 +49,14 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
                 .fun(prebindgen_registry::fun!(borrowed_handle))
                 .fun(prebindgen_registry::fun!(exclusively_borrowed_handle)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve handle fixture");
 
     for ty in [syn::parse_quote!(Token), syn::parse_quote!(&Token)] {
-        let reading = generation.registry.reading_of(&ty).expect("handle reading");
+        let reading = generation
+            .registry()
+            .reading_of(&ty)
+            .expect("handle reading");
         assert!(
             generation
                 .decls
@@ -73,11 +76,11 @@ fn opaque_handles_retain_late_plans_for_all_ownership_operations() {
     }
 
     let shared = generation
-        .registry
+        .registry()
         .reading_of(&syn::parse_quote!(&Token))
         .expect("shared handle reading");
     let exclusive = generation
-        .registry
+        .registry()
         .reading_of(&syn::parse_quote!(&mut Token))
         .expect("exclusive handle reading");
     assert_eq!(
@@ -109,10 +112,10 @@ fn bare_scalars_retain_late_registry_plans_in_both_directions() {
     let generation = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().fun(prebindgen_registry::fun!(scalar_echo)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve scalar fixture");
     let reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(u32)))
         .expect("u32 reading");
 
@@ -148,10 +151,10 @@ fn byte_vectors_retain_late_registry_plans_in_both_directions() {
     let generation = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().fun(prebindgen_registry::fun!(bytes_echo)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve byte-vector fixture");
     let reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(Vec<u8>)))
         .expect("Vec<u8> reading");
 
@@ -240,7 +243,7 @@ fn owned_strings_and_unit_retain_late_value_codec_plans() {
                 .fun(prebindgen_registry::fun!(cow_string_echo))
                 .fun(prebindgen_registry::fun!(unit_result)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve value-codec fixture");
 
     for ty in [
@@ -249,7 +252,7 @@ fn owned_strings_and_unit_retain_late_value_codec_plans() {
         syn::parse_quote!(Cow<'static, str>),
     ] {
         let reading = generation
-            .registry
+            .registry()
             .reading(&TypeKey::from_type(&ty))
             .expect("owned-string reading");
         assert!(
@@ -271,7 +274,7 @@ fn owned_strings_and_unit_retain_late_value_codec_plans() {
     }
 
     let unit = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(())))
         .expect("unit reading");
     assert!(
@@ -342,18 +345,18 @@ fn unsized_str_retains_semantic_text_codec_plans() {
         .expand(
             prebindgen_registry::expand_return!(Text).field(prebindgen_registry::fun!(text_as_str)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve unsized-str fixture");
     let str_reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(str)))
         .expect("str reading");
     let ref_reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(&str)))
         .expect("&str reading");
     let string_reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(String)))
         .expect("String reading");
 
@@ -399,10 +402,10 @@ fn fixed_primitive_arrays_retain_late_registry_plans() {
     let generation = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().fun(prebindgen_registry::fun!(array_echo)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve primitive-array fixture");
     let reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!([bool; 4])))
         .expect("primitive-array reading");
 
@@ -485,10 +488,10 @@ fn cow_byte_slices_retain_a_late_value_codec() {
     let generation = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().fun(prebindgen_registry::fun!(cow_bytes)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve Cow-byte fixture");
     let reading = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(Cow<'static, [u8]>)))
         .expect("Cow-byte reading");
 
@@ -538,7 +541,7 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
     let dir = unique_test_dir("jnigen_bounded_duration");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).unwrap();
+    let generation = jni.build_over(registry).unwrap();
     let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let paths = generation.write_kotlin(&dir.join("kotlin")).unwrap();
@@ -603,11 +606,11 @@ fn enum_terminal_allocates_one_niche_per_optional_layer() {
         .package(crate::package!().class(crate::enum_class!(Priority)))
         .package(crate::package!().fun(prebindgen_registry::fun!(priority_nested)));
     let gen = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve nested enum options");
 
     let key = TypeKey::from_type(&syn::parse_quote!(Priority));
-    let reading = gen.registry.reading(&key).expect("Priority reading");
+    let reading = gen.registry().reading(&key).expect("Priority reading");
     let input = gen.decls.in_frag(&reading).expect("Priority input");
     let output = gen.decls.out_frag(&reading).expect("Priority output");
     assert!(
@@ -647,7 +650,7 @@ fn enum_terminal_allocates_one_niche_per_optional_layer() {
     );
 
     let option_key = TypeKey::from_type(&syn::parse_quote!(Option<Priority>));
-    let option = gen.registry.reading(&option_key).expect("Option reading");
+    let option = gen.registry().reading(&option_key).expect("Option reading");
     assert_eq!(
         gen.decls
             .in_frag(&option)
@@ -678,7 +681,7 @@ fn enum_terminal_allocates_one_niche_per_optional_layer() {
     );
     let nested_key = TypeKey::from_type(&syn::parse_quote!(Option<Option<Priority>>));
     let nested = gen
-        .registry
+        .registry()
         .reading(&nested_key)
         .expect("nested Option reading");
     assert_eq!(
@@ -757,7 +760,7 @@ fn flattened_field_composes_bounded_conversion_stages() {
     let dir = unique_test_dir("jnigen_flat_staged_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -929,7 +932,7 @@ fn a_handle_leaf_takes_its_niche_from_its_own_type_not_its_ancestor() {
     let dir = unique_test_dir("jnigen_handle_niche_matrix");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let rust =
         std::fs::read_to_string(generation.write_rust(dir.join("g.rs")).expect("write_rust"))
             .unwrap();
@@ -1101,7 +1104,7 @@ fn a_bounded_leaf_takes_its_sentinel_from_its_own_type_not_its_ancestor() {
     let dir = unique_test_dir("jnigen_niche_matrix");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
@@ -1168,7 +1171,7 @@ fn duration_requires_an_explicit_conversion() {
         .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_echo)));
 
     let error = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("Duration must not have an implicit unchecked converter")
         .to_string();
     assert!(error.contains("Duration"), "{error}");
@@ -1198,7 +1201,7 @@ fn conversion_domain_must_match_the_representation() {
         )
         .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_use)));
 
-    let _ = jni.build_with(registry);
+    let _ = jni.build_over(registry);
 }
 
 /// A path-qualified scalar never reaches the domain check above: a marked item
@@ -1227,7 +1230,7 @@ fn a_qualified_scalar_representation_never_reaches_the_domain_check() {
         )
         .package(crate::package!("time").fun(prebindgen_registry::fun!(duration_use)));
 
-    let error = format!("{:?}", jni.build_with(registry).err());
+    let error = format!("{:?}", jni.build_over(registry).err());
     assert!(error.contains("core :: primitive :: u64"), "{error}");
     assert!(!error.contains("domain type"), "{error}");
 }
@@ -1270,7 +1273,7 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1372,7 +1375,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
     let dir = unique_test_dir("jnigen_vec_handle_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1457,7 +1460,7 @@ fn option_scalar_struct_field_flattens() {
     let dir = unique_test_dir("jnigen_optfield");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1578,7 +1581,7 @@ fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let dir = unique_test_dir("jnigen_fromparts_optbox");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -1698,9 +1701,9 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
     let dir = unique_test_dir("jnigen_hybrid_jobject_input");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let object_child = generation
-        .registry
+        .registry()
         .reading(&TypeKey::from_type(&syn::parse_quote!(ObjectChild)))
         .expect("ObjectChild reading");
     assert!(
@@ -1834,7 +1837,7 @@ fn empty_structs_keep_their_own_constructor_delimiters() {
     let dir = unique_test_dir("jnigen_empty_struct_delimiters");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
@@ -1897,7 +1900,7 @@ fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
     let dir = unique_test_dir("jnigen_recursive_handles");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     assert_eq!(
         generation.optional_chain_plan_for_test("Option<Token>"),
         Some(true),
@@ -2004,7 +2007,7 @@ fn owned_handle_sites_reuse_the_frozen_pipeline() {
     let dir = unique_test_dir("jnigen_owned_handle_site_pipeline");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let file = syn::parse_file(&rust).expect("generated Rust parses");
 
@@ -2088,7 +2091,7 @@ fn whole_object_handle_field_calls_its_reached_owned_plan() {
     let dir = unique_test_dir("jnigen_whole_object_owned_handle_plan");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let file = syn::parse_file(&rust).expect("generated Rust parses");
 
@@ -2145,7 +2148,7 @@ fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overfl
             .fun(prebindgen_registry::fun!(use_wide)),
     );
     let error = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("256 JVM slots must fail")
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
@@ -2169,7 +2172,7 @@ fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overfl
     .expect("index plain function");
     let error = JniGenBuilder::new()
         .package(crate::package!().fun(prebindgen_registry::fun!(use_plain_wide)))
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("127 ordinary Long parameters plus infrastructure must fail")
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
@@ -2196,7 +2199,7 @@ fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overfl
                 .class(crate::ptr_class!(Token))
                 .fun(prebindgen_registry::fun!(use_handle_wide)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("127 handle Long parameters plus infrastructure must fail")
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
@@ -2215,7 +2218,7 @@ fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overfl
             .fun(prebindgen_registry::fun!(use_wide)),
     );
     let generation = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("JObject boundary must bypass the flattened slot limit");
     assert!(generation.report().contains("input `JObject` opt-in"));
 }
@@ -2249,7 +2252,7 @@ fn output_only_convert_resolves_without_input_twin() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("an output-only convert type must not require an input twin");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
@@ -2294,7 +2297,7 @@ fn convert_fn_qualifies_with_origin_crate() {
     let dir = unique_test_dir("jnigen_convert_origin");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2330,7 +2333,7 @@ fn convert_input_target_mismatch_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = jni
-        .build_with(registry)
+        .build_over(registry)
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
@@ -2356,9 +2359,9 @@ fn convert_via_trait_impls() {
     let dir = unique_test_dir("jnigen_convert_trait");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let reading = gen
-        .registry
+        .registry()
         .reading_of(&syn::parse_quote!(Celsius))
         .expect("Celsius reading");
     assert!(
@@ -2406,7 +2409,7 @@ fn convert_via_try_from_is_fallible() {
     let dir = unique_test_dir("jnigen_convert_tryfrom");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2448,7 +2451,7 @@ fn option_composition_normalizes_fallible_stage_errors() {
     let dir = unique_test_dir("jnigen_option_fallible_stages");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2495,9 +2498,9 @@ fn convert_via_local_fns() {
     let dir = unique_test_dir("jnigen_convert_local");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let reading = gen
-        .registry
+        .registry()
         .reading_of(&syn::parse_quote!(Label))
         .expect("Label reading");
     assert!(
@@ -2573,7 +2576,7 @@ fn multi_stage_pipeline_preserves_registry_order() {
     let dir = unique_test_dir("jnigen_convert_two_stages");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2666,7 +2669,7 @@ fn convert_via_local_try_fn_is_fallible() {
     let dir = unique_test_dir("jnigen_convert_local_try");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -2725,7 +2728,7 @@ fn data_class_members_reenter_as_field_leaves() {
     let dir = unique_test_dir("jnigen_data_members");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     gen.write_rust(dir.join("gen.rs")).expect("write_rust");
 
     let kdir = dir.join("kotlin");
@@ -2828,9 +2831,9 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     let dir = unique_test_dir("jnigen_unsigned");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let result = generation
-        .registry
+        .registry()
         .reading_of(&syn::parse_quote!(Result<u64, String>))
         .expect("fallible output reading");
     assert!(
@@ -2946,7 +2949,7 @@ fn an_optional_handle_field_mints_through_the_factory() {
     let dir = unique_test_dir("jnigen_optional_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     // A nested owned handle crosses as a `Long` and is locked through the
     // handle OBJECT, so the recipe has to carry both — the facts the Kotlin
     // lock-and-consume scaffold reads. Asserted here because `Bag`'s field is
@@ -3059,7 +3062,7 @@ fn data_class_properties_match_their_from_parts_params() {
     let dir = unique_test_dir("jnigen_data_class_props");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
@@ -3169,7 +3172,7 @@ fn check_array_length_qualification(loc: SourceLocation, module: &str) {
     let dir = unique_test_dir(&format!("jnigen_array_len_const_{module}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).unwrap();
+    let generation = jni.build_over(registry).unwrap();
     let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
     let rust = std::fs::read_to_string(rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -3229,7 +3232,7 @@ fn a_borrowed_transparent_sequence_wrapper_is_not_decoded_as_a_vec() {
     let err = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(decls)
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("a borrowed transparent sequence wrapper has no conversion");
 
     let msg = err.to_string();
@@ -3290,7 +3293,7 @@ fn the_enum_probe_sees_through_wrappers_a_spelling_key_misses() {
     let gen = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::enum_class!(Priority)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
 
@@ -3405,7 +3408,7 @@ fn a_transparently_wrapped_option_takes_the_present_value_pair_and_is_rebuilt() 
     // The wrapped spelling may legitimately fail to resolve a converter of its
     // own — that is a refusal too, and equally not an `E0308`. Only a build that
     // SUCCEEDS can be asked what it emitted.
-    let Ok(gen) = jni.build_with(registry) else {
+    let Ok(gen) = jni.build_over(registry) else {
         return;
     };
     let kdir = dir.join("kotlin");
@@ -3521,7 +3524,7 @@ fn an_outer_wrapper_around_a_reference_is_seen_before_the_layers_are_read() {
 
     // The wrapped spelling may legitimately resolve no converter of its own —
     // that is a refusal too, and equally not an `E0308`.
-    let Ok(gen) = jni.build_with(registry) else {
+    let Ok(gen) = jni.build_over(registry) else {
         return;
     };
     let kdir = dir.join("kotlin");
@@ -3623,7 +3626,7 @@ fn both_spellings_of_a_borrowed_run_get_the_vec_borrow() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
@@ -3744,7 +3747,7 @@ fn a_wrapped_vec_element_keeps_the_push_path_and_shares_one_trio() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
@@ -3858,7 +3861,7 @@ fn a_vec_build_parameter_does_not_emit_an_unused_sequence_decoder() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).expect("read rust");
     let compact: String = rust.split_whitespace().collect();
@@ -3959,7 +3962,7 @@ fn an_exclusive_borrow_parameter_crosses_only_over_a_handle() {
         let dir = unique_test_dir(name);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create test dir");
-        match jni.build_with(registry) {
+        match jni.build_over(registry) {
             Ok(g) => Ok(std::fs::read_to_string(
                 g.write_rust(dir.join("g.rs")).expect("write_rust"),
             )
@@ -4081,7 +4084,7 @@ fn a_type_with_no_parts_files_no_parts_row() {
                 .class(crate::data_class!(HasOne))
                 .fun(prebindgen_registry::fun!(use_both)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     for out in [false, true] {

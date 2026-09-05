@@ -62,7 +62,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
@@ -211,7 +211,7 @@ fn declared_optional_conversion_callback_falls_back_to_whole_value() {
     let dir = unique_test_dir("jnigen_declared_optional_callback");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
     let kotlin = generation
         .write_kotlin(&dir.join("kotlin"))
@@ -279,7 +279,7 @@ fn undeclared_expanded_callback_retains_its_registry_invoke_plan() {
     let dir = unique_test_dir("jnigen_ledger_callback_compatibility");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let generation = jni.build_with(registry).expect("resolve");
+    let generation = jni.build_over(registry).expect("resolve");
     let callback = "impl Fn(Ledger) + Send + Sync + 'static";
     let (converter, is_late_invoke) = generation
         .callback_invoke_for_test(callback)
@@ -407,7 +407,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -538,7 +538,7 @@ fn callback_double_option_unwrap_pipeline() {
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
@@ -675,7 +675,7 @@ fn iface_spec_memo_shares_one_derivation() {
                 .field_self()
                 .field(prebindgen_registry::fun!(z_thing_name)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
 
     // Same key twice ⇒ the same allocation (resolve already populated the
@@ -768,7 +768,7 @@ fn generation_plan_freezes_and_drains_derivations() {
     // Resolve runs validation, builds every function plan, then freezes: the
     // derived memos are drained into the generation plan, and the recipe
     // compiler's own store is left where it is as the single fragment lookup.
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let (ext, registry) = (gen.declarations(), gen.registry());
     let f = registry.flat().function("z_do_thing").expect("indexed");
 
@@ -930,7 +930,7 @@ fn a_wrapped_borrow_callback_arg_declines() {
         let dir = unique_test_dir("jnigen_wrapped_cb");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        match jni.build_with(registry) {
+        match jni.build_over(registry) {
             Ok(g) => Ok(std::fs::read_to_string(
                 g.write_rust(dir.join("g.rs")).expect("write_rust"),
             )
@@ -988,7 +988,7 @@ fn a_callback_argument_carries_its_layers() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let kotlin = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve")
         .write_kotlin(&dir.join("kotlin"))
         .unwrap()
@@ -1033,7 +1033,7 @@ fn a_callback_parameter_is_a_site_in_the_canonical_plan() {
     let gen = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_each)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let sites: Vec<String> = gen
@@ -1084,7 +1084,7 @@ fn an_expanded_callback_leaf_keeps_its_expansion_identity() {
             prebindgen_registry::expand_param!(ZOpts)
                 .variant(prebindgen_registry::fun!(z_opts_new)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let roles: Vec<String> = gen
@@ -1217,7 +1217,7 @@ fn a_delivered_argument_names_the_row_it_crossed_on() {
                 .field(prebindgen_registry::fun!(z_reply_is_ok))
                 .field(prebindgen_registry::fun!(z_reply_sample)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let decls = gen.declarations();
@@ -1312,7 +1312,7 @@ fn a_whole_delivered_argument_shares_the_trampolines_abi() {
     let gen = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(prebindgen_registry::fun!(z_watch)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let decls = gen.declarations();
@@ -1397,7 +1397,7 @@ fn a_whole_element_fold_states_no_decomposition_row() {
                 )
                 .fun(prebindgen_registry::fun!(z_stream)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let decls = gen.declarations();
@@ -1482,7 +1482,7 @@ fn two_callbacks_in_one_expanded_parameter_are_refused() {
             prebindgen_registry::expand_param!(ZOpts)
                 .variant(prebindgen_registry::fun!(z_opts_new)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("two callbacks under one parameter cannot both be named");
     let message = error.to_string();
     assert!(
@@ -1526,7 +1526,7 @@ fn a_refused_callback_argument_fails_the_build_and_names_its_parameter() {
     *builder.decls.refuse_role.borrow_mut() =
         Some("argument 0 of the callback in parameter 0".to_string());
 
-    let Err(error) = builder.build_with(registry) else {
+    let Err(error) = builder.build_over(registry) else {
         panic!("a refused site fails the build rather than vanishing")
     };
     let message = error.to_string();

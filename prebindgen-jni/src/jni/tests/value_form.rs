@@ -98,7 +98,7 @@ fn value_form_gen(tag: &str, decl: crate::ExpandReturnDecl) -> (String, String) 
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -248,7 +248,7 @@ fn deriving_matches_the_equivalent_hand_written_list() {
                     .field(prebindgen_registry::fun!(z_keyexpr_as_str)),
             )
             .expand(decl);
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         gen.declarations()
             .unfolded()
             .callback_arg_plans
@@ -433,7 +433,7 @@ fn sum_field_gen(tag: &str) -> (String, String) {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -535,7 +535,7 @@ fn a_vec_sum_field_is_rejected_by_name() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _ = jni
-            .build_with(registry)
+            .build_over(registry)
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
 
@@ -628,7 +628,7 @@ fn an_optional_sum_field_gates_its_whole_segment() {
         let dir = unique_test_dir("jnigen_vf_opt_sum");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
             .expect("read rust");
         let kotlin = gen
@@ -737,7 +737,7 @@ fn a_bare_sum_field_takes_no_gate() {
     let dir = unique_test_dir("jnigen_vf_bare_sum");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -861,7 +861,7 @@ fn a_vec_of_data_classes_crosses_as_a_return_and_as_a_field() {
         let dir = unique_test_dir("jnigen_vec_dataclass_field");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let kdir = dir.join("kotlin");
         let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
         gen.write_rust(dir.join("g.rs")).expect("write_rust");
@@ -983,7 +983,7 @@ fn an_optional_field_crosses_the_same_however_rust_spells_it() {
         let dir = unique_test_dir("jnigen_vf_boxed_opt");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
             .expect("read rust")
     };
@@ -1044,7 +1044,7 @@ fn an_adjustment_naming_an_unknown_field_is_an_error() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _ = jni
-            .build_with(registry)
+            .build_over(registry)
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
 
@@ -1157,7 +1157,7 @@ fn a_single_leaf_value_form_delivers_an_owned_field() {
     let dir = unique_test_dir("jnigen_vf_single");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1220,7 +1220,7 @@ fn a_single_leaf_consuming_value_form_moves_its_field() {
     let dir = unique_test_dir("jnigen_vf_single_consume");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1291,7 +1291,7 @@ fn an_unstated_parity_expectation_refuses_a_skipped_decomposition() {
             prebindgen_registry::expand_return!(ZEnvelope)
                 .fields_self_into(prebindgen_registry::fields!(z_envelope_into_struct)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("a skipped decomposition against an empty expectation");
     let message = error.to_string();
     assert!(
@@ -1358,7 +1358,7 @@ fn a_handle_field_of_a_consuming_value_form_moves() {
     let dir = unique_test_dir("jnigen_vf_handle_field_consume");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1429,7 +1429,7 @@ fn a_sole_handle_field_of_a_consuming_value_form_moves() {
     let dir = unique_test_dir("jnigen_vf_sole_handle_consume");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1502,7 +1502,7 @@ fn an_optional_handle_field_of_a_consuming_value_form_moves() {
     let dir = unique_test_dir("jnigen_vf_optional_handle_consume");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1573,7 +1573,7 @@ fn a_sole_optional_handle_field_takes_callback_delivery() {
     let dir = unique_test_dir("jnigen_vf_sole_optional_handle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1636,7 +1636,7 @@ fn an_owned_root_identity_moves_without_any_value_form() {
     let dir = unique_test_dir("jnigen_vf_root_identity");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -1683,7 +1683,7 @@ fn a_per_field_override_must_name_the_field_s_own_type() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _ = jni
-            .build_with(registry)
+            .build_over(registry)
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(build))
@@ -1775,7 +1775,7 @@ fn a_nested_value_form_is_hoisted_too() {
     let dir = unique_test_dir("jnigen_vf_nested");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -1896,7 +1896,7 @@ fn a_nested_consuming_value_form_moves_the_parent_s_field() {
         let dir = unique_test_dir(&format!("jnigen_vf_nested_consume_{tag}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
             .expect("read rust");
 
@@ -1996,7 +1996,7 @@ fn an_optional_nested_value_form_is_rejected_before_emission() {
         prebindgen_registry::expand_return!(ZReviewOuter)
             .fields(prebindgen_registry::fields!(z_review_outer_to_struct)),
     );
-    let err = match jni.build_with(registry) {
+    let err = match jni.build_over(registry) {
         Ok(_) => panic!("an optional nested value form must be rejected"),
         Err(e) => e,
     };
@@ -2057,7 +2057,7 @@ fn a_value_form_under_an_optional_accessor_is_hoisted_conditionally() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("a conditional hoist resolves");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
@@ -2138,7 +2138,7 @@ fn conditional_owned_gen(tag: &str, decl: crate::ExpandReturnDecl) -> String {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust")
 }
@@ -2203,7 +2203,7 @@ fn an_owned_optional_payload_is_borrowed_for_the_steps_after_it() {
     let dir = unique_test_dir("jnigen_vf_cond_owned_chain");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -2284,7 +2284,7 @@ fn a_rebased_hoist_projects_its_leading_fields_past_a_sibling_move() {
     let dir = unique_test_dir("jnigen_vf_sibling_move");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -2351,7 +2351,7 @@ fn a_consuming_value_form_keeps_its_by_value_boundary_behind_accessors() {
     let dir = unique_test_dir("jnigen_vf_consume_behind_acc");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -2434,7 +2434,7 @@ fn an_owned_intermediate_result_is_borrowed_for_the_next_step() {
     let dir = unique_test_dir("jnigen_vf_cond_owned_middle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -2553,7 +2553,7 @@ fn a_sum_field_of_a_conditional_value_form_stays_inside_the_arm() {
     let dir = unique_test_dir("jnigen_vf_conditional_sum");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -2598,7 +2598,7 @@ fn a_vec_field_override_must_name_the_whole_vec_type() {
                 prebindgen_registry::expand_return!(ZReviewInner).field_self(),
             ),
         ));
-        let _ = jni.build_with(registry);
+        let _ = jni.build_over(registry);
     };
 
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(build))
@@ -2673,7 +2673,7 @@ fn consuming_gen(tag: &str, decl: crate::ExpandReturnDecl) -> String {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust")
 }
@@ -2760,7 +2760,7 @@ fn a_borrowed_plan_clones_before_consuming() {
     let dir = unique_test_dir("jnigen_vf_consume_ref");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let (composed_only, ident, _) = gen
         .parts_plan_for_test(
             syn::parse_quote!(Option<&ZCarrier>),
@@ -2831,7 +2831,7 @@ fn the_declarator_and_the_accessor_s_receiver_must_agree() {
                     .fun(prebindgen_registry::fun!(zc_sub)),
             )
             .expand(decl);
-        match jni.build_with(registry) {
+        match jni.build_over(registry) {
             Ok(_) => String::new(),
             Err(e) => e.to_string(),
         }
@@ -2926,7 +2926,7 @@ fn a_whole_value_crossing_uses_only_its_flat_structure() {
         std::fs::create_dir_all(&dir).unwrap();
         // Resolving at all is half the assertion: this is what #270 reported as
         // `Unresolved { key: "Box < Option < ZStamp > >" }`.
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
             .expect("read rust")
     };
@@ -3010,7 +3010,7 @@ fn an_owned_string_crosses_the_same_however_rust_spells_it() {
         let dir = unique_test_dir("jnigen_vf_boxed_string");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let (rust, kotlin) = (
             std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
                 .expect("read rust"),
@@ -3098,7 +3098,7 @@ fn a_transparent_wrapper_is_bridged_only_where_it_can_be() {
         let dir = unique_test_dir("jnigen_vf_bridge");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        match jni.build_with(registry) {
+        match jni.build_over(registry) {
             Ok(g) => Ok(std::fs::read_to_string(
                 g.write_rust(dir.join("g.rs")).expect("write_rust"),
             )
@@ -3225,14 +3225,14 @@ fn an_erased_wrapper_over_a_terminal_crosses_both_ways() {
     // Resolving at all is the claim: every one of these reached `None` outbound
     // before, and the build failed naming the wrapped spelling.
     let gen = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect("an erased wrapper over a terminal resolves in both directions");
     for ty in [
         syn::parse_quote!(Box<Priority>),
         syn::parse_quote!(Box<ZSample>),
         syn::parse_quote!(Box<Leaf>),
     ] {
-        let reading = gen.registry.reading_of(&ty).expect("wrapped reading");
+        let reading = gen.registry().reading_of(&ty).expect("wrapped reading");
         assert!(
             gen.decls
                 .in_frag(&reading)
@@ -3325,7 +3325,7 @@ fn an_optional_data_class_borrow_uses_an_owned_registry_carrier() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let gen = jni
-            .build_with(registry)
+            .build_over(registry)
             .expect("an optional borrow resolves");
         let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
             .expect("read rust");
@@ -3403,7 +3403,7 @@ fn an_unbuildable_optional_borrow_is_explicitly_refused() {
                 .class(crate::data_class!(ZData))
                 .fun(prebindgen_registry::fun!(z_take)),
         );
-    let error = match jni.build_with(registry) {
+    let error = match jni.build_over(registry) {
         Ok(_) => panic!("an outer wrapper cannot contain converter-local borrows"),
         Err(error) => error.to_string(),
     };
@@ -3428,7 +3428,7 @@ fn an_unbuildable_optional_borrow_is_explicitly_refused() {
     let gen = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::data_class!(ZData)))
-        .build_with(registry)
+        .build_over(registry)
         .expect("build the supported neighbouring crossings");
     let refusal = gen
         .crossing_plan_for_test(
@@ -3489,7 +3489,7 @@ fn a_wrapped_borrow_has_nothing_to_bridge_and_refuses() {
         let dir = unique_test_dir("jnigen_wrapped_borrow");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        match jni.build_with(registry) {
+        match jni.build_over(registry) {
             Ok(g) => {
                 let planned = g
                     .borrowed_optional_handle_plan_for_test(&spelling)
@@ -3598,7 +3598,7 @@ fn nullability_ignores_how_rust_spells_the_optional() {
         let dir = unique_test_dir("jnigen_nullability");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let _ = gen.write_rust(dir.join("g.rs")).expect("write_rust");
         gen.write_kotlin(&dir.join("kotlin"))
             .expect("write_kotlin")
@@ -3683,7 +3683,7 @@ fn a_value_form_states_what_it_hands_out() {
                 .class(crate::ptr_class!(Vault))
                 .fun(prebindgen_registry::fun!(vault_new)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     assert_eq!(
         gen.out_lines_for_test("Vault")
@@ -3782,7 +3782,7 @@ fn a_fallible_return_whose_error_expands_binds_once() {
             prebindgen_registry::expand_return!(ZFail)
                 .fields(prebindgen_registry::fields!(z_fail_to_struct)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("a fallible function whose error expands resolves");
 
     // The site the two passes would have collided on is planned, once.
@@ -3834,7 +3834,7 @@ fn the_error_arm_of_a_fallible_return_is_declined_not_refused() {
                 .class(crate::ptr_class!(ZFail))
                 .fun(prebindgen_registry::fun!(z_one_try)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("a fallible return resolves");
 
     let decls = gen.declarations();
