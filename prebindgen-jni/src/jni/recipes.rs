@@ -141,11 +141,27 @@ impl Declarations {
         registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
-        use crate::unfold::{FieldDecon, FieldRecord};
         let decl = self
             .return_expand_decls
             .iter()
             .find(|d| *d.key() == ty.stripped_key())?;
+        self.value_form_in(model, registry, ty, decl)
+    }
+
+    /// [`Self::value_form_of`] against ONE declaration — the type's own, or the
+    /// one a function wrote for its return. A per-function
+    /// `.expand_return(expand_return!(T).fields(..))` states its own accessor
+    /// and its own field list, which may differ from the type's or exist
+    /// without one, so the lowering reads the declaration it was handed rather
+    /// than looking the type up again.
+    fn value_form_in(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Option<(syn::Ident, Vec<Reach>)> {
+        use crate::unfold::{FieldDecon, FieldRecord};
         let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
             return None;
         };
@@ -353,7 +369,7 @@ impl Declarations {
             // which can splice a child's fields, so `Report` yields six records
             // over a five-field struct. It maps each record back to the struct
             // field it names and declines the shapes a row cannot hold.
-            let (func, parts) = self.value_form_of(model, registry, ty)?;
+            let (func, parts) = self.value_form_in(model, registry, ty, decl)?;
             return Some(Deconstruct::ValueForm { func, parts });
         }
         let mut reaches = Vec::with_capacity(fields.len());
@@ -833,8 +849,19 @@ impl Declarations {
                     },
                     crate::unfold::Delivery::Callback => {
                         let crossing = Crossing::new(plan.source.clone(), Direction::Deconstruct);
-                        let ask = if recipes.key_of(&crossing.key(), &parts()).is_some() {
-                            Ask::Recipe(parts())
+                        // The row that states THIS function's decomposition: a
+                        // function with its own `.expand_return(...)` takes
+                        // apart differently from the way its type does, and
+                        // this is the binding the return site resolves — the
+                        // one with `Origin::Function`, which no weaker binding
+                        // can displace.
+                        let row = if self.fn_return_expands.iter().any(|(g, _)| *g == func) {
+                            site_row(&func)
+                        } else {
+                            parts()
+                        };
+                        let ask = if recipes.key_of(&crossing.key(), &row).is_some() {
+                            Ask::Recipe(row)
                         } else {
                             Ask::Default
                         };
@@ -986,12 +1013,7 @@ impl Declarations {
             // Only where the type states one. A `sealed_class` always does; a
             // `data_class` states one unless a field of it declines, and a
             // return whose type states none crosses whole.
-            let stated = if self.fn_return_expands.iter().any(|(g, _)| *g == f.name) {
-                site_row(&f.name)
-            } else {
-                parts()
-            };
-            if recipes.key_of(&crossing.key(), &stated).is_none() {
+            if recipes.key_of(&crossing.key(), &parts()).is_none() {
                 continue;
             }
             // And only where it is genuinely several. A decomposition that
@@ -1012,7 +1034,7 @@ impl Declarations {
                     role: prebindgen_registry::recipe::Role::Return,
                 },
                 crossing,
-                Ask::Recipe(stated),
+                Ask::Recipe(parts()),
                 Origin::Adapter,
             );
         }
