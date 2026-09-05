@@ -1254,7 +1254,7 @@
 <a href=#1254 id=1254 data-nosnippet>1254</a>            .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })<span class="question-mark">?</span>;
 <a href=#1255 id=1255 data-nosnippet>1255</a>        <span class="prelude-val">Ok</span>(Cbindgen {
 <a href=#1256 id=1256 data-nosnippet>1256</a>            <span class="kw">gen</span>: <span class="self">self</span>,
-<a href=#1257 id=1257 data-nosnippet>1257</a>            engine: <span class="kw">crate</span>::Engine::V1(registry),
+<a href=#1257 id=1257 data-nosnippet>1257</a>            engine: <span class="kw">crate</span>::Engine::V1(Box::new(registry)),
 <a href=#1258 id=1258 data-nosnippet>1258</a>        })
 <a href=#1259 id=1259 data-nosnippet>1259</a>    }
 <a href=#1260 id=1260 data-nosnippet>1260</a>
