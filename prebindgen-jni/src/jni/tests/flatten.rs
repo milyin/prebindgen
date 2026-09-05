@@ -1071,6 +1071,144 @@ fn binding_local_field_conditional_handle() {
     assert!(all.contains("zEncGetId:Int,handle:ZEnc?"), "{raw}");
 }
 
+/// A per-function `.expand_return(...)` states a row of its own, and the return
+/// site RESOLVES to it — not to the type's `parts`.
+///
+/// Reading the resolution rather than the declaration is the point: several
+/// bindings name this one site, and only the strongest wins (#701 step 3).
+#[test]
+fn a_per_function_return_row_wins_at_the_site() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_pt_x(p: &ZPt) -> i32 { unimplemented!() }",
+        "pub fn z_pt_y(p: &ZPt) -> i32 { unimplemented!() }",
+        "pub fn z_pt_default() -> ZPt { unimplemented!() }",
+        "pub fn z_pt_detailed() -> ZPt { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZPt {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("pt")
+                .class(
+                    crate::ptr_class!(ZPt)
+                        .method(prebindgen_registry::fun!(z_pt_x))
+                        .method(prebindgen_registry::fun!(z_pt_y)),
+                )
+                .fun(prebindgen_registry::fun!(z_pt_default))
+                // This one takes its return apart differently from the way the
+                // type does: x twice over, without y.
+                .fun(
+                    prebindgen_registry::fun!(z_pt_detailed).expand_return(
+                        prebindgen_registry::expand_return!(ZPt)
+                            .field(prebindgen_registry::fun!(z_pt_x))
+                            .field_self(),
+                    ),
+                ),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(ZPt)
+                .field(prebindgen_registry::fun!(z_pt_x))
+                .field(prebindgen_registry::fun!(z_pt_y)),
+        );
+    let gen = jni.build_with(registry).expect("resolve");
+    assert_eq!(
+        gen.return_row_for_test("z_pt_detailed").as_deref(),
+        Some("expand-return@z_pt_detailed"),
+        "the function's own row has to win at its own return site"
+    );
+    // The type's row still answers every return that states nothing of its own.
+    assert_eq!(
+        gen.return_row_for_test("z_pt_default").as_deref(),
+        Some("parts"),
+    );
+}
+
+/// A per-function VALUE FORM, with no type-level declaration to fall back on.
+///
+/// The lowering has to read the declaration it was handed: looking the type up
+/// again would find nothing here, and would find the wrong accessor where a
+/// type-level form exists (#709 review).
+#[test]
+fn a_per_function_value_form_needs_no_type_default() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_val_to_struct(v: &ZVal) -> ZValStruct { unimplemented!() }",
+        "pub fn z_val_make() -> ZVal { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZVal {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZValStruct {
+                    pub a: i32,
+                    pub b: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("val").class(crate::ptr_class!(ZVal)).fun(
+                prebindgen_registry::fun!(z_val_make).expand_return(
+                    prebindgen_registry::expand_return!(ZVal)
+                        .fields(prebindgen_registry::fields!(z_val_to_struct)),
+                ),
+            ),
+        );
+    let dir = unique_test_dir("jnigen_perfn_value_form");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    // Named for the function, and stating the form's parts rather than
+    // falling back to the `Atomic` placeholder a missed lookup would leave.
+    let (row, shape) = gen
+        .return_row_shape_for_test("z_val_make")
+        .expect("the return site resolves");
+    assert_eq!(row, "expand-return@z_val_make");
+    assert!(
+        shape.contains("z_val_to_struct"),
+        "the row states the form's own accessor, not an `Atomic` placeholder: {shape}"
+    );
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+    // The form's own accessor is what the decomposition calls.
+    assert!(rc.contains("myflat::z_val_to_struct("), "{rust}");
+}
+
 /// A binding-local callable must be crate-qualified: `fun!`'s ident arm
 /// catches single segments (declaring a registry fn), and `new_local`
 /// rejects a degenerate single-segment path outright.
