@@ -511,11 +511,24 @@ impl Folding<'_> {
                         PathStep::Field { ident, .. } => PathStep::field(ident.clone(), true),
                     };
                 }
-                flag.path = path.clone();
-                walk.leaves.push(flag);
+                // Whether the absence gets a WIRE SLOT of its own, or is
+                // carried by the leaves under it.
+                //
+                // A layer reached by CALLING an accessor is spent as
+                // nullability: the emitter calls the accessor, and every leaf
+                // under it is null when nothing came back. There is no second
+                // value to test, so a flag would be a slot nothing sets. A
+                // layer the value HOLDS — a field, or the reading itself — is
+                // one the emitter tests before it reaches anything, and that
+                // test is the flag.
+                let gated = !matches!(path.last(), Some(PathStep::Call { .. }));
+                if gated {
+                    flag.path = path.clone();
+                    walk.leaves.push(flag);
+                }
                 let inner_at = At {
                     path,
-                    nullable: at.nullable,
+                    nullable: at.nullable || !gated,
                     // The row the INNER crossing states, so its parts are keyed
                     // by it: a binding written for a part of `Option<T>` is not
                     // one written for a part of `T`, and the compiler keys them
@@ -532,8 +545,10 @@ impl Folding<'_> {
                 // Everything the inner contributed is live only when the flag
                 // says the value is there.
                 // Group 0: an optional has one arm, the one the flag admits.
-                for leaf in &mut walk.leaves[before..] {
-                    leaf.groups.insert(0, 0);
+                if gated {
+                    for leaf in &mut walk.leaves[before..] {
+                        leaf.groups.insert(0, 0);
+                    }
                 }
                 Ok(())
             }
@@ -590,7 +605,11 @@ impl Folding<'_> {
                 out_ty: if at.path.is_empty() && !walk.lent {
                     source.clone()
                 } else {
-                    source.borrowed()
+                    // A borrow of the VALUE. A part reached through a layer is
+                    // already spelled `&T` where the accessor lends it, and
+                    // borrowing that again gives `&&T` — the same double borrow
+                    // the walk entry peels for a `&T` reading.
+                    source.borrow_target().unwrap_or(source).borrowed()
                 },
                 identity: true,
                 nullable: at.nullable,
@@ -626,7 +645,14 @@ impl Folding<'_> {
             Some(outer) => walk.policy.nest(outer, &name),
             None => name,
         };
-        let (step, ty) = match reach {
+        // `ty` is what this level goes on to WALK, delivery layers peeled off.
+        // `crossed` is what the part CROSSES, layers included — the type
+        // `Compiler::part_of` builds its crossing from, so the one a binding
+        // for this part is written against. They differ for an optional part,
+        // and resolving the binding under the walked value rather than the
+        // crossed one is why an optional part could not be bound: whichever
+        // type the adapter named, one of the two sides looked for the other.
+        let (step, ty, crossed) = match reach {
             Reach::Omit => return Ok(()),
             Reach::Accessor(func) => {
                 let ret = self.returns(func)?;
@@ -636,6 +662,7 @@ impl Folding<'_> {
                 (
                     PathStep::call(func.clone(), optional, owned),
                     core.borrow_target().unwrap_or(core).clone(),
+                    ret.clone(),
                 )
             }
             Reach::Field(field) => {
@@ -651,7 +678,7 @@ impl Folding<'_> {
                 // THROUGH one — the nesting step a decomposition makes of an
                 // optional nested class — is the `Optional` part #701's
                 // decision 3 describes, and waits for it.
-                (PathStep::field(ident, false), ty)
+                (PathStep::field(ident, false), ty.clone(), ty)
             }
             Reach::Identity => unreachable!("handled by the caller"),
             other => {
@@ -669,7 +696,7 @@ impl Folding<'_> {
         // row of its own is not enough — a `data_class` states one and still
         // crosses whole as an accessor's return, which is the difference a
         // binding carries and a row cannot (#701 decision 3).
-        if let Some((row, child)) = self.bound_row(walk, at, None, index, &ty) {
+        if let Some((row, child)) = self.bound_row(walk, at, None, index, &crossed) {
             let child = child.clone();
             let seen = ty.key().to_string();
             if walk.reading.contains(&seen) {
@@ -685,7 +712,11 @@ impl Folding<'_> {
                 // by it rather than by the row above.
                 row,
             };
-            self.level(walk, &ty, &child, &inner)?;
+            // A row that states the layer is walked with the crossed value:
+            // the Optional row peels it itself, marking the step already on the
+            // path rather than adding one.
+            let layered = matches!(child, Shape::Optional);
+            self.level(walk, if layered { &crossed } else { &ty }, &child, &inner)?;
             walk.reading.pop();
             return Ok(());
         }

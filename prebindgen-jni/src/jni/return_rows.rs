@@ -74,7 +74,11 @@ impl UnfoldPolicy for JniUnfold<'_> {
         // `.name(..)` overrides live on the child's declaration, so asking
         // under the walk's root would answer with the accessor-derived name
         // and rename every part a nested decomposition declared.
-        let key = owner.stripped_key();
+        // The VALUE's key: a part reached through a lending accessor arrives
+        // as `&T`, and a row is keyed by what crosses, not by how it was
+        // reached. Keyed by the borrow, the declaration lookup misses and every
+        // nested part falls back to its accessor's ident.
+        let key = owner.borrow_target().unwrap_or(owner).stripped_key();
         match reach {
             Reach::Accessor(func) => self.decls.leaf_name_of(&key, func, index),
             // A synthesized `data_class` decomposition names its slots after
@@ -390,9 +394,6 @@ impl Declarations {
             else {
                 continue;
             };
-            if ret.optional_inner().is_some() {
-                return Some("optional-part");
-            }
             // `bindings` writes a binding only where the row it would name
             // exists. A declared type whose `parts` row this table does not
             // state yet is the same unfinished work, seen from the other side.
