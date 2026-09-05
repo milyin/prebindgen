@@ -652,7 +652,7 @@
 <a href=#652 id=652 data-nosnippet>652</a>    /// Which engine does that is settled here, once, before either one plans
 <a href=#653 id=653 data-nosnippet>653</a>    /// anything: `PREBINDGEN_PIPELINE` selects, the `v2` Cargo feature makes v2
 <a href=#654 id=654 data-nosnippet>654</a>    /// available, and unset means v1. See
-<a href=#655 id=655 data-nosnippet>655</a>    /// [`pipeline`](prebindgen_registry::pipeline) for the full table, and
+<a href=#655 id=655 data-nosnippet>655</a>    /// [`crate::pipeline`] for the full table, and
 <a href=#656 id=656 data-nosnippet>656</a>    /// [`Self::build_with`] to state the engine in code.
 <a href=#657 id=657 data-nosnippet>657</a>    </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;JniGen, prebindgen_registry::WriteRustError&gt; {
 <a href=#658 id=658 data-nosnippet>658</a>        <span class="kw">let </span>requested = prebindgen_registry::pipeline::Pipeline::from_env()<span class="question-mark">?</span>;
