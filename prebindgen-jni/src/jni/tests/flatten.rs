@@ -447,7 +447,7 @@ fn a_per_function_expansion_on_an_accessor_is_refused() {
             prebindgen_registry::expand_return!(ZThing)
                 .field(prebindgen_registry::fun!(z_thing_name)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("an accessor composes nothing");
     let message = error.to_string();
     assert!(
@@ -520,7 +520,7 @@ fn a_declared_class_can_be_expanded_and_still_cross_whole() {
                 .variant_self(),
         );
 
-    let gen = jni.build_with(registry).expect("both classes resolve");
+    let gen = jni.build_over(registry).expect("both classes resolve");
 
     let dir = unique_test_dir("jnigen_expanded_declared_classes");
     let _ = std::fs::remove_dir_all(&dir);

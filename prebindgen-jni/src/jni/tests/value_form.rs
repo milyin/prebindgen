@@ -1291,7 +1291,7 @@ fn an_unstated_parity_expectation_refuses_a_skipped_decomposition() {
             prebindgen_registry::expand_return!(ZEnvelope)
                 .fields_self_into(prebindgen_registry::fields!(z_envelope_into_struct)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("a skipped decomposition against an empty expectation");
     let message = error.to_string();
     assert!(
