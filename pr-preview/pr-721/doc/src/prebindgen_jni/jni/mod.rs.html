@@ -470,7 +470,7 @@
 <a href=#470 id=470 data-nosnippet>470</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Engine {
 <a href=#471 id=471 data-nosnippet>471</a>    <span class="doccomment">/// Every crossing this binding needs, each with its conversion — the v1
 <a href=#472 id=472 data-nosnippet>472</a>    /// engine's resolution.
-<a href=#473 id=473 data-nosnippet>473</a>    </span>V1(prebindgen_registry::Registry),
+<a href=#473 id=473 data-nosnippet>473</a>    </span>V1(Box&lt;prebindgen_registry::Registry&gt;),
 <a href=#474 id=474 data-nosnippet>474</a>    <span class="doccomment">/// The v2 engine's finished run — see `prebindgen-registry-v2`.
 <a href=#475 id=475 data-nosnippet>475</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
 <a href=#476 id=476 data-nosnippet>476</a>    </span>V2(Box&lt;prebindgen_registry_v2::Generation&gt;),
@@ -1144,7 +1144,7 @@
 <a href=#1144 id=1144 data-nosnippet>1144</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_v1(decls: Declarations, registry: prebindgen_registry::Registry) -&gt; <span class="self">Self </span>{
 <a href=#1145 id=1145 data-nosnippet>1145</a>        JniGen {
 <a href=#1146 id=1146 data-nosnippet>1146</a>            decls,
-<a href=#1147 id=1147 data-nosnippet>1147</a>            engine: Engine::V1(registry),
+<a href=#1147 id=1147 data-nosnippet>1147</a>            engine: Engine::V1(Box::new(registry)),
 <a href=#1148 id=1148 data-nosnippet>1148</a>        }
 <a href=#1149 id=1149 data-nosnippet>1149</a>    }
 <a href=#1150 id=1150 data-nosnippet>1150</a>
