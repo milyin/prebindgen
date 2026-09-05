@@ -63,9 +63,24 @@ impl UnfoldPolicy for JniUnfold<'_> {
         }
     }
 
-    fn part_name(&self, reach: &Reach, index: usize, field: Option<&syn::Ident>) -> String {
+    fn part_name(
+        &self,
+        owner: &TypeRef,
+        reach: &Reach,
+        index: usize,
+        field: Option<&syn::Ident>,
+    ) -> String {
+        // Named under the declaration that OWNS the part. A spliced child's
+        // `.name(..)` overrides live on the child's declaration, so asking
+        // under the walk's root would answer with the accessor-derived name
+        // and rename every part a nested decomposition declared.
+        // The VALUE's key: a part reached through a lending accessor arrives
+        // as `&T`, and a row is keyed by what crosses, not by how it was
+        // reached. Keyed by the borrow, the declaration lookup misses and every
+        // nested part falls back to its accessor's ident.
+        let key = owner.borrow_target().unwrap_or(owner).stripped_key();
         match reach {
-            Reach::Accessor(func) => self.decls.leaf_name_of(&self.key, func, index),
+            Reach::Accessor(func) => self.decls.leaf_name_of(&key, func, index),
             // A synthesized `data_class` decomposition names its slots after
             // the struct's own fields — as the KOTLIN property is named, which
             // camel-cases and escapes a name that is a keyword there. A
@@ -74,7 +89,7 @@ impl UnfoldPolicy for JniUnfold<'_> {
                 Some(name) => crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(
                     &name.to_string(),
                 )),
-                None => self.decls.leaf_name_at(&self.key, index),
+                None => self.decls.leaf_name_at(&key, index),
             },
         }
     }
@@ -379,9 +394,6 @@ impl Declarations {
             else {
                 continue;
             };
-            if ret.optional_inner().is_some() {
-                return Some("optional-part");
-            }
             // `bindings` writes a binding only where the row it would name
             // exists. A declared type whose `parts` row this table does not
             // state yet is the same unfinished work, seen from the other side.
