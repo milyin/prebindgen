@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["PIPELINE_ENV"],"enum":["Pipeline","PipelineError"]};
