@@ -178,7 +178,14 @@ impl Declarations {
         };
         let mut reaches = Vec::new();
         for record in &records {
-            if !matches!(record.decon, FieldDecon::Default) {
+            // A field the ADAPTER took apart — a decomposed sum, a selector
+            // plus one group per alternative — is a plain reach here, and the
+            // taking-apart is a part binding on it (design decision 3). The row
+            // says which field; the binding says that it comes apart, and to
+            // what. Only `Records`, which replaces the field's type default
+            // wholesale with a list written at this site, is a statement no row
+            // makes yet.
+            if matches!(record.decon, FieldDecon::Records(_)) {
                 return None;
             }
             // A record with several members is an INLINED nested class: each
@@ -1201,6 +1208,67 @@ impl Declarations {
                 bound.bind(
                     Site::arm_part(&row, None, index),
                     part,
+                    Ask::Recipe(parts()),
+                    Origin::Adapter,
+                );
+            }
+        }
+
+        // A VALUE FORM's parts, bound the same way an accessor's are. The row
+        // states which field of the returned struct each part reaches; a
+        // binding states that the part comes apart further and to what. That
+        // split is design decision 3, and it is what lets a sum-typed field —
+        // a selector plus one group per alternative, which no `Reach` spells —
+        // be a `Choice` part rather than a shape smuggled into the row.
+        for decl in &self.return_expand_decls {
+            let Some(owner) = registry.reading(decl.key()) else {
+                continue;
+            };
+            let Some((func, reaches)) = self.value_form_of(model, registry, &owner) else {
+                continue;
+            };
+            let Some(st) = model.function(&func).map(|f| f.ret.clone()) else {
+                continue;
+            };
+            let st = st.borrow_target().unwrap_or(&st);
+            let Some(ident) = st.stripped_key().ident() else {
+                continue;
+            };
+            let Some(prebindgen_registry::flat::Type::Struct(st)) = model.declared_type(&ident)
+            else {
+                continue;
+            };
+            // The DECLARATION's answer for each field, in the same order as
+            // the reaches: whether this occurrence comes apart. Having a row of
+            // its own is not enough — `a_whole_value_crossing_uses_only_its_
+            // flat_structure` is a field whose type is a `data_class` and which
+            // this form crosses whole — and the record's `decon` is where the
+            // declaration says which (design decision 3).
+            let [crate::jni::LocalField::Fields(form)] = decl.field_list() else {
+                continue;
+            };
+            let records = self.lower_value_form(registry, decl.key(), form);
+            let row = Crossing::new(owner, Direction::Deconstruct).row(parts());
+            for (index, reach) in reaches.iter().enumerate() {
+                let prebindgen_registry::recipe::Reach::Field(field) = reach else {
+                    continue;
+                };
+                if records
+                    .get(index)
+                    .is_none_or(|r| matches!(r.decon, crate::unfold::FieldDecon::Default))
+                {
+                    continue;
+                }
+                let Some(field) = st.fields.get(*field) else {
+                    continue;
+                };
+                let crossing = Crossing::new(field.ty.clone(), Direction::Deconstruct);
+                if recipes.key_of(&crossing.key(), &parts()).is_none() {
+                    continue;
+                }
+                bound.bind(
+                    Site::part(&row, index),
+                    crossing,
                     Ask::Recipe(parts()),
                     Origin::Adapter,
                 );

@@ -521,7 +521,13 @@ impl Folding<'_> {
                 // layer the value HOLDS — a field, or the reading itself — is
                 // one the emitter tests before it reaches anything, and that
                 // test is the flag.
-                let gated = !matches!(path.last(), Some(PathStep::Call { .. }));
+                //
+                // Anywhere on the path, not just at its end: a layer inside a
+                // value the accessor produced is read off that one result, so
+                // the call that produced it is still the only test there is.
+                let gated = !path
+                    .iter()
+                    .any(|step| matches!(step, PathStep::Call { .. }));
                 if gated {
                     flag.path = path.clone();
                     walk.leaves.push(flag);

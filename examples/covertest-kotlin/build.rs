@@ -133,18 +133,16 @@ fn main() {
         // so a build fails if either moves — a decomposition leaving the comparison,
         // or leaving the population. Each entry is a part binding #701 step 3 owes.
         .expect_parity_skips([
-            "`ledger_new`'s return: row-states-no-parts",
-            "`probe_new`'s return: row-states-no-parts",
+            "`ledger_new`'s return: field-of-a-field-chain",
             "`storage_labels`'s return: whole-element-fold",
             "`storage_shards_opt`'s return: whole-element-fold",
             "`storage_shards`'s return: whole-element-fold",
             "`storage_summary_probe`'s return: row-states-no-parts",
             "`unsigned_series`'s return: whole-element-fold",
-            "the callback argument `Ledger`: row-states-no-parts",
-            "the callback argument `Probe`: row-states-no-parts",
-            "the callback argument `Report`: row-states-no-parts",
+            "the callback argument `Ledger`: field-of-a-field-chain",
+            "the callback argument `Report`: field-of-a-field-chain",
         ])
-        .expect_parity_compared(49)
+        .expect_parity_compared(51)
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a
