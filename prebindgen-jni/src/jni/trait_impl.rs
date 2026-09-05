@@ -652,7 +652,7 @@ impl JniGenBuilder {
     /// Which engine does that is settled here, once, before either one plans
     /// anything: `PREBINDGEN_PIPELINE` selects, the `v2` Cargo feature makes v2
     /// available, and unset means v1. See
-    /// [`pipeline`](prebindgen_registry::pipeline) for the full table, and
+    /// [`crate::pipeline`] for the full table, and
     /// [`Self::build_with`] to state the engine in code.
     pub fn build(self) -> Result<JniGen, prebindgen_registry::WriteRustError> {
         let requested = prebindgen_registry::pipeline::Pipeline::from_env()?;

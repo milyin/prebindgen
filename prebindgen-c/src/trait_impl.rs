@@ -843,7 +843,7 @@ impl CbindgenBuilder {
     ///
     /// Which engine does that is settled here, once, before either one plans
     /// anything: `PREBINDGEN_PIPELINE` selects, the `v2` Cargo feature makes v2
-    /// available, and unset means v1. See [`pipeline`](prebindgen_registry::pipeline)
+    /// available, and unset means v1. See [`pipeline`]
     /// for the full table, and [`Self::build_with`] to state the engine in code.
     pub fn build(self) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
         let requested = prebindgen_registry::pipeline::Pipeline::from_env()?;
