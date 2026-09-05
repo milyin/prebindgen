@@ -936,7 +936,7 @@ impl<'a> Check<'a, '_> {
     }
 
     /// Every part crossing this recipe reaches, checking what it names on the way.
-    fn recipe(&mut self, ty: &TypeRef, recipe: &Recipe) -> Vec<Crossing> {
+    fn recipe(&mut self, ty: &TypeRef, recipe: &Recipe) -> Vec<Edge> {
         let direction = recipe.direction();
         // The one place the two directions swap: the Rust side holds the values a
         // callback's arguments carry and pushes them out through the call.
@@ -946,19 +946,23 @@ impl<'a> Check<'a, '_> {
                 self.not_a_callback();
                 return Vec::new();
             };
+            // A callable's arguments are its parts, numbered by position and
+            // crossing the other way.
             return args
                 .into_iter()
-                .map(|ty| Crossing::new(ty, direction.swap()))
+                .enumerate()
+                .map(|(index, ty)| Edge {
+                    arm: None,
+                    index,
+                    ty,
+                    identity: false,
+                })
                 .collect();
         }
-        let parts = match recipe {
+        match recipe {
             Recipe::Constructing(shape) => self.constructing(ty, shape),
             Recipe::Deconstructing(shape) => self.deconstructing(ty, shape),
-        };
-        parts
-            .into_iter()
-            .map(|ty| Crossing::new(ty, direction))
-            .collect()
+        }
     }
 
     /// The inner crossing an arity shape reaches, or a refusal naming the
@@ -967,14 +971,20 @@ impl<'a> Check<'a, '_> {
     /// Stated nowhere in the recipe: the payload of `Option<T>` is `T` and the
     /// element of `Vec<T>` is `T`, so declaring either would only be a fact
     /// that could disagree with the type.
-    fn arity_inner(&mut self, ty: &TypeRef, optional: bool) -> Vec<TypeRef> {
+    fn arity_inner(&mut self, ty: &TypeRef, optional: bool) -> Vec<Tagged> {
         let inner = if optional {
             ty.optional_inner()
         } else {
             sequence_elem(ty)
         };
         match inner {
-            Some(inner) => vec![inner.clone()],
+            // The payload of a layer is that row's part 0 — the site an
+            // adapter binds when it takes the payload apart through the layer.
+            Some(inner) => vec![Tagged {
+                index: 0,
+                ty: inner.clone(),
+                identity: false,
+            }],
             None => {
                 self.wrong_arity(optional);
                 Vec::new()
@@ -982,14 +992,14 @@ impl<'a> Check<'a, '_> {
         }
     }
 
-    fn constructing(&mut self, ty: &TypeRef, shape: &Constructing) -> Vec<TypeRef> {
+    fn constructing(&mut self, ty: &TypeRef, shape: &Constructing) -> Vec<Edge> {
         match shape {
             Shape::Atomic => Vec::new(),
-            Shape::Optional => self.arity_inner(ty, true),
-            Shape::Sequence => self.arity_inner(ty, false),
+            Shape::Optional => plain(self.arity_inner(ty, true)),
+            Shape::Sequence => plain(self.arity_inner(ty, false)),
             // Reached through `is_invoke` above, never here.
             Shape::Invoke => Vec::new(),
-            Shape::Product(op) => self.construct(ty, op),
+            Shape::Product(op) => plain(self.construct(ty, op)),
             Shape::Choice { arms } => {
                 // Only an arm that names an alternative needs the type to be a
                 // sum. A choice between ways to obtain a value — several
@@ -1002,7 +1012,7 @@ impl<'a> Check<'a, '_> {
                 }
                 let alternatives = alternatives.unwrap_or_default();
                 let mut parts = Vec::new();
-                for arm in arms {
+                for (position, arm) in arms.iter().enumerate() {
                     let fields = match arm.alternative {
                         Some(index) => match alternatives.get(index) {
                             Some(fields) => Some(fields.clone()),
@@ -1018,7 +1028,18 @@ impl<'a> Check<'a, '_> {
                     // alternative has no payload to stand in, and reads the
                     // value's own fields if its operation asks for them.
                     let outer = std::mem::replace(&mut self.arm_fields, fields);
-                    parts.extend(self.construct(ty, &arm.op));
+                    // Every arm numbers its parts from zero, and an arm that
+                    // names no alternative is identified by its position —
+                    // which is what `Site::arm_part` keys on.
+                    let key = match arm.alternative {
+                        Some(index) => ArmKey::Alternative(index),
+                        None => ArmKey::Position(position),
+                    };
+                    parts.extend(
+                        self.construct(ty, &arm.op)
+                            .into_iter()
+                            .map(|p| p.armed(Some(key))),
+                    );
                     self.arm_fields = outer;
                 }
                 parts
@@ -1026,14 +1047,14 @@ impl<'a> Check<'a, '_> {
         }
     }
 
-    fn deconstructing(&mut self, ty: &TypeRef, shape: &Deconstructing) -> Vec<TypeRef> {
+    fn deconstructing(&mut self, ty: &TypeRef, shape: &Deconstructing) -> Vec<Edge> {
         match shape {
             Shape::Atomic => Vec::new(),
-            Shape::Optional => self.arity_inner(ty, true),
-            Shape::Sequence => self.arity_inner(ty, false),
+            Shape::Optional => plain(self.arity_inner(ty, true)),
+            Shape::Sequence => plain(self.arity_inner(ty, false)),
             // Reached through `is_invoke` above, never here.
             Shape::Invoke => Vec::new(),
-            Shape::Product(op) => self.deconstruct(ty, op),
+            Shape::Product(op) => plain(self.deconstruct(ty, op)),
             Shape::Choice { arms } => {
                 // Only an arm that names an alternative needs the type to be a
                 // sum. A choice between ways to obtain a value — several
@@ -1046,7 +1067,7 @@ impl<'a> Check<'a, '_> {
                 }
                 let alternatives = alternatives.unwrap_or_default();
                 let mut parts = Vec::new();
-                for arm in arms {
+                for (position, arm) in arms.iter().enumerate() {
                     let fields = match arm.alternative {
                         Some(index) => match alternatives.get(index) {
                             Some(fields) => Some(fields.clone()),
@@ -1062,7 +1083,15 @@ impl<'a> Check<'a, '_> {
                     // alternative has no payload to stand in, and reads the
                     // value's own fields if its operation asks for them.
                     let outer = std::mem::replace(&mut self.arm_fields, fields);
-                    parts.extend(self.deconstruct(ty, &arm.op));
+                    let key = match arm.alternative {
+                        Some(index) => ArmKey::Alternative(index),
+                        None => ArmKey::Position(position),
+                    };
+                    parts.extend(
+                        self.deconstruct(ty, &arm.op)
+                            .into_iter()
+                            .map(|p| p.armed(Some(key))),
+                    );
                     self.arm_fields = outer;
                 }
                 parts
@@ -1070,11 +1099,20 @@ impl<'a> Check<'a, '_> {
         }
     }
 
-    fn construct(&mut self, ty: &TypeRef, op: &Construct) -> Vec<TypeRef> {
+    fn construct(&mut self, ty: &TypeRef, op: &Construct) -> Vec<Tagged> {
         match op {
             Construct::Call(func) => match self.function(func) {
                 Some(f) => {
-                    let parts = f.params.iter().map(|p| p.ty.clone()).collect();
+                    let parts = f
+                        .params
+                        .iter()
+                        .enumerate()
+                        .map(|(index, p)| Tagged {
+                            index,
+                            ty: p.ty.clone(),
+                            identity: false,
+                        })
+                        .collect();
                     if !constructor_of(f, ty) {
                         self.push(RecipeError::NotAConstructor {
                             recipe: self.recipe.clone(),
@@ -1090,9 +1128,23 @@ impl<'a> Check<'a, '_> {
             // as a cycle, exactly as `Reach::Identity` says on the other side:
             // the arm is handed the value its own default row builds, which is
             // a different recipe.
-            Construct::Identity => Vec::new(),
+            // The arm is handed the value its own DEFAULT row builds, which is
+            // a different recipe — the constructing twin of `Reach::Identity`.
+            Construct::Identity => vec![Tagged {
+                index: 0,
+                ty: ty.clone(),
+                identity: true,
+            }],
             Construct::Fields => match self.fields(ty) {
-                Some(fields) => fields.into_iter().map(|f| f.ty).collect(),
+                Some(fields) => fields
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, f)| Tagged {
+                        index,
+                        ty: f.ty,
+                        identity: false,
+                    })
+                    .collect(),
                 None => {
                     self.not_a_product();
                     Vec::new()
@@ -1101,7 +1153,7 @@ impl<'a> Check<'a, '_> {
         }
     }
 
-    fn deconstruct(&mut self, ty: &TypeRef, op: &Deconstruct) -> Vec<TypeRef> {
+    fn deconstruct(&mut self, ty: &TypeRef, op: &Deconstruct) -> Vec<Tagged> {
         match op {
             Deconstruct::Fields(reaches) => self.reaches(ty, reaches),
             Deconstruct::ValueForm { func, parts } => {
@@ -1125,9 +1177,16 @@ impl<'a> Check<'a, '_> {
         }
     }
 
-    fn reaches(&mut self, ty: &TypeRef, reaches: &[Reach]) -> Vec<TypeRef> {
+    fn reaches(&mut self, ty: &TypeRef, reaches: &[Reach]) -> Vec<Tagged> {
         let mut out = Vec::new();
-        for reach in reaches {
+        for (slot, reach) in reaches.iter().enumerate() {
+            let mut push = |ty: TypeRef, identity: bool| {
+                out.push(Tagged {
+                    index: slot,
+                    ty,
+                    identity,
+                })
+            };
             match reach {
                 Reach::Omit => {}
                 // The part IS the receiver, so it reaches no new type: there
@@ -1136,7 +1195,12 @@ impl<'a> Check<'a, '_> {
                 // depending on itself, and validation reports a cycle. The
                 // value's own converter comes from its `whole` row, which is a
                 // different recipe.
-                Reach::Identity => {}
+                // The part IS the receiver: it reaches no NEW type, but it is
+                // still a part the compiler resolves — through the crossing's
+                // default row, never the row being compiled. Stating that
+                // edge is what lets the walk see the one cycle it really is,
+                // a default that is the row itself.
+                Reach::Identity => push(ty.clone(), true),
                 Reach::Accessor(func) => {
                     let Some(f) = self.function(func) else {
                         continue;
@@ -1148,7 +1212,7 @@ impl<'a> Check<'a, '_> {
                             func: func.clone(),
                         });
                     }
-                    out.push(ret);
+                    push(ret, false);
                 }
                 // Each hop resolves against the previous field's type, so a
                 // chain is validated exactly as the accesses it renders.
@@ -1169,10 +1233,16 @@ impl<'a> Check<'a, '_> {
 
                             match shape.as_ref() {
                                 Deconstruct::Fields(inner_reaches) => {
-                                    out.extend(self.reaches(&inner, inner_reaches));
+                                    out.extend(
+                                        self.reaches(&inner, inner_reaches)
+                                            .into_iter()
+                                            .map(|p| p.at(slot)),
+                                    );
                                 }
                                 Deconstruct::ValueForm { parts, .. } => {
-                                    out.extend(self.reaches(&inner, parts));
+                                    out.extend(
+                                        self.reaches(&inner, parts).into_iter().map(|p| p.at(slot)),
+                                    );
                                 }
                             }
                         }
@@ -1198,7 +1268,11 @@ impl<'a> Check<'a, '_> {
                         }
                     }
                     if ok {
-                        out.push(at);
+                        out.push(Tagged {
+                            index: slot,
+                            ty: at,
+                            identity: false,
+                        });
                     }
                 }
                 Reach::Field(index) => {
@@ -1207,7 +1281,11 @@ impl<'a> Check<'a, '_> {
                         continue;
                     };
                     match fields.get(*index) {
-                        Some(field) => out.push(field.ty.clone()),
+                        Some(field) => out.push(Tagged {
+                            index: slot,
+                            ty: field.ty.clone(),
+                            identity: false,
+                        }),
                         None => self.out_of_range(*index, fields.len()),
                     }
                 }
@@ -1308,6 +1386,52 @@ fn declared<'a>(model: &'a Flat, ty: &TypeRef) -> Option<&'a Type> {
 ///
 /// Every declared row is a starting point, so a row that reaches itself is
 /// found wherever it sits.
+/// One part of one operation, before the arm it sits in is known.
+struct Tagged {
+    index: usize,
+    ty: TypeRef,
+    identity: bool,
+}
+
+impl Tagged {
+    /// Renumber to the part that CONTAINS this one: an inlined chain is one
+    /// part of the row above however many reaches it spells.
+    fn at(self, index: usize) -> Self {
+        Self { index, ..self }
+    }
+
+    /// Place this part in an arm, or in no arm at all.
+    fn armed(self, arm: Option<ArmKey>) -> Edge {
+        Edge {
+            arm,
+            index: self.index,
+            ty: self.ty,
+            identity: self.identity,
+        }
+    }
+}
+
+/// Parts of a shape that has no arms.
+fn plain(parts: Vec<Tagged>) -> Vec<Edge> {
+    parts.into_iter().map(|p| p.armed(None)).collect()
+}
+
+/// One part a row reaches, tagged with the site a binding for it would use.
+///
+/// The cycle walk resolves each of these the way `Compiler::part_of` does — a
+/// binding REPLACES the part's default row rather than adding to it — so the
+/// site has to come out of the shape walk with the crossing.
+struct Edge {
+    arm: Option<ArmKey>,
+    index: usize,
+    ty: TypeRef,
+    /// The part IS the receiver. It resolves through the crossing's DEFAULT
+    /// row and never through the row being compiled, which is what stops it
+    /// re-entering itself; a default that IS that row is a cycle the
+    /// declaration wrote.
+    identity: bool,
+}
+
 pub(crate) fn cycles(
     model: &Flat,
     table: &Recipes,
@@ -1369,17 +1493,30 @@ fn walk(
         return;
     }
     path.push((row.clone(), crossing.key()));
-    // Each part's own default, and every row a binding on this row names.
-    let mut next: Vec<(RecipeKey, Crossing)> = successors(model, table, row, crossing)
-        .into_iter()
-        .map(|part| (table.recipe(&part).0, part))
-        .collect();
-    next.extend(
-        bindings
-            .parts_of(row)
-            .into_iter()
-            .map(|(crossing, recipe)| (recipe, crossing)),
-    );
+    // Each part resolved the way `Compiler::part_of` resolves it: through the
+    // binding written for its site if there is one, and otherwise through its
+    // crossing's default row. A binding REPLACES that default rather than
+    // adding to it, which is the whole reason the site has to be carried here.
+    let direction = table
+        .get(row)
+        .map(|r| r.direction())
+        .unwrap_or(crossing.direction);
+    let mut next: Vec<(RecipeKey, Crossing)> = Vec::new();
+    for edge in successors(model, table, row, crossing) {
+        let part = Crossing::new(edge.ty, direction);
+        let site = Site::arm_part(row, edge.arm, edge.index);
+        // An IDENTITY part is the receiver, and the compiler takes the
+        // crossing's default for it without consulting a binding — otherwise it
+        // re-enters the row it is compiling. A default that IS that row is the
+        // cycle the declaration wrote, and this walk reports it.
+        let part_row = match (edge.identity, bindings.bound_row(&site)) {
+            (false, Some(Some(bound))) => bound,
+            // Bound to nothing: the site contributes no crossing at all.
+            (false, Some(None)) => continue,
+            _ => table.recipe(&part).0,
+        };
+        next.push((part_row, part));
+    }
     for (part_row, part) in next {
         walk(
             model, table, bindings, &part_row, &part, path, settled, reported, errors,
@@ -1398,12 +1535,7 @@ fn walk(
 /// One row, not every row of the crossing: the walk asks what compiling this
 /// row compiles next, and a sibling row under the same crossing is a different
 /// question it asks from that row's own starting point.
-fn successors(
-    model: &Flat,
-    table: &Recipes,
-    row: &RecipeKey,
-    crossing: &Crossing,
-) -> Vec<Crossing> {
+fn successors(model: &Flat, table: &Recipes, row: &RecipeKey, crossing: &Crossing) -> Vec<Edge> {
     let recipe = match table.get(row) {
         Some(recipe) => recipe.clone(),
         // A crossing nothing declared reads as its derived row.

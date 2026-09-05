@@ -444,20 +444,17 @@ impl Bindings {
         }
     }
 
-    /// Every row this row's PARTS were bound to: what compiling it compiles
-    /// next, beyond each part crossing's own default.
+    /// The row one site was bound to, distinguishing "not bound" from "bound
+    /// to nothing".
     ///
-    /// The cycle check needs exactly this. A part is resolved through a binding
-    /// keyed by the row that names it, so the rows one row can reach are the
-    /// bindings written against it — and reading them off the table needs no
-    /// part index, which the shape walk does not carry.
-    pub fn parts_of(&self, row: &RecipeKey) -> Vec<(Crossing, RecipeKey)> {
+    /// `None` — no declaration named this site, so its crossing takes its own
+    /// default. `Some(None)` — a declaration bound it to [`Ask::Omit`], so it
+    /// contributes nothing. `Some(Some(row))` — that row, which REPLACES the
+    /// default rather than adding to it.
+    pub fn bound_row(&self, site: &Site) -> Option<Option<RecipeKey>> {
         self.bound
-            .iter()
-            .filter(|(site, _)| matches!(&site.role, Role::Part { recipe, .. } if recipe == row))
-            .filter_map(|(_, bound)| bound.as_ref())
-            .map(|b| (b.crossing.clone(), b.recipe.clone()))
-            .collect()
+            .get(site)
+            .map(|bound| bound.as_ref().map(|b| b.recipe.clone()))
     }
 
     /// Whether any declaration named this site.

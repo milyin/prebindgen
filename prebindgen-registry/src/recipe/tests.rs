@@ -525,6 +525,90 @@ fn a_row_reaching_its_own_crossing_is_refused() {
     );
 }
 
+/// A binding REPLACES a part's default row, so one that routes the part away
+/// from a cycle breaks it.
+///
+/// `clone` builds a `Sample` from a `Sample`, which loops through the default.
+/// Binding that part to the atomic `whole` row is what the compiler follows,
+/// and it terminates — reading the default anyway reports a loop the compiler
+/// never takes (#718 review).
+#[test]
+fn a_binding_that_routes_a_part_away_breaks_the_cycle() {
+    let model = model(&[SAMPLE, "pub fn sample_clone(s: Sample) -> Sample {}"]);
+    let mut builder = Recipes::builder();
+    builder
+        .declare_default(
+            ty(&model, "Sample"),
+            recipe_name("clone"),
+            Constructing::Product(Construct::Call(ident("sample_clone"))),
+        )
+        .declare(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Constructing::Atomic,
+        );
+    let recipes = builder.build(&model).expect("table");
+    let clone = recipes
+        .key_of(
+            &Crossing::new(ty(&model, "Sample"), Direction::Construct).key(),
+            &recipe_name("clone"),
+        )
+        .expect("clone row")
+        .clone();
+    let mut bound = Bindings::builder();
+    bound.bind(
+        Site::part(&clone, 0),
+        Crossing::new(ty(&model, "Sample"), Direction::Construct),
+        Ask::Recipe(recipe_name("whole")),
+        Origin::Adapter,
+    );
+    bound
+        .build(&recipes, &model)
+        .expect("the binding routes the part to `whole`, which is atomic");
+}
+
+/// And one that routes a part INTO a cycle is refused, though every default
+/// would have terminated.
+#[test]
+fn a_binding_that_routes_a_part_into_a_cycle_is_refused() {
+    let model = model(&[SAMPLE, "pub fn sample_clone(s: Sample) -> Sample {}"]);
+    let mut builder = Recipes::builder();
+    builder
+        .declare_default(
+            ty(&model, "Sample"),
+            recipe_name("whole"),
+            Constructing::Atomic,
+        )
+        .declare(
+            ty(&model, "Sample"),
+            recipe_name("clone"),
+            Constructing::Product(Construct::Call(ident("sample_clone"))),
+        );
+    let recipes = builder.build(&model).expect("table");
+    let clone = recipes
+        .key_of(
+            &Crossing::new(ty(&model, "Sample"), Direction::Construct).key(),
+            &recipe_name("clone"),
+        )
+        .expect("clone row")
+        .clone();
+    let mut bound = Bindings::builder();
+    // `clone`'s part is routed back to `clone`, which is the loop.
+    bound.bind(
+        Site::part(&clone, 0),
+        Crossing::new(ty(&model, "Sample"), Direction::Construct),
+        Ask::Recipe(recipe_name("clone")),
+        Origin::Adapter,
+    );
+    let errors = bound
+        .build(&recipes, &model)
+        .expect_err("the binding closes the loop");
+    assert!(
+        matches!(errors.as_slice(), [RecipeError::Cycle { .. }]),
+        "{errors:?}"
+    );
+}
+
 #[test]
 fn a_cycle_through_two_crossings_is_refused() {
     let model = model(&[
