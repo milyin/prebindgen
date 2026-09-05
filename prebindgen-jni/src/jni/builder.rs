@@ -885,17 +885,37 @@ impl Declarations {
     /// `.name()` first, then the class member's Kotlin name, else the
     /// camel-cased Rust name — the same precedence [`Self::lower_fields`]
     /// applies, because it is the same question.
-    pub(crate) fn leaf_name_of(&self, key: &TypeKey, func: &syn::Ident, index: usize) -> String {
+    pub(crate) fn leaf_name_of(
+        &self,
+        row: &prebindgen_registry::recipe::RecipeName,
+        key: &TypeKey,
+        func: &syn::Ident,
+        index: usize,
+    ) -> String {
+        // The declaration the ROW states: for a function's own row that is the
+        // function's declaration, not the type's. Both list parts of the same
+        // owner, so the key alone cannot tell them apart.
         let declared = self
-            .return_expand_decls
+            .fn_return_expands
             .iter()
-            .find(|d| d.key() == key)
+            .find(|(f, d)| d.key() == key && crate::jni::recipes::site_row(f) == *row)
+            .map(|(_, d)| d)
+            .or_else(|| self.return_expand_decls.iter().find(|d| d.key() == key))
             .and_then(|d| d.field_list().get(index).cloned());
         match declared {
             Some(LocalField::Named(_, Some(name))) => name,
             Some(LocalField::Named(named, None)) => self
                 .class_method_kotlin_name(key, &named)
                 .unwrap_or_else(|| snake_to_camel(&named.to_string())),
+            // A BINDING-LOCAL field names itself the same way, and its
+            // declaration is the only place that name exists — there is no
+            // `#[prebindgen]` item to fall back to. [`Self::leaf_name_at`] has
+            // always answered for one; a reach names the same field.
+            Some(LocalField::Local {
+                path,
+                name_override,
+                ..
+            }) => self.local_field_name(key, &path, &name_override),
             _ => self
                 .class_method_kotlin_name(key, func)
                 .unwrap_or_else(|| snake_to_camel(&func.to_string())),
@@ -941,7 +961,32 @@ impl Declarations {
         // with the same precedence every other field name takes. Asking it
         // rather than re-deriving keeps the one answer in one place.
         let records = self.lower_value_form(registry, key, fields);
-        Some(records.get(index)?.name.clone())
+        // Indexed by PART, not by record: a spliced part is one position of the
+        // row however many records the declaration flattened it into, so the
+        // groups are formed the way the row's reaches are — by the field the
+        // records' first member names.
+        let mut heads: Vec<&syn::Ident> = Vec::new();
+        let mut groups: Vec<Vec<&crate::unfold::FieldRecord>> = Vec::new();
+        for record in &records {
+            let head = record.members.first()?;
+            match heads.iter().position(|h| *h == head) {
+                Some(at) => groups[at].push(record),
+                None => {
+                    heads.push(head);
+                    groups.push(vec![record]);
+                }
+            }
+        }
+        // A SPLICED part is named by the field it reaches, which the ordinary
+        // part naming answers; only a part that is one plain record carries the
+        // declaration's own name for it.
+        let [record] = groups.get(index)?.as_slice() else {
+            return None;
+        };
+        if record.members.len() > 1 {
+            return None;
+        }
+        Some(record.name.clone())
     }
 
     /// Whether this type carries an `expand_return!` declaration.

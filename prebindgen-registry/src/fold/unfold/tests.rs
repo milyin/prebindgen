@@ -47,6 +47,7 @@ impl UnfoldPolicy for Jni {
 
     fn part_name(
         &self,
+        _row: &crate::recipe::RecipeKey,
         _owner: &TypeRef,
         reach: &Reach,
         index: usize,
@@ -175,7 +176,7 @@ fn unfolds_bound(
             crate::recipe::Origin::Adapter,
         );
     }
-    let bindings = bound.build(&recipes).expect("bindings");
+    let bindings = bound.build(&recipes, &model).expect("bindings");
     Folding::new(&recipes, &model)
         .unfold(&Jni, &bindings, &ty(target), &RecipeName::new(target_row))
         .map(|(leaves, hoists, coverage)| (render(&leaves, &hoists), coverage))
@@ -250,7 +251,7 @@ fn unfolds(sources: &[&str], rows: &[(&str, Deconstructing)], target: &str) -> V
             );
         }
     }
-    let bindings = bound.build(&recipes).expect("bindings");
+    let bindings = bound.build(&recipes, &model).expect("bindings");
     let (leaves, hoists, _) = Folding::new(&recipes, &model)
         .unfold(&Jni, &bindings, &ty(target), &RecipeName::new("parts"))
         .unwrap_or_else(|e| panic!("the row does not unfold: {e}"));

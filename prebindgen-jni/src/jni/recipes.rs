@@ -161,6 +161,86 @@ impl Declarations {
         ty: &TypeRef,
         decl: &crate::jni::ExpandReturnDecl,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
+        let (func, reaches, _) = self.value_form_parts(model, registry, ty, decl)?;
+        Some((func, reaches))
+    }
+
+    /// Each field of a value form whose declaration OVERRODE how it comes
+    /// apart: the field's name, the type it reaches, and the reaches that
+    /// override states.
+    ///
+    /// `FieldDecon::Records` is a list written at this site, replacing the
+    /// field type's own decomposition for this occurrence. It says exactly what
+    /// a `Deconstruct::Fields` row says, so it becomes one — under a name of
+    /// its own, since the type's own row is a different statement.
+    fn field_overrides(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Vec<(String, TypeRef, Vec<Reach>)> {
+        use crate::unfold::{DeconRecord, FieldDecon};
+
+        let mut out = Vec::new();
+        let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
+            return out;
+        };
+        let Some(st) = model.function(fields.func()).map(|f| f.ret.clone()) else {
+            return out;
+        };
+        let st = st.borrow_target().unwrap_or(&st);
+        let Some(ident) = st.stripped_key().ident() else {
+            return out;
+        };
+        let Some(prebindgen_registry::flat::Type::Struct(st)) = model.declared_type(&ident) else {
+            return out;
+        };
+        let _ = ty;
+        for record in self.lower_value_form(registry, decl.key(), fields) {
+            let FieldDecon::Records(records) = &record.decon else {
+                continue;
+            };
+            let Some(member) = record.members.first() else {
+                continue;
+            };
+            let Some(field) = st.fields.iter().find(|f| f.name.as_ref() == Some(member)) else {
+                continue;
+            };
+            let reaches: Option<Vec<Reach>> = records
+                .iter()
+                .map(|r| match r {
+                    DeconRecord::Acc { func, .. } => Some(Reach::Accessor(func.clone())),
+                    DeconRecord::LocalAcc { path, .. } => {
+                        Some(Reach::Accessor(path.segments.last()?.ident.clone()))
+                    }
+                    DeconRecord::Identity => Some(Reach::Identity),
+                    // A value form inside an override is a row of a shape this
+                    // one does not hold; it waits, rather than being stated
+                    // wrongly.
+                    _ => None,
+                })
+                .collect();
+            let Some(reaches) = reaches else { continue };
+            out.push((member.to_string(), field.ty.clone(), reaches));
+        }
+        out
+    }
+
+    /// [`Self::value_form_in`], with the answer it drops: whether each part is
+    /// SPLICED, taken apart by a binding on it, or crosses as one leaf.
+    ///
+    /// One walk answers both, because they have to agree. A spliced part is one
+    /// position of the row however many records the declaration flattened it
+    /// into, so a row grouped differently from the bindings would index them
+    /// apart (#701 decision 3).
+    fn value_form_parts(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Option<(syn::Ident, Vec<Reach>, Vec<bool>)> {
         use crate::unfold::{FieldDecon, FieldRecord};
         let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
             return None;
@@ -176,11 +256,18 @@ impl Declarations {
         else {
             return None;
         };
-        let mut reaches = Vec::new();
+        let mut reaches: Vec<Reach> = Vec::new();
+        let mut spliced: Vec<bool> = Vec::new();
+        // The field each part already reached, so records an inlined nested
+        // class flattened into — one per leaf of the child, sharing a first hop
+        // — collapse to the single part that child is.
+        let mut reached: Vec<usize> = Vec::new();
         for record in &records {
-            if !matches!(record.decon, FieldDecon::Default) {
-                return None;
-            }
+            // A field the DECLARATION took apart — a decomposed sum, or an
+            // override written at this site — is a plain reach here, and the
+            // taking-apart is a part binding on it (design decision 3). The row
+            // says which field; the binding says that it comes apart, and to
+            // which row.
             // A record with several members is an INLINED nested class: each
             // member is one hop of a field-access chain. `Reach::Path` states
             // that; before it existed this row declined and fell back to a
@@ -203,8 +290,64 @@ impl Declarations {
                     here = next;
                 }
             }
+            // A CHAIN is an inlined nested class. `Reach::Path` spelled the
+            // whole chain in the parent's row; design decision 3 says the same
+            // thing as the first hop plus a part binding, and the binding is
+            // what #701 keeps.
+            //
+            // Collapsible only where the CHILD names these parts the way this
+            // declaration does, because a binding delegates naming to the
+            // child's own row. A parent that renamed a nested leaf —
+            // `.name("nodeId")` over the child's `node` — says something no
+            // binding can, and keeps the chain it had.
+            if indices.len() > 1 {
+                let head = indices[0];
+                let child = st.fields[head].ty.stripped_key();
+                let declared = self.return_expand_decls.iter().any(|d| *d.key() == child);
+                let prefix = st.fields[head]
+                    .name
+                    .as_ref()
+                    .map(|n| {
+                        crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(
+                            &n.to_string(),
+                        ))
+                    })
+                    .unwrap_or_default();
+                // The name the spliced child will produce for its part, under
+                // the prefix the parent part contributes — which is exactly
+                // what `UnfoldPolicy::nest` composes.
+                let renamed = records
+                    .iter()
+                    .filter(|r| r.members.first() == record.members.first())
+                    .enumerate()
+                    .any(|(at, r)| {
+                        let leaf = if declared {
+                            self.leaf_name_at(&child, at)
+                        } else {
+                            r.members
+                                .get(1)
+                                .map(|m| {
+                                    crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(
+                                        &m.to_string(),
+                                    ))
+                                })
+                                .unwrap_or_default()
+                        };
+                        r.name != format!("{prefix}__{leaf}")
+                    });
+                if !renamed {
+                    if reached.contains(&head) {
+                        continue;
+                    }
+                    reached.push(head);
+                    reaches.push(Reach::Field(head));
+                    spliced.push(true);
+                    continue;
+                }
+            }
             let [index] = indices.as_slice() else {
                 reaches.push(Reach::Path(indices));
+                spliced.push(false);
                 continue;
             };
             let index = *index;
@@ -218,9 +361,23 @@ impl Declarations {
             if st.fields[index].ty.stripped_key() == ty.stripped_key() {
                 return None;
             }
+            if reached.contains(&index) {
+                continue;
+            }
+            reached.push(index);
+            // Spliced two ways. The declaration may take the field apart HERE —
+            // a decomposed sum — or say `Default`, which means "by the field
+            // type's own deconstructor if it has one". A field whose type
+            // merely COULD come apart is not spliced.
+            let (_, core) = st.fields[index].ty.layer_stack();
+            let core = core.borrow_target().unwrap_or(core).stripped_key();
             reaches.push(Reach::Field(index));
+            spliced.push(
+                !matches!(record.decon, FieldDecon::Default)
+                    || self.return_expand_decls.iter().any(|d| *d.key() == core),
+            );
         }
-        Some((fields.func().clone(), reaches))
+        Some((fields.func().clone(), reaches, spliced))
     }
 }
 
@@ -301,23 +458,21 @@ pub(crate) fn site_row(func: &syn::Ident) -> RecipeName {
     RecipeName::new(format!("expand-return@{func}"))
 }
 
+/// The row one FIELD's override declares — `fields!(f).field("x", expand_return!(X))`.
+///
+/// A name of its own, for the reason a per-function `.expand_return(..)` has
+/// one: it sits on the same crossing as the field type's own row and says
+/// something different, namely how this occurrence comes apart. The shape is
+/// the same one step 2 gave the parameter side and #709 gave the return site,
+/// one level further in (#701 decision 3).
+pub(crate) fn field_row(parent: &RecipeName, owner: &TypeKey, field: &str) -> RecipeName {
+    RecipeName::new(format!("{}@{}#{field}", parent.as_str(), owner.as_str()))
+}
+
 /// The allocation-free `(present, value)` input row for an Optional whose
 /// destination payload is a JNI primitive.
 pub(crate) fn pair() -> RecipeName {
     RecipeName::new("pair")
-}
-
-/// Whether a reach's type mentions `owner` anywhere inside it.
-///
-/// Deliberately NOT a delivery peel. [`TypeRef::layer_stack`] answers "what
-/// does this crossing deliver", and is bounded because `Vec<Option<T>>` has
-/// the optional inside the ELEMENT rather than in the boundary. The question
-/// here is a different one — "would splicing this part make the row reach its
-/// own crossing" — and a self-reference nested out of position still closes the
-/// loop: `T`'s row reaches `Vec<Option<T>>`, whose element row reaches `T`.
-/// Answering it with a peel of either depth conflates the two.
-fn mentions(ty: &TypeRef, owner: &TypeKey) -> bool {
-    ty.walk().iter().any(|node| node.stripped_key() == *owner)
 }
 
 impl Declarations {
@@ -374,27 +529,6 @@ impl Declarations {
         }
         let mut reaches = Vec::with_capacity(fields.len());
         for field in fields {
-            // A field that reaches the type being taken apart — the
-            // conditional-handle idiom, `fn(&T) -> Option<&T>`. Splicing it
-            // would make this row reach its own crossing; the field crosses as
-            // one nullable handle leaf instead. Refused here for the same
-            // reason `value_form_of` refuses its own case: `Recipes::build`
-            // would otherwise fail the whole binding over one field.
-            let reaches_self = match field {
-                crate::jni::LocalField::Local { sig, .. } => match &sig.output {
-                    syn::ReturnType::Type(_, ret) => model
-                        .classify(ret)
-                        .is_ok_and(|r| mentions(&r, &ty.stripped_key())),
-                    syn::ReturnType::Default => false,
-                },
-                crate::jni::LocalField::Named(func, _) => model
-                    .function(func)
-                    .is_some_and(|f| mentions(&f.ret, &ty.stripped_key())),
-                _ => false,
-            };
-            if reaches_self {
-                return None;
-            }
             reaches.push(match field {
                 crate::jni::LocalField::Named(func, _) => Reach::Accessor(func.clone()),
                 // The handle itself — the leaf `Reach::Identity` was added for.
@@ -609,6 +743,47 @@ impl Declarations {
                 .and_then(|ident| model.classify(&syn::parse_quote!(#ident)).ok())
             {
                 decomposed.entry(decl.key().clone()).or_insert(ty);
+            }
+        }
+        // A per-FIELD override states how ONE occurrence of a field's type
+        // comes apart, which is a row under a name of its own on that type's
+        // crossing — beside whatever row the type itself states.
+        let type_forms = self.return_expand_decls.iter().map(|decl| (decl, parts()));
+        let fn_forms = self
+            .fn_return_expands
+            .iter()
+            .map(|(func, decl)| (decl, site_row(func)));
+        for (decl, parent) in type_forms.chain(fn_forms) {
+            let Some(owner) = registry.reading(decl.key()) else {
+                continue;
+            };
+            for (field, child, reaches) in self.field_overrides(model, registry, &owner, decl) {
+                recipes.declare(
+                    child,
+                    field_row(&parent, decl.key(), &field),
+                    Deconstructing::Product(Deconstruct::Fields(reaches)),
+                );
+            }
+        }
+
+        // A plan that states NO decomposition still states a crossing: a
+        // whole-element fold hands each element over through its own converter.
+        // The derived row is what that reads as, and declaring it here is what
+        // lets the differential compare such a plan instead of naming it.
+        let mut derived: std::collections::BTreeSet<TypeKey> = Default::default();
+        for plan in unfolded
+            .callback_arg_plans
+            .values()
+            .chain(unfolded.unfold_plans.values())
+            .chain(unfolded.error_plans.values())
+        {
+            // Once per crossing, and only where nothing else states one: a
+            // DECLARED class already has its `whole` default, and a second
+            // default is refused. Several functions fold runs of one element
+            // type, so the row they read is the element's, not each plan's.
+            let key = plan.source.stripped_key();
+            if plan.decon.is_none() && !self.types.contains_key(&key) && derived.insert(key) {
+                recipes.declare_derived_default(plan.source.clone(), Direction::Deconstruct);
             }
         }
         for ty in decomposed.into_values() {
@@ -1194,6 +1369,15 @@ impl Declarations {
                 {
                     continue;
                 }
+                // A part that reaches the type being taken apart crosses as
+                // ONE leaf — the conditional-handle idiom, `fn(&T) -> Option<&T>`,
+                // which re-hands the receiver rather than reading something out
+                // of it. Splicing it would make this row reach its own
+                // crossing; refused here, at the binding, so only this part is
+                // affected and the rest of the decomposition still comes apart.
+                if core.stripped_key() == *decl.key() {
+                    continue;
+                }
                 let part = Crossing::new(ret.clone(), Direction::Deconstruct);
                 if recipes.key_of(&part.key(), &parts()).is_none() {
                     continue;
@@ -1207,6 +1391,82 @@ impl Declarations {
             }
         }
 
-        bound.build(recipes)
+        // A VALUE FORM's parts, bound the same way an accessor's are. The row
+        // states which field of the returned struct each part reaches; a
+        // binding states that the part comes apart further and to what. That
+        // split is design decision 3, and it is what lets a sum-typed field —
+        // a selector plus one group per alternative, which no `Reach` spells —
+        // be a `Choice` part rather than a shape smuggled into the row.
+        // Every value form, under the row that states it: a type's own under
+        // `parts`, and a function's own under `expand-return@fn`. A per-function
+        // `.expand_return(..)` declares a real `ValueForm` row of its own, so
+        // its sum-typed field needs the same binding — without one the row says
+        // `b : ZValOutcome` where the decomposition says a tag and two groups.
+        let type_forms = self.return_expand_decls.iter().map(|decl| (decl, parts()));
+        let fn_forms = self
+            .fn_return_expands
+            .iter()
+            .map(|(func, decl)| (decl, site_row(func)));
+        for (decl, name) in type_forms.chain(fn_forms) {
+            let Some(owner) = registry.reading(decl.key()) else {
+                continue;
+            };
+            let Some((func, reaches, spliced)) =
+                self.value_form_parts(model, registry, &owner, decl)
+            else {
+                continue;
+            };
+            let Some(st) = model.function(&func).map(|f| f.ret.clone()) else {
+                continue;
+            };
+            let st = st.borrow_target().unwrap_or(&st);
+            let Some(ident) = st.stripped_key().ident() else {
+                continue;
+            };
+            let Some(prebindgen_registry::flat::Type::Struct(st)) = model.declared_type(&ident)
+            else {
+                continue;
+            };
+            let row = Crossing::new(owner, Direction::Deconstruct).row(name.clone());
+            for (index, reach) in reaches.iter().enumerate() {
+                let prebindgen_registry::recipe::Reach::Field(field) = reach else {
+                    continue;
+                };
+                if !spliced.get(index).copied().unwrap_or(false) {
+                    continue;
+                }
+                let Some(field) = st.fields.get(*field) else {
+                    continue;
+                };
+                // The row this occurrence comes apart by: the one the
+                // declaration wrote for THIS field where it wrote one, and the
+                // field type's own `parts` otherwise.
+                let overridden = field
+                    .name
+                    .as_ref()
+                    .map(|n| field_row(&name, decl.key(), &n.to_string()))
+                    .filter(|r| {
+                        recipes
+                            .key_of(
+                                &Crossing::new(field.ty.clone(), Direction::Deconstruct).key(),
+                                r,
+                            )
+                            .is_some()
+                    });
+                let name = overridden.unwrap_or_else(parts);
+                let crossing = Crossing::new(field.ty.clone(), Direction::Deconstruct);
+                if recipes.key_of(&crossing.key(), &name).is_none() {
+                    continue;
+                }
+                bound.bind(
+                    Site::part(&row, index),
+                    crossing,
+                    Ask::Recipe(name),
+                    Origin::Adapter,
+                );
+            }
+        }
+
+        bound.build(recipes, model)
     }
 }

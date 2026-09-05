@@ -1164,7 +1164,22 @@ fn a_per_function_value_form_needs_no_type_default() {
             syn::Item::Struct(syn::parse_quote!(
                 pub struct ZValStruct {
                     pub a: i32,
-                    pub b: i64,
+                    // A DECOMPOSED SUM inside a per-function value form: a
+                    // selector plus one group per alternative, which the row
+                    // states as a plain reach and a binding takes apart. That
+                    // binding is keyed by THIS function's row, not the type's,
+                    // and there is no type-wide declaration to fall back on
+                    // (#712 review).
+                    pub b: ZValOutcome,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum ZValOutcome {
+                    Good { value: i64 },
+                    Bad { code: i32 },
                 }
             )),
             loc.clone(),
@@ -1181,12 +1196,15 @@ fn a_per_function_value_form_needs_no_type_default() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
-            crate::package!("val").class(crate::ptr_class!(ZVal)).fun(
-                prebindgen_registry::fun!(z_val_make).expand_return(
-                    prebindgen_registry::expand_return!(ZVal)
-                        .fields(prebindgen_registry::fields!(z_val_to_struct)),
+            crate::package!("val")
+                .class(crate::ptr_class!(ZVal))
+                .class(crate::sealed_class!(ZValOutcome))
+                .fun(
+                    prebindgen_registry::fun!(z_val_make).expand_return(
+                        prebindgen_registry::expand_return!(ZVal)
+                            .fields(prebindgen_registry::fields!(z_val_to_struct)),
+                    ),
                 ),
-            ),
         );
     let dir = unique_test_dir("jnigen_perfn_value_form");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1207,6 +1225,100 @@ fn a_per_function_value_form_needs_no_type_default() {
     let rc: String = rust.split_whitespace().collect();
     // The form's own accessor is what the decomposition calls.
     assert!(rc.contains("myflat::z_val_to_struct("), "{rust}");
+    // And its sum field comes apart: one arm per alternative, which only the
+    // part binding on THIS function's row produces.
+    assert!(rc.contains("ZValOutcome::Good"), "{rust}");
+    assert!(rc.contains("ZValOutcome::Bad"), "{rust}");
+}
+
+/// Two functions overriding the SAME field of the same type, differently, and a
+/// type-wide override beside them.
+///
+/// A per-field override is a row on the field type's crossing, so its name has
+/// to carry which declaration wrote it: keyed by owner and field alone, these
+/// three collide and `RecipesBuilder` refuses the whole binding (#716 review).
+#[test]
+fn per_field_overrides_are_keyed_by_their_own_declaration() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOwner {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZKid {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOwnerForm {
+                    pub child: ZKid,
+                    pub tag: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    for src in [
+        "pub fn z_owner_form(o: &ZOwner) -> ZOwnerForm { unimplemented!() }",
+        "pub fn z_kid_id(k: &ZKid) -> i64 { unimplemented!() }",
+        "pub fn z_kid_size(k: &ZKid) -> i64 { unimplemented!() }",
+        "pub fn z_owner_a() -> ZOwner { unimplemented!() }",
+        "pub fn z_owner_b() -> ZOwner { unimplemented!() }",
+        "pub fn z_owner_c() -> ZOwner { unimplemented!() }",
+    ] {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry =
+        crate::test_util::reg_from_items(declare_referenced(items)).expect("index items");
+    let form = |acc: &str| {
+        let acc = quote::format_ident!("{acc}");
+        prebindgen_registry::expand_return!(ZOwner).fields(
+            prebindgen_registry::fields!(z_owner_form).field(
+                "child",
+                prebindgen_registry::expand_return!(ZKid)
+                    .field(prebindgen_registry::FunctionDecl::new(acc)),
+            ),
+        )
+    };
+    let jni = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("own")
+                .class(crate::ptr_class!(ZOwner))
+                .class(
+                    crate::ptr_class!(ZKid)
+                        .method(prebindgen_registry::fun!(z_kid_id))
+                        .method(prebindgen_registry::fun!(z_kid_size)),
+                )
+                // Two functions override the same field DIFFERENTLY, and a
+                // third takes the type-wide override.
+                .fun(prebindgen_registry::fun!(z_owner_a).expand_return(form("z_kid_id")))
+                .fun(prebindgen_registry::fun!(z_owner_b).expand_return(form("z_kid_size")))
+                .fun(prebindgen_registry::fun!(z_owner_c)),
+        )
+        .expand(form("z_kid_id"));
+    let dir = unique_test_dir("jnigen_field_row_identity");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = jni.build_with(registry).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
+        .expect("read rust");
+    let rc: String = rust.split_whitespace().collect();
+    // Each function's own override is what its decomposition calls.
+    assert!(rc.contains("myflat::z_kid_id("), "{rust}");
+    assert!(rc.contains("myflat::z_kid_size("), "{rust}");
 }
 
 /// A binding-local callable must be crate-qualified: `fun!`'s ident arm
