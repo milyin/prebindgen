@@ -941,7 +941,32 @@ impl Declarations {
         // with the same precedence every other field name takes. Asking it
         // rather than re-deriving keeps the one answer in one place.
         let records = self.lower_value_form(registry, key, fields);
-        Some(records.get(index)?.name.clone())
+        // Indexed by PART, not by record: a spliced part is one position of the
+        // row however many records the declaration flattened it into, so the
+        // groups are formed the way the row's reaches are — by the field the
+        // records' first member names.
+        let mut heads: Vec<&syn::Ident> = Vec::new();
+        let mut groups: Vec<Vec<&crate::unfold::FieldRecord>> = Vec::new();
+        for record in &records {
+            let head = record.members.first()?;
+            match heads.iter().position(|h| *h == head) {
+                Some(at) => groups[at].push(record),
+                None => {
+                    heads.push(head);
+                    groups.push(vec![record]);
+                }
+            }
+        }
+        // A SPLICED part is named by the field it reaches, which the ordinary
+        // part naming answers; only a part that is one plain record carries the
+        // declaration's own name for it.
+        let [record] = groups.get(index)?.as_slice() else {
+            return None;
+        };
+        if record.members.len() > 1 {
+            return None;
+        }
+        Some(record.name.clone())
     }
 
     /// Whether this type carries an `expand_return!` declaration.

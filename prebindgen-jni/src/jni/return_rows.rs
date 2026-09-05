@@ -26,9 +26,6 @@ pub(crate) struct JniUnfold<'a> {
     decls: &'a Declarations,
     /// The registry, for the one name lookup that needs a signature.
     registry: &'a dyn prebindgen_registry::Conversions,
-    /// The type whose declaration names these parts. A part name is the
-    /// declaration's answer, and a declaration is per type.
-    key: prebindgen_registry::TypeKey,
 }
 
 impl UnfoldPolicy for JniUnfold<'_> {
@@ -120,11 +117,14 @@ impl UnfoldPolicy for JniUnfold<'_> {
         )
     }
 
-    fn value_form_part(&self, index: usize) -> Option<String> {
-        // A value form's parts are named by the declaration that lists them,
-        // which is the one record `field_list` holds for such a declaration.
-        self.decls
-            .value_form_part_name(self.registry, &self.key, index)
+    fn value_form_part(
+        &self,
+        owner: &prebindgen_registry::TypeKey,
+        index: usize,
+    ) -> Option<String> {
+        // A value form's parts are named by the declaration that lists them —
+        // the OWNER's, since a form spliced inside another names its own.
+        self.decls.value_form_part_name(self.registry, owner, index)
     }
 
     fn identity_name(&self) -> String {
@@ -218,7 +218,6 @@ impl Declarations {
             let policy = JniUnfold {
                 decls: self,
                 registry,
-                key: plan.source.stripped_key(),
             };
 
             // The reading as the decomposition holds it: a plan reached by
@@ -364,9 +363,7 @@ impl Declarations {
                 let core = record.ty.optional_inner().unwrap_or(&record.ty);
                 let core = core.borrow_target().unwrap_or(core);
                 let key = core.stripped_key();
-                if self.return_expand_decls.iter().any(|d| *d.key() == key) {
-                    return Some("value-form-field-with-parts");
-                }
+
                 // A CONSUMING form hands a handle field over rather than
                 // reading it, which the decomposition records as an identity
                 // leaf. Whether a field is a handle is this adapter's answer

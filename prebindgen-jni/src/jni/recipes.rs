@@ -161,6 +161,24 @@ impl Declarations {
         ty: &TypeRef,
         decl: &crate::jni::ExpandReturnDecl,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
+        let (func, reaches, _) = self.value_form_parts(model, registry, ty, decl)?;
+        Some((func, reaches))
+    }
+
+    /// [`Self::value_form_in`], with the answer it drops: whether each part is
+    /// SPLICED, taken apart by a binding on it, or crosses as one leaf.
+    ///
+    /// One walk answers both, because they have to agree. A spliced part is one
+    /// position of the row however many records the declaration flattened it
+    /// into, so a row grouped differently from the bindings would index them
+    /// apart (#701 decision 3).
+    fn value_form_parts(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Option<(syn::Ident, Vec<Reach>, Vec<bool>)> {
         use crate::unfold::{FieldDecon, FieldRecord};
         let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
             return None;
@@ -176,7 +194,12 @@ impl Declarations {
         else {
             return None;
         };
-        let mut reaches = Vec::new();
+        let mut reaches: Vec<Reach> = Vec::new();
+        let mut spliced: Vec<bool> = Vec::new();
+        // The field each part already reached, so records an inlined nested
+        // class flattened into — one per leaf of the child, sharing a first hop
+        // — collapse to the single part that child is.
+        let mut reached: Vec<usize> = Vec::new();
         for record in &records {
             // A field the ADAPTER took apart — a decomposed sum, a selector
             // plus one group per alternative — is a plain reach here, and the
@@ -210,8 +233,64 @@ impl Declarations {
                     here = next;
                 }
             }
+            // A CHAIN is an inlined nested class. `Reach::Path` spelled the
+            // whole chain in the parent's row; design decision 3 says the same
+            // thing as the first hop plus a part binding, and the binding is
+            // what #701 keeps.
+            //
+            // Collapsible only where the CHILD names these parts the way this
+            // declaration does, because a binding delegates naming to the
+            // child's own row. A parent that renamed a nested leaf —
+            // `.name("nodeId")` over the child's `node` — says something no
+            // binding can, and keeps the chain it had.
+            if indices.len() > 1 {
+                let head = indices[0];
+                let child = st.fields[head].ty.stripped_key();
+                let declared = self.return_expand_decls.iter().any(|d| *d.key() == child);
+                let prefix = st.fields[head]
+                    .name
+                    .as_ref()
+                    .map(|n| {
+                        crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(
+                            &n.to_string(),
+                        ))
+                    })
+                    .unwrap_or_default();
+                // The name the spliced child will produce for its part, under
+                // the prefix the parent part contributes — which is exactly
+                // what `UnfoldPolicy::nest` composes.
+                let renamed = records
+                    .iter()
+                    .filter(|r| r.members.first() == record.members.first())
+                    .enumerate()
+                    .any(|(at, r)| {
+                        let leaf = if declared {
+                            self.leaf_name_at(&child, at)
+                        } else {
+                            r.members
+                                .get(1)
+                                .map(|m| {
+                                    crate::jni::mangle_kotlin_ident(&crate::jni::kt_snake_to_camel(
+                                        &m.to_string(),
+                                    ))
+                                })
+                                .unwrap_or_default()
+                        };
+                        r.name != format!("{prefix}__{leaf}")
+                    });
+                if !renamed {
+                    if reached.contains(&head) {
+                        continue;
+                    }
+                    reached.push(head);
+                    reaches.push(Reach::Field(head));
+                    spliced.push(true);
+                    continue;
+                }
+            }
             let [index] = indices.as_slice() else {
                 reaches.push(Reach::Path(indices));
+                spliced.push(false);
                 continue;
             };
             let index = *index;
@@ -225,9 +304,23 @@ impl Declarations {
             if st.fields[index].ty.stripped_key() == ty.stripped_key() {
                 return None;
             }
+            if reached.contains(&index) {
+                continue;
+            }
+            reached.push(index);
+            // Spliced two ways. The declaration may take the field apart HERE —
+            // a decomposed sum — or say `Default`, which means "by the field
+            // type's own deconstructor if it has one". A field whose type
+            // merely COULD come apart is not spliced.
+            let (_, core) = st.fields[index].ty.layer_stack();
+            let core = core.borrow_target().unwrap_or(core).stripped_key();
             reaches.push(Reach::Field(index));
+            spliced.push(
+                !matches!(record.decon, FieldDecon::Default)
+                    || self.return_expand_decls.iter().any(|d| *d.key() == core),
+            );
         }
-        Some((fields.func().clone(), reaches))
+        Some((fields.func().clone(), reaches, spliced))
     }
 }
 
@@ -1234,7 +1327,9 @@ impl Declarations {
             let Some(owner) = registry.reading(decl.key()) else {
                 continue;
             };
-            let Some((func, reaches)) = self.value_form_in(model, registry, &owner, decl) else {
+            let Some((func, reaches, spliced)) =
+                self.value_form_parts(model, registry, &owner, decl)
+            else {
                 continue;
             };
             let Some(st) = model.function(&func).map(|f| f.ret.clone()) else {
@@ -1248,25 +1343,12 @@ impl Declarations {
             else {
                 continue;
             };
-            // The DECLARATION's answer for each field, in the same order as
-            // the reaches: whether this occurrence comes apart. Having a row of
-            // its own is not enough — `a_whole_value_crossing_uses_only_its_
-            // flat_structure` is a field whose type is a `data_class` and which
-            // this form crosses whole — and the record's `decon` is where the
-            // declaration says which (design decision 3).
-            let [crate::jni::LocalField::Fields(form)] = decl.field_list() else {
-                continue;
-            };
-            let records = self.lower_value_form(registry, decl.key(), form);
             let row = Crossing::new(owner, Direction::Deconstruct).row(name);
             for (index, reach) in reaches.iter().enumerate() {
                 let prebindgen_registry::recipe::Reach::Field(field) = reach else {
                     continue;
                 };
-                if records
-                    .get(index)
-                    .is_none_or(|r| matches!(r.decon, crate::unfold::FieldDecon::Default))
-                {
+                if !spliced.get(index).copied().unwrap_or(false) {
                     continue;
                 }
                 let Some(field) = st.fields.get(*field) else {

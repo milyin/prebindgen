@@ -50,7 +50,15 @@ pub trait UnfoldPolicy {
     /// A value form's parts are named by the declaration that lists them, and a
     /// product's own by whatever the target calls the field. The two are
     /// different lists, and only the caller knows which is being walked.
-    fn value_form_part(&self, _index: usize) -> Option<String> {
+    /// `owner` is the crossing whose ROW states this form — the type the
+    /// declaration is written against, not the struct the form returns and not
+    /// the walk's root. A value form spliced inside another names its parts
+    /// from its own declaration, and those are three different types here.
+    fn value_form_part(
+        &self,
+        _owner: &prebindgen_flat::flat::TypeKey,
+        _index: usize,
+    ) -> Option<String> {
         None
     }
 
@@ -637,7 +645,7 @@ impl Folding<'_> {
     ) -> Result<(), UnfoldViewError> {
         let name = match at
             .value_form
-            .then(|| walk.policy.value_form_part(index))
+            .then(|| walk.policy.value_form_part(&at.row.crossing().ty, index))
             .flatten()
         {
             Some(name) => name,
