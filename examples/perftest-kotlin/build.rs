@@ -21,7 +21,11 @@
 //! `ObjectBoundary64` is recursively flattened, while its structural twin
 //! `ObjectBoundary64Object` uses `.jobject_input()`.
 
-use prebindgen_jni::{data_class, package, ptr_class, JniGen};
+use prebindgen_jni::{
+    data_class, package,
+    pipeline::{fresh_output_root, Pipeline},
+    ptr_class, JniGen,
+};
 use prebindgen_registry::fun;
 
 fn main() {
@@ -130,24 +134,55 @@ fn main() {
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    // Rust JNI wrappers → src/generated_bindings.rs (committed; included by lib.rs).
-    let rust_dest = std::path::Path::new(&crate_dir)
-        .join("src")
-        .join("generated_bindings.rs");
     let jni = binding.build().expect("build failed");
+    let (rust_dest, kotlin_root, reports) = destinations(&crate_dir, jni.pipeline());
+
     let rust_path = jni
         .write_rust(&rust_dest)
         .unwrap_or_else(|error| panic!("write_rust failed: {error}"));
+    // `lib.rs` includes the path this build script chose rather than a literal
+    // one, so the engine that ran decides which file is compiled.
+    println!("cargo:rustc-env=PERFTEST_BINDINGS={}", rust_path.display());
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
     );
 
-    // Kotlin classes → kotlin/generated/** (picked up by the Gradle source set).
-    let kotlin_root = std::path::Path::new(&crate_dir)
-        .join("kotlin")
-        .join("generated");
     for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
+    }
+
+    // The emitted-surface manifest, for an engine that produces one. Empty
+    // under v1, whose answer is "everything declared, or the build failed".
+    for path in jni.write_manifest(&reports).expect("write_manifest failed") {
+        println!("cargo:warning=Wrote {}", path.display());
+    }
+}
+
+/// Where this build script writes its Rust file, its Kotlin root and its
+/// manifest, for the engine that ran.
+///
+/// V1 owns the committed source-tree artifacts and keeps writing them. Any
+/// other engine writes into a root of its own, emptied first, so it can never
+/// overwrite v1's files and cannot leave its own previous run's behind.
+fn destinations(
+    crate_dir: &str,
+    pipeline: Pipeline,
+) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+    let crate_dir = std::path::Path::new(crate_dir);
+    match pipeline {
+        Pipeline::V1 => (
+            crate_dir.join("src").join("generated_bindings.rs"),
+            crate_dir.join("kotlin").join("generated"),
+            crate_dir.join("kotlin"),
+        ),
+        other => {
+            let root = fresh_output_root(crate_dir, other).expect("make the output root");
+            (
+                root.join("generated_bindings.rs"),
+                root.join("kotlin"),
+                root,
+            )
+        }
     }
 }

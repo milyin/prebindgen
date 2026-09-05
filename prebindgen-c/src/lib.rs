@@ -587,6 +587,10 @@ mod trait_impl;
 #[cfg(feature = "v2")]
 mod v2;
 
+/// Which engine a build script runs, and where each one writes — re-exported
+/// so a build script names this crate for the whole binding.
+pub use prebindgen_registry::pipeline;
+
 // ── Free helpers ───────────────────────────────────────────────────────
 
 /// Iterate a `TypeKey`-keyed map in deterministic (key-string) order.

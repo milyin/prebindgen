@@ -18,16 +18,17 @@
 
 use std::path::{Path, PathBuf};
 
+use prebindgen_c::pipeline::{fresh_output_root, Pipeline};
 use syn::parse_quote as pq;
 
 fn main() {
-    let bindings_file = generate_ffi_bindings();
-    generate_c_headers(&bindings_file);
+    let (bindings_file, header_dest) = generate_ffi_bindings();
+    generate_c_headers(&bindings_file, &header_dest);
 }
 
 /// Generate the Rust FFI bindings from `perftest-flat`'s prebindgen output via the
 /// `prebindgen_c::CbindgenBuilder` adapter, and publish the result to `generated/perftest_<arch>.rs`.
-fn generate_ffi_bindings() -> PathBuf {
+fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
     // into its C name (e.g. `Payload` -> `payload_t`, `String` -> `string_t`).
     let mut cbindgen = prebindgen_c::Cbindgen::builder()
@@ -129,26 +130,54 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
 
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
-    let out_file = cbindgen
-        .build()
-        .expect("build prebindgen items")
+    let binding = cbindgen.build().expect("build prebindgen items");
+    let out_file = binding
         .write_rust("perftest.rs")
         .unwrap_or_else(|error| panic!("write generated bindings: {error}"));
 
-    // Publish the generated Rust into the crate tree (committed artifact `lib.rs`
-    // `include!`s; regenerated on every build).
-    let in_tree = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .join("generated")
-        .join("perftest.rs");
-    write_if_changed(&in_tree, &std::fs::read_to_string(&out_file).unwrap());
+    // V1 owns the committed source-tree artifacts and keeps writing them. Any
+    // other engine writes into a root of its own, emptied first, so it can
+    // never overwrite v1's files and cannot leave its own previous run's
+    // behind.
+    let crate_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let (published, header_dest) = match binding.pipeline() {
+        Pipeline::V1 => (
+            crate_dir.join("generated").join("perftest.rs"),
+            crate_dir.join("include").join("perftest.h"),
+        ),
+        other => {
+            let root = fresh_output_root(&crate_dir, other).expect("make the output root");
+            (root.join("perftest.rs"), root.join("perftest.h"))
+        }
+    };
+    write_if_changed(&published, &std::fs::read_to_string(&out_file).unwrap());
 
-    println!("cargo:warning=Generated bindings at: {}", in_tree.display());
-    in_tree
+    // The emitted-surface manifest, for an engine that produces one. Empty
+    // under v1, whose answer is "everything declared, or the build failed".
+    for path in binding
+        .write_manifest(published.parent().expect("the published file has a parent"))
+        .expect("write_manifest failed")
+    {
+        println!("cargo:warning=Wrote {}", path.display());
+    }
+
+    // `lib.rs` includes the path this build script chose rather than a literal
+    // one, so the engine that ran decides which file is compiled.
+    println!(
+        "cargo:rustc-env=PERFTEST_C_BINDINGS={}",
+        published.display()
+    );
+    println!(
+        "cargo:warning=Generated bindings at: {}",
+        published.display()
+    );
+    (published, header_dest)
 }
 
-/// Generate the C header from the prebindgen-generated Rust file via cbindgen, and
-/// publish it to `include/perftest_<arch>.h` (per-target, like the Rust file).
-fn generate_c_headers(bindings_file: &Path) {
+/// Generate the C header from the prebindgen-generated Rust file via cbindgen,
+/// and publish it to `header_dest` — `include/perftest.h` under v1, and the
+/// engine's own output root otherwise.
+fn generate_c_headers(bindings_file: &Path, header_dest: &Path) {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let config = cbindgen::Config::from_root_or_default(&crate_dir);
@@ -163,9 +192,13 @@ fn generate_c_headers(bindings_file: &Path) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
-            let stable = PathBuf::from(&crate_dir).join("include").join("perftest.h");
-            write_if_changed(&stable, &std::fs::read_to_string(&header_path).unwrap());
-            println!("cargo:warning=Generated C header at: {}", stable.display());
+            // The engine that produced the Rust layer decides where its header
+            // goes too, so the two can never come from different runs.
+            write_if_changed(header_dest, &std::fs::read_to_string(&header_path).unwrap());
+            println!(
+                "cargo:warning=Generated C header at: {}",
+                header_dest.display()
+            );
         }
         Err(e) => {
             println!("cargo:warning=Failed to generate C header: {e:?}");

@@ -4,7 +4,6 @@
 
 // The generated perftest-flat FFI bindings, committed under generated/ and
 // (re)produced by build.rs from perftest-flat's #[prebindgen] surface.
-include!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/generated/perftest.rs"
-));
+// The path is chosen by build.rs, so the engine that generated the file is
+// the one whose file is compiled.
+include!(env!("PERFTEST_C_BINDINGS"));

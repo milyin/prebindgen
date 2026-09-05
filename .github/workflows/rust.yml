@@ -96,6 +96,78 @@ jobs:
         RUSTDOCFLAGS: -D warnings
       run: cargo doc --no-deps
 
+  v2-pipeline:
+    # The v2 engine has to keep accepting every example's declarations, and
+    # keep its output out of v1's files. Neither is covered by a build that
+    # never sets the selector.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prebindgen
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: prebindgen
+    - name: Install Rust
+      run: rustup toolchain install stable && rustup default stable
+    - name: v1 first, so the committed artifacts are freshly generated
+      run: cargo build --workspace --all-features
+    - name: Every example submits its declarations to v2
+      run: PREBINDGEN_PIPELINE=v2 cargo build --workspace --all-features
+    - name: v2 wrote nothing into v1's committed artifacts
+      run: git diff --exit-code
+    - name: Every example accounted for its declarations
+      # A build that passes says nothing on its own while v2 emits nothing:
+      # the milestone is that each example's whole declaration set reached the
+      # engine and came back with an outcome. Assert that from the manifests,
+      # so an example that silently stopped submitting cannot look like
+      # progress.
+      run: |
+        python3 - <<'PY'
+        import json, pathlib, sys
+
+        expected = {
+            "covertest-kotlin": "jni",
+            "example-cbindgen": "c",
+            "perftest-kotlin": "jni",
+            "perftest-c": "c",
+            "emitcheck": "jni",
+        }
+        failed = False
+        for example, target in expected.items():
+            path = pathlib.Path("examples") / example / "build/prebindgen/v2" / f"{target}-report.json"
+            if not path.is_file():
+                print(f"{example}: no v2 manifest at {path}")
+                failed = True
+                continue
+            report = json.loads(path.read_text())
+            accounted = len(report["elements"])
+            if report["pipeline"] != "v2" or accounted == 0:
+                print(f"{example}: manifest accounts for {accounted} element(s) of pipeline {report['pipeline']!r}")
+                failed = True
+                continue
+            print(f"{example}: {accounted} element(s) accounted for ({target})")
+        sys.exit(1 if failed else 0)
+        PY
+    - name: Switching back needs no manual cleaning
+      run: |
+        cargo build --workspace --all-features
+        git diff --exit-code
+    - name: Selecting v2 without the feature fails, and never falls back
+      run: |
+        if PREBINDGEN_PIPELINE=v2 cargo build -p covertest-kotlin 2>err.log; then
+          echo "a v2 build with no v2 engine compiled anyway" >&2
+          exit 1
+        fi
+        grep -q -- "--features v2" err.log
+    - name: An unreadable selector fails before generation
+      run: |
+        if PREBINDGEN_PIPELINE=latest cargo build -p covertest-kotlin --features v2 2>err.log; then
+          echo "an unreadable selector was accepted" >&2
+          exit 1
+        fi
+        grep -q "is not a pipeline" err.log
+
   package:
     # Catch packaging breakage on the PR that causes it, not at release time.
     # `cargo package` is what the publish workflow runs, and it fails on

@@ -23,7 +23,11 @@
 //! One file is therefore both the compiled definitions and the model input,
 //! and adding a spelling means editing `src/myflat.rs` alone.
 
-use prebindgen_jni::{matching, package, ptr_class, JniGen};
+use prebindgen_jni::{
+    matching, package,
+    pipeline::{fresh_output_root, Pipeline},
+    ptr_class, JniGen,
+};
 use prebindgen_registry::{expand_return, fields, fun};
 
 /// The crate name stamped on every item, and so the qualifier the generated
@@ -101,11 +105,33 @@ fn main() {
     // Committed next to the source (not `OUT_DIR`) for the same two reasons the
     // other examples do it: `examples/regen-check.sh` can diff it, and a rustc
     // error lands on a stable reviewable path instead of a build hash.
-    let dest = std::path::Path::new(&manifest_dir)
-        .join("src")
-        .join("generated_bindings.rs");
+    //
+    // V1 owns that committed file. Any other engine writes into a root of its
+    // own, emptied first, so it can never overwrite v1's file and cannot leave
+    // its own previous run's behind.
+    let dest = match generation.pipeline() {
+        Pipeline::V1 => std::path::Path::new(&manifest_dir)
+            .join("src")
+            .join("generated_bindings.rs"),
+        other => fresh_output_root(&manifest_dir, other)
+            .expect("make the output root")
+            .join("generated_bindings.rs"),
+    };
     let written = generation
         .write_rust(&dest)
         .unwrap_or_else(|error| panic!("write_rust failed: {error}"));
+    // `lib.rs` includes the path this build script chose rather than a literal
+    // one, so the engine that generated the file is the one whose file is
+    // compiled.
+    println!("cargo:rustc-env=EMITCHECK_BINDINGS={}", written.display());
     println!("cargo:warning=emitcheck: wrote {}", written.display());
+
+    // The emitted-surface manifest, for an engine that produces one. Empty
+    // under v1, whose answer is "everything declared, or the build failed".
+    for path in generation
+        .write_manifest(dest.parent().expect("the written file has a parent"))
+        .expect("write_manifest failed")
+    {
+        println!("cargo:warning=emitcheck: wrote {}", path.display());
+    }
 }

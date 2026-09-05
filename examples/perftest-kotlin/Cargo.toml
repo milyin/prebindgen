@@ -4,6 +4,12 @@ version = { workspace = true }
 edition = { workspace = true }
 build = "build.rs"
 
+[features]
+# Forward `prebindgen-jni`'s v2 engine feature, so `PREBINDGEN_PIPELINE=v2` has
+# an engine to select. Additive: enabling it does not change what an unset
+# selector generates.
+v2 = ["prebindgen-jni/v2"]
+
 [lib]
 name = "perftest_kotlin"
 crate-type = ["cdylib"]

@@ -89,6 +89,34 @@ impl std::fmt::Display for Pipeline {
     }
 }
 
+/// Where a build script writes what an engine generated, when it must not write
+/// to the paths another engine owns.
+///
+/// `<manifest_dir>/build/prebindgen/<pipeline>`, **emptied first**: a file the
+/// previous run wrote and this one did not must not survive into the compile,
+/// which is what makes a shrinking capability set visible instead of stale.
+///
+/// V1 keeps writing the committed source-tree artifacts it always has, so it
+/// never calls this; the directory is named after the pipeline anyway, so two
+/// engines can never land in one root.
+pub fn fresh_output_root(
+    manifest_dir: impl AsRef<std::path::Path>,
+    pipeline: Pipeline,
+) -> std::io::Result<std::path::PathBuf> {
+    let root = manifest_dir
+        .as_ref()
+        .join("build")
+        .join("prebindgen")
+        .join(pipeline.as_str());
+    match std::fs::remove_dir_all(&root) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    std::fs::create_dir_all(&root)?;
+    Ok(root)
+}
+
 /// A pipeline was asked for that cannot be run — reported before generation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PipelineError {
@@ -123,6 +151,26 @@ impl std::error::Error for PipelineError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_output_root_is_per_pipeline_and_starts_empty() {
+        let dir = std::env::temp_dir().join(format!("prebindgen_root_{}", std::process::id()));
+        let v2 = fresh_output_root(&dir, Pipeline::V2).expect("root");
+        assert!(v2.ends_with("build/prebindgen/v2"));
+        std::fs::write(v2.join("stale.rs"), "// from a previous run").unwrap();
+
+        // Another engine's root is a different directory, and making it leaves
+        // the first alone.
+        let v1 = fresh_output_root(&dir, Pipeline::V1).expect("root");
+        assert_ne!(v1, v2);
+        assert!(v2.join("stale.rs").exists());
+
+        // Remaking a root drops what the previous run left in it.
+        let v2_again = fresh_output_root(&dir, Pipeline::V2).expect("root");
+        assert_eq!(v2_again, v2);
+        assert!(!v2.join("stale.rs").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn unset_selects_v1_whether_or_not_v2_is_available() {

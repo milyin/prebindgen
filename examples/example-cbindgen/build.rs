@@ -23,6 +23,7 @@
 
 use std::path::{Path, PathBuf};
 
+use prebindgen_c::pipeline::{fresh_output_root, Pipeline};
 use syn::parse_quote as pq;
 
 /// The target architecture this build targets (`x86_64`, `aarch64`, …), used to
@@ -59,14 +60,14 @@ fn variant() -> String {
 
 fn main() {
     // prebindgen part: build the Rust file of extern "C" wrappers.
-    let bindings_file = generate_ffi_bindings();
+    let (bindings_file, header_dest) = generate_ffi_bindings();
     // cbindgen part: build the C header from that Rust file.
-    generate_c_headers(&bindings_file);
+    generate_c_headers(&bindings_file, &header_dest);
 }
 
 /// Generate the Rust FFI bindings from `example-flat`'s prebindgen output via the
 /// `prebindgen_c::CbindgenBuilder` adapter, and publish the result to `generated/example_flat.rs`.
-fn generate_ffi_bindings() -> PathBuf {
+fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     let unstable = std::env::var("CARGO_FEATURE_UNSTABLE").is_ok();
 
     // The C / cbindgen adapter. Name-mangling rules turn each Rust type/function
@@ -241,19 +242,42 @@ fn generate_ffi_bindings() -> PathBuf {
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
-    let out_file = cbindgen
-        .build()
-        .expect("build prebindgen items")
+    let binding = cbindgen.build().expect("build prebindgen items");
+    let out_file = binding
         .write_rust("example_flat.rs")
         .unwrap_or_else(|error| panic!("write generated bindings: {error}"));
 
-    // Publish the generated Rust into the crate tree under its per-variant name
-    // (committed artifact). Write only on change so cargo doesn't rebuild-loop on
-    // the `include!`d file.
-    let in_tree = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .join("generated")
-        .join(format!("{}.rs", variant()));
+    // Publish the generated Rust under its per-variant name. V1 owns the
+    // committed source-tree artifacts and keeps writing them; any other engine
+    // writes into a root of its own, emptied first, so it can never overwrite
+    // v1's files and cannot leave its own previous run's behind. Write only on
+    // change so cargo doesn't rebuild-loop on the `include!`d file.
+    let crate_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let (in_tree, header_dest) = match binding.pipeline() {
+        Pipeline::V1 => (
+            crate_dir
+                .join("generated")
+                .join(format!("{}.rs", variant())),
+            crate_dir.join("include").join(format!("{}.h", variant())),
+        ),
+        other => {
+            let root = fresh_output_root(&crate_dir, other).expect("make the output root");
+            (
+                root.join(format!("{}.rs", variant())),
+                root.join(format!("{}.h", variant())),
+            )
+        }
+    };
     write_if_changed(&in_tree, &std::fs::read_to_string(&out_file).unwrap());
+
+    // The emitted-surface manifest, for an engine that produces one. Empty
+    // under v1, whose answer is "everything declared, or the build failed".
+    for path in binding
+        .write_manifest(in_tree.parent().expect("the published file has a parent"))
+        .expect("write_manifest failed")
+    {
+        println!("cargo:warning=Wrote {}", path.display());
+    }
 
     // `lib.rs` includes this path rather than matching on `cfg`: the build script
     // already knows which variant it wrote, and a `cfg` matrix in the source would
@@ -263,13 +287,13 @@ fn generate_ffi_bindings() -> PathBuf {
         in_tree.display()
     );
     println!("cargo:warning=Generated bindings at: {}", in_tree.display());
-    in_tree
+    (in_tree, header_dest)
 }
 
 /// Generate the C header from the prebindgen-generated Rust file via cbindgen, and
 /// publish it to `include/example_flat_<arch>[_<feature>…].h` (per-variant, like
 /// the Rust file).
-fn generate_c_headers(bindings_file: &Path) {
+fn generate_c_headers(bindings_file: &Path, header_dest: &Path) {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let config = cbindgen::Config::from_root_or_default(&crate_dir);
@@ -284,12 +308,14 @@ fn generate_c_headers(bindings_file: &Path) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
-            // Publish the header to the in-tree, committed `include/` dir, per-variant.
-            let stable = PathBuf::from(&crate_dir)
-                .join("include")
-                .join(format!("{}.h", variant()));
-            write_if_changed(&stable, &std::fs::read_to_string(&header_path).unwrap());
-            println!("cargo:warning=Generated C header at: {}", stable.display());
+            // The engine that produced the Rust layer decides where its header
+            // goes too, so the two can never come from different runs. Under v1
+            // that is the in-tree, committed `include/` dir, per-variant.
+            write_if_changed(header_dest, &std::fs::read_to_string(&header_path).unwrap());
+            println!(
+                "cargo:warning=Generated C header at: {}",
+                header_dest.display()
+            );
         }
         Err(e) => {
             println!("cargo:warning=Failed to generate C header: {e:?}");
