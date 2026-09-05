@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Niche optimisation for FFI-wire encodings."><title>prebindgen_registry::niches - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_registry" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module niches</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_registry/index.html">prebindgen_<wbr>registry</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module niches</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#aligned-pointer-tags" title="Aligned pointer tags">Aligned pointer tags</a></li><li><a href="#cascading" title="Cascading">Cascading</a></li><li><a href="#soundness" title="Soundness">Soundness</a></li><li><a href="#calling-convention-for-matches" title="Calling convention for `matches`">Calling convention for <code>matches</code></a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate prebindgen_<wbr>registry</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_registry</a></div><h1>Module <span>niches</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_registry/niches.rs.html#1-174">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Niche optimisation for FFI-wire encodings.</p>
+<p>A <em>niche</em> is a bit-pattern that the wire type <em>can</em> represent but that
+a particular converter is guaranteed to never produce on output and
+always reject on input. Wrappers like <code>Option&lt;_&gt;</code> and sum-typed enums
+carve niches one at a time for their own discriminants and re-export
+the remainder so further wrappers stack.</p>
+<p>Direct analogy with Rust’s niche optimisation:</p>
+<div><table><thead><tr><th>Rust</th><th>This crate</th></tr></thead><tbody>
+<tr><td><code>NonZeroU32</code> declares <code>{0}</code></td><td>converter sets <code>niches = Niches::one(…)</code></td></tr>
+<tr><td><code>Option&lt;NonZeroU32&gt;</code> is u32</td><td><code>Option&lt;T&gt;</code> reuses inner’s wire</td></tr>
+<tr><td><code>Option&lt;Option&lt;NonZeroU32&gt;&gt;</code></td><td>falls back unless inner exposes ≥2</td></tr>
+</tbody></table>
+</div>
+<p>In the FFI setting the canonical example is a Rust value encoded as a
+raw <code>Box::into_raw</code> pointer carried over the wire as an integer handle:
+real <code>Box::into_raw</code> results are never <code>0</code>, so the converter declares
+the single niche <code>{0}</code>. <code>Option&lt;T&gt;</code> then automatically reuses the same
+integer wire with <code>0</code> meaning <code>None</code>, matching the C-pointer-with-null
+ABI most native bindings already use.</p>
+<h3 id="aligned-pointer-tags"><a class="doc-anchor" href="#aligned-pointer-tags">§</a>Aligned pointer tags</h3>
+<p>Alignment can leave more invalid integer encodings than the null pointer.
+If generated Rust proves <code>align_of::&lt;T&gt;() &gt;= 2</code>, every live
+<code>Box::into_raw</code> pointer to <code>T</code> has bit zero clear. An adapter can reserve
+that bit as an out-of-band tag while carrying the pointer in an integer
+wire.</p>
+<p>JniGen uses exactly this scheme for handle invalidation:</p>
+<div><table><thead><tr><th>integer handle</th><th>meaning</th></tr></thead><tbody>
+<tr><td><code>0</code></td><td>an absent optional handle</td></tr>
+<tr><td>nonzero, even</td><td>a live <code>Box&lt;T&gt;</code> pointer</td></tr>
+<tr><td>nonzero, odd</td><td>a closed handle; the original address is <code>v &amp; !1</code></td></tr>
+</tbody></table>
+</div>
+<p>Closing a Kotlin handle sets bit zero instead of replacing the address, so
+the masked address remains an immutable lock-ordering key. Generated Rust
+asserts the alignment floor and rejects an odd value before any dereference.</p>
+<p>The odd encodings are <strong>not</strong> entries in JniGen’s <a href="struct.Niches.html" title="struct prebindgen_registry::niches::Niches"><code>Niches</code></a>. They already
+mean “closed handle”, an operational error that can reach the decoder; if
+an <code>Option</code> layer carved one, a close race would silently become <code>None</code>.
+“Not a valid live pointer” is therefore insufficient to make an encoding a
+representation niche. A slot belongs in <a href="struct.Niches.html" title="struct prebindgen_registry::niches::Niches"><code>Niches</code></a> only when the wrapper is
+free to claim its meaning.</p>
+<p>An adapter reusing aligned-pointer tags must keep the complete protocol
+together:</p>
+<ol>
+<li>assert the required alignment against the final concrete pointee type;</li>
+<li>assign every reserved tag one meaning on both sides of the boundary;</li>
+<li>recognize tags before dereferencing or freeing the integer as a pointer;</li>
+<li>mask tags anywhere the stable address identity is compared or ordered;</li>
+<li>publish only genuinely unclaimed encodings as <a href="struct.NicheSlot.html" title="struct prebindgen_registry::niches::NicheSlot"><code>NicheSlot</code></a>s.</li>
+</ol>
+<p>Reserving several low-bit patterns requires a correspondingly stronger
+alignment guarantee and a non-overlapping allocation between lifecycle
+tags and wrapper discriminants.</p>
+<h3 id="cascading"><a class="doc-anchor" href="#cascading">§</a>Cascading</h3>
+<p><a href="struct.Niches.html#method.carve" title="method prebindgen_registry::niches::Niches::carve"><code>Niches::carve</code></a> returns the next slot together with the remainder.
+The wrapper places the carved value into its own emitted code (output:
+<code>None</code> is encoded as <code>slot.value</code>; input: <code>slot.matches</code> is the
+discriminator predicate) and stores <code>rest</code> on its own
+<a href="../prebindgen/struct.ConverterImpl.html#structfield.niches" title="field prebindgen_registry::prebindgen::ConverterImpl::niches"><code>crate::prebindgen::ConverterImpl::niches</code></a> so any
+enclosing wrapper can keep carving. Once <code>rest</code> is empty further
+wrappers must fall back to a tag/box scheme.</p>
+<h3 id="soundness"><a class="doc-anchor" href="#soundness">§</a>Soundness</h3>
+<p>For the carve to be sound, the inner converter’s outputs must
+genuinely avoid the carved bit pattern, and its input must reject it
+(typically by erroring). The adapter author guarantees this — <code>Niches</code>
+is a <em>declaration</em> that the resolver and wrappers trust.</p>
+<h3 id="calling-convention-for-matches"><a class="doc-anchor" href="#calling-convention-for-matches">§</a>Calling convention for <code>matches</code></h3>
+<p>The <code>matches</code> predicate is spliced into the input wrapper’s body where
+the wire-typed parameter <code>v</code> is in scope. The exact shape of <code>v</code>
+depends on the wire kind:</p>
+<ul>
+<li>By-reference wires (e.g. an integer handle, or an object-handle
+type): <code>v: &amp;&lt;wire&gt;</code> — write <code>*v == 0</code>, or <code>v.is_null()</code> for a handle
+type that derefs to a null check.</li>
+<li>Raw-pointer wires (<code>*const T</code>): <code>v: &lt;wire&gt;</code> — write <code>v.is_null()</code>
+directly, no <code>*</code> deref.</li>
+</ul>
+<p>The adapter producing the niche knows which wire kind it is using and
+must write <code>matches</code> accordingly.</p>
+<p><code>value</code> is a wire-typed <em>constant</em> expression with no <code>v</code> and no other
+locals in scope — just the bit pattern (e.g. <code>0i64</code>,
+<code>std::ptr::null()</code>).</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.NicheSlot.html" title="struct prebindgen_registry::niches::NicheSlot">Niche<wbr>Slot</a></dt><dd>One free bit-pattern slot in the wire encoding.</dd><dt><a class="struct" href="struct.Niches.html" title="struct prebindgen_registry::niches::Niches">Niches</a></dt><dd>An ordered set of <a href="struct.NicheSlot.html" title="struct prebindgen_registry::niches::NicheSlot"><code>NicheSlot</code></a>s that a converter’s wire type can
+represent but that this converter never produces (output) and always
+rejects (input).</dd></dl></section></div></main></body></html>
