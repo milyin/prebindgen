@@ -876,13 +876,25 @@ fn recursive_sum_shapes_fail_deterministically() {
         }
     };
 
-    // `Vec<Node>` — the recipe saying what `Node` is made of reaches `Node`
-    // again, and the table refuses it by name before anything is compiled.
-    // The same refusal the emitter used to phrase as "variable arity", now
-    // stating which crossings close the loop.
+    // `Vec<Node>` — a sum whose arm holds a run of itself. Refused, and the
+    // refusal names `Node`.
+    //
+    // WHICH refusal moved. The cycle check follows what the compiler compiles:
+    // each part's bound row, or its crossing's default. Nothing binds
+    // `Vec<Node>`'s element to `Node`'s parts row, so the compiler's own walk
+    // terminates and the loop is not one it would take — the recursion that
+    // actually breaks is the type table's, which cannot build a converter for
+    // a type that contains itself. So this now fails as an unresolvable type
+    // rather than as a named cycle: the same program refused, one diagnostic
+    // later. Reading it structurally instead is what refused
+    // `storage_summary_probe`'s conditional handle, which the compiler
+    // compiles perfectly well.
     let msg = attempt(quote::quote!(Branch(Vec<Node>)), "rec_vec").expect_err("must fail");
-    assert!(msg.contains("reaches its own crossing"), "{msg}");
     assert!(msg.contains("Node"), "{msg}");
+    assert!(
+        msg.contains("could not be resolved") || msg.contains("reaches its own crossing"),
+        "{msg}"
+    );
 
     // `Box<Node>` — not a bare ident, so it never classifies as a sum; it
     // fails as an unresolvable payload rather than recursing.

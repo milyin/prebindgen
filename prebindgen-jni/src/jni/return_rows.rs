@@ -62,6 +62,7 @@ impl UnfoldPolicy for JniUnfold<'_> {
 
     fn part_name(
         &self,
+        row: &prebindgen_registry::recipe::RecipeKey,
         owner: &TypeRef,
         reach: &Reach,
         index: usize,
@@ -77,7 +78,7 @@ impl UnfoldPolicy for JniUnfold<'_> {
         // nested part falls back to its accessor's ident.
         let key = owner.borrow_target().unwrap_or(owner).stripped_key();
         match reach {
-            Reach::Accessor(func) => self.decls.leaf_name_of(&key, func, index),
+            Reach::Accessor(func) => self.decls.leaf_name_of(row.name(), &key, func, index),
             // A synthesized `data_class` decomposition names its slots after
             // the struct's own fields — as the KOTLIN property is named, which
             // camel-cases and escapes a name that is a keyword there. A
@@ -352,51 +353,26 @@ impl Declarations {
     /// if any.
     ///
     /// `Declarations::bindings` writes a part binding for an accessor part
-    /// whose type carries a declaration of its own, and only where that part is
-    /// the value itself. Three shapes are left, each waiting on work #701's
-    /// step 3 still has: a part reached through an `Option`, which is the
-    /// `Optional` part of its decision 3; a part of a value form, whose fields
-    /// the row states as the returned struct's; and a value form that CONSUMES
-    /// its receiver, whose parts may be handed over rather than read.
+    /// whose type carries a declaration of its own. One shape is left: a
+    /// declared type whose `parts` row the table does not state, which is the
+    /// same unfinished work seen from the other side.
     ///
     /// Named here rather than guessed at from the leaves, because this is where
     /// the declaration is.
     fn unlowered_parts(
         &self,
         model: &Flat,
-        registry: &dyn prebindgen_registry::Conversions,
+        _registry: &dyn prebindgen_registry::Conversions,
         recipes: &Recipes,
         source: &prebindgen_registry::flat::TypeRef,
     ) -> Option<&'static str> {
         let key = source.stripped_key();
         let decl = self.return_expand_decls.iter().find(|d| *d.key() == key)?;
-        if let [crate::jni::LocalField::Fields(form)] = decl.field_list() {
-            // A form that was handed the value may move a part out rather than
-            // read it, and which parts those are is a fact about their types
-            // that no row states. A BORROWING form has no such fact, and
-            // `Deconstruct::ValueForm` represents it completely.
-            let consuming = model
-                .function(&form.func())
-                .and_then(|f| f.params.first())
-                .is_some_and(|p| p.ty.borrow_target().is_none());
-            // Per FIELD, not per form. A form of ordinary fields is represented
-            // completely by `Deconstruct::ValueForm` — the call, the hoist, each
-            // field's reach and leaf — whether or not it consumes. Only a field
-            // that is waiting on something is.
-            for record in self.lower_value_form(registry, decl.key(), form) {
-                let core = record.ty.optional_inner().unwrap_or(&record.ty);
-                let core = core.borrow_target().unwrap_or(core);
-                let key = core.stripped_key();
-
-                // A CONSUMING form hands a handle field over rather than
-                // reading it, which the decomposition records as an identity
-                // leaf. Whether a field is a handle is this adapter's answer
-                // about its type, and the row states the same reach either way.
-                // An ordinary field has no such fact and is compared.
-                if consuming && self.types.get(&key).is_some_and(|c| c.is_opaque()) {
-                    return Some("consuming-value-form-handle-field");
-                }
-            }
+        // A VALUE FORM is represented completely by `Deconstruct::ValueForm`
+        // now — the call, the hoist, each field's reach and leaf, a field the
+        // declaration overrode, and whether the form was handed the value and
+        // moves its parts out. Nothing about one is unlowered.
+        if matches!(decl.field_list(), [crate::jni::LocalField::Fields(_)]) {
             return None;
         }
         for field in decl.field_list() {

@@ -73,8 +73,12 @@ pub trait UnfoldPolicy {
     /// started from. A row splices a child's decomposition into its parent's,
     /// and the child's declaration is what names the child's parts, so a policy
     /// asked under the root would miss every name the child declared.
+    /// `row` is the row being read, so a policy can tell a type's own
+    /// declaration from the one a function wrote for its return: both state
+    /// parts of the same owner, and only the row says which is being read.
     fn part_name(
         &self,
+        row: &crate::recipe::RecipeKey,
         owner: &TypeRef,
         reach: &Reach,
         index: usize,
@@ -257,6 +261,10 @@ struct At {
     nullable: bool,
     /// Whether these parts are a value form's, which names them itself.
     value_form: bool,
+    /// Whether the value was GIVEN to a form that moves its fields out, rather
+    /// than lent to one that clones what it hands over. A part that is the
+    /// value itself crosses owned in the first case and borrowed in the second.
+    moved: bool,
     /// The row being read at this level, as a key.
     ///
     /// The KEY and not a name: a part's binding is written against the row its
@@ -303,6 +311,7 @@ impl Folding<'_> {
             name: None,
             nullable: false,
             value_form: false,
+            moved: false,
             row: crate::recipe::Crossing::new(
                 reading.clone(),
                 crate::recipe::Direction::Deconstruct,
@@ -338,11 +347,18 @@ impl Folding<'_> {
                     prefix: root.clone(),
                     consuming: self.consumes(func)?,
                 });
+                let consuming = self.consumes(func)?;
                 let inner = At {
                     path: root,
                     name: at.name.clone(),
                     nullable: at.nullable,
                     value_form: true,
+                    // A CONSUMING form is given the value and moves its fields
+                    // out; a borrowing one clones what it hands over. So a part
+                    // that is the value itself crosses owned here and borrowed
+                    // there, which is the one thing a `ValueForm` row does not
+                    // say and the accessor's own signature does.
+                    moved: at.moved || consuming,
                     // A value form's parts belong to the row that states the
                     // form, not to the struct the call returns.
                     row: at.row.clone(),
@@ -445,6 +461,7 @@ impl Folding<'_> {
                                 name: Some(full),
                                 nullable: at.nullable,
                                 value_form: false,
+                                moved: at.moved,
                                 row,
                             };
                             let before = walk.leaves.len();
@@ -635,7 +652,7 @@ impl Folding<'_> {
                 // borrowed everywhere else, where the leaf clones through its
                 // own converter. A root reached by reference is lent, not
                 // given, which the reading says and the row cannot.
-                out_ty: if at.path.is_empty() && !walk.lent {
+                out_ty: if (at.path.is_empty() && !walk.lent) || at.moved {
                     source.clone()
                 } else {
                     // A borrow of the VALUE. A part reached through a layer is
@@ -670,9 +687,13 @@ impl Folding<'_> {
             Some(name) => name,
             // A value form that names no part at this position falls back to
             // the ordinary answer, the same as a product's own part.
-            None => walk
-                .policy
-                .part_name(source, reach, index, self.field_name(source, reach)),
+            None => walk.policy.part_name(
+                &at.row,
+                source,
+                reach,
+                index,
+                self.field_name(source, reach),
+            ),
         };
         let full = match &at.name {
             Some(outer) => walk.policy.nest(outer, &name),
@@ -737,6 +758,7 @@ impl Folding<'_> {
             }
             walk.reading.push(seen);
             let inner = At {
+                moved: at.moved,
                 path,
                 name: Some(full),
                 nullable: at.nullable || optional,
@@ -758,12 +780,23 @@ impl Folding<'_> {
         // not a stopping point. Whether some older statement takes it apart
         // further is that statement's business, and a caller comparing the two
         // knows its own declarations; this walk read what the rows say.
+        // A part whose type is the value's OWN is that value delivered again —
+        // the conditional-handle idiom, `fn(&T) -> Option<&T>`, which re-hands
+        // the receiver rather than reading anything out of it. That makes its
+        // leaf an identity leaf, and the layer it is delivered under is its
+        // presence rather than part of what crosses. Both follow from the
+        // types, so no reach form has to say it.
+        let out_ty = self.leaf_ty(reach, source, index);
+        let core = out_ty.optional_inner().unwrap_or(&out_ty);
+        let identity = core.borrow_target().unwrap_or(core).stripped_key()
+            == source.borrow_target().unwrap_or(source).stripped_key();
+        let out_ty = if identity { core.clone() } else { out_ty };
         walk.leaves.push(UnfoldLeaf {
             name: full,
             path,
-            out_ty: self.leaf_ty(reach, source, index),
-            identity: false,
-            nullable: at.nullable,
+            out_ty,
+            identity,
+            nullable: at.nullable || (identity && optional),
             source: LeafSource::Reach,
             groups: Vec::new(),
         });
