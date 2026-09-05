@@ -325,7 +325,14 @@ impl BindingsBuilder {
     /// The one check here is that a site naming a recipe asks for one the crossing
     /// has. Whether a crossing with several recipes says which of them is the
     /// default is [`RecipesBuilder::build`](super::RecipesBuilder::build)'s.
-    pub fn build(self, recipes: &Recipes) -> Result<Bindings, Vec<RecipeError>> {
+    /// `model` is needed for the cycle check, which runs HERE rather than in
+    /// `RecipesBuilder::build`: what a row reaches depends on the rows its parts are
+    /// bound to, and this is the first point at which both are known.
+    pub fn build(
+        self,
+        recipes: &Recipes,
+        model: &crate::flat::Flat,
+    ) -> Result<Bindings, Vec<RecipeError>> {
         let mut errors: Vec<RecipeError> = self
             .conflicts
             .into_values()
@@ -361,8 +368,13 @@ impl BindingsBuilder {
                 }),
             );
         }
+        // Now that both the rows and the bindings exist, whether any row
+        // reaches itself can be asked of what the compiler will actually
+        // compile rather than of every row the shapes name.
+        let bindings = Bindings { bound };
+        super::cycles(model, recipes, &bindings, &mut errors);
         if errors.is_empty() {
-            Ok(Bindings { bound })
+            Ok(bindings)
         } else {
             Err(errors)
         }
@@ -430,6 +442,19 @@ impl Bindings {
                 origin: Origin::Adapter,
             }),
         }
+    }
+
+    /// The row one site was bound to, distinguishing "not bound" from "bound
+    /// to nothing".
+    ///
+    /// `None` — no declaration named this site, so its crossing takes its own
+    /// default. `Some(None)` — a declaration bound it to [`Ask::Omit`], so it
+    /// contributes nothing. `Some(Some(row))` — that row, which REPLACES the
+    /// default rather than adding to it.
+    pub fn bound_row(&self, site: &Site) -> Option<Option<RecipeKey>> {
+        self.bound
+            .get(site)
+            .map(|bound| bound.as_ref().map(|b| b.recipe.clone()))
     }
 
     /// Whether any declaration named this site.
