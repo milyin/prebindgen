@@ -73,8 +73,12 @@ pub trait UnfoldPolicy {
     /// started from. A row splices a child's decomposition into its parent's,
     /// and the child's declaration is what names the child's parts, so a policy
     /// asked under the root would miss every name the child declared.
+    /// `row` is the row being read, so a policy can tell a type's own
+    /// declaration from the one a function wrote for its return: both state
+    /// parts of the same owner, and only the row says which is being read.
     fn part_name(
         &self,
+        row: &crate::recipe::RecipeKey,
         owner: &TypeRef,
         reach: &Reach,
         index: usize,
@@ -683,9 +687,13 @@ impl Folding<'_> {
             Some(name) => name,
             // A value form that names no part at this position falls back to
             // the ordinary answer, the same as a product's own part.
-            None => walk
-                .policy
-                .part_name(source, reach, index, self.field_name(source, reach)),
+            None => walk.policy.part_name(
+                &at.row,
+                source,
+                reach,
+                index,
+                self.field_name(source, reach),
+            ),
         };
         let full = match &at.name {
             Some(outer) => walk.policy.nest(outer, &name),
@@ -772,12 +780,23 @@ impl Folding<'_> {
         // not a stopping point. Whether some older statement takes it apart
         // further is that statement's business, and a caller comparing the two
         // knows its own declarations; this walk read what the rows say.
+        // A part whose type is the value's OWN is that value delivered again —
+        // the conditional-handle idiom, `fn(&T) -> Option<&T>`, which re-hands
+        // the receiver rather than reading anything out of it. That makes its
+        // leaf an identity leaf, and the layer it is delivered under is its
+        // presence rather than part of what crosses. Both follow from the
+        // types, so no reach form has to say it.
+        let out_ty = self.leaf_ty(reach, source, index);
+        let core = out_ty.optional_inner().unwrap_or(&out_ty);
+        let identity = core.borrow_target().unwrap_or(core).stripped_key()
+            == source.borrow_target().unwrap_or(source).stripped_key();
+        let out_ty = if identity { core.clone() } else { out_ty };
         walk.leaves.push(UnfoldLeaf {
             name: full,
             path,
-            out_ty: self.leaf_ty(reach, source, index),
-            identity: false,
-            nullable: at.nullable,
+            out_ty,
+            identity,
+            nullable: at.nullable || (identity && optional),
             source: LeafSource::Reach,
             groups: Vec::new(),
         });

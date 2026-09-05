@@ -873,7 +873,8 @@ impl RecipesBuilder {
             }
         }
 
-        cycles(model, &table, &mut errors);
+        // The cycle check moved to `Bindings::build`: what a row reaches
+        // depends on the bindings its parts take, and none exist yet here.
 
         if errors.is_empty() {
             Ok(table)
@@ -1297,24 +1298,44 @@ fn declared<'a>(model: &'a Flat, ty: &TypeRef) -> Option<&'a Type> {
 /// terminate. That is a mechanical limit rather than a semantic one, which is
 /// why a self-referential Rust type is refused here and is not otherwise
 /// ill-behaved.
-fn cycles(model: &Flat, table: &Recipes, errors: &mut Vec<RecipeError>) {
-    let mut settled: HashSet<CrossingKey> = HashSet::new();
-    let mut reported: HashSet<CrossingKey> = HashSet::new();
-    let roots: Vec<Crossing> = table
+/// Whether any row reaches ITSELF, following what the compiler compiles.
+///
+/// `Compiler::part_of` resolves each part through a binding and falls back to
+/// the part crossing's DEFAULT row, so the walk follows both: every part's
+/// default, and every row a binding on this row names. Following every row of
+/// every part crossing instead — which is what this did while it ran before
+/// any `Bindings` existed — reports loops the compiler never takes.
+///
+/// Every declared row is a starting point, so a row that reaches itself is
+/// found wherever it sits.
+pub(crate) fn cycles(
+    model: &Flat,
+    table: &Recipes,
+    bindings: &Bindings,
+    errors: &mut Vec<RecipeError>,
+) {
+    let mut settled: HashSet<RecipeKey> = HashSet::new();
+    let mut reported: HashSet<RecipeKey> = HashSet::new();
+    let roots: Vec<(RecipeKey, Crossing)> = table
         .recipes
         .values()
         .flat_map(|entries| {
-            entries
-                .iter()
-                .map(|e| Crossing::new(e.ty.clone(), e.recipe.direction()))
+            entries.iter().map(|e| {
+                (
+                    e.key.clone(),
+                    Crossing::new(e.ty.clone(), e.recipe.direction()),
+                )
+            })
         })
         .collect();
-    for root in roots {
+    for (row, crossing) in roots {
         let mut path = Vec::new();
         walk(
             model,
             table,
-            &root,
+            bindings,
+            &row,
+            &crossing,
             &mut path,
             &mut settled,
             &mut reported,
@@ -1323,67 +1344,81 @@ fn cycles(model: &Flat, table: &Recipes, errors: &mut Vec<RecipeError>) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk(
     model: &Flat,
     table: &Recipes,
+    bindings: &Bindings,
+    row: &RecipeKey,
     crossing: &Crossing,
-    path: &mut Vec<CrossingKey>,
-    settled: &mut HashSet<CrossingKey>,
-    reported: &mut HashSet<CrossingKey>,
+    path: &mut Vec<(RecipeKey, CrossingKey)>,
+    settled: &mut HashSet<RecipeKey>,
+    reported: &mut HashSet<RecipeKey>,
     errors: &mut Vec<RecipeError>,
 ) {
-    let key = crossing.key();
-    if settled.contains(&key) {
+    if settled.contains(row) {
         return;
     }
-    if let Some(start) = path.iter().position(|k| k == &key) {
-        if reported.insert(key.clone()) {
-            let mut cycle = path[start..].to_vec();
-            cycle.push(key);
+    if let Some(start) = path.iter().position(|(r, _)| r == row) {
+        if reported.insert(row.clone()) {
+            let mut cycle: Vec<CrossingKey> =
+                path[start..].iter().map(|(_, c)| c.clone()).collect();
+            cycle.push(crossing.key());
             errors.push(RecipeError::Cycle { path: cycle });
         }
         return;
     }
-    path.push(key.clone());
-    for part in successors(model, table, crossing) {
-        walk(model, table, &part, path, settled, reported, errors);
+    path.push((row.clone(), crossing.key()));
+    // Each part's own default, and every row a binding on this row names.
+    let mut next: Vec<(RecipeKey, Crossing)> = successors(model, table, row, crossing)
+        .into_iter()
+        .map(|part| (table.recipe(&part).0, part))
+        .collect();
+    next.extend(
+        bindings
+            .parts_of(row)
+            .into_iter()
+            .map(|(crossing, recipe)| (recipe, crossing)),
+    );
+    for (part_row, part) in next {
+        walk(
+            model, table, bindings, &part_row, &part, path, settled, reported, errors,
+        );
     }
     path.pop();
-    settled.insert(key);
+    settled.insert(row.clone());
 }
 
 /// Every crossing a crossing's recipes reach.
 ///
 /// Every recipe counts, not only the default: a site may name any of them, so a
 /// cycle through the recipe nobody happens to default to is still a cycle.
-fn successors(model: &Flat, table: &Recipes, crossing: &Crossing) -> Vec<Crossing> {
-    let key = crossing.key();
-    let recipes: Vec<(RecipeKey, TypeRef, Recipe)> = match table.recipes.get(&key) {
-        Some(entries) => entries
-            .iter()
-            .map(|e| (e.key.clone(), e.ty.clone(), e.recipe.clone()))
-            .collect(),
-        None => vec![(
-            key.row(RecipeName::derived()),
-            crossing.spelled().clone(),
-            derive(crossing),
-        )],
+/// The part crossings ONE row reaches.
+///
+/// One row, not every row of the crossing: the walk asks what compiling this
+/// row compiles next, and a sibling row under the same crossing is a different
+/// question it asks from that row's own starting point.
+fn successors(
+    model: &Flat,
+    table: &Recipes,
+    row: &RecipeKey,
+    crossing: &Crossing,
+) -> Vec<Crossing> {
+    let recipe = match table.get(row) {
+        Some(recipe) => recipe.clone(),
+        // A crossing nothing declared reads as its derived row.
+        None => derive(crossing),
     };
     // Anything a recipe names wrongly is reported by the per-recipe pass; here the
     // walk only needs the parts a well-formed reading of the recipe reaches.
     let mut discarded = Vec::new();
-    recipes
-        .into_iter()
-        .flat_map(|(recipe_key, ty, recipe)| {
-            let mut check = Check {
-                model,
-                recipe: &recipe_key,
-                errors: &mut discarded,
-                arm_fields: None,
-            };
-            check.recipe(&ty, &recipe)
-        })
-        .collect()
+    let mut check = Check {
+        model,
+        recipe: row,
+        errors: &mut discarded,
+        arm_fields: None,
+    };
+    check.recipe(crossing.spelled(), &recipe)
 }
 
 // ── What the table refuses ────────────────────────────────────────────────

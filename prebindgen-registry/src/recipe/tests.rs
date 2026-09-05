@@ -512,7 +512,13 @@ fn a_row_reaching_its_own_crossing_is_refused() {
         recipe_name("clone"),
         Constructing::Product(Construct::Call(ident("sample_clone"))),
     );
-    let errors = builder.build(&model).expect_err("a cycle of one");
+    // The check lives where the bindings do. None are written here, so every
+    // part takes its crossing's default row — and this cycle closes through
+    // those, which is what makes it a cycle at all.
+    let recipes = builder.build(&model).expect("table");
+    let errors = Bindings::builder()
+        .build(&recipes, &model)
+        .expect_err("a cycle of one");
     assert!(
         matches!(errors.as_slice(), [RecipeError::Cycle { path }] if path.len() == 2),
         "{errors:?}"
@@ -539,7 +545,10 @@ fn a_cycle_through_two_crossings_is_refused() {
             recipe_name("fields"),
             Constructing::Product(Construct::Call(ident("b_new"))),
         );
-    let errors = builder.build(&model).expect_err("A reaches A through B");
+    let recipes = builder.build(&model).expect("table");
+    let errors = Bindings::builder()
+        .build(&recipes, &model)
+        .expect_err("A reaches A through B");
     assert!(
         matches!(errors.as_slice(), [RecipeError::Cycle { .. }]),
         "{errors:?}"
@@ -692,7 +701,7 @@ fn a_site_takes_the_row_it_names() {
         Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
-    let bindings = builder.build(&recipes).expect("bindings");
+    let bindings = builder.build(&recipes, &model).expect("bindings");
 
     let bound = bindings
         .resolve(&site("z_put", 0), &crossing, &recipes)
@@ -829,7 +838,7 @@ fn the_higher_precedence_declaration_wins_whichever_was_written_first() {
             };
             builder.bind(site("z_put", 0), crossing.clone(), ask, origin);
         }
-        let bindings = builder.build(&recipes).expect("bindings");
+        let bindings = builder.build(&recipes, &model).expect("bindings");
         let bound = bindings
             .resolve(&site("z_put", 0), &crossing, &recipes)
             .expect("bound");
@@ -859,7 +868,7 @@ fn two_declarations_of_equal_precedence_may_agree_and_may_not_disagree() {
             Origin::Function,
         );
     agreeing
-        .build(&recipes)
+        .build(&recipes, &model)
         .expect("saying it twice is not a conflict");
 
     let mut disagreeing = Bindings::builder();
@@ -876,7 +885,9 @@ fn two_declarations_of_equal_precedence_may_agree_and_may_not_disagree() {
             Ask::Recipe(recipe_name("whole")),
             Origin::Function,
         );
-    let errors = disagreeing.build(&recipes).expect_err("two answers");
+    let errors = disagreeing
+        .build(&recipes, &model)
+        .expect_err("two answers");
     assert!(
         matches!(errors.as_slice(), [RecipeError::Rebound { origin, .. }] if *origin == Origin::Function),
         "{errors:?}"
@@ -909,7 +920,7 @@ fn two_declarations_of_equal_precedence_naming_different_crossings_disagree() {
             Ask::Default,
             Origin::Function,
         );
-    let errors = builder.build(&recipes).expect_err("two crossings");
+    let errors = builder.build(&recipes, &model).expect_err("two crossings");
     assert!(
         matches!(errors.as_slice(), [RecipeError::Rebound { .. }]),
         "{errors:?}"
@@ -929,7 +940,7 @@ fn a_site_naming_a_row_the_crossing_lacks_is_refused() {
         Ask::Recipe(recipe_name("jobject")),
         Origin::Function,
     );
-    let errors = builder.build(&recipes).expect_err("no such recipe");
+    let errors = builder.build(&recipes, &model).expect_err("no such recipe");
     assert!(
         matches!(errors.as_slice(), [RecipeError::UnknownRecipe { recipe, .. }] if recipe == &missing),
         "{errors:?}"
@@ -943,7 +954,7 @@ fn an_omitted_site_contributes_nothing() {
     let crossing = Crossing::new(ty(&model, "Sample"), Direction::Deconstruct);
     let mut builder = Bindings::builder();
     builder.bind(site("z_put", 0), crossing.clone(), Ask::Omit, Origin::Part);
-    let bindings = builder.build(&recipes).expect("bindings");
+    let bindings = builder.build(&recipes, &model).expect("bindings");
 
     assert!(bindings.is_declared(&site("z_put", 0)));
     assert!(bindings
@@ -963,7 +974,7 @@ fn asking_for_the_default_records_which_row_that_was() {
         Ask::Default,
         Origin::Type,
     );
-    let bindings = builder.build(&recipes).expect("bindings");
+    let bindings = builder.build(&recipes, &model).expect("bindings");
 
     let bound = bindings
         .resolve(&site("z_put", 0), &crossing, &recipes)
@@ -988,7 +999,7 @@ fn one_site_is_one_role_of_one_owner() {
         Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
-    let bindings = builder.build(&recipes).expect("bindings");
+    let bindings = builder.build(&recipes, &model).expect("bindings");
 
     assert_eq!(
         bindings.resolve(&ret, &crossing, &recipes).unwrap().recipe,
@@ -1419,7 +1430,7 @@ fn an_identity_part_through_a_borrow_is_lent_not_owned() {
         Ask::Recipe(recipe_name("handle")),
         Origin::Function,
     );
-    let bindings = bind.build(&recipes).expect("bindings");
+    let bindings = bind.build(&recipes, &model).expect("bindings");
 
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
@@ -1453,7 +1464,7 @@ fn an_owned_identity_part_is_moved() {
         Ask::Recipe(recipe_name("handle")),
         Origin::Function,
     );
-    let bindings = bind.build(&recipes).expect("bindings");
+    let bindings = bind.build(&recipes, &model).expect("bindings");
 
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
@@ -2055,7 +2066,7 @@ fn compile_arm_bound(arms: Vec<Arm<Deconstruct>>, key: ArmKey) -> (Vec<String>, 
         Ask::Recipe(recipe_name("fields")),
         Origin::Adapter,
     );
-    let bindings = bound.build(&recipes).expect("bindings");
+    let bindings = bound.build(&recipes, &model).expect("bindings");
 
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
@@ -2191,7 +2202,7 @@ fn a_callback_argument_is_a_part_of_the_callback_row_that_names_it() {
         Ask::Recipe(recipe_name("fields")),
         Origin::Part,
     );
-    let bindings = bound.build(&recipes).expect("bindings");
+    let bindings = bound.build(&recipes, &model).expect("bindings");
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
@@ -2242,7 +2253,7 @@ fn a_callback_argument_is_overridden_by_compiling_it_as_its_own_site() {
         Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
-    let bindings = bound.build(&recipes).expect("bindings");
+    let bindings = bound.build(&recipes, &model).expect("bindings");
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
@@ -2732,7 +2743,7 @@ fn an_omitted_site_compiles_to_no_plan() {
         Ask::Omit,
         Origin::Function,
     );
-    let bindings = builder.build(&recipes).expect("bindings");
+    let bindings = builder.build(&recipes, &model).expect("bindings");
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
@@ -2770,7 +2781,7 @@ fn a_site_takes_the_row_the_binding_names_and_others_take_the_default() {
         Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
-    let bindings = bound.build(&recipes).expect("bindings");
+    let bindings = bound.build(&recipes, &model).expect("bindings");
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 
@@ -2937,7 +2948,7 @@ fn an_emitter_asking_for_a_crossing_gets_the_row_the_crossing_defaults_to() {
         Ask::Recipe(recipe_name("fields")),
         Origin::Function,
     );
-    let bindings = builder.build(&recipes).expect("bindings");
+    let bindings = builder.build(&recipes, &model).expect("bindings");
     let mut adapter = Recorder::default();
     let mut compiler = Compiler::new(&model, &recipes, &bindings);
 

@@ -62,6 +62,7 @@ impl UnfoldPolicy for JniUnfold<'_> {
 
     fn part_name(
         &self,
+        row: &prebindgen_registry::recipe::RecipeKey,
         owner: &TypeRef,
         reach: &Reach,
         index: usize,
@@ -77,7 +78,7 @@ impl UnfoldPolicy for JniUnfold<'_> {
         // nested part falls back to its accessor's ident.
         let key = owner.borrow_target().unwrap_or(owner).stripped_key();
         match reach {
-            Reach::Accessor(func) => self.decls.leaf_name_of(&key, func, index),
+            Reach::Accessor(func) => self.decls.leaf_name_of(row.name(), &key, func, index),
             // A synthesized `data_class` decomposition names its slots after
             // the struct's own fields — as the KOTLIN property is named, which
             // camel-cases and escapes a name that is a keyword there. A

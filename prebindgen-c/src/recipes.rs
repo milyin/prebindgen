@@ -399,7 +399,7 @@ impl CbindgenBuilder {
                 }
             }
         }
-        bound.build(recipes)
+        bound.build(recipes, model)
     }
 }
 

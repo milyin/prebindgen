@@ -325,7 +325,14 @@ impl BindingsBuilder {
     /// The one check here is that a site naming a recipe asks for one the crossing
     /// has. Whether a crossing with several recipes says which of them is the
     /// default is [`RecipesBuilder::build`](super::RecipesBuilder::build)'s.
-    pub fn build(self, recipes: &Recipes) -> Result<Bindings, Vec<RecipeError>> {
+    /// `model` is needed for the cycle check, which runs HERE rather than in
+    /// `RecipesBuilder::build`: what a row reaches depends on the rows its parts are
+    /// bound to, and this is the first point at which both are known.
+    pub fn build(
+        self,
+        recipes: &Recipes,
+        model: &crate::flat::Flat,
+    ) -> Result<Bindings, Vec<RecipeError>> {
         let mut errors: Vec<RecipeError> = self
             .conflicts
             .into_values()
@@ -361,8 +368,13 @@ impl BindingsBuilder {
                 }),
             );
         }
+        // Now that both the rows and the bindings exist, whether any row
+        // reaches itself can be asked of what the compiler will actually
+        // compile rather than of every row the shapes name.
+        let bindings = Bindings { bound };
+        super::cycles(model, recipes, &bindings, &mut errors);
         if errors.is_empty() {
-            Ok(Bindings { bound })
+            Ok(bindings)
         } else {
             Err(errors)
         }
@@ -430,6 +442,22 @@ impl Bindings {
                 origin: Origin::Adapter,
             }),
         }
+    }
+
+    /// Every row this row's PARTS were bound to: what compiling it compiles
+    /// next, beyond each part crossing's own default.
+    ///
+    /// The cycle check needs exactly this. A part is resolved through a binding
+    /// keyed by the row that names it, so the rows one row can reach are the
+    /// bindings written against it — and reading them off the table needs no
+    /// part index, which the shape walk does not carry.
+    pub fn parts_of(&self, row: &RecipeKey) -> Vec<(Crossing, RecipeKey)> {
+        self.bound
+            .iter()
+            .filter(|(site, _)| matches!(&site.role, Role::Part { recipe, .. } if recipe == row))
+            .filter_map(|(_, bound)| bound.as_ref())
+            .map(|b| (b.crossing.clone(), b.recipe.clone()))
+            .collect()
     }
 
     /// Whether any declaration named this site.

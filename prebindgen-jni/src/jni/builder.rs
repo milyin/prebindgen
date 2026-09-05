@@ -885,17 +885,37 @@ impl Declarations {
     /// `.name()` first, then the class member's Kotlin name, else the
     /// camel-cased Rust name — the same precedence [`Self::lower_fields`]
     /// applies, because it is the same question.
-    pub(crate) fn leaf_name_of(&self, key: &TypeKey, func: &syn::Ident, index: usize) -> String {
+    pub(crate) fn leaf_name_of(
+        &self,
+        row: &prebindgen_registry::recipe::RecipeName,
+        key: &TypeKey,
+        func: &syn::Ident,
+        index: usize,
+    ) -> String {
+        // The declaration the ROW states: for a function's own row that is the
+        // function's declaration, not the type's. Both list parts of the same
+        // owner, so the key alone cannot tell them apart.
         let declared = self
-            .return_expand_decls
+            .fn_return_expands
             .iter()
-            .find(|d| d.key() == key)
+            .find(|(f, d)| d.key() == key && crate::jni::recipes::site_row(f) == *row)
+            .map(|(_, d)| d)
+            .or_else(|| self.return_expand_decls.iter().find(|d| d.key() == key))
             .and_then(|d| d.field_list().get(index).cloned());
         match declared {
             Some(LocalField::Named(_, Some(name))) => name,
             Some(LocalField::Named(named, None)) => self
                 .class_method_kotlin_name(key, &named)
                 .unwrap_or_else(|| snake_to_camel(&named.to_string())),
+            // A BINDING-LOCAL field names itself the same way, and its
+            // declaration is the only place that name exists — there is no
+            // `#[prebindgen]` item to fall back to. [`Self::leaf_name_at`] has
+            // always answered for one; a reach names the same field.
+            Some(LocalField::Local {
+                path,
+                name_override,
+                ..
+            }) => self.local_field_name(key, &path, &name_override),
             _ => self
                 .class_method_kotlin_name(key, func)
                 .unwrap_or_else(|| snake_to_camel(&func.to_string())),
