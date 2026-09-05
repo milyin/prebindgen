@@ -1,0 +1,24 @@
+[package]
+name = "prebindgen-registry-v2"
+version = { workspace = true }
+edition = { workspace = true }
+description = "Experimental v2 generation engine for prebindgen: partial generation with a reported skip surface"
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+# Experimental, and versioned with the workspace only so a path dependency
+# resolves. Nothing here is published while #719 is in progress.
+publish = false
+
+[dependencies]
+# The shared model and the shared pipeline selector. Deliberately NOT
+# `prebindgen-registry`: v2 owns its own resolution, plans and emission, and a
+# dependency on the v1 engine is what would let that ownership erode.
+prebindgen-flat = { workspace = true }
+# The machine-readable half of the report.
+serde = { workspace = true }
+serde_json = { workspace = true }

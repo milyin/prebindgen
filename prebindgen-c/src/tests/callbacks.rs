@@ -16,7 +16,7 @@ fn callback_artifact_consumes_frozen_argument_sites() {
     let binding = CbindgenBuilder::new()
         .callback(syn::parse_quote!(impl Fn(u64) + Send + Sync + 'static))
         .function(syn::parse_quote!(on_value))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
     let generation = binding
         .gen

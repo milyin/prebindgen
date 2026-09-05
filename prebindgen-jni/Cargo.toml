@@ -11,9 +11,16 @@ keywords = { workspace = true }
 categories = { workspace = true }
 rust-version = { workspace = true }
 
+[features]
+# Compile the experimental v2 engine alongside v1 and make it selectable.
+# Additive: it enables the optional dependency and nothing else. V1 stays the
+# engine an unset `PREBINDGEN_PIPELINE` selects, `--all-features` included.
+v2 = ["dep:prebindgen-registry-v2"]
+
 [dependencies]
 prebindgen = { workspace = true }
 prebindgen-registry = { workspace = true }
+prebindgen-registry-v2 = { workspace = true, optional = true }
 prebindgen-jni-runtime = { workspace = true }
 kotlin-codegen = { workspace = true }
 jni = "0.21.1"

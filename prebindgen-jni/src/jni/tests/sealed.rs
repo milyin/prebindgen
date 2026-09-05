@@ -51,7 +51,7 @@ fn sealed_kotlin(rename_labeled: Option<&str>) -> String {
     let dir = unique_test_dir("jnigen_sealed");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     paths
         .iter()
@@ -168,7 +168,7 @@ fn declarators_do_not_accept_each_others_shape() {
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
 
@@ -212,7 +212,7 @@ fn unknown_variant_is_an_error() {
         let dir = unique_test_dir("sealed_unknown_variant");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).is_err());
@@ -252,7 +252,7 @@ fn reopened_sealed_class_merges_variant_names() {
     let dir = unique_test_dir("sealed_reopen");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let kt: String = paths
         .iter()
@@ -459,7 +459,7 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
         let jni = JniGenBuilder::new()
             .set_package_prefix("io.test.jni")
             .package(crate::package!().class(decl));
-        match jni.build_with(registry) {
+        match jni.build_over(registry) {
             Ok(_) => String::new(),
             Err(e) => e.to_string(),
         }
@@ -531,7 +531,7 @@ fn variant_named_companion_moves_the_companion_not_the_variant() {
         let dir = unique_test_dir(tag);
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         gen.write_kotlin(&dir.join("kotlin"))
             .expect("write_kotlin")
             .iter()
@@ -612,7 +612,7 @@ fn payload_without_output_converter_is_an_error() {
         let dir = unique_test_dir("sealed_unmapped_payload");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let gen = jni.build_with(registry).expect("resolve");
+        let gen = jni.build_over(registry).expect("resolve");
         let _ = gen.write_kotlin(&dir.join("kotlin"));
     };
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).expect_err("must fail");
@@ -715,7 +715,7 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
                 .class(crate::sealed_class!(Reading))
                 .fun(prebindgen_registry::fun!(read_one)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let reg = gen.registry();
     let key = TypeKey::from_type(&syn::parse_quote!(Reading));
 
@@ -740,7 +740,7 @@ fn a_sums_registry_cells_are_registered_but_not_required() {
         reg.has_entry_for_test(Direction::Construct, &key) == Some(true),
         "the input direction has a whole-object decoder"
     );
-    let reading = gen.registry.reading(&key).expect("Reading model type");
+    let reading = gen.registry().reading(&key).expect("Reading model type");
     assert!(
         gen.decls
             .in_frag(&reading)
@@ -799,7 +799,7 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let _ = jni
-            .build_with(registry)
+            .build_over(registry)
             .map(|g| g.write_rust(dir.join("g.rs")));
     };
 
@@ -861,7 +861,7 @@ fn recursive_sum_shapes_fail_deterministically() {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            jni.build_with(registry)
+            jni.build_over(registry)
                 .map(|g| g.write_rust(dir.join("g.rs")))
                 .map(|_| ())
                 .map_err(|e| e.to_string())
@@ -1015,7 +1015,7 @@ fn sum_returns(tag: &str) -> (String, String) {
     let dir = unique_test_dir(tag);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let kotlin = gen
@@ -1308,7 +1308,7 @@ fn a_payload_carries_its_option_and_collection_layers() {
     let dir = unique_test_dir("jnigen_sum_payload_layers");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let kotlin = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect("write_kotlin")
@@ -1478,7 +1478,7 @@ fn a_data_class_field_may_be_a_sum_carrying_a_handle() {
     let dir = unique_test_dir("jnigen_sum_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).expect("write_rust"))
         .expect("read rust");
     let kotlin = gen
@@ -1604,7 +1604,7 @@ fn a_data_class_field_may_be_a_nested_data_class_carrying_a_handle() {
     let dir = unique_test_dir("jnigen_nested_handle_field");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let kotlin = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect("write_kotlin")
@@ -1679,7 +1679,7 @@ fn a_sum_owning_nothing_native_is_not_closeable() {
     let dir = unique_test_dir("jnigen_sum_no_handle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let kotlin = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect("write_kotlin")
@@ -1766,7 +1766,7 @@ fn two_sum_callback_args_keep_their_own_selectors() {
     let dir = unique_test_dir("jnigen_two_sum_cb");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let kotlin = gen
         .write_kotlin(&dir.join("kotlin"))
         .expect("write_kotlin")
@@ -1862,7 +1862,7 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
                 .fun(prebindgen_registry::fun!(read_try)),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1914,7 +1914,7 @@ fn undeclared_sum_in_result_error_position_is_rejected() {
                 .fun(prebindgen_registry::fun!(read_try)),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -1969,7 +1969,7 @@ fn the_diagnostic_names_the_whole_error_type_where_it_must() {
                 .fun(prebindgen_registry::fun!(read_try)),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("must be rejected")
         .to_string();
     let compact: String = err.split_whitespace().collect();
@@ -2031,7 +2031,7 @@ fn declared_sum_in_result_error_position_resolves() {
                 .class(crate::sealed_class!(Reading))
                 .fun(prebindgen_registry::fun!(read_try)),
         );
-    jni.build_with(registry)
+    jni.build_over(registry)
         .expect("a declared error deconstructor is the supported shape");
 }
 
@@ -2075,7 +2075,7 @@ fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
                 .fun(prebindgen_registry::fun!(read_batch)),
         );
     let err = jni
-        .build_with(registry)
+        .build_over(registry)
         .expect_err("must be rejected")
         .to_string();
     assert!(
@@ -2158,7 +2158,7 @@ fn a_raw_named_sum_generates() {
     let dir = unique_test_dir("jnigen_raw_sum");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
         .expect("read rust");
 
@@ -2219,7 +2219,7 @@ fn empty_sum_alternatives_keep_their_own_pattern_delimiters() {
     let dir = unique_test_dir("jnigen_empty_sum_alternatives");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
     let rust = std::fs::read_to_string(gen.write_rust(dir.join("g.rs")).expect("write_rust"))
         .expect("read rust");
     let rc: String = rust.split_whitespace().collect();
@@ -2340,8 +2340,8 @@ fn a_types_close_answer_matches_its_plans() {
                 .class(crate::data_class!(Everything))
                 .fun(prebindgen_registry::fun!(everything_new)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
-    let (ext, registry) = (&gen.decls, &gen.registry);
+    let gen = jni.build_over(registry).expect("resolve");
+    let (ext, registry) = (&gen.decls, gen.registry());
 
     // Every field of every declared type — struct fields and sum payloads
     // alike, since a payload goes through the same `classify_field`.
@@ -2453,7 +2453,7 @@ fn a_sealed_class_states_what_it_hands_out() {
                 .class(crate::sealed_class!(Reading))
                 .fun(prebindgen_registry::fun!(read_one)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let composed = gen
         .out_lines_for_test("Reading")
@@ -2560,7 +2560,7 @@ fn a_data_class_states_what_it_hands_out() {
                 .fun(prebindgen_registry::fun!(wrapped_new))
                 .fun(prebindgen_registry::fun!(guarded_new)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     assert_eq!(
         gen.out_lines_for_test("Wrapped")
@@ -2641,7 +2641,7 @@ fn a_decomposed_return_is_a_site_asking_for_the_parts_row() {
                 .fun(prebindgen_registry::fun!(read_one))
                 .fun(prebindgen_registry::fun!(read_maybe)),
         );
-    let gen = jni.build_with(registry).expect("resolve");
+    let gen = jni.build_over(registry).expect("resolve");
 
     let expected = vec![
         "tag: Reading <- tag @[]",
@@ -2699,7 +2699,7 @@ fn optional_wrapper_rust(
             JniGenBuilder::new()
                 .set_package_prefix("io.test.jni")
                 .package(crate::package!().fun(prebindgen_registry::fun!(cross)))
-                .build_with(registry)
+                .build_over(registry)
                 .map_err(|e| e.to_string())?
         }
         Direction::Deconstruct => {
@@ -2742,7 +2742,7 @@ fn optional_wrapper_rust(
                     prebindgen_registry::expand_return!(ZSample)
                         .fields(prebindgen_registry::fields!(z_sample_to_holder)),
                 )
-                .build_with(registry)
+                .build_over(registry)
                 .map_err(|e| e.to_string())?
         }
     };
@@ -2789,7 +2789,7 @@ fn choice_wrapper_plan(
                 .class(crate::sealed_class!(Reading))
                 .fun(prebindgen_registry::fun!(seed)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .map_err(|e| e.to_string())?;
     gen.parts_plan_for_test(ty, direction)
 }
@@ -2826,7 +2826,7 @@ fn product_wrapper_plan(
                 .class(crate::data_class!(Sample))
                 .fun(prebindgen_registry::fun!(seed)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .map_err(|e| e.to_string())?;
     gen.parts_plan_for_test(ty, direction)
 }
@@ -2849,7 +2849,7 @@ fn sequence_wrapper_plan(
     let gen = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!().fun(prebindgen_registry::fun!(seed)))
-        .build_with(registry)
+        .build_over(registry)
         .map_err(|e| e.to_string())?;
     gen.crossing_plan_for_test(ty, direction)
 }
@@ -2897,7 +2897,7 @@ fn borrowed_sequences_keep_their_registry_plan_or_specialized_shape() {
                 .fun(prebindgen_registry::fun!(seed))
                 .fun(prebindgen_registry::fun!(take_labels)),
         )
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
     let (specialized, ident, rendered) = gen
         .crossing_plan_for_test(

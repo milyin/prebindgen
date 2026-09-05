@@ -101,7 +101,7 @@ fn free_memory_function_required() {
     // declaration must never reach it — asserting over both phases at once
     // passes either way and would not notice the difference.
     let built = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        cbindgen.build_with(registry)
+        cbindgen.build_over(registry)
     }));
     match built {
         // A panic here is the older shape of the same refusal, and is still a

@@ -790,6 +790,22 @@ fn file_order(kind: &str) -> usize {
     }
 }
 
+/// Whether this build compiled the v2 engine in — the `v2` Cargo feature.
+///
+/// Availability, not selection: it never changes which engine an unset
+/// `PREBINDGEN_PIPELINE` runs.
+const V2_AVAILABLE: bool = cfg!(feature = "v2");
+
+/// The crate an unavailable-engine message tells the user to enable the feature on.
+const FACADE_CRATE: &str = "prebindgen-c";
+
+/// The crate whose build script is declaring this binding, for the report's
+/// source identity. Empty outside a build script.
+#[cfg(feature = "v2")]
+fn declaring_crate() -> String {
+    std::env::var("CARGO_PKG_NAME").unwrap_or_default()
+}
+
 impl CbindgenBuilder {
     /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
@@ -824,14 +840,83 @@ impl CbindgenBuilder {
     /// `JniGenBuilder::build`.
     /// Read the source, resolve every crossing, and hand back the binding —
     /// see `JniGenBuilder::build`.
+    ///
+    /// Which engine does that is settled here, once, before either one plans
+    /// anything: `PREBINDGEN_PIPELINE` selects, the `v2` Cargo feature makes v2
+    /// available, and unset means v1. See [`pipeline`](prebindgen_registry::pipeline)
+    /// for the full table, and [`Self::build_with`] to state the engine in code.
     pub fn build(self) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
-        let flat = self
-            .sources
-            .clone()
-            .build()
-            .map_err(prebindgen_registry::ScanError::from)?;
-        let registry = prebindgen_registry::Registry::builder(flat)?;
-        self.build_with(registry)
+        let requested = prebindgen_registry::pipeline::Pipeline::from_env()?;
+        self.build_pipeline(prebindgen_registry::pipeline::Pipeline::resolve(
+            requested,
+            V2_AVAILABLE,
+            FACADE_CRATE,
+        )?)
+    }
+
+    /// [`Self::build`] with the engine stated rather than read.
+    ///
+    /// For deterministic tests and for a caller that has already decided.
+    /// Bypasses `PREBINDGEN_PIPELINE` — but not availability: asking for an
+    /// engine this build did not compile in still fails, through the same
+    /// validator.
+    pub fn build_with(
+        self,
+        pipeline: prebindgen_registry::pipeline::Pipeline,
+    ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
+        self.build_pipeline(prebindgen_registry::pipeline::Pipeline::resolve(
+            Some(pipeline),
+            V2_AVAILABLE,
+            FACADE_CRATE,
+        )?)
+    }
+
+    /// Run `pipeline` over the declarations accumulated so far.
+    ///
+    /// Both routes above end here, so the two engines are dispatched from one
+    /// place and a selection can never reach generation unvalidated.
+    fn build_pipeline(
+        self,
+        pipeline: prebindgen_registry::pipeline::Pipeline,
+    ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
+        match pipeline {
+            prebindgen_registry::pipeline::Pipeline::V1 => {
+                let flat = self
+                    .sources
+                    .clone()
+                    .build()
+                    .map_err(prebindgen_registry::ScanError::from)?;
+                let registry = prebindgen_registry::Registry::builder(flat)?;
+                self.build_over(registry)
+            }
+            #[cfg(feature = "v2")]
+            prebindgen_registry::pipeline::Pipeline::V2 => self.build_v2(),
+            #[cfg(not(feature = "v2"))]
+            prebindgen_registry::pipeline::Pipeline::V2 => {
+                unreachable!("`Pipeline::resolve` refuses v2 when it is not compiled in")
+            }
+        }
+    }
+
+    /// Hand the whole declaration set to the v2 engine.
+    ///
+    /// Nothing of v1 runs first: no `declare_into`, no resolution, no
+    /// assembly. V2 reads the same sources and the same declarations and owns
+    /// everything after that.
+    #[cfg(feature = "v2")]
+    fn build_v2(self) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
+        let sources = self.sources.clone();
+        let generation =
+            prebindgen_registry_v2::plan(&self, sources, declaring_crate()).map_err(|error| {
+                prebindgen_registry::WriteRustError::Engine {
+                    pipeline: prebindgen_registry_v2::PIPELINE,
+                    message: error.to_string(),
+                }
+            })?;
+        Ok(Cbindgen {
+            gen: self,
+            engine: crate::Engine::V2(Box::new(generation)),
+        })
     }
 
     /// [`Self::build`] over a registry described elsewhere — the test seam.
@@ -981,7 +1066,8 @@ impl CbindgenBuilder {
         Ok(out)
     }
 
-    pub(crate) fn build_with(
+    /// [`Self::build`] over a registry described elsewhere — the v1 test seam.
+    pub(crate) fn build_over(
         mut self,
         registry: prebindgen_registry::RegistryBuilder,
     ) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
@@ -1168,7 +1254,7 @@ impl CbindgenBuilder {
             .map_err(|message| prebindgen_registry::ScanError::AdapterInvariant { message })?;
         Ok(Cbindgen {
             gen: self,
-            registry,
+            engine: crate::Engine::V1(registry),
         })
     }
 

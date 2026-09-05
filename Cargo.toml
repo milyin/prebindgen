@@ -3,6 +3,7 @@ members = [
     "prebindgen",
     "prebindgen-flat",
     "prebindgen-registry",
+    "prebindgen-registry-v2",
     "prebindgen-c",
     "prebindgen-jni",
     "prebindgen-proc-macro",
@@ -39,6 +40,7 @@ kotlin-codegen = { version = "0.3.0", git = "https://github.com/milyin/kotlin-co
 prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-flat = { path = "prebindgen-flat", version = "0.5.0" }
 prebindgen-registry = { path = "prebindgen-registry", version = "0.5.0" }
+prebindgen-registry-v2 = { path = "prebindgen-registry-v2", version = "0.5.0" }
 prebindgen-c = { path = "prebindgen-c", version = "0.5.0" }
 prebindgen-jni = { path = "prebindgen-jni", version = "0.5.0" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }

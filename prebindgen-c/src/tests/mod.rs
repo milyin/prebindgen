@@ -16,12 +16,14 @@ mod recipes;
 mod returns;
 mod structs;
 mod tagged_unions;
+#[cfg(feature = "v2")]
+mod v2;
 
 fn write(cbindgen: CbindgenBuilder, registry: RegistryBuilder, tag: &str) -> String {
     let dir = unique_test_dir(&format!("cbindgen_{tag}"));
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join(format!("{tag}.rs"));
-    let gen = cbindgen.build_with(registry).expect("resolve");
+    let gen = cbindgen.build_over(registry).expect("resolve");
     let path = gen.write_rust(&out).expect("write_rust");
     std::fs::read_to_string(&path).unwrap()
 }

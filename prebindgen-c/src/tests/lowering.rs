@@ -169,7 +169,7 @@ fn custom_conversion_stays_unrendered_until_final_write() {
                 .output(prebindgen_registry::fun!(ratio_to_f64)),
         )
         .function(syn::parse_quote!(ratio_echo))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     assert_eq!(
@@ -281,7 +281,7 @@ fn output_terminals_stay_unrendered_until_final_write() {
         .function(syn::parse_quote!(output_error))
         .function(syn::parse_quote!(output_value_opaque))
         .function(syn::parse_quote!(output_enum))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     assert_eq!(
@@ -330,7 +330,7 @@ fn input_terminals_stay_unrendered_until_final_write() {
         .panic()
         .function(syn::parse_quote!(input_bool))
         .function(syn::parse_quote!(input_scalar))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     assert_eq!(
@@ -370,7 +370,7 @@ fn tagged_union_payloads_stay_unrendered_until_final_write() {
             .tagged_union(syn::parse_quote!(Payloads))
             .function(syn::parse_quote!(payload_roundtrip))
             .panic()
-            .build_with(registry)
+            .build_over(registry)
             .expect("resolve");
         generated
             .gen
@@ -401,7 +401,7 @@ fn specialized_field_terminals_stay_unrendered_until_final_write() {
         .free_memory_function("binding_free")
         .data_struct(syn::parse_quote!(Record))
         .function(syn::parse_quote!(record_roundtrip))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let functions: Vec<_> = generated.gen.converter_functions().collect();
@@ -451,7 +451,7 @@ fn borrow_terminals_stay_unrendered_until_final_write() {
         .panic()
         .function(syn::parse_quote!(fill))
         .panic()
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     for operation in [
@@ -491,7 +491,7 @@ fn slice_input_terminals_stay_unrendered_until_final_write() {
         .panic()
         .function(syn::parse_quote!(record_slice))
         .panic()
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     let mut operations: Vec<(TypeKey, bool)> = generated
@@ -534,7 +534,7 @@ fn multi_wire_markers_stay_typed_until_final_write() {
         .function(syn::parse_quote!(maybe))
         .function(syn::parse_quote!(values))
         .function(syn::parse_quote!(fallible))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
 
     for operation in [MarkerOperation::Optional, MarkerOperation::Sequence] {

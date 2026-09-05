@@ -568,7 +568,7 @@ fn type_artifacts_retain_source_types_and_fragment_dependencies() {
         .opaque_owned_struct(syn::parse_quote!(Payload), syn::parse_quote!(PayloadOpaque))
         .function(syn::parse_quote!(make_handle))
         .function(syn::parse_quote!(make_payload))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
     let generation = binding.gen.generation.as_ref().expect("frozen plan");
 
@@ -663,7 +663,7 @@ fn tagged_union_artifacts_retain_cleanup_types_and_dependencies() {
         .tagged_union(syn::parse_quote!(Note))
         .function(syn::parse_quote!(make_shape))
         .function(syn::parse_quote!(make_note))
-        .build_with(registry)
+        .build_over(registry)
         .expect("resolve");
     let generation = binding.gen.generation.as_ref().expect("frozen plan");
     let tagged: Vec<_> = generation

@@ -83,6 +83,8 @@ pub mod jni;
 mod test_util;
 pub(crate) mod unfold;
 pub(crate) mod util;
+#[cfg(feature = "v2")]
+mod v2;
 
 pub use jni::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
