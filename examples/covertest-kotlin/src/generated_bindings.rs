@@ -15911,27 +15911,6 @@ pub(crate) unsafe fn __jni_out_convert_SelectorCode_jni_handle_codec_own_output_
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
-pub(crate) unsafe fn __jni_out_convert_SpanHolder_jni_handle_codec_own_output_to_wire_1ac97bb1a855b86c<
-    'a,
->(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::SpanHolder,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
 #[inline(always)]
 pub(crate) unsafe fn __jni_out_convert_Stamp_jni_product_intermediate_tuple_to_wire_bff5dd89e6be5ae4<
     'a,
@@ -16472,27 +16451,6 @@ pub(crate) unsafe fn __jni_out_convert_Unsigned_to_wire_6e359c816a9dc4dc<'a>(
             >>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
     })
-}
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    dead_code,
-    clippy::useless_conversion,
-    clippy::needless_question_mark,
-    clippy::let_and_return,
-    clippy::nonminimal_bool,
-    clippy::eq_op
-)]
-pub(crate) unsafe fn __jni_out_convert_VaultHolder_jni_handle_codec_own_output_to_wire_ae9f1d6f9ae0389a<
-    'a,
->(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::VaultHolder,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
 #[allow(
     non_snake_case,

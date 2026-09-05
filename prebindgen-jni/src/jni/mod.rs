@@ -525,6 +525,38 @@ impl JniGen {
         self.render_plan_for_test(ty, direction, true)
     }
 
+    /// The row the RESOLVED return site of one function names.
+    ///
+    /// Test support for #701 step 3: a function with its own
+    /// `.expand_return(...)` must resolve to that function's row rather than to
+    /// the type's, and the binding that decides it is one of several over the
+    /// same site. Reading the resolution, not the declaration, is what says the
+    /// right one won.
+    pub(crate) fn return_row_for_test(&self, func: &str) -> Option<String> {
+        self.resolved_return_row(func).map(|(name, _)| name)
+    }
+
+    /// The resolved return row's name AND the row itself, rendered — an
+    /// `Atomic` placeholder says nothing, so a row that was supposed to
+    /// describe a decomposition and silently fell back is visible here.
+    pub(crate) fn return_row_shape_for_test(&self, func: &str) -> Option<(String, String)> {
+        self.resolved_return_row(func)
+    }
+
+    fn resolved_return_row(&self, func: &str) -> Option<(String, String)> {
+        use prebindgen_registry::recipe::{Role, Site};
+
+        let site = Site {
+            owner: quote::format_ident!("{func}"),
+            role: Role::Return,
+        };
+        let bindings = self.decls.site_bindings();
+        let crossing = bindings.crossing_of(&site)?;
+        let bound = bindings.resolve(&site, &crossing, self.decls.recipe_table())?;
+        let recipe = self.decls.recipe_table().get(&bound.recipe)?;
+        Some((bound.recipe.name().to_string(), format!("{recipe:?}")))
+    }
+
     /// Compile and render the crossing's default row.
     pub(crate) fn crossing_plan_for_test(
         &self,

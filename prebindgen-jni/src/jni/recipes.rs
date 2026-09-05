@@ -141,11 +141,27 @@ impl Declarations {
         registry: &(impl prebindgen_registry::Conversions + ?Sized),
         ty: &TypeRef,
     ) -> Option<(syn::Ident, Vec<Reach>)> {
-        use crate::unfold::{FieldDecon, FieldRecord};
         let decl = self
             .return_expand_decls
             .iter()
             .find(|d| *d.key() == ty.stripped_key())?;
+        self.value_form_in(model, registry, ty, decl)
+    }
+
+    /// [`Self::value_form_of`] against ONE declaration — the type's own, or the
+    /// one a function wrote for its return. A per-function
+    /// `.expand_return(expand_return!(T).fields(..))` states its own accessor
+    /// and its own field list, which may differ from the type's or exist
+    /// without one, so the lowering reads the declaration it was handed rather
+    /// than looking the type up again.
+    fn value_form_in(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Option<(syn::Ident, Vec<Reach>)> {
+        use crate::unfold::{FieldDecon, FieldRecord};
         let [crate::jni::LocalField::Fields(fields)] = decl.field_list() else {
             return None;
         };
@@ -274,10 +290,34 @@ pub(crate) fn parts() -> RecipeName {
     RecipeName::new("parts")
 }
 
+/// The row one function's `.expand_return(...)` declares for its return.
+///
+/// A name of its own, because it sits on the same crossing as the type's
+/// `parts` row and says something different: the type states how it comes
+/// apart wherever it is reached, this states how THIS function's return does.
+/// The parameter side took this shape in step 2 (`expand-param@fn#param`);
+/// this is the same shape at the other end (#701 step 3).
+pub(crate) fn site_row(func: &syn::Ident) -> RecipeName {
+    RecipeName::new(format!("expand-return@{func}"))
+}
+
 /// The allocation-free `(present, value)` input row for an Optional whose
 /// destination payload is a JNI primitive.
 pub(crate) fn pair() -> RecipeName {
     RecipeName::new("pair")
+}
+
+/// Whether a reach's type mentions `owner` anywhere inside it.
+///
+/// Deliberately NOT a delivery peel. [`TypeRef::layer_stack`] answers "what
+/// does this crossing deliver", and is bounded because `Vec<Option<T>>` has
+/// the optional inside the ELEMENT rather than in the boundary. The question
+/// here is a different one — "would splicing this part make the row reach its
+/// own crossing" — and a self-reference nested out of position still closes the
+/// loop: `T`'s row reaches `Vec<Option<T>>`, whose element row reaches `T`.
+/// Answering it with a peel of either depth conflates the two.
+fn mentions(ty: &TypeRef, owner: &TypeKey) -> bool {
+    ty.walk().iter().any(|node| node.stripped_key() == *owner)
 }
 
 impl Declarations {
@@ -305,6 +345,18 @@ impl Declarations {
             .return_expand_decls
             .iter()
             .find(|d| *d.key() == ty.stripped_key())?;
+        self.decon_of(model, registry, ty, decl)
+    }
+
+    /// [`Self::parts_deconstruct`] against ONE declaration, whichever states
+    /// it: the type's own, or the one a function wrote for its return.
+    fn decon_of(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        ty: &TypeRef,
+        decl: &crate::jni::ExpandReturnDecl,
+    ) -> Option<Deconstruct> {
         let fields = decl.field_list();
         if matches!(fields, [crate::jni::LocalField::Fields(_)]) {
             // `ValueForm` means "call this accessor, then read these parts off
@@ -317,11 +369,32 @@ impl Declarations {
             // which can splice a child's fields, so `Report` yields six records
             // over a five-field struct. It maps each record back to the struct
             // field it names and declines the shapes a row cannot hold.
-            let (func, parts) = self.value_form_of(model, registry, ty)?;
+            let (func, parts) = self.value_form_in(model, registry, ty, decl)?;
             return Some(Deconstruct::ValueForm { func, parts });
         }
         let mut reaches = Vec::with_capacity(fields.len());
         for field in fields {
+            // A field that reaches the type being taken apart — the
+            // conditional-handle idiom, `fn(&T) -> Option<&T>`. Splicing it
+            // would make this row reach its own crossing; the field crosses as
+            // one nullable handle leaf instead. Refused here for the same
+            // reason `value_form_of` refuses its own case: `Recipes::build`
+            // would otherwise fail the whole binding over one field.
+            let reaches_self = match field {
+                crate::jni::LocalField::Local { sig, .. } => match &sig.output {
+                    syn::ReturnType::Type(_, ret) => model
+                        .classify(ret)
+                        .is_ok_and(|r| mentions(&r, &ty.stripped_key())),
+                    syn::ReturnType::Default => false,
+                },
+                crate::jni::LocalField::Named(func, _) => model
+                    .function(func)
+                    .is_some_and(|f| mentions(&f.ret, &ty.stripped_key())),
+                _ => false,
+            };
+            if reaches_self {
+                return None;
+            }
             reaches.push(match field {
                 crate::jni::LocalField::Named(func, _) => Reach::Accessor(func.clone()),
                 // The handle itself — the leaf `Reach::Identity` was added for.
@@ -333,6 +406,20 @@ impl Declarations {
                 }
                 crate::jni::LocalField::Fields(_) => return None,
             });
+        }
+        // A row names a part by the accessor that reaches it, so one accessor
+        // used twice — `.field(fun!(f).name("a")).field(fun!(f).name("b"))` —
+        // is two parts the row cannot tell apart. The declaration's name
+        // overrides say which is which and `Reach` has nowhere to put them, so
+        // the row declines rather than stating two leaves of one name.
+        let mut seen: Vec<&syn::Ident> = Vec::with_capacity(reaches.len());
+        for reach in &reaches {
+            if let Reach::Accessor(func) = reach {
+                if seen.contains(&func) {
+                    return None;
+                }
+                seen.push(func);
+            }
         }
         Some(Deconstruct::Fields(reaches))
     }
@@ -490,7 +577,19 @@ impl Declarations {
         // a different recipe (#623 review). `decon` is the gate the model
         // already carries for this: `None` only for the whole-element arm.
         let mut decomposed: BTreeMap<TypeKey, TypeRef> = BTreeMap::new();
-        for plan in self.unfolded().callback_arg_plans.values() {
+        // EVERY decomposition, not only a callback argument's. A return and a
+        // domain error come apart by the same declaration — `Error` is one
+        // declaration reached from every fallible function in zenoh-flat-jni —
+        // so each states its row too. Without this the rows described a
+        // fraction of what a binding decomposes, which is what 68 entries of
+        // the parity inventory said (#701 step 3).
+        let unfolded = self.unfolded();
+        let every_plan = unfolded
+            .callback_arg_plans
+            .values()
+            .chain(unfolded.unfold_plans.values())
+            .chain(unfolded.error_plans.values());
+        for plan in every_plan {
             if plan.decon.is_none() {
                 continue;
             }
@@ -499,6 +598,18 @@ impl Declarations {
                 continue;
             }
             decomposed.entry(key).or_insert_with(|| plan.source.clone());
+        }
+        for decl in &self.return_expand_decls {
+            if parts_out.contains(decl.key()) {
+                continue;
+            }
+            if let Some(ty) = decl
+                .key()
+                .ident()
+                .and_then(|ident| model.classify(&syn::parse_quote!(#ident)).ok())
+            {
+                decomposed.entry(decl.key().clone()).or_insert(ty);
+            }
         }
         for ty in decomposed.into_values() {
             // A real row where the declaration can state one. #622 wrote
@@ -511,6 +622,30 @@ impl Declarations {
                 }
                 None => {
                     recipes.declare(ty, parts(), Deconstructing::Atomic);
+                }
+            }
+        }
+
+        // A per-function `.expand_return(...)` states a decomposition of its
+        // own, so it gets a row of its own, under a name of its own — the shape
+        // step 2 gave the parameter side (`expand-param@fn#param`), at the
+        // other end. Without it the type's `parts` row and the function's
+        // decomposition sat under one name describing two different things,
+        // which is why the differential could not compare either.
+        for (func, decl) in &self.fn_return_expands {
+            let Some(ty) = decl
+                .key()
+                .ident()
+                .and_then(|ident| model.classify(&syn::parse_quote!(#ident)).ok())
+            else {
+                continue;
+            };
+            match self.decon_of(model, registry, &ty, decl) {
+                Some(deconstruct) => {
+                    recipes.declare(ty, site_row(func), Deconstructing::Product(deconstruct));
+                }
+                None => {
+                    recipes.declare(ty, site_row(func), Deconstructing::Atomic);
                 }
             }
         }
@@ -606,6 +741,32 @@ impl Declarations {
     /// A `data_class` declared `.jobject_input()` crosses Kotlin → Rust as a
     /// single `JObject` — that is the whole point of the opt-in — so binding
     /// its parts would flatten a boundary the declaration drew.
+    /// Whether this binding takes a type APART where it appears inside another
+    /// value, rather than crossing it whole.
+    ///
+    /// Three declarations say so: a `data_class`, a `sealed_class`, and a value
+    /// form — `expand_return!(T).fields(..)`, which names its own accessor. The
+    /// proxy for this used to be "declares a `parts` row", which held only
+    /// while an inlined class was the one thing that had one; every
+    /// decomposition states a row now (#701 step 3).
+    fn inlines_parts(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        key: &TypeKey,
+    ) -> bool {
+        if self
+            .types
+            .get(key)
+            .is_some_and(|c| c.sum().is_some() || matches!(c.kind, DeclaredKind::Data))
+        {
+            return true;
+        }
+        key.ident()
+            .and_then(|ident| model.classify(&syn::parse_quote!(#ident)).ok())
+            .is_some_and(|ty| self.value_form_of(model, registry, &ty).is_some())
+    }
+
     fn field_crosses_as_its_fields(&self, ty: &TypeRef) -> bool {
         // The field's own key, not the stripped one: a `Box<Leaf>` field
         // crosses as one value through `Box<Leaf>`'s conversion, and only a
@@ -700,8 +861,19 @@ impl Declarations {
                     },
                     crate::unfold::Delivery::Callback => {
                         let crossing = Crossing::new(plan.source.clone(), Direction::Deconstruct);
-                        let ask = if recipes.key_of(&crossing.key(), &parts()).is_some() {
-                            Ask::Recipe(parts())
+                        // The row that states THIS function's decomposition: a
+                        // function with its own `.expand_return(...)` takes
+                        // apart differently from the way its type does, and
+                        // this is the binding the return site resolves — the
+                        // one with `Origin::Function`, which no weaker binding
+                        // can displace.
+                        let row = if self.fn_return_expands.iter().any(|(g, _)| *g == func) {
+                            site_row(&func)
+                        } else {
+                            parts()
+                        };
+                        let ask = if recipes.key_of(&crossing.key(), &row).is_some() {
+                            Ask::Recipe(row)
                         } else {
                             Ask::Default
                         };
@@ -753,10 +925,18 @@ impl Declarations {
                 let outer = Crossing::new(outer.clone(), direction);
                 let row = outer.row(parts());
                 let inner = Crossing::new(inner.clone(), direction);
+                // A DECLARED CLASS's parts are inlined here; anything else
+                // crosses whole. "Has a `parts` row" was the proxy for that
+                // while only a declared class had one — every decomposition
+                // states a row now, so the proxy would inline a field the
+                // decomposition crosses whole. The condition says what it
+                // meant (#701 step 3).
+                let inlines = self.inlines_parts(model, registry, &inner.key().ty)
+                    && recipes.key_of(&inner.key(), &parts()).is_some();
                 bound.bind(
                     Site::part(&row, 0),
                     inner.clone(),
-                    if recipes.key_of(&inner.key(), &parts()).is_some() {
+                    if inlines {
                         Ask::Recipe(parts())
                     } else {
                         Ask::Default
@@ -793,6 +973,25 @@ impl Declarations {
                     (&building, Direction::Construct),
                     (&handing_out, Direction::Deconstruct),
                 ] {
+                    // Handing a value OUT, an optional field asks the question
+                    // of what is inside the layer: a decomposition looks
+                    // through `Option<T>` only where it inlines T's fields, and
+                    // crosses `Option<Summary>` — an optional handle — whole.
+                    // "Declares a `parts` row" was the proxy for that while only
+                    // an inlined class had one; every decomposition states one
+                    // now, so the proxy would look through a layer the
+                    // decomposition crosses whole (#701 step 3).
+                    //
+                    // Building one is unchanged: a `(present, value)` pair is
+                    // how every optional parameter arrives, whatever is inside.
+                    if direction == Direction::Deconstruct
+                        && field
+                            .ty
+                            .optional_inner()
+                            .is_some_and(|inner| !self.field_crosses_as_its_fields(inner))
+                    {
+                        continue;
+                    }
                     let row = of.row(parts());
                     let field_crossing = Crossing::new(field.ty.clone(), direction);
                     if recipes.key_of(&field_crossing.key(), &parts()).is_none() {
@@ -839,6 +1038,8 @@ impl Declarations {
             if self.out_wire_count(registry, ret) < 2 {
                 continue;
             }
+            // A function that wrote its own `.expand_return(...)` names the row
+            // that states IT, not the type's.
             bound.bind(
                 Site {
                     owner: f.name.clone(),
@@ -962,29 +1163,39 @@ impl Declarations {
                 let Some(ret) = model.function(func).map(|f| f.ret.clone()) else {
                     continue;
                 };
-                // The part crosses as the accessor's return states it, layers
-                // included: an `Option<&Report>` part is an optional crossing,
-                // and binding the inner row there would hand the compiler a
-                // fragment of the wrong type. Only a part that is the value
-                // itself is bound to its `parts` row; a layered one waits for
-                // the layer to be a part of its own.
-                if ret.optional_inner().is_some() {
-                    continue;
-                }
-                let core = ret.borrow_target().unwrap_or(&ret);
+                // An OPTIONAL part comes apart like any other: it crosses as
+                // the accessor's return states it, LAYERS INCLUDED, which is
+                // the crossing both the compiler and the leaf view build for
+                // it. The binding names `Option<&Report>` and the payload's
+                // own row is reached through the Optional's value slot,
+                // exactly as it is for an optional field.
+                // The bounded delivery peel, not `stripped_key`: that reaches
+                // the leaf type through ANY nesting, so a part typed
+                // `Vec<Option<T>>` would be read as the declaration's own `T`
+                // and spliced — making the row reach its own crossing. The
+                // inner optional is part of the element, and the part crosses
+                // as the distinct `Vec<Option<T>>`.
+                let (_, core) = ret.layer_stack();
+                let core = core.borrow_target().unwrap_or(core);
                 // Two conditions, and both are needed. A DECLARATION is what
                 // says this part comes apart — a type may state a `parts` row
                 // and still cross whole here, which is the difference this
                 // binding carries. And the row has to exist to be named: a
                 // declared type whose row this table does not state yet is
                 // step 3's remaining work, not a binding to write now.
-                let part = Crossing::new(core.clone(), Direction::Deconstruct);
+                // Two questions of two types. WHAT COMES APART is the value
+                // inside the layers, and a DECLARATION is what says it does.
+                // WHAT CROSSES is the accessor's return as written, and that is
+                // what the binding names.
                 if !self
                     .return_expand_decls
                     .iter()
                     .any(|d| *d.key() == core.stripped_key())
-                    || recipes.key_of(&part.key(), &parts()).is_none()
                 {
+                    continue;
+                }
+                let part = Crossing::new(ret.clone(), Direction::Deconstruct);
+                if recipes.key_of(&part.key(), &parts()).is_none() {
                     continue;
                 }
                 bound.bind(

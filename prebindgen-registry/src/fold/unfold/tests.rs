@@ -45,7 +45,13 @@ impl UnfoldPolicy for Jni {
         }
     }
 
-    fn part_name(&self, reach: &Reach, index: usize, field: Option<&syn::Ident>) -> String {
+    fn part_name(
+        &self,
+        _owner: &TypeRef,
+        reach: &Reach,
+        index: usize,
+        field: Option<&syn::Ident>,
+    ) -> String {
         match reach {
             Reach::Accessor(func) => func.to_string(),
             // A field's own name where it has one, which is what a struct's
