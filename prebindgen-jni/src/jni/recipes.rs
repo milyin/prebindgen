@@ -280,6 +280,23 @@ pub(crate) fn pair() -> RecipeName {
     RecipeName::new("pair")
 }
 
+/// The type a reach yields, through the layers it is delivered under — the
+/// same peel a decomposed return takes, since the shape rides the delivery
+/// rather than the recipe.
+fn reaches_type(ty: &TypeRef) -> TypeKey {
+    let mut ty = ty;
+    loop {
+        let next = ty
+            .borrow_target()
+            .or_else(|| ty.optional_inner())
+            .or_else(|| ty.sequence_elem());
+        match next {
+            Some(inner) => ty = inner,
+            None => return ty.stripped_key(),
+        }
+    }
+}
+
 impl Declarations {
     /// Every recipe this binding's declarations state.
     ///
@@ -322,6 +339,27 @@ impl Declarations {
         }
         let mut reaches = Vec::with_capacity(fields.len());
         for field in fields {
+            // A field that reaches the type being taken apart — the
+            // conditional-handle idiom, `fn(&T) -> Option<&T>`. Splicing it
+            // would make this row reach its own crossing; the field crosses as
+            // one nullable handle leaf instead. Refused here for the same
+            // reason `value_form_of` refuses its own case: `Recipes::build`
+            // would otherwise fail the whole binding over one field.
+            let reaches_self = match field {
+                crate::jni::LocalField::Local { sig, .. } => match &sig.output {
+                    syn::ReturnType::Type(_, ret) => model
+                        .classify(ret)
+                        .is_ok_and(|r| reaches_type(&r) == ty.stripped_key()),
+                    syn::ReturnType::Default => false,
+                },
+                crate::jni::LocalField::Named(func, _) => model
+                    .function(func)
+                    .is_some_and(|f| reaches_type(&f.ret) == ty.stripped_key()),
+                _ => false,
+            };
+            if reaches_self {
+                return None;
+            }
             reaches.push(match field {
                 crate::jni::LocalField::Named(func, _) => Reach::Accessor(func.clone()),
                 // The handle itself — the leaf `Reach::Identity` was added for.
@@ -490,7 +528,19 @@ impl Declarations {
         // a different recipe (#623 review). `decon` is the gate the model
         // already carries for this: `None` only for the whole-element arm.
         let mut decomposed: BTreeMap<TypeKey, TypeRef> = BTreeMap::new();
-        for plan in self.unfolded().callback_arg_plans.values() {
+        // EVERY decomposition, not only a callback argument's. A return and a
+        // domain error come apart by the same declaration — `Error` is one
+        // declaration reached from every fallible function in zenoh-flat-jni —
+        // so each states its row too. Without this the rows described a
+        // fraction of what a binding decomposes, which is what 68 entries of
+        // the parity inventory said (#701 step 3).
+        let unfolded = self.unfolded();
+        let every_plan = unfolded
+            .callback_arg_plans
+            .values()
+            .chain(unfolded.unfold_plans.values())
+            .chain(unfolded.error_plans.values());
+        for plan in every_plan {
             if plan.decon.is_none() {
                 continue;
             }
@@ -606,6 +656,32 @@ impl Declarations {
     /// A `data_class` declared `.jobject_input()` crosses Kotlin → Rust as a
     /// single `JObject` — that is the whole point of the opt-in — so binding
     /// its parts would flatten a boundary the declaration drew.
+    /// Whether this binding takes a type APART where it appears inside another
+    /// value, rather than crossing it whole.
+    ///
+    /// Three declarations say so: a `data_class`, a `sealed_class`, and a value
+    /// form — `expand_return!(T).fields(..)`, which names its own accessor. The
+    /// proxy for this used to be "declares a `parts` row", which held only
+    /// while an inlined class was the one thing that had one; every
+    /// decomposition states a row now (#701 step 3).
+    fn inlines_parts(
+        &self,
+        model: &Flat,
+        registry: &(impl prebindgen_registry::Conversions + ?Sized),
+        key: &TypeKey,
+    ) -> bool {
+        if self
+            .types
+            .get(key)
+            .is_some_and(|c| c.sum().is_some() || matches!(c.kind, DeclaredKind::Data))
+        {
+            return true;
+        }
+        key.ident()
+            .and_then(|ident| model.classify(&syn::parse_quote!(#ident)).ok())
+            .is_some_and(|ty| self.value_form_of(model, registry, &ty).is_some())
+    }
+
     fn field_crosses_as_its_fields(&self, ty: &TypeRef) -> bool {
         // The field's own key, not the stripped one: a `Box<Leaf>` field
         // crosses as one value through `Box<Leaf>`'s conversion, and only a
@@ -753,10 +829,18 @@ impl Declarations {
                 let outer = Crossing::new(outer.clone(), direction);
                 let row = outer.row(parts());
                 let inner = Crossing::new(inner.clone(), direction);
+                // A DECLARED CLASS's parts are inlined here; anything else
+                // crosses whole. "Has a `parts` row" was the proxy for that
+                // while only a declared class had one — every decomposition
+                // states a row now, so the proxy would inline a field the
+                // decomposition crosses whole. The condition says what it
+                // meant (#701 step 3).
+                let inlines = self.inlines_parts(model, registry, &inner.key().ty)
+                    && recipes.key_of(&inner.key(), &parts()).is_some();
                 bound.bind(
                     Site::part(&row, 0),
                     inner.clone(),
-                    if recipes.key_of(&inner.key(), &parts()).is_some() {
+                    if inlines {
                         Ask::Recipe(parts())
                     } else {
                         Ask::Default
@@ -793,6 +877,25 @@ impl Declarations {
                     (&building, Direction::Construct),
                     (&handing_out, Direction::Deconstruct),
                 ] {
+                    // Handing a value OUT, an optional field asks the question
+                    // of what is inside the layer: a decomposition looks
+                    // through `Option<T>` only where it inlines T's fields, and
+                    // crosses `Option<Summary>` — an optional handle — whole.
+                    // "Declares a `parts` row" was the proxy for that while only
+                    // an inlined class had one; every decomposition states one
+                    // now, so the proxy would look through a layer the
+                    // decomposition crosses whole (#701 step 3).
+                    //
+                    // Building one is unchanged: a `(present, value)` pair is
+                    // how every optional parameter arrives, whatever is inside.
+                    if direction == Direction::Deconstruct
+                        && field
+                            .ty
+                            .optional_inner()
+                            .is_some_and(|inner| !self.field_crosses_as_its_fields(inner))
+                    {
+                        continue;
+                    }
                     let row = of.row(parts());
                     let field_crossing = Crossing::new(field.ty.clone(), direction);
                     if recipes.key_of(&field_crossing.key(), &parts()).is_none() {

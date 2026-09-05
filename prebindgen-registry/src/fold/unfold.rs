@@ -291,7 +291,12 @@ impl Folding<'_> {
             )
             .row(row.clone()),
         };
-        self.level(&mut walk, reading, &shape, &at)?;
+        // The value the row describes, not the way it was reached. A `&T`
+        // return reads T's row, and `lent` above is where the borrow is already
+        // recorded — leaving it on the source too makes an identity leaf borrow
+        // a second time, `&&T` for a `&T` reading.
+        let value = reading.borrow_target().unwrap_or(reading);
+        self.level(&mut walk, value, &shape, &at)?;
         unique_names(&walk.leaves, reading)?;
         Ok((walk.leaves, walk.hoists, walk.coverage))
     }
