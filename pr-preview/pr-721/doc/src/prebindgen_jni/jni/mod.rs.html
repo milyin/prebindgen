@@ -934,666 +934,678 @@
 <a href=#934 id=934 data-nosnippet>934</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#935 id=935 data-nosnippet>935</a>        out_path: <span class="kw">impl </span>AsRef&lt;std::path::Path&gt;,
 <a href=#936 id=936 data-nosnippet>936</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;std::path::PathBuf, prebindgen_registry::WriteRustError&gt; {
-<a href=#937 id=937 data-nosnippet>937</a>        <span class="comment">// Every binding a test writes also freezes each compiled fragment into
-<a href=#938 id=938 data-nosnippet>938</a>        // its canonical plan and checks the two describe the same fragment.
-<a href=#939 id=939 data-nosnippet>939</a>        // Nothing renders from that plan yet — #613 step 4 is what moves JNI
-<a href=#940 id=940 data-nosnippet>940</a>        // onto it — so this is what says it is ready to.
-<a href=#941 id=941 data-nosnippet>941</a>        </span><span class="attr">#[cfg(test)]
-<a href=#942 id=942 data-nosnippet>942</a>        </span><span class="self">self</span>.assert_fragments_freeze();
-<a href=#943 id=943 data-nosnippet>943</a>
-<a href=#944 id=944 data-nosnippet>944</a>        <span class="comment">// Every binding a test writes also checks that the assembly's
-<a href=#945 id=945 data-nosnippet>945</a>        // dependency edges name every call its artifacts render — the
-<a href=#946 id=946 data-nosnippet>946</a>        // completeness the emission-time check reasons from.
-<a href=#947 id=947 data-nosnippet>947</a>        </span><span class="attr">#[cfg(test)]
-<a href=#948 id=948 data-nosnippet>948</a>        </span>prebindgen_registry::write::assert_edges_cover_rendered_calls(
-<a href=#949 id=949 data-nosnippet>949</a>            <span class="self">self</span>.decls
-<a href=#950 id=950 data-nosnippet>950</a>                .generation
-<a href=#951 id=951 data-nosnippet>951</a>                .as_ref()
-<a href=#952 id=952 data-nosnippet>952</a>                .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>)
-<a href=#953 id=953 data-nosnippet>953</a>                .assembly(),
-<a href=#954 id=954 data-nosnippet>954</a>            <span class="string">"jni"</span>,
-<a href=#955 id=955 data-nosnippet>955</a>        );
-<a href=#956 id=956 data-nosnippet>956</a>        <span class="prelude-val">Ok</span>(prebindgen_registry::write::write_rust(
-<a href=#957 id=957 data-nosnippet>957</a>            <span class="self">self</span>.decls
-<a href=#958 id=958 data-nosnippet>958</a>                .generation
-<a href=#959 id=959 data-nosnippet>959</a>                .as_ref()
-<a href=#960 id=960 data-nosnippet>960</a>                .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>)
-<a href=#961 id=961 data-nosnippet>961</a>                .assembly(),
-<a href=#962 id=962 data-nosnippet>962</a>            out_path,
-<a href=#963 id=963 data-nosnippet>963</a>        )<span class="question-mark">?</span>)
-<a href=#964 id=964 data-nosnippet>964</a>    }
-<a href=#965 id=965 data-nosnippet>965</a>
-<a href=#966 id=966 data-nosnippet>966</a>    <span class="doccomment">/// Every compiled fragment states the same thing twice while step 5 is in
-<a href=#967 id=967 data-nosnippet>967</a>    /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
-<a href=#968 id=968 data-nosnippet>968</a>    /// `FragmentPlan` the canonical plan holds — and this is what says the two
-<a href=#969 id=969 data-nosnippet>969</a>    /// agree.
-<a href=#970 id=970 data-nosnippet>970</a>    ///
-<a href=#971 id=971 data-nosnippet>971</a>    /// Identity, source and artifact presence are compared because they are
-<a href=#972 id=972 data-nosnippet>972</a>    /// what a plan is keyed and spelled by, and what an emitter would read
-<a href=#973 id=973 data-nosnippet>973</a>    /// instead of the fragment. A composed-only fragment renders nothing, and
-<a href=#974 id=974 data-nosnippet>974</a>    /// the canonical plan says so by carrying no artifact at all.
-<a href=#975 id=975 data-nosnippet>975</a>    ///
-<a href=#976 id=976 data-nosnippet>976</a>    /// The plan itself is **not** rebuilt here. Since 5a it is built and
-<a href=#977 id=977 data-nosnippet>977</a>    /// validated in `JniGenerationPlan::freeze`, so a set-level defect — a
-<a href=#978 id=978 data-nosnippet>978</a>    /// chain whose endpoints do not join up, an edge naming a fragment nothing
-<a href=#979 id=979 data-nosnippet>979</a>    /// compiled, a duplicate site identity — fails the binding rather than one
-<a href=#980 id=980 data-nosnippet>980</a>    /// test. What is left for this check is the per-fragment agreement that
-<a href=#981 id=981 data-nosnippet>981</a>    /// only survives while `JFrag` still exists; 5c deletes both.
-<a href=#982 id=982 data-nosnippet>982</a>    </span><span class="attr">#[cfg(test)]
-<a href=#983 id=983 data-nosnippet>983</a>    </span><span class="kw">fn </span>assert_fragments_freeze(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-<a href=#984 id=984 data-nosnippet>984</a>        <span class="kw">let </span>generation = <span class="self">self
-<a href=#985 id=985 data-nosnippet>985</a>            </span>.decls
-<a href=#986 id=986 data-nosnippet>986</a>            .generation
-<a href=#987 id=987 data-nosnippet>987</a>            .as_ref()
-<a href=#988 id=988 data-nosnippet>988</a>            .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>);
-<a href=#989 id=989 data-nosnippet>989</a>        <span class="comment">// Driven from the PLAN, not from the compiled store. `build` keeps the
-<a href=#990 id=990 data-nosnippet>990</a>        // fragments reachable from a site and prunes the rest, so the store is
-<a href=#991 id=991 data-nosnippet>991</a>        // a superset — a converter the assembly still reaches on its own is in
-<a href=#992 id=992 data-nosnippet>992</a>        // it and not in the plan. Closing that is step 8's, where artifact
-<a href=#993 id=993 data-nosnippet>993</a>        // ordering moves onto the plan; until then the plan's own fragments are
-<a href=#994 id=994 data-nosnippet>994</a>        // what there is to agree about.
-<a href=#995 id=995 data-nosnippet>995</a>        </span><span class="kw">let </span>compiled = <span class="self">self</span>.decls.compiled.borrow();
-<a href=#996 id=996 data-nosnippet>996</a>        <span class="kw">for </span>plan <span class="kw">in </span>generation.plan().fragments() {
-<a href=#997 id=997 data-nosnippet>997</a>            <span class="kw">let </span>fragment = compiled
-<a href=#998 id=998 data-nosnippet>998</a>                .recipe_fragment(plan.id().spelling(), plan.id().recipe())
-<a href=#999 id=999 data-nosnippet>999</a>                .unwrap_or_else(|| {
-<a href=#1000 id=1000 data-nosnippet>1000</a>                    <span class="macro">panic!</span>(
-<a href=#1001 id=1001 data-nosnippet>1001</a>                        <span class="string">"`{}`: the canonical plan holds a fragment nothing compiled"</span>,
-<a href=#1002 id=1002 data-nosnippet>1002</a>                        plan.id().spelling()
-<a href=#1003 id=1003 data-nosnippet>1003</a>                    )
-<a href=#1004 id=1004 data-nosnippet>1004</a>                });
-<a href=#1005 id=1005 data-nosnippet>1005</a>            <span class="macro">assert_eq!</span>(
-<a href=#1006 id=1006 data-nosnippet>1006</a>                plan.id(),
-<a href=#1007 id=1007 data-nosnippet>1007</a>                <span class="kw-2">&amp;</span>fragment.id,
-<a href=#1008 id=1008 data-nosnippet>1008</a>                <span class="string">"a frozen fragment plan changed the fragment's identity"
-<a href=#1009 id=1009 data-nosnippet>1009</a>            </span>);
-<a href=#1010 id=1010 data-nosnippet>1010</a>            <span class="macro">assert_eq!</span>(
-<a href=#1011 id=1011 data-nosnippet>1011</a>                plan.source().key(),
-<a href=#1012 id=1012 data-nosnippet>1012</a>                fragment.source.key(),
-<a href=#1013 id=1013 data-nosnippet>1013</a>                <span class="string">"`{}`: a frozen fragment plan changed the crossing it answers"</span>,
-<a href=#1014 id=1014 data-nosnippet>1014</a>                fragment.source.key()
-<a href=#1015 id=1015 data-nosnippet>1015</a>            );
-<a href=#1016 id=1016 data-nosnippet>1016</a>            <span class="macro">assert_eq!</span>(
-<a href=#1017 id=1017 data-nosnippet>1017</a>                plan.artifact().is_some(),
-<a href=#1018 id=1018 data-nosnippet>1018</a>                !fragment.composed_only,
-<a href=#1019 id=1019 data-nosnippet>1019</a>                <span class="string">"`{}`: a composed-only fragment renders nothing, and only such a \
-<a href=#1020 id=1020 data-nosnippet>1020</a>                 fragment freezes without an artifact"</span>,
-<a href=#1021 id=1021 data-nosnippet>1021</a>                fragment.source.key()
-<a href=#1022 id=1022 data-nosnippet>1022</a>            );
-<a href=#1023 id=1023 data-nosnippet>1023</a>            <span class="comment">// The conversion graph, step for step. Comparing only that a chain
-<a href=#1024 id=1024 data-nosnippet>1024</a>            // exists would not have caught freezing every staged custom
-<a href=#1025 id=1025 data-nosnippet>1025</a>            // conversion as `Direct`, which is what the first version of this
-<a href=#1026 id=1026 data-nosnippet>1026</a>            // did (#621 review): the operations and their order ARE the
-<a href=#1027 id=1027 data-nosnippet>1027</a>            // contract, and a reader of the plan routes to stage artifacts
-<a href=#1028 id=1028 data-nosnippet>1028</a>            // through them.
-<a href=#1029 id=1029 data-nosnippet>1029</a>            </span><span class="kw">let </span>steps = |chain: <span class="kw-2">&amp;</span>prebindgen_registry::generation::ConversionChain&lt;
-<a href=#1030 id=1030 data-nosnippet>1030</a>                <span class="kw">crate</span>::jni::compile::JRepresentation,
-<a href=#1031 id=1031 data-nosnippet>1031</a>            &gt;| <span class="kw">match </span>chain {
-<a href=#1032 id=1032 data-nosnippet>1032</a>                prebindgen_registry::generation::ConversionChain::Direct =&gt; Vec::new(),
-<a href=#1033 id=1033 data-nosnippet>1033</a>                prebindgen_registry::generation::ConversionChain::Steps(steps) =&gt; steps
-<a href=#1034 id=1034 data-nosnippet>1034</a>                    .iter()
-<a href=#1035 id=1035 data-nosnippet>1035</a>                    .map(|step| {
-<a href=#1036 id=1036 data-nosnippet>1036</a>                        <span class="macro">format!</span>(
-<a href=#1037 id=1037 data-nosnippet>1037</a>                            <span class="string">"{:?}:{:?}-&gt;{:?}:{:?}"</span>,
-<a href=#1038 id=1038 data-nosnippet>1038</a>                            step.operation(),
-<a href=#1039 id=1039 data-nosnippet>1039</a>                            step.from(),
-<a href=#1040 id=1040 data-nosnippet>1040</a>                            step.into(),
-<a href=#1041 id=1041 data-nosnippet>1041</a>                            step.failure()
-<a href=#1042 id=1042 data-nosnippet>1042</a>                        )
-<a href=#1043 id=1043 data-nosnippet>1043</a>                    })
-<a href=#1044 id=1044 data-nosnippet>1044</a>                    .collect(),
-<a href=#1045 id=1045 data-nosnippet>1045</a>            };
-<a href=#1046 id=1046 data-nosnippet>1046</a>            <span class="macro">assert_eq!</span>(
-<a href=#1047 id=1047 data-nosnippet>1047</a>                steps(plan.converter().chain()),
-<a href=#1048 id=1048 data-nosnippet>1048</a>                steps(<span class="kw-2">&amp;</span>fragment.chain),
-<a href=#1049 id=1049 data-nosnippet>1049</a>                <span class="string">"`{}`: a frozen fragment plan changed the conversion graph"</span>,
-<a href=#1050 id=1050 data-nosnippet>1050</a>                fragment.source.key()
-<a href=#1051 id=1051 data-nosnippet>1051</a>            );
-<a href=#1052 id=1052 data-nosnippet>1052</a>            <span class="comment">// Both niche domains: what the fragment spends on its own absence,
-<a href=#1053 id=1053 data-nosnippet>1053</a>            // and what it leaves for a parent. Exposing the remainder while
-<a href=#1054 id=1054 data-nosnippet>1054</a>            // losing the consumed slot was the other thing this check could not
-<a href=#1055 id=1055 data-nosnippet>1055</a>            // see.
-<a href=#1056 id=1056 data-nosnippet>1056</a>            // Both niche domains, by identity rather than by count. Comparing
-<a href=#1057 id=1057 data-nosnippet>1057</a>            // how many there are would pass a substituted sentinel, and
-<a href=#1058 id=1058 data-nosnippet>1058</a>            // `GenerationPlanBuilder` cannot see one either — a niche is a
-<a href=#1059 id=1059 data-nosnippet>1059</a>            // bit-pattern contract, so what it IS is the whole of it.
-<a href=#1060 id=1060 data-nosnippet>1060</a>            </span><span class="kw">let </span>niches = plan.converter().niches();
-<a href=#1061 id=1061 data-nosnippet>1061</a>            <span class="kw">let </span>key = <span class="kw">crate</span>::jni::compile::niche_key;
-<a href=#1062 id=1062 data-nosnippet>1062</a>            <span class="macro">assert_eq!</span>(
-<a href=#1063 id=1063 data-nosnippet>1063</a>                niches.consumed(),
-<a href=#1064 id=1064 data-nosnippet>1064</a>                fragment
-<a href=#1065 id=1065 data-nosnippet>1065</a>                    .consumed_niche
-<a href=#1066 id=1066 data-nosnippet>1066</a>                    .iter()
-<a href=#1067 id=1067 data-nosnippet>1067</a>                    .map(key)
-<a href=#1068 id=1068 data-nosnippet>1068</a>                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#1069 id=1069 data-nosnippet>1069</a>                    .as_slice(),
-<a href=#1070 id=1070 data-nosnippet>1070</a>                <span class="string">"`{}`: a frozen fragment plan changed the niche it consumed"</span>,
-<a href=#1071 id=1071 data-nosnippet>1071</a>                fragment.source.key()
-<a href=#1072 id=1072 data-nosnippet>1072</a>            );
-<a href=#1073 id=1073 data-nosnippet>1073</a>            <span class="macro">assert_eq!</span>(
-<a href=#1074 id=1074 data-nosnippet>1074</a>                niches.discriminants(),
-<a href=#1075 id=1075 data-nosnippet>1075</a>                niches.consumed().len(),
-<a href=#1076 id=1076 data-nosnippet>1076</a>                <span class="string">"`{}`: a consumed niche is what the fragment discriminates on"</span>,
-<a href=#1077 id=1077 data-nosnippet>1077</a>                fragment.source.key()
-<a href=#1078 id=1078 data-nosnippet>1078</a>            );
-<a href=#1079 id=1079 data-nosnippet>1079</a>            <span class="macro">assert_eq!</span>(
-<a href=#1080 id=1080 data-nosnippet>1080</a>                niches.exposed(),
-<a href=#1081 id=1081 data-nosnippet>1081</a>                fragment
-<a href=#1082 id=1082 data-nosnippet>1082</a>                    .conv
-<a href=#1083 id=1083 data-nosnippet>1083</a>                    .niches
-<a href=#1084 id=1084 data-nosnippet>1084</a>                    .slots
-<a href=#1085 id=1085 data-nosnippet>1085</a>                    .iter()
-<a href=#1086 id=1086 data-nosnippet>1086</a>                    .map(key)
-<a href=#1087 id=1087 data-nosnippet>1087</a>                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#1088 id=1088 data-nosnippet>1088</a>                    .as_slice(),
-<a href=#1089 id=1089 data-nosnippet>1089</a>                <span class="string">"`{}`: a frozen fragment plan changed the niches it leaves for a parent"</span>,
-<a href=#1090 id=1090 data-nosnippet>1090</a>                fragment.source.key()
-<a href=#1091 id=1091 data-nosnippet>1091</a>            );
-<a href=#1092 id=1092 data-nosnippet>1092</a>            <span class="comment">// A composition's shape has to be the composition, not the
-<a href=#1093 id=1093 data-nosnippet>1093</a>            // placeholder every fragment starts with: `JLayout` is what JNI
-<a href=#1094 id=1094 data-nosnippet>1094</a>            // says today about occupying several wires, so a fragment whose
-<a href=#1095 id=1095 data-nosnippet>1095</a>            // layout composes must not freeze as `Atomic`.
-<a href=#1096 id=1096 data-nosnippet>1096</a>            </span><span class="kw">if </span><span class="macro">matches!</span>(
-<a href=#1097 id=1097 data-nosnippet>1097</a>                fragment.layout,
-<a href=#1098 id=1098 data-nosnippet>1098</a>                <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::JLayout::Product(<span class="kw">_</span>))
-<a href=#1099 id=1099 data-nosnippet>1099</a>                    | <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::JLayout::Optional(<span class="kw">_</span>))
-<a href=#1100 id=1100 data-nosnippet>1100</a>                    | <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::JLayout::Choice(<span class="kw">_</span>))
-<a href=#1101 id=1101 data-nosnippet>1101</a>            ) {
-<a href=#1102 id=1102 data-nosnippet>1102</a>                <span class="macro">assert!</span>(
-<a href=#1103 id=1103 data-nosnippet>1103</a>                    !<span class="macro">matches!</span>(
-<a href=#1104 id=1104 data-nosnippet>1104</a>                        plan.converter().shape(),
-<a href=#1105 id=1105 data-nosnippet>1105</a>                        prebindgen_registry::generation::ShapePlan::Atomic(<span class="kw">_</span>)
-<a href=#1106 id=1106 data-nosnippet>1106</a>                    ),
-<a href=#1107 id=1107 data-nosnippet>1107</a>                    <span class="string">"`{}`: a fragment whose layout composes froze as atomic — the \
-<a href=#1108 id=1108 data-nosnippet>1108</a>                     hook that composed it did not state its shape"</span>,
-<a href=#1109 id=1109 data-nosnippet>1109</a>                    fragment.source.key()
-<a href=#1110 id=1110 data-nosnippet>1110</a>                );
-<a href=#1111 id=1111 data-nosnippet>1111</a>            }
-<a href=#1112 id=1112 data-nosnippet>1112</a>        }
-<a href=#1113 id=1113 data-nosnippet>1113</a>        <span class="comment">// Every site the compilation stated reached the stored plan. The
-<a href=#1114 id=1114 data-nosnippet>1114</a>        // set-level properties — a duplicate identity, a failure route that
-<a href=#1115 id=1115 data-nosnippet>1115</a>        // does not match its fragment's fallibility, an edge naming a fragment
-<a href=#1116 id=1116 data-nosnippet>1116</a>        // nothing compiled — are `build`'s, and `build` now runs in `freeze`,
-<a href=#1117 id=1117 data-nosnippet>1117</a>        // so reaching here at all means it passed. What this adds is that
-<a href=#1118 id=1118 data-nosnippet>1118</a>        // nothing was dropped between stating a site and storing it.
-<a href=#1119 id=1119 data-nosnippet>1119</a>        </span><span class="kw">let </span>stated = <span class="self">self</span>.decls.site_plans.borrow();
-<a href=#1120 id=1120 data-nosnippet>1120</a>        <span class="macro">assert_eq!</span>(
-<a href=#1121 id=1121 data-nosnippet>1121</a>            stated.len(),
-<a href=#1122 id=1122 data-nosnippet>1122</a>            generation.plan().sites().len(),
-<a href=#1123 id=1123 data-nosnippet>1123</a>            <span class="string">"the canonical plan holds a different number of sites than were stated"
-<a href=#1124 id=1124 data-nosnippet>1124</a>        </span>);
-<a href=#1125 id=1125 data-nosnippet>1125</a>        <span class="kw">for </span>site <span class="kw">in </span>stated.iter() {
-<a href=#1126 id=1126 data-nosnippet>1126</a>            <span class="comment">// The slot count is what the ABI itself says it is, so the two
-<a href=#1127 id=1127 data-nosnippet>1127</a>            // cannot drift: `slots` is taken from the leaves rather than
-<a href=#1128 id=1128 data-nosnippet>1128</a>            // counted beside them.
-<a href=#1129 id=1129 data-nosnippet>1129</a>            </span><span class="macro">assert_eq!</span>(
-<a href=#1130 id=1130 data-nosnippet>1130</a>                site.abi().slots(),
-<a href=#1131 id=1131 data-nosnippet>1131</a>                site.abi().payload().len(),
-<a href=#1132 id=1132 data-nosnippet>1132</a>                <span class="string">"site {}: the slot count and the ABI disagree"</span>,
-<a href=#1133 id=1133 data-nosnippet>1133</a>                site.id().site()
-<a href=#1134 id=1134 data-nosnippet>1134</a>            );
-<a href=#1135 id=1135 data-nosnippet>1135</a>            <span class="macro">assert!</span>(
-<a href=#1136 id=1136 data-nosnippet>1136</a>                generation.plan().site(site.id()).is_some(),
-<a href=#1137 id=1137 data-nosnippet>1137</a>                <span class="string">"site {} was stated but is not in the canonical plan"</span>,
-<a href=#1138 id=1138 data-nosnippet>1138</a>                site.id().site()
-<a href=#1139 id=1139 data-nosnippet>1139</a>            );
-<a href=#1140 id=1140 data-nosnippet>1140</a>        }
-<a href=#1141 id=1141 data-nosnippet>1141</a>    }
-<a href=#1142 id=1142 data-nosnippet>1142</a>
-<a href=#1143 id=1143 data-nosnippet>1143</a>    <span class="doccomment">/// The binding the v1 engine resolved.
-<a href=#1144 id=1144 data-nosnippet>1144</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_v1(decls: Declarations, registry: prebindgen_registry::Registry) -&gt; <span class="self">Self </span>{
-<a href=#1145 id=1145 data-nosnippet>1145</a>        JniGen {
-<a href=#1146 id=1146 data-nosnippet>1146</a>            decls,
-<a href=#1147 id=1147 data-nosnippet>1147</a>            engine: Engine::V1(Box::new(registry)),
-<a href=#1148 id=1148 data-nosnippet>1148</a>        }
-<a href=#1149 id=1149 data-nosnippet>1149</a>    }
-<a href=#1150 id=1150 data-nosnippet>1150</a>
-<a href=#1151 id=1151 data-nosnippet>1151</a>    <span class="doccomment">/// The binding the v2 engine ran.
-<a href=#1152 id=1152 data-nosnippet>1152</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#1153 id=1153 data-nosnippet>1153</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_v2(
-<a href=#1154 id=1154 data-nosnippet>1154</a>        decls: Declarations,
-<a href=#1155 id=1155 data-nosnippet>1155</a>        generation: prebindgen_registry_v2::Generation,
-<a href=#1156 id=1156 data-nosnippet>1156</a>    ) -&gt; <span class="self">Self </span>{
-<a href=#1157 id=1157 data-nosnippet>1157</a>        JniGen {
-<a href=#1158 id=1158 data-nosnippet>1158</a>            decls,
-<a href=#1159 id=1159 data-nosnippet>1159</a>            engine: Engine::V2(Box::new(generation)),
-<a href=#1160 id=1160 data-nosnippet>1160</a>        }
-<a href=#1161 id=1161 data-nosnippet>1161</a>    }
-<a href=#1162 id=1162 data-nosnippet>1162</a>
-<a href=#1163 id=1163 data-nosnippet>1163</a>    <span class="doccomment">/// The resolved registry — conversions, decompositions, and the model.
-<a href=#1164 id=1164 data-nosnippet>1164</a>    ///
-<a href=#1165 id=1165 data-nosnippet>1165</a>    /// V1 only: it *is* the v1 engine's resolution, and v2 builds none. Panics
-<a href=#1166 id=1166 data-nosnippet>1166</a>    /// under v2, which is why [`Self::pipeline`] answers first.
-<a href=#1167 id=1167 data-nosnippet>1167</a>    </span><span class="kw">pub fn </span>registry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_registry::Registry {
-<a href=#1168 id=1168 data-nosnippet>1168</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.engine {
-<a href=#1169 id=1169 data-nosnippet>1169</a>            Engine::V1(registry) =&gt; registry,
-<a href=#1170 id=1170 data-nosnippet>1170</a>            <span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#1171 id=1171 data-nosnippet>1171</a>            </span>Engine::V2(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(
-<a href=#1172 id=1172 data-nosnippet>1172</a>                <span class="string">"`JniGen::registry` is the v1 engine's resolution; this binding was \
-<a href=#1173 id=1173 data-nosnippet>1173</a>                 generated by v2. Read `JniGen::manifest()` instead"
-<a href=#1174 id=1174 data-nosnippet>1174</a>            </span>),
-<a href=#1175 id=1175 data-nosnippet>1175</a>        }
-<a href=#1176 id=1176 data-nosnippet>1176</a>    }
-<a href=#1177 id=1177 data-nosnippet>1177</a>
-<a href=#1178 id=1178 data-nosnippet>1178</a>    <span class="doccomment">/// Which engine generated this binding.
-<a href=#1179 id=1179 data-nosnippet>1179</a>    </span><span class="kw">pub fn </span>pipeline(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; prebindgen_registry::pipeline::Pipeline {
-<a href=#1180 id=1180 data-nosnippet>1180</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.engine {
-<a href=#1181 id=1181 data-nosnippet>1181</a>            Engine::V1(<span class="kw">_</span>) =&gt; prebindgen_registry::pipeline::Pipeline::V1,
-<a href=#1182 id=1182 data-nosnippet>1182</a>            <span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#1183 id=1183 data-nosnippet>1183</a>            </span>Engine::V2(<span class="kw">_</span>) =&gt; prebindgen_registry::pipeline::Pipeline::V2,
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#938 id=938 data-nosnippet>938</a>        </span><span class="kw">if let </span>Engine::V2(generation) = <span class="kw-2">&amp;</span><span class="self">self</span>.engine {
+<a href=#939 id=939 data-nosnippet>939</a>            <span class="kw">return </span>generation.write_rust(out_path).map_err(|error| {
+<a href=#940 id=940 data-nosnippet>940</a>                prebindgen_registry::WriteRustError::Engine {
+<a href=#941 id=941 data-nosnippet>941</a>                    pipeline: prebindgen_registry_v2::PIPELINE,
+<a href=#942 id=942 data-nosnippet>942</a>                    message: error.to_string(),
+<a href=#943 id=943 data-nosnippet>943</a>                }
+<a href=#944 id=944 data-nosnippet>944</a>            });
+<a href=#945 id=945 data-nosnippet>945</a>        }
+<a href=#946 id=946 data-nosnippet>946</a>        <span class="comment">// Every binding a test writes also freezes each compiled fragment into
+<a href=#947 id=947 data-nosnippet>947</a>        // its canonical plan and checks the two describe the same fragment.
+<a href=#948 id=948 data-nosnippet>948</a>        // Nothing renders from that plan yet — #613 step 4 is what moves JNI
+<a href=#949 id=949 data-nosnippet>949</a>        // onto it — so this is what says it is ready to.
+<a href=#950 id=950 data-nosnippet>950</a>        </span><span class="attr">#[cfg(test)]
+<a href=#951 id=951 data-nosnippet>951</a>        </span><span class="self">self</span>.assert_fragments_freeze();
+<a href=#952 id=952 data-nosnippet>952</a>
+<a href=#953 id=953 data-nosnippet>953</a>        <span class="comment">// Every binding a test writes also checks that the assembly's
+<a href=#954 id=954 data-nosnippet>954</a>        // dependency edges name every call its artifacts render — the
+<a href=#955 id=955 data-nosnippet>955</a>        // completeness the emission-time check reasons from.
+<a href=#956 id=956 data-nosnippet>956</a>        </span><span class="attr">#[cfg(test)]
+<a href=#957 id=957 data-nosnippet>957</a>        </span>prebindgen_registry::write::assert_edges_cover_rendered_calls(
+<a href=#958 id=958 data-nosnippet>958</a>            <span class="self">self</span>.decls
+<a href=#959 id=959 data-nosnippet>959</a>                .generation
+<a href=#960 id=960 data-nosnippet>960</a>                .as_ref()
+<a href=#961 id=961 data-nosnippet>961</a>                .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>)
+<a href=#962 id=962 data-nosnippet>962</a>                .assembly(),
+<a href=#963 id=963 data-nosnippet>963</a>            <span class="string">"jni"</span>,
+<a href=#964 id=964 data-nosnippet>964</a>        );
+<a href=#965 id=965 data-nosnippet>965</a>        <span class="prelude-val">Ok</span>(prebindgen_registry::write::write_rust(
+<a href=#966 id=966 data-nosnippet>966</a>            <span class="self">self</span>.decls
+<a href=#967 id=967 data-nosnippet>967</a>                .generation
+<a href=#968 id=968 data-nosnippet>968</a>                .as_ref()
+<a href=#969 id=969 data-nosnippet>969</a>                .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>)
+<a href=#970 id=970 data-nosnippet>970</a>                .assembly(),
+<a href=#971 id=971 data-nosnippet>971</a>            out_path,
+<a href=#972 id=972 data-nosnippet>972</a>        )<span class="question-mark">?</span>)
+<a href=#973 id=973 data-nosnippet>973</a>    }
+<a href=#974 id=974 data-nosnippet>974</a>
+<a href=#975 id=975 data-nosnippet>975</a>    <span class="doccomment">/// Every compiled fragment states the same thing twice while step 5 is in
+<a href=#976 id=976 data-nosnippet>976</a>    /// progress — as a [`JFrag`](crate::jni::compile::JFrag) and as the
+<a href=#977 id=977 data-nosnippet>977</a>    /// `FragmentPlan` the canonical plan holds — and this is what says the two
+<a href=#978 id=978 data-nosnippet>978</a>    /// agree.
+<a href=#979 id=979 data-nosnippet>979</a>    ///
+<a href=#980 id=980 data-nosnippet>980</a>    /// Identity, source and artifact presence are compared because they are
+<a href=#981 id=981 data-nosnippet>981</a>    /// what a plan is keyed and spelled by, and what an emitter would read
+<a href=#982 id=982 data-nosnippet>982</a>    /// instead of the fragment. A composed-only fragment renders nothing, and
+<a href=#983 id=983 data-nosnippet>983</a>    /// the canonical plan says so by carrying no artifact at all.
+<a href=#984 id=984 data-nosnippet>984</a>    ///
+<a href=#985 id=985 data-nosnippet>985</a>    /// The plan itself is **not** rebuilt here. Since 5a it is built and
+<a href=#986 id=986 data-nosnippet>986</a>    /// validated in `JniGenerationPlan::freeze`, so a set-level defect — a
+<a href=#987 id=987 data-nosnippet>987</a>    /// chain whose endpoints do not join up, an edge naming a fragment nothing
+<a href=#988 id=988 data-nosnippet>988</a>    /// compiled, a duplicate site identity — fails the binding rather than one
+<a href=#989 id=989 data-nosnippet>989</a>    /// test. What is left for this check is the per-fragment agreement that
+<a href=#990 id=990 data-nosnippet>990</a>    /// only survives while `JFrag` still exists; 5c deletes both.
+<a href=#991 id=991 data-nosnippet>991</a>    </span><span class="attr">#[cfg(test)]
+<a href=#992 id=992 data-nosnippet>992</a>    </span><span class="kw">fn </span>assert_fragments_freeze(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#993 id=993 data-nosnippet>993</a>        <span class="kw">let </span>generation = <span class="self">self
+<a href=#994 id=994 data-nosnippet>994</a>            </span>.decls
+<a href=#995 id=995 data-nosnippet>995</a>            .generation
+<a href=#996 id=996 data-nosnippet>996</a>            .as_ref()
+<a href=#997 id=997 data-nosnippet>997</a>            .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>);
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="comment">// Driven from the PLAN, not from the compiled store. `build` keeps the
+<a href=#999 id=999 data-nosnippet>999</a>        // fragments reachable from a site and prunes the rest, so the store is
+<a href=#1000 id=1000 data-nosnippet>1000</a>        // a superset — a converter the assembly still reaches on its own is in
+<a href=#1001 id=1001 data-nosnippet>1001</a>        // it and not in the plan. Closing that is step 8's, where artifact
+<a href=#1002 id=1002 data-nosnippet>1002</a>        // ordering moves onto the plan; until then the plan's own fragments are
+<a href=#1003 id=1003 data-nosnippet>1003</a>        // what there is to agree about.
+<a href=#1004 id=1004 data-nosnippet>1004</a>        </span><span class="kw">let </span>compiled = <span class="self">self</span>.decls.compiled.borrow();
+<a href=#1005 id=1005 data-nosnippet>1005</a>        <span class="kw">for </span>plan <span class="kw">in </span>generation.plan().fragments() {
+<a href=#1006 id=1006 data-nosnippet>1006</a>            <span class="kw">let </span>fragment = compiled
+<a href=#1007 id=1007 data-nosnippet>1007</a>                .recipe_fragment(plan.id().spelling(), plan.id().recipe())
+<a href=#1008 id=1008 data-nosnippet>1008</a>                .unwrap_or_else(|| {
+<a href=#1009 id=1009 data-nosnippet>1009</a>                    <span class="macro">panic!</span>(
+<a href=#1010 id=1010 data-nosnippet>1010</a>                        <span class="string">"`{}`: the canonical plan holds a fragment nothing compiled"</span>,
+<a href=#1011 id=1011 data-nosnippet>1011</a>                        plan.id().spelling()
+<a href=#1012 id=1012 data-nosnippet>1012</a>                    )
+<a href=#1013 id=1013 data-nosnippet>1013</a>                });
+<a href=#1014 id=1014 data-nosnippet>1014</a>            <span class="macro">assert_eq!</span>(
+<a href=#1015 id=1015 data-nosnippet>1015</a>                plan.id(),
+<a href=#1016 id=1016 data-nosnippet>1016</a>                <span class="kw-2">&amp;</span>fragment.id,
+<a href=#1017 id=1017 data-nosnippet>1017</a>                <span class="string">"a frozen fragment plan changed the fragment's identity"
+<a href=#1018 id=1018 data-nosnippet>1018</a>            </span>);
+<a href=#1019 id=1019 data-nosnippet>1019</a>            <span class="macro">assert_eq!</span>(
+<a href=#1020 id=1020 data-nosnippet>1020</a>                plan.source().key(),
+<a href=#1021 id=1021 data-nosnippet>1021</a>                fragment.source.key(),
+<a href=#1022 id=1022 data-nosnippet>1022</a>                <span class="string">"`{}`: a frozen fragment plan changed the crossing it answers"</span>,
+<a href=#1023 id=1023 data-nosnippet>1023</a>                fragment.source.key()
+<a href=#1024 id=1024 data-nosnippet>1024</a>            );
+<a href=#1025 id=1025 data-nosnippet>1025</a>            <span class="macro">assert_eq!</span>(
+<a href=#1026 id=1026 data-nosnippet>1026</a>                plan.artifact().is_some(),
+<a href=#1027 id=1027 data-nosnippet>1027</a>                !fragment.composed_only,
+<a href=#1028 id=1028 data-nosnippet>1028</a>                <span class="string">"`{}`: a composed-only fragment renders nothing, and only such a \
+<a href=#1029 id=1029 data-nosnippet>1029</a>                 fragment freezes without an artifact"</span>,
+<a href=#1030 id=1030 data-nosnippet>1030</a>                fragment.source.key()
+<a href=#1031 id=1031 data-nosnippet>1031</a>            );
+<a href=#1032 id=1032 data-nosnippet>1032</a>            <span class="comment">// The conversion graph, step for step. Comparing only that a chain
+<a href=#1033 id=1033 data-nosnippet>1033</a>            // exists would not have caught freezing every staged custom
+<a href=#1034 id=1034 data-nosnippet>1034</a>            // conversion as `Direct`, which is what the first version of this
+<a href=#1035 id=1035 data-nosnippet>1035</a>            // did (#621 review): the operations and their order ARE the
+<a href=#1036 id=1036 data-nosnippet>1036</a>            // contract, and a reader of the plan routes to stage artifacts
+<a href=#1037 id=1037 data-nosnippet>1037</a>            // through them.
+<a href=#1038 id=1038 data-nosnippet>1038</a>            </span><span class="kw">let </span>steps = |chain: <span class="kw-2">&amp;</span>prebindgen_registry::generation::ConversionChain&lt;
+<a href=#1039 id=1039 data-nosnippet>1039</a>                <span class="kw">crate</span>::jni::compile::JRepresentation,
+<a href=#1040 id=1040 data-nosnippet>1040</a>            &gt;| <span class="kw">match </span>chain {
+<a href=#1041 id=1041 data-nosnippet>1041</a>                prebindgen_registry::generation::ConversionChain::Direct =&gt; Vec::new(),
+<a href=#1042 id=1042 data-nosnippet>1042</a>                prebindgen_registry::generation::ConversionChain::Steps(steps) =&gt; steps
+<a href=#1043 id=1043 data-nosnippet>1043</a>                    .iter()
+<a href=#1044 id=1044 data-nosnippet>1044</a>                    .map(|step| {
+<a href=#1045 id=1045 data-nosnippet>1045</a>                        <span class="macro">format!</span>(
+<a href=#1046 id=1046 data-nosnippet>1046</a>                            <span class="string">"{:?}:{:?}-&gt;{:?}:{:?}"</span>,
+<a href=#1047 id=1047 data-nosnippet>1047</a>                            step.operation(),
+<a href=#1048 id=1048 data-nosnippet>1048</a>                            step.from(),
+<a href=#1049 id=1049 data-nosnippet>1049</a>                            step.into(),
+<a href=#1050 id=1050 data-nosnippet>1050</a>                            step.failure()
+<a href=#1051 id=1051 data-nosnippet>1051</a>                        )
+<a href=#1052 id=1052 data-nosnippet>1052</a>                    })
+<a href=#1053 id=1053 data-nosnippet>1053</a>                    .collect(),
+<a href=#1054 id=1054 data-nosnippet>1054</a>            };
+<a href=#1055 id=1055 data-nosnippet>1055</a>            <span class="macro">assert_eq!</span>(
+<a href=#1056 id=1056 data-nosnippet>1056</a>                steps(plan.converter().chain()),
+<a href=#1057 id=1057 data-nosnippet>1057</a>                steps(<span class="kw-2">&amp;</span>fragment.chain),
+<a href=#1058 id=1058 data-nosnippet>1058</a>                <span class="string">"`{}`: a frozen fragment plan changed the conversion graph"</span>,
+<a href=#1059 id=1059 data-nosnippet>1059</a>                fragment.source.key()
+<a href=#1060 id=1060 data-nosnippet>1060</a>            );
+<a href=#1061 id=1061 data-nosnippet>1061</a>            <span class="comment">// Both niche domains: what the fragment spends on its own absence,
+<a href=#1062 id=1062 data-nosnippet>1062</a>            // and what it leaves for a parent. Exposing the remainder while
+<a href=#1063 id=1063 data-nosnippet>1063</a>            // losing the consumed slot was the other thing this check could not
+<a href=#1064 id=1064 data-nosnippet>1064</a>            // see.
+<a href=#1065 id=1065 data-nosnippet>1065</a>            // Both niche domains, by identity rather than by count. Comparing
+<a href=#1066 id=1066 data-nosnippet>1066</a>            // how many there are would pass a substituted sentinel, and
+<a href=#1067 id=1067 data-nosnippet>1067</a>            // `GenerationPlanBuilder` cannot see one either — a niche is a
+<a href=#1068 id=1068 data-nosnippet>1068</a>            // bit-pattern contract, so what it IS is the whole of it.
+<a href=#1069 id=1069 data-nosnippet>1069</a>            </span><span class="kw">let </span>niches = plan.converter().niches();
+<a href=#1070 id=1070 data-nosnippet>1070</a>            <span class="kw">let </span>key = <span class="kw">crate</span>::jni::compile::niche_key;
+<a href=#1071 id=1071 data-nosnippet>1071</a>            <span class="macro">assert_eq!</span>(
+<a href=#1072 id=1072 data-nosnippet>1072</a>                niches.consumed(),
+<a href=#1073 id=1073 data-nosnippet>1073</a>                fragment
+<a href=#1074 id=1074 data-nosnippet>1074</a>                    .consumed_niche
+<a href=#1075 id=1075 data-nosnippet>1075</a>                    .iter()
+<a href=#1076 id=1076 data-nosnippet>1076</a>                    .map(key)
+<a href=#1077 id=1077 data-nosnippet>1077</a>                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#1078 id=1078 data-nosnippet>1078</a>                    .as_slice(),
+<a href=#1079 id=1079 data-nosnippet>1079</a>                <span class="string">"`{}`: a frozen fragment plan changed the niche it consumed"</span>,
+<a href=#1080 id=1080 data-nosnippet>1080</a>                fragment.source.key()
+<a href=#1081 id=1081 data-nosnippet>1081</a>            );
+<a href=#1082 id=1082 data-nosnippet>1082</a>            <span class="macro">assert_eq!</span>(
+<a href=#1083 id=1083 data-nosnippet>1083</a>                niches.discriminants(),
+<a href=#1084 id=1084 data-nosnippet>1084</a>                niches.consumed().len(),
+<a href=#1085 id=1085 data-nosnippet>1085</a>                <span class="string">"`{}`: a consumed niche is what the fragment discriminates on"</span>,
+<a href=#1086 id=1086 data-nosnippet>1086</a>                fragment.source.key()
+<a href=#1087 id=1087 data-nosnippet>1087</a>            );
+<a href=#1088 id=1088 data-nosnippet>1088</a>            <span class="macro">assert_eq!</span>(
+<a href=#1089 id=1089 data-nosnippet>1089</a>                niches.exposed(),
+<a href=#1090 id=1090 data-nosnippet>1090</a>                fragment
+<a href=#1091 id=1091 data-nosnippet>1091</a>                    .conv
+<a href=#1092 id=1092 data-nosnippet>1092</a>                    .niches
+<a href=#1093 id=1093 data-nosnippet>1093</a>                    .slots
+<a href=#1094 id=1094 data-nosnippet>1094</a>                    .iter()
+<a href=#1095 id=1095 data-nosnippet>1095</a>                    .map(key)
+<a href=#1096 id=1096 data-nosnippet>1096</a>                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#1097 id=1097 data-nosnippet>1097</a>                    .as_slice(),
+<a href=#1098 id=1098 data-nosnippet>1098</a>                <span class="string">"`{}`: a frozen fragment plan changed the niches it leaves for a parent"</span>,
+<a href=#1099 id=1099 data-nosnippet>1099</a>                fragment.source.key()
+<a href=#1100 id=1100 data-nosnippet>1100</a>            );
+<a href=#1101 id=1101 data-nosnippet>1101</a>            <span class="comment">// A composition's shape has to be the composition, not the
+<a href=#1102 id=1102 data-nosnippet>1102</a>            // placeholder every fragment starts with: `JLayout` is what JNI
+<a href=#1103 id=1103 data-nosnippet>1103</a>            // says today about occupying several wires, so a fragment whose
+<a href=#1104 id=1104 data-nosnippet>1104</a>            // layout composes must not freeze as `Atomic`.
+<a href=#1105 id=1105 data-nosnippet>1105</a>            </span><span class="kw">if </span><span class="macro">matches!</span>(
+<a href=#1106 id=1106 data-nosnippet>1106</a>                fragment.layout,
+<a href=#1107 id=1107 data-nosnippet>1107</a>                <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::JLayout::Product(<span class="kw">_</span>))
+<a href=#1108 id=1108 data-nosnippet>1108</a>                    | <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::JLayout::Optional(<span class="kw">_</span>))
+<a href=#1109 id=1109 data-nosnippet>1109</a>                    | <span class="prelude-val">Some</span>(<span class="kw">crate</span>::jni::compile::JLayout::Choice(<span class="kw">_</span>))
+<a href=#1110 id=1110 data-nosnippet>1110</a>            ) {
+<a href=#1111 id=1111 data-nosnippet>1111</a>                <span class="macro">assert!</span>(
+<a href=#1112 id=1112 data-nosnippet>1112</a>                    !<span class="macro">matches!</span>(
+<a href=#1113 id=1113 data-nosnippet>1113</a>                        plan.converter().shape(),
+<a href=#1114 id=1114 data-nosnippet>1114</a>                        prebindgen_registry::generation::ShapePlan::Atomic(<span class="kw">_</span>)
+<a href=#1115 id=1115 data-nosnippet>1115</a>                    ),
+<a href=#1116 id=1116 data-nosnippet>1116</a>                    <span class="string">"`{}`: a fragment whose layout composes froze as atomic — the \
+<a href=#1117 id=1117 data-nosnippet>1117</a>                     hook that composed it did not state its shape"</span>,
+<a href=#1118 id=1118 data-nosnippet>1118</a>                    fragment.source.key()
+<a href=#1119 id=1119 data-nosnippet>1119</a>                );
+<a href=#1120 id=1120 data-nosnippet>1120</a>            }
+<a href=#1121 id=1121 data-nosnippet>1121</a>        }
+<a href=#1122 id=1122 data-nosnippet>1122</a>        <span class="comment">// Every site the compilation stated reached the stored plan. The
+<a href=#1123 id=1123 data-nosnippet>1123</a>        // set-level properties — a duplicate identity, a failure route that
+<a href=#1124 id=1124 data-nosnippet>1124</a>        // does not match its fragment's fallibility, an edge naming a fragment
+<a href=#1125 id=1125 data-nosnippet>1125</a>        // nothing compiled — are `build`'s, and `build` now runs in `freeze`,
+<a href=#1126 id=1126 data-nosnippet>1126</a>        // so reaching here at all means it passed. What this adds is that
+<a href=#1127 id=1127 data-nosnippet>1127</a>        // nothing was dropped between stating a site and storing it.
+<a href=#1128 id=1128 data-nosnippet>1128</a>        </span><span class="kw">let </span>stated = <span class="self">self</span>.decls.site_plans.borrow();
+<a href=#1129 id=1129 data-nosnippet>1129</a>        <span class="macro">assert_eq!</span>(
+<a href=#1130 id=1130 data-nosnippet>1130</a>            stated.len(),
+<a href=#1131 id=1131 data-nosnippet>1131</a>            generation.plan().sites().len(),
+<a href=#1132 id=1132 data-nosnippet>1132</a>            <span class="string">"the canonical plan holds a different number of sites than were stated"
+<a href=#1133 id=1133 data-nosnippet>1133</a>        </span>);
+<a href=#1134 id=1134 data-nosnippet>1134</a>        <span class="kw">for </span>site <span class="kw">in </span>stated.iter() {
+<a href=#1135 id=1135 data-nosnippet>1135</a>            <span class="comment">// The slot count is what the ABI itself says it is, so the two
+<a href=#1136 id=1136 data-nosnippet>1136</a>            // cannot drift: `slots` is taken from the leaves rather than
+<a href=#1137 id=1137 data-nosnippet>1137</a>            // counted beside them.
+<a href=#1138 id=1138 data-nosnippet>1138</a>            </span><span class="macro">assert_eq!</span>(
+<a href=#1139 id=1139 data-nosnippet>1139</a>                site.abi().slots(),
+<a href=#1140 id=1140 data-nosnippet>1140</a>                site.abi().payload().len(),
+<a href=#1141 id=1141 data-nosnippet>1141</a>                <span class="string">"site {}: the slot count and the ABI disagree"</span>,
+<a href=#1142 id=1142 data-nosnippet>1142</a>                site.id().site()
+<a href=#1143 id=1143 data-nosnippet>1143</a>            );
+<a href=#1144 id=1144 data-nosnippet>1144</a>            <span class="macro">assert!</span>(
+<a href=#1145 id=1145 data-nosnippet>1145</a>                generation.plan().site(site.id()).is_some(),
+<a href=#1146 id=1146 data-nosnippet>1146</a>                <span class="string">"site {} was stated but is not in the canonical plan"</span>,
+<a href=#1147 id=1147 data-nosnippet>1147</a>                site.id().site()
+<a href=#1148 id=1148 data-nosnippet>1148</a>            );
+<a href=#1149 id=1149 data-nosnippet>1149</a>        }
+<a href=#1150 id=1150 data-nosnippet>1150</a>    }
+<a href=#1151 id=1151 data-nosnippet>1151</a>
+<a href=#1152 id=1152 data-nosnippet>1152</a>    <span class="doccomment">/// The binding the v1 engine resolved.
+<a href=#1153 id=1153 data-nosnippet>1153</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_v1(decls: Declarations, registry: prebindgen_registry::Registry) -&gt; <span class="self">Self </span>{
+<a href=#1154 id=1154 data-nosnippet>1154</a>        JniGen {
+<a href=#1155 id=1155 data-nosnippet>1155</a>            decls,
+<a href=#1156 id=1156 data-nosnippet>1156</a>            engine: Engine::V1(Box::new(registry)),
+<a href=#1157 id=1157 data-nosnippet>1157</a>        }
+<a href=#1158 id=1158 data-nosnippet>1158</a>    }
+<a href=#1159 id=1159 data-nosnippet>1159</a>
+<a href=#1160 id=1160 data-nosnippet>1160</a>    <span class="doccomment">/// The binding the v2 engine ran.
+<a href=#1161 id=1161 data-nosnippet>1161</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#1162 id=1162 data-nosnippet>1162</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_v2(
+<a href=#1163 id=1163 data-nosnippet>1163</a>        decls: Declarations,
+<a href=#1164 id=1164 data-nosnippet>1164</a>        generation: prebindgen_registry_v2::Generation,
+<a href=#1165 id=1165 data-nosnippet>1165</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#1166 id=1166 data-nosnippet>1166</a>        JniGen {
+<a href=#1167 id=1167 data-nosnippet>1167</a>            decls,
+<a href=#1168 id=1168 data-nosnippet>1168</a>            engine: Engine::V2(Box::new(generation)),
+<a href=#1169 id=1169 data-nosnippet>1169</a>        }
+<a href=#1170 id=1170 data-nosnippet>1170</a>    }
+<a href=#1171 id=1171 data-nosnippet>1171</a>
+<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="doccomment">/// The resolved registry — conversions, decompositions, and the model.
+<a href=#1173 id=1173 data-nosnippet>1173</a>    ///
+<a href=#1174 id=1174 data-nosnippet>1174</a>    /// V1 only: it *is* the v1 engine's resolution, and v2 builds none. Panics
+<a href=#1175 id=1175 data-nosnippet>1175</a>    /// under v2, which is why [`Self::pipeline`] answers first.
+<a href=#1176 id=1176 data-nosnippet>1176</a>    </span><span class="kw">pub fn </span>registry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>prebindgen_registry::Registry {
+<a href=#1177 id=1177 data-nosnippet>1177</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.engine {
+<a href=#1178 id=1178 data-nosnippet>1178</a>            Engine::V1(registry) =&gt; registry,
+<a href=#1179 id=1179 data-nosnippet>1179</a>            <span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#1180 id=1180 data-nosnippet>1180</a>            </span>Engine::V2(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(
+<a href=#1181 id=1181 data-nosnippet>1181</a>                <span class="string">"`JniGen::registry` is the v1 engine's resolution; this binding was \
+<a href=#1182 id=1182 data-nosnippet>1182</a>                 generated by v2. Read `JniGen::manifest()` instead"
+<a href=#1183 id=1183 data-nosnippet>1183</a>            </span>),
 <a href=#1184 id=1184 data-nosnippet>1184</a>        }
 <a href=#1185 id=1185 data-nosnippet>1185</a>    }
 <a href=#1186 id=1186 data-nosnippet>1186</a>
-<a href=#1187 id=1187 data-nosnippet>1187</a>    <span class="doccomment">/// What was generated and what was skipped, per declared element.
-<a href=#1188 id=1188 data-nosnippet>1188</a>    ///
-<a href=#1189 id=1189 data-nosnippet>1189</a>    /// `None` under v1: its answer is "everything declared, or the build
-<a href=#1190 id=1190 data-nosnippet>1190</a>    /// failed", so it has no partial surface to manifest. Producing one for v1
-<a href=#1191 id=1191 data-nosnippet>1191</a>    /// too is #719 §4 and follows this change.
-<a href=#1192 id=1192 data-nosnippet>1192</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#1193 id=1193 data-nosnippet>1193</a>    </span><span class="kw">pub fn </span>manifest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_registry_v2::Report&gt; {
-<a href=#1194 id=1194 data-nosnippet>1194</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.engine {
-<a href=#1195 id=1195 data-nosnippet>1195</a>            Engine::V1(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-<a href=#1196 id=1196 data-nosnippet>1196</a>            Engine::V2(generation) =&gt; <span class="prelude-val">Some</span>(generation.report()),
-<a href=#1197 id=1197 data-nosnippet>1197</a>        }
-<a href=#1198 id=1198 data-nosnippet>1198</a>    }
-<a href=#1199 id=1199 data-nosnippet>1199</a>
-<a href=#1200 id=1200 data-nosnippet>1200</a>    <span class="doccomment">/// Write the manifest into `dir`, and print its summary as cargo warnings.
-<a href=#1201 id=1201 data-nosnippet>1201</a>    ///
-<a href=#1202 id=1202 data-nosnippet>1202</a>    /// Returns the paths written, or `None` under an engine that produces no
-<a href=#1203 id=1203 data-nosnippet>1203</a>    /// report.
-<a href=#1204 id=1204 data-nosnippet>1204</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#1205 id=1205 data-nosnippet>1205</a>    </span><span class="kw">pub fn </span>write_manifest(
-<a href=#1206 id=1206 data-nosnippet>1206</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1207 id=1207 data-nosnippet>1207</a>        dir: <span class="kw">impl </span>AsRef&lt;std::path::Path&gt;,
-<a href=#1208 id=1208 data-nosnippet>1208</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;std::path::PathBuf&gt;&gt;, prebindgen_registry::WriteRustError&gt; {
-<a href=#1209 id=1209 data-nosnippet>1209</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(report) = <span class="self">self</span>.manifest() <span class="kw">else </span>{
-<a href=#1210 id=1210 data-nosnippet>1210</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
-<a href=#1211 id=1211 data-nosnippet>1211</a>        };
-<a href=#1212 id=1212 data-nosnippet>1212</a>        report.warn();
-<a href=#1213 id=1213 data-nosnippet>1213</a>        report
-<a href=#1214 id=1214 data-nosnippet>1214</a>            .write(dir)
-<a href=#1215 id=1215 data-nosnippet>1215</a>            .map(<span class="prelude-val">Some</span>)
-<a href=#1216 id=1216 data-nosnippet>1216</a>            .map_err(|error| prebindgen_registry::WriteRustError::Engine {
-<a href=#1217 id=1217 data-nosnippet>1217</a>                pipeline: prebindgen_registry_v2::PIPELINE,
-<a href=#1218 id=1218 data-nosnippet>1218</a>                message: error.to_string(),
-<a href=#1219 id=1219 data-nosnippet>1219</a>            })
-<a href=#1220 id=1220 data-nosnippet>1220</a>    }
-<a href=#1221 id=1221 data-nosnippet>1221</a>
-<a href=#1222 id=1222 data-nosnippet>1222</a>    <span class="doccomment">/// What the binding declared.
-<a href=#1223 id=1223 data-nosnippet>1223</a>    </span><span class="kw">pub fn </span>declarations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Declarations {
-<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.decls
-<a href=#1225 id=1225 data-nosnippet>1225</a>    }
-<a href=#1226 id=1226 data-nosnippet>1226</a>
-<a href=#1227 id=1227 data-nosnippet>1227</a>    <span class="doccomment">/// The immutable cross-artifact plan shared by Rust and Kotlin emission.
-<a href=#1228 id=1228 data-nosnippet>1228</a>    </span><span class="attr">#[cfg(test)]
-<a href=#1229 id=1229 data-nosnippet>1229</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>generation_plan(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>generation::JniGenerationPlan {
-<a href=#1230 id=1230 data-nosnippet>1230</a>        <span class="self">self</span>.decls
-<a href=#1231 id=1231 data-nosnippet>1231</a>            .generation
-<a href=#1232 id=1232 data-nosnippet>1232</a>            .as_deref()
-<a href=#1233 id=1233 data-nosnippet>1233</a>            .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>)
-<a href=#1234 id=1234 data-nosnippet>1234</a>    }
-<a href=#1235 id=1235 data-nosnippet>1235</a>}
-<a href=#1236 id=1236 data-nosnippet>1236</a>
-<a href=#1237 id=1237 data-nosnippet>1237</a><span class="doccomment">/// Everything a binding **declared**, once it is done declaring.
-<a href=#1238 id=1238 data-nosnippet>1238</a>///
-<a href=#1239 id=1239 data-nosnippet>1239</a>/// The read-only half of what used to be one `JniGenBuilder`. Splitting it is what
-<a href=#1240 id=1240 data-nosnippet>1240</a>/// keeps the phase separation now that a generator owns its own registry: before
-<a href=#1241 id=1241 data-nosnippet>1241</a>/// [#253](https://github.com/milyin/prebindgen/pull/253) a build script held a
-<a href=#1242 id=1242 data-nosnippet>1242</a>/// `RegistryBuilder` and then a `Registry`, and that type split *was* the
-<a href=#1243 id=1243 data-nosnippet>1243</a>/// enforcement. Once `JniGen::builder().source(..).build()` moved both inside the
-<a href=#1244 id=1244 data-nosnippet>1244</a>/// generator, the built object was left holding the builder — mutators and all.
-<a href=#1245 id=1245 data-nosnippet>1245</a>///
-<a href=#1246 id=1246 data-nosnippet>1246</a>/// So the mutators live on [`JniGenBuilder`] and nothing else, and this type — the
-<a href=#1247 id=1247 data-nosnippet>1247</a>/// one a [`JniGen`] keeps and every emitter reads — **has no `&amp;mut self` method at
-<a href=#1248 id=1248 data-nosnippet>1248</a>/// all**. Not "the obvious ones were removed": none, which
-<a href=#1249 id=1249 data-nosnippet>1249</a>/// `a_built_jnigen_exposes_no_mutation` checks by reading the source, because a
-<a href=#1250 id=1250 data-nosnippet>1250</a>/// one-line grep once missed a multi-line signature and let `Registry::supply`
-<a href=#1251 id=1251 data-nosnippet>1251</a>/// survive two commits that claimed it was gone.
-<a href=#1252 id=1252 data-nosnippet>1252</a></span><span class="attr">#[derive(Clone)]
-<a href=#1253 id=1253 data-nosnippet>1253</a></span><span class="kw">pub struct </span>Declarations {
-<a href=#1254 id=1254 data-nosnippet>1254</a>    <span class="doccomment">/// Single source of truth for the JVM/Kotlin namespace this binding
-<a href=#1255 id=1255 data-nosnippet>1255</a>    /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
-<a href=#1256 id=1256 data-nosnippet>1256</a>    /// Every derived form — slash-separated for `FindClass`
-<a href=#1257 id=1257 data-nosnippet>1257</a>    /// ([`Declarations::java_class_prefix`]), `_`-mangled for JNI extern idents,
-<a href=#1258 id=1258 data-nosnippet>1258</a>    /// dot-separated for Kotlin `package` declarations — is computed from this at
-<a href=#1259 id=1259 data-nosnippet>1259</a>    /// the point of use.
-<a href=#1260 id=1260 data-nosnippet>1260</a>    /// `pub(crate)`: consumers go through [`JniGenBuilder::set_package_prefix`],
-<a href=#1261 id=1261 data-nosnippet>1261</a>    /// whose trimming a direct field write would bypass.
-<a href=#1262 id=1262 data-nosnippet>1262</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) package: String,
-<a href=#1263 id=1263 data-nosnippet>1263</a>
-<a href=#1264 id=1264 data-nosnippet>1264</a>    <span class="doccomment">/// Mangler for top-level package function names. Receives the destination
-<a href=#1265 id=1265 data-nosnippet>1265</a>    /// package and camelCase Rust function name; default = identity.
-<a href=#1266 id=1266 data-nosnippet>1266</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fun_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
-<a href=#1267 id=1267 data-nosnippet>1267</a>    <span class="doccomment">/// Mangler for Kotlin ptr-class names declared via a
-<a href=#1268 id=1268 data-nosnippet>1268</a>    /// `PtrClassDecl`. Default = identity.
-<a href=#1269 id=1269 data-nosnippet>1269</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ptr_class_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
-<a href=#1270 id=1270 data-nosnippet>1270</a>    <span class="doccomment">/// Mangler for Kotlin data-class names declared via a
-<a href=#1271 id=1271 data-nosnippet>1271</a>    /// `DataClassDecl`. Default = identity.
-<a href=#1272 id=1272 data-nosnippet>1272</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) data_class_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
-<a href=#1273 id=1273 data-nosnippet>1273</a>    <span class="doccomment">/// Mangler for `EnumClassDecl`-declared C-like enum class
-<a href=#1274 id=1274 data-nosnippet>1274</a>    /// names. Default = identity.
-<a href=#1275 id=1275 data-nosnippet>1275</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) enum_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
-<a href=#1276 id=1276 data-nosnippet>1276</a>    <span class="doccomment">/// Method-name mangle hook ([`JniGenBuilder::set_method_name_mangle`]) — applied
-<a href=#1277 id=1277 data-nosnippet>1277</a>    /// to the camelCase Rust function name of every class method/factory
-<a href=#1278 id=1278 data-nosnippet>1278</a>    /// without a per-method `.name()`, with package and class context.
-<a href=#1279 id=1279 data-nosnippet>1279</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) method_name_mangle: <span class="prelude-ty">Option</span>&lt;MethodNameMangle&gt;,
-<a href=#1280 id=1280 data-nosnippet>1280</a>    <span class="doccomment">/// Mangler for the framework `JNINative` harness class name. Receives its
-<a href=#1281 id=1281 data-nosnippet>1281</a>    /// default class name; unset = identity.
-<a href=#1282 id=1282 data-nosnippet>1282</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) harness_name_mangle: <span class="prelude-ty">Option</span>&lt;HarnessNameMangle&gt;,
-<a href=#1283 id=1283 data-nosnippet>1283</a>    <span class="doccomment">/// Mangler turning a class name into its generated `.interface()` name.
-<a href=#1284 id=1284 data-nosnippet>1284</a>    /// Receives the target package and final class name; identity is forbidden
-<a href=#1285 id=1285 data-nosnippet>1285</a>    /// (a class and its interface can't share a name). Default when unset =
-<a href=#1286 id=1286 data-nosnippet>1286</a>    /// append `"Api"`.
-<a href=#1287 id=1287 data-nosnippet>1287</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) interface_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
-<a href=#1288 id=1288 data-nosnippet>1288</a>
-<a href=#1289 id=1289 data-nosnippet>1289</a>    <span class="doccomment">/// Structured per-type configuration keyed by canonical Rust type.
-<a href=#1290 id=1290 data-nosnippet>1290</a>    /// One entry per declared class; populated when accepting a `ClassDecl`,
-<a href=#1291 id=1291 data-nosnippet>1291</a>    /// through the table's single writer `JniGenBuilder::register_class` — so
-<a href=#1292 id=1292 data-nosnippet>1292</a>    /// presence here *is* "declared as a class", and each entry's
-<a href=#1293 id=1293 data-nosnippet>1293</a>    /// [`TypeConfig::kind`] is the one representation of which declarator it
-<a href=#1294 id=1294 data-nosnippet>1294</a>    /// came from. Also holds the raw [`NameSpec`] (Kotlin FQNs are
-<a href=#1295 id=1295 data-nosnippet>1295</a>    /// derived from it on read via [`JniGenBuilder::kotlin_fqn`] /
-<a href=#1296 id=1296 data-nosnippet>1296</a>    /// [`JniGenBuilder::fqn_of`]). Terminal dispatch order is opaque → enum →
-<a href=#1297 id=1297 data-nosnippet>1297</a>    /// `convert!` → primitive → struct; see
-<a href=#1298 id=1298 data-nosnippet>1298</a>    /// [`JniGenBuilder::select_input_type`](crate::JniGenBuilder)'s selector.
-<a href=#1299 id=1299 data-nosnippet>1299</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) types: HashMap&lt;TypeKey, TypeConfig&gt;,
+<a href=#1187 id=1187 data-nosnippet>1187</a>    <span class="doccomment">/// Which engine generated this binding.
+<a href=#1188 id=1188 data-nosnippet>1188</a>    </span><span class="kw">pub fn </span>pipeline(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; prebindgen_registry::pipeline::Pipeline {
+<a href=#1189 id=1189 data-nosnippet>1189</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.engine {
+<a href=#1190 id=1190 data-nosnippet>1190</a>            Engine::V1(<span class="kw">_</span>) =&gt; prebindgen_registry::pipeline::Pipeline::V1,
+<a href=#1191 id=1191 data-nosnippet>1191</a>            <span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#1192 id=1192 data-nosnippet>1192</a>            </span>Engine::V2(<span class="kw">_</span>) =&gt; prebindgen_registry::pipeline::Pipeline::V2,
+<a href=#1193 id=1193 data-nosnippet>1193</a>        }
+<a href=#1194 id=1194 data-nosnippet>1194</a>    }
+<a href=#1195 id=1195 data-nosnippet>1195</a>
+<a href=#1196 id=1196 data-nosnippet>1196</a>    <span class="doccomment">/// What was generated and what was skipped, per declared element.
+<a href=#1197 id=1197 data-nosnippet>1197</a>    ///
+<a href=#1198 id=1198 data-nosnippet>1198</a>    /// `None` under v1: its answer is "everything declared, or the build
+<a href=#1199 id=1199 data-nosnippet>1199</a>    /// failed", so it has no partial surface to manifest. Producing one for v1
+<a href=#1200 id=1200 data-nosnippet>1200</a>    /// too is #719 §4 and follows this change.
+<a href=#1201 id=1201 data-nosnippet>1201</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#1202 id=1202 data-nosnippet>1202</a>    </span><span class="kw">pub fn </span>manifest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>prebindgen_registry_v2::Report&gt; {
+<a href=#1203 id=1203 data-nosnippet>1203</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.engine {
+<a href=#1204 id=1204 data-nosnippet>1204</a>            Engine::V1(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#1205 id=1205 data-nosnippet>1205</a>            Engine::V2(generation) =&gt; <span class="prelude-val">Some</span>(generation.report()),
+<a href=#1206 id=1206 data-nosnippet>1206</a>        }
+<a href=#1207 id=1207 data-nosnippet>1207</a>    }
+<a href=#1208 id=1208 data-nosnippet>1208</a>
+<a href=#1209 id=1209 data-nosnippet>1209</a>    <span class="doccomment">/// Write the manifest into `dir`, and print its summary as cargo warnings.
+<a href=#1210 id=1210 data-nosnippet>1210</a>    ///
+<a href=#1211 id=1211 data-nosnippet>1211</a>    /// Returns the paths written — empty under an engine that produces no
+<a href=#1212 id=1212 data-nosnippet>1212</a>    /// manifest, so a build script can call this unconditionally. It cannot ask
+<a href=#1213 id=1213 data-nosnippet>1213</a>    /// `cfg(feature = "v2")`: cargo passes a package's features to a build
+<a href=#1214 id=1214 data-nosnippet>1214</a>    /// script as environment variables, not as cfgs.
+<a href=#1215 id=1215 data-nosnippet>1215</a>    </span><span class="kw">pub fn </span>write_manifest(
+<a href=#1216 id=1216 data-nosnippet>1216</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1217 id=1217 data-nosnippet>1217</a>        dir: <span class="kw">impl </span>AsRef&lt;std::path::Path&gt;,
+<a href=#1218 id=1218 data-nosnippet>1218</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;std::path::PathBuf&gt;, prebindgen_registry::WriteRustError&gt; {
+<a href=#1219 id=1219 data-nosnippet>1219</a>        <span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#1220 id=1220 data-nosnippet>1220</a>        </span><span class="kw">if let </span>Engine::V2(generation) = <span class="kw-2">&amp;</span><span class="self">self</span>.engine {
+<a href=#1221 id=1221 data-nosnippet>1221</a>            <span class="kw">let </span>report = generation.report();
+<a href=#1222 id=1222 data-nosnippet>1222</a>            report.warn();
+<a href=#1223 id=1223 data-nosnippet>1223</a>            <span class="kw">return </span>report.write(dir).map_err(|error| {
+<a href=#1224 id=1224 data-nosnippet>1224</a>                prebindgen_registry::WriteRustError::Engine {
+<a href=#1225 id=1225 data-nosnippet>1225</a>                    pipeline: prebindgen_registry_v2::PIPELINE,
+<a href=#1226 id=1226 data-nosnippet>1226</a>                    message: error.to_string(),
+<a href=#1227 id=1227 data-nosnippet>1227</a>                }
+<a href=#1228 id=1228 data-nosnippet>1228</a>            });
+<a href=#1229 id=1229 data-nosnippet>1229</a>        }
+<a href=#1230 id=1230 data-nosnippet>1230</a>        <span class="kw">let _ </span>= dir;
+<a href=#1231 id=1231 data-nosnippet>1231</a>        <span class="prelude-val">Ok</span>(Vec::new())
+<a href=#1232 id=1232 data-nosnippet>1232</a>    }
+<a href=#1233 id=1233 data-nosnippet>1233</a>
+<a href=#1234 id=1234 data-nosnippet>1234</a>    <span class="doccomment">/// What the binding declared.
+<a href=#1235 id=1235 data-nosnippet>1235</a>    </span><span class="kw">pub fn </span>declarations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Declarations {
+<a href=#1236 id=1236 data-nosnippet>1236</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.decls
+<a href=#1237 id=1237 data-nosnippet>1237</a>    }
+<a href=#1238 id=1238 data-nosnippet>1238</a>
+<a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="doccomment">/// The immutable cross-artifact plan shared by Rust and Kotlin emission.
+<a href=#1240 id=1240 data-nosnippet>1240</a>    </span><span class="attr">#[cfg(test)]
+<a href=#1241 id=1241 data-nosnippet>1241</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>generation_plan(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>generation::JniGenerationPlan {
+<a href=#1242 id=1242 data-nosnippet>1242</a>        <span class="self">self</span>.decls
+<a href=#1243 id=1243 data-nosnippet>1243</a>            .generation
+<a href=#1244 id=1244 data-nosnippet>1244</a>            .as_deref()
+<a href=#1245 id=1245 data-nosnippet>1245</a>            .expect(<span class="string">"resolved JniGen has no frozen generation plan"</span>)
+<a href=#1246 id=1246 data-nosnippet>1246</a>    }
+<a href=#1247 id=1247 data-nosnippet>1247</a>}
+<a href=#1248 id=1248 data-nosnippet>1248</a>
+<a href=#1249 id=1249 data-nosnippet>1249</a><span class="doccomment">/// Everything a binding **declared**, once it is done declaring.
+<a href=#1250 id=1250 data-nosnippet>1250</a>///
+<a href=#1251 id=1251 data-nosnippet>1251</a>/// The read-only half of what used to be one `JniGenBuilder`. Splitting it is what
+<a href=#1252 id=1252 data-nosnippet>1252</a>/// keeps the phase separation now that a generator owns its own registry: before
+<a href=#1253 id=1253 data-nosnippet>1253</a>/// [#253](https://github.com/milyin/prebindgen/pull/253) a build script held a
+<a href=#1254 id=1254 data-nosnippet>1254</a>/// `RegistryBuilder` and then a `Registry`, and that type split *was* the
+<a href=#1255 id=1255 data-nosnippet>1255</a>/// enforcement. Once `JniGen::builder().source(..).build()` moved both inside the
+<a href=#1256 id=1256 data-nosnippet>1256</a>/// generator, the built object was left holding the builder — mutators and all.
+<a href=#1257 id=1257 data-nosnippet>1257</a>///
+<a href=#1258 id=1258 data-nosnippet>1258</a>/// So the mutators live on [`JniGenBuilder`] and nothing else, and this type — the
+<a href=#1259 id=1259 data-nosnippet>1259</a>/// one a [`JniGen`] keeps and every emitter reads — **has no `&amp;mut self` method at
+<a href=#1260 id=1260 data-nosnippet>1260</a>/// all**. Not "the obvious ones were removed": none, which
+<a href=#1261 id=1261 data-nosnippet>1261</a>/// `a_built_jnigen_exposes_no_mutation` checks by reading the source, because a
+<a href=#1262 id=1262 data-nosnippet>1262</a>/// one-line grep once missed a multi-line signature and let `Registry::supply`
+<a href=#1263 id=1263 data-nosnippet>1263</a>/// survive two commits that claimed it was gone.
+<a href=#1264 id=1264 data-nosnippet>1264</a></span><span class="attr">#[derive(Clone)]
+<a href=#1265 id=1265 data-nosnippet>1265</a></span><span class="kw">pub struct </span>Declarations {
+<a href=#1266 id=1266 data-nosnippet>1266</a>    <span class="doccomment">/// Single source of truth for the JVM/Kotlin namespace this binding
+<a href=#1267 id=1267 data-nosnippet>1267</a>    /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
+<a href=#1268 id=1268 data-nosnippet>1268</a>    /// Every derived form — slash-separated for `FindClass`
+<a href=#1269 id=1269 data-nosnippet>1269</a>    /// ([`Declarations::java_class_prefix`]), `_`-mangled for JNI extern idents,
+<a href=#1270 id=1270 data-nosnippet>1270</a>    /// dot-separated for Kotlin `package` declarations — is computed from this at
+<a href=#1271 id=1271 data-nosnippet>1271</a>    /// the point of use.
+<a href=#1272 id=1272 data-nosnippet>1272</a>    /// `pub(crate)`: consumers go through [`JniGenBuilder::set_package_prefix`],
+<a href=#1273 id=1273 data-nosnippet>1273</a>    /// whose trimming a direct field write would bypass.
+<a href=#1274 id=1274 data-nosnippet>1274</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) package: String,
+<a href=#1275 id=1275 data-nosnippet>1275</a>
+<a href=#1276 id=1276 data-nosnippet>1276</a>    <span class="doccomment">/// Mangler for top-level package function names. Receives the destination
+<a href=#1277 id=1277 data-nosnippet>1277</a>    /// package and camelCase Rust function name; default = identity.
+<a href=#1278 id=1278 data-nosnippet>1278</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fun_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
+<a href=#1279 id=1279 data-nosnippet>1279</a>    <span class="doccomment">/// Mangler for Kotlin ptr-class names declared via a
+<a href=#1280 id=1280 data-nosnippet>1280</a>    /// `PtrClassDecl`. Default = identity.
+<a href=#1281 id=1281 data-nosnippet>1281</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ptr_class_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
+<a href=#1282 id=1282 data-nosnippet>1282</a>    <span class="doccomment">/// Mangler for Kotlin data-class names declared via a
+<a href=#1283 id=1283 data-nosnippet>1283</a>    /// `DataClassDecl`. Default = identity.
+<a href=#1284 id=1284 data-nosnippet>1284</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) data_class_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
+<a href=#1285 id=1285 data-nosnippet>1285</a>    <span class="doccomment">/// Mangler for `EnumClassDecl`-declared C-like enum class
+<a href=#1286 id=1286 data-nosnippet>1286</a>    /// names. Default = identity.
+<a href=#1287 id=1287 data-nosnippet>1287</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) enum_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
+<a href=#1288 id=1288 data-nosnippet>1288</a>    <span class="doccomment">/// Method-name mangle hook ([`JniGenBuilder::set_method_name_mangle`]) — applied
+<a href=#1289 id=1289 data-nosnippet>1289</a>    /// to the camelCase Rust function name of every class method/factory
+<a href=#1290 id=1290 data-nosnippet>1290</a>    /// without a per-method `.name()`, with package and class context.
+<a href=#1291 id=1291 data-nosnippet>1291</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) method_name_mangle: <span class="prelude-ty">Option</span>&lt;MethodNameMangle&gt;,
+<a href=#1292 id=1292 data-nosnippet>1292</a>    <span class="doccomment">/// Mangler for the framework `JNINative` harness class name. Receives its
+<a href=#1293 id=1293 data-nosnippet>1293</a>    /// default class name; unset = identity.
+<a href=#1294 id=1294 data-nosnippet>1294</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) harness_name_mangle: <span class="prelude-ty">Option</span>&lt;HarnessNameMangle&gt;,
+<a href=#1295 id=1295 data-nosnippet>1295</a>    <span class="doccomment">/// Mangler turning a class name into its generated `.interface()` name.
+<a href=#1296 id=1296 data-nosnippet>1296</a>    /// Receives the target package and final class name; identity is forbidden
+<a href=#1297 id=1297 data-nosnippet>1297</a>    /// (a class and its interface can't share a name). Default when unset =
+<a href=#1298 id=1298 data-nosnippet>1298</a>    /// append `"Api"`.
+<a href=#1299 id=1299 data-nosnippet>1299</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) interface_name_mangle: <span class="prelude-ty">Option</span>&lt;NameMangle&gt;,
 <a href=#1300 id=1300 data-nosnippet>1300</a>
-<a href=#1301 id=1301 data-nosnippet>1301</a>    <span class="doccomment">/// Free-standing package-level wrappers, keyed by subpackage path
-<a href=#1302 id=1302 data-nosnippet>1302</a>    /// (relative to [`Self::package`], dot-separated; the empty key is the
-<a href=#1303 id=1303 data-nosnippet>1303</a>    /// base package itself). Populated by [`JniGenBuilder::package`], merging into
-<a href=#1304 id=1304 data-nosnippet>1304</a>    /// whatever the named subpackage already holds.
-<a href=#1305 id=1305 data-nosnippet>1305</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) packages: BTreeMap&lt;String, PackageConfig&gt;,
-<a href=#1306 id=1306 data-nosnippet>1306</a>
-<a href=#1307 id=1307 data-nosnippet>1307</a>    <span class="doccomment">/// Canonical single-value conversions ([`ConvertDecl`], accepted by
-<a href=#1308 id=1308 data-nosnippet>1308</a>    /// [`JniGenBuilder::convert`]), stored raw. Recipe compilation freezes
-<a href=#1309 id=1309 data-nosnippet>1309</a>    /// function/trait call policy and Flat representation/error readings;
-<a href=#1310 id=1310 data-nosnippet>1310</a>    /// final rendering spells those readings and qualifies their origins.
-<a href=#1311 id=1311 data-nosnippet>1311</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) convert_decls: Vec&lt;ConvertDecl&gt;,
-<a href=#1312 id=1312 data-nosnippet>1312</a>    <span class="doccomment">/// Every conversion this binding has compiled so far, keyed by crossing.
-<a href=#1313 id=1313 data-nosnippet>1313</a>    ///
-<a href=#1314 id=1314 data-nosnippet>1314</a>    /// What the emitters ask instead of the converter table. A table entry
-<a href=#1315 id=1315 data-nosnippet>1315</a>    /// carries one `destination`, the single wire type a conversion produces,
-<a href=#1316 id=1316 data-nosnippet>1316</a>    /// so it can answer only while a crossing occupies one wire value — and the
-<a href=#1317 id=1317 data-nosnippet>1317</a>    /// answer an emitter wants is this adapter's own fragment.
-<a href=#1318 id=1318 data-nosnippet>1318</a>    ///
-<a href=#1319 id=1319 data-nosnippet>1319</a>    /// Shared and interior-mutable because JniGen reads it **while** it is
-<a href=#1320 id=1320 data-nosnippet>1320</a>    /// being filled: unlike `prebindgen-c`, this adapter's emitters are also
-<a href=#1321 id=1321 data-nosnippet>1321</a>    /// its conversion builders, and the registry calls them from inside
-<a href=#1322 id=1322 data-nosnippet>1322</a>    /// `generate`. A conversion for one type is built out of the
-<a href=#1323 id=1323 data-nosnippet>1323</a>    /// conversions for its inners, which the resolver compiles first — the same
-<a href=#1324 id=1324 data-nosnippet>1324</a>    /// order that filled the converter table, so a fragment is there exactly
-<a href=#1325 id=1325 data-nosnippet>1325</a>    /// when a table entry would have been. Resolution drains it into
-<a href=#1326 id=1326 data-nosnippet>1326</a>    /// [`generation::JniGenerationPlan`]; writers and writer-facing lookups
-<a href=#1327 id=1327 data-nosnippet>1327</a>    /// cannot resume or mutate this store.
-<a href=#1328 id=1328 data-nosnippet>1328</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) compiled: std::rc::Rc&lt;
-<a href=#1329 id=1329 data-nosnippet>1329</a>        std::cell::RefCell&lt;prebindgen_registry::recipe::Compiled&lt;<span class="kw">crate</span>::jni::compile::JFrag&gt;&gt;,
-<a href=#1330 id=1330 data-nosnippet>1330</a>    &gt;,
-<a href=#1331 id=1331 data-nosnippet>1331</a>    <span class="doccomment">/// The recipe table and the site bindings this binding was built against.
-<a href=#1332 id=1332 data-nosnippet>1332</a>    ///
-<a href=#1333 id=1333 data-nosnippet>1333</a>    /// Kept beside the fragment store for the same reason it is: a plan is
-<a href=#1334 id=1334 data-nosnippet>1334</a>    /// compiled per **site**, and the sites are `fn_plan`'s to enumerate — a
-<a href=#1335 id=1335 data-nosnippet>1335</a>    /// constructor expansion contributes leaves no signature names. So the
-<a href=#1336 id=1336 data-nosnippet>1336</a>    /// compiler has to be resumable after `build_with` has returned, and these
-<a href=#1337 id=1337 data-nosnippet>1337</a>    /// are the two things `Compiler::resume` needs that the model does not
-<a href=#1338 id=1338 data-nosnippet>1338</a>    /// already carry.
-<a href=#1339 id=1339 data-nosnippet>1339</a>    ///
-<a href=#1340 id=1340 data-nosnippet>1340</a>    /// `None` only before the build fills them, which is before anything can
-<a href=#1341 id=1341 data-nosnippet>1341</a>    /// ask.
-<a href=#1342 id=1342 data-nosnippet>1342</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) tables: <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;Tables&gt;&gt;,
-<a href=#1343 id=1343 data-nosnippet>1343</a>
-<a href=#1344 id=1344 data-nosnippet>1344</a>    <span class="doccomment">/// When `true` (default), generated wrappers wrap each call that
-<a href=#1345 id=1345 data-nosnippet>1345</a>    /// touches an opaque handle in the per-call `withSortedHandleLocks`
-<a href=#1346 id=1346 data-nosnippet>1346</a>    /// scaffold (deadlock-safe N-ary monitor acquisition + atomic
-<a href=#1347 id=1347 data-nosnippet>1347</a>    /// consume). When `false`, the scaffold is omitted — wrappers emit
-<a href=#1348 id=1348 data-nosnippet>1348</a>    /// only the raw `ptr` read + closed-handle null-check + native call.
-<a href=#1349 id=1349 data-nosnippet>1349</a>    /// Toggled via [`JniGenBuilder::set_emit_handle_locks`].
-<a href=#1350 id=1350 data-nosnippet>1350</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) emit_handle_locks: bool,
-<a href=#1351 id=1351 data-nosnippet>1351</a>
-<a href=#1352 id=1352 data-nosnippet>1352</a>    <span class="doccomment">/// Optional Kotlin statement(s) to place inside an `init { … }` block of
-<a href=#1353 id=1353 data-nosnippet>1353</a>    /// the generated centralized externs object (`JNINative`). Set via
-<a href=#1354 id=1354 data-nosnippet>1354</a>    /// [`JniGenBuilder::set_jni_native_init`]. Every generated native call routes
-<a href=#1355 id=1355 data-nosnippet>1355</a>    /// through that object, so its `&lt;clinit&gt;` is the single point at which a
-<a href=#1356 id=1356 data-nosnippet>1356</a>    /// consumer can trigger native-library loading (e.g.
-<a href=#1357 id=1357 data-nosnippet>1357</a>    /// `"io.zenoh.jni.NativeLibrary.ensureLoaded()"`). `None` (default) emits no
-<a href=#1358 id=1358 data-nosnippet>1358</a>    /// init block — loading stays the consumer's responsibility.
-<a href=#1359 id=1359 data-nosnippet>1359</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) jni_native_init: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#1360 id=1360 data-nosnippet>1360</a>
-<a href=#1361 id=1361 data-nosnippet>1361</a>    <span class="doccomment">/// The decompositions this binding expects the row differential NOT to
-<a href=#1362 id=1362 data-nosnippet>1362</a>    /// compare, each with the reason — see `Declarations::check_unfold_parity`.
-<a href=#1363 id=1363 data-nosnippet>1363</a>    ///
-<a href=#1364 id=1364 data-nosnippet>1364</a>    /// Temporary, and deleted with the differential. Stated rather than
-<a href=#1365 id=1365 data-nosnippet>1365</a>    /// reported so that a decomposition quietly leaving the comparison fails
-<a href=#1366 id=1366 data-nosnippet>1366</a>    /// the build: the check exists to catch the rows and the decomposition
-<a href=#1367 id=1367 data-nosnippet>1367</a>    /// disagreeing, and one that compares nothing agrees with everything.
-<a href=#1368 id=1368 data-nosnippet>1368</a>    ///
-<a href=#1369 id=1369 data-nosnippet>1369</a>    /// `Some(vec![])` by default, so a binding that states nothing is held to
-<a href=#1370 id=1370 data-nosnippet>1370</a>    /// comparing everything. `None` only under `cfg(test)`, where a fixture
-<a href=#1371 id=1371 data-nosnippet>1371</a>    /// exercises one shape and has no reach worth holding.
-<a href=#1372 id=1372 data-nosnippet>1372</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) parity_skips: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
-<a href=#1373 id=1373 data-nosnippet>1373</a>
-<a href=#1374 id=1374 data-nosnippet>1374</a>    <span class="doccomment">/// How many decompositions this binding expects the differential to
-<a href=#1375 id=1375 data-nosnippet>1375</a>    /// COMPARE — see `Declarations::check_unfold_parity`.
-<a href=#1376 id=1376 data-nosnippet>1376</a>    ///
-<a href=#1377 id=1377 data-nosnippet>1377</a>    /// The skip list names what left the comparison, which says nothing about
-<a href=#1378 id=1378 data-nosnippet>1378</a>    /// a decomposition leaving the population: one that stops being declared
-<a href=#1379 id=1379 data-nosnippet>1379</a>    /// contributes to neither side and the set is unchanged. This is the other
-<a href=#1380 id=1380 data-nosnippet>1380</a>    /// half of the partition, and the two move in opposite directions as
-<a href=#1381 id=1381 data-nosnippet>1381</a>    /// #701's step 3 lands its bindings.
-<a href=#1382 id=1382 data-nosnippet>1382</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) parity_compared: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-<a href=#1383 id=1383 data-nosnippet>1383</a>
-<a href=#1384 id=1384 data-nosnippet>1384</a>    <span class="doccomment">/// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
-<a href=#1385 id=1385 data-nosnippet>1385</a>    /// [`JniGenBuilder::expand`]), stored raw — merged into the expansion set
-<a href=#1386 id=1386 data-nosnippet>1386</a>    /// at the point of use so declarations stay order-independent.
-<a href=#1387 id=1387 data-nosnippet>1387</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) param_expand_decls: Vec&lt;ExpandParamDecl&gt;,
-<a href=#1388 id=1388 data-nosnippet>1388</a>
-<a href=#1389 id=1389 data-nosnippet>1389</a>    <span class="doccomment">/// Type-level default output boundaries ([`ExpandReturnDecl`], accepted
-<a href=#1390 id=1390 data-nosnippet>1390</a>    /// by [`JniGenBuilder::expand`]), stored raw — field names (member
-<a href=#1391 id=1391 data-nosnippet>1391</a>    /// inheritance) resolve at the point of use so declarations stay
-<a href=#1392 id=1392 data-nosnippet>1392</a>    /// order-independent.
-<a href=#1393 id=1393 data-nosnippet>1393</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) return_expand_decls: Vec&lt;ExpandReturnDecl&gt;,
-<a href=#1394 id=1394 data-nosnippet>1394</a>
-<a href=#1395 id=1395 data-nosnippet>1395</a>    <span class="doccomment">/// Per-fn input overrides ([`FunctionDecl::expand_param`]): the fn ident,
-<a href=#1396 id=1396 data-nosnippet>1396</a>    /// the parameter name, and the decl — stored raw like the type-level
-<a href=#1397 id=1397 data-nosnippet>1397</a>    /// decls; cross-checked and lowered in `core/expand.rs`'s `apply`.
-<a href=#1398 id=1398 data-nosnippet>1398</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_param_expands: Vec&lt;(syn::Ident, String, ExpandParamDecl)&gt;,
-<a href=#1399 id=1399 data-nosnippet>1399</a>
-<a href=#1400 id=1400 data-nosnippet>1400</a>    <span class="doccomment">/// Per-fn output overrides ([`FunctionDecl::expand_return`]): the fn
-<a href=#1401 id=1401 data-nosnippet>1401</a>    /// ident and the decl — stored raw; cross-checked and lowered in
-<a href=#1402 id=1402 data-nosnippet>1402</a>    /// `core/unfold.rs`'s `apply`.
-<a href=#1403 id=1403 data-nosnippet>1403</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_return_expands: Vec&lt;(syn::Ident, ExpandReturnDecl)&gt;,
-<a href=#1404 id=1404 data-nosnippet>1404</a>
-<a href=#1405 id=1405 data-nosnippet>1405</a>    <span class="doccomment">/// Per-fn split requests ([`FunctionDecl::split_on_param`]): the fn ident
-<a href=#1406 id=1406 data-nosnippet>1406</a>    /// and the parameter name whose variants get idiomatic typed overloads
-<a href=#1407 id=1407 data-nosnippet>1407</a>    /// (#52). Consumed by `overloads::render_param_overloads`.
-<a href=#1408 id=1408 data-nosnippet>1408</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_split_params: Vec&lt;(syn::Ident, String)&gt;,
-<a href=#1409 id=1409 data-nosnippet>1409</a>
-<a href=#1410 id=1410 data-nosnippet>1410</a>    <span class="doccomment">/// Class members (funs / constructors) attached to a declared class via
-<a href=#1411 id=1411 data-nosnippet>1411</a>    /// its decl's `.method()`/`.constructor()`, keyed by the class's canonical
-<a href=#1412 id=1412 data-nosnippet>1412</a>    /// Rust type. Supplies the instance-method / companion-factory emission
-<a href=#1413 id=1413 data-nosnippet>1413</a>    /// and the receiver-skip set for input-flattening (see [`ClassMember`]).
-<a href=#1414 id=1414 data-nosnippet>1414</a>    /// Insertion order within a class is preserved (the Vec); class emission
-<a href=#1415 id=1415 data-nosnippet>1415</a>    /// iterates `types` by sorted key, so map order is irrelevant.
-<a href=#1416 id=1416 data-nosnippet>1416</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) class_members: HashMap&lt;TypeKey, Vec&lt;ClassMember&gt;&gt;,
-<a href=#1417 id=1417 data-nosnippet>1417</a>
-<a href=#1418 id=1418 data-nosnippet>1418</a>    <span class="doccomment">/// `#[prebindgen]` fns the binding deliberately does NOT wrap, declared
-<a href=#1419 id=1419 data-nosnippet>1419</a>    /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_functions`]:
-<a href=#1420 id=1420 data-nosnippet>1420</a>    /// suppresses the registry's per-item "skipping undeclared" warning
-<a href=#1421 id=1421 data-nosnippet>1421</a>    /// without emitting anything.
-<a href=#1422 id=1422 data-nosnippet>1422</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_fns: std::collections::HashSet&lt;syn::Ident&gt;,
-<a href=#1423 id=1423 data-nosnippet>1423</a>
-<a href=#1424 id=1424 data-nosnippet>1424</a>    <span class="doccomment">/// Bulk name-family ignore predicates, declared via [`JniGenBuilder::ignore`] +
-<a href=#1425 id=1425 data-nosnippet>1425</a>    /// [`matching`](crate::matching). Backs
-<a href=#1426 id=1426 data-nosnippet>1426</a>    /// [`Prebindgen::ignored_name_predicates`]: every undeclared item
-<a href=#1427 id=1427 data-nosnippet>1427</a>    /// (fn/type/const) whose name matches is an acknowledged skip.
-<a href=#1428 id=1428 data-nosnippet>1428</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_name_predicates: Vec&lt;prebindgen_registry::NamePredicate&gt;,
+<a href=#1301 id=1301 data-nosnippet>1301</a>    <span class="doccomment">/// Structured per-type configuration keyed by canonical Rust type.
+<a href=#1302 id=1302 data-nosnippet>1302</a>    /// One entry per declared class; populated when accepting a `ClassDecl`,
+<a href=#1303 id=1303 data-nosnippet>1303</a>    /// through the table's single writer `JniGenBuilder::register_class` — so
+<a href=#1304 id=1304 data-nosnippet>1304</a>    /// presence here *is* "declared as a class", and each entry's
+<a href=#1305 id=1305 data-nosnippet>1305</a>    /// [`TypeConfig::kind`] is the one representation of which declarator it
+<a href=#1306 id=1306 data-nosnippet>1306</a>    /// came from. Also holds the raw [`NameSpec`] (Kotlin FQNs are
+<a href=#1307 id=1307 data-nosnippet>1307</a>    /// derived from it on read via [`JniGenBuilder::kotlin_fqn`] /
+<a href=#1308 id=1308 data-nosnippet>1308</a>    /// [`JniGenBuilder::fqn_of`]). Terminal dispatch order is opaque → enum →
+<a href=#1309 id=1309 data-nosnippet>1309</a>    /// `convert!` → primitive → struct; see
+<a href=#1310 id=1310 data-nosnippet>1310</a>    /// [`JniGenBuilder::select_input_type`](crate::JniGenBuilder)'s selector.
+<a href=#1311 id=1311 data-nosnippet>1311</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) types: HashMap&lt;TypeKey, TypeConfig&gt;,
+<a href=#1312 id=1312 data-nosnippet>1312</a>
+<a href=#1313 id=1313 data-nosnippet>1313</a>    <span class="doccomment">/// Free-standing package-level wrappers, keyed by subpackage path
+<a href=#1314 id=1314 data-nosnippet>1314</a>    /// (relative to [`Self::package`], dot-separated; the empty key is the
+<a href=#1315 id=1315 data-nosnippet>1315</a>    /// base package itself). Populated by [`JniGenBuilder::package`], merging into
+<a href=#1316 id=1316 data-nosnippet>1316</a>    /// whatever the named subpackage already holds.
+<a href=#1317 id=1317 data-nosnippet>1317</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) packages: BTreeMap&lt;String, PackageConfig&gt;,
+<a href=#1318 id=1318 data-nosnippet>1318</a>
+<a href=#1319 id=1319 data-nosnippet>1319</a>    <span class="doccomment">/// Canonical single-value conversions ([`ConvertDecl`], accepted by
+<a href=#1320 id=1320 data-nosnippet>1320</a>    /// [`JniGenBuilder::convert`]), stored raw. Recipe compilation freezes
+<a href=#1321 id=1321 data-nosnippet>1321</a>    /// function/trait call policy and Flat representation/error readings;
+<a href=#1322 id=1322 data-nosnippet>1322</a>    /// final rendering spells those readings and qualifies their origins.
+<a href=#1323 id=1323 data-nosnippet>1323</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) convert_decls: Vec&lt;ConvertDecl&gt;,
+<a href=#1324 id=1324 data-nosnippet>1324</a>    <span class="doccomment">/// Every conversion this binding has compiled so far, keyed by crossing.
+<a href=#1325 id=1325 data-nosnippet>1325</a>    ///
+<a href=#1326 id=1326 data-nosnippet>1326</a>    /// What the emitters ask instead of the converter table. A table entry
+<a href=#1327 id=1327 data-nosnippet>1327</a>    /// carries one `destination`, the single wire type a conversion produces,
+<a href=#1328 id=1328 data-nosnippet>1328</a>    /// so it can answer only while a crossing occupies one wire value — and the
+<a href=#1329 id=1329 data-nosnippet>1329</a>    /// answer an emitter wants is this adapter's own fragment.
+<a href=#1330 id=1330 data-nosnippet>1330</a>    ///
+<a href=#1331 id=1331 data-nosnippet>1331</a>    /// Shared and interior-mutable because JniGen reads it **while** it is
+<a href=#1332 id=1332 data-nosnippet>1332</a>    /// being filled: unlike `prebindgen-c`, this adapter's emitters are also
+<a href=#1333 id=1333 data-nosnippet>1333</a>    /// its conversion builders, and the registry calls them from inside
+<a href=#1334 id=1334 data-nosnippet>1334</a>    /// `generate`. A conversion for one type is built out of the
+<a href=#1335 id=1335 data-nosnippet>1335</a>    /// conversions for its inners, which the resolver compiles first — the same
+<a href=#1336 id=1336 data-nosnippet>1336</a>    /// order that filled the converter table, so a fragment is there exactly
+<a href=#1337 id=1337 data-nosnippet>1337</a>    /// when a table entry would have been. Resolution drains it into
+<a href=#1338 id=1338 data-nosnippet>1338</a>    /// [`generation::JniGenerationPlan`]; writers and writer-facing lookups
+<a href=#1339 id=1339 data-nosnippet>1339</a>    /// cannot resume or mutate this store.
+<a href=#1340 id=1340 data-nosnippet>1340</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) compiled: std::rc::Rc&lt;
+<a href=#1341 id=1341 data-nosnippet>1341</a>        std::cell::RefCell&lt;prebindgen_registry::recipe::Compiled&lt;<span class="kw">crate</span>::jni::compile::JFrag&gt;&gt;,
+<a href=#1342 id=1342 data-nosnippet>1342</a>    &gt;,
+<a href=#1343 id=1343 data-nosnippet>1343</a>    <span class="doccomment">/// The recipe table and the site bindings this binding was built against.
+<a href=#1344 id=1344 data-nosnippet>1344</a>    ///
+<a href=#1345 id=1345 data-nosnippet>1345</a>    /// Kept beside the fragment store for the same reason it is: a plan is
+<a href=#1346 id=1346 data-nosnippet>1346</a>    /// compiled per **site**, and the sites are `fn_plan`'s to enumerate — a
+<a href=#1347 id=1347 data-nosnippet>1347</a>    /// constructor expansion contributes leaves no signature names. So the
+<a href=#1348 id=1348 data-nosnippet>1348</a>    /// compiler has to be resumable after `build_with` has returned, and these
+<a href=#1349 id=1349 data-nosnippet>1349</a>    /// are the two things `Compiler::resume` needs that the model does not
+<a href=#1350 id=1350 data-nosnippet>1350</a>    /// already carry.
+<a href=#1351 id=1351 data-nosnippet>1351</a>    ///
+<a href=#1352 id=1352 data-nosnippet>1352</a>    /// `None` only before the build fills them, which is before anything can
+<a href=#1353 id=1353 data-nosnippet>1353</a>    /// ask.
+<a href=#1354 id=1354 data-nosnippet>1354</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) tables: <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;Tables&gt;&gt;,
+<a href=#1355 id=1355 data-nosnippet>1355</a>
+<a href=#1356 id=1356 data-nosnippet>1356</a>    <span class="doccomment">/// When `true` (default), generated wrappers wrap each call that
+<a href=#1357 id=1357 data-nosnippet>1357</a>    /// touches an opaque handle in the per-call `withSortedHandleLocks`
+<a href=#1358 id=1358 data-nosnippet>1358</a>    /// scaffold (deadlock-safe N-ary monitor acquisition + atomic
+<a href=#1359 id=1359 data-nosnippet>1359</a>    /// consume). When `false`, the scaffold is omitted — wrappers emit
+<a href=#1360 id=1360 data-nosnippet>1360</a>    /// only the raw `ptr` read + closed-handle null-check + native call.
+<a href=#1361 id=1361 data-nosnippet>1361</a>    /// Toggled via [`JniGenBuilder::set_emit_handle_locks`].
+<a href=#1362 id=1362 data-nosnippet>1362</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) emit_handle_locks: bool,
+<a href=#1363 id=1363 data-nosnippet>1363</a>
+<a href=#1364 id=1364 data-nosnippet>1364</a>    <span class="doccomment">/// Optional Kotlin statement(s) to place inside an `init { … }` block of
+<a href=#1365 id=1365 data-nosnippet>1365</a>    /// the generated centralized externs object (`JNINative`). Set via
+<a href=#1366 id=1366 data-nosnippet>1366</a>    /// [`JniGenBuilder::set_jni_native_init`]. Every generated native call routes
+<a href=#1367 id=1367 data-nosnippet>1367</a>    /// through that object, so its `&lt;clinit&gt;` is the single point at which a
+<a href=#1368 id=1368 data-nosnippet>1368</a>    /// consumer can trigger native-library loading (e.g.
+<a href=#1369 id=1369 data-nosnippet>1369</a>    /// `"io.zenoh.jni.NativeLibrary.ensureLoaded()"`). `None` (default) emits no
+<a href=#1370 id=1370 data-nosnippet>1370</a>    /// init block — loading stays the consumer's responsibility.
+<a href=#1371 id=1371 data-nosnippet>1371</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) jni_native_init: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#1372 id=1372 data-nosnippet>1372</a>
+<a href=#1373 id=1373 data-nosnippet>1373</a>    <span class="doccomment">/// The decompositions this binding expects the row differential NOT to
+<a href=#1374 id=1374 data-nosnippet>1374</a>    /// compare, each with the reason — see `Declarations::check_unfold_parity`.
+<a href=#1375 id=1375 data-nosnippet>1375</a>    ///
+<a href=#1376 id=1376 data-nosnippet>1376</a>    /// Temporary, and deleted with the differential. Stated rather than
+<a href=#1377 id=1377 data-nosnippet>1377</a>    /// reported so that a decomposition quietly leaving the comparison fails
+<a href=#1378 id=1378 data-nosnippet>1378</a>    /// the build: the check exists to catch the rows and the decomposition
+<a href=#1379 id=1379 data-nosnippet>1379</a>    /// disagreeing, and one that compares nothing agrees with everything.
+<a href=#1380 id=1380 data-nosnippet>1380</a>    ///
+<a href=#1381 id=1381 data-nosnippet>1381</a>    /// `Some(vec![])` by default, so a binding that states nothing is held to
+<a href=#1382 id=1382 data-nosnippet>1382</a>    /// comparing everything. `None` only under `cfg(test)`, where a fixture
+<a href=#1383 id=1383 data-nosnippet>1383</a>    /// exercises one shape and has no reach worth holding.
+<a href=#1384 id=1384 data-nosnippet>1384</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) parity_skips: <span class="prelude-ty">Option</span>&lt;Vec&lt;String&gt;&gt;,
+<a href=#1385 id=1385 data-nosnippet>1385</a>
+<a href=#1386 id=1386 data-nosnippet>1386</a>    <span class="doccomment">/// How many decompositions this binding expects the differential to
+<a href=#1387 id=1387 data-nosnippet>1387</a>    /// COMPARE — see `Declarations::check_unfold_parity`.
+<a href=#1388 id=1388 data-nosnippet>1388</a>    ///
+<a href=#1389 id=1389 data-nosnippet>1389</a>    /// The skip list names what left the comparison, which says nothing about
+<a href=#1390 id=1390 data-nosnippet>1390</a>    /// a decomposition leaving the population: one that stops being declared
+<a href=#1391 id=1391 data-nosnippet>1391</a>    /// contributes to neither side and the set is unchanged. This is the other
+<a href=#1392 id=1392 data-nosnippet>1392</a>    /// half of the partition, and the two move in opposite directions as
+<a href=#1393 id=1393 data-nosnippet>1393</a>    /// #701's step 3 lands its bindings.
+<a href=#1394 id=1394 data-nosnippet>1394</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) parity_compared: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+<a href=#1395 id=1395 data-nosnippet>1395</a>
+<a href=#1396 id=1396 data-nosnippet>1396</a>    <span class="doccomment">/// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
+<a href=#1397 id=1397 data-nosnippet>1397</a>    /// [`JniGenBuilder::expand`]), stored raw — merged into the expansion set
+<a href=#1398 id=1398 data-nosnippet>1398</a>    /// at the point of use so declarations stay order-independent.
+<a href=#1399 id=1399 data-nosnippet>1399</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) param_expand_decls: Vec&lt;ExpandParamDecl&gt;,
+<a href=#1400 id=1400 data-nosnippet>1400</a>
+<a href=#1401 id=1401 data-nosnippet>1401</a>    <span class="doccomment">/// Type-level default output boundaries ([`ExpandReturnDecl`], accepted
+<a href=#1402 id=1402 data-nosnippet>1402</a>    /// by [`JniGenBuilder::expand`]), stored raw — field names (member
+<a href=#1403 id=1403 data-nosnippet>1403</a>    /// inheritance) resolve at the point of use so declarations stay
+<a href=#1404 id=1404 data-nosnippet>1404</a>    /// order-independent.
+<a href=#1405 id=1405 data-nosnippet>1405</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) return_expand_decls: Vec&lt;ExpandReturnDecl&gt;,
+<a href=#1406 id=1406 data-nosnippet>1406</a>
+<a href=#1407 id=1407 data-nosnippet>1407</a>    <span class="doccomment">/// Per-fn input overrides ([`FunctionDecl::expand_param`]): the fn ident,
+<a href=#1408 id=1408 data-nosnippet>1408</a>    /// the parameter name, and the decl — stored raw like the type-level
+<a href=#1409 id=1409 data-nosnippet>1409</a>    /// decls; cross-checked and lowered in `core/expand.rs`'s `apply`.
+<a href=#1410 id=1410 data-nosnippet>1410</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_param_expands: Vec&lt;(syn::Ident, String, ExpandParamDecl)&gt;,
+<a href=#1411 id=1411 data-nosnippet>1411</a>
+<a href=#1412 id=1412 data-nosnippet>1412</a>    <span class="doccomment">/// Per-fn output overrides ([`FunctionDecl::expand_return`]): the fn
+<a href=#1413 id=1413 data-nosnippet>1413</a>    /// ident and the decl — stored raw; cross-checked and lowered in
+<a href=#1414 id=1414 data-nosnippet>1414</a>    /// `core/unfold.rs`'s `apply`.
+<a href=#1415 id=1415 data-nosnippet>1415</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_return_expands: Vec&lt;(syn::Ident, ExpandReturnDecl)&gt;,
+<a href=#1416 id=1416 data-nosnippet>1416</a>
+<a href=#1417 id=1417 data-nosnippet>1417</a>    <span class="doccomment">/// Per-fn split requests ([`FunctionDecl::split_on_param`]): the fn ident
+<a href=#1418 id=1418 data-nosnippet>1418</a>    /// and the parameter name whose variants get idiomatic typed overloads
+<a href=#1419 id=1419 data-nosnippet>1419</a>    /// (#52). Consumed by `overloads::render_param_overloads`.
+<a href=#1420 id=1420 data-nosnippet>1420</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_split_params: Vec&lt;(syn::Ident, String)&gt;,
+<a href=#1421 id=1421 data-nosnippet>1421</a>
+<a href=#1422 id=1422 data-nosnippet>1422</a>    <span class="doccomment">/// Class members (funs / constructors) attached to a declared class via
+<a href=#1423 id=1423 data-nosnippet>1423</a>    /// its decl's `.method()`/`.constructor()`, keyed by the class's canonical
+<a href=#1424 id=1424 data-nosnippet>1424</a>    /// Rust type. Supplies the instance-method / companion-factory emission
+<a href=#1425 id=1425 data-nosnippet>1425</a>    /// and the receiver-skip set for input-flattening (see [`ClassMember`]).
+<a href=#1426 id=1426 data-nosnippet>1426</a>    /// Insertion order within a class is preserved (the Vec); class emission
+<a href=#1427 id=1427 data-nosnippet>1427</a>    /// iterates `types` by sorted key, so map order is irrelevant.
+<a href=#1428 id=1428 data-nosnippet>1428</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) class_members: HashMap&lt;TypeKey, Vec&lt;ClassMember&gt;&gt;,
 <a href=#1429 id=1429 data-nosnippet>1429</a>
-<a href=#1430 id=1430 data-nosnippet>1430</a>    <span class="doccomment">/// `#[prebindgen]` types the binding deliberately does NOT declare,
-<a href=#1431 id=1431 data-nosnippet>1431</a>    /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_types`].
-<a href=#1432 id=1432 data-nosnippet>1432</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_class_types: std::collections::HashSet&lt;TypeKey&gt;,
-<a href=#1433 id=1433 data-nosnippet>1433</a>
-<a href=#1434 id=1434 data-nosnippet>1434</a>    <span class="doccomment">/// `#[prebindgen]` consts the binding deliberately does NOT declare,
-<a href=#1435 id=1435 data-nosnippet>1435</a>    /// via [`JniGenBuilder::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
-<a href=#1436 id=1436 data-nosnippet>1436</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_const_idents: std::collections::HashSet&lt;syn::Ident&gt;,
-<a href=#1437 id=1437 data-nosnippet>1437</a>    <span class="doccomment">/// Binding-local fns declared via path-built [`fun!`](prebindgen_registry::fun) +
-<a href=#1438 id=1438 data-nosnippet>1438</a>    /// [`FunctionDecl::sig`]: `(fn ident = path last segment, declared path,
-<a href=#1439 id=1439 data-nosnippet>1439</a>    /// stated signature)`. Synthesized into registry entries by the
-<a href=#1440 id=1440 data-nosnippet>1440</a>    /// [`Prebindgen::local_functions`] pre-pass.
-<a href=#1441 id=1441 data-nosnippet>1441</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) local_fns: Vec&lt;(syn::Ident, syn::Path, syn::Signature)&gt;,
-<a href=#1442 id=1442 data-nosnippet>1442</a>
-<a href=#1443 id=1443 data-nosnippet>1443</a>    <span class="doccomment">/// Memoized callback-interface specs, one per [`SpecKey`] identity —
-<a href=#1444 id=1444 data-nosnippet>1444</a>    /// populated lazily via [`JniGenBuilder::iface_spec`] (first touch may be the
-<a href=#1445 id=1445 data-nosnippet>1445</a>    /// resolve-time trampoline, which runs before any function plan exists)
-<a href=#1446 id=1446 data-nosnippet>1446</a>    /// and shared by every later consumer, so the FQN/descriptor pair cannot
-<a href=#1447 id=1447 data-nosnippet>1447</a>    /// drift between the Rust, Kotlin-wrapper, and interface-declaration
-<a href=#1448 id=1448 data-nosnippet>1448</a>    /// tiers (issue #107). Not a setting: derived state, keyed entirely by
-<a href=#1449 id=1449 data-nosnippet>1449</a>    /// `(self, registry)` — cloning the builder just clones the cache.
-<a href=#1450 id=1450 data-nosnippet>1450</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) iface_specs:
-<a href=#1451 id=1451 data-nosnippet>1451</a>        std::cell::RefCell&lt;std::collections::BTreeMap&lt;SpecKey, std::sync::Arc&lt;IfaceSpec&gt;&gt;&gt;,
-<a href=#1452 id=1452 data-nosnippet>1452</a>
-<a href=#1453 id=1453 data-nosnippet>1453</a>    <span class="doccomment">/// Readings an interface param resolved when its spec was built, keyed by
-<a href=#1454 id=1454 data-nosnippet>1454</a>    /// the identity text the param carries.
-<a href=#1455 id=1455 data-nosnippet>1455</a>    ///
-<a href=#1456 id=1456 data-nosnippet>1456</a>    /// `IfaceParam::reading` is text because a spec is memoized behind an
-<a href=#1457 id=1457 data-nosnippet>1457</a>    /// `Arc` and a `TypeRef` carries non-`Send` interiors, so the resolved
-<a href=#1458 id=1458 data-nosnippet>1458</a>    /// answer cannot live in the spec. It lives here instead, outside the
-<a href=#1459 id=1459 data-nosnippet>1459</a>    /// `Arc`, which is what lets a renderer ask for the model's answer without
-<a href=#1460 id=1460 data-nosnippet>1460</a>    /// holding a `Conversions` (#613 step 7).
-<a href=#1461 id=1461 data-nosnippet>1461</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) frozen_readings:
-<a href=#1462 id=1462 data-nosnippet>1462</a>        std::cell::RefCell&lt;std::collections::BTreeMap&lt;String, prebindgen_registry::flat::TypeRef&gt;&gt;,
-<a href=#1463 id=1463 data-nosnippet>1463</a>
-<a href=#1464 id=1464 data-nosnippet>1464</a>    <span class="doccomment">/// Memoized per-function lowered plans, one [`JniFunctionPlan`] per bound
-<a href=#1465 id=1465 data-nosnippet>1465</a>    /// function/const-getter ident — the single lowering shared by validation
-<a href=#1466 id=1466 data-nosnippet>1466</a>    /// and every emitter (Rust extern, JNINative extern, Kotlin wrapper,
-<a href=#1467 id=1467 data-nosnippet>1467</a>    /// report), so a function's binding is derived ONCE per generation
-<a href=#1468 id=1468 data-nosnippet>1468</a>    /// instead of ~8× (issue #90's deferred "build the plan once and store
-<a href=#1469 id=1469 data-nosnippet>1469</a>    /// it" — `fn_plan.rs`). Populated eagerly at `resolve` by
-<a href=#1470 id=1470 data-nosnippet>1470</a>    /// [`validate_bindings`], which builds every declared function's plan for
-<a href=#1471 id=1471 data-nosnippet>1471</a>    /// the collision tables; the writers then read it. Same interior-mutable
-<a href=#1472 id=1472 data-nosnippet>1472</a>    /// "derived state, keyed by `(self, registry)`" contract as
-<a href=#1473 id=1473 data-nosnippet>1473</a>    /// [`Self::iface_specs`].
-<a href=#1474 id=1474 data-nosnippet>1474</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_plans: std::cell::RefCell&lt;HashMap&lt;syn::Ident, std::rc::Rc&lt;JniFunctionPlan&gt;&gt;&gt;,
+<a href=#1430 id=1430 data-nosnippet>1430</a>    <span class="doccomment">/// `#[prebindgen]` fns the binding deliberately does NOT wrap, declared
+<a href=#1431 id=1431 data-nosnippet>1431</a>    /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_functions`]:
+<a href=#1432 id=1432 data-nosnippet>1432</a>    /// suppresses the registry's per-item "skipping undeclared" warning
+<a href=#1433 id=1433 data-nosnippet>1433</a>    /// without emitting anything.
+<a href=#1434 id=1434 data-nosnippet>1434</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_fns: std::collections::HashSet&lt;syn::Ident&gt;,
+<a href=#1435 id=1435 data-nosnippet>1435</a>
+<a href=#1436 id=1436 data-nosnippet>1436</a>    <span class="doccomment">/// Bulk name-family ignore predicates, declared via [`JniGenBuilder::ignore`] +
+<a href=#1437 id=1437 data-nosnippet>1437</a>    /// [`matching`](crate::matching). Backs
+<a href=#1438 id=1438 data-nosnippet>1438</a>    /// [`Prebindgen::ignored_name_predicates`]: every undeclared item
+<a href=#1439 id=1439 data-nosnippet>1439</a>    /// (fn/type/const) whose name matches is an acknowledged skip.
+<a href=#1440 id=1440 data-nosnippet>1440</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_name_predicates: Vec&lt;prebindgen_registry::NamePredicate&gt;,
+<a href=#1441 id=1441 data-nosnippet>1441</a>
+<a href=#1442 id=1442 data-nosnippet>1442</a>    <span class="doccomment">/// `#[prebindgen]` types the binding deliberately does NOT declare,
+<a href=#1443 id=1443 data-nosnippet>1443</a>    /// via [`JniGenBuilder::ignore`]. Backs [`Prebindgen::ignored_types`].
+<a href=#1444 id=1444 data-nosnippet>1444</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_class_types: std::collections::HashSet&lt;TypeKey&gt;,
+<a href=#1445 id=1445 data-nosnippet>1445</a>
+<a href=#1446 id=1446 data-nosnippet>1446</a>    <span class="doccomment">/// `#[prebindgen]` consts the binding deliberately does NOT declare,
+<a href=#1447 id=1447 data-nosnippet>1447</a>    /// via [`JniGenBuilder::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
+<a href=#1448 id=1448 data-nosnippet>1448</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) ignored_const_idents: std::collections::HashSet&lt;syn::Ident&gt;,
+<a href=#1449 id=1449 data-nosnippet>1449</a>    <span class="doccomment">/// Binding-local fns declared via path-built [`fun!`](prebindgen_registry::fun) +
+<a href=#1450 id=1450 data-nosnippet>1450</a>    /// [`FunctionDecl::sig`]: `(fn ident = path last segment, declared path,
+<a href=#1451 id=1451 data-nosnippet>1451</a>    /// stated signature)`. Synthesized into registry entries by the
+<a href=#1452 id=1452 data-nosnippet>1452</a>    /// [`Prebindgen::local_functions`] pre-pass.
+<a href=#1453 id=1453 data-nosnippet>1453</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) local_fns: Vec&lt;(syn::Ident, syn::Path, syn::Signature)&gt;,
+<a href=#1454 id=1454 data-nosnippet>1454</a>
+<a href=#1455 id=1455 data-nosnippet>1455</a>    <span class="doccomment">/// Memoized callback-interface specs, one per [`SpecKey`] identity —
+<a href=#1456 id=1456 data-nosnippet>1456</a>    /// populated lazily via [`JniGenBuilder::iface_spec`] (first touch may be the
+<a href=#1457 id=1457 data-nosnippet>1457</a>    /// resolve-time trampoline, which runs before any function plan exists)
+<a href=#1458 id=1458 data-nosnippet>1458</a>    /// and shared by every later consumer, so the FQN/descriptor pair cannot
+<a href=#1459 id=1459 data-nosnippet>1459</a>    /// drift between the Rust, Kotlin-wrapper, and interface-declaration
+<a href=#1460 id=1460 data-nosnippet>1460</a>    /// tiers (issue #107). Not a setting: derived state, keyed entirely by
+<a href=#1461 id=1461 data-nosnippet>1461</a>    /// `(self, registry)` — cloning the builder just clones the cache.
+<a href=#1462 id=1462 data-nosnippet>1462</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) iface_specs:
+<a href=#1463 id=1463 data-nosnippet>1463</a>        std::cell::RefCell&lt;std::collections::BTreeMap&lt;SpecKey, std::sync::Arc&lt;IfaceSpec&gt;&gt;&gt;,
+<a href=#1464 id=1464 data-nosnippet>1464</a>
+<a href=#1465 id=1465 data-nosnippet>1465</a>    <span class="doccomment">/// Readings an interface param resolved when its spec was built, keyed by
+<a href=#1466 id=1466 data-nosnippet>1466</a>    /// the identity text the param carries.
+<a href=#1467 id=1467 data-nosnippet>1467</a>    ///
+<a href=#1468 id=1468 data-nosnippet>1468</a>    /// `IfaceParam::reading` is text because a spec is memoized behind an
+<a href=#1469 id=1469 data-nosnippet>1469</a>    /// `Arc` and a `TypeRef` carries non-`Send` interiors, so the resolved
+<a href=#1470 id=1470 data-nosnippet>1470</a>    /// answer cannot live in the spec. It lives here instead, outside the
+<a href=#1471 id=1471 data-nosnippet>1471</a>    /// `Arc`, which is what lets a renderer ask for the model's answer without
+<a href=#1472 id=1472 data-nosnippet>1472</a>    /// holding a `Conversions` (#613 step 7).
+<a href=#1473 id=1473 data-nosnippet>1473</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) frozen_readings:
+<a href=#1474 id=1474 data-nosnippet>1474</a>        std::cell::RefCell&lt;std::collections::BTreeMap&lt;String, prebindgen_registry::flat::TypeRef&gt;&gt;,
 <a href=#1475 id=1475 data-nosnippet>1475</a>
-<a href=#1476 id=1476 data-nosnippet>1476</a>    <span class="doccomment">/// Whole-value struct layouts accumulated during resolution. The frozen
-<a href=#1477 id=1477 data-nosnippet>1477</a>    /// generation plan drains this store together with the function and
-<a href=#1478 id=1478 data-nosnippet>1478</a>    /// interface memos, so Rust and Kotlin cannot rebuild the layout apart.
-<a href=#1479 id=1479 data-nosnippet>1479</a>    /// Every site frozen into the canonical plan while compiling, so the whole
-<a href=#1480 id=1480 data-nosnippet>1480</a>    /// set can be validated as one — which is where a duplicate site identity
-<a href=#1481 id=1481 data-nosnippet>1481</a>    /// or a missing failure route shows up, neither being visible in a site
-<a href=#1482 id=1482 data-nosnippet>1482</a>    /// compared against itself (#622 review).
-<a href=#1483 id=1483 data-nosnippet>1483</a>    /// What the registry's site walk compiled, by site.
-<a href=#1484 id=1484 data-nosnippet>1484</a>    ///
-<a href=#1485 id=1485 data-nosnippet>1485</a>    /// `Registry::compile_sites` enumerates every position a value crosses at
-<a href=#1486 id=1486 data-nosnippet>1486</a>    /// and compiles each through `Compile::plan`, so `fn_plan` reads the answer
-<a href=#1487 id=1487 data-nosnippet>1487</a>    /// off this rather than driving a compiler of its own.
-<a href=#1488 id=1488 data-nosnippet>1488</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) planned_sites: std::cell::RefCell&lt;
-<a href=#1489 id=1489 data-nosnippet>1489</a>        std::collections::HashMap&lt;prebindgen_registry::recipe::Site, <span class="kw">crate</span>::jni::compile::JPlan&gt;,
-<a href=#1490 id=1490 data-nosnippet>1490</a>    &gt;,
-<a href=#1491 id=1491 data-nosnippet>1491</a>    <span class="doccomment">/// A site role `JCompile::plan` refuses outright, so the reporting path can
-<a href=#1492 id=1492 data-nosnippet>1492</a>    /// be exercised.
-<a href=#1493 id=1493 data-nosnippet>1493</a>    ///
-<a href=#1494 id=1494 data-nosnippet>1494</a>    /// No shape in either adapter refuses at a site today — a tuple, a nested
-<a href=#1495 id=1495 data-nosnippet>1495</a>    /// `Vec`, a raw pointer, a handle and a borrow all plan — which is exactly
-<a href=#1496 id=1496 data-nosnippet>1496</a>    /// why discarding `Sited::refusals` looked safe and why the discard needs a
-<a href=#1497 id=1497 data-nosnippet>1497</a>    /// test that does not depend on finding one.
-<a href=#1498 id=1498 data-nosnippet>1498</a>    </span><span class="attr">#[cfg(test)]
-<a href=#1499 id=1499 data-nosnippet>1499</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) refuse_role: std::cell::RefCell&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt;,
-<a href=#1500 id=1500 data-nosnippet>1500</a>
-<a href=#1501 id=1501 data-nosnippet>1501</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) site_plans: std::cell::RefCell&lt;
-<a href=#1502 id=1502 data-nosnippet>1502</a>        Vec&lt;
-<a href=#1503 id=1503 data-nosnippet>1503</a>            std::rc::Rc&lt;
-<a href=#1504 id=1504 data-nosnippet>1504</a>                prebindgen_registry::generation::SitePlan&lt;<span class="kw">crate</span>::jni::compile::JRepresentation&gt;,
-<a href=#1505 id=1505 data-nosnippet>1505</a>            &gt;,
-<a href=#1506 id=1506 data-nosnippet>1506</a>        &gt;,
-<a href=#1507 id=1507 data-nosnippet>1507</a>    &gt;,
-<a href=#1508 id=1508 data-nosnippet>1508</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) struct_plans: std::cell::RefCell&lt;HashMap&lt;TypeKey, <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;StructPlan&gt;&gt;&gt;&gt;,
-<a href=#1509 id=1509 data-nosnippet>1509</a>
-<a href=#1510 id=1510 data-nosnippet>1510</a>    <span class="doccomment">/// Sealed-class payload/ownership layouts accumulated during resolution.
-<a href=#1511 id=1511 data-nosnippet>1511</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) sum_plans:
-<a href=#1512 id=1512 data-nosnippet>1512</a>        std::cell::RefCell&lt;HashMap&lt;TypeKey, std::rc::Rc&lt;kotlin_emit::SealedClassPlan&gt;&gt;&gt;,
-<a href=#1513 id=1513 data-nosnippet>1513</a>
-<a href=#1514 id=1514 data-nosnippet>1514</a>    <span class="doccomment">/// Synthetic `Vec&lt;T&gt;` helper ABI plans, interned by canonical element
-<a href=#1515 id=1515 data-nosnippet>1515</a>    /// type while function sites are compiled and drained into the frozen
-<a href=#1516 id=1516 data-nosnippet>1516</a>    /// generation plan before any artifact writer runs.
-<a href=#1517 id=1517 data-nosnippet>1517</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) vec_build_plans: std::cell::RefCell&lt;HashMap&lt;TypeKey, std::rc::Rc&lt;VecBuildHelpers&gt;&gt;&gt;,
-<a href=#1518 id=1518 data-nosnippet>1518</a>
-<a href=#1519 id=1519 data-nosnippet>1519</a>    <span class="doccomment">/// The output-side decompositions this binding declared, applied.
-<a href=#1520 id=1520 data-nosnippet>1520</a>    ///
-<a href=#1521 id=1521 data-nosnippet>1521</a>    /// Filled once, while the binding declares itself into the registry, and
-<a href=#1522 id=1522 data-nosnippet>1522</a>    /// read at every emission site that asks how a return, an error or a
-<a href=#1523 id=1523 data-nosnippet>1523</a>    /// callback argument comes apart. The registry holds none of this: it is
-<a href=#1524 id=1524 data-nosnippet>1524</a>    /// told only which readings the decompositions need on the output side, and
-<a href=#1525 id=1525 data-nosnippet>1525</a>    /// which leaves a callback argument's delivery depends on.
-<a href=#1526 id=1526 data-nosnippet>1526</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) unfolded: std::cell::OnceCell&lt;unfold::Unfolded&gt;,
-<a href=#1527 id=1527 data-nosnippet>1527</a>
-<a href=#1528 id=1528 data-nosnippet>1528</a>    <span class="doccomment">/// Present only after resolution has finished. All artifact writers reach
-<a href=#1529 id=1529 data-nosnippet>1529</a>    /// derived JNI decisions through this one immutable store; the mutable
-<a href=#1530 id=1530 data-nosnippet>1530</a>    /// memos above are empty after it is installed.
-<a href=#1531 id=1531 data-nosnippet>1531</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) generation: <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;generation::JniGenerationPlan&gt;&gt;,
-<a href=#1532 id=1532 data-nosnippet>1532</a>}
-<a href=#1533 id=1533 data-nosnippet>1533</a>
-<a href=#1534 id=1534 data-nosnippet>1534</a><span class="doccomment">/// Describe a JNI binding: state the Kotlin surface, then [`build`](Self::build).
-<a href=#1535 id=1535 data-nosnippet>1535</a>///
-<a href=#1536 id=1536 data-nosnippet>1536</a>/// Holds the [`Declarations`] being filled and the sources to parse, and it is the
-<a href=#1537 id=1537 data-nosnippet>1537</a>/// only type with mutators. `build` consumes it, hands the declarations to the
-<a href=#1538 id=1538 data-nosnippet>1538</a>/// registry, and stores them in a [`JniGen`] — from where nothing can declare
-<a href=#1539 id=1539 data-nosnippet>1539</a>/// anything again, because this type is gone by then.
-<a href=#1540 id=1540 data-nosnippet>1540</a></span><span class="attr">#[derive(Clone, Default)]
-<a href=#1541 id=1541 data-nosnippet>1541</a></span><span class="kw">pub struct </span>JniGenBuilder {
-<a href=#1542 id=1542 data-nosnippet>1542</a>    <span class="doccomment">/// What has been declared so far. Moved out whole by [`Self::build`].
-<a href=#1543 id=1543 data-nosnippet>1543</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) decls: Declarations,
-<a href=#1544 id=1544 data-nosnippet>1544</a>
-<a href=#1545 id=1545 data-nosnippet>1545</a>    <span class="doccomment">/// Where the `#[prebindgen]` items come from.
-<a href=#1546 id=1546 data-nosnippet>1546</a>    ///
-<a href=#1547 id=1547 data-nosnippet>1547</a>    /// A [`FlatBuilder`](prebindgen_registry::flat::FlatBuilder), stated with the same
-<a href=#1548 id=1548 data-nosnippet>1548</a>    /// three feeders it has — so a build script says where the source is in the
-<a href=#1549 id=1549 data-nosnippet>1549</a>    /// vocabulary the model already uses, and never names a `Flat` or a
-<a href=#1550 id=1550 data-nosnippet>1550</a>    /// `Registry` itself.
-<a href=#1551 id=1551 data-nosnippet>1551</a>    ///
-<a href=#1552 id=1552 data-nosnippet>1552</a>    /// Not a declaration, which is why it stays here rather than moving across:
-<a href=#1553 id=1553 data-nosnippet>1553</a>    /// it is *input to* building, and keeping it out is what makes
-<a href=#1554 id=1554 data-nosnippet>1554</a>    /// [`Declarations`] mean one thing.
-<a href=#1555 id=1555 data-nosnippet>1555</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) sources: prebindgen_registry::flat::FlatBuilder,
-<a href=#1556 id=1556 data-nosnippet>1556</a>}
-<a href=#1557 id=1557 data-nosnippet>1557</a>
-<a href=#1558 id=1558 data-nosnippet>1558</a><span class="comment">// ── Sibling submodules (carved from the former monolithic file) ─────────
-<a href=#1559 id=1559 data-nosnippet>1559</a></span><span class="kw">mod </span>builder;
-<a href=#1560 id=1560 data-nosnippet>1560</a><span class="kw">mod </span>classify;
-<a href=#1561 id=1561 data-nosnippet>1561</a><span class="kw">mod </span>compile;
-<a href=#1562 id=1562 data-nosnippet>1562</a><span class="kw">mod </span>config;
-<a href=#1563 id=1563 data-nosnippet>1563</a><span class="kw">mod </span>decl;
-<a href=#1564 id=1564 data-nosnippet>1564</a><span class="kw">mod </span>emit;
-<a href=#1565 id=1565 data-nosnippet>1565</a><span class="kw">mod </span>equality;
-<a href=#1566 id=1566 data-nosnippet>1566</a><span class="kw">mod </span>iface;
-<a href=#1567 id=1567 data-nosnippet>1567</a><span class="kw">mod </span>prim;
-<a href=#1568 id=1568 data-nosnippet>1568</a><span class="kw">mod </span>prim_array;
-<a href=#1569 id=1569 data-nosnippet>1569</a><span class="kw">mod </span>recipes;
-<a href=#1570 id=1570 data-nosnippet>1570</a><span class="kw">mod </span>return_rows;
-<a href=#1571 id=1571 data-nosnippet>1571</a><span class="attr">#[cfg(test)]
-<a href=#1572 id=1572 data-nosnippet>1572</a></span><span class="kw">mod </span>tests;
-<a href=#1573 id=1573 data-nosnippet>1573</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>trait_impl;
-<a href=#1574 id=1574 data-nosnippet>1574</a>
-<a href=#1575 id=1575 data-nosnippet>1575</a><span class="kw">mod </span>fn_plan;
-<a href=#1576 id=1576 data-nosnippet>1576</a><span class="kw">mod </span>fold;
-<a href=#1577 id=1577 data-nosnippet>1577</a><span class="kw">mod </span>kotlin_emit;
-<a href=#1578 id=1578 data-nosnippet>1578</a><span class="kw">mod </span>overloads;
-<a href=#1579 id=1579 data-nosnippet>1579</a><span class="kw">mod </span>param_rows;
-<a href=#1580 id=1580 data-nosnippet>1580</a><span class="kw">mod </span>render;
-<a href=#1581 id=1581 data-nosnippet>1581</a><span class="kw">mod </span>report;
-<a href=#1582 id=1582 data-nosnippet>1582</a><span class="kw">mod </span>struct_plan;
-<a href=#1583 id=1583 data-nosnippet>1583</a><span class="kw">mod </span>symbol;
-<a href=#1584 id=1584 data-nosnippet>1584</a><span class="kw">mod </span>symbols;
-<a href=#1585 id=1585 data-nosnippet>1585</a>
-<a href=#1586 id=1586 data-nosnippet>1586</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>builder::<span class="kw-2">*</span>;
-<a href=#1587 id=1587 data-nosnippet>1587</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>classify::<span class="kw-2">*</span>;
-<a href=#1588 id=1588 data-nosnippet>1588</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>config::<span class="kw-2">*</span>;
-<a href=#1589 id=1589 data-nosnippet>1589</a><span class="kw">pub use </span>decl::<span class="kw-2">*</span>;
-<a href=#1590 id=1590 data-nosnippet>1590</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>emit::<span class="kw-2">*</span>;
-<a href=#1591 id=1591 data-nosnippet>1591</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>fn_plan::<span class="kw-2">*</span>;
-<a href=#1592 id=1592 data-nosnippet>1592</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>fold::<span class="kw-2">*</span>;
-<a href=#1593 id=1593 data-nosnippet>1593</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>iface::<span class="kw-2">*</span>;
-<a href=#1594 id=1594 data-nosnippet>1594</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>overloads::<span class="kw-2">*</span>;
-<a href=#1595 id=1595 data-nosnippet>1595</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>prim::<span class="kw-2">*</span>;
-<a href=#1596 id=1596 data-nosnippet>1596</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>render::<span class="kw-2">*</span>;
-<a href=#1597 id=1597 data-nosnippet>1597</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>struct_plan::<span class="kw-2">*</span>;
-<a href=#1598 id=1598 data-nosnippet>1598</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>symbols::<span class="kw-2">*</span>;
+<a href=#1476 id=1476 data-nosnippet>1476</a>    <span class="doccomment">/// Memoized per-function lowered plans, one [`JniFunctionPlan`] per bound
+<a href=#1477 id=1477 data-nosnippet>1477</a>    /// function/const-getter ident — the single lowering shared by validation
+<a href=#1478 id=1478 data-nosnippet>1478</a>    /// and every emitter (Rust extern, JNINative extern, Kotlin wrapper,
+<a href=#1479 id=1479 data-nosnippet>1479</a>    /// report), so a function's binding is derived ONCE per generation
+<a href=#1480 id=1480 data-nosnippet>1480</a>    /// instead of ~8× (issue #90's deferred "build the plan once and store
+<a href=#1481 id=1481 data-nosnippet>1481</a>    /// it" — `fn_plan.rs`). Populated eagerly at `resolve` by
+<a href=#1482 id=1482 data-nosnippet>1482</a>    /// [`validate_bindings`], which builds every declared function's plan for
+<a href=#1483 id=1483 data-nosnippet>1483</a>    /// the collision tables; the writers then read it. Same interior-mutable
+<a href=#1484 id=1484 data-nosnippet>1484</a>    /// "derived state, keyed by `(self, registry)`" contract as
+<a href=#1485 id=1485 data-nosnippet>1485</a>    /// [`Self::iface_specs`].
+<a href=#1486 id=1486 data-nosnippet>1486</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) fn_plans: std::cell::RefCell&lt;HashMap&lt;syn::Ident, std::rc::Rc&lt;JniFunctionPlan&gt;&gt;&gt;,
+<a href=#1487 id=1487 data-nosnippet>1487</a>
+<a href=#1488 id=1488 data-nosnippet>1488</a>    <span class="doccomment">/// Whole-value struct layouts accumulated during resolution. The frozen
+<a href=#1489 id=1489 data-nosnippet>1489</a>    /// generation plan drains this store together with the function and
+<a href=#1490 id=1490 data-nosnippet>1490</a>    /// interface memos, so Rust and Kotlin cannot rebuild the layout apart.
+<a href=#1491 id=1491 data-nosnippet>1491</a>    /// Every site frozen into the canonical plan while compiling, so the whole
+<a href=#1492 id=1492 data-nosnippet>1492</a>    /// set can be validated as one — which is where a duplicate site identity
+<a href=#1493 id=1493 data-nosnippet>1493</a>    /// or a missing failure route shows up, neither being visible in a site
+<a href=#1494 id=1494 data-nosnippet>1494</a>    /// compared against itself (#622 review).
+<a href=#1495 id=1495 data-nosnippet>1495</a>    /// What the registry's site walk compiled, by site.
+<a href=#1496 id=1496 data-nosnippet>1496</a>    ///
+<a href=#1497 id=1497 data-nosnippet>1497</a>    /// `Registry::compile_sites` enumerates every position a value crosses at
+<a href=#1498 id=1498 data-nosnippet>1498</a>    /// and compiles each through `Compile::plan`, so `fn_plan` reads the answer
+<a href=#1499 id=1499 data-nosnippet>1499</a>    /// off this rather than driving a compiler of its own.
+<a href=#1500 id=1500 data-nosnippet>1500</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) planned_sites: std::cell::RefCell&lt;
+<a href=#1501 id=1501 data-nosnippet>1501</a>        std::collections::HashMap&lt;prebindgen_registry::recipe::Site, <span class="kw">crate</span>::jni::compile::JPlan&gt;,
+<a href=#1502 id=1502 data-nosnippet>1502</a>    &gt;,
+<a href=#1503 id=1503 data-nosnippet>1503</a>    <span class="doccomment">/// A site role `JCompile::plan` refuses outright, so the reporting path can
+<a href=#1504 id=1504 data-nosnippet>1504</a>    /// be exercised.
+<a href=#1505 id=1505 data-nosnippet>1505</a>    ///
+<a href=#1506 id=1506 data-nosnippet>1506</a>    /// No shape in either adapter refuses at a site today — a tuple, a nested
+<a href=#1507 id=1507 data-nosnippet>1507</a>    /// `Vec`, a raw pointer, a handle and a borrow all plan — which is exactly
+<a href=#1508 id=1508 data-nosnippet>1508</a>    /// why discarding `Sited::refusals` looked safe and why the discard needs a
+<a href=#1509 id=1509 data-nosnippet>1509</a>    /// test that does not depend on finding one.
+<a href=#1510 id=1510 data-nosnippet>1510</a>    </span><span class="attr">#[cfg(test)]
+<a href=#1511 id=1511 data-nosnippet>1511</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) refuse_role: std::cell::RefCell&lt;<span class="prelude-ty">Option</span>&lt;String&gt;&gt;,
+<a href=#1512 id=1512 data-nosnippet>1512</a>
+<a href=#1513 id=1513 data-nosnippet>1513</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) site_plans: std::cell::RefCell&lt;
+<a href=#1514 id=1514 data-nosnippet>1514</a>        Vec&lt;
+<a href=#1515 id=1515 data-nosnippet>1515</a>            std::rc::Rc&lt;
+<a href=#1516 id=1516 data-nosnippet>1516</a>                prebindgen_registry::generation::SitePlan&lt;<span class="kw">crate</span>::jni::compile::JRepresentation&gt;,
+<a href=#1517 id=1517 data-nosnippet>1517</a>            &gt;,
+<a href=#1518 id=1518 data-nosnippet>1518</a>        &gt;,
+<a href=#1519 id=1519 data-nosnippet>1519</a>    &gt;,
+<a href=#1520 id=1520 data-nosnippet>1520</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) struct_plans: std::cell::RefCell&lt;HashMap&lt;TypeKey, <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;StructPlan&gt;&gt;&gt;&gt;,
+<a href=#1521 id=1521 data-nosnippet>1521</a>
+<a href=#1522 id=1522 data-nosnippet>1522</a>    <span class="doccomment">/// Sealed-class payload/ownership layouts accumulated during resolution.
+<a href=#1523 id=1523 data-nosnippet>1523</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) sum_plans:
+<a href=#1524 id=1524 data-nosnippet>1524</a>        std::cell::RefCell&lt;HashMap&lt;TypeKey, std::rc::Rc&lt;kotlin_emit::SealedClassPlan&gt;&gt;&gt;,
+<a href=#1525 id=1525 data-nosnippet>1525</a>
+<a href=#1526 id=1526 data-nosnippet>1526</a>    <span class="doccomment">/// Synthetic `Vec&lt;T&gt;` helper ABI plans, interned by canonical element
+<a href=#1527 id=1527 data-nosnippet>1527</a>    /// type while function sites are compiled and drained into the frozen
+<a href=#1528 id=1528 data-nosnippet>1528</a>    /// generation plan before any artifact writer runs.
+<a href=#1529 id=1529 data-nosnippet>1529</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) vec_build_plans: std::cell::RefCell&lt;HashMap&lt;TypeKey, std::rc::Rc&lt;VecBuildHelpers&gt;&gt;&gt;,
+<a href=#1530 id=1530 data-nosnippet>1530</a>
+<a href=#1531 id=1531 data-nosnippet>1531</a>    <span class="doccomment">/// The output-side decompositions this binding declared, applied.
+<a href=#1532 id=1532 data-nosnippet>1532</a>    ///
+<a href=#1533 id=1533 data-nosnippet>1533</a>    /// Filled once, while the binding declares itself into the registry, and
+<a href=#1534 id=1534 data-nosnippet>1534</a>    /// read at every emission site that asks how a return, an error or a
+<a href=#1535 id=1535 data-nosnippet>1535</a>    /// callback argument comes apart. The registry holds none of this: it is
+<a href=#1536 id=1536 data-nosnippet>1536</a>    /// told only which readings the decompositions need on the output side, and
+<a href=#1537 id=1537 data-nosnippet>1537</a>    /// which leaves a callback argument's delivery depends on.
+<a href=#1538 id=1538 data-nosnippet>1538</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) unfolded: std::cell::OnceCell&lt;unfold::Unfolded&gt;,
+<a href=#1539 id=1539 data-nosnippet>1539</a>
+<a href=#1540 id=1540 data-nosnippet>1540</a>    <span class="doccomment">/// Present only after resolution has finished. All artifact writers reach
+<a href=#1541 id=1541 data-nosnippet>1541</a>    /// derived JNI decisions through this one immutable store; the mutable
+<a href=#1542 id=1542 data-nosnippet>1542</a>    /// memos above are empty after it is installed.
+<a href=#1543 id=1543 data-nosnippet>1543</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) generation: <span class="prelude-ty">Option</span>&lt;std::rc::Rc&lt;generation::JniGenerationPlan&gt;&gt;,
+<a href=#1544 id=1544 data-nosnippet>1544</a>}
+<a href=#1545 id=1545 data-nosnippet>1545</a>
+<a href=#1546 id=1546 data-nosnippet>1546</a><span class="doccomment">/// Describe a JNI binding: state the Kotlin surface, then [`build`](Self::build).
+<a href=#1547 id=1547 data-nosnippet>1547</a>///
+<a href=#1548 id=1548 data-nosnippet>1548</a>/// Holds the [`Declarations`] being filled and the sources to parse, and it is the
+<a href=#1549 id=1549 data-nosnippet>1549</a>/// only type with mutators. `build` consumes it, hands the declarations to the
+<a href=#1550 id=1550 data-nosnippet>1550</a>/// registry, and stores them in a [`JniGen`] — from where nothing can declare
+<a href=#1551 id=1551 data-nosnippet>1551</a>/// anything again, because this type is gone by then.
+<a href=#1552 id=1552 data-nosnippet>1552</a></span><span class="attr">#[derive(Clone, Default)]
+<a href=#1553 id=1553 data-nosnippet>1553</a></span><span class="kw">pub struct </span>JniGenBuilder {
+<a href=#1554 id=1554 data-nosnippet>1554</a>    <span class="doccomment">/// What has been declared so far. Moved out whole by [`Self::build`].
+<a href=#1555 id=1555 data-nosnippet>1555</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) decls: Declarations,
+<a href=#1556 id=1556 data-nosnippet>1556</a>
+<a href=#1557 id=1557 data-nosnippet>1557</a>    <span class="doccomment">/// Where the `#[prebindgen]` items come from.
+<a href=#1558 id=1558 data-nosnippet>1558</a>    ///
+<a href=#1559 id=1559 data-nosnippet>1559</a>    /// A [`FlatBuilder`](prebindgen_registry::flat::FlatBuilder), stated with the same
+<a href=#1560 id=1560 data-nosnippet>1560</a>    /// three feeders it has — so a build script says where the source is in the
+<a href=#1561 id=1561 data-nosnippet>1561</a>    /// vocabulary the model already uses, and never names a `Flat` or a
+<a href=#1562 id=1562 data-nosnippet>1562</a>    /// `Registry` itself.
+<a href=#1563 id=1563 data-nosnippet>1563</a>    ///
+<a href=#1564 id=1564 data-nosnippet>1564</a>    /// Not a declaration, which is why it stays here rather than moving across:
+<a href=#1565 id=1565 data-nosnippet>1565</a>    /// it is *input to* building, and keeping it out is what makes
+<a href=#1566 id=1566 data-nosnippet>1566</a>    /// [`Declarations`] mean one thing.
+<a href=#1567 id=1567 data-nosnippet>1567</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) sources: prebindgen_registry::flat::FlatBuilder,
+<a href=#1568 id=1568 data-nosnippet>1568</a>}
+<a href=#1569 id=1569 data-nosnippet>1569</a>
+<a href=#1570 id=1570 data-nosnippet>1570</a><span class="comment">// ── Sibling submodules (carved from the former monolithic file) ─────────
+<a href=#1571 id=1571 data-nosnippet>1571</a></span><span class="kw">mod </span>builder;
+<a href=#1572 id=1572 data-nosnippet>1572</a><span class="kw">mod </span>classify;
+<a href=#1573 id=1573 data-nosnippet>1573</a><span class="kw">mod </span>compile;
+<a href=#1574 id=1574 data-nosnippet>1574</a><span class="kw">mod </span>config;
+<a href=#1575 id=1575 data-nosnippet>1575</a><span class="kw">mod </span>decl;
+<a href=#1576 id=1576 data-nosnippet>1576</a><span class="kw">mod </span>emit;
+<a href=#1577 id=1577 data-nosnippet>1577</a><span class="kw">mod </span>equality;
+<a href=#1578 id=1578 data-nosnippet>1578</a><span class="kw">mod </span>iface;
+<a href=#1579 id=1579 data-nosnippet>1579</a><span class="kw">mod </span>prim;
+<a href=#1580 id=1580 data-nosnippet>1580</a><span class="kw">mod </span>prim_array;
+<a href=#1581 id=1581 data-nosnippet>1581</a><span class="kw">mod </span>recipes;
+<a href=#1582 id=1582 data-nosnippet>1582</a><span class="kw">mod </span>return_rows;
+<a href=#1583 id=1583 data-nosnippet>1583</a><span class="attr">#[cfg(test)]
+<a href=#1584 id=1584 data-nosnippet>1584</a></span><span class="kw">mod </span>tests;
+<a href=#1585 id=1585 data-nosnippet>1585</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>trait_impl;
+<a href=#1586 id=1586 data-nosnippet>1586</a>
+<a href=#1587 id=1587 data-nosnippet>1587</a><span class="kw">mod </span>fn_plan;
+<a href=#1588 id=1588 data-nosnippet>1588</a><span class="kw">mod </span>fold;
+<a href=#1589 id=1589 data-nosnippet>1589</a><span class="kw">mod </span>kotlin_emit;
+<a href=#1590 id=1590 data-nosnippet>1590</a><span class="kw">mod </span>overloads;
+<a href=#1591 id=1591 data-nosnippet>1591</a><span class="kw">mod </span>param_rows;
+<a href=#1592 id=1592 data-nosnippet>1592</a><span class="kw">mod </span>render;
+<a href=#1593 id=1593 data-nosnippet>1593</a><span class="kw">mod </span>report;
+<a href=#1594 id=1594 data-nosnippet>1594</a><span class="kw">mod </span>struct_plan;
+<a href=#1595 id=1595 data-nosnippet>1595</a><span class="kw">mod </span>symbol;
+<a href=#1596 id=1596 data-nosnippet>1596</a><span class="kw">mod </span>symbols;
+<a href=#1597 id=1597 data-nosnippet>1597</a>
+<a href=#1598 id=1598 data-nosnippet>1598</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>builder::<span class="kw-2">*</span>;
+<a href=#1599 id=1599 data-nosnippet>1599</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>classify::<span class="kw-2">*</span>;
+<a href=#1600 id=1600 data-nosnippet>1600</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>config::<span class="kw-2">*</span>;
+<a href=#1601 id=1601 data-nosnippet>1601</a><span class="kw">pub use </span>decl::<span class="kw-2">*</span>;
+<a href=#1602 id=1602 data-nosnippet>1602</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>emit::<span class="kw-2">*</span>;
+<a href=#1603 id=1603 data-nosnippet>1603</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>fn_plan::<span class="kw-2">*</span>;
+<a href=#1604 id=1604 data-nosnippet>1604</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>fold::<span class="kw-2">*</span>;
+<a href=#1605 id=1605 data-nosnippet>1605</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>iface::<span class="kw-2">*</span>;
+<a href=#1606 id=1606 data-nosnippet>1606</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>overloads::<span class="kw-2">*</span>;
+<a href=#1607 id=1607 data-nosnippet>1607</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>prim::<span class="kw-2">*</span>;
+<a href=#1608 id=1608 data-nosnippet>1608</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>render::<span class="kw-2">*</span>;
+<a href=#1609 id=1609 data-nosnippet>1609</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>struct_plan::<span class="kw-2">*</span>;
+<a href=#1610 id=1610 data-nosnippet>1610</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>symbols::<span class="kw-2">*</span>;
 </code></pre></div></section></main></body></html>
