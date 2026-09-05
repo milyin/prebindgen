@@ -38,6 +38,8 @@ pub mod decl;
 pub mod outcome;
 pub mod report;
 pub mod run;
+#[cfg(test)]
+mod tests;
 
 pub use decl::{BindingDeclarations, DeclaredElement, ElementId, ElementKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};

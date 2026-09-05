@@ -101,8 +101,13 @@ impl BindingDeclarations for Declarations {
             }
         }
 
-        // Declared conversions and binding-local helper functions: defined by
+        // Declared conversions: the wire mapping for one Rust type, defined by
         // the binding rather than selected out of the source.
+        //
+        // A binding-local fn is NOT an element of its own. It is a helper the
+        // binding defines, and what the target exports is the member or the
+        // package function it was bound to — already stated above. Listing it
+        // twice would give one id to two entries.
         for decl in &self.convert_decls {
             out.push(
                 DeclaredElement::new(
@@ -114,18 +119,6 @@ impl BindingDeclarations for Declarations {
                 .local(),
             );
         }
-        for (ident, path, _) in &self.local_fns {
-            out.push(
-                DeclaredElement::new(
-                    ElementKind::Function,
-                    ident.to_string(),
-                    quote::quote!(#path).to_string().replace(' ', ""),
-                    "local_fn",
-                )
-                .local(),
-            );
-        }
-
         out
     }
 

@@ -85,22 +85,31 @@ pub fn plan(
     // A declaration is a statement of intent, so a declared item the source
     // never captured is an error and not a capability question — the same rule
     // v1 holds, and the reason `must_resolve` is stated per element.
+    // Captured items live in one flat namespace, so this is one lookup and not
+    // one per kind: a Kotlin `val` may be backed by a nullary function, and
+    // asking the constant table for it would report a typo that is not there.
     let missing: Vec<_> = declared
         .iter()
         .filter(|element| element.must_resolve)
-        .filter(|element| match element.kind {
-            ElementKind::Function => flat.function(element.rust_origin.as_str()).is_none(),
-            ElementKind::Const => flat.constant(element.rust_origin.as_str()).is_none(),
-            // A type is looked up by name like the rest; the adapter says
-            // whether one has to be there (`String` declared as a handle does
-            // not). A callback or a conversion names no captured item at all.
-            ElementKind::Type => flat.declared_type(element.rust_origin.as_str()).is_none(),
-            ElementKind::Callback | ElementKind::Conversion => false,
-        })
+        .filter(|element| flat.element(element.rust_origin.as_str()).is_none())
         .map(|element| (element.id.clone(), element.rust_origin.clone()))
         .collect();
     if !missing.is_empty() {
         return Err(EngineError::DeclaredNotFound { entries: missing });
+    }
+
+    // One id, one element: the manifest is read by id, and a repeat would leave
+    // one of the two entries unaccounted for.
+    let mut seen = std::collections::HashSet::new();
+    let mut repeated: Vec<_> = declared
+        .iter()
+        .filter(|element| !seen.insert(&element.id))
+        .map(|element| element.id.clone())
+        .collect();
+    repeated.sort();
+    repeated.dedup();
+    if !repeated.is_empty() {
+        return Err(EngineError::DuplicateElement { entries: repeated });
     }
 
     let mut elements: Vec<Entry> = declared

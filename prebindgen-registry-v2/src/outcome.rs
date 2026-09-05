@@ -105,6 +105,11 @@ pub enum EngineError {
     /// or a source-crate rename, and never a capability question. All of them
     /// are collected before failing.
     DeclaredNotFound { entries: Vec<(ElementId, String)> },
+    /// Two declared elements answering to one id. An id identifies an element,
+    /// and a manifest that gave one id to two entries could not account for
+    /// either — so this is a contradiction in the declarations, not a gap in
+    /// what v2 implements.
+    DuplicateElement { entries: Vec<ElementId> },
     /// Writing an artifact or a report failed.
     Io(std::io::Error),
 }
@@ -127,6 +132,17 @@ impl std::fmt::Display for EngineError {
                     "check the spelling in build.rs, and that the source crate still \
                      exports them"
                 )
+            }
+            EngineError::DuplicateElement { entries } => {
+                writeln!(
+                    f,
+                    "v2: {} element id(s) were declared more than once:",
+                    entries.len()
+                )?;
+                for id in entries {
+                    writeln!(f, "  {id}")?;
+                }
+                write!(f, "each declared element answers to one id")
             }
             EngineError::Io(error) => write!(f, "v2: {error}"),
         }
