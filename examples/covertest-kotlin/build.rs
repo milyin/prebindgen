@@ -132,8 +132,8 @@ fn main() {
         // reason code, and how many it does. Every decomposition is in exactly one,
         // so a build fails if either moves — a decomposition leaving the comparison,
         // or leaving the population. Each entry is a part binding #701 step 3 owes.
-        .expect_parity_skips(["`storage_summary_probe`'s return: row-states-no-parts"])
-        .expect_parity_compared(58)
+        .expect_parity_skips::<[&str; 0], &str>([])
+        .expect_parity_compared(59)
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // Every naming tier used here is configured. The harness hook is a

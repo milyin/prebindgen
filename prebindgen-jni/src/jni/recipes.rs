@@ -475,19 +475,6 @@ pub(crate) fn pair() -> RecipeName {
     RecipeName::new("pair")
 }
 
-/// Whether a reach's type mentions `owner` anywhere inside it.
-///
-/// Deliberately NOT a delivery peel. [`TypeRef::layer_stack`] answers "what
-/// does this crossing deliver", and is bounded because `Vec<Option<T>>` has
-/// the optional inside the ELEMENT rather than in the boundary. The question
-/// here is a different one — "would splicing this part make the row reach its
-/// own crossing" — and a self-reference nested out of position still closes the
-/// loop: `T`'s row reaches `Vec<Option<T>>`, whose element row reaches `T`.
-/// Answering it with a peel of either depth conflates the two.
-fn mentions(ty: &TypeRef, owner: &TypeKey) -> bool {
-    ty.walk().iter().any(|node| node.stripped_key() == *owner)
-}
-
 impl Declarations {
     /// Every recipe this binding's declarations state.
     ///
@@ -542,27 +529,6 @@ impl Declarations {
         }
         let mut reaches = Vec::with_capacity(fields.len());
         for field in fields {
-            // A field that reaches the type being taken apart — the
-            // conditional-handle idiom, `fn(&T) -> Option<&T>`. Splicing it
-            // would make this row reach its own crossing; the field crosses as
-            // one nullable handle leaf instead. Refused here for the same
-            // reason `value_form_of` refuses its own case: `Recipes::build`
-            // would otherwise fail the whole binding over one field.
-            let reaches_self = match field {
-                crate::jni::LocalField::Local { sig, .. } => match &sig.output {
-                    syn::ReturnType::Type(_, ret) => model
-                        .classify(ret)
-                        .is_ok_and(|r| mentions(&r, &ty.stripped_key())),
-                    syn::ReturnType::Default => false,
-                },
-                crate::jni::LocalField::Named(func, _) => model
-                    .function(func)
-                    .is_some_and(|f| mentions(&f.ret, &ty.stripped_key())),
-                _ => false,
-            };
-            if reaches_self {
-                return None;
-            }
             reaches.push(match field {
                 crate::jni::LocalField::Named(func, _) => Reach::Accessor(func.clone()),
                 // The handle itself — the leaf `Reach::Identity` was added for.
@@ -1403,6 +1369,15 @@ impl Declarations {
                 {
                     continue;
                 }
+                // A part that reaches the type being taken apart crosses as
+                // ONE leaf — the conditional-handle idiom, `fn(&T) -> Option<&T>`,
+                // which re-hands the receiver rather than reading something out
+                // of it. Splicing it would make this row reach its own
+                // crossing; refused here, at the binding, so only this part is
+                // affected and the rest of the decomposition still comes apart.
+                if core.stripped_key() == *decl.key() {
+                    continue;
+                }
                 let part = Crossing::new(ret.clone(), Direction::Deconstruct);
                 if recipes.key_of(&part.key(), &parts()).is_none() {
                     continue;
@@ -1492,6 +1467,6 @@ impl Declarations {
             }
         }
 
-        bound.build(recipes)
+        bound.build(recipes, model)
     }
 }
