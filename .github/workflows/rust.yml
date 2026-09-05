@@ -116,6 +116,39 @@ jobs:
       run: PREBINDGEN_PIPELINE=v2 cargo build --workspace --all-features
     - name: v2 wrote nothing into v1's committed artifacts
       run: git diff --exit-code
+    - name: Every example accounted for its declarations
+      # A build that passes says nothing on its own while v2 emits nothing:
+      # the milestone is that each example's whole declaration set reached the
+      # engine and came back with an outcome. Assert that from the manifests,
+      # so an example that silently stopped submitting cannot look like
+      # progress.
+      run: |
+        python3 - <<'PY'
+        import json, pathlib, sys
+
+        expected = {
+            "covertest-kotlin": "jni",
+            "example-cbindgen": "c",
+            "perftest-kotlin": "jni",
+            "perftest-c": "c",
+            "emitcheck": "jni",
+        }
+        failed = False
+        for example, target in expected.items():
+            path = pathlib.Path("examples") / example / "build/prebindgen/v2" / f"{target}-report.json"
+            if not path.is_file():
+                print(f"{example}: no v2 manifest at {path}")
+                failed = True
+                continue
+            report = json.loads(path.read_text())
+            accounted = len(report["elements"])
+            if report["pipeline"] != "v2" or accounted == 0:
+                print(f"{example}: manifest accounts for {accounted} element(s) of pipeline {report['pipeline']!r}")
+                failed = True
+                continue
+            print(f"{example}: {accounted} element(s) accounted for ({target})")
+        sys.exit(1 if failed else 0)
+        PY
     - name: Switching back needs no manual cleaning
       run: |
         cargo build --workspace --all-features
