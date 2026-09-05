@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ScanError","WriteRustError"],"struct":["Building","Decompositions","DuplicateNameError","NotExpressibleEntry","Registry","RegistryBuilder","TypeKey","TypeKeyParseError"],"trait":["Conversions"],"type":["Crossing"]};
