@@ -280,21 +280,17 @@ pub(crate) fn pair() -> RecipeName {
     RecipeName::new("pair")
 }
 
-/// The type a reach yields, through the layers it is delivered under — the
-/// same peel a decomposed return takes, since the shape rides the delivery
-/// rather than the recipe.
-fn reaches_type(ty: &TypeRef) -> TypeKey {
-    let mut ty = ty;
-    loop {
-        let next = ty
-            .borrow_target()
-            .or_else(|| ty.optional_inner())
-            .or_else(|| ty.sequence_elem());
-        match next {
-            Some(inner) => ty = inner,
-            None => return ty.stripped_key(),
-        }
-    }
+/// Whether a reach's type mentions `owner` anywhere inside it.
+///
+/// Deliberately NOT a delivery peel. [`TypeRef::layer_stack`] answers "what
+/// does this crossing deliver", and is bounded because `Vec<Option<T>>` has
+/// the optional inside the ELEMENT rather than in the boundary. The question
+/// here is a different one — "would splicing this part make the row reach its
+/// own crossing" — and a self-reference nested out of position still closes the
+/// loop: `T`'s row reaches `Vec<Option<T>>`, whose element row reaches `T`.
+/// Answering it with a peel of either depth conflates the two.
+fn mentions(ty: &TypeRef, owner: &TypeKey) -> bool {
+    ty.walk().iter().any(|node| node.stripped_key() == *owner)
 }
 
 impl Declarations {
@@ -349,12 +345,12 @@ impl Declarations {
                 crate::jni::LocalField::Local { sig, .. } => match &sig.output {
                     syn::ReturnType::Type(_, ret) => model
                         .classify(ret)
-                        .is_ok_and(|r| reaches_type(&r) == ty.stripped_key()),
+                        .is_ok_and(|r| mentions(&r, &ty.stripped_key())),
                     syn::ReturnType::Default => false,
                 },
                 crate::jni::LocalField::Named(func, _) => model
                     .function(func)
-                    .is_some_and(|f| reaches_type(&f.ret) == ty.stripped_key()),
+                    .is_some_and(|f| mentions(&f.ret, &ty.stripped_key())),
                 _ => false,
             };
             if reaches_self {
@@ -1074,7 +1070,14 @@ impl Declarations {
                 if ret.optional_inner().is_some() {
                     continue;
                 }
-                let core = ret.borrow_target().unwrap_or(&ret);
+                // The bounded delivery peel, not `stripped_key`: that reaches
+                // the leaf type through ANY nesting, so a part typed
+                // `Vec<Option<T>>` would be read as the declaration's own `T`
+                // and spliced — making the row reach its own crossing. The
+                // inner optional is part of the element, and the part crosses
+                // as the distinct `Vec<Option<T>>`.
+                let (_, core) = ret.layer_stack();
+                let core = core.borrow_target().unwrap_or(core);
                 // Two conditions, and both are needed. A DECLARATION is what
                 // says this part comes apart — a type may state a `parts` row
                 // and still cross whole here, which is the difference this
