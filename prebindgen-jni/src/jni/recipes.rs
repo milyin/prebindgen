@@ -1220,11 +1220,21 @@ impl Declarations {
         // split is design decision 3, and it is what lets a sum-typed field —
         // a selector plus one group per alternative, which no `Reach` spells —
         // be a `Choice` part rather than a shape smuggled into the row.
-        for decl in &self.return_expand_decls {
+        // Every value form, under the row that states it: a type's own under
+        // `parts`, and a function's own under `expand-return@fn`. A per-function
+        // `.expand_return(..)` declares a real `ValueForm` row of its own, so
+        // its sum-typed field needs the same binding — without one the row says
+        // `b : ZValOutcome` where the decomposition says a tag and two groups.
+        let type_forms = self.return_expand_decls.iter().map(|decl| (decl, parts()));
+        let fn_forms = self
+            .fn_return_expands
+            .iter()
+            .map(|(func, decl)| (decl, site_row(func)));
+        for (decl, name) in type_forms.chain(fn_forms) {
             let Some(owner) = registry.reading(decl.key()) else {
                 continue;
             };
-            let Some((func, reaches)) = self.value_form_of(model, registry, &owner) else {
+            let Some((func, reaches)) = self.value_form_in(model, registry, &owner, decl) else {
                 continue;
             };
             let Some(st) = model.function(&func).map(|f| f.ret.clone()) else {
@@ -1248,7 +1258,7 @@ impl Declarations {
                 continue;
             };
             let records = self.lower_value_form(registry, decl.key(), form);
-            let row = Crossing::new(owner, Direction::Deconstruct).row(parts());
+            let row = Crossing::new(owner, Direction::Deconstruct).row(name);
             for (index, reach) in reaches.iter().enumerate() {
                 let prebindgen_registry::recipe::Reach::Field(field) = reach else {
                     continue;

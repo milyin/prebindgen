@@ -1164,7 +1164,22 @@ fn a_per_function_value_form_needs_no_type_default() {
             syn::Item::Struct(syn::parse_quote!(
                 pub struct ZValStruct {
                     pub a: i32,
-                    pub b: i64,
+                    // A DECOMPOSED SUM inside a per-function value form: a
+                    // selector plus one group per alternative, which the row
+                    // states as a plain reach and a binding takes apart. That
+                    // binding is keyed by THIS function's row, not the type's,
+                    // and there is no type-wide declaration to fall back on
+                    // (#712 review).
+                    pub b: ZValOutcome,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum ZValOutcome {
+                    Good { value: i64 },
+                    Bad { code: i32 },
                 }
             )),
             loc.clone(),
@@ -1181,12 +1196,15 @@ fn a_per_function_value_form_needs_no_type_default() {
     let jni = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .package(
-            crate::package!("val").class(crate::ptr_class!(ZVal)).fun(
-                prebindgen_registry::fun!(z_val_make).expand_return(
-                    prebindgen_registry::expand_return!(ZVal)
-                        .fields(prebindgen_registry::fields!(z_val_to_struct)),
+            crate::package!("val")
+                .class(crate::ptr_class!(ZVal))
+                .class(crate::sealed_class!(ZValOutcome))
+                .fun(
+                    prebindgen_registry::fun!(z_val_make).expand_return(
+                        prebindgen_registry::expand_return!(ZVal)
+                            .fields(prebindgen_registry::fields!(z_val_to_struct)),
+                    ),
                 ),
-            ),
         );
     let dir = unique_test_dir("jnigen_perfn_value_form");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1207,6 +1225,10 @@ fn a_per_function_value_form_needs_no_type_default() {
     let rc: String = rust.split_whitespace().collect();
     // The form's own accessor is what the decomposition calls.
     assert!(rc.contains("myflat::z_val_to_struct("), "{rust}");
+    // And its sum field comes apart: one arm per alternative, which only the
+    // part binding on THIS function's row produces.
+    assert!(rc.contains("ZValOutcome::Good"), "{rust}");
+    assert!(rc.contains("ZValOutcome::Bad"), "{rust}");
 }
 
 /// A binding-local callable must be crate-qualified: `fun!`'s ident arm
