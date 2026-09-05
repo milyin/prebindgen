@@ -125,7 +125,12 @@ jobs:
           # kotlin-codegen: `cargo package` drops the git source and resolves
           # the `version` key against crates.io. Report and keep going;
           # anything else fails.
-          unpublished='prebindgen(-[a-z-]+)?|kotlin-codegen'
+          # `-v2` carries a digit, and `prebindgen-registry-v2` is
+          # `publish = false` while #719 builds it: `prebindgen-c` and
+          # `prebindgen-jni` therefore cannot be published until that optional
+          # dependency is either published or dropped. Nothing is on crates.io
+          # yet, so this only has to be settled before the first release.
+          unpublished='prebindgen(-[a-z0-9-]+)?|kotlin-codegen'
           if ! out=$(cargo package -p "$crate" --no-verify --allow-dirty 2>&1); then
             printf '%s\n' "$out"
             printf '%s\n' "$out" | grep -qE "no matching package named \`($unpublished)\`|failed to select a version for the requirement \`($unpublished)" || exit 1
