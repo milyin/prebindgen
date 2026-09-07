@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Attribute macro that exports FFI definitions for use in language-specific binding crates."><title>prebindgen in prebindgen_proc_macro - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_proc_macro" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">prebindgen</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_proc_macro/index.html">prebindgen_<wbr>proc_<wbr>macro</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">prebindgen</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#usage" title="Usage">Usage</a></li><li><a href="#requirements" title="Requirements">Requirements</a></li><li><a href="#the-inline-feature" title="The `inline` feature">The <code>inline</code> feature</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate prebindgen_<wbr>proc_<wbr>macro</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">prebindgen_proc_macro</a></div><h1>Attribute Macro <span class="attr">prebindgen</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_proc_macro/lib.rs.html#249-366">Source</a> </span></div><pre class="rust item-decl"><code>#[prebindgen]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Attribute macro that exports FFI definitions for use in language-specific binding crates.</p>
+<p>All types and functions marked with this attribute can be made available in dependent
+crates as Rust source code for both binding generator processing (cbindgen, csbindgen, etc.)
+and for including into projects to make the compiler generate <code>#[no_mangle]</code> FFI exports
+for cdylib/staticlib targets.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Use with explicit group name
+</span><span class="attr">#[prebindgen(<span class="string">"group_name"</span>)]
+#[repr(C)]
+</span><span class="kw">pub struct </span>Point {
+    <span class="kw">pub </span>x: f64,
+    <span class="kw">pub </span>y: f64,
+}
+
+<span class="comment">// Use with default group name "default"
+</span><span class="attr">#[prebindgen]
+</span><span class="kw">pub fn </span>calculate_distance(p1: <span class="kw-2">&amp;</span>Point, p2: <span class="kw-2">&amp;</span>Point) -&gt; f64 {
+    ((p2.x - p1.x).powi(<span class="number">2</span>) + (p2.y - p1.y).powi(<span class="number">2</span>)).sqrt()
+}
+
+<span class="comment">// Add cfg attribute to generated code
+</span><span class="attr">#[prebindgen(cfg = <span class="string">"feature = \"experimental\""</span>)]
+</span><span class="kw">pub fn </span>experimental_function() -&gt; i32 {
+    <span class="number">42
+</span>}
+
+<span class="comment">// Combine group name with cfg
+</span><span class="attr">#[prebindgen(<span class="string">"functions"</span>, cfg = <span class="string">"unix"</span>)]
+</span><span class="kw">pub fn </span>another_function() -&gt; i32 {
+    <span class="number">42
+</span>}</code></pre></div><h2 id="requirements"><a class="doc-anchor" href="#requirements">§</a>Requirements</h2>
+<ul>
+<li>Must call <code>prebindgen::init_prebindgen_out_dir()</code> in your crate’s <code>build.rs</code></li>
+<li>Optionally takes a string literal group name for organization (defaults to “default”)</li>
+<li>Optionally takes <code>cfg = "condition"</code> to add <code>#[cfg(condition)]</code> to generated code</li>
+</ul>
+<h2 id="the-inline-feature"><a class="doc-anchor" href="#the-inline-feature">§</a>The <code>inline</code> feature</h2>
+<p>With the crate <code>inline</code> feature enabled, this macro prepends <code>#[inline]</code> to the
+emitted function so thin wrappers stay zero-cost for Rust consumers that do not
+build with LTO. Off by default; see the crate-level documentation.</p>
+</div></details></section></div></main></body></html>
