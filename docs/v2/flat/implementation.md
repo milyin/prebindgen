@@ -41,3 +41,7 @@ Required validation for implementation:
   enumeration, and type/key consistency holds by construction.
 - Flat tests validate source inspection and emission. The registry project's
   C/JNI tests separately validate conversion behavior and ownership.
+
+---
+
+Previous: [C and Kotlin examples](../registry/primitive-examples.md) · Next: [Registry implementation](../registry/implementation.md)

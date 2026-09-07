@@ -6,6 +6,11 @@ Status: proposed design. API sketches describe intended contracts, not implement
 
 Source-model companion: [Flat V2](../flat/overview.md).
 
+Flat has now supplied the [checked source model and views](../flat/inspection.md).
+The next stage combines that source information with the frontend's recorded
+binding choices. The registry determines the operations needed to implement
+each requested binding.
+
 ## Purpose and scope
 
 Build a second generation pipeline around a common **registry**: an engine that takes the Rust source model and the consumer's choices, determines the required conversions, and assembles instructions for generating bindings. Language implementations describe how foreign code represents Rust values and provide the operations specific to their runtime. The registry combines those descriptions into complete conversions and exported functions using algorithms shared by C, JNI/Kotlin, and future languages.
@@ -16,7 +21,7 @@ V2 accepts the existing examples' complete Rust inputs and preserves their exist
 
 ## 1. What the registry does
 
-The registry receives the existing [`Flat` source model](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/flat/mod.rs) and requests to expose particular types, functions, and constants. For each request, it builds a **plan**: structured data describing the required conversions, calls and their execution order. The common Rust writer renders the native wrappers and supporting Rust types. The C build then uses `cbindgen` to derive C headers from that Rust output; the JNI implementation renders Kotlin declarations from the completed plans. Planning happens in the generator; the generated operations execute later when the bindings are used.
+The registry receives the [Flat V2 source model](../flat/model.md) and requests to expose particular types, functions, and constants. For each request, it builds a **plan**: structured data describing the required conversions, calls and their execution order. The common Rust writer renders the native wrappers and supporting Rust types. The C build then uses `cbindgen` to derive C headers from that Rust output; the JNI implementation renders Kotlin declarations from the completed plans. Planning happens in the generator; the generated operations execute later when the bindings are used.
 
 For example, consider this illustrative source API:
 
@@ -87,3 +92,7 @@ The implementation divides the registry's data between two structures:
 - **`GenerationRun`** holds the temporary planning state inside `Registry::generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and report; on failure, the registry returns an error.
 
 A binding crate normally builds one configured frontend. The frontend calls `Registry::generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using `GenerationRun` working state.
+
+---
+
+Previous: [Flat inspection](../flat/inspection.md) · Next: [Binding requests](requests.md)

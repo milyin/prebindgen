@@ -160,3 +160,7 @@ uses it when checking borrowing requirements.
 
 This path is the first acceptance example for the API. It should work with only
 `prebindgen-flat`, independently of registry or language-generator crates.
+
+---
+
+Previous: [Flat model](model.md) · Next: [Registry purpose](../registry/overview.md)

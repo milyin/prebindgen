@@ -10,8 +10,9 @@ Binding-generation companion: [Registry V2](../registry/overview.md).
 
 Flat describes the Rust items captured from annotated source. A consumer needs
 to find a function, inspect its parameters, follow their types to declarations,
-and inspect fields or enum variants. Those operations are useful to a binding
-frontend, the registry, an API documentation tool, or a source validator.
+and inspect fields or enum variants. Those operations are useful to an API
+documentation tool, a source validator, a language frontend, or the registry
+that later plans the bindings.
 
 Flat V2 should provide that navigation through a consistent, read-only API. A
 **view** is an inspectable handle that retains the source model containing its
@@ -19,7 +20,7 @@ information. Following a parameter to its type, or a record to a field, keeps
 that model association. A view also retains the source information needed for
 diagnostics and eventual Rust emission.
 
-The independent utility of these views is checked source inspection. The
+Flat supplies these views independently of binding generation. The
 [registry](../registry/overview.md#1-what-the-registry-does) adds decisions about which
 values to convert and how to combine conversions. For example, Flat reports that
 `stamp_from_millis(i64) -> Stamp` takes one integer and returns `Stamp`. The
@@ -51,22 +52,6 @@ The new API adds three guarantees around those facts:
 Function lookup returns `FunctionView` directly. The view supports inspection
 and retains the model; Flat keeps the underlying function index private.
 
-## Boundary with the registry project
+---
 
-The [registry's relation API](../registry/source-relations.md#4-describing-source-construction-and-decomposition)
-consumes `FunctionView` and `RecordView`. The registry assigns conversion roles
-and validates them against a requested direction and exact `TypeView`.
-
-| Flat provides | Registry adds |
-| --- | --- |
-| Function parameters and complete return type | Whether the function constructs a value or projects one from an input. |
-| Record shape and typed fields | Recursive field conversions and value construction/decomposition. |
-| `Result` child types | Whether a selected constructor treats `Ok` as construction success and routes `Err` as failure. |
-| Exact reference/wrapper structure and source access facts | Temporary lifetimes, borrow use and ownership in the generated conversion. |
-| Stable snapshot association and normalized type keys | Conversion-cache identity including direction, selected relation and target policy. |
-| Source locations and unsupported-item descriptions | Binding-specific dependency paths and skipped-output reports. |
-
-The registry and language frontends use Flat independently. Flat has no
-conversion-selection policy, target representation, recursive binding planner,
-or dependency on the registry. A `FunctionView` has no `as_constructor()`
-method; `ConstructorRelation::new(function)` belongs to the registry library.
+Previous: [Project contents](../README.md) · Next: [Flat model](model.md)

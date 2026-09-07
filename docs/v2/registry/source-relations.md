@@ -105,3 +105,27 @@ Registry-library registration accepts checked relations and issues opaque `Relat
 The registry follows `Selection.relation` to the checked operation, obtains its fields or helper arguments, and recursively plans their conversions. Projection calls its helper once and processes the saved result through the conversion rules. The adapter describes foreign representations; the registry assembles the source-side instructions executed by the wrapper.
 
 Selection precedes child traversal: an atomic opaque representation does not inspect unused private fields. Helper arguments need not resemble fields. Child types retain wrappers, references and lifetimes; cloning needs an explicit operation. Callback arguments reverse direction. Future roles follow the same checked-construction pattern and produce unsupported outcomes until implemented.
+
+## Responsibility boundary with Flat
+
+The [registry's relation API](#4-describing-source-construction-and-decomposition)
+consumes `FunctionView` and `RecordView`. The registry assigns conversion roles
+and validates them against a requested direction and exact `TypeView`.
+
+| Flat provides | Registry adds |
+| --- | --- |
+| Function parameters and complete return type | Whether the function constructs a value or projects one from an input. |
+| Record shape and typed fields | Recursive field conversions and value construction/decomposition. |
+| `Result` child types | Whether a selected constructor treats `Ok` as construction success and routes `Err` as failure. |
+| Exact reference/wrapper structure and source access facts | Temporary lifetimes, borrow use and ownership in the generated conversion. |
+| Stable snapshot association and normalized type keys | Conversion-cache identity including direction, selected relation and target policy. |
+| Source locations and unsupported-item descriptions | Binding-specific dependency paths and skipped-output reports. |
+
+The registry and language frontends use Flat independently. Flat has no
+conversion-selection policy, target representation, recursive binding planner,
+or dependency on the registry. A `FunctionView` has no `as_constructor()`
+method; `ConstructorRelation::new(function)` belongs to the registry library.
+
+---
+
+Previous: [Binding requests](requests.md) · Next: [Primitive operations](target-operations.md)

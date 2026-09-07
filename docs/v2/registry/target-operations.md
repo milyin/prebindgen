@@ -195,3 +195,7 @@ arbitrary renderer code obeys its description.
 #### Concrete generated-code examples
 
 The [C and Kotlin/JNI examples](primitive-examples.md) show a complete foreign declaration and native wrapper, the primitive specifications behind their input operations, and the exact ownership of each generated fragment.
+
+---
+
+Previous: [Source relations](source-relations.md) · Next: [Representations](representations.md)

@@ -89,3 +89,7 @@ struct OptionalOps {
 A **niche** is a reserved representation that cannot be a valid present child, such as zero for a handle whose valid values exclude zero. `DomainId` describes those validity facts. `DefaultsId` describes valid wire defaults, not fabricated Rust source values. `absent` builds the complete absent representation; `inactive` supplies the unused child slots for the separate-flag convention.
 
 The registry branches on presence and invokes the child conversion only on the present path. It validates active inputs and supplies required inactive defaults. Nested optionals must preserve distinct states such as `None` and `Some(None)`; if the selected encoding cannot do that, the combination is unsupported.
+
+---
+
+Previous: [Primitive operations](target-operations.md) · Next: [Target interface](target-interface.md)

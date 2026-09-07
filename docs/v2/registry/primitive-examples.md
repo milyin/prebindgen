@@ -2,7 +2,9 @@
 
 [V2 project contents](../README.md) · [Individual target operations](target-operations.md)
 
-These examples continue the `PrimitiveSpec` design with concrete expected output.
+With [conversion plans](plans.md) assembled and [supported output retained](generation.md),
+the writers can emit bindings. These examples follow `PrimitiveSpec` descriptions
+through to that concrete output.
 The snippets are illustrative output for the proposed V2 engine, not files
 produced by its current scaffold. The planning snippets show proposed data
 contracts; the complete Rust and Kotlin examples show what those contracts mean
@@ -392,3 +394,7 @@ Adding a third supported field makes the registry visit another source child
 and apply the same composition algorithm. The target describes one more member
 or getter through its existing local representation interface. The target does
 not need another handwritten record converter or wrapper-assembly algorithm.
+
+---
+
+Previous: [Complete output](generation.md) · Next: [Flat implementation](../flat/implementation.md)

@@ -60,3 +60,7 @@ Source-conversion dependencies appear in selected relationships. Target operatio
 Descriptions returned by a target can contain new primitive, layout, helper, or policy definitions with references local to that description. The registry validates and registers the definitions and assigns its own table IDs. Existing descriptors can reference IDs the registry already supplied. The target does not allocate entries in registry-owned tables itself.
 
 The language-provided final rendering interface reads immutable plans and retained payloads. The common emission machinery supplies allocated operand names and the necessary rendering context; the rendering interface exposes no planning entry point. The original builder is translated before generation; subsequent decisions use requests and policies.
+
+---
+
+Previous: [Representations](representations.md) · Next: [Conversion and function plans](plans.md)

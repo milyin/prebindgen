@@ -13,9 +13,12 @@ view associated with the correct model.
 ## Building and retaining a model
 
 A **snapshot** is one completed, immutable set of source records and lookup
-indices. Source captures and declared local helper signatures enter a mutable
-builder. Building checks the complete set and publishes a snapshot. All views
-from that snapshot retain shared ownership of its storage.
+indices. A **local helper** is a Rust function whose signature the binding
+frontend declares instead of obtaining it from annotated-source captures. The
+frontend supplies that signature and its source module so Flat can describe the
+helper alongside captured functions. Both inputs enter a mutable builder.
+Building checks the complete set and publishes a snapshot. All views from that
+snapshot retain shared ownership of its storage.
 
 ```rust
 impl FlatBuilder {
@@ -157,3 +160,7 @@ facilities. Views are not a new route for reparsing captured syntax during
 planning. Any new source fact needed to render an operation belongs in Flat's
 structured model. Source legality and field accessibility must be represented
 or diagnosed before the registry claims support for construction or projection.
+
+---
+
+Previous: [Flat purpose](overview.md) · Next: [Flat inspection](inspection.md)

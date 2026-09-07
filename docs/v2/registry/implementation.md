@@ -78,3 +78,7 @@ Acceptance criteria:
 Earlier feasibility work inspected registry relationships/composition and Flat emission at [e046546](https://github.com/milyin/prebindgen/tree/e04654679e7aa0e7c7d4b9bb4a1268f9943926ec). Type-key inspection at [a429662](https://github.com/milyin/prebindgen/tree/a429662bb450408f401ad8f52ff753c5f5a179d4/prebindgen-flat/src/flat) confirmed `TypeRef::key()` and its equality/hash contract. `cargo test -p prebindgen-flat --lib`: 92 passed. These checks covered existing Flat behavior, not the proposed V2 contracts.
 
 Future resource, recursive and runtime capabilities require implementations and tests; until then, affected requests remain unsupported. Background: [#689](https://github.com/milyin/prebindgen/issues/689) / [#701](https://github.com/milyin/prebindgen/issues/701); earlier plans: [#713](https://github.com/milyin/prebindgen/issues/713) / [#717](https://github.com/milyin/prebindgen/issues/717).
+
+---
+
+Previous: [Flat implementation](../flat/implementation.md) · Next: [Project contents](../README.md)

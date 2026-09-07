@@ -99,3 +99,7 @@ validate and convert inputs
 The registry allocates synthetic parameters required by the boundary, validates type/value mappings and ensures that partial results and errors obey the declared contract. Unit results explicitly require no result payload.
 
 C and JNI retain configured calling conventions. Unsupported result destinations skip the function; changing its ABI is not a substitute for support.
+
+---
+
+Previous: [Target interface](target-interface.md) · Next: [Complete output](generation.md)

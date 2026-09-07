@@ -175,3 +175,7 @@ For example, two owned `Stamp` inputs with the same two-integer JNI representati
 Model membership follows the [Flat V2 snapshot contract](../flat/model.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. The registry checks incoming views against its own model before planning. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 
 Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Policies containing closures share identity only when equivalence is established. Reports use deterministic source/configuration identities.
+
+---
+
+Previous: [Registry purpose](overview.md) · Next: [Source relations](source-relations.md)
