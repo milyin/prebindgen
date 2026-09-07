@@ -2,6 +2,8 @@
 
 Status: proposed design for [issue #720](https://github.com/milyin/prebindgen/issues/720). This document describes the architecture and implementation plan; its Rust examples are schematic API sketches.
 
+Companion project: [Flat V2: checked source inspection](flat-v2.md) defines the shared source API used by the registry and language frontends.
+
 ## Purpose and scope
 
 Build a second generation pipeline around a common **registry**: an engine that takes the Rust source model and the consumer's choices, determines the required conversions, and assembles instructions for generating bindings. Language implementations describe how foreign code represents Rust values and provide the operations specific to their runtime. The registry combines those descriptions into complete conversions and exported functions using algorithms shared by C, JNI/Kotlin, and future languages.
@@ -218,7 +220,7 @@ For example, `(Stamp.fields, None, Field("secs"))` identifies a struct field; `(
 
 ### Finding an existing conversion plan
 
-Conversion planning takes a model-validated `TypeRef` and a direction, represented by `Crossing`. Frontends and adapters supply source descriptions, not cache keys:
+Conversion planning takes a `TypeView` and a direction, represented by `Crossing`. A `TypeView` is a read-only handle retaining an exact Rust type reading and the immutable Flat model in which it is interpreted; the [Flat V2 project](flat-v2.md#type-readings-and-type-views) defines its lookup and navigation API. Frontends and adapters supply source descriptions, not cache keys:
 
 ```rust
 enum Direction {
@@ -227,7 +229,7 @@ enum Direction {
 }
 
 struct Crossing {
-    source: TypeRef,       // Model-validated type, including references/generics.
+    source: TypeView,      // Exact type and retained Flat snapshot, including wrappers.
     direction: Direction, // Whether the value enters or leaves the Rust API.
 }
 ```
@@ -244,13 +246,13 @@ struct NodeKey {
 }
 ```
 
-The private cache operation accepts the validated crossing and selection, derives the key, and retains the same `TypeRef` in the plan. Key construction and cache mutation are private; plan descriptors expose typed readings. Callers cannot submit mismatched type/key pairs or request conversions using parsed keys.
+The private cache operation accepts the validated crossing and selection, derives the key, and retains the same `TypeView` in the plan. Key construction and cache mutation are private; plan descriptors expose typed readings. Callers cannot submit mismatched type/key pairs or request conversions using parsed keys.
 
-`TypeRef` has no `Eq`/`Hash`; its existing `key()` returns `prebindgen_flat::TypeKey`, which supplies both. `key()` preserves references/mutability, wrappers, generic arguments, array extents and lifetime spelling. Flat normalizes parentheses and known equivalent paths, such as `std::vec::Vec<T>` and `Vec<T>`, without equating arbitrary aliases. `stripped_key()` removes outer `Box`/`Cow` wrappers for declaration lookup: `Box<Stamp>` finds the `Stamp` declaration. The conversion cache uses `key()` to retain those wrappers. Plans retain the typed readings needed for inspection and emission.
+The existing structural reading `TypeRef` has no `Eq`/`Hash`; its `key()` returns `prebindgen_flat::TypeKey`, which supplies both. `key()` preserves references/mutability, wrappers, generic arguments, array extents and lifetime spelling. Flat normalizes parentheses and known equivalent paths, such as `std::vec::Vec<T>` and `Vec<T>`, without equating arbitrary aliases. `stripped_key()` removes outer `Box`/`Cow` wrappers for declaration lookup: `Box<Stamp>` finds the `Stamp` declaration. The proposed `TypeView::key()` delegates to its retained reading. The conversion cache uses that key to retain wrappers. Plans retain the view for model-aware inspection and emission; key text cannot recreate a view.
 
 For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override changes the policy; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
 
-Model membership is part of the API contract. Extend `prebindgen-flat` with model-scoped type references or checked import operations that bind a reading to a specific `Flat` model. Flat owns source identity, lookup and validation; the registry accepts the resulting checked references. Private constructors prevent forged model identity, and derived child types preserve that context. A mismatched reference must be rejected before planning; matching key text alone is insufficient. Design this contract jointly across Flat and the registry rather than duplicating source validation in the registry.
+Model membership follows the [Flat V2 snapshot contract](flat-v2.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. The registry checks incoming views against its own model before planning. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 
 Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Policies containing closures share identity only when equivalence is established. Reports use deterministic source/configuration identities.
 
@@ -262,26 +264,26 @@ A **relation** is the registry's description of how to construct or read a Rust 
 
 ### Flat provides neutral source views
 
-The proposed Flat API returns structural views, without choosing conversion roles:
+The [Flat V2 project](flat-v2.md) defines a source-inspection API useful independently of binding generation. Function lookup returns a checked `FunctionView` directly; parameter, result and field access retain the same immutable source model. The registry and frontend use this API independently.
 
 ```rust
 impl Flat {
-    pub fn record(&self, ty: &TypeRef) -> Result<RecordView, ModelError>;
-    pub fn function(&self, reference: &FunctionRef) -> Result<FunctionView, ModelError>;
+    pub fn function(&self, name: &str) -> Option<FunctionView>;
 }
-
-// Internals private to Flat; public accessors provide read-only source facts.
-pub struct RecordView {
-    model: ModelIdentity, // Checked model association, retained with the source data.
-    record: RecordRef,    // Record type, named/tuple/unit form and typed fields.
+impl FunctionView {
+    pub fn parameters(&self) -> impl Iterator<Item = ParameterView>;
+    pub fn return_type(&self) -> TypeView;
 }
-pub struct FunctionView {
-    model: ModelIdentity,
-    function: FunctionRef, // Checked signature: parameters and complete return type.
+impl TypeView {
+    pub fn as_record(&self) -> Option<RecordView>;
+    pub fn referent(&self) -> Option<TypeView>;
+}
+impl RecordView {
+    pub fn fields(&self) -> impl Iterator<Item = FieldView>;
 }
 ```
 
-`RecordRef`/`FunctionRef` are model-issued references. Flat checks membership and source shape; failures return `ModelError`. Private constructors and retained immutable source data preserve validity. Frontend and registry share this API; required Flat extensions are in scope.
+`ParameterView` and `FieldView` provide their exact `TypeView`s. Flat creates the views and keeps their constructors and storage indices private. A record view exposes structural fields only when Flat models them. Reaching a record through `&Stamp` requires an explicit `referent()` step; that inspection does not itself implement a borrow conversion. Details of [storage, model checks](flat-v2.md#private-storage-and-model-consistency) and [incremental adoption](flat-v2.md#implementation-sequence-and-acceptance) belong to the Flat project.
 
 For `parse_stamp(&str) -> Result<Stamp, Error>`, Flat reports one parameter and a `Result` return type. Whether `Ok` means successful construction is decided by the registry when that function is selected as a constructor.
 
@@ -308,17 +310,17 @@ pub struct ConstructorRelation {
     output: ConstructionOutput, // Checked interpretation of its return type.
 }
 enum ConstructionOutput {
-    Value(TypeRef), // Constructed type.
-    Fallible { constructed: TypeRef, error: TypeRef },
+    Value(TypeView), // Constructed type.
+    Fallible { constructed: TypeView, error: TypeView },
 }
 pub struct ProjectionRelation {
     function: FunctionView, // Initially requires exactly one source argument.
-    input: TypeRef,        // Derived exact argument type: T, &T, or &mut T.
-    output: TypeRef,       // Derived complete return type, including wrappers.
+    input: TypeView,        // Derived exact argument type: T, &T, or &mut T.
+    output: TypeView,       // Derived complete return type, including wrappers.
 }
 ```
 
-All relation fields are private. Read-only accessors expose source types and arguments. A constructor's subject is derived from its result; a projector's subject/access requirements come from its input. Callers cannot pair an arbitrary subject with an unrelated operation. For `stamp_from_millis(i64) -> Stamp`, the constructor has one `i64` argument and produces `Stamp`, regardless of `Stamp`'s fields. For `stamp_parts(&Stamp) -> (i64, i64)`, projection requires a shared borrow and produces a tuple.
+All relation fields are private. Read-only accessors expose source types and arguments. A constructor's subject is derived from its result; a projector's subject/access requirements come from its input. Callers cannot pair an arbitrary subject with an unrelated operation. For `stamp_from_millis(i64) -> Stamp`, the constructor has one `i64` argument and produces `Stamp`, regardless of `Stamp`'s fields. For a helper `stamp_parts(&Stamp) -> StampParts`, where `StampParts` is a named record with `secs: i64` and `nanos: i64` fields, projection requires a shared borrow and produces that record.
 
 `RelationError` reports a source function incompatible with the requested role. Validation establishes the role's internal consistency, not that every target supports it. The registry separately checks a selected role against the conversion's expected type, direction and ownership: producing `Stamp` alone does not satisfy `&Stamp` without a supported temporary-and-borrow step. Default fallible construction interprets `Result::Ok` as the value and `Err` as failure; a different treatment requires an explicit conversion role.
 
@@ -404,7 +406,7 @@ struct OperandSpec {
 }
 
 enum OperationType {
-    Source(TypeRef),     // A checked Rust source type supplied by Flat.
+    Source(TypeView),     // An exact Rust type in its retained Flat snapshot.
     Carrier(WireTypeId), // A registered target/runtime type, described below.
 }
 
@@ -1004,7 +1006,7 @@ Acceptance criteria:
 - [ ] The proposal's boundaries are exercised by scalar and record bindings in existing C/JNI examples.
 - [ ] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. Target policies have explicit local interpretation APIs.
 - [ ] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
-- [ ] Flat and registry jointly enforce model-scoped references and private key derivation; update Flat APIs as needed.
+- [ ] The [Flat V2 project](flat-v2.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [ ] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner.
 - [ ] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
 - [ ] One immutable generation result supplies Rust output, optional foreign-writer output, reports and test selection; C headers are derived from the retained Rust output by `cbindgen`.
