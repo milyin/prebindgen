@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "languages": [
+    "c",
+    "kotlin"
+  ],
+  "stages": [
+    {
+      "id": "01-source",
+      "title": "Capture source items",
+      "language_dependent": false
+    },
+    {
+      "id": "02-flat",
+      "title": "Build and inspect Flat",
+      "language_dependent": false
+    },
+    {
+      "id": "03-requests",
+      "title": "Record binding requests",
+      "language_dependent": true
+    },
+    {
+      "id": "04-values",
+      "title": "Plan value conversions",
+      "language_dependent": true
+    },
+    {
+      "id": "05-boundary",
+      "title": "Assemble the native boundary",
+      "language_dependent": true
+    },
+    {
+      "id": "06-retain",
+      "title": "Retain supported output",
+      "language_dependent": false
+    },
+    {
+      "id": "07-emit",
+      "title": "Emit bindings",
+      "language_dependent": true
+    }
+  ],
+  "examples": [
+    {
+      "id": "function",
+      "title": "Function: stamp_sum"
+    },
+    {
+      "id": "struct",
+      "title": "Struct: Stamp"
+    }
+  ],
+  "deferred_examples": [
+    "enum",
+    "const",
+    "callback",
+    "option",
+    "vector",
+    "borrowed-parameter",
+    "nested-record-field"
+  ],
+  "cells": [
+    {
+      "example": "function",
+      "stage": "01-source",
+      "languages": []
+    },
+    {
+      "example": "function",
+      "stage": "02-flat",
+      "languages": []
+    },
+    {
+      "example": "function",
+      "stage": "03-requests",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "function",
+      "stage": "04-values",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "function",
+      "stage": "05-boundary",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "function",
+      "stage": "06-retain",
+      "languages": []
+    },
+    {
+      "example": "function",
+      "stage": "07-emit",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "01-source",
+      "languages": []
+    },
+    {
+      "example": "struct",
+      "stage": "02-flat",
+      "languages": []
+    },
+    {
+      "example": "struct",
+      "stage": "03-requests",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "04-values",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "06-retain",
+      "languages": []
+    },
+    {
+      "example": "struct",
+      "stage": "07-emit",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    }
+  ]
+}
