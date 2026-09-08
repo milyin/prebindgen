@@ -4,13 +4,12 @@
 
 [Project contents](../README.md)
 
-No later stage re-parses the source crate. Before any binding decision is made,
-the annotated crate is turned into a stream of records describing what it
-declares, and everything downstream works from those records. (No stage re-parses the
-captured source: it is read once, here. Rust syntax is parsed in two other
-places, both outside that path — when a binding crate declares a helper signature
-of its own, described at the end of this chapter, and when `cbindgen` reads the
-*generated* Rust to derive the C header.)
+The annotated crate is parsed once, here, into a stream of records describing
+what it declares; every later stage works from those records rather than from
+Rust source. Two steps further on do parse Rust — a helper signature a binding
+crate declares itself, at the end of this chapter, and `cbindgen` reading the
+*generated* wrappers to derive the C header — but never the captured source
+again.
 
 A **source crate** is an ordinary Rust library that marks the items it wants
 available to binding generators:

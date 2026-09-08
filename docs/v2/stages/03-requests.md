@@ -123,7 +123,7 @@ A C binding might represent `Stamp` as a C struct. A JNI binding might accept tw
 
 A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](07-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
 
-Flat and the flat crate have finished their work by the time requests exist.
+The source crate and Flat have finished their work by the time requests exist.
 These are the roles that act from here on — roles, not crates: the frontend and
 the target adapter are the two faces of one language adapter crate, and the
 common Rust writer belongs to the engine.

@@ -75,9 +75,11 @@ architecture is for.
 
 Two crates in this picture are yours; the rest are what prebindgen is.
 
-**What you write.** The **flat crate** is an ordinary Rust library — the fixture
-above is one — that marks the items it wants exposed and otherwise knows nothing
-about C or Kotlin. Beside it stands one **binding crate per target language**: a
+**What you write.** The **source crate** is an ordinary Rust library — the
+fixture above is one — that marks the items it wants exposed and otherwise knows
+nothing about C or Kotlin. (Such crates are conventionally named `…-flat`, after
+the flat namespace of items a binding sees, which is why the model built from one
+is called Flat.) Beside it stands one **binding crate per target language**: a
 `cdylib` or `staticlib` whose build script configures the generator, whose
 `lib.rs` includes the Rust that generator produced, and which is the thing you
 ship — a native library plus a C header, or a native library plus Kotlin sources
