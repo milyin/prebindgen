@@ -4,45 +4,87 @@
 
 [Project contents](../README.md)
 
-Nothing in this pipeline reads Rust source directly. The first stage turns the
-annotated source crate into a stream of captured records, and everything
-downstream works from those records and from what the binding crate declares
-alongside them.
+No later stage re-parses the source crate. Before any binding decision is made,
+the annotated crate is turned into a stream of records describing what it
+declares, and everything downstream works from those records. (No stage re-parses the
+captured source: it is read once, here. Rust syntax is parsed in two other
+places, both outside that path — when a binding crate declares a helper signature
+of its own, described at the end of this chapter, and when `cbindgen` reads the
+*generated* Rust to derive the C header.)
 
-**Input.** A source crate whose public items are marked with `#[prebindgen]`,
-compiled as usual. The proc macro leaves the item in place — the source crate
-still compiles and still exports it — and writes a record describing it into the
-crate's `OUT_DIR`, one record per line. The crate exports the directory as a
-constant, so a binding crate's `build.rs` can find the capture without knowing
-where Cargo put it.
+A **source crate** is an ordinary Rust library that marks the items it wants
+available to binding generators:
 
-**Owner.** The proc macro. It decides what a captured record contains: the item's
-syntax as written, the module path it was written in, the feature guards around
-it, and the source location for diagnostics. It makes no binding decisions and
-knows no target language; marking an item does not say it can be exported to C or
-Kotlin, only that it is available to try.
+```rust
+use prebindgen::prebindgen;
 
-**Second input, from the other side.** A binding crate can also declare the
-signature of a **local helper** — a Rust function it provides itself, which the
-generated code may call, and which no captured record describes. Those
-declarations arrive at the next stage as ordinary source facts, so a helper's
-parameters and result are inspected the same way a captured function's are. They
-are named here because the source model is built from both inputs, not from the
-captures alone.
+#[prebindgen]
+pub struct Stamp {
+    pub secs: i64,
+    pub nanos: i64,
+}
 
-**Output.** The complete capture for the crate: the marked items, the guards, and
-the locations. A construct the capture grammar does not model is retained as an
-explicit unsupported record rather than dropped, so the reason survives to the
-report at the end of the pipeline. Retaining an item as unsupported is not the
-same as failing: only malformed capture data — a record the reader cannot parse,
-or a set that contradicts itself — is an error, and it fails the build rather
-than silently reducing the generated API.
+#[prebindgen]
+pub fn stamp_sum(stamp: Stamp) -> i64 {
+    stamp.secs.wrapping_add(stamp.nanos)
+}
+```
 
-**What this stage does not decide.** Which items get exposed, under what foreign
-names, with which representation, and whether a conversion for them exists. Those
-are the [request](03-requests.md) and [planning](04-values.md) stages. Capture is
-deliberately indiscriminate: it is cheaper to carry an item that no binding uses
-than to lose one that a later target could have exported.
+The `#[prebindgen]` attribute leaves each item exactly where it is — the crate
+still compiles, and Rust callers still use `Stamp` and `stamp_sum` normally. What
+it adds is a side effect at compile time: for each marked item it writes one
+record describing that declaration into the crate's build output directory, the
+one Cargo gives every crate as `OUT_DIR`. A record holds the declaration as
+written, the module path it was written in, the feature guards around it, and the
+file and line for diagnostics. (The [function][fn_source] and
+[record][struct_source] paths show one such record in full.)
+
+The attribute goes on a function, a struct, an enum or a constant. It is not a
+general Rust reader: a declaration whose shape the capture grammar does not
+describe — a generic function, say — is recorded as unsupported rather than
+lowered, which is the first of the two outcomes described at the end of this
+chapter.
+
+Two more things travel with the records, both easy to miss because neither is a
+declaration. **Feature guards** are the `#[cfg]` conditions around a captured
+item; they are carried so that generated Rust can be gated exactly as the source
+was, and so a binding built with different features does not export items its
+source crate did not compile. A **guard item** is a compile-time check the
+capture emits rather than the user writing it — the assertion that the binding
+crate's feature selection matches the source crate's. It has no name in any
+foreign API, and it is re-emitted into the generated Rust verbatim.
+
+The source crate then re-exports that directory as a constant, so a binding
+crate's build script can read the capture without knowing where Cargo put it:
+
+```rust
+// build.rs of a binding crate
+let items = Source::new(source_crate::PREBINDGEN_OUT_DIR).items_all();
+```
+
+Marking an item is not a statement about bindings. It does not say that `Stamp`
+can be represented in C, that `stamp_sum` can be called from Kotlin, or that
+either will appear in the generated API. It says only that the declaration is
+available for a binding crate to ask about. Which items are exposed, under which
+names and with which representation, is settled two stages later, when a
+[binding request](03-requests.md) names them.
+
+Captures are not the only input to the source model. A binding crate can also
+declare a **local helper**: a Rust function that the binding crate itself
+provides, that generated code may call, and that no capture describes — for
+example a `fn stamp_from_millis(millis: i64) -> Stamp` written in the binding
+crate to build a source value that has no public constructor. The frontend
+declares the helper's signature, and from the next stage on it is inspected like
+any captured function. Helpers are mentioned here because the source model is
+built from both inputs, not from the captures alone.
+
+Two outcomes have to stay distinct. A construct the capture grammar does not
+model — a signature shape it cannot describe — is kept as an explicit
+*unsupported record*, so the reason survives all the way to the report at the end
+of the pipeline, and so an item that some other target could still export is not
+silently lost. Malformed capture data is different: a record that cannot be
+parsed, or a set that contradicts itself, is an error that fails the build rather
+than quietly shrinking the generated API.
 
 ## Elements at this stage
 

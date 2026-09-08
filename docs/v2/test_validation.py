@@ -63,10 +63,10 @@ class SpecStructure(unittest.TestCase):
         self.rejects("not a declared link id")
 
     def test_inline_link_into_examples(self):
-        self.edit("stages/01-source.md", "[Record with scalar fields][struct_source]",
-                  "[Record with scalar fields](../examples/struct/01-source.md)")
-        self.edit("stages/01-source.md",
-                  "[struct_source]: ../examples/struct/01-source.md", "")
+        self.edit("stages/06-retain.md", "[Record with scalar fields][struct_retain]",
+                  "[Record with scalar fields](../examples/struct/06-retain.md)")
+        self.edit("stages/06-retain.md",
+                  "[struct_retain]: ../examples/struct/06-retain.md", "")
         self.rejects("must use a reference-style link id")
 
     def test_broken_local_link(self):

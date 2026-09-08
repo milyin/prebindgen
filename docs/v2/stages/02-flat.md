@@ -7,53 +7,74 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-Captured records are text about Rust. This stage turns them into a checked model
-of Rust: typed records, resolved references between them, and read-only handles
-that let a consumer walk from a function to its parameters, from a parameter to
-its type, and from that type to the declaration and fields behind it.
+A captured record says `stamp: Stamp` because that is what the source said. To
+plan a binding, something has to know more than the text: that `Stamp` is a
+record declared in this same crate, that it has two fields, and that both are
+`i64`. Turning the captured text into that kind of answerable model is this
+stage, and the library that does it is **Flat** (`prebindgen-flat`).
 
-**Input.** The complete captures for the crate, plus any local helper signatures
-the binding frontend declares.
+Flat reads the whole capture, lowers each declaration into a typed record,
+resolves the references between them — the `Stamp` named by the parameter is
+matched to the `Stamp` that was declared — and publishes the result:
 
-**Owner.** Flat — the `prebindgen-flat` library. It lowers the source into typed
-records, validates references between them, and publishes one immutable snapshot
-with read-only views over it. It makes no binding decisions: it reports that
-`stamp_from_millis(i64) -> Stamp` takes one integer and returns `Stamp`, and has
-no opinion about whether that function should be used to construct values.
+```rust
+// build.rs of a binding crate, continued from the previous chapter
+let mut builder = FlatBuilder::new();
+builder.add_captures(Source::new(source_crate::PREBINDGEN_OUT_DIR).items_all())?;
+builder.add_local_function(stamp_from_millis_signature)?;  // optional, see below
+let model = builder.build()?;   // the snapshot; nothing is added to it afterwards
+```
 
-**Output.** A snapshot and the views into it: functions, parameters, types,
-declarations, records, fields, source locations, and explicit unsupported-item
-records. Views retain the snapshot, so they stay valid after the original handle
-is dropped, and a view from a different snapshot is rejected before it can be
-planned against.
+Then it can be walked:
 
-**Failure.** Malformed or contradictory capture data is a `ModelError` and fails
-the build. A construct the model does not describe stays in the snapshot as an
-unsupported record; whether that blocks a requested binding is decided later, by
-the [registry](03-requests.md#what-the-registry-does).
+```rust
+let function = model.function("stamp_sum").expect("captured");
+let stamp = function.parameters().next().unwrap().ty(); // the Stamp parameter type
+let record = stamp.as_record().expect("a record");      // its declaration
+for field in record.fields() {
+    println!("{}: {}", field.name().unwrap(), field.ty().type_ref()); // secs: i64, nanos: i64
+}
+```
+
+Two words in that snippet carry the design. A **snapshot** is one finished,
+immutable set of source records: once published, nothing is added to it, so
+everything read from it agrees. A **view** — `FunctionView`, `TypeView`,
+`RecordView`, `FieldView` — is a read-only handle to something inside a snapshot,
+which remembers which snapshot it came from. That memory is why navigation works:
+`parameters().next().unwrap().ty()` hands back a type view in the same snapshot,
+so `as_record()` can look up the declaration without the caller repeating a name
+lookup, and without a name from one build being resolved against another build's
+declarations.
+
+Flat answers questions about Rust; it takes no position on bindings. It will
+report that `stamp_from_millis(i64) -> Stamp` takes one integer and returns
+`Stamp`. Whether that function should therefore be used to *construct* `Stamp`
+values for a binding is not something a view says — that decision belongs to the
+[registry](03-requests.md#what-the-registry-does), and Flat has no API that
+expresses it.
+
+The same split governs failure. Capture data that is malformed or contradictory
+is a `ModelError` and fails the build. A declaration whose shape the model does
+not describe stays in the snapshot as an unsupported record, carrying its
+location; whether that blocks a particular requested binding is decided much
+later, and only for the bindings that actually need it.
 
 ## What Flat is for
 
-Flat describes the Rust items captured from annotated source. A consumer needs
-to find a function, inspect its parameters, follow their types to declarations,
-and inspect fields or enum variants. Those operations are useful to an API
-documentation tool, a source validator, a language frontend, or the registry
-that later plans the bindings.
+Binding generation is not the only consumer of this model. The same navigation —
+find a function, inspect its parameters, follow a type to its declaration, list
+a record's fields or an enum's variants — is what an API documentation tool or a
+source validator needs, and Flat is usable on its own, with no registry and no
+target in the picture.
 
-Flat V2 should provide that navigation through a consistent, read-only API. A
-**view** is an inspectable handle that retains the source model containing its
-information. Following a parameter to its type, or a record to a field, keeps
-that model association. A view also retains the source information needed for
-diagnostics and eventual Rust emission.
+A view also retains the source information needed for diagnostics and for
+eventual Rust emission, so a consumer that reports an error can point at the
+line, and the writer at the end of the pipeline can reproduce a type as the
+source spelled it.
 
-Flat supplies these views independently of binding generation. The registry adds
-decisions about which values to convert and how to combine conversions. For
-example, Flat reports that `stamp_from_millis(i64) -> Stamp` takes one integer
-and returns `Stamp`. The registry decides whether that function is selected to
-construct a value for a binding.
-
-This stage covers Flat's supported source language. It does not promise the type
-inference, trait resolution, or full Rust semantics of the Rust compiler.
+What Flat models is a supported subset of Rust, not the language. It does not
+promise the type inference, trait resolution or full semantics of the compiler,
+and a declaration outside that subset is reported rather than approximated.
 
 ## What changes from the current API
 
@@ -178,7 +199,8 @@ impl Flat {
 }
 ```
 
-These methods compare snapshot association and do not rebind the view. Equivalent
+These methods compare snapshot association — in the `Rc`-based storage above, an
+identity comparison of the shared model data — and do not rebind the view. Equivalent
 checks cover other view kinds. `ModelError` distinguishes a mismatched model
 from other invalid model operations. Private constructors prevent forged
 indices and mismatched internal pairs; runtime checks reject valid views from
@@ -236,8 +258,8 @@ Parameters keep declaration order and their containing function's identity.
 A parameter index is not a globally unique source identifier.
 
 Constants and enum inspection should follow these conventions as their views
-are added. This does not require an enormous common trait. A generic item view
-supports enumeration and classification; a function still exposes parameters,
+are added, which needs no large shared trait: a generic item view
+supports enumeration and classification, while a function still exposes parameters,
 a record exposes fields, and an enum exposes variants.
 
 ## Type readings and type views
@@ -333,7 +355,9 @@ impl TypeView {
 }
 ```
 
-`ScalarKind` is Flat's supported scalar vocabulary. Composition retains the
+`ScalarKind` is Flat's supported scalar vocabulary, so naming a scalar cannot
+fail; wrapping an existing type can, which is why only the second returns a
+`Result`. Composition retains the
 operand's snapshot and builds a consistent reading inside Flat. The resulting
 view owns the derived reading; it does not insert another captured declaration
 into the immutable snapshot. Invalid grammar combinations return `ModelError`.
@@ -342,7 +366,8 @@ prove that the generated temporary or source borrow has the required lifetime.
 More complex constructors must check that all operand views share a snapshot.
 
 Inspection must preserve opaque declarations as opaque. Current Flat lowers
-tuple structs to opaque `Extern` records and does not lower their fields.
+tuple structs to `Extern` records — its record kind for a declaration whose
+fields it does not model — and does not lower those fields.
 Returning a `RecordView` for them would therefore need an additional source-model
 extension. The first views expose existing facts. Later structural extensions
 may represent additional fields, but must not make previously accepted opaque

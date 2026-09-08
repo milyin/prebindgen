@@ -25,6 +25,79 @@ sketches illustrate intended contracts, not published APIs, and code shown as
 generated output illustrates required behavior rather than bytes produced by the
 current scaffold.
 
+## What is being generated
+
+The input is a Rust crate that marks the items it wants exposed. The whole of
+this document works from one small example of that:
+
+```rust
+#[prebindgen]
+pub struct Stamp {
+    pub secs: i64,
+    pub nanos: i64,
+}
+
+#[prebindgen]
+pub fn stamp_sum(stamp: Stamp) -> i64 {
+    stamp.secs.wrapping_add(stamp.nanos)
+}
+```
+
+From it, and from what a binding crate configures, the C output is a header a C
+program compiles against, backed by a generated Rust function that C actually
+calls:
+
+```c
+typedef struct StampC { int64_t secs; int64_t nanos; } StampC;
+int64_t stamp_sum_c(struct StampC arg0);
+```
+
+and the Kotlin/JNI output is a Kotlin class and method, backed by a different
+generated Rust function that the JVM calls:
+
+```kotlin
+data class Stamp(val secs: Long, val nanos: Long)
+object Bindings { @JvmStatic external fun sum(stamp: Stamp): Long }
+```
+
+Neither generated Rust function is written by hand, and neither is a
+transliteration of the other: the C one receives a struct by value and reads its
+members, the JNI one receives a JVM object and calls its property getters through
+the Java Native Interface. What they share is everything about the *source* side
+— two field values, one `Stamp`, one call — and sharing that work is what this
+architecture is for.
+
+## The components
+
+Four crates' worth of code and one input file set appear throughout. Two of the
+pieces live in the same crate: a frontend and its target adapter are the user-
+facing and registry-facing halves of `prebindgen-c` or `prebindgen-jni`. It is
+worth fixing what each is before following them stage by stage.
+
+- **The source crate** is the annotated Rust library above. It knows nothing
+  about C or Kotlin.
+- **Flat** (`prebindgen-flat`) turns what was captured from that crate into a
+  queryable source model: which functions exist, what their parameters are, which
+  declaration a type name refers to, what fields a record has.
+- **A language frontend** is the public API a user configures — `prebindgen-c`
+  or `prebindgen-jni` — usually from a build script. It records what to expose
+  and how it should look in that language, and hands the result to the registry.
+- **The registry** (`prebindgen-registry`) is the engine. It reads the source
+  model, works out every conversion a requested binding needs, and assembles the
+  Rust wrappers. It is shared by all targets and contains nothing C- or
+  JNI-specific.
+- **A target adapter** is the language-specific half of a frontend's crate. A
+  **target** is the language and its native calling interface — C, or Kotlin
+  through JNI. The registry asks the adapter local questions —
+  among them what carries a `Stamp`, how a member of it is read, and what this
+  exported function's native signature looks like — and it answers with
+  descriptions, never with generated code for a whole binding.
+
+Output is written by the registry's **common Rust writer** for the native Rust of
+both targets. The C header is then derived from that Rust by the external
+`cbindgen` tool, while Kotlin source is rendered by a **foreign writer** that the
+JNI implementation provides.
+
 ## The pipeline
 
 ```text
@@ -62,9 +135,14 @@ All example paths share [one source fixture](source.md).
 - [Function taking an owned record][fn] — `stamp_sum(Stamp) -> i64`
 - [Record with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
 
-Element kinds form a tree: a kind at the root, more specific variants below it,
-each becoming its own path when its behavior differs from its parent's. Two paths
-are specified today; the rest name the id they will use when they are written.
+An **element kind** is a kind of source declaration — a function, a record, an
+enum — as this appendix organizes it. (Inside the pipeline, the chapters use
+`ElementId` for something narrower: one *requested output*, such as `stamp_sum`
+exposed at one Kotlin placement. Same adjective, different noun; the chapters say
+which they mean.) Element kinds form a tree: a kind at the root, more specific
+variants below it, each becoming its own path when its behavior differs from its
+parent's. Two paths are specified today; the rest name the id they will use when
+they are written.
 
 ```text
 fn                      specified   function taking an owned record, returning a scalar
@@ -106,7 +184,8 @@ for every skipped request; it does not fall back to V1 for individual items.
 Emitted bindings preserve logical behavior, ownership, error handling and declared
 interfaces. Byte-identical generated text is not required.
 
-The `v2` Cargo feature makes the engine available. `.build()` selects the pipeline
+The frontend crate's `v2` Cargo feature — on `prebindgen-c` or `prebindgen-jni`,
+whichever the binding crate depends on — makes the engine available. `.build()` selects the pipeline
 from `PREBINDGEN_PIPELINE=v1|v2`, defaulting to V1 when unset; an explicit
 `build_with(Pipeline::...)` overrides that. Selecting V2 without the feature is an
 error. [Issue #719](https://github.com/milyin/prebindgen/issues/719) covers that

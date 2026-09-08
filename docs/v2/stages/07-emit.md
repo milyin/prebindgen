@@ -7,28 +7,133 @@
 Status: proposed design. Code shown as generated output illustrates required
 behavior, not bytes produced by the current scaffold.
 
-Everything is decided by now. The last stage turns the frozen result into files:
-native Rust for both targets, a C header derived from that Rust, and Kotlin
-declarations rendered from the same plans.
+Everything is decided by now; what is left is producing files. There are three
+kinds of output, and understanding which component makes each is most of this
+stage.
 
-**Input.** The frozen `Generation`: retained value plans, function plans, public
-declarations, generated artifacts in emission order, and the payloads the targets
-attached to them.
+**Native Rust** is generated for both targets by the same component, the common
+Rust writer, which belongs to the registry. It walks the frozen instructions and
+renders them: the locals, their order, the branches on failure, the construction
+of the source value, the call, the return. It also allocates the wrapper's temporaries — `v0`, `v1`, … — from the plan, so
+two operations rendered into the same wrapper cannot collide over a name. The
+wrapper's *parameters* are the exception, and deliberately so: they are named in
+the boundary description, because a target that requires an environment operand
+has to be able to say what that operand is called in the signature it dictated.
 
-**Owner.** The common Rust writer, which is part of the registry library and
-renders every native wrapper and supporting Rust type. It allocates the local
-names, renders the registry's instructions, and calls a target's operation
-renderer for the fragments only that target can produce. C then runs the external
-`cbindgen` tool over the generated Rust; JNI runs its own Kotlin writer over the
-same `Generation`.
+**A fragment inside that Rust** is the one thing a target contributes, and only
+where the operation is target-specific. Reading a C aggregate member renders as
+`arg0.secs` through an operation the registry library already provides, so the C
+adapter ships no renderer at all. Reading a JVM property renders as
+`env.call_method(&arg0, "getSecs", "()J", &[]).and_then(|value| value.j())`,
+which only the JNI adapter can produce. A fragment is one expression: this one
+evaluates to a `Result`, and the `and_then` is part of performing the read, not
+part of handling its failure. Nothing decides what happens when that `Result` is
+an error — no `match` on it, no early return — because deciding that is the
+wrapper's job, and the wrapper is the registry's.
 
-**Output.** The generated Rust module, the C header, the Kotlin sources, and the
-report published alongside them.
+**The foreign declaration** is what the other language compiles against, and here
+the two targets differ in kind. C has no foreign writer: the public C API is
+expressed as generated Rust types and functions, and the external `cbindgen` tool
+derives the header from them, so there is no generated C source file — the body
+of every C entry point *is* the Rust wrapper. Kotlin needs a writer, because a
+Kotlin class is not derivable from Rust, so the JNI implementation renders the
+data class and the `external fun` from the same retained plans. It uses the same
+class metadata that the property-read operations used, so a renamed getter moves
+in both places or neither.
 
-**Failure.** None of its own that concerns support. A writer cannot discover a new
-conversion, add a dependency or change a support decision — anything it would
-need was decided before freezing, and its absence at this point is a generator
-defect, not a skip.
+Put together, the JNI wrapper for the fixture comes out like this — every line
+attributable to one of the three contributions above:
+
+```rust
+#[no_mangle]
+pub extern "system" fn Java_example_Bindings_sum(   // symbol: JNI adapter
+    mut env: JNIEnv<'_>,                            // environment: JNI adapter
+    _class: JClass<'_>,
+    arg0: JObject<'_>,
+) -> jlong {
+    let v0 = match env.call_method(&arg0, "getSecs", "()J", &[])
+        .and_then(|value| value.j())                // fragment: JNI adapter
+    {                                               // everything else: registry
+        Ok(value) => value,
+        Err(error) => {
+            if report_jni_error(&mut env, error).is_err() {
+                std::process::abort();
+            }
+            return 0;
+        }
+    };
+    let v1 = match env.call_method(&arg0, "getNanos", "()J", &[])
+        .and_then(|value| value.j())
+    {
+        Ok(value) => value,
+        Err(error) => {
+            if report_jni_error(&mut env, error).is_err() {
+                std::process::abort();
+            }
+            return 0;
+        }
+    };
+    let v2 = source::Stamp { secs: v0, nanos: v1 };
+    let v3 = source::stamp_sum(v2);
+    v3
+}
+```
+
+Both reads render the same way and neither name collides, because the
+temporaries came from the plan rather than from the operation. `report_jni_error`
+is neither a fragment nor part of the wrapper: it is a generated artifact the JNI
+adapter contributes — a small helper function emitted into the same module — and
+the primitive that calls it lists that artifact among its dependencies, which is
+how retention knew to keep it.
+
+The C wrapper for the same function is the same shape with the branches gone,
+because its member reads cannot fail:
+
+```rust
+#[no_mangle]
+pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64 {
+    let v0 = arg0.secs;
+    let v1 = arg0.nanos;
+    let v2 = source::Stamp { secs: v0, nanos: v1 };
+    let v3 = source::stamp_sum(v2);
+    v3
+}
+```
+
+On the Kotlin side, the fixture's public API is a single declaration: because the
+record crosses as an object, the `external fun` can take the data class itself,
+and there is nothing to wrap. Had the configuration chosen to pass the two fields
+as separate JNI arguments, the native declaration would take two `Long`s, and the
+writer would add a Kotlin method taking a `Stamp` in front of it — that is the
+"typed wrapper" the component table mentions, and it exists only when the native
+signature is not the one Kotlin callers should see.
+
+## What lands on disk
+
+The generated Rust is written into the binding crate's build output directory and
+pulled into the crate the ordinary way:
+
+```rust
+// src/lib.rs of the binding crate
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+```
+
+Everything the registry retained is emitted into that file: the wrappers, the
+type declarations the target needed, and any generated helper an operation
+depended on — several such units per file, in the order retention fixed, so a
+declaration precedes its uses. The C build then runs `cbindgen` over the crate to
+produce the header a C program includes. The JNI build instead runs its Kotlin
+writer, which writes `.kt` files into a source directory the build script names,
+where the Kotlin compiler finds them; checking those into the repository is a
+reasonable choice, since it makes a change in the generated API visible in
+review.
+
+The report is published alongside the code. It is what says which requested
+elements were emitted, which were skipped and why — and, for the example crates,
+which test sections may be compiled against this output.
+
+The [element paths](#elements-at-this-stage) below show each generated file in
+full, including the parts elided above.
 
 ## What each writer contributes
 

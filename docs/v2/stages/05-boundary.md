@@ -7,27 +7,61 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-Conversions are reusable and know nothing about the function that uses them. This
-stage puts them into one exported function: which native arguments feed which
-input conversion, where the converted result goes, and what happens on each way
-the call can fail.
+A conversion knows how to turn a value into another value. It does not know which
+exported function it serves, where that function's result is supposed to go, or
+what should happen if a conversion inside it fails. That is this stage: taking
+the conversions planned for one requested function and assembling the actual
+native function a foreign caller will call.
 
-**Input.** The requested function, its input and output conversion nodes, and the
-policy governing calling convention, result delivery and error handling.
+For the fixture, the two targets end up with these signatures:
 
-**Owner.** The registry assembles and validates the wrapper; the target adapter
-describes the native interface — symbol, calling convention, environment
-operands, result placement and the terminal action for each failure category.
+```rust
+#[no_mangle]
+pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64
 
-**Output.** A `FunctionPlan`: the source callee, its input nodes in parameter
-order, its output conversions, a validated `BoundarySpec` and the complete body
-instructions for the wrapper, plus the generated prerequisites it needs.
+#[no_mangle]
+pub extern "system" fn Java_example_Bindings_sum(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    arg0: JObject<'_>,
+) -> jlong
+```
 
-**Failure.** An unsupported result destination or error route skips the function.
-Silently changing the ABI — dropping an out-parameter, returning a status the
-configuration did not ask for — is not a substitute for supporting it.
+Both wrap the same Rust function through the same input conversion, yet neither
+signature can be derived from the other. The C one is what a C caller can write;
+the JNI one is what the JVM demands — a symbol named after the Kotlin placement,
+plus two parameters (the JNI environment and the calling class) that the JVM
+passes to every native method and that no source parameter corresponds to. The
+target supplies those conventions; the registry places the conversions inside
+them.
 
-Only exported callables reach this stage. A record has a conversion but no
+Three things are decided here. **Where inputs come from**: which native argument
+feeds which input conversion, including arguments the target added for its own
+reasons. **Where the result goes** — the *delivery* — which for this fixture is
+the native return, but could be a caller-provided out-parameter, or a callback
+the configuration named; the same conversion is reused whichever destination
+applies, so a conversion never has one version per destination. **What happens on
+failure**: every failure a conversion declared needs a terminal action here, and
+the actions differ by category — a `Result::Err` returned by the source function
+is not the same event as a JNI call failing mid-conversion.
+
+The JNI wrapper shows why that last part is not a detail. Reading `getSecs()` can
+fail; the conversion says so but decides nothing. The answer comes from the
+policy the frontend recorded — the `runtime_errors` call in
+[the binding crate's build script](03-requests.md#record-binding-requests) — which
+for this fixture says: report the error to the JVM, then return zero — zero being merely
+the value a native method must return while an exception is pending, since the
+caller will see the exception rather than a result. Reporting can itself fail,
+and that path terminates by aborting. The registry emits the branch, the
+reporting call, the check on its result and the terminal return; the JNI adapter
+supplies only the operation that reports.
+
+If a requested delivery or failure route is not supported, the function is
+skipped and the report says why. It is never quietly given a different ABI than
+the one the configuration asked for, because a caller compiled against the header
+or the Kotlin declaration would then be calling something else.
+
+Only exported callables reach this stage. A record has conversions but no
 boundary of its own; it crosses inside the functions that use it.
 
 ## Assembling an exported function
