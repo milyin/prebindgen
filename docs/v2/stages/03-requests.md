@@ -121,7 +121,7 @@ A C binding might represent `Stamp` as a C struct. A JNI binding might accept tw
 
 **The registry owns that common work.** When a record gains another nested record field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of record traversal or wrapper assembly.
 
-A language implementation may also provide a **foreign writer**, an optional component that renders foreign-language source from the completed plans — Kotlin needs one, C does not, for the reason [emission](07-emit.md) gives. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
+A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](07-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
 
 Flat and the flat crate have finished their work by the time requests exist.
 These are the roles that act from here on — roles, not crates: the frontend and
@@ -156,9 +156,9 @@ common Rust writer belongs to the engine.
 <td colspan="2">Emit Rust locals, field accesses, source calls, branches and the extern wrapper from the common plans, using the chosen native calling convention and target operations.</td>
 </tr>
 <tr>
-<td>Foreign writer (optional)</td>
-<td>Render foreign-language source when the language implementation needs a custom writer.</td>
-<td>Not needed. The build invokes the external <code>cbindgen</code> tool on generated Rust to produce C headers.</td>
+<td>Foreign writer</td>
+<td>Render the target language's own declarations from the completed plans.</td>
+<td>Delegated: the build invokes the external <code>cbindgen</code> tool on the generated Rust, which is where C headers come from.</td>
 <td>Emit the Kotlin <code>Stamp</code> class and typed wrappers that call the generated JNI boundary.</td>
 </tr>
 </tbody>

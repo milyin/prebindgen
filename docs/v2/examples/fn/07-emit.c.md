@@ -11,8 +11,8 @@ The frozen C function plan and the aggregate representation of the record.
 ## Owner
 
 The common Rust writer renders the wrapper; `cbindgen` derives the header
-declaration from it. There is no C foreign writer and no generated C
-implementation file — the function body is the Rust wrapper.
+declaration from it. The C adapter writes no foreign source of its own, and there
+is no generated C implementation file — the function body is the Rust wrapper.
 
 ## Result
 

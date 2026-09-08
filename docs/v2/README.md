@@ -113,8 +113,11 @@ build-dependency only:
   implementation the engine queries while planning — what carries a `Stamp`, how
   a member of it is read, what this exported function's native signature is. One
   crate, two directions; the first records decisions, the second is made to spell
-  them out item by item. The JNI adapter has a third job the C one does not,
-  writing Kotlin, because the engine renders only Rust.
+  them out item by item. Producing the target language's own declarations is part
+  of the same job — the JNI adapter emits the Kotlin, since only it knows what a
+  Kotlin class should look like. The C adapter is the exception, and only because
+  a well-established tool already does that work: `cbindgen` derives C headers
+  from Rust source, so there is nothing for a C emitter to add.
 - **`cbindgen`** is external, and only a C binding crate runs it — over the
   generated Rust, to produce the header.
 

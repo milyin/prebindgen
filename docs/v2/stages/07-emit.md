@@ -31,15 +31,19 @@ part of handling its failure. Nothing decides what happens when that `Result` is
 an error — no `match` on it, no early return — because deciding that is the
 wrapper's job, and the wrapper is the registry's.
 
-**The foreign declaration** is what the other language compiles against, and here
-the two targets differ in kind. C has no foreign writer: the public C API is
-expressed as generated Rust types and functions, and the external `cbindgen` tool
-derives the header from them, so there is no generated C source file — the body
-of every C entry point *is* the Rust wrapper. Kotlin needs a writer, because a
-Kotlin class is not derivable from Rust, so the JNI implementation renders the
-data class and the `external fun` from the same retained plans. It uses the same
-class metadata that the property-read operations used, so a renamed getter moves
+**The foreign declaration** is what the other language compiles against, and
+writing it belongs to the adapter for that language: nothing else knows what a
+declaration in it should look like. The JNI adapter therefore renders the data
+class and the `external fun` itself, from the same retained plans, using the same
+class metadata that the property-read operations used — so a renamed getter moves
 in both places or neither.
+
+C is the exception, and for a practical reason rather than an architectural one:
+`cbindgen` already derives C headers from Rust source and is the established way
+to do it. The public C API is expressed as generated Rust types and functions,
+the build runs `cbindgen` over them, and the C adapter writes nothing. There is
+no generated C source file either — the body of every C entry point *is* the Rust
+wrapper.
 
 Put together, the JNI wrapper for the fixture comes out like this — every line
 attributable to one of the three contributions above:
@@ -158,12 +162,10 @@ symbol and calling convention, the environment and class parameters, the carrier
 types, the getter descriptors and the error policy — and a renderer for the JNI
 operations, which produces one expression per operation and nothing around it.
 
-For C there is no foreign writer at all. The public C API is expressed as
-generated Rust types and functions, and `cbindgen` derives the header from them;
-there is no generated C implementation file, because the function body is the
-Rust wrapper. For Kotlin the JNI implementation renders the public declarations
-directly from the retained plans, using the same class metadata the primitive
-renderer uses, so a naming override reaches both consistently.
+The public declarations follow the same division: the JNI adapter renders them
+from the retained plans, with the same class metadata its primitive renderer
+uses, so a naming override reaches both consistently; C's are expressed as
+generated Rust and left to `cbindgen`.
 
 ## From description to generated code
 
