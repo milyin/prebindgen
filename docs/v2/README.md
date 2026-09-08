@@ -73,34 +73,57 @@ architecture is for.
 
 ## The components
 
-Four crates' worth of code and one input file set appear throughout. Two of the
-pieces live in the same crate: a frontend and its target adapter are the user-
-facing and registry-facing halves of `prebindgen-c` or `prebindgen-jni`. It is
-worth fixing what each is before following them stage by stage.
+Two crates in this picture are yours; the rest are what prebindgen is.
 
-- **The source crate** is the annotated Rust library above. It knows nothing
-  about C or Kotlin.
-- **Flat** (`prebindgen-flat`) turns what was captured from that crate into a
-  queryable source model: which functions exist, what their parameters are, which
-  declaration a type name refers to, what fields a record has.
-- **A language frontend** is the public API a user configures — `prebindgen-c`
-  or `prebindgen-jni` — usually from a build script. It records what to expose
-  and how it should look in that language, and hands the result to the registry.
-- **The registry** (`prebindgen-registry`) is the engine. It reads the source
-  model, works out every conversion a requested binding needs, and assembles the
-  Rust wrappers. It is shared by all targets and contains nothing C- or
-  JNI-specific.
-- **A target adapter** is the language-specific half of a frontend's crate. A
-  **target** is the language and its native calling interface — C, or Kotlin
-  through JNI. The registry asks the adapter local questions —
-  among them what carries a `Stamp`, how a member of it is read, and what this
-  exported function's native signature looks like — and it answers with
-  descriptions, never with generated code for a whole binding.
+**What you write.** The **flat crate** is an ordinary Rust library — the fixture
+above is one — that marks the items it wants exposed and otherwise knows nothing
+about C or Kotlin. Beside it stands one **binding crate per target language**: a
+`cdylib` or `staticlib` whose build script configures the generator, whose
+`lib.rs` includes the Rust that generator produced, and which is the thing you
+ship — a native library plus a C header, or a native library plus Kotlin sources
+in a JAR.
 
-Output is written by the registry's **common Rust writer** for the native Rust of
-both targets. The C header is then derived from that Rust by the external
-`cbindgen` tool, while Kotlin source is rendered by a **foreign writer** that the
-JNI implementation provides.
+They are two crates rather than one because a `#[no_mangle] extern "C"` function
+can only be exported from a `cdylib` or a `staticlib`. Keep the FFI layer in the
+library that implements the functionality and nothing can export it; move it into
+the binding crate and you write it again for every language you bind. Generating
+it into each binding crate, from one annotated source, is what this project is
+for.
+
+**The generator**, which runs inside the binding crate's build script and is a
+build-dependency only:
+
+- **`prebindgen-proc-macro`** provides the `#[prebindgen]` attribute, and
+  **`prebindgen`** reads back what it captured — one record per marked item.
+- **`prebindgen-flat`** builds the queryable source model over those records:
+  which functions exist, what a parameter's type is, which declaration a type
+  name refers to, what fields a record has.
+- **`prebindgen-registry-v2`** is the engine this document specifies. It plans
+  every conversion a requested binding needs, resolves what depends on what,
+  renders the Rust wrappers, and reports what it could not generate. It shares
+  the capture and model crates with the V1 engine and depends on nothing else of
+  it, so "V2 never falls back to V1 for an item" is a property of the dependency
+  graph rather than a promise.
+- **`prebindgen-c`** and **`prebindgen-jni`** are the **language adapters**, one
+  crate per **target** — a language together with its native calling interface,
+  C or Kotlin through JNI. Each adapter answers to two callers, which is why the
+  chapters address it under two names. Facing you, it is the **frontend**: the
+  builder your build script configures with what to expose and how it should look
+  in that language. Facing the engine, it is the **target adapter**: the
+  implementation the engine queries while planning — what carries a `Stamp`, how
+  a member of it is read, what this exported function's native signature is. One
+  crate, two directions; the first records decisions, the second is made to spell
+  them out item by item. The JNI adapter has a third job the C one does not,
+  writing Kotlin, because the engine renders only Rust.
+- **`cbindgen`** is external, and only a C binding crate runs it — over the
+  generated Rust, to produce the header.
+
+**The runtime**, which is linked into what you ship rather than into the build:
+**`prebindgen-c-runtime`** (traits for opaque values passed by value across the C
+ABI) and **`prebindgen-jni-runtime`** (string and array encoding, the binding
+error type, cached JVM method ids). Generated code calls these at run time, so a
+binding crate depends on one of them the ordinary way. None of the generator
+ships inside a binding.
 
 ## The pipeline
 

@@ -128,6 +128,14 @@ where the Kotlin compiler finds them; checking those into the repository is a
 reasonable choice, since it makes a change in the generated API visible in
 review.
 
+What the generated code calls at run time is not the generator. Beyond the
+source crate itself, a wrapper reaches for the small runtime crate that matches
+its target — `prebindgen-c-runtime` or `prebindgen-jni-runtime` — for the
+operations that are the same in every binding: encoding a string or a byte array
+for the JVM, the binding error type, the traits behind an opaque value passed by
+value across the C ABI. A binding crate therefore depends on a few hundred lines
+at run time and on the generator only while building.
+
 The report is published alongside the code. It is what says which requested
 elements were emitted, which were skipped and why — and, for the example crates,
 which test sections may be compiled against this output.
