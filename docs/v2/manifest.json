@@ -1,0 +1,223 @@
+{
+  "version": 2,
+  "languages": [
+    "c",
+    "kotlin"
+  ],
+  "stages": [
+    {
+      "id": "01-source",
+      "title": "Capture source items",
+      "language_dependent": false
+    },
+    {
+      "id": "02-flat",
+      "title": "Build and inspect Flat",
+      "language_dependent": false
+    },
+    {
+      "id": "03-requests",
+      "title": "Record binding requests",
+      "language_dependent": true
+    },
+    {
+      "id": "04-values",
+      "title": "Plan value conversions",
+      "language_dependent": true
+    },
+    {
+      "id": "05-boundary",
+      "title": "Assemble the native boundary",
+      "language_dependent": true
+    },
+    {
+      "id": "06-retain",
+      "title": "Retain supported output",
+      "language_dependent": false
+    },
+    {
+      "id": "07-emit",
+      "title": "Emit bindings",
+      "language_dependent": true
+    }
+  ],
+  "examples": [
+    {
+      "id": "function",
+      "title": "Function: stamp_sum"
+    },
+    {
+      "id": "struct",
+      "title": "Struct: Stamp"
+    }
+  ],
+  "deferred_examples": [
+    "enum",
+    "const",
+    "callback",
+    "option",
+    "vector",
+    "borrowed-parameter",
+    "nested-record-field"
+  ],
+  "cells": [
+    {
+      "example": "function",
+      "stage": "01-source",
+      "languages": []
+    },
+    {
+      "example": "function",
+      "stage": "02-flat",
+      "languages": []
+    },
+    {
+      "example": "function",
+      "stage": "03-requests",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "function",
+      "stage": "04-values",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "function",
+      "stage": "05-boundary",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "function",
+      "stage": "06-retain",
+      "languages": []
+    },
+    {
+      "example": "function",
+      "stage": "07-emit",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "01-source",
+      "languages": []
+    },
+    {
+      "example": "struct",
+      "stage": "02-flat",
+      "languages": []
+    },
+    {
+      "example": "struct",
+      "stage": "03-requests",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "04-values",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "06-retain",
+      "languages": []
+    },
+    {
+      "example": "struct",
+      "stage": "07-emit",
+      "languages": [
+        "c",
+        "kotlin"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "id": "flat-overview",
+      "stage": "02-flat",
+      "title": "Flat V2: purpose and scope"
+    },
+    {
+      "id": "flat-model",
+      "stage": "02-flat",
+      "title": "Flat snapshots, identity and derived types"
+    },
+    {
+      "id": "flat-inspection",
+      "stage": "02-flat",
+      "title": "Flat lookup and source navigation"
+    },
+    {
+      "id": "flat-implementation",
+      "stage": "02-flat",
+      "title": "Flat V2 implementation and acceptance"
+    },
+    {
+      "id": "registry-overview",
+      "stage": "03-requests",
+      "title": "Registry V2: purpose and responsibilities"
+    },
+    {
+      "id": "binding-requests",
+      "stage": "03-requests",
+      "title": "Binding requests and conversion identity"
+    },
+    {
+      "id": "source-relations",
+      "stage": "04-values",
+      "title": "Source construction and decomposition"
+    },
+    {
+      "id": "target-operations",
+      "stage": "04-values",
+      "title": "Individual target operations"
+    },
+    {
+      "id": "representations",
+      "stage": "04-values",
+      "title": "Target representations and composition"
+    },
+    {
+      "id": "target-interface",
+      "stage": "04-values",
+      "title": "The target adapter interface"
+    },
+    {
+      "id": "plans",
+      "stage": "05-boundary",
+      "title": "Conversion and exported-function plans"
+    },
+    {
+      "id": "generation",
+      "stage": "06-retain",
+      "title": "Support, registry state and output"
+    },
+    {
+      "id": "primitive-examples",
+      "stage": "07-emit",
+      "title": "Concrete primitive examples: C and Kotlin/JNI"
+    },
+    {
+      "id": "implementation",
+      "stage": "07-emit",
+      "title": "Registry V2 implementation and acceptance"
+    }
+  ]
+}
