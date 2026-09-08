@@ -48,8 +48,8 @@ program compiles against, backed by a generated Rust function that C actually
 calls:
 
 ```c
-typedef struct StampC { int64_t secs; int64_t nanos; } StampC;
-int64_t stamp_sum_c(struct StampC arg0);
+typedef struct Stamp { int64_t secs; int64_t nanos; } Stamp;
+int64_t stamp_sum(struct Stamp arg0);
 ```
 
 and the Kotlin/JNI output is a Kotlin class and method, backed by a different
@@ -59,6 +59,10 @@ generated Rust function that the JVM calls:
 data class Stamp(val secs: Long, val nanos: Long)
 object Bindings { @JvmStatic external fun sum(stamp: Stamp): Long }
 ```
+
+The C declarations carry the source names, because a foreign name defaults to the
+name the source used; Kotlin's cannot, since a Kotlin declaration also needs a
+package and a class to live in, which the binding crate supplies.
 
 Neither generated Rust function is written by hand, and neither is a
 transliteration of the other: the C one receives a struct by value and reads its

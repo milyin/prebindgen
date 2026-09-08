@@ -11,21 +11,23 @@ declaration of [`Stamp` as a data struct][struct_requests_c].
 
 ## Owner
 
-The C frontend. Its manglers decide the exported symbol; nothing in the source
-crate names it.
+The C frontend. It decides the exported symbol, which by default is the source
+function's own name.
 
 ## Result
 
 The function request carries a C function policy: the exported symbol
-`stamp_sum_c`, the default calling convention, the argument delivered by value,
+`stamp_sum`, the default calling convention, the argument delivered by value,
 and the result delivered through the native return. C is opt-in, so a function
 that is not declared produces no request and is reported as unselected rather
 than skipped.
 
 ## Checks
 
-The exported name comes from the frontend's mangler applied to the source name,
-which is the same answer the V1 pipeline gives for this declaration. Declaring
+The exported symbol is `stamp_sum` because nothing asked for anything else; a
+naming hook configured on the builder would change it, and would be the only
+thing that could. Either way the answer is the one the V1 pipeline gives for this
+declaration. Declaring
 the function without declaring `Stamp` is a valid request that fails later, at
 [retention][fn_retain] — the frontend does not silently add the missing type
 declaration.
@@ -42,7 +44,7 @@ CbindgenBuilder::new()
 
 ```text
 policy (C function):
-  symbol:     "stamp_sum_c"
+  symbol:     "stamp_sum"
   convention: extern "C"
   input:      by value at its ABI position
   output:     native return

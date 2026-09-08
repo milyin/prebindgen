@@ -22,8 +22,11 @@ reads in [that wrapper][fn_emit_c] are ordinary Rust field accesses on it.
 
 ## Checks
 
-The Rust declaration must be `repr(C)`: without it, the member layout the header
-promises is not the layout the wrapper reads. Member order and names must match
+The generated aggregate carries the source name, `Stamp`, and is a different type
+from `source::Stamp` — same spelling, different module, different purpose: one is
+the ABI type a C caller fills in, the other is the Rust value the source function
+takes. The Rust declaration must be `repr(C)`: without it, the member layout the
+header promises is not the layout the wrapper reads. Member order and names must match
 the aggregate description, since [the member-read operations][struct_values_c]
 refer to those identities. The header's shape is `cbindgen` output — formatting
 and include guards can differ without the binding being wrong.
@@ -34,7 +37,7 @@ In the generated C Rust module (`c.rs`):
 
 ```rust
 #[repr(C)]
-pub struct StampC {
+pub struct Stamp {
     pub secs: i64,
     pub nanos: i64,
 }
@@ -45,10 +48,10 @@ The header `cbindgen` derives:
 ```c
 #include <stdint.h>
 
-typedef struct StampC {
+typedef struct Stamp {
     int64_t secs;
     int64_t nanos;
-} StampC;
+} Stamp;
 ```
 
 ## Along this element

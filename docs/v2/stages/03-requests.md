@@ -13,23 +13,22 @@ part ways.
 
 A binding crate is an ordinary Rust crate whose build script configures a
 **language frontend** — the public Rust API of `prebindgen-c` or
-`prebindgen-jni` — and asks it to generate. Exposing the fixture through C is two declarations,
-plus the hooks that decide what the two items are called in C:
+`prebindgen-jni` — and asks it to generate. Exposing the fixture through C is two declarations:
 
 ```rust
 // build.rs of the C binding crate (schematic)
 CbindgenBuilder::new()
-    .type_name_mangle(|name| format!("{name}C"))   // Stamp     -> StampC
-    .fn_name_mangle(|name| format!("{name}_c"))    // stamp_sum -> stamp_sum_c
     .data_struct("Stamp")     // Stamp crosses as a C struct passed by value
     .function("stamp_sum")    // and this function becomes a C entry point
     .build();
 ```
 
-The two manglers are why the generated C names are `StampC` and `stamp_sum_c`:
-nothing in the source crate names them, so a frontend derives every foreign name
-from the source name through hooks like these. They have defaults, and a user who
-dislikes the result changes them here rather than anywhere downstream.
+The generated C type and function keep the names the source used, `Stamp` and
+`stamp_sum`, because that is the default: a foreign name is the source name
+unless something changes it. A frontend offers naming hooks for the cases where
+that is not what you want — a crate-wide prefix, or a symbol that would collide
+with something already in the C namespace — and those hooks are configured here,
+in the same builder, not anywhere downstream.
 
 Through Kotlin it is the same two items with different answers — `Stamp` becomes
 a Kotlin class in a package, and the function becomes a method on a Kotlin
@@ -46,7 +45,11 @@ JniGen::builder()
     .build();
 ```
 
-The macros take Rust paths rather than strings, so `data_class!(Stamp)` fails to
+Kotlin cannot fall back on the source name the way C does, because a Kotlin
+declaration needs somewhere to live: a package for the class, an object and a
+method name for the function. That is what `package!` and `placement!` supply,
+and it is why the JNI configuration says more than the C one about names. The
+macros take Rust paths rather than strings, so `data_class!(Stamp)` fails to
 compile if `Stamp` is not in scope. The `runtime_errors` call is the error
 convention, and it is worth noticing that this is configuration rather than a
 writer default: what

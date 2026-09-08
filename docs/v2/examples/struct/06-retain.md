@@ -40,7 +40,7 @@ SurfaceSpec {
   element:  ElementId(public Stamp in this target),
   requires: [ node(Stamp, IntoRust), node(i64, IntoRust) x2 ],
   members:  [],
-  payload:  StampC aggregate  |  example.Stamp data class
+  payload:  Stamp aggregate  |  example.Stamp data class
 }
 
 outcome(public Stamp) = Emitted { artifacts: [ type declaration ] }

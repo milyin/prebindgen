@@ -35,7 +35,7 @@ In the generated C Rust module (`c.rs`), after the aggregate declaration:
 use crate::source;
 
 #[no_mangle]
-pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64 {
+pub extern "C" fn stamp_sum(arg0: Stamp) -> i64 {
     let v0 = arg0.secs;
     let v1 = arg0.nanos;
     let v2 = source::Stamp { secs: v0, nanos: v1 };
@@ -44,8 +44,11 @@ pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64 {
 }
 ```
 
-The C adapter selects `repr(C)`, the extern calling convention and the public
-names. The common writer renders those declarations. The expressions `arg0.secs`
+The wrapper and the function it wraps are both called `stamp_sum`: the C name
+defaults to the source name, and the two never collide because the source one is
+only ever reached through its module path. The C adapter selects `repr(C)`, the
+extern calling convention and the public names — here, the source names. The
+common writer renders those declarations. The expressions `arg0.secs`
 and `arg0.nanos` implement the selected target primitives. The registry supplies
 their order, the local bindings, the source-record construction, the source call
 and the return placement. All native local names are allocated by the common
@@ -54,7 +57,7 @@ writer.
 `cbindgen` derives the declaration, following the aggregate's `typedef`:
 
 ```c
-int64_t stamp_sum_c(struct StampC arg0);
+int64_t stamp_sum(struct Stamp arg0);
 ```
 
 A caller can use it as follows:
@@ -63,8 +66,8 @@ A caller can use it as follows:
 #include "bindings.h"
 
 int main(void) {
-    StampC stamp = { .secs = 12, .nanos = 34 };
-    return stamp_sum_c(stamp) == 46 ? 0 : 1;
+    Stamp stamp = { .secs = 12, .nanos = 34 };
+    return stamp_sum(stamp) == 46 ? 0 : 1;
 }
 ```
 

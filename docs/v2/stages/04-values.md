@@ -86,7 +86,7 @@ of their own. A record with a record field simply makes `plan` call itself again
 and neither adapter learns anything about the nesting — which is the point.
 
 The unit the target supplies for the second question is a **primitive**: one
-typed operation, such as "read the `secs` member of a `StampC`" or "call the
+typed operation, such as "read the `secs` member of a `Stamp`" or "call the
 `getSecs()` getter on this object with this environment". A primitive describes
 an operation, not a use of it — it names no variable and belongs to no exported
 function — so the same description can be applied wherever that operation is

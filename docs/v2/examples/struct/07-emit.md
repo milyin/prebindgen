@@ -34,8 +34,8 @@ adds nothing of its own.
 
 | Contribution | C | Kotlin/JNI |
 | --- | --- | --- |
-| Rust declaration | `#[repr(C)] pub struct StampC` | none needed; the object is a JVM value |
-| Foreign declaration | header `typedef struct StampC` | `data class Stamp(val secs: Long, val nanos: Long)` |
+| Rust declaration | `#[repr(C)] pub struct Stamp` | none needed; the object is a JVM value |
+| Foreign declaration | header `typedef struct Stamp` | `data class Stamp(val secs: Long, val nanos: Long)` |
 | Member access used by conversions | Rust field reads | JVM getters `getSecs`/`getNanos` |
 
 ## Language variants

@@ -50,7 +50,7 @@ requirements resolved:
 report entry:
   element:  exported stamp_sum
   outcome:  Emitted
-  symbol:   stamp_sum_c  |  Java_example_Bindings_sum
+  symbol:   stamp_sum  |  Java_example_Bindings_sum
 ```
 
 Had a field of the record been unsupported, the same table would read:

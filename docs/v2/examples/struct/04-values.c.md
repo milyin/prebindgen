@@ -6,7 +6,7 @@
 
 ## Input
 
-The record crossing with the C policy: a by-value `StampC` aggregate whose
+The record crossing with the C policy: a by-value `Stamp` aggregate whose
 members carry the two field values.
 
 ## Owner
@@ -16,7 +16,7 @@ Rust ABI type, its member identities and one member-read operation per member.
 
 ## Result
 
-The representation is an aggregate layout over the `StampC` carrier with two
+The representation is an aggregate layout over the `Stamp` carrier with two
 members, and a product protocol whose projections are those member reads. Every
 read is infallible, and its result is independent of the aggregate — a copied
 integer owes nothing to the struct it came from — so the whole record conversion
@@ -45,7 +45,7 @@ The stored specification for reading the target `secs` member:
 let read_secs = PrimitiveSpec {
     signature: PrimitiveSignature {
         operands: vec![OperandSpec {
-            ty: OperationType::Carrier(stamp_c_type), // Rust StampC ABI carrier.
+            ty: OperationType::Carrier(stamp_aggregate), // The repr(C) Stamp, as an ABI carrier.
             access: Access::Shared,
         }],
         results: vec![OperationType::Carrier(c_i64_type)],
@@ -55,15 +55,17 @@ let read_secs = PrimitiveSpec {
         results: vec![ResultValidity::Independent],
     },
     resources: ResourceContract::none(),
-    dependencies: vec![stamp_c_declaration],
+    dependencies: vec![stamp_aggregate_decl],
     implementation: COperation::Rust(StandardRustOp::ReadMember {
         member: secs_member,
     }),
 };
 ```
 
-`stamp_c_type` and `c_i64_type` are registered carrier type references.
-`stamp_c_declaration` identifies the generated `StampC` type artifact.
+`stamp_aggregate` and `c_i64_type` are registered carrier type references;
+`stamp_aggregate` is the generated `repr(C)` `Stamp`, not `source::Stamp`, which
+the source model owns and no primitive names.
+`stamp_aggregate_decl` identifies the generated type's artifact.
 `secs_member` identifies that declaration's `secs` member. The `nanos`
 specification has the same contracts and uses `nanos_member` instead.
 `ResourceContract::none()` denotes no extra runtime ownership obligation.

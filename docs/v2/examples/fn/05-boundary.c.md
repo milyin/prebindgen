@@ -15,7 +15,7 @@ The registry, using the C adapter's `BoundarySpec`.
 
 ## Result
 
-One exported symbol, `stamp_sum_c`, with the C calling convention. The aggregate
+One exported symbol, `stamp_sum`, with the C calling convention. The aggregate
 is passed by value in the first ABI position and feeds the input conversion
 whole; the converted result is delivered through the native return. There are no
 synthetic parameters, no out-parameters, and no failure routes, because
@@ -34,8 +34,8 @@ goes.
 
 ```text
 BoundarySpec {
-  abi:    extern "C", symbol "stamp_sum_c",
-  inputs: [ InputPlacement { native arg 0 (StampC, by value) -> node(input) } ],
+  abi:    extern "C", symbol "stamp_sum",
+  inputs: [ InputPlacement { native arg 0 (Stamp, by value) -> node(input) } ],
   output: OutputPlacement::Return(node(output) -> int64_t),
   failures: {},
 }
@@ -44,7 +44,7 @@ BoundarySpec {
 The signature this fixes, which [emission][fn_emit_c] renders:
 
 ```rust
-pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64
+pub extern "C" fn stamp_sum(arg0: Stamp) -> i64
 ```
 
 ## Along this element

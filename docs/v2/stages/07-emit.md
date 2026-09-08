@@ -91,7 +91,7 @@ because its member reads cannot fail:
 
 ```rust
 #[no_mangle]
-pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64 {
+pub extern "C" fn stamp_sum(arg0: Stamp) -> i64 {
     let v0 = arg0.secs;
     let v1 = arg0.nanos;
     let v2 = source::Stamp { secs: v0, nanos: v1 };
@@ -166,7 +166,7 @@ concrete contributions stay separate throughout planning and writing:
 | Contribution | C aggregate | Kotlin/JNI object | Component responsible |
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
-| Requested public API | `StampC`, `stamp_sum_c` | `example.Stamp`, `Bindings.sum` | Language frontend records user choices. |
+| Requested public API | `Stamp`, `stamp_sum` — the source names, since nothing renamed them | `example.Stamp`, `Bindings.sum` | Language frontend records user choices. |
 | Target representation | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
 | `PrimitiveSpec.implementation` | Common `ReadMember` plus member identity | `CallLongGetter` plus getter metadata | Adapter selects payload; registry retains it. |
 | One primitive's rendered operation | `arg0.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |

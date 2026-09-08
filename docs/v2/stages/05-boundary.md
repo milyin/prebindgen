@@ -17,7 +17,7 @@ For the fixture, the two targets end up with these signatures:
 
 ```rust
 #[no_mangle]
-pub extern "C" fn stamp_sum_c(arg0: StampC) -> i64
+pub extern "C" fn stamp_sum(arg0: Stamp) -> i64
 
 #[no_mangle]
 pub extern "system" fn Java_example_Bindings_sum(

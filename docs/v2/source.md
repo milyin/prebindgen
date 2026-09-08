@@ -27,7 +27,7 @@ record, and invoking its function.
 
 The binding configuration exposes both roots — `Stamp` as a public data type and
 `stamp_sum` as a public function. The argument is an owned record; the fields and
-the result are `i64`. C selects a by-value `StampC` aggregate. Kotlin/JNI — Kotlin's
+the result are `i64`. C selects a by-value aggregate, which keeps the source name `Stamp`. Kotlin/JNI — Kotlin's
 JVM code calling Rust through the Java Native Interface — selects an
 `example.Stamp` object whose properties are read through JNI, rather than
 separate field arguments. No constructor helper, handle, borrow or callback is

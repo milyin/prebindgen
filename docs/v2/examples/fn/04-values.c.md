@@ -17,7 +17,7 @@ member identities rather than a renderer.
 
 ## Result
 
-The input node carries the `StampC` aggregate and is infallible: reading a member
+The input node carries the `Stamp` aggregate and is infallible: reading a member
 of a by-value struct cannot fail, and the copied integers are independent of the
 aggregate afterwards. Its operations are [the member reads specified in the
 record's C plan][struct_values_c].
@@ -43,7 +43,7 @@ node(input)  contract: produced = source Stamp (owned)
                        access   = Owned
                        validity = Independent
                        failures = {}
-             representation: Aggregate { ty: StampC, members: [secs, nanos] }
+             representation: Aggregate { ty: Stamp, members: [secs, nanos] }
 
 node(output) contract: produced = carrier c_i64
                        access   = Owned
