@@ -1,18 +1,57 @@
-# Registry V2 implementation and acceptance
+<!-- spec: {"kind": "implementation"} -->
 
-[V2 project contents](../README.md)
+# Implementation and acceptance
 
-Status: proposed design. API sketches describe intended contracts, not implemented functionality.
+[Project contents](README.md)
 
-Source-model companion: [Flat V2](../flat/overview.md).
+The chapters describe the pipeline as a whole. This page is the plan for building
+it: the order in which the pieces become real, the cases that would expose a
+wrong architecture early, and what has to be true before the work counts as done.
+It is not a pipeline stage, and no element path passes through it.
 
-## 11. Integration and first implementation steps
+## Flat implementation sequence and acceptance
+
+Implement the [source-model API](stages/02-flat.md) incrementally in
+`prebindgen-flat`. A V2 module can coexist with the current API during migration;
+`Flat` in these documents denotes that V2 model. This does not require a new
+standalone crate or an immediate breaking rewrite of V1 consumers.
+
+1. Add builder-to-snapshot ownership, helper registration checks and direct
+   function lookup/enumeration. Preserve unsupported records and locations.
+2. Add parameter/result `TypeView`s, exact record navigation and field views.
+   Implement the independent inspection example using existing captured inputs.
+3. Add snapshot checks and checked type composition. Have V2 registry requests
+   retain views, and derive cache keys privately from those views.
+4. Extend constants, enums and other type forms using the same conventions when
+   their consumers need them. Existing inputs remain retained and reportable
+   throughout; unsupported structural access is not a reason to lose an item.
+
+Required validation for implementation:
+
+- A standalone Flat consumer navigates function → parameter → record → field
+  without a registry dependency or source reparsing.
+- Lookup and enumeration agree; views remain usable after the original `Flat`
+  value is dropped, and cloned views refer to the same snapshot.
+- A view from another snapshot is rejected even when both snapshots contain a
+  type with the same name and key.
+- External callers cannot forge views or mutate their retained records.
+- Local helpers are validated before publication, including duplicate names and
+  source-module qualification; existing opaque helper types remain representable.
+- Reference, optional and fallible navigation preserves wrappers and exact child
+  types. Modeled lifetime arguments survive field navigation and emission.
+- Opaque items, unsupported records, guards and locations survive migration.
+- Derived type views preserve model association without changing source-item
+  enumeration, and type/key consistency holds by construction.
+- Flat tests validate source inspection and emission. The registry project's
+  C/JNI tests separately validate conversion behavior and ownership.
+
+## Integration and first implementation steps
 
 ### Switching existing examples
 
 Keep v1 and v2 as parallel engines behind the existing frontend. Independent v2 registry and C/JNI implementation crates can share binding-configuration data modules and the source model. They must not depend on v1 conversion plans, recursive generators or emitters. Engine selection happens before v1 generation starts.
 
-Engine selection and separate output paths already have an initial implementation in [#721](https://github.com/milyin/prebindgen/pull/721) and [#722](https://github.com/milyin/prebindgen/pull/722). The current V2 scaffold reports unsupported declarations; the conversion architecture in this document is the next implementation work.
+Engine selection and separate output paths already have an initial implementation in [#721](https://github.com/milyin/prebindgen/pull/721) and [#722](https://github.com/milyin/prebindgen/pull/722). The current V2 scaffold reports unsupported declarations; the conversion architecture in these chapters is the next implementation work.
 
 The switching contract from [#719](https://github.com/milyin/prebindgen/issues/719) is:
 
@@ -42,6 +81,10 @@ The initial implementation should demonstrate the architecture with both existin
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
 5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete artifacts.
 
+Steps 2 and 3 are exactly the two element paths specified in this document: the
+[function path][fn] is the scalar function and its owned record argument, and the
+[record path][struct] is the named-field record behind it.
+
 Do not implement every proposed enum variant before the scalar case runs. Constructor/projector conversions, `Result`, resource-bearing handles, sequences and callbacks can be added incrementally through the same descriptions and registry algorithms. Full inputs remain accepted throughout that work.
 
 ### Cases that expose architectural mistakes
@@ -60,14 +103,14 @@ Do not implement every proposed enum variant before the scalar case runs. Constr
 
 A capability involving JNI is complete only when the existing Kotlin covertest exercises both its generated native boundary and Kotlin API. Unit tests for planning are useful, but they do not establish runtime ownership, JNI, or foreign-interface correctness.
 
-## 12. Acceptance and feasibility evidence
+## Acceptance and feasibility evidence
 
 Acceptance criteria:
 
-- [ ] The proposal's boundaries are exercised by scalar and record bindings in existing C/JNI examples.
+- [ ] The design's boundaries are exercised by scalar and record bindings in existing C/JNI examples.
 - [ ] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. Target policies have explicit local interpretation APIs.
 - [ ] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
-- [ ] The [Flat V2 project](../flat/overview.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
+- [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [ ] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner.
 - [ ] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
 - [ ] One immutable generation result supplies Rust output, optional foreign-writer output, reports and test selection; C headers are derived from the retained Rust output by `cbindgen`.
@@ -81,4 +124,7 @@ Future resource, recursive and runtime capabilities require implementations and 
 
 ---
 
-Previous: [Flat implementation](../flat/implementation.md) · Next: [Project contents](../README.md)
+Previous: [Emit bindings](stages/07-emit.md) · Next: [Project contents](README.md)
+
+[fn]: examples/fn/README.md
+[struct]: examples/struct/README.md

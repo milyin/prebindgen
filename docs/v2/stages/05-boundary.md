@@ -1,45 +1,36 @@
-# Conversion and exported-function plans
+<!-- spec: {"kind": "stage", "stage": "05-boundary"} -->
 
-[V2 project contents](../README.md)
+# Assemble the native boundary
 
-Status: proposed design. API sketches describe intended contracts, not implemented functionality.
+[Project contents](../README.md)
 
-Source-model companion: [Flat V2](../flat/overview.md).
+Status: proposed design. The API sketches state intended contracts, not
+implemented functionality.
 
-## 7. The conversion plans the registry builds
+Conversions are reusable and know nothing about the function that uses them. This
+stage puts them into one exported function: which native arguments feed which
+input conversion, where the converted result goes, and what happens on each way
+the call can fail.
 
-For each supported conversion node, the registry records the selected source operation, target representation, generated instructions, and the conditions under which the result is usable.
+**Input.** The requested function, its input and output conversion nodes, and the
+policy governing calling convention, result delivery and error handling.
 
-```rust
-struct ValuePlan<Payload> {
-    id: NodeId,                    // Reference used by callers of this conversion.
-    crossing: Crossing,            // Exact source type and direction being converted.
-    relation: ResolvedRelation,    // Source operation with validated child/stage node IDs.
-    representation: ReprSpec<Payload>, // Target layout and access/construction operations.
-    body: ConversionBodyId,        // Registry-owned structured instructions.
-    contract: ValueContract,       // Result type, permitted use, validity and possible failures.
-    dependencies: Vec<NodeId>,     // Derived index of the conversions this plan uses.
-}
+**Owner.** The registry assembles and validates the wrapper; the target adapter
+describes the native interface — symbol, calling convention, environment
+operands, result placement and the terminal action for each failure category.
 
-struct ValueContract {
-    produced: ValueType, // Output endpoint: a source Rust value or target/intermediate layout.
-    access: Access,     // Permitted use, checked against Rust types and selected helper signatures.
-    validity: Validity, // Concrete lifetime/provenance guarantees of the produced value.
-    failures: FailureSet, // Typed errors possible on the conversion's active execution paths.
-}
-```
+**Output.** A `FunctionPlan`: the source callee, its input nodes in parameter
+order, its output conversions, a validated `BoundarySpec` and the complete body
+instructions for the wrapper, plus the generated prerequisites it needs.
 
-`ResolvedRelation` is the chosen relationship after its source references and child conversions are resolved. `ValueType` can describe a source type or a carrier layout containing zero, one or several values. `Validity` composes the individual primitives' validity rules: for example, a produced reference remains tied to a particular temporary. `FailureSet` collects possible error categories/types; the function boundary decides their eventual handling.
+**Failure.** An unsupported result destination or error route skips the function.
+Silently changing the ABI — dropping an out-parameter, returning a status the
+configuration did not ask for — is not a substitute for supporting it.
 
-`ConversionBodyId` points to structured instructions for locals, field access, variant matching, source construction/calls, primitive applications, conditions, and later loops or callback invocation. The common writer renders these instructions as Rust. It allocates temporary names centrally from identities.
+Only exported callables reach this stage. A record has a conversion but no
+boundary of its own; it crosses inside the functions that use it.
 
-The registry generates all child calls and source traversal. A projector binds its intermediate result once. Optional/variant branches convert only active children. The dependency list is derived from these instructions and the resolved relationship; it is a convenience index maintained by the registry.
-
-Access follows the exact source type and operation. For example, generating `&Stamp` input may require constructing an owned temporary and borrowing it for the duration of the source call. Supporting the two scalar fields alone does not implement that borrow. The conversion contract must preserve the temporary's validity through its uses.
-
-For initial scalar/record support, ordinary owned Rust temporaries can rely on Rust destruction at scope exit. Handles and callbacks need implemented acquisition, transfer and cleanup semantics before they are supported. As those features are added, the registry will schedule resource scopes and cleanup on success and failure paths; adapters provide the actual retain/free/runtime operations.
-
-## 8. Assembling an exported function
+## Assembling an exported function
 
 A complete binding function coordinates several value plans. It converts inputs, calls the source once, converts the selected result, handles failures, and finishes resource scopes.
 
@@ -100,6 +91,18 @@ The registry allocates synthetic parameters required by the boundary, validates 
 
 C and JNI retain configured calling conventions. Unsupported result destinations skip the function; changing its ABI is not a substitute for support.
 
+## Elements at this stage
+
+- [Function taking an owned record][fn_boundary] · [C][fn_boundary_c] · [Kotlin/JNI][fn_boundary_jni]
+
+The record path has no cell here: [its conversion][struct_values] is reached
+through the function that uses it.
+
 ---
 
-Previous: [Target interface](target-interface.md) · Next: [Complete output](generation.md)
+Previous: [Plan value conversions](04-values.md) · Next: [Retain supported output](06-retain.md)
+
+[fn_boundary]: ../examples/fn/05-boundary.md
+[fn_boundary_c]: ../examples/fn/05-boundary.c.md
+[fn_boundary_jni]: ../examples/fn/05-boundary.jni.md
+[struct_values]: ../examples/struct/04-values.md

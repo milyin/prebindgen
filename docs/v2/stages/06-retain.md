@@ -1,12 +1,35 @@
-# Support, registry state and output
+<!-- spec: {"kind": "stage", "stage": "06-retain"} -->
 
-[V2 project contents](../README.md)
+# Retain supported output
 
-Status: proposed design. API sketches describe intended contracts, not implemented functionality.
+[Project contents](../README.md)
 
-Source-model companion: [Flat V2](../flat/overview.md).
+Status: proposed design. The API sketches state intended contracts, not
+implemented functionality.
 
-## 9. Unsupported requests and public API dependencies
+Planning produces candidates. This stage decides which of them actually become
+output: it resolves every dependency a public declaration has, drops the requests
+whose dependencies are missing, records why, and freezes what remains.
+
+**Input.** The candidate value plans, function plans and public declarations, the
+dependencies between them, and the causes collected wherever the target or the
+registry reported a missing capability.
+
+**Owner.** The registry. Targets answer local questions and never decide what is
+emitted; a writer, later, cannot revisit the decision either.
+
+**Output.** A frozen `Generation`: retained conversions, native functions, public
+declarations and generated artifacts in a valid emission order, plus a report
+saying what was emitted, skipped, ignored or never selected, and for each skip,
+the capability that was missing and where it was needed.
+
+**Failure.** An unsupported request is a normal outcome, not an error. Malformed
+configuration and violated internal invariants are `PlanningError` and fail the
+build. Nothing partially supported is retained: a function whose input conversion
+is unsupported is skipped whole, and the record it needed is skipped along with
+every other declaration that required that record.
+
+## Unsupported requests and public API dependencies
 
 V2 accepts more input than it initially knows how to generate. Unsupported functionality is a normal, explicit planning result. Invalid configuration and generator defects are errors that fail generation.
 
@@ -77,7 +100,7 @@ A `SurfaceSpec` describes one public declaration and its requirements; providing
 
 Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks. Public dependencies may require repeated readiness evaluation until the retained set stops changing. A new public requirement discovered after value planning must still propagate before output is finalized.
 
-## 10. Registry state, execution order and final output
+## Registry state, execution order and final output
 
 During generation, `Registry` provides access to the `Flat` source model. `GenerationRun` holds the temporary plans, dependencies and diagnostics being assembled for the configured frontend. The registry returns the retained results as `Generation`. The following structures separate source information from mutable planning state:
 
@@ -140,6 +163,14 @@ Freezing retains all referenced tables (bodies, primitives, layouts, helpers) an
 
 The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds. The report also selects existing test sections, ensuring tests match the emitted API.
 
+## Elements at this stage
+
+- [Function taking an owned record][fn_retain]
+- [Record with scalar fields][struct_retain]
+
 ---
 
-Previous: [Conversion and function plans](plans.md) · Next: [C and Kotlin examples](primitive-examples.md)
+Previous: [Assemble the native boundary](05-boundary.md) · Next: [Emit bindings](07-emit.md)
+
+[fn_retain]: ../examples/fn/06-retain.md
+[struct_retain]: ../examples/struct/06-retain.md

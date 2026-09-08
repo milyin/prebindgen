@@ -1,0 +1,46 @@
+{
+  "version": 3,
+  "languages": [
+    { "id": "c", "title": "C" },
+    { "id": "jni", "title": "Kotlin/JNI" }
+  ],
+  "stages": [
+    { "id": "01-source", "slug": "source", "title": "Capture source items", "language_dependent": false },
+    { "id": "02-flat", "slug": "flat", "title": "Build and inspect the source model", "language_dependent": false },
+    { "id": "03-requests", "slug": "requests", "title": "Record binding requests", "language_dependent": true },
+    { "id": "04-values", "slug": "values", "title": "Plan value conversions", "language_dependent": true },
+    { "id": "05-boundary", "slug": "boundary", "title": "Assemble the native boundary", "language_dependent": true },
+    { "id": "06-retain", "slug": "retain", "title": "Retain supported output", "language_dependent": false },
+    { "id": "07-emit", "slug": "emit", "title": "Emit bindings", "language_dependent": true }
+  ],
+  "examples": [
+    { "id": "fn", "dir": "fn", "title": "Function taking an owned record", "fixture": "stamp_sum" },
+    { "id": "struct", "dir": "struct", "title": "Record with scalar fields", "fixture": "Stamp" }
+  ],
+  "deferred_examples": [
+    { "id": "fn_fallible", "title": "Function returning Result" },
+    { "id": "fn_callback", "title": "Function taking a callback" },
+    { "id": "fn_borrowed_param", "title": "Function taking a borrowed parameter" },
+    { "id": "fn_complex_return", "title": "Function returning a non-scalar value" },
+    { "id": "struct_nested", "title": "Record with a record field" },
+    { "id": "struct_option_field", "title": "Record with an optional field" },
+    { "id": "struct_vec_field", "title": "Record with a sequence field" },
+    { "id": "enum", "title": "Enum with payload variants" },
+    { "id": "const", "title": "Exported constant" }
+  ],
+  "cells": [
+    { "example": "fn", "stage": "01-source", "languages": [] },
+    { "example": "fn", "stage": "02-flat", "languages": [] },
+    { "example": "fn", "stage": "03-requests", "languages": ["c", "jni"] },
+    { "example": "fn", "stage": "04-values", "languages": ["c", "jni"] },
+    { "example": "fn", "stage": "05-boundary", "languages": ["c", "jni"] },
+    { "example": "fn", "stage": "06-retain", "languages": [] },
+    { "example": "fn", "stage": "07-emit", "languages": ["c", "jni"] },
+    { "example": "struct", "stage": "01-source", "languages": [] },
+    { "example": "struct", "stage": "02-flat", "languages": [] },
+    { "example": "struct", "stage": "03-requests", "languages": ["c", "jni"] },
+    { "example": "struct", "stage": "04-values", "languages": ["c", "jni"] },
+    { "example": "struct", "stage": "06-retain", "languages": [] },
+    { "example": "struct", "stage": "07-emit", "languages": ["c", "jni"] }
+  ]
+}
