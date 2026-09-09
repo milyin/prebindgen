@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "example", "example": "fn"} -->
 
-# Function taking an owned record
-
 [Project contents](../../README.md) · [Source crate](../../source.md)
+
+# Function taking an owned record
 
 ```rust
 pub fn stamp_sum(stamp: Stamp) -> i64 {

@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "07-emit", "language": "jni"} -->
 
-# Function taking an owned record — Emit bindings — Kotlin/JNI
-
 [Stage chapter](../../stages/07-emit.md) · [Common cell][fn_emit] · [Element path][fn]
+
+# Function taking an owned record — Emit bindings — Kotlin/JNI
 
 ## Input
 

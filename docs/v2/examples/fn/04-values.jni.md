@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "04-values", "language": "jni"} -->
 
-# Function taking an owned record — Plan value conversions — Kotlin/JNI
-
 [Stage chapter](../../stages/04-values.md) · [Common cell][fn_values] · [Element path][fn]
+
+# Function taking an owned record — Plan value conversions — Kotlin/JNI
 
 ## Input
 

@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "05-boundary", "language": "c"} -->
 
-# Function taking an owned record — Assemble the native boundary — C
-
 [Stage chapter](../../stages/05-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
+
+# Function taking an owned record — Assemble the native boundary — C
 
 ## Input
 

@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "04-values"} -->
 
-# Function taking an owned record — Plan value conversions
-
 [Stage chapter](../../stages/04-values.md) · [Element path][fn] · [Source crate](../../source.md)
 Previous: [Record binding requests][fn_requests] · Next: [Assemble the native boundary][fn_boundary]
+
+# Function taking an owned record — Plan value conversions
 
 ## Input
 

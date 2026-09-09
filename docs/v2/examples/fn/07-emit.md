@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "07-emit"} -->
 
-# Function taking an owned record — Emit bindings
-
 [Stage chapter](../../stages/07-emit.md) · [Element path][fn] · [Source crate](../../source.md)
 Previous: [Retain supported output][fn_retain]
+
+# Function taking an owned record — Emit bindings
 
 ## Input
 

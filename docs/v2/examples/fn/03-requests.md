@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "03-requests"} -->
 
-# Function taking an owned record — Record binding requests
-
 [Stage chapter](../../stages/03-requests.md) · [Element path][fn] · [Source crate](../../source.md)
 Previous: [Build and inspect the source model][fn_flat] · Next: [Plan value conversions][fn_values]
+
+# Function taking an owned record — Record binding requests
 
 ## Input
 

@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "04-values"} -->
 
-# Record with scalar fields — Plan value conversions
-
 [Stage chapter](../../stages/04-values.md) · [Element path][struct] · [Source crate](../../source.md)
 Previous: [Record binding requests][struct_requests] · Next: [Retain supported output][struct_retain]
+
+# Record with scalar fields — Plan value conversions
 
 ## Input
 

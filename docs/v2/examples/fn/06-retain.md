@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "06-retain"} -->
 
-# Function taking an owned record — Retain supported output
-
 [Stage chapter](../../stages/06-retain.md) · [Element path][fn] · [Source crate](../../source.md)
 Previous: [Assemble the native boundary][fn_boundary] · Next: [Emit bindings][fn_emit]
+
+# Function taking an owned record — Retain supported output
 
 ## Input
 

@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "05-boundary", "language": "jni"} -->
 
-# Function taking an owned record — Assemble the native boundary — Kotlin/JNI
-
 [Stage chapter](../../stages/05-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
+
+# Function taking an owned record — Assemble the native boundary — Kotlin/JNI
 
 ## Input
 

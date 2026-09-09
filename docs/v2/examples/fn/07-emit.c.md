@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "07-emit", "language": "c"} -->
 
-# Function taking an owned record — Emit bindings — C
-
 [Stage chapter](../../stages/07-emit.md) · [Common cell][fn_emit] · [Element path][fn]
+
+# Function taking an owned record — Emit bindings — C
 
 ## Input
 

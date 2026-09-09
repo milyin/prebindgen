@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "format"} -->
 
-# The format contract
-
 [Project contents](README.md)
+
+# The format contract
 
 The document has two axes. [manifest.json](manifest.json) lists the **stages** of
 the pipeline and the **element paths** of the appendix; one applicable
@@ -77,7 +77,7 @@ captured item, the views, the request, the plan, the boundary, the retained entr
 or the generated code. A variant specializes its common cell rather than
 repeating it.
 
-Navigation lives at the top of a page, under the title, before any prose: a
+Navigation lives above the title, between the metadata line and the heading: a
 chapter's line carries the link to the contents and its previous/next chapters, a
 cell's carries its stage chapter, its element TOC, the source crate and its
 previous/next cells along that element, and a variant's carries its chapter, its

@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "03-requests", "language": "jni"} -->
 
-# Record with scalar fields — Record binding requests — Kotlin/JNI
-
 [Stage chapter](../../stages/03-requests.md) · [Common cell][struct_requests] · [Element path][struct]
+
+# Record with scalar fields — Record binding requests — Kotlin/JNI
 
 ## Input
 

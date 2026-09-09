@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "fixture"} -->
 
-# The specification's source crate
-
 [Project contents](README.md)
+
+# The specification's source crate
 
 Every element path in the appendix is specified against one source crate, and
 this page is that crate. Sharing it is what lets the paths intersect the way real

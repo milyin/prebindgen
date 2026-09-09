@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "03-requests"} -->
 
-# Record binding requests
-
 [Project contents](../README.md) · Previous: [Build and inspect the source model](02-flat.md) · Next: [Plan value conversions](04-values.md)
+
+# Record binding requests
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.

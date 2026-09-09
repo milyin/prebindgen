@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "06-retain"} -->
 
-# Retain supported output
-
 [Project contents](../README.md) · Previous: [Assemble the native boundary](05-boundary.md) · Next: [Emit bindings](07-emit.md)
+
+# Retain supported output
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.

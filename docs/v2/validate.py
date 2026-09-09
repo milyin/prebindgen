@@ -106,13 +106,11 @@ def section(page, heading):
 
 
 def header(page):
-    """The block between the page title and its first section: links and neighbours."""
+    """The navigation block above the page title: backlinks and neighbours."""
     title = re.search(r"^# .*$", page.text, re.M)
     if title is None:
         fail(f"{page.relative}: missing a title")
-    tail = page.text[title.end():]
-    end = re.search(r"^## ", tail, re.M)
-    return tail[: end.start()] if end else tail
+    return page.text[: title.start()]
 
 
 def ordered_ids(text, allowed):

@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "02-flat"} -->
 
-# Build and inspect the source model
-
 [Project contents](../README.md) · Previous: [Capture source items](01-source.md) · Next: [Record binding requests](03-requests.md)
+
+# Build and inspect the source model
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.

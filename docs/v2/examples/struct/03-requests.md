@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "03-requests"} -->
 
-# Record with scalar fields — Record binding requests
-
 [Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source crate](../../source.md)
 Previous: [Build and inspect the source model][struct_flat] · Next: [Plan value conversions][struct_values]
+
+# Record with scalar fields — Record binding requests
 
 ## Input
 

@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "02-flat"} -->
 
-# Function taking an owned record — Build and inspect the source model
-
 [Stage chapter](../../stages/02-flat.md) · [Element path][fn] · [Source crate](../../source.md)
 Previous: [Capture source items][fn_source] · Next: [Record binding requests][fn_requests]
+
+# Function taking an owned record — Build and inspect the source model
 
 ## Input
 

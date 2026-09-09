@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "04-values", "language": "jni"} -->
 
-# Record with scalar fields — Plan value conversions — Kotlin/JNI
-
 [Stage chapter](../../stages/04-values.md) · [Common cell][struct_values] · [Element path][struct]
+
+# Record with scalar fields — Plan value conversions — Kotlin/JNI
 
 ## Input
 

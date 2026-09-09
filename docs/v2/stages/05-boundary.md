@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "05-boundary"} -->
 
-# Assemble the native boundary
-
 [Project contents](../README.md) · Previous: [Plan value conversions](04-values.md) · Next: [Retain supported output](06-retain.md)
+
+# Assemble the native boundary
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.

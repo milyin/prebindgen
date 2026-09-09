@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "04-values"} -->
 
-# Plan value conversions
-
 [Project contents](../README.md) · Previous: [Record binding requests](03-requests.md) · Next: [Assemble the native boundary](05-boundary.md)
+
+# Plan value conversions
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.

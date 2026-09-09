@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "03-requests", "language": "c"} -->
 
-# Record with scalar fields — Record binding requests — C
-
 [Stage chapter](../../stages/03-requests.md) · [Common cell][struct_requests] · [Element path][struct]
+
+# Record with scalar fields — Record binding requests — C
 
 ## Input
 

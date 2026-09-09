@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "07-emit"} -->
 
-# Record with scalar fields — Emit bindings
-
 [Stage chapter](../../stages/07-emit.md) · [Element path][struct] · [Source crate](../../source.md)
 Previous: [Retain supported output][struct_retain]
+
+# Record with scalar fields — Emit bindings
 
 ## Input
 

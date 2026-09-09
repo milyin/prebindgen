@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "01-source"} -->
 
-# Capture source items
-
 [Project contents](../README.md) · Next: [Build and inspect the source model](02-flat.md)
+
+# Capture source items
 
 Capture copies each marked declaration out of the crate as source text and says
 where it came from. It does not analyse it: what a declaration means — which type

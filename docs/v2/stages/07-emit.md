@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "stage", "stage": "07-emit"} -->
 
-# Emit bindings
-
 [Project contents](../README.md) · Previous: [Retain supported output](06-retain.md) · Next: [Implementation and acceptance](../implementation.md)
+
+# Emit bindings
 
 Status: proposed design. Code shown as generated output illustrates required
 behavior, not bytes produced by the current scaffold.

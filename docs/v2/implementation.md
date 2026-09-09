@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "implementation"} -->
 
-# Implementation and acceptance
-
 [Project contents](README.md) · Previous: [Emit bindings](stages/07-emit.md)
+
+# Implementation and acceptance
 
 The chapters describe the pipeline as a whole. This page is the plan for building
 it: the order in which the pieces become real, the cases that would expose a

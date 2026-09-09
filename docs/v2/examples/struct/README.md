@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "example", "example": "struct"} -->
 
-# Record with scalar fields
-
 [Project contents](../../README.md) · [Source crate](../../source.md)
+
+# Record with scalar fields
 
 ```rust
 pub struct Stamp {

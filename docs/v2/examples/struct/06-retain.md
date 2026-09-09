@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "06-retain"} -->
 
-# Record with scalar fields — Retain supported output
-
 [Stage chapter](../../stages/06-retain.md) · [Element path][struct] · [Source crate](../../source.md)
 Previous: [Plan value conversions][struct_values] · Next: [Emit bindings][struct_emit]
+
+# Record with scalar fields — Retain supported output
 
 ## Input
 

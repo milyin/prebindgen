@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "05-boundary"} -->
 
-# Function taking an owned record — Assemble the native boundary
-
 [Stage chapter](../../stages/05-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
 Previous: [Plan value conversions][fn_values] · Next: [Retain supported output][fn_retain]
+
+# Function taking an owned record — Assemble the native boundary
 
 ## Input
 

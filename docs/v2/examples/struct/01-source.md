@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "01-source"} -->
 
-# Record with scalar fields — Capture source items
-
 [Stage chapter](../../stages/01-source.md) · [Element path][struct] · [Source crate](../../source.md)
 Next: [Build and inspect the source model][struct_flat]
+
+# Record with scalar fields — Capture source items
 
 ## Input
 

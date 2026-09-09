@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "02-flat"} -->
 
-# Record with scalar fields — Build and inspect the source model
-
 [Stage chapter](../../stages/02-flat.md) · [Element path][struct] · [Source crate](../../source.md)
 Previous: [Capture source items][struct_source] · Next: [Record binding requests][struct_requests]
+
+# Record with scalar fields — Build and inspect the source model
 
 ## Input
 

@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "07-emit", "language": "jni"} -->
 
-# Record with scalar fields — Emit bindings — Kotlin/JNI
-
 [Stage chapter](../../stages/07-emit.md) · [Common cell][struct_emit] · [Element path][struct]
+
+# Record with scalar fields — Emit bindings — Kotlin/JNI
 
 ## Input
 

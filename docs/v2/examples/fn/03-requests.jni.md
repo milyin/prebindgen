@@ -1,8 +1,8 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "03-requests", "language": "jni"} -->
 
-# Function taking an owned record — Record binding requests — Kotlin/JNI
-
 [Stage chapter](../../stages/03-requests.md) · [Common cell][fn_requests] · [Element path][fn]
+
+# Function taking an owned record — Record binding requests — Kotlin/JNI
 
 ## Input
 
