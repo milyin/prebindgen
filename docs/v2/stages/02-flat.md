@@ -20,27 +20,18 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 
 ## What Flat is for
 
-What arrives here is what capture stored: the source text of each marked
-declaration, parsed back into the item it was. Of `stamp_sum` that text says its
-parameter is written `Stamp` — and being text, that is all it can say. Planning a
-binding needs the next answer: `Stamp` is a record, declared in this same source
-crate, with two fields, both `i64`.
+Capture stored text. Of `stamp_sum` that text says its parameter is written
+`Stamp`, which is all text can say; planning a binding needs to know that `Stamp`
+is a record with two `i64` fields, declared in this same crate. **Flat**
+(`prebindgen-flat`) is what answers that.
 
-Answering that is one half of what this stage is for. The other half is refusing
-to answer anything else. Rust is a large language, and a binding generator that
-accepted all of it would have to decide, at every step, what to do with a
-lifetime-generic trait object or an `async fn` returning an `impl Future`. **Flat**
-(`prebindgen-flat`) removes that question by holding an accepted subset and only
-that: a small set of structures a consumer can match against exhaustively, with
-no case left over for a Rust form it has never met. Anything a marked item
-contains that has no place in those structures is refused here, once, at the
-edge — so no stage after this one has to check what it was handed.
+It answers it for an accepted subset of Rust, and refuses everything else at this
+edge. That refusal is the point: a consumer matches a small set of structures
+exhaustively, with no case left over for a form it has never met, and no stage
+after this one re-checks what it was handed.
 
-Binding generation is not the only thing that can use such a model. The same
-navigation — find a function, inspect its parameters, follow a type name to its
-declaration, list a record's fields or an enum's variants — is what an API
-documentation tool or a source validator needs, and Flat is usable on its own,
-with no registry and no target in the picture.
+Nothing about it is specific to bindings — a documentation tool or a source
+validator can walk the same model, with no registry and no target in sight.
 
 ## One flat namespace
 
