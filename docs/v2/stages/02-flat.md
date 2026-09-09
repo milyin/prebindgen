@@ -79,10 +79,9 @@ pub struct Broken { pub field: Missing }   // marked, and names an unmarked type
 pub fn use_broken(value: Broken) {}        // marked, and takes that struct
 ```
 
-Flat settles this while building the model, and it settles it among the elements
-it has just lowered — the source is not read a second time. It looks up every
-type name each element mentions. `Broken` mentions `Missing`, which no element
-declares, so `Broken` cannot be described. Flat replaces it with an unsupported
+Flat settles this while building the model, by looking up every type name each
+element mentions. `Broken` mentions `Missing`, which no element declares, so
+`Broken` cannot be described. Flat replaces it with an unsupported
 entry that keeps its name and location and carries the reason, in the terms the
 author can act on: *names the type `Missing`, which the flat API does not declare
 — mark its declaration `#[prebindgen]`, or, for a foreign or crate-private type
@@ -90,10 +89,9 @@ used as a handle, give it a name here with `#[prebindgen] pub type Missing = ..;
 
 That changes the namespace, because `Broken` has stopped being a declaration.
 `use_broken` takes a `Broken` and was perfectly resolvable a moment ago; now the
-name it mentions is gone as well. So Flat goes over the elements again — the same
-list, not the source — refuses `use_broken` for the same reason, and keeps going
-until a pass refuses nothing new. Here that is the third pass, which changes
-nothing.
+name it mentions is gone as well. So Flat goes over the elements again, refuses
+`use_broken` for the same reason, and keeps going until a pass refuses nothing
+new — here, the third one.
 
 Nothing is discarded on the way, and this does not fail the build. A refused
 element stays in the model as an unsupported entry, and `Flat::unsupported()`
