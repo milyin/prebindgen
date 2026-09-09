@@ -83,7 +83,24 @@ What the model accepts is closed. The type grammar is an accepted subset of Rust
 syntax rather than all of it, and a shape with no slot in an element — an `async
 fn`, a variadic, a generic parameter — is refused rather than approximated,
 because the missing piece would otherwise be dropped silently. Lifetimes are not
-in that list: they are spelling, and spelling travels.
+in that list: they are spelling, and spelling travels. Raw pointers are not in the
+grammar at all, and that is a statement about the whole project: a source crate is
+idiomatic Rust, and pointers belong to the stage that builds a native boundary out
+of it.
+
+A type element comes in three shapes, and the differences are what later stages
+work from. A **record** has fields the model describes, so a binding can take it
+apart and put it back together. An **enum** is really two concepts sharing one
+Rust keyword, and the model keeps them apart because they are identified
+differently: where every alternative is fieldless, its members are identified by
+the integer Rust assigns them — the value a C header restates and a Kotlin enum
+entry carries — while an enum whose alternatives carry payloads is a sum, whose
+alternatives are identified by position, since a foreign representation numbers
+its own arms and Rust's discriminant would be the wrong number to use. And a type
+can be **named without being described**: `pub type Session = zenoh::Session;`, or
+a marked tuple struct, gives the flat API a name and claims nothing about what is
+behind it. That is how a value that crosses as an opaque handle enters the API
+deliberately, rather than by being mentioned somewhere.
 
 It travels because each element also keeps its **origin**: the exact syntax it
 was built from, and the source it arrived in. Generated Rust is the one artifact
