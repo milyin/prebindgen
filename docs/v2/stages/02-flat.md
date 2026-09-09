@@ -64,44 +64,48 @@ declaration in that namespace, two mentions of `Stamp` are two mentions of the
 same type — there is no way to end up holding two `Stamp`s that disagree.
 
 A name can fail to resolve, and the reason is worth being clear about: the
-namespace contains what was marked, not what the crate compiles. A marked
-function may take a type whose declaration nobody marked, or a foreign type the
-crate never gave a name to. Rust is perfectly happy with that code; the binding
-world is not, because there is nothing here to describe the value that would have
-to cross.
-
-Flat settles this while building the model. Once every marked item is in hand,
-it goes over the elements one by one and looks up every type name each of them
-mentions. An element that mentions a name the namespace does not have cannot be
-described, so Flat refuses it: it becomes an unsupported element, carrying that
-diagnosis, like any other refusal.
-
-One pass is not enough, because refusing an element also removes a declaration —
-and an element that looked fine a moment ago may have been naming the element
-just refused:
+namespace holds what was marked, not what the crate compiles. A marked function
+may take a type whose declaration nobody marked, or a foreign type the crate
+never gave a name to. Rust is happy with such code; a binding cannot be built
+from it, because nothing here describes the value that would have to cross.
 
 ```rust
-pub struct Missing;                        // ordinary Rust, but nobody marked it
+pub struct Missing;                        // ordinary Rust, but not marked
 
 #[prebindgen]
-pub struct Broken { pub field: Missing }   // refused: `Missing` is not in the namespace
+pub struct Broken { pub field: Missing }   // marked, and names an unmarked type
 
 #[prebindgen]
-pub fn use_broken(value: Broken) {}        // refused too: `Broken` is gone now
+pub fn use_broken(value: Broken) {}        // marked, and takes that struct
 ```
 
-All three lines compile. Only the marked two were offered to the binding world,
-and neither can be described there: the first names a type the namespace does not
-have, and the second names the first.
+Flat settles this while building the model, and it settles it among the elements
+it has just lowered — the source is not read a second time. It looks up every
+type name each element mentions. `Broken` mentions `Missing`, which no element
+declares, so `Broken` cannot be described. Flat replaces it with an unsupported
+entry that keeps its name and location and carries the reason, in the terms the
+author can act on: *names the type `Missing`, which the flat API does not declare
+— mark its declaration `#[prebindgen]`, or, for a foreign or crate-private type
+used as a handle, give it a name here with `#[prebindgen] pub type Missing = ..;`*
 
-So Flat goes over the surviving elements again, refusing whatever has just been
-stranded, and keeps going until a pass refuses nothing new. Here that takes two
-passes: the first refuses `Broken`, the second refuses `use_broken`, the third
-finds nothing left to refuse and stops.
+That changes the namespace, because `Broken` has stopped being a declaration.
+`use_broken` takes a `Broken` and was perfectly resolvable a moment ago; now the
+name it mentions is gone as well. So Flat goes over the elements again — the same
+list, not the source — refuses `use_broken` for the same reason, and keeps going
+until a pass refuses nothing new. Here that is the third pass, which changes
+nothing.
 
-What remains is a model with no dead ends. Every type name in a surviving element
-has a declaration in the namespace to look up, which is what lets every later
-stage walk the model without a plan for what to do when a name leads nowhere.
+Nothing is discarded on the way, and this does not fail the build. A refused
+element stays in the model as an unsupported entry, and `Flat::unsupported()`
+enumerates them with their names, locations and reasons, so a consumer can report
+exactly what it cannot use. What to do about them is the consumer's decision, and
+today's registry makes a strict one: it refuses to build a binding from a model
+that contains any unsupported element, and lists all of them at once, so a source
+crate that needs fixing is fixed in one pass rather than one item per rebuild.
+
+What survives has no dead ends. Every type name in a surviving element has a
+declaration in the namespace to look up, which is what lets every later stage
+walk the model without a plan for what to do when a name leads nowhere.
 
 ## The shapes the model has
 
