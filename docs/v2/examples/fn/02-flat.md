@@ -10,16 +10,20 @@ The captured `stamp_sum` record, in a build that also captured `Stamp`.
 
 ## Owner
 
-Flat. It lowers the signature, resolves the parameter's type name to the
-declaration in the same snapshot, and publishes read-only views.
+Flat. It lowers the signature into an element, checks that every type the
+signature names is declared somewhere in the namespace, and publishes read-only
+views over the result.
 
 ## Result
 
 `model.function("stamp_sum")` returns a `FunctionView`. Its `parameters()` yields
 exactly one `ParameterView`, at index 0, named `stamp`, whose `ty()` is a
-`TypeView` of `Stamp`. Its `return_type()` is a `TypeView` of `i64`. Following
-`parameter.ty().as_record()` reaches [the record view][struct_flat] — the same
-view the record path describes, in the same snapshot.
+`TypeView` of `Stamp`. Its `return_type()` is a `TypeView` of `i64`.
+
+That parameter type holds the name `Stamp` and nothing else — there is no stored
+link to the declaration. `parameter.ty().as_record()` performs the lookup and
+reaches [the record view][struct_flat], the same view the record path describes,
+in the same snapshot.
 
 Reading a function assigns it nothing. `stamp_sum` is a function that takes a
 `Stamp`; whether it is exported, and whether some other function is a constructor
@@ -31,8 +35,10 @@ All views reached from this function retain the same snapshot, and stay usable
 after the original `Flat` handle is dropped. A `Stamp` view from a different
 snapshot is not interchangeable with this one, even though the name and the type
 key match. Lookup and enumeration agree: `model.functions()` yields this same
-function view. If the capture had named a type no declaration defines, building
-the model — not reading it — is where that fails.
+function view. Had the parameter named a type nothing declares, this function
+would not be here to look up at all: building the model refuses an element whose
+names do not resolve, so a `FunctionView` that exists is one whose types can be
+followed.
 
 ## Representation
 

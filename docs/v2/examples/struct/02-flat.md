@@ -10,7 +10,8 @@ The captured `Stamp` record.
 
 ## Owner
 
-Flat, which lowers the declaration and publishes the views over it.
+Flat, which lowers the declaration into an element in the namespace and
+publishes the views over it.
 
 ## Result
 

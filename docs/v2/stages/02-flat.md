@@ -10,93 +10,123 @@ implemented functionality.
 A capture entry says `stamp: Stamp` because that is what the source said. To
 plan a binding, something has to know more than the text: that `Stamp` is a
 record declared in this same crate, that it has two fields, and that both are
-`i64`. Turning the captured text into that kind of answerable model is this
-stage, and the library that does it is **Flat** (`prebindgen-flat`).
+`i64`. Turning captured text into that kind of answerable model is this stage,
+and the library that does it is **Flat** (`prebindgen-flat`).
 
-Flat reads the whole capture, lowers each declaration into a typed record,
-resolves the references between them — the `Stamp` named by the parameter is
-matched to the `Stamp` that was declared — and publishes the result:
+Flat parses each captured item, lowers it into an **element** — a function, a
+type, a constant — and puts every element into **one flat namespace**: a single
+index by name, spanning every source crate that was read. That is what the name
+of the crate refers to, and it shapes everything else here.
 
 ```rust
 // build.rs of a binding crate, continued from the previous chapter
-let mut builder = FlatBuilder::new();
-builder.add_captures(Source::new(source_crate::PREBINDGEN_OUT_DIR).items_all())?;
-builder.add_local_function(stamp_from_millis_signature)?;  // optional, see below
-let model = builder.build()?;   // the snapshot; nothing is added to it afterwards
+let model = Flat::builder()
+    .source(source_crate::PREBINDGEN_OUT_DIR)   // the capture, read and parsed
+    .build()?;
 ```
 
-Then it can be walked:
+The namespace is flat in a literal sense. Before anything is lowered, every type
+mentioned anywhere is normalized to a bare name: `std::option::Option<T>` becomes
+`Option`, `source_a::TypeA` becomes `TypeA`, and an alias becomes whatever it
+named. Paths are gathered from all items first, so the same type normalizes the
+same way wherever it is mentioned. What survives is the set of names the
+generated crate will actually be able to write.
+
+Two names cannot collide in one namespace, so a duplicate is the one thing that
+fails the build outright, however the source crates were arranged. Everything
+else that goes wrong is per item, and does not fail: an item the model cannot
+express becomes an **unsupported element** carrying its diagnosis and stays in
+the model, so a consumer can enumerate what a source crate marked, refusals
+included, instead of wondering what went missing.
+
+What is *not* in the model is a link between elements. A parameter's type carries
+the name `Stamp` and nothing more — no pointer, no index, no resolved
+declaration. Finding what that name denotes is a lookup in the namespace, done
+when someone needs it:
 
 ```rust
 let function = model.function("stamp_sum").expect("captured");
-let stamp = function.parameters().next().unwrap().ty(); // the Stamp parameter type
-let record = stamp.as_record().expect("a record");      // its declaration
-for field in record.fields() {
-    println!("{}: {}", field.name().unwrap(), field.ty().type_ref()); // secs: i64, nanos: i64
-}
+let stamp = &function.params[0].ty;              // a reference: the name `Stamp`
+let decl = model.resolve(stamp.type_id().unwrap()).expect("declared");
 ```
 
-Two words in that snippet carry the design. A **snapshot** is one finished,
-immutable set of source records: once published, nothing is added to it, so
-everything read from it agrees. A **view** — `FunctionView`, `TypeView`,
-`RecordView`, `FieldView` — is a read-only handle to something inside a snapshot,
-which remembers which snapshot it came from. That memory is why navigation works:
-`parameters().next().unwrap().ty()` hands back a type view in the same snapshot,
-so `as_record()` can look up the declaration without the caller repeating a name
-lookup, and without a name from one build being resolved against another build's
-declarations.
+Keeping a reference to a name is what makes the namespace work: the same type
+cannot compare unequal to itself because two source crates mentioned it, and a
+reference may point forward, or across crates, without the order the captures
+were read in mattering.
+
+The one thing Flat does across elements is check that those lookups will
+succeed. Once every declaration is in hand, an element naming a type nothing
+declares is refused — turned into an unsupported element — and because refusing
+a type takes away a declaration, the check repeats until a round refuses nothing:
+
+```rust
+pub struct Broken { pub field: Missing }   // refused: `Missing` is undeclared
+pub fn use_broken(value: Broken) {}        // refused too: `Broken` is now gone
+```
+
+The result is an invariant worth stating, because everything downstream leans on
+it: for any element still standing, every type it names resolves.
+
+What the model accepts is closed. The type grammar is an accepted subset of Rust
+syntax rather than all of it, and a shape with no slot in an element — an `async
+fn`, a variadic, a generic parameter — is refused rather than approximated,
+because the missing piece would otherwise be dropped silently. Lifetimes are not
+in that list: they are spelling, and spelling travels.
+
+It travels because each element also keeps its **origin**: the exact syntax it
+was built from, and the source it arrived in. Generated Rust is the one artifact
+that needs that fidelity — `B()` must not be re-spelled `B`, `= 0x07` must not
+become `= 7` — so the source's own text rides along for emission to reuse. It is
+not a second source of facts: the retained syntax is private to Flat, and the
+rule for every consumer is to analyse the model and generate from the model.
 
 Flat answers questions about Rust; it takes no position on bindings. It will
 report that `stamp_from_millis(i64) -> Stamp` takes one integer and returns
 `Stamp`. Whether that function should therefore be used to *construct* `Stamp`
-values for a binding is not something a view says — that decision belongs to the
-[registry](03-requests.md#what-the-registry-does), and Flat has no API that
+values for a binding is not something the model says — that decision belongs to
+the [registry](03-requests.md#what-the-registry-does), and Flat has no API that
 expresses it.
 
-The same split governs failure. Capture data that is malformed or contradictory
-is a `ModelError` and fails the build. A declaration whose shape the model does
-not describe stays in the snapshot as an unsupported item, carrying its
-location; whether that blocks a particular requested binding is decided much
-later, and only for the bindings that actually need it.
+Everything above is what the current library does. What V2 adds is described
+next, and one thing it does not add is a second opinion on any of it.
 
 ## What Flat is for
 
 Binding generation is not the only consumer of this model. The same navigation —
-find a function, inspect its parameters, follow a type to its declaration, list
-a record's fields or an enum's variants — is what an API documentation tool or a
-source validator needs, and Flat is usable on its own, with no registry and no
-target in the picture.
-
-A view also retains the source information needed for diagnostics and for
-eventual Rust emission, so a consumer that reports an error can point at the
-line, and the writer at the end of the pipeline can reproduce a type as the
-source spelled it.
-
-What Flat models is a supported subset of Rust, not the language. It does not
-promise the type inference, trait resolution or full semantics of the compiler,
-and a declaration outside that subset is reported rather than approximated.
+find a function, inspect its parameters, follow a type name to its declaration,
+list a record's fields or an enum's variants — is what an API documentation tool
+or a source validator needs, and Flat is usable on its own, with no registry and
+no target in the picture.
 
 ## What changes from the current API
 
-Flat already has name lookup and typed source records. In the existing code,
-[`Flat::function`](../../../prebindgen-flat/src/flat/mod.rs) returns `&Function`, and
+Everything above exists today. What V2 adds is about *handles*, not about facts.
+
+In the current code, [`Flat::function`](../../../prebindgen-flat/src/flat/mod.rs)
+returns `&Function`, borrowed from the model, and
 [`Function`, `Struct`, `Param`, and `Field`](../../../prebindgen-flat/src/flat/element.rs)
-contain most of the facts needed for inspection. [`TypeRef`](../../../prebindgen-flat/src/flat/ty.rs)
-already classifies source types and preserves wrappers and references.
+hold the facts an inspecting consumer needs.
+[`TypeRef`](../../../prebindgen-flat/src/flat/ty.rs) already classifies a source
+type and preserves its wrappers and references. Following a parameter's type to a
+declaration is then the caller's job: take the name out of the reference, call
+`Flat::resolve`, keep the model in hand for the next hop.
 
-The new API adds three guarantees around those facts:
+V2 replaces those borrows with **views**: `FunctionView`, `TypeView`,
+`RecordView`, `FieldView` — read-only handles that carry the model they came from
+rather than borrowing it. Three things follow.
 
-1. Public views retain one immutable model and expose read-only records. A
-   consumer cannot change a signature or field while retaining unrelated source
-   data behind that record.
-2. Navigation returns views associated with that same model, including derived
-   child types. Consumers do not have to repeat name lookup and attach model
-   identity themselves.
-3. Lookup, enumeration, source locations, identity checks, and model ownership
-   follow the same rules across item kinds.
+1. Navigation composes. `parameters().next().ty().as_record()` works because each
+   step hands back a view that still knows its model, so the lookup this chapter
+   showed as an explicit `resolve` call happens inside the step that needs it.
+2. A view outlives the handle it was obtained from, which is what lets a request
+   or a completed plan retain one instead of copying facts out of it.
+3. Which model a view belongs to is checkable, so a view from one build cannot be
+   planned against another build's declarations even when the two contain a type
+   with the same name.
 
-Function lookup returns `FunctionView` directly. The view supports inspection
-and retains the model; Flat keeps the underlying function index private.
+Lookup, enumeration, source locations and ownership then follow the same rules
+across every item kind, and the index behind a view stays private to Flat.
 
 ## Building and retaining a model
 
@@ -126,6 +156,11 @@ the same grammar as captured functions. Input parsing may consume Rust syntax;
 inspection after lowering uses the typed model. Adding local helpers must check
 name collisions and preserve the distinction between captured source modules
 and helper-module qualification.
+
+This is also a change from today, where a helper is added to a model that has
+already been built. Making the builder the only way in is what lets the published
+snapshot be complete: everything the model will ever contain is there when the
+first view is handed out.
 
 The frontend registers all helpers before creating registry requests containing
 views. Registering a helper after publication requires building another
