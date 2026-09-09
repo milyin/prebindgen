@@ -7,15 +7,16 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-A capture entry says `stamp: Stamp` because that is what the source said. To
-plan a binding, something has to know more than the text: that `Stamp` is a
-record declared in this same crate, that it has two fields, and that both are
-`i64`. Turning captured text into that kind of answerable model is this stage,
-and the library that does it is **Flat** (`prebindgen-flat`).
+What arrives here is what capture stored: the source text of each marked
+declaration, parsed back into the item it was. Of `stamp_sum` that text says its
+parameter is written `Stamp` — and being text, that is all it can say. Planning a
+binding needs the next answer: `Stamp` is a record, declared in this same source
+crate, with two fields, both `i64`. Building something that can answer that is
+this stage, and the library that does it is **Flat** (`prebindgen-flat`).
 
-Flat parses each captured item, lowers it into an **element** — a function, a
-type, a constant — and puts every element into **one flat namespace**: a single
-index by name, spanning every source crate that was read. That is what the name
+Flat lowers each of those items into an **element** — a function, a type, a
+constant — and puts every element into **one flat namespace**: a single index by
+name, spanning every source crate that was read. That is what the name
 of the crate refers to, and it shapes everything else here.
 
 ```rust
