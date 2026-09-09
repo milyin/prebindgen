@@ -63,18 +63,29 @@ captures arrived in changes nothing. And because a name has exactly one
 declaration in that namespace, two mentions of `Stamp` are two mentions of the
 same type — there is no way to end up holding two `Stamp`s that disagree.
 
-The one thing Flat does across elements is check that those lookups will
-succeed. Once every declaration is in hand, an element naming a type nothing
-declares is refused — turned into an unsupported element — and because refusing
-a type takes away a declaration, the check repeats until a round refuses nothing:
+A name can fail to resolve, and the reason is worth being clear about: the
+namespace contains what was marked, not what the crate compiles. A marked
+function may take a type whose declaration nobody marked, or a foreign type the
+crate never gave a name to. Rust is perfectly happy with that code; the binding
+world is not, because there is nothing here to describe the value that would have
+to cross.
+
+Flat settles this once, while building. An element naming a type the namespace
+does not declare cannot be described, so it is refused and becomes an unsupported
+element like any other. Refusing it can strand others, since what was refused is
+no longer declared either:
 
 ```rust
-pub struct Broken { pub field: Missing }   // refused: `Missing` is undeclared
-pub fn use_broken(value: Broken) {}        // refused too: `Broken` is now gone
+pub struct Broken { pub field: Missing }   // refused: nobody declared `Missing`
+pub fn use_broken(value: Broken) {}        // refused too: `Broken` is gone now
 ```
 
-The result is an invariant worth stating, because everything downstream leans on
-it: for any element still standing, every type it names resolves.
+So the check runs again over what is left, and again, until a round refuses
+nothing. What comes out the other side is a model with no dead ends: every type
+mentioned by a surviving element has a declaration in the namespace to look up.
+That is the property every later stage relies on — a stage planning a conversion
+for a field can follow the field's type without asking what to do if it leads
+nowhere.
 
 ## The shapes the model has
 
