@@ -4,8 +4,8 @@
 
 # Build and inspect the source model
 
-Status: proposed design. The API sketches state intended contracts, not
-implemented functionality.
+Status: this chapter describes the library as it stands, except for its last
+section, which is proposed design.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:
@@ -226,10 +226,12 @@ values for a binding is not something the model says — that decision belongs t
 the [registry](03-requests.md#what-the-registry-does), and Flat has no API that
 expresses it.
 
-## What changes from the current API
+## What V2 changes
 
-Everything above is what the library does today. What V2 adds is about *handles*,
-not about facts, and it revisits none of it.
+Everything above is what the library does today, and everything from here to the
+end of the chapter is proposed instead of built. None of it revisits the model's
+answers: the elements, the grammar, the namespace and the refusals all stay as
+described. What changes is how the model is held and handed out.
 
 In the current code, [`Flat::function`](../../../prebindgen-flat/src/flat/mod.rs)
 returns `&Function`, borrowed from the model, and
@@ -256,7 +258,7 @@ rather than borrowing it. Three things follow.
 Lookup, enumeration, source locations and ownership then follow the same rules
 across every item kind, and the index behind a view stays private to Flat.
 
-## Building and retaining a model
+### Building and retaining a model
 
 A **snapshot** is one completed, immutable set of source records and lookup
 indices. A **local helper** is a Rust function whose signature the binding
@@ -307,7 +309,7 @@ Flat can retain as unsupported is different from malformed capture data or a
 contradictory model, which returns `ModelError`. Whether an unsupported source
 item prevents a requested binding is the registry's decision.
 
-## Private storage and model consistency
+### Private storage and model consistency
 
 The following internals illustrate the ownership rule. Every field is private
 to Flat; callers receive accessors instead of mutable records.
@@ -375,7 +377,7 @@ operation with source mapping and validation. Matching names or key strings are
 insufficient evidence of equivalence. Cross-snapshot import is outside the first
 increment.
 
-## Lookup and navigation
+### Lookup and navigation
 
 Lookup and enumeration return the same kind of handle. The prototypes below
 show the first useful path through the API:
@@ -427,7 +429,7 @@ are added, which needs no large shared trait: a generic item view
 supports enumeration and classification, while a function still exposes parameters,
 a record exposes fields, and an enum exposes variants.
 
-## Type readings and type views
+### Type readings and type views
 
 A **type reading**, the existing `TypeRef`, describes one Rust type's structure
 and the source information retained by Flat. A **type view**, `TypeView`, adds
@@ -503,7 +505,7 @@ the current Flat grammar. Adding generic instantiation requires explicit Flat
 support and tests; a view must not substitute a bare declaration for an
 instantiated type and silently lose its arguments.
 
-## Derived types and source fidelity
+### Derived types and source fidelity
 
 Planning may need a type that no captured signature writes, such as `Option<T>`
 around an existing modeled type. A type view should support checked structural
@@ -544,7 +546,7 @@ needed to render an operation belongs in Flat's structured model, where it can b
 checked, rather than being recovered from the text by whoever needs it. Source legality and field accessibility must be represented
 or diagnosed before the registry claims support for construction or projection.
 
-## A useful consumer without a registry
+### A useful consumer without a registry
 
 A source-inspection tool can list the fields of a function's record parameter:
 
