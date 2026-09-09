@@ -3,6 +3,7 @@
 # Record with scalar fields — Retain supported output
 
 [Stage chapter](../../stages/06-retain.md) · [Element path][struct] · [Source crate](../../source.md)
+Previous: [Plan value conversions][struct_values] · Next: [Emit bindings][struct_emit]
 
 ## Input
 
@@ -47,10 +48,6 @@ outcome(public Stamp) = Emitted { artifacts: [ type declaration ] }
 
 artifact order:  type declaration -> native wrapper that uses it
 ```
-
-## Along this element
-
-Previous: [Plan value conversions][struct_values] · Next: [Emit bindings][struct_emit]
 
 [struct]: README.md
 [struct_values]: 04-values.md

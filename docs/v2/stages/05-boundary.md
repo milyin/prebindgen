@@ -2,7 +2,7 @@
 
 # Assemble the native boundary
 
-[Project contents](../README.md)
+[Project contents](../README.md) · Previous: [Plan value conversions](04-values.md) · Next: [Retain supported output](06-retain.md)
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
@@ -11,8 +11,10 @@ The examples in this chapter use one small source crate — a record and a funct
 over it, marked for binding generation:
 
 ```rust
+#[prebindgen]
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
 
+#[prebindgen]
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
@@ -140,10 +142,6 @@ C and JNI retain configured calling conventions. Unsupported result destinations
 
 The record path has no cell here: [its conversion][struct_values] is reached
 through the function that uses it.
-
----
-
-Previous: [Plan value conversions](04-values.md) · Next: [Retain supported output](06-retain.md)
 
 [fn_boundary]: ../examples/fn/05-boundary.md
 [fn_boundary_c]: ../examples/fn/05-boundary.c.md

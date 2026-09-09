@@ -3,6 +3,7 @@
 # Function taking an owned record — Assemble the native boundary
 
 [Stage chapter](../../stages/05-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
+Previous: [Plan value conversions][fn_values] · Next: [Retain supported output][fn_retain]
 
 ## Input
 
@@ -59,10 +60,6 @@ function would instead resolve two conversions and a branching
 
 - [C][fn_boundary_c]
 - [Kotlin/JNI][fn_boundary_jni]
-
-## Along this element
-
-Previous: [Plan value conversions][fn_values] · Next: [Retain supported output][fn_retain]
 
 [fn]: README.md
 [fn_values]: 04-values.md

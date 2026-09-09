@@ -2,7 +2,7 @@
 
 # Record binding requests
 
-[Project contents](../README.md)
+[Project contents](../README.md) · Previous: [Build and inspect the source model](02-flat.md) · Next: [Plan value conversions](04-values.md)
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
@@ -11,8 +11,10 @@ The examples in this chapter use one small source crate — a record and a funct
 over it, marked for binding generation:
 
 ```rust
+#[prebindgen]
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
 
+#[prebindgen]
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
@@ -391,10 +393,6 @@ Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies
 
 - [Function taking an owned record][fn_requests] · [C][fn_requests_c] · [Kotlin/JNI][fn_requests_jni]
 - [Record with scalar fields][struct_requests] · [C][struct_requests_c] · [Kotlin/JNI][struct_requests_jni]
-
----
-
-Previous: [Build and inspect the source model](02-flat.md) · Next: [Plan value conversions](04-values.md)
 
 [fn_requests]: ../examples/fn/03-requests.md
 [fn_requests_c]: ../examples/fn/03-requests.c.md

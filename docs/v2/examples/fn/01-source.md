@@ -3,6 +3,7 @@
 # Function taking an owned record — Capture source items
 
 [Stage chapter](../../stages/01-source.md) · [Element path][fn] · [Source crate](../../source.md)
+Next: [Build and inspect the source model][fn_flat]
 
 ## Input
 
@@ -59,10 +60,6 @@ The line it appends to the capture file:
 When a binding crate reads this line back, the text is parsed into the item it
 came from and stamped with the crate that captured it — which is how the next
 stage can tell whose `Stamp` this is.
-
-## Along this element
-
-Next: [Build and inspect the source model][fn_flat]
 
 [fn]: README.md
 [fn_flat]: 02-flat.md

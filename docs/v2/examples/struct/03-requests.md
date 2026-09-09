@@ -3,6 +3,7 @@
 # Record with scalar fields — Record binding requests
 
 [Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source crate](../../source.md)
+Previous: [Build and inspect the source model][struct_flat] · Next: [Plan value conversions][struct_values]
 
 ## Input
 
@@ -57,10 +58,6 @@ conversion_rules.parts: {}   // none recorded for this path
 
 - [C][struct_requests_c]
 - [Kotlin/JNI][struct_requests_jni]
-
-## Along this element
-
-Previous: [Build and inspect the source model][struct_flat] · Next: [Plan value conversions][struct_values]
 
 [struct]: README.md
 [struct_flat]: 02-flat.md

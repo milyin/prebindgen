@@ -3,6 +3,7 @@
 # Record with scalar fields — Plan value conversions
 
 [Stage chapter](../../stages/04-values.md) · [Element path][struct] · [Source crate](../../source.md)
+Previous: [Record binding requests][struct_requests] · Next: [Retain supported output][struct_retain]
 
 ## Input
 
@@ -66,10 +67,6 @@ same place.
 
 - [C][struct_values_c]
 - [Kotlin/JNI][struct_values_jni]
-
-## Along this element
-
-Previous: [Record binding requests][struct_requests] · Next: [Retain supported output][struct_retain]
 
 [struct]: README.md
 [struct_requests]: 03-requests.md

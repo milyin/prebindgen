@@ -77,11 +77,15 @@ captured item, the views, the request, the plan, the boundary, the retained entr
 or the generated code. A variant specializes its common cell rather than
 repeating it.
 
-Every cell links to its stage chapter and its element TOC; every variant links to
-its chapter, its common cell and its element TOC. Every stage chapter lists all
-of its declared cells and variants, and every element TOC lists all of that
-element's, both in manifest order. Chapters carry previous/next links across the
-stage order; cells carry them across that element's declared cells. Cross-element
+Navigation lives at the top of a page, under the title, before any prose: a
+chapter's line carries the link to the contents and its previous/next chapters, a
+cell's carries its stage chapter, its element TOC, the source crate and its
+previous/next cells along that element, and a variant's carries its chapter, its
+common cell and its element TOC. Nothing navigational sits at the foot of a page
+except the link definitions.
+
+Every stage chapter lists all of its declared cells and variants, and every
+element TOC lists all of that element's, both in manifest order. Cross-element
 links document dependencies; they never replace an index or a backlink.
 
 A stage marked `language_dependent` requires both languages for each of its

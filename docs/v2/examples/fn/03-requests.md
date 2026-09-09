@@ -3,6 +3,7 @@
 # Function taking an owned record — Record binding requests
 
 [Stage chapter](../../stages/03-requests.md) · [Element path][fn] · [Source crate](../../source.md)
+Previous: [Build and inspect the source model][fn_flat] · Next: [Plan value conversions][fn_values]
 
 ## Input
 
@@ -62,10 +63,6 @@ the divergence at this stage.
 
 - [C][fn_requests_c]
 - [Kotlin/JNI][fn_requests_jni]
-
-## Along this element
-
-Previous: [Build and inspect the source model][fn_flat] · Next: [Plan value conversions][fn_values]
 
 [fn]: README.md
 [fn_flat]: 02-flat.md

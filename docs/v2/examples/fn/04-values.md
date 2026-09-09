@@ -3,6 +3,7 @@
 # Function taking an owned record — Plan value conversions
 
 [Stage chapter](../../stages/04-values.md) · [Element path][fn] · [Source crate](../../source.md)
+Previous: [Record binding requests][fn_requests] · Next: [Assemble the native boundary][fn_boundary]
 
 ## Input
 
@@ -74,10 +75,6 @@ node(output) = Crossing { source: i64, direction: OutOfRust }
 
 - [C][fn_values_c]
 - [Kotlin/JNI][fn_values_jni]
-
-## Along this element
-
-Previous: [Record binding requests][fn_requests] · Next: [Assemble the native boundary][fn_boundary]
 
 [fn]: README.md
 [fn_requests]: 03-requests.md

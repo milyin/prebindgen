@@ -2,7 +2,7 @@
 
 # Build and inspect the source model
 
-[Project contents](../README.md)
+[Project contents](../README.md) · Previous: [Capture source items](01-source.md) · Next: [Record binding requests](03-requests.md)
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
@@ -11,8 +11,10 @@ The examples in this chapter use one small source crate — a record and a funct
 over it, marked for binding generation:
 
 ```rust
+#[prebindgen]
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
 
+#[prebindgen]
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
@@ -472,10 +474,6 @@ This path is the first acceptance example for the API. It should work with only
 
 - [Function taking an owned record][fn_flat]
 - [Record with scalar fields][struct_flat]
-
----
-
-Previous: [Capture source items](01-source.md) · Next: [Record binding requests](03-requests.md)
 
 [fn_flat]: ../examples/fn/02-flat.md
 [struct_flat]: ../examples/struct/02-flat.md

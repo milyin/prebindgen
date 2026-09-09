@@ -3,6 +3,7 @@
 # Function taking an owned record — Build and inspect the source model
 
 [Stage chapter](../../stages/02-flat.md) · [Element path][fn] · [Source crate](../../source.md)
+Previous: [Capture source items][fn_source] · Next: [Record binding requests][fn_requests]
 
 ## Input
 
@@ -63,10 +64,6 @@ Two type views leave this stage, and they are what the later stages plan
 against: `Stamp` used as an owned parameter type, and `i64` used as the result
 type. Neither is a name or a key — each retains its reading and its snapshot, so
 `Stamp`, `&Stamp` and `Option<Stamp>` remain three different inputs to planning.
-
-## Along this element
-
-Previous: [Capture source items][fn_source] · Next: [Record binding requests][fn_requests]
 
 [fn]: README.md
 [fn_source]: 01-source.md

@@ -105,6 +105,16 @@ def section(page, heading):
     return body
 
 
+def header(page):
+    """The block between the page title and its first section: links and neighbours."""
+    title = re.search(r"^# .*$", page.text, re.M)
+    if title is None:
+        fail(f"{page.relative}: missing a title")
+    tail = page.text[title.end():]
+    end = re.search(r"^## ", tail, re.M)
+    return tail[: end.start()] if end else tail
+
+
 def ordered_ids(text, allowed):
     """Ids of `allowed` in order of first use, as [label] references."""
     seen = []
@@ -249,14 +259,13 @@ def check_cell(page, ids, root, manifest, stage_by_id, example_by_id, order):
         expected = [f"{example}_{stage['slug']}_{language}" for language in languages]
         if listed != expected:
             fail(f"{page.relative}: 'Language variants' lists {listed}, expected {expected}")
-    neighbors = section(page, "Along this element")
     position = order[example].index(page.relative)
     for step, label in ((-1, "previous"), (1, "next")):
         index = position + step
         if 0 <= index < len(order[example]):
             neighbor = ids_by_path(ids)[order[example][index]]
-            if neighbor not in ordered_ids(neighbors, set(ids)):
-                fail(f"{page.relative}: 'Along this element' must link its {label} "
+            if neighbor not in ordered_ids(header(page), set(ids)):
+                fail(f"{page.relative}: the header must link its {label} "
                      f"cell [{neighbor}]")
 
 

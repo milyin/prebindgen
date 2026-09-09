@@ -2,7 +2,7 @@
 
 # Retain supported output
 
-[Project contents](../README.md)
+[Project contents](../README.md) · Previous: [Assemble the native boundary](05-boundary.md) · Next: [Emit bindings](07-emit.md)
 
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
@@ -11,8 +11,10 @@ The examples in this chapter use one small source crate — a record and a funct
 over it, marked for binding generation:
 
 ```rust
+#[prebindgen]
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
 
+#[prebindgen]
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
@@ -217,10 +219,6 @@ The common Rust writer reads `Generation`; JNI's optional writer reads the same 
 
 - [Function taking an owned record][fn_retain]
 - [Record with scalar fields][struct_retain]
-
----
-
-Previous: [Assemble the native boundary](05-boundary.md) · Next: [Emit bindings](07-emit.md)
 
 [fn_retain]: ../examples/fn/06-retain.md
 [struct_retain]: ../examples/struct/06-retain.md

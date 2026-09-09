@@ -2,7 +2,7 @@
 
 # Capture source items
 
-[Project contents](../README.md)
+[Project contents](../README.md) · Next: [Build and inspect the source model](02-flat.md)
 
 Capture copies each marked declaration out of the crate as source text and says
 where it came from. It does not analyse it: what a declaration means — which type
@@ -107,10 +107,6 @@ support.
 
 - [Function taking an owned record][fn_source]
 - [Record with scalar fields][struct_source]
-
----
-
-Previous: [Project contents](../README.md) · Next: [Build and inspect the source model](02-flat.md)
 
 [fn_source]: ../examples/fn/01-source.md
 [struct_source]: ../examples/struct/01-source.md

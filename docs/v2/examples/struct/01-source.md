@@ -3,6 +3,7 @@
 # Record with scalar fields — Capture source items
 
 [Stage chapter](../../stages/01-source.md) · [Element path][struct] · [Source crate](../../source.md)
+Next: [Build and inspect the source model][struct_flat]
 
 ## Input
 
@@ -52,10 +53,6 @@ The line it appends to the capture file:
 
 Unlike a function, a type is kept whole: its fields are its declaration, so there
 is nothing to leave out.
-
-## Along this element
-
-Next: [Build and inspect the source model][struct_flat]
 
 [struct]: README.md
 [struct_flat]: 02-flat.md

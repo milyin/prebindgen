@@ -2,7 +2,7 @@
 
 # Emit bindings
 
-[Project contents](../README.md)
+[Project contents](../README.md) · Previous: [Retain supported output](06-retain.md) · Next: [Implementation and acceptance](../implementation.md)
 
 Status: proposed design. Code shown as generated output illustrates required
 behavior, not bytes produced by the current scaffold.
@@ -11,8 +11,10 @@ The examples in this chapter use one small source crate — a record and a funct
 over it, marked for binding generation:
 
 ```rust
+#[prebindgen]
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
 
+#[prebindgen]
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
@@ -214,10 +216,6 @@ the [C aggregate][struct_emit_c] and the [Kotlin data class][struct_emit_jni].
 
 - [Function taking an owned record][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
 - [Record with scalar fields][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
-
----
-
-Previous: [Retain supported output](06-retain.md) · Next: [Implementation and acceptance](../implementation.md)
 
 [fn_emit]: ../examples/fn/07-emit.md
 [fn_emit_c]: ../examples/fn/07-emit.c.md

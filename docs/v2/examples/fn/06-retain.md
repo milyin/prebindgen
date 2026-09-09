@@ -3,6 +3,7 @@
 # Function taking an owned record — Retain supported output
 
 [Stage chapter](../../stages/06-retain.md) · [Element path][fn] · [Source crate](../../source.md)
+Previous: [Assemble the native boundary][fn_boundary] · Next: [Emit bindings][fn_emit]
 
 ## Input
 
@@ -59,10 +60,6 @@ Had a field of the record been unsupported, the same table would read:
 outcome(record)            = Skipped { causes: [cause#1] }
 outcome(exported stamp_sum)= Skipped { causes: [cause#1] }   // same cause, own path
 ```
-
-## Along this element
-
-Previous: [Assemble the native boundary][fn_boundary] · Next: [Emit bindings][fn_emit]
 
 [fn]: README.md
 [fn_boundary]: 05-boundary.md

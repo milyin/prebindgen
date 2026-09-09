@@ -3,6 +3,7 @@
 # Function taking an owned record — Emit bindings
 
 [Stage chapter](../../stages/07-emit.md) · [Element path][fn] · [Source crate](../../source.md)
+Previous: [Retain supported output][fn_retain]
 
 ## Input
 
@@ -47,10 +48,6 @@ The instructions and what each becomes:
 
 - [C][fn_emit_c]
 - [Kotlin/JNI][fn_emit_jni]
-
-## Along this element
-
-Previous: [Retain supported output][fn_retain]
 
 [fn]: README.md
 [fn_retain]: 06-retain.md

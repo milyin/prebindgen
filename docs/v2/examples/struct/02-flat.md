@@ -3,6 +3,7 @@
 # Record with scalar fields — Build and inspect the source model
 
 [Stage chapter](../../stages/02-flat.md) · [Element path][struct] · [Source crate](../../source.md)
+Previous: [Capture source items][struct_source] · Next: [Record binding requests][struct_requests]
 
 ## Input
 
@@ -53,10 +54,6 @@ for field in record.fields() {
 What leaves this stage is one record view and two field type views. Everything
 the later stages do to this record — selecting a relationship, converting the
 children, mapping them onto members or getters — is derived from exactly these.
-
-## Along this element
-
-Previous: [Capture source items][struct_source] · Next: [Record binding requests][struct_requests]
 
 [struct]: README.md
 [struct_source]: 01-source.md

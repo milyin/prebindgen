@@ -3,6 +3,7 @@
 # Record with scalar fields — Emit bindings
 
 [Stage chapter](../../stages/07-emit.md) · [Element path][struct] · [Source crate](../../source.md)
+Previous: [Retain supported output][struct_retain]
 
 ## Input
 
@@ -42,10 +43,6 @@ adds nothing of its own.
 
 - [C][struct_emit_c]
 - [Kotlin/JNI][struct_emit_jni]
-
-## Along this element
-
-Previous: [Retain supported output][struct_retain]
 
 [struct]: README.md
 [struct_retain]: 06-retain.md
