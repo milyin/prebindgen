@@ -97,7 +97,8 @@ build-dependency only:
 
 - **`prebindgen-proc-macro`** provides the `#[prebindgen]` attribute, and
   **`prebindgen`** reads back what it captured — one record per marked item.
-- **`prebindgen-flat`** builds the queryable source model over those records:
+- **`prebindgen-flat`** builds the queryable source model over those captured
+  items:
   which functions exist, what a parameter's type is, which declaration a type
   name refers to, what fields a record has.
 - **`prebindgen-registry-v2`** is the engine this document specifies. It plans

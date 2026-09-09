@@ -17,7 +17,7 @@ Implement the [source-model API](stages/02-flat.md) incrementally in
 standalone crate or an immediate breaking rewrite of V1 consumers.
 
 1. Add builder-to-snapshot ownership, helper registration checks and direct
-   function lookup/enumeration. Preserve unsupported records and locations.
+   function lookup/enumeration. Preserve unsupported items and locations.
 2. Add parameter/result `TypeView`s, exact record navigation and field views.
    Implement the independent inspection example using existing captured inputs.
 3. Add snapshot checks and checked type composition. Have V2 registry requests
@@ -39,7 +39,7 @@ Required validation for implementation:
   source-module qualification; existing opaque helper types remain representable.
 - Reference, optional and fallible navigation preserves wrappers and exact child
   types. Modeled lifetime arguments survive field navigation and emission.
-- Opaque items, unsupported records, guards and locations survive migration.
+- Opaque items, unsupported items, guards and locations survive migration.
 - Derived type views preserve model association without changing source-item
   enumeration, and type/key consistency holds by construction.
 - Flat tests validate source inspection and emission. The registry project's

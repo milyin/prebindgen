@@ -7,7 +7,7 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-A captured record says `stamp: Stamp` because that is what the source said. To
+A capture entry says `stamp: Stamp` because that is what the source said. To
 plan a binding, something has to know more than the text: that `Stamp` is a
 record declared in this same crate, that it has two fields, and that both are
 `i64`. Turning the captured text into that kind of answerable model is this
@@ -55,7 +55,7 @@ expresses it.
 
 The same split governs failure. Capture data that is malformed or contradictory
 is a `ModelError` and fails the build. A declaration whose shape the model does
-not describe stays in the snapshot as an unsupported record, carrying its
+not describe stays in the snapshot as an unsupported item, carrying its
 location; whether that blocks a particular requested binding is decided much
 later, and only for the bindings that actually need it.
 
@@ -138,7 +138,7 @@ The first implementation can use `Rc` for shared ownership, consistent with
 Flat's existing single-threaded source data. This design makes no `Send` or
 `Sync` guarantee; parallel planning would require a separate storage audit.
 
-A snapshot includes the source language's explicit unsupported-item records.
+A snapshot includes the source language's explicit unsupported items.
 Flat must preserve their identity and diagnostic information. A construct that
 Flat can retain as unsupported is different from malformed capture data or a
 contradictory model, which returns `ModelError`. Whether an unsupported source

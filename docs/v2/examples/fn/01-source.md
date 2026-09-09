@@ -16,20 +16,21 @@ record describing it.
 
 ## Result
 
-One captured function record: the name `stamp_sum`, the module path it was
-written in, its signature as written — one parameter named `stamp` of type
-`Stamp`, returning `i64` — the capture group it was assigned, any feature guards
-around it, and the source location. The record names `Stamp`; it does not contain
-`Stamp`'s definition. That arrives separately, from [the record's own
-capture][struct_source], and the two are related only by name until the next
-stage resolves them.
+One line in the capture file: the kind (a function), the name `stamp_sum`, the
+declaration's source text with its body replaced by a placeholder, and the file
+and line it came from. There is no `cfg` on this item, so that field is absent.
+
+The text mentions `Stamp`, and that is all it does — the entry does not contain
+`Stamp`'s definition, and nothing here has matched the two. The definition
+arrives separately, from [the record's own capture][struct_source]; connecting
+them is the next stage's work.
 
 ## Checks
 
-Capture is not resolution: a parameter type is retained as written, so a record
-naming a type that no capture defines is possible and has to be diagnosed later,
-not here. Capture is not selection either — this record exists whether or not any
-binding exposes the function. The same source produces the same record, so an
+The body is not kept, because no binding needs it: the generated wrapper calls
+the real `stamp_sum` in the source crate, so the signature is the whole of what
+travels. Capture is not selection either — this entry exists whether or not any
+binding exposes the function. The same source produces the same entry, so an
 unchanged crate regenerates identical capture output.
 
 ## Representation
@@ -43,22 +44,21 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
 }
 ```
 
-The captured record, schematically — one line of the capture file:
+The line it appends to the capture file:
 
 ```json
 {
   "kind": "function",
   "name": "stamp_sum",
-  "module": "crate::source",
-  "group": "default",
-  "signature": "pub fn stamp_sum(stamp: Stamp) -> i64",
-  "location": { "file": "src/source.rs", "line": 6 }
+  "content": "pub fn stamp_sum(stamp: Stamp) -> i64 { /* placeholder */ }",
+  "source_location": { "file": "src/source.rs", "line": 6, "column": 1 }
 }
 ```
 
-The body is not part of the record: nothing downstream needs it. The generated
-wrapper calls `crate::source::stamp_sum`, and the source crate keeps the
-implementation.
+`content` is text, not a parsed signature: `Stamp` here is a name in a string.
+When a binding crate reads this line back, the text is parsed into the item it
+came from and stamped with the crate that captured it — which is how the next
+stage can tell whose `Stamp` this is.
 
 ## Along this element
 

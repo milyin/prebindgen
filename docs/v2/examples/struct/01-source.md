@@ -14,18 +14,18 @@ The `#[prebindgen]` proc macro, which leaves the type in place and records it.
 
 ## Result
 
-One captured type record: the name `Stamp`, its module path, the declaration as
-written — a named-field struct with `secs: i64` and `nanos: i64`, both public —
-its capture group, feature guards and source location. Field order is part of the
-record, because it is part of the declaration.
+One line in the capture file: the kind (a struct), the name `Stamp`, and the
+declaration's complete source text — which is why the field names, their types,
+their order and their visibility all survive without any of them being a field of
+the entry. No `cfg` guarded this item, so that field is absent.
 
 ## Checks
 
-Capture keeps what it cannot interpret rather than dropping it: a field of a type
-this grammar does not model leaves the record present and marked unsupported, so
-the reason reaches the report at the end of the pipeline. Field privacy is
-recorded, not judged — whether a private field blocks a representation is decided
-much later, and only for representations that need to read it.
+Nothing about the fields is interpreted here. A field whose type the model cannot
+describe does not stop the capture, and neither does a private one: the text is
+stored either way, and what can be done with it is settled later — the model
+decides what it can describe, and a representation decides whether it needs to
+read a field it is not allowed to.
 
 ## Representation
 
@@ -39,22 +39,19 @@ pub struct Stamp {
 }
 ```
 
-The captured record, schematically:
+The line it appends to the capture file:
 
 ```json
 {
   "kind": "struct",
   "name": "Stamp",
-  "module": "crate::source",
-  "group": "default",
-  "shape": "named",
-  "fields": [
-    { "name": "secs", "ty": "i64", "vis": "pub" },
-    { "name": "nanos", "ty": "i64", "vis": "pub" }
-  ],
-  "location": { "file": "src/source.rs", "line": 1 }
+  "content": "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+  "source_location": { "file": "src/source.rs", "line": 1, "column": 1 }
 }
 ```
+
+Unlike a function, a type is kept whole: its fields are its declaration, so there
+is nothing to leave out.
 
 ## Along this element
 
