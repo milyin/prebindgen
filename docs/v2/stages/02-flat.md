@@ -80,28 +80,84 @@ pub fn use_broken(value: Broken) {}        // refused too: `Broken` is now gone
 The result is an invariant worth stating, because everything downstream leans on
 it: for any element still standing, every type it names resolves.
 
-What the model accepts is closed. The type grammar is an accepted subset of Rust
-syntax rather than all of it, and a shape with no slot in an element — an `async
-fn`, a variadic, a generic parameter — is refused rather than approximated,
-because the missing piece would otherwise be dropped silently. Lifetimes are not
-in that list: they are spelling, and spelling travels. Raw pointers are not in the
-grammar at all, and that is a statement about the whole project: a source crate is
-idiomatic Rust, and pointers belong to the stage that builds a native boundary out
-of it.
+## The shapes the model has
 
-A type element comes in three shapes, and the differences are what later stages
-work from. A **record** has fields the model describes, so a binding can take it
-apart and put it back together. An **enum** is really two concepts sharing one
-Rust keyword, and the model keeps them apart because they are identified
-differently: where every alternative is fieldless, its members are identified by
-the integer Rust assigns them — the value a C header restates and a Kotlin enum
-entry carries — while an enum whose alternatives carry payloads is a sum, whose
-alternatives are identified by position, since a foreign representation numbers
-its own arms and Rust's discriminant would be the wrong number to use. And a type
-can be **named without being described**: `pub type Session = zenoh::Session;`, or
-a marked tuple struct, gives the flat API a name and claims nothing about what is
-behind it. That is how a value that crosses as an opaque handle enters the API
-deliberately, rather than by being mentioned somewhere.
+Everything above is about the namespace. The model itself is the other half of
+what this crate is, and the more important one: a small set of structures that
+hold an accepted subset of Rust and nothing else.
+
+An element is one of five things:
+
+```rust
+enum Element {
+    Function(Function),      // a name, parameters in order, and a return type
+    Type(Type),              // a declared type, in one of the four shapes below
+    Constant(Constant),      // a name and its type
+    Guard(Guard),            // the injected feature assertion; no name, re-emitted as is
+    Unsupported(Unsupported),// a marked item the subset cannot express, with its diagnosis
+}
+
+enum Type {
+    Struct(Struct),   // fields, each with a name or a position, and a type
+    Variant(Variant), // an enum with payloads: alternatives identified by position
+    Enum(Enum),       // a fieldless enum: members identified by the integer Rust assigns
+    Extern(Extern),   // a name, and nothing behind it
+}
+```
+
+The four type shapes are the ones later stages actually work from. A **struct**
+has fields the model describes, so a binding can take a value apart and put one
+back together. The two **enum** shapes are one Rust keyword covering two
+concepts, and the model separates them because they are identified differently: a
+fieldless enum's members are identified by the value Rust assigns, which a C
+header restates and a Kotlin enum entry carries, while an enum with payloads is a
+sum whose alternatives are identified by position, since a foreign representation
+numbers its own arms and Rust's discriminant would be the wrong number to use. An
+**extern** is a name with nothing behind it — `pub type Session = zenoh::Session;`,
+or a marked tuple struct — which is how a value that crosses as an opaque handle
+enters the API deliberately, rather than by being mentioned somewhere.
+
+Every type written anywhere in those elements — a parameter, a return, a field,
+an alternative's payload, an array element — is one **type reading**: a kind,
+plus the origin it was lowered from. The kinds are the whole accepted grammar:
+
+```rust
+enum TypeKind {
+    Scalar(ScalarKind),                     // bool, the integers, isize/usize, f32, f64
+    Str, String,
+    Optional(TypeRef), Vec(TypeRef), Slice(TypeRef),
+    Fallible { ok: TypeRef, err: TypeRef }, // Result<T, E>
+    Named { id: TypeId, args: Vec<GenericArg> },
+    Array { elem: TypeRef, extent: ArrayExtent },
+    Ref { lifetime, mutable, inner: TypeRef },
+    Boxed(TypeRef), Cow { lifetime, inner: TypeRef }, Uninit(TypeRef),
+    Callback { args: Vec<TypeRef> },        // impl Fn(..) + Send + Sync + 'static
+    Unit,
+}
+```
+
+That list is the point of the crate, and reading it is most of understanding this
+stage. A consumer matches these variants and has no other case to handle: there
+is no arm for "some other Rust type", and no reason to walk `syn` looking for
+one. Enforcement happens once, here — a marked item mentioning a form with no
+variant in this grammar is refused at the door and becomes an unsupported
+element, so no adapter downstream has to re-check what it was given or decide
+what to do with a shape it has never heard of.
+
+The same closure applies above the type level. A shape with no slot in an element
+— an `async fn`, a variadic, a generic parameter — is refused rather than
+approximated, because the missing piece would otherwise be dropped silently.
+Lifetimes are not in that list: they are spelling, and the model keeps them.
+Raw pointers are not in the grammar at all, and that absence is a statement about
+the whole project: a source crate is idiomatic Rust, and pointers belong to the
+stage that builds a native boundary out of it.
+
+The grammar also keeps distinctions a destination language may well erase.
+`String` and `str` are different kinds; so are `Vec<T>` and `[T]`; `Box<T>` and
+`Cow<'a, T>` stay visible as wrappers rather than being flattened to what they
+contain. That a C binding treats several of these alike is a decision for the C
+adapter to take deliberately, at the point where it matters — not a decision the
+source model takes for everyone by throwing the difference away.
 
 It travels because each element also keeps its **origin**: the exact syntax it
 was built from, and the source it arrived in. Generated Rust is the one artifact
