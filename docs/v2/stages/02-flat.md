@@ -245,8 +245,10 @@ impl ParameterView {
 ```
 
 `TypeDeclView` describes a named type declaration. `ElementView` distinguishes
-functions, type declarations, constants, guards and unsupported items; guards
-are captured checks with no named public API. Typed lookup returns `None` when
+functions, type declarations, constants, guards and unsupported items. A guard
+here is the [feature assertion](01-source.md#capture-source-items) injected when
+the capture was read: an item the model carries and the writer emits, with no
+name in any foreign API. Typed lookup returns `None` when
 no accepted item of that kind exists under the name. A consumer needing to
 distinguish a missing name, wrong item kind and unsupported declaration uses
 `element`. Enumeration preserves source order.

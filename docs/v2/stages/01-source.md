@@ -44,14 +44,25 @@ captured declaration can actually be modelled — a generic function cannot, for
 one — is not decided here; the item is captured either way, and the answer comes
 with the [source model](02-flat.md).
 
-Two more things travel with the captures, both easy to miss because neither is a
-declaration. **Feature guards** are the `#[cfg]` conditions around a captured
-item; they are carried so that generated Rust can be gated exactly as the source
-was, and so a binding built with different features does not export items its
-source crate did not compile. A **guard item** is a compile-time check the
-capture emits rather than the user writing it — the assertion that the binding
-crate's feature selection matches the source crate's. It has no name in any
-foreign API, and it is re-emitted into the generated Rust verbatim.
+Features need two mechanisms of their own, because a `#[cfg]`-gated item exists
+in some builds and not others.
+
+The first is the **`cfg` condition** stored with each captured item, the one
+listed among the fields above. When the capture is read, items are filtered by
+it: one whose condition does not hold for this build never reaches the source
+model, and one that does keeps its condition into the generated Rust, so a
+binding never exports an item its source crate did not compile.
+
+The second is a **feature assertion**, which nobody writes and no capture
+contains. Cargo can compile the source crate twice with different feature sets —
+once as a build-dependency of the binding crate, where the capture is filtered,
+and once as an ordinary dependency, which is what the generated code is finally
+linked against. If those two disagree, the generated code was filtered against
+one build and compiled against another. So reading the capture prepends one item
+to the stream: a `const _` assertion comparing the source crate's own `FEATURES`
+constant with the feature list the capture was filtered by, which fails
+compilation with an explanatory message when they differ. It has no name in any
+foreign API, and it is carried into the generated Rust unchanged.
 
 The source crate re-exports the capture directory as a constant, so a binding
 crate's build script can read it without knowing where Cargo put it:
