@@ -159,8 +159,8 @@ contain. That a C binding treats several of these alike is a decision for the C
 adapter to take deliberately, at the point where it matters — not a decision the
 source model takes for everyone by throwing the difference away.
 
-It travels because each element also keeps its **origin**: the exact syntax it
-was built from, and the source it arrived in. Generated Rust is the one artifact
+Spelling survives all of this because each element also keeps its **origin**: the
+exact syntax it was built from, and the source it arrived in. Generated Rust is the one artifact
 that needs that fidelity — `B()` must not be re-spelled `B`, `= 0x07` must not
 become `= 7` — so the source's own text rides along for emission to reuse. It is
 not a second source of facts: the retained syntax is private to Flat, and the
