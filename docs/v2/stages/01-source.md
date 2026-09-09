@@ -10,7 +10,8 @@ a parameter names, what fields a record has — is worked out one stage later, f
 these snippets.
 
 A **source crate** is an ordinary Rust library that marks the items it wants
-available to binding generators:
+available to binding generators. This one is the [fixture](../source.md) every
+chapter and every element path in this document works from:
 
 ```rust
 use prebindgen::prebindgen;

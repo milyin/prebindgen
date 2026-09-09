@@ -7,6 +7,16 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
+The examples below follow one small [source fixture](../source.md) all the way
+through: a Rust crate holding a record and a function over it, both marked for
+binding generation.
+
+```rust
+pub struct Stamp { pub secs: i64, pub nanos: i64 }
+
+pub fn stamp_sum(stamp: Stamp) -> i64;
+```
+
 Planning produces candidates: conversion nodes, wrapper plans, public
 declarations, generated helpers. Not all of them can be emitted, because they
 depend on each other, and V2 deliberately accepts more input than it can yet

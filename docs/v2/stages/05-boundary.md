@@ -7,6 +7,16 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
+The examples below follow one small [source fixture](../source.md) all the way
+through: a Rust crate holding a record and a function over it, both marked for
+binding generation.
+
+```rust
+pub struct Stamp { pub secs: i64, pub nanos: i64 }
+
+pub fn stamp_sum(stamp: Stamp) -> i64;
+```
+
 A conversion knows how to turn a value into another value. It does not know which
 exported function it serves, where that function's result is supposed to go, or
 what should happen if a conversion inside it fails. That is this stage: taking

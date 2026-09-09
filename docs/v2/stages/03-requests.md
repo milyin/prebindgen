@@ -7,6 +7,16 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
+The examples below follow one small [source fixture](../source.md) all the way
+through: a Rust crate holding a record and a function over it, both marked for
+binding generation.
+
+```rust
+pub struct Stamp { pub secs: i64, pub nanos: i64 }
+
+pub fn stamp_sum(stamp: Stamp) -> i64;
+```
+
 The source model says what the crate contains. Nothing so far says what should
 come out of it. That is what a user configures, and where the two targets first
 part ways.

@@ -7,11 +7,21 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
+The examples below follow one small [source fixture](../source.md) all the way
+through: a Rust crate holding a record and a function over it, both marked for
+binding generation.
+
+```rust
+pub struct Stamp { pub secs: i64, pub nanos: i64 }
+
+pub fn stamp_sum(stamp: Stamp) -> i64;
+```
+
 This is the stage that does the real work, and the one the whole architecture is
 arranged around.
 
-Consider what has to happen for a foreign caller to call `stamp_sum(Stamp) ->
-i64`. The Rust function needs an owned `Stamp`. No foreign caller has one: a C
+Consider what has to happen for a foreign caller to call `stamp_sum`. The Rust
+function needs an owned `Stamp`. No foreign caller has one: a C
 caller has a struct of two integers, a Kotlin caller has a JVM object. So the
 generated wrapper has to obtain two field values from whatever the caller
 actually passed, build `Stamp { secs, nanos }` out of them, call the function,

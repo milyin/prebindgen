@@ -7,6 +7,16 @@
 Status: proposed design. Code shown as generated output illustrates required
 behavior, not bytes produced by the current scaffold.
 
+The examples below follow one small [source fixture](../source.md) all the way
+through: a Rust crate holding a record and a function over it, both marked for
+binding generation.
+
+```rust
+pub struct Stamp { pub secs: i64, pub nanos: i64 }
+
+pub fn stamp_sum(stamp: Stamp) -> i64;
+```
+
 Everything is decided by now; what is left is producing files. There are three
 kinds of output, and understanding which component makes each is most of this
 stage.
