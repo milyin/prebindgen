@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Plan value conversions
 
-[Stage chapter](../../stages/04-values.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/04-values.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 

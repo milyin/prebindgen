@@ -7,9 +7,8 @@
 Status: proposed design. Code shown as generated output illustrates required
 behavior, not bytes produced by the current scaffold.
 
-The examples below follow one small [source fixture](../source.md) all the way
-through: a Rust crate holding a record and a function over it, both marked for
-binding generation.
+The examples in this chapter use one small source crate — a record and a function
+over it, marked for binding generation:
 
 ```rust
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
@@ -55,7 +54,7 @@ the build runs `cbindgen` over them, and the C adapter writes nothing. There is
 no generated C source file either — the body of every C entry point *is* the Rust
 wrapper.
 
-Put together, the JNI wrapper for the fixture comes out like this — every line
+Put together, the JNI wrapper for the example comes out like this — every line
 attributable to one of the three contributions above:
 
 ```rust
@@ -114,7 +113,7 @@ pub extern "C" fn stamp_sum(arg0: Stamp) -> i64 {
 }
 ```
 
-On the Kotlin side, the fixture's public API is a single declaration: because the
+On the Kotlin side, the public API here is a single declaration: because the
 record crosses as an object, the `external fun` can take the data class itself,
 and there is nothing to wrap. Had the configuration chosen to pass the two fields
 as separate JNI arguments, the native declaration would take two `Long`s, and the

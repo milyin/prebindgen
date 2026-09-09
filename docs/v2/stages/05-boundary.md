@@ -7,9 +7,8 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-The examples below follow one small [source fixture](../source.md) all the way
-through: a Rust crate holding a record and a function over it, both marked for
-binding generation.
+The examples in this chapter use one small source crate — a record and a function
+over it, marked for binding generation:
 
 ```rust
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
@@ -23,7 +22,7 @@ what should happen if a conversion inside it fails. That is this stage: taking
 the conversions planned for one requested function and assembling the actual
 native function a foreign caller will call.
 
-For the fixture, the two targets end up with these signatures:
+For this example, the two targets end up with these signatures:
 
 ```rust
 #[no_mangle]
@@ -47,7 +46,7 @@ them.
 
 Three things are decided here. **Where inputs come from**: which native argument
 feeds which input conversion, including arguments the target added for its own
-reasons. **Where the result goes** — the *delivery* — which for this fixture is
+reasons. **Where the result goes** — the *delivery* — which here is
 the native return, but could be a caller-provided out-parameter, or a callback
 the configuration named; the same conversion is reused whichever destination
 applies, so a conversion never has one version per destination. **What happens on
@@ -59,7 +58,7 @@ The JNI wrapper shows why that last part is not a detail. Reading `getSecs()` ca
 fail; the conversion says so but decides nothing. The answer comes from the
 policy the frontend recorded — the `runtime_errors` call in
 [the binding crate's build script](03-requests.md#record-binding-requests) — which
-for this fixture says: report the error to the JVM, then return zero — zero being merely
+in this example says: report the error to the JVM, then return zero — zero being merely
 the value a native method must return while an exception is pending, since the
 caller will see the exception rather than a result. Reporting can itself fail,
 and that path terminates by aborting. The registry emits the branch, the

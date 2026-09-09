@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Retain supported output
 
-[Stage chapter](../../stages/06-retain.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/06-retain.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 
@@ -17,7 +17,7 @@ return at this point can change what is retained.
 
 ## Result
 
-For this fixture the outcome is `Emitted`. The retained set is the function plan,
+For this path the outcome is `Emitted`. The retained set is the function plan,
 the two conversion nodes, the public declaration, and the artifacts they need —
 the native wrapper, the record's declaration from [the record path][struct_retain],
 and, for JNI, the error-reporting helper. The artifacts are ordered so that a

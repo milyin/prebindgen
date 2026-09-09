@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Build and inspect the source model
 
-[Stage chapter](../../stages/02-flat.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/02-flat.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 

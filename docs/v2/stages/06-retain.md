@@ -7,9 +7,8 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-The examples below follow one small [source fixture](../source.md) all the way
-through: a Rust crate holding a record and a function over it, both marked for
-binding generation.
+The examples in this chapter use one small source crate — a record and a function
+over it, marked for binding generation:
 
 ```rust
 pub struct Stamp { pub secs: i64, pub nanos: i64 }

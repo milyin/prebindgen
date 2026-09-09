@@ -2,7 +2,7 @@
 
 # Record with scalar fields — Record binding requests
 
-[Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source crate](../../source.md)
 
 ## Input
 
@@ -24,7 +24,7 @@ mention it is skipped.
 
 The fields are addressable from here on. `(Stamp.fields, None, Field("secs"))`
 and its `nanos` counterpart are the parts a per-field rule would attach to; this
-fixture records none, so both take the default scalar treatment.
+path records none, so both take the default scalar treatment.
 
 ## Checks
 
@@ -50,7 +50,7 @@ parts:
   PartId { owner: Stamp.fields, arm: None, position: Field("secs")  }
   PartId { owner: Stamp.fields, arm: None, position: Field("nanos") }
 
-conversion_rules.parts: {}   // no per-field overrides in this fixture
+conversion_rules.parts: {}   // none recorded for this path
 ```
 
 ## Language variants

@@ -2,7 +2,7 @@
 
 # Record with scalar fields — Build and inspect the source model
 
-[Stage chapter](../../stages/02-flat.md) · [Element path][struct] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/02-flat.md) · [Element path][struct] · [Source crate](../../source.md)
 
 ## Input
 

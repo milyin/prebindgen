@@ -2,7 +2,7 @@
 
 # Record with scalar fields — Emit bindings
 
-[Stage chapter](../../stages/07-emit.md) · [Element path][struct] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/07-emit.md) · [Element path][struct] · [Source crate](../../source.md)
 
 ## Input
 

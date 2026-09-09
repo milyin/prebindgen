@@ -27,8 +27,8 @@ current scaffold.
 
 ## What is being generated
 
-The input is a Rust crate that marks the items it wants exposed. The whole of
-this document works from one small example of that:
+The input is a Rust crate that marks the items it wants exposed. The chapters
+illustrate the pipeline with one small example of that:
 
 ```rust
 #[prebindgen]
@@ -76,7 +76,7 @@ architecture is for.
 Two crates in this picture are yours; the rest are what prebindgen is.
 
 **What you write.** The **source crate** is an ordinary Rust library — the
-fixture above is one — that marks the items it wants exposed and otherwise knows
+example above is one — that marks the items it wants exposed and otherwise knows
 nothing about C or Kotlin. (Such crates are conventionally named `…-flat`, after
 the flat namespace of items a binding sees, which is why the model built from one
 is called Flat.) Beside it stands one **binding crate per target language**: a
@@ -163,7 +163,8 @@ those choices into requests once the Flat views exist.
 
 ## The appendix: elements and their paths
 
-All example paths share [one source fixture](source.md).
+All the paths are specified against [one source crate](source.md), which grows as
+paths are added.
 
 - [Function taking an owned record][fn] — `stamp_sum(Stamp) -> i64`
 - [Record with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`

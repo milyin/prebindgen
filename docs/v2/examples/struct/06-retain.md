@@ -2,7 +2,7 @@
 
 # Record with scalar fields — Retain supported output
 
-[Stage chapter](../../stages/06-retain.md) · [Element path][struct] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/06-retain.md) · [Element path][struct] · [Source crate](../../source.md)
 
 ## Input
 
@@ -15,7 +15,7 @@ The registry.
 
 ## Result
 
-For this fixture the outcome is `Emitted`. The public declaration requires the
+For this path the outcome is `Emitted`. The public declaration requires the
 record's representation and, through it, both field conversions; all are ready,
 so the declaration and its artifact are retained — the `repr(C)` aggregate for C,
 the Kotlin data class for JNI. [The function][fn_retain] that requires this

@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Record binding requests
 
-[Stage chapter](../../stages/03-requests.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/03-requests.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 
@@ -19,7 +19,7 @@ choice, and later translates it into `BindingRequests`.
 One `OutputRequest` whose `source` is the captured `stamp_sum` and whose `policy`
 points at the entry holding this target's choices for the function. It fixes two
 sites, which is how every later decision about this function is addressed:
-`Param(0)` for the argument and `Return` for the result. The fixture records no
+`Param(0)` for the argument and `Return` for the result. The configuration records no
 per-site override, so both sites take the target's defaults; the record's own
 representation is chosen by [the record's request][struct_requests] and applies
 wherever that record is converted.
@@ -38,7 +38,7 @@ a parameter this function does not have, is invalid input and fails the build.
 
 ## Representation
 
-For this fixture, schematically:
+For this path, schematically:
 
 ```text
 OutputRequest {
@@ -52,7 +52,7 @@ sites:
   SiteId { owner: <that ElementId>, path: Param(0) }  -> owned Stamp input
   SiteId { owner: <that ElementId>, path: Return }    -> i64 result
 
-conversion_rules.sites:  {}   // no per-site overrides in this fixture
+conversion_rules.sites:  {}   // none recorded for this path
 ```
 
 The two targets fill `policy` differently, and that difference is the whole of

@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Emit bindings
 
-[Stage chapter](../../stages/07-emit.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/07-emit.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 

@@ -2,7 +2,7 @@
 
 # Function taking an owned record
 
-[Project contents](../../README.md) · [Source fixture](../../source.md)
+[Project contents](../../README.md) · [Source crate](../../source.md)
 
 ```rust
 pub fn stamp_sum(stamp: Stamp) -> i64 {

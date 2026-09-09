@@ -2,7 +2,7 @@
 
 # Record with scalar fields — Capture source items
 
-[Stage chapter](../../stages/01-source.md) · [Element path][struct] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/01-source.md) · [Element path][struct] · [Source crate](../../source.md)
 
 ## Input
 

@@ -2,7 +2,7 @@
 
 # Record with scalar fields
 
-[Project contents](../../README.md) · [Source fixture](../../source.md)
+[Project contents](../../README.md) · [Source crate](../../source.md)
 
 ```rust
 pub struct Stamp {

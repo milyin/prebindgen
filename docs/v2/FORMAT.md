@@ -17,7 +17,7 @@ meaningful — not whether the generator supports it.
 | --- | --- |
 | Root | `README.md` |
 | Format contract | `FORMAT.md` |
-| Source fixture | `source.md` |
+| The specification's source crate | `source.md` |
 | Stage chapter | `stages/<stage>.md` |
 | Implementation plan | `implementation.md` |
 | Element path TOC | `examples/<element>/README.md` |
@@ -48,9 +48,9 @@ variant. A sub-variant extends the element id and keeps the same suffixes:
 `fn_callback`, `fn_callback_values_jni`.
 
 An element id names a structural kind — function, record, enum, constant, and
-the variants of those — never the fixture's own names. `Stamp` and `stamp_sum`
-appear in prose and code, never in an id, so a path stays recognizable when its
-fixture changes.
+the variants of those — never the names the source crate happens to use. `Stamp`
+and `stamp_sum` appear in prose and code, never in an id, so a path stays
+recognizable when the declarations it works from change.
 
 Definitions live in one block at the foot of the page:
 
@@ -63,8 +63,8 @@ Planned as the record input described in [the record's C value plan][struct_valu
 Every definition has to name a declared id and point at that id's canonical path,
 relative to the page. Every used label has to be defined on its page, with no
 duplicates and nothing defined but unused. Links into `examples/` are always
-reference-style; inline links are for everything else — chapters, the fixture,
-external URLs.
+reference-style; inline links are for everything else — chapters, the source
+crate, external URLs.
 
 ## Required content
 

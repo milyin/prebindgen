@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Assemble the native boundary
 
-[Stage chapter](../../stages/05-boundary.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/05-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 

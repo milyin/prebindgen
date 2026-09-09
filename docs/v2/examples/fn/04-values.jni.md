@@ -27,7 +27,7 @@ The output node maps source `i64` onto the `jlong` carrier — the same Rust val
 so an identity conversion with no failure.
 
 Because the input node can fail, [the JNI boundary][fn_boundary_jni] must have a
-route for the `Runtime` category, and the fixture's policy supplies one.
+route for the `Runtime` category, and the configured policy supplies one.
 
 ## Checks
 

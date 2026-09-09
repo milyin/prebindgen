@@ -2,7 +2,7 @@
 
 # Record with scalar fields — Plan value conversions
 
-[Stage chapter](../../stages/04-values.md) · [Element path][struct] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/04-values.md) · [Element path][struct] · [Source crate](../../source.md)
 
 ## Input
 

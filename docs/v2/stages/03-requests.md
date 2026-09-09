@@ -7,9 +7,8 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-The examples below follow one small [source fixture](../source.md) all the way
-through: a Rust crate holding a record and a function over it, both marked for
-binding generation.
+The examples in this chapter use one small source crate — a record and a function
+over it, marked for binding generation:
 
 ```rust
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
@@ -23,7 +22,7 @@ part ways.
 
 A binding crate is an ordinary Rust crate whose build script configures a
 **language frontend** — the public Rust API of `prebindgen-c` or
-`prebindgen-jni` — and asks it to generate. Exposing the fixture through C is two declarations:
+`prebindgen-jni` — and asks it to generate. Exposing these two items through C is two declarations:
 
 ```rust
 // build.rs of the C binding crate (schematic)
@@ -112,7 +111,7 @@ contracts; capabilities not yet implemented are extension points, not features.
 
 The registry receives the [source model](02-flat.md) and requests to expose particular types, functions, and constants. For each request, it builds a **plan**: structured data describing the required conversions, calls and their execution order. The common Rust writer renders the native wrappers and supporting Rust types. The C build then uses `cbindgen` to derive C headers from that Rust output; the JNI implementation renders Kotlin declarations from the completed plans. Planning happens in the generator; the generated operations execute later when the bindings are used.
 
-Take the fixture's record and a second function over it — one that also
+Take the record above and a second function over it — one that also
 *returns* a `Stamp`, so that both directions are visible at once:
 
 ```rust

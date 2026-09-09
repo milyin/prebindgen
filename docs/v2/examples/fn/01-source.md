@@ -2,7 +2,7 @@
 
 # Function taking an owned record — Capture source items
 
-[Stage chapter](../../stages/01-source.md) · [Element path][fn] · [Source fixture](../../source.md)
+[Stage chapter](../../stages/01-source.md) · [Element path][fn] · [Source crate](../../source.md)
 
 ## Input
 

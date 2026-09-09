@@ -7,9 +7,8 @@
 Status: proposed design. The API sketches state intended contracts, not
 implemented functionality.
 
-The examples below follow one small [source fixture](../source.md) all the way
-through: a Rust crate holding a record and a function over it, both marked for
-binding generation.
+The examples in this chapter use one small source crate — a record and a function
+over it, marked for binding generation:
 
 ```rust
 pub struct Stamp { pub secs: i64, pub nanos: i64 }
@@ -208,7 +207,7 @@ struct ConversionRules {
 }
 ```
 
-Nothing in either build script registers a relation, yet the fixture needs three
+Nothing in either build script registers a relation, yet this example needs three
 of them, so it is worth being explicit about where each comes from.
 
 A **record relation** is implicit: for any record the source model describes, the
@@ -219,9 +218,9 @@ a frontend declaration. A **scalar** has no parts at all — an `i64` is not bui
 from anything — so its relation is the atomic one, the whole value converted by a
 single operation the target supplies. The enum above lists atomic among the roles
 still to be added; the first increment needs it before anything else, because the
-`i64` result and the `i64` fields of the fixture are exactly that case.
+`i64` result and the `i64` fields here are exactly that case.
 
-For the fixture, the relation for `Stamp` is its record: two parts, the fields.
+The relation for `Stamp` is its record: two parts, the fields.
 Pinning the constructor instead is a rule recorded with the request, and changes
 what the parts are without changing anything else:
 
@@ -703,7 +702,7 @@ For initial scalar/record support, ordinary owned Rust temporaries can rely on R
 ## What is not settled here
 
 The contracts above are complete enough to divide the work and to plan the
-fixture's conversions, and not complete enough to implement the planner from.
+conversions above, and not complete enough to implement the planner from.
 [The implementation plan](../implementation.md#what-this-design-does-not-settle-yet)
 lists what the first increment still has to decide — chiefly the instruction set
 behind `ConversionBodyId`, the shapes of the target interface's parameter types,
