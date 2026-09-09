@@ -51,21 +51,17 @@ express becomes an **unsupported element** carrying its diagnosis and stays in
 the model, so a consumer can enumerate what a source crate marked, refusals
 included, instead of wondering what went missing.
 
-What is *not* in the model is a link between elements. A parameter's type carries
-the name `Stamp` and nothing more — no pointer, no index, no resolved
-declaration. Finding what that name denotes is a lookup in the namespace, done
-when someone needs it:
+What is *not* in the model is a link between elements. Where `stamp_sum`'s
+parameter mentions `Stamp`, the model records the name `Stamp` — not a pointer to
+the declaration, not an index into a table. Whoever wants the declaration looks
+the name up in the namespace, and the model is content to store a name until then.
 
-```rust
-let function = model.function("stamp_sum").expect("captured");
-let stamp = &function.params[0].ty;              // a reference: the name `Stamp`
-let decl = model.resolve(stamp.type_id().unwrap()).expect("declared");
-```
-
-Keeping a reference to a name is what makes the namespace work: the same type
-cannot compare unequal to itself because two source crates mentioned it, and a
-reference may point forward, or across crates, without the order the captures
-were read in mattering.
+That is what makes the namespace usable. A capture may mention a type before the
+declaration is read, or one in another source crate entirely, and neither is a
+problem: every name is looked up against the finished namespace, so the order the
+captures arrived in changes nothing. And because a name has exactly one
+declaration in that namespace, two mentions of `Stamp` are two mentions of the
+same type — there is no way to end up holding two `Stamp`s that disagree.
 
 The one thing Flat does across elements is check that those lookups will
 succeed. Once every declaration is in hand, an element naming a type nothing
@@ -143,6 +139,21 @@ one. Enforcement happens once, here — a marked item mentioning a form with no
 variant in this grammar is refused at the door and becomes an unsupported
 element, so no adapter downstream has to re-check what it was given or decide
 what to do with a shape it has never heard of.
+
+`Named` is where the namespace comes back in. The identity it carries is a name,
+not a path, and the declaration it refers to is an element somewhere else in the
+model. Following it is the lookup this chapter began with, written out:
+
+```rust
+let function = model.function("stamp_sum").expect("marked in the source");
+let parameter = &function.params[0];          // stamp: Stamp
+let TypeKind::Named { id, .. } = parameter.ty.kind() else { … };
+let declaration = model.resolve(id);          // the Stamp element, or None
+```
+
+`resolve` can only return nothing for a type nobody declared, and the refusal
+pass above has already removed the elements that would have asked — which is why
+a consumer walking a surviving element can follow every name it meets.
 
 The same closure applies above the type level. A shape with no slot in an element
 — an `async fn`, a variadic, a generic parameter — is refused rather than
