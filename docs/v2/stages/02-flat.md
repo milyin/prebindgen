@@ -76,9 +76,18 @@ element like any other. Refusing it can strand others, since what was refused is
 no longer declared either:
 
 ```rust
-pub struct Broken { pub field: Missing }   // refused: nobody declared `Missing`
+pub struct Missing;                        // ordinary Rust, but nobody marked it
+
+#[prebindgen]
+pub struct Broken { pub field: Missing }   // refused: `Missing` is not in the namespace
+
+#[prebindgen]
 pub fn use_broken(value: Broken) {}        // refused too: `Broken` is gone now
 ```
+
+All three lines compile. Only the marked two were offered to the binding world,
+and neither can be described there: the first names a type the namespace does not
+have, and the second names the first.
 
 So the check runs again over what is left, and again, until a round refuses
 nothing. What comes out the other side is a model with no dead ends: every type
