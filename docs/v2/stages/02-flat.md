@@ -18,17 +18,36 @@ pub struct Stamp { pub secs: i64, pub nanos: i64 }
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
+## What Flat is for
+
 What arrives here is what capture stored: the source text of each marked
 declaration, parsed back into the item it was. Of `stamp_sum` that text says its
 parameter is written `Stamp` — and being text, that is all it can say. Planning a
 binding needs the next answer: `Stamp` is a record, declared in this same source
-crate, with two fields, both `i64`. Building something that can answer that is
-this stage, and the library that does it is **Flat** (`prebindgen-flat`).
+crate, with two fields, both `i64`.
 
-Flat lowers each of those items into an **element** — a function, a type, a
+Answering that is one half of what this stage is for. The other half is refusing
+to answer anything else. Rust is a large language, and a binding generator that
+accepted all of it would have to decide, at every step, what to do with a
+lifetime-generic trait object or an `async fn` returning an `impl Future`. **Flat**
+(`prebindgen-flat`) removes that question by holding an accepted subset and only
+that: a small set of structures a consumer can match against exhaustively, with
+no case left over for a Rust form it has never met. Anything a marked item
+contains that has no place in those structures is refused here, once, at the
+edge — so no stage after this one has to check what it was handed.
+
+Binding generation is not the only thing that can use such a model. The same
+navigation — find a function, inspect its parameters, follow a type name to its
+declaration, list a record's fields or an enum's variants — is what an API
+documentation tool or a source validator needs, and Flat is usable on its own,
+with no registry and no target in the picture.
+
+## One flat namespace
+
+Flat lowers each captured item into an **element** — a function, a type, a
 constant — and puts every element into **one flat namespace**: a single index by
-name, spanning every source crate that was read. That is what the name
-of the crate refers to, and it shapes everything else here.
+name, spanning every source crate that was read. That is what the crate's own
+name refers to, and it shapes everything else here.
 
 ```rust
 // build.rs of a binding crate, continued from the previous chapter
@@ -50,6 +69,8 @@ else that goes wrong is per item, and does not fail: an item the model cannot
 express becomes an **unsupported element** carrying its diagnosis and stays in
 the model, so a consumer can enumerate what a source crate marked, refusals
 included, instead of wondering what went missing.
+
+## Names, and what happens when one leads nowhere
 
 What is *not* in the model is a link between elements. Where `stamp_sum`'s
 parameter mentions `Stamp`, the model records the name `Stamp` — not a pointer to
@@ -213,20 +234,10 @@ values for a binding is not something the model says — that decision belongs t
 the [registry](03-requests.md#what-the-registry-does), and Flat has no API that
 expresses it.
 
-Everything above is what the current library does. What V2 adds is described
-next, and one thing it does not add is a second opinion on any of it.
-
-## What Flat is for
-
-Binding generation is not the only consumer of this model. The same navigation —
-find a function, inspect its parameters, follow a type name to its declaration,
-list a record's fields or an enum's variants — is what an API documentation tool
-or a source validator needs, and Flat is usable on its own, with no registry and
-no target in the picture.
-
 ## What changes from the current API
 
-Everything above exists today. What V2 adds is about *handles*, not about facts.
+Everything above is what the library does today. What V2 adds is about *handles*,
+not about facts, and it revisits none of it.
 
 In the current code, [`Flat::function`](../../../prebindgen-flat/src/flat/mod.rs)
 returns `&Function`, borrowed from the model, and
