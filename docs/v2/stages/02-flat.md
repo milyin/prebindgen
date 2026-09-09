@@ -70,10 +70,15 @@ crate never gave a name to. Rust is perfectly happy with that code; the binding
 world is not, because there is nothing here to describe the value that would have
 to cross.
 
-Flat settles this once, while building. An element naming a type the namespace
-does not declare cannot be described, so it is refused and becomes an unsupported
-element like any other. Refusing it can strand others, since what was refused is
-no longer declared either:
+Flat settles this while building the model. Once every marked item is in hand,
+it goes over the elements one by one and looks up every type name each of them
+mentions. An element that mentions a name the namespace does not have cannot be
+described, so Flat refuses it: it becomes an unsupported element, carrying that
+diagnosis, like any other refusal.
+
+One pass is not enough, because refusing an element also removes a declaration —
+and an element that looked fine a moment ago may have been naming the element
+just refused:
 
 ```rust
 pub struct Missing;                        // ordinary Rust, but nobody marked it
@@ -89,12 +94,14 @@ All three lines compile. Only the marked two were offered to the binding world,
 and neither can be described there: the first names a type the namespace does not
 have, and the second names the first.
 
-So the check runs again over what is left, and again, until a round refuses
-nothing. What comes out the other side is a model with no dead ends: every type
-mentioned by a surviving element has a declaration in the namespace to look up.
-That is the property every later stage relies on — a stage planning a conversion
-for a field can follow the field's type without asking what to do if it leads
-nowhere.
+So Flat goes over the surviving elements again, refusing whatever has just been
+stranded, and keeps going until a pass refuses nothing new. Here that takes two
+passes: the first refuses `Broken`, the second refuses `use_broken`, the third
+finds nothing left to refuse and stops.
+
+What remains is a model with no dead ends. Every type name in a surviving element
+has a declaration in the namespace to look up, which is what lets every later
+stage walk the model without a plan for what to do when a name leads nowhere.
 
 ## The shapes the model has
 
