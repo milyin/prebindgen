@@ -4,12 +4,9 @@
 
 [Project contents](../README.md)
 
-The annotated crate is parsed once, here, into a stream of records describing
-what it declares; every later stage works from those records rather than from
-Rust source. Two steps further on do parse Rust — a helper signature a binding
-crate declares itself, at the end of this chapter, and `cbindgen` reading the
-*generated* wrappers to derive the C header — but never the captured source
-again.
+The annotated crate is turned into a stream of records describing what it
+declares, and every later stage works from those records rather than from the
+crate's source.
 
 A **source crate** is an ordinary Rust library that marks the items it wants
 available to binding generators:

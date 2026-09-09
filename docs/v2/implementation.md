@@ -29,7 +29,7 @@ standalone crate or an immediate breaking rewrite of V1 consumers.
 Required validation for implementation:
 
 - A standalone Flat consumer navigates function → parameter → record → field
-  without a registry dependency or source reparsing.
+  without depending on the registry.
 - Lookup and enumeration agree; views remain usable after the original `Flat`
   value is dropped, and cloned views refer to the same snapshot.
 - A view from another snapshot is rejected even when both snapshots contain a

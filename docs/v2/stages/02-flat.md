@@ -342,7 +342,7 @@ instantiated type and silently lose its arguments.
 
 Planning may need a type that no captured signature writes, such as `Option<T>`
 around an existing modeled type. A type view should support checked structural
-composition without reparsing source spelling:
+composition, so that such a type is built rather than spelled:
 
 ```rust
 impl Flat {
@@ -374,9 +374,9 @@ may represent additional fields, but must not make previously accepted opaque
 items fail because an unused field is outside the structural grammar.
 
 Final Rust emission reads retained source facts through Flat's emission
-facilities. Views are not a new route for reparsing captured syntax during
-planning. Any new source fact needed to render an operation belongs in Flat's
-structured model. Source legality and field accessibility must be represented
+facilities. A view is not a way back to the original syntax: any source fact
+needed to render an operation belongs in Flat's structured model, where it can be
+checked, rather than being recovered from the text by whoever needs it. Source legality and field accessibility must be represented
 or diagnosed before the registry claims support for construction or projection.
 
 ## A useful consumer without a registry
