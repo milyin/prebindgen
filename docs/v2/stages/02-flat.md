@@ -181,20 +181,21 @@ variant in this grammar is refused at the door and becomes an unsupported
 element, so no adapter downstream has to re-check what it was given or decide
 what to do with a shape it has never heard of.
 
-`Named` is where the namespace comes back in. The identity it carries is a name,
-not a path, and the declaration it refers to is an element somewhere else in the
-model. Following it is the lookup this chapter began with, written out:
+`Named` is the variant that holds a name — `Stamp`, plus any generic arguments
+written with it. The record it names is a separate element, and getting from one
+to the other is the lookup this chapter described earlier. Walking from the
+function to its parameter's fields is therefore four steps:
 
 ```rust
-let function = model.function("stamp_sum").expect("marked in the source");
-let parameter = &function.params[0];          // stamp: Stamp
-let TypeKind::Named { id, .. } = parameter.ty.kind() else { … };
-let declaration = model.resolve(id);          // the Stamp element, or None
+let function = model.function("stamp_sum").unwrap();       // the Function element
+let TypeKind::Named { id, .. } = function.params[0].ty.kind() else { … };
+let Type::Struct(stamp) = model.resolve(id).unwrap() else { … };
+let fields = &stamp.fields;                                // secs: i64, nanos: i64
 ```
 
-`resolve` can only return nothing for a type nobody declared, and the refusal
-pass above has already removed the elements that would have asked — which is why
-a consumer walking a surviving element can follow every name it meets.
+`resolve` returns nothing only for a name nothing declares, and the pass above
+has already refused the elements that could have asked. A consumer walking a
+surviving element can follow every name it meets.
 
 The same closure applies above the type level. A shape with no slot in an element
 — an `async fn`, a variadic, a generic parameter — is refused rather than
