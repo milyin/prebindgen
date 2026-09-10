@@ -285,7 +285,19 @@ impl CallbackDecl {
     }
 
     /// Deliver this argument as a takeable owned pointer rather than by value.
+    ///
+    /// The index is zero-based over the callback's own arguments, and one the
+    /// signature does not have is a declaration error: silently ignoring it
+    /// would leave the argument the author meant on ordinary delivery, with
+    /// nothing to say so.
     pub fn takeable_param(mut self, index: usize) -> Self {
+        let arity = prebindgen_registry::flat::extract_fn_trait_args(&self.ty)
+            .map(|args| args.len())
+            .unwrap_or(0);
+        assert!(
+            index < arity,
+            "takeable_param({index}) on a callback with {arity} argument(s): the index is              zero-based over the callback's arguments, and this one has none to name"
+        );
         self.takeable.push(index);
         self
     }

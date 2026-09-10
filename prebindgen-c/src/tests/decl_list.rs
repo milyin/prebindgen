@@ -373,3 +373,18 @@ fn a_declaration_repeated_in_another_api_call_is_refused() {
     });
     assert!(message.contains("Point"), "{message}");
 }
+
+/// A takeable index the callback has no argument for is refused, rather than
+/// silently leaving argument zero on ordinary delivery.
+#[test]
+fn a_takeable_index_out_of_range_is_refused() {
+    let message = catch_msg(|| {
+        let _ = callback!(impl Fn(i64) + Send + Sync + 'static).takeable_param(1);
+    });
+    assert!(
+        message.contains("takeable_param(1)") && message.contains("1 argument"),
+        "{message}"
+    );
+    // The one it does have is accepted.
+    let _ = callback!(impl Fn(i64) + Send + Sync + 'static).takeable_param(0);
+}
