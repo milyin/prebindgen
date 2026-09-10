@@ -296,7 +296,7 @@ impl CallbackDecl {
             .unwrap_or(0);
         assert!(
             index < arity,
-            "takeable_param({index}) on a callback with {arity} argument(s): the index is              zero-based over the callback's arguments, and this one has none to name"
+            "takeable_param({index}) on a callback with {arity} argument(s): the index is zero-based over the callback's own arguments, and this one has no argument to name"
         );
         self.takeable.push(index);
         self
