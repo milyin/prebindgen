@@ -16,7 +16,7 @@ candidate: SurfaceSpec(exported stamp_sum)
 requires:  node(Stamp, IntoRust)              // the record's conversion
            node(i64, OutOfRust)
            the record's public representation // from the record path
-           report_jni_error artifact          // JNI only
+           the error-signalling helper        // JNI only
 ```
 
 ## Result
@@ -26,14 +26,14 @@ requirements:
     node(input)                   ready      // needs the record's conversion
     node(output)                  ready
     record public representation  ready
-    report_jni_error artifact     ready      // JNI only
+    error-signalling helper       ready      // JNI only
 
 outcome(exported stamp_sum) = Emitted { artifacts: [ native wrapper, public declaration ] }
 
 report entry:
     element: exported stamp_sum
     outcome: Emitted
-    symbol:  stamp_sum  |  Java_example_Bindings_sum
+    symbol:  stamp_sum  |  Java_example_JNINative_stampSum
 ```
 
 Had a field of the record been unsupported:

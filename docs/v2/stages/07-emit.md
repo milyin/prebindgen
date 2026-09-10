@@ -61,19 +61,18 @@ attributable to one of the three contributions above:
 
 ```rust
 #[no_mangle]
-pub extern "system" fn Java_example_Bindings_sum(   // symbol: JNI adapter
-    mut env: JNIEnv<'_>,                            // environment: JNI adapter
-    _class: JClass<'_>,
-    arg0: JObject<'_>,
-) -> jlong {
+pub unsafe extern "C" fn Java_example_JNINative_stampSum<'a>(  // symbol: JNI adapter
+    mut env: jni::JNIEnv<'a>,                                  // environment: JNI adapter
+    _class: jni::objects::JClass<'a>,
+    arg0: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,                   // the caller's error handler
+) -> jni::sys::jlong {
     let v0 = match env.call_method(&arg0, "getSecs", "()J", &[])
         .and_then(|value| value.j())                // fragment: JNI adapter
     {                                               // everything else: registry
         Ok(value) => value,
-        Err(error) => {
-            if report_jni_error(&mut env, error).is_err() {
-                std::process::abort();
-            }
+        Err(error) => {                             // the route: JNI adapter
+            signal_binding_error(&mut env, &__error_sink, …, &error.to_string());
             return 0;
         }
     };
@@ -82,9 +81,7 @@ pub extern "system" fn Java_example_Bindings_sum(   // symbol: JNI adapter
     {
         Ok(value) => value,
         Err(error) => {
-            if report_jni_error(&mut env, error).is_err() {
-                std::process::abort();
-            }
+            signal_binding_error(&mut env, &__error_sink, …, &error.to_string());
             return 0;
         }
     };
@@ -95,11 +92,11 @@ pub extern "system" fn Java_example_Bindings_sum(   // symbol: JNI adapter
 ```
 
 Both reads render the same way and neither name collides, because the
-temporaries came from the plan rather than from the operation. `report_jni_error`
-is neither a fragment nor part of the wrapper: it is a generated artifact the JNI
-adapter contributes — a small helper function emitted into the same module — and
-the primitive that calls it lists that artifact among its dependencies, which is
-how retention knew to keep it.
+temporaries came from the plan rather than from the operation.
+`signal_binding_error` is neither a fragment nor part of the wrapper: it is a
+runtime helper the JNI side provides, called through a described operation whose
+dependencies name what it needs — a cached identifier for the handler's method
+among them — which is how retention knows to keep those.
 
 The C wrapper for the same function is the same shape with the branches gone,
 because its member reads cannot fail:
@@ -187,13 +184,13 @@ concrete contributions stay separate throughout planning and writing:
 | Contribution | C aggregate | Kotlin/JNI object | Component responsible |
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
-| Requested public API | `Stamp`, `stamp_sum` — the source names, since nothing renamed them | `example.Stamp`, `Bindings.sum` | Language frontend records user choices. |
+| Requested public API | `Stamp`, `stamp_sum` — the source names, since nothing renamed them | `example.Stamp`, the top-level `example.stampSum` | Language frontend records user choices. |
 | Target representation | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
 | `PrimitiveSpec.implementation` | Common `ReadMember` plus member identity | `CallLongGetter` plus getter metadata | Adapter selects payload; registry retains it. |
 | One primitive's rendered operation | `arg0.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
 | Source construction and call | `source::Stamp { ... }`, then `stamp_sum` | Same source instructions | Registry plans; common Rust writer renders. |
-| Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
+| Error-reporting operation | Not needed by these field reads | Signalling the caller's error handler | JNI supplies the operation and the convention; the registry places it. |
 | Public foreign source | Header derived from Rust | Kotlin classes and native declaration | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
 
 For the input record, the registry asks the selected relation for its fields,

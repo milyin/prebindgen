@@ -8,9 +8,10 @@ Owner: the JNI frontend
 ## Input
 
 ```rust
-// build.rs (schematic)
+// build.rs
 JniGen::builder()
-    .package(package!("example").data_class(data_class!(Stamp)))
+    .source(source_crate::PREBINDGEN_OUT_DIR)
+    .package(package!("example").class(data_class!(Stamp)))
     .build();
 ```
 

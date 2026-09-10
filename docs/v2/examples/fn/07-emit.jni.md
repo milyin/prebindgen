@@ -9,46 +9,60 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 
 ```text
 FunctionPlan(exported stamp_sum) frozen, with
-    boundary: extern "system", symbol "Java_example_Bindings_sum",
-              (JNIEnv, JClass, JObject) -> jlong,
-              Runtime -> report_jni_error then return 0, reporting failure -> abort
+    boundary: extern "C", symbol "Java_example_JNINative_stampSum",
+              (JNIEnv, JClass, JObject, __error_sink) -> jlong,
+              Runtime -> signal __error_sink, then return 0
     node(input):  object carrier, property getters "getSecs" / "getNanos"
     node(output): Scalar(jlong), identity
 ```
 
 ## Result
 
-The Kotlin declaration, beside [the data class][struct_emit_jni] (`Bindings.kt`):
+The Kotlin declarations, beside [the data class][struct_emit_jni]:
 
 ```kotlin
 package example
 
-object Bindings {
-    @JvmStatic
-    external fun sum(stamp: Stamp): Long
+public fun stampSum(stamp: Stamp, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = JNINative.stampSum(stamp, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+internal object JNINative {
+    @JvmSynthetic
+    external fun stampSum(stamp: Stamp, errorSink: Any): Long
 }
 ```
+
+`JniErrorHandler` and the capture the wrapper hands the native side are generated
+into the package too, once for all of its functions.
 
 The native wrapper it calls (`kotlin.rs`):
 
 ```rust
-use crate::{jni_support::report_jni_error, source};
-use jni::{objects::{JClass, JObject}, sys::jlong, JNIEnv};
+use crate::source;
 
 #[no_mangle]
-pub extern "system" fn Java_example_Bindings_sum(
-    mut env: JNIEnv<'_>,
-    _class: JClass<'_>,
-    arg0: JObject<'_>,
-) -> jlong {
+pub unsafe extern "C" fn Java_example_JNINative_stampSum<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    arg0: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    static __SINK_MID: ::prebindgen_jni_runtime::CachedIfaceMethod =
+        ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "example/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+
     let v0 = match env.call_method(&arg0, "getSecs", "()J", &[])
         .and_then(|value| value.j())
     {
         Ok(value) => value,
         Err(error) => {
-            if report_jni_error(&mut env, error).is_err() {
-                std::process::abort();
-            }
+            signal_binding_error(&mut env, &__error_sink, &__SINK_MID,
+                                 __SINK_FQN, __SINK_DESCR, &error.to_string());
             return 0;
         }
     };
@@ -57,9 +71,8 @@ pub extern "system" fn Java_example_Bindings_sum(
     {
         Ok(value) => value,
         Err(error) => {
-            if report_jni_error(&mut env, error).is_err() {
-                std::process::abort();
-            }
+            signal_binding_error(&mut env, &__error_sink, &__SINK_MID,
+                                 __SINK_FQN, __SINK_DESCR, &error.to_string());
             return 0;
         }
     };
@@ -69,19 +82,19 @@ pub extern "system" fn Java_example_Bindings_sum(
 }
 ```
 
-`Bindings.sum(Stamp(12, 34))` returns `46L` once the native library is loaded,
+`stampSum(Stamp(12, 34)) { … }` returns `46L` once the native library is loaded,
 which the harness does.
 
 ## Checks
 
-- Symbol and Kotlin declaration come from the same recorded placement, so they
-  cannot disagree.
+- The symbol is built from the package, the `JNINative` object and the method
+  name, so renaming the Kotlin function moves both.
 - If `getSecs` fails, `getNanos` and `stamp_sum` do not run; if `getNanos` fails,
-  the source `Stamp` is never constructed. Either way the JVM sees an exception
-  rather than a returned zero.
-- The adapter supplies the two getter expressions; every `match`, the reporting
-  call, its failure branch, the terminal return, the construction and the call
-  are the registry's.
+  the source `Stamp` is never constructed. Either way the Kotlin caller's
+  `onError` runs, and the zero this wrapper returned is never observed.
+- The adapter supplies the two getter expressions and the signalling helper,
+  which is generated into this module; every `match`, the reporting call, the
+  terminal return, the construction and the call are the registry's.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
   conversions render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.
