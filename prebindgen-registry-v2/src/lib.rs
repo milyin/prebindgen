@@ -34,14 +34,30 @@
 //! `PREBINDGEN_PIPELINE=v2`, resolved once at `.build()` — see
 //! [`prebindgen_flat::pipeline`].
 
+pub mod body;
 pub mod decl;
+mod emit;
 pub mod outcome;
+pub mod plan;
 pub mod report;
 pub mod run;
+pub mod target;
 #[cfg(test)]
 mod tests;
 
+pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::{BindingDeclarations, DeclaredElement, ElementId, ElementKind, SourceKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
+pub use plan::{
+    generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, PolicyId, ValuePlan,
+};
 pub use report::{Counts, Report, SCHEMA_VERSION};
 pub use run::{plan, Generation, PIPELINE};
+pub use target::{
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Direction, FailureCategory,
+    FailureRoute, Layout, NativeParam, OperandRole, OperandSpec, Operation, OperationType,
+    OutputPlacement, ParamRole, Part, PlanningError, Position, PrimitiveFailure, PrimitiveId,
+    PrimitiveSpec, Protocol, RecordRelation, Relation, RelationId, ReprSpec, ResolvedShape,
+    ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest,
+    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
+};

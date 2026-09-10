@@ -229,7 +229,13 @@ expresses it.
 ## What V2 changes
 
 Everything above is what the library does today, and everything from here to the
-end of the chapter is proposed instead of built. None of it revisits the model's
+end of the chapter is proposed instead of built. It is also the one stage
+[the first increment](../implementation.md#the-first-increment-as-built) did not
+build: the engine plans over the borrowed API above, and its frozen result owns
+the model, so a plan cannot outlive the model it was planned against and no view
+from another snapshot can be offered. That holds while a run has exactly one
+model, which is what makes the views below the next thing this stage needs rather
+than the first. None of it revisits the model's
 answers: the elements, the grammar, the namespace and the refusals all stay as
 described. What changes is how the model is held and handed out.
 

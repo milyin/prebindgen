@@ -1,5 +1,7 @@
 //! What the engine does with a declaration set, independent of any adapter.
 
+mod pipeline;
+
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
