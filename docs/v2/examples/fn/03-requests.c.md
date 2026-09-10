@@ -14,7 +14,8 @@ Cbindgen::builder()
     .source_module(parse_quote!(source_crate))
     .module(
         module!().data_type(
-            data_type!(Stamp)              // see the record path
+            data_type!(Stamp)
+                .base_name("Stamp")        // see the record path
                 .method(fun!(stamp_sum)),
         ),
     )

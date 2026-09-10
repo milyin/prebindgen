@@ -261,3 +261,109 @@ fn every_declaration_kind_carries_its_options() {
         .ignored_types
         .contains(&key(syn::parse_quote!(Unused))));
 }
+
+/// A base a declaration carries reaches the emitted names — for a function, an
+/// enum, a tagged union and a `repr(C)` mirror.
+///
+/// Each of these would survive a lowering that quietly dropped its base if the
+/// name it produced were the default one, so each asks for a name the default
+/// derivation would never give.
+#[test]
+fn a_declared_base_reaches_the_emitted_names() {
+    let loc = SourceLocation::default();
+    let mode: syn::ItemEnum = syn::parse_quote!(
+        pub enum Mode {
+            Fast,
+            Slow,
+        }
+    );
+    let shape: syn::ItemEnum = syn::parse_quote!(
+        pub enum Shape {
+            Dot,
+            Line(i64),
+        }
+    );
+    let raw: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        pub struct Raw {
+            pub x: i64,
+        }
+    );
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn raw_make(x: i64) -> Raw {
+            unimplemented!()
+        }
+    );
+    let mode_of: syn::ItemFn = syn::parse_quote!(
+        pub fn raw_mode(mode: Mode, shape: Shape) -> i64 {
+            unimplemented!()
+        }
+    );
+    let registry = crate::test_util::reg_from_items(declare_referenced([
+        (syn::Item::Enum(mode), loc.clone()),
+        (syn::Item::Enum(shape), loc.clone()),
+        (syn::Item::Struct(raw), loc.clone()),
+        (syn::Item::Fn(make), loc.clone()),
+        (syn::Item::Fn(mode_of), loc),
+    ]))
+    .expect("index items");
+
+    let src = write(
+        base().mangle_type_name(|base| format!("{base}_t")).module(
+            module!()
+                .enum_type(enum_type!(Mode).base_name("speed"))
+                .tagged_union(tagged_union!(Shape).base_name("figure"))
+                .repr_c_type(repr_c_type!(Raw).base_name("packet"))
+                .fun(fun!(raw_make).base_name("packet_make"))
+                .fun(fun!(raw_mode).base_name("packet_mode").panic()),
+        ),
+        registry,
+        "decl_bases",
+    );
+    let compact: String = src.split_whitespace().collect();
+
+    for name in ["speed_t", "figure_t", "packet_t"] {
+        assert!(compact.contains(name), "{name} missing from {src}");
+    }
+    for symbol in ["fnpacket_make(", "fnpacket_mode("] {
+        assert!(compact.contains(symbol), "{symbol} missing from {src}");
+    }
+    // The mirror's name is derived once: everything naming the wire type has to
+    // agree with the emitted struct, or the file does not compile.
+    assert!(
+        !compact.contains("raw_t"),
+        "the default mirror name survived beside the declared one: {src}"
+    );
+}
+
+/// Two spellings of one callback signature are one declaration, and the second
+/// would otherwise overwrite the first's options.
+#[test]
+fn one_callback_signature_spelled_two_ways_is_refused() {
+    let message = catch_msg(|| {
+        let _ = base().module(
+            module!()
+                .callback(callback!(impl Fn(i64) + Send + Sync + 'static).base_name("first"))
+                .callback(callback!(impl Fn(i64) + Sync + Send + 'static).base_name("second")),
+        );
+    });
+    assert!(message.contains("declared twice"), "{message}");
+}
+
+/// A second module cannot quietly reconfigure what the first declared.
+#[test]
+fn a_declaration_repeated_in_another_module_is_refused() {
+    let message = catch_msg(|| {
+        let _ = base()
+            .module(module!().fun(fun!(point_make).base_name("first")))
+            .module(module!().fun(fun!(point_make).base_name("second")));
+    });
+    assert!(message.contains("point_make"), "{message}");
+
+    let message = catch_msg(|| {
+        let _ = base()
+            .module(module!().data_type(data_type!(Point)))
+            .module(module!().data_type(data_type!(Point)));
+    });
+    assert!(message.contains("Point"), "{message}");
+}

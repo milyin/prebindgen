@@ -35,6 +35,7 @@ Cbindgen::builder()
     .module(
         module!().data_type(
             data_type!(Stamp)              // Stamp crosses as a C struct, by value
+                .base_name("Stamp")        // under this name, rather than the default `stamp`
                 .method(fun!(stamp_sum)),  // and this function becomes a C entry point
         ),
     )
@@ -46,10 +47,10 @@ own options, so the tree means the same however it is ordered.
 
 Names come from the frontend's manglers. A function keeps its Rust name by
 default, which is why `stamp_sum` is the exported symbol; a type's default base
-is the snake_case of its short name, so `Stamp` would reach C as `stamp` unless a
-naming hook or a declaration's `.base_name` says otherwise — and the worked
-example names it `Stamp`. The hooks are configured on the same builder, never
-anywhere downstream.
+is the snake_case of its short name, so `Stamp` would reach C as `stamp`, which
+is why the declaration above names it. Generator-wide naming hooks do the same
+job for every declaration at once, and are configured on the same builder —
+before the module, since a declaration's name is derived as it is applied.
 
 Through Kotlin it is the same two items with different answers — `Stamp` becomes
 a class in a package, and the function a top-level function of that package,

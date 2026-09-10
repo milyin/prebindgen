@@ -328,24 +328,37 @@ impl CbindgenBuilder {
     /// with no C representation at all, and declaring one is a hard error naming
     /// the field. Rejecting the `Box` would leave a nullable-pointer field
     /// inexpressible.
-    pub(crate) fn repr_c_struct(mut self, ty: syn::Type) -> Self {
+    /// The declaration's naming base has to be known here: the mirror's name is
+    /// derived once, and everything else that names the wire type — the size and
+    /// alignment assertions, the `Transmute` glue — reads what was derived.
+    /// Setting the base afterwards renames the emitted struct and leaves those
+    /// pointing at the old name.
+    pub(crate) fn repr_c_struct(mut self, ty: syn::Type, base: Option<String>) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(
             !self.ignored_types.contains(&key),
             "Cbindgen::repr_c_struct cannot declare `{}` because it is already ignored",
             key
         );
-        let mirror = self.c_type_ident(&key);
+        let mut cfg = TypeCfg::new(ty);
+        cfg.base = base;
         self.value_opaque.insert(
             key.clone(),
             ValueOpaqueCfg {
-                opaque: syn::parse_quote!(#mirror),
+                // A placeholder: the name is derived below, once the base this
+                // declaration carries is in place for `rust_base` to find.
+                opaque: syn::parse_quote!(()),
                 kind: OpaqueKind::Data,
                 generate_mirror: true,
                 assume_c_field_validity: false,
-                cfg: TypeCfg::new(ty),
+                cfg,
             },
         );
+        let mirror = self.c_type_ident(&key);
+        self.value_opaque
+            .get_mut(&key)
+            .expect("just inserted")
+            .opaque = syn::parse_quote!(#mirror);
         self.current = Some(CurrentDecl::ValueOpaque(key));
         self
     }
@@ -791,45 +804,65 @@ impl CbindgenBuilder {
         // A declaration tree is a set, so a repeated declaration is a mistake
         // rather than a last-write-wins update: two `fun!(f)` with different
         // options would otherwise export whichever the lowering replayed last,
-        // which is exactly the order-dependence this surface removes.
-        let mut names: HashSet<String> = HashSet::new();
-        let mut seen = |what: &str, name: String| {
+        // which is exactly the order-dependence this surface removes. The
+        // builder's own declarations count too, so a second `module()` cannot
+        // quietly reconfigure what the first one declared.
+        let declared_type = |builder: &Self, key: &TypeKey| {
+            builder.opaque.contains_key(key)
+                || builder.data.contains_key(key)
+                || builder.enums.contains_key(key)
+                || builder.tagged_unions.contains_key(key)
+                || builder.value_opaque.contains_key(key)
+                || builder.opaque_errors.contains_key(key)
+        };
+        let mut fresh: HashSet<String> = HashSet::new();
+        // `identity` is what the builder keys the declaration by — two spellings
+        // of one callback signature share it — while `shown` is what a reader
+        // wrote, which is what the message has to name.
+        let mut once = |what: &str, identity: String, shown: &str, already: bool| {
             assert!(
-                names.insert(format!("{what} {name}")),
-                "`{name}` is declared twice in one module. A declaration carries its own                  options, so two of them would silently keep one set and drop the other;                  declare it once, with the options it needs"
+                !already && fresh.insert(format!("{what} {identity}")),
+                "`{shown}` is declared twice. A declaration carries its own options, so two of \
+                 them would silently keep one set and drop the other; declare it once, with \
+                 the options it needs"
             );
         };
-        for decl in &ptr_types {
-            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
-        }
-        for decl in &data_types {
-            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
-        }
-        for decl in &enum_types {
-            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
-        }
-        for decl in &tagged_unions {
-            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
-        }
-        for decl in &value_types {
-            seen("type", TypeKey::from_type(&decl.rust).as_str().to_string());
-        }
-        for decl in &repr_c_types {
-            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
-        }
-        for decl in &error_types {
-            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+
+        let type_keys = ptr_types
+            .iter()
+            .map(|decl| &decl.ty)
+            .chain(data_types.iter().map(|decl| &decl.ty))
+            .chain(enum_types.iter().map(|decl| &decl.ty))
+            .chain(tagged_unions.iter().map(|decl| &decl.ty))
+            .chain(value_types.iter().map(|decl| &decl.rust))
+            .chain(repr_c_types.iter().map(|decl| &decl.ty))
+            .chain(error_types.iter().map(|decl| &decl.ty));
+        for ty in type_keys {
+            let key = TypeKey::from_type(ty);
+            let name = key.as_str().to_string();
+            once("type", name.clone(), &name, declared_type(&self, &key));
         }
         for decl in &callbacks {
-            seen(
+            // The same key the insertion uses: two spellings of one signature —
+            // `Send + Sync` either way round, an explicit `-> ()` — are one
+            // declaration, and comparing the written type would miss that.
+            let key: CallbackKey = extract_fn_trait_args(&decl.ty)
+                .unwrap_or_default()
+                .iter()
+                .map(TypeKey::from_type)
+                .collect();
+            let identity: Vec<&str> = key.iter().map(|arg| arg.as_str()).collect();
+            once(
                 "callback",
-                TypeKey::from_type(&decl.ty).as_str().to_string(),
+                identity.join(","),
+                &decl.ty.to_token_stream().to_string(),
+                self.callbacks.contains_key(&key),
             );
         }
-        let methods_of = |decls: &[crate::FunDecl]| -> Vec<String> {
-            decls.iter().map(|decl| decl.ident.to_string()).collect()
+        let methods_of = |decls: &[crate::FunDecl]| -> Vec<syn::Ident> {
+            decls.iter().map(|decl| decl.ident.clone()).collect()
         };
-        for name in ptr_types
+        for ident in ptr_types
             .iter()
             .flat_map(|decl| methods_of(&decl.methods))
             .chain(data_types.iter().flat_map(|decl| methods_of(&decl.methods)))
@@ -841,10 +874,10 @@ impl CbindgenBuilder {
             )
             .chain(methods_of(&funs))
         {
-            seen("function", name);
+            let already = self.functions.contains_key(&ident);
+            let name = ident.to_string();
+            once("function", name.clone(), &name, already);
         }
-        drop(seen);
-
         for decl in ptr_types {
             let methods = decl.methods;
             self = self.opaque_ptr(decl.ty);
@@ -892,13 +925,10 @@ impl CbindgenBuilder {
             }
         }
         for decl in repr_c_types {
-            let (assume, base) = (decl.assume_field_validity, decl.base);
-            self = self.repr_c_struct(decl.ty);
+            let assume = decl.assume_field_validity;
+            self = self.repr_c_struct(decl.ty, decl.base);
             if assume {
                 self = self.assume_c_field_validity();
-            }
-            if let Some(base) = base {
-                self = self.base_name(base);
             }
         }
         for decl in error_types {
