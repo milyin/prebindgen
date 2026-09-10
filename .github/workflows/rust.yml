@@ -95,6 +95,13 @@ jobs:
       env:
         RUSTDOCFLAGS: -D warnings
       run: cargo doc --no-deps
+    # The V2 specification's chapters, element paths and link ids only stay
+    # consistent if something checks them; the validator needs no toolchain.
+    - name: Check the V2 specification structure
+      working-directory: prebindgen
+      run: |
+        python3 docs/v2/validate.py
+        python3 -m unittest discover -s docs/v2 -p 'test_*.py'
 
   v2-pipeline:
     # The v2 engine has to keep accepting every example's declarations, and

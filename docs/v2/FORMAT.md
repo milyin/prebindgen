@@ -1,0 +1,121 @@
+<!-- spec: {"kind": "format"} -->
+
+[Project contents](README.md)
+
+# The format contract
+
+The document has two axes. [manifest.json](manifest.json) lists the **stages** of
+the pipeline and the **element paths** of the appendix; one applicable
+`(element, stage)` pair is a **cell**, and a cell at a language-dependent stage
+also has one **variant** page per language. Inapplicable pairs have no file, no
+link and no placeholder. The manifest records applicability — whether the pair is
+meaningful — not whether the generator supports it.
+
+## Canonical paths
+
+| Page | Path |
+| --- | --- |
+| Root | `README.md` |
+| Format contract | `FORMAT.md` |
+| The specification's source crate | `source.md` |
+| Stage chapter | `stages/<stage>.md` |
+| Implementation plan | `implementation.md` |
+| Element path TOC | `examples/<element>/README.md` |
+| Cell | `examples/<element>/<stage>.md` |
+| Variant | `examples/<element>/<stage>.<language>.md` |
+
+Every Markdown file starts with exactly one `<!-- spec: {...} -->` metadata line.
+`kind` is `root`, `format`, `fixture`, `stage`, `implementation`, `example`,
+`cell` or `variant`. A stage page carries `stage`; an element TOC carries
+`example`; a cell carries both; a variant adds `language`. The identity has to
+match the canonical path, and every Markdown file under `docs/v2/` has to be one
+the manifest accounts for.
+
+## Link ids
+
+Links into the appendix use reference-style links whose label is the element id:
+
+```text
+<element>[_<subvariant>]        the element path's TOC
+<element>..._<stage-slug>       that element at that stage
+<element>..._<stage-slug>_<lang>  the language variant of that cell
+```
+
+The stage slugs are `source`, `flat`, `requests`, `values`, `boundary`, `retain`
+and `emit`; the language ids are `c` and `jni`. So `fn` is the function path,
+`fn_values` is the function at value planning, and `fn_values_c` is its C
+variant. A sub-variant extends the element id and keeps the same suffixes:
+`fn_callback`, `fn_callback_values_jni`.
+
+An element id names a structural kind — function, record, enum, constant, and
+the variants of those — never the names the source crate happens to use. `Stamp`
+and `stamp_sum` appear in prose and code, never in an id, so a path stays
+recognizable when the declarations it works from change.
+
+Definitions live in one block at the foot of the page:
+
+```markdown
+Planned as the record input described in [the record's C value plan][struct_values_c].
+
+[struct_values_c]: ../struct/04-values.c.md
+```
+
+Every definition has to name a declared id and point at that id's canonical path,
+relative to the page. Every used label has to be defined on its page, with no
+duplicates and nothing defined but unused. Links into `examples/` are always
+reference-style; inline links are for everything else — chapters, the source
+crate, external URLs.
+
+## Required content
+
+A cell and a variant show code. The point of the appendix is the chain of
+artifacts an element passes through — marked source, capture entry, model
+elements, request, plans, boundary, retained output, generated bindings — so each
+page carries the artifact itself and says only what the artifact cannot.
+
+Each has exactly one **Input**, **Result** and **Checks** section, all non-empty,
+and a `Owner: …` line in its header naming the component that acts. Input is the
+artifact this stage receives, Result is the artifact it produces, and both lead
+with code wherever the artifact can be written down. Prose around them is for
+what the code does not show: an identity, a rule, a reason. Checks are the
+observable obligations and the failure behavior, in short items. A variant
+specializes its common cell rather than repeating it.
+
+Navigation lives above the title, between the metadata line and the heading: a
+chapter's line carries the link to the contents and its previous/next chapters, a
+cell's carries its stage chapter, its element TOC, the source crate and its
+previous/next cells along that element, and a variant's carries its chapter, its
+common cell and its element TOC. Nothing navigational sits at the foot of a page
+except the link definitions.
+
+Every stage chapter lists all of its declared cells and variants, and every
+element TOC lists all of that element's, both in manifest order. Cross-element
+links document dependencies; they never replace an index or a backlink.
+
+A stage marked `language_dependent` requires both languages for each of its
+applicable cells: capture, source-model inspection and retention are shared
+across targets, while requests, value planning, the boundary and emission are
+not. A future stage that needs a finer split should be split, rather than having
+its coverage check weakened.
+
+## Adding a path or a stage
+
+1. Add the id and title to the manifest, and declare only the applicable cells.
+2. Write each cell, plus both language variants at language-dependent stages.
+3. Update the stage indexes, the element TOC, the root's appendix tree and the
+   previous/next chains together.
+4. Move the id out of `deferred_examples` and state in the new path's
+   introduction whatever remains unspecified about it.
+
+A path is finished when its cells say what actually happens, not when they name
+the feature. For a sequence field, that means the item type, element order,
+length handling, ownership, allocation and failure behavior, and the dependency
+on the enclosing record — at each stage that decides one of them. Reusing the
+word "sequence" without those decisions is not a specified path.
+
+The validator checks page identities, required sections, link ids and their
+targets, ordered indexes, backlinks, neighbors, resolvable local links and
+anchors, balanced code fences, and that no Markdown file is unlisted or missing.
+It does not infer meaning from an absent pair and cannot judge whether the
+described conversions are correct; review, and eventually the generator's own
+tests, do that.
