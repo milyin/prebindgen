@@ -405,7 +405,6 @@ impl<'a, T: Target> Run<'a, T> {
         };
         let shape = ResolvedShape {
             crossing,
-            position,
             relation,
             record,
         };
@@ -1030,6 +1029,25 @@ fn assemble<T: Target>(
                 spell(&ret.ty)
             )));
         }
+        let produced = output.map(|node| run.nodes[node.0].repr.layout.wire().ty.clone());
+        match produced {
+            Some(produced) if !same_type(&ret.ty, &produced) => {
+                return Err(PlanningError::InternalInvariant(format!(
+                    "`{}` returns `{}` natively, and its result conversion produces a `{}`",
+                    element.id,
+                    spell(&ret.ty),
+                    spell(&produced)
+                )))
+            }
+            None => {
+                return Err(PlanningError::InternalInvariant(format!(
+                    "`{}` returns `{}` natively and has no result conversion to fill it",
+                    element.id,
+                    spell(&ret.ty)
+                )))
+            }
+            _ => {}
+        }
     }
 
     let mut arguments = Vec::new();
@@ -1037,8 +1055,8 @@ fn assemble<T: Target>(
         let carrier = params
             .iter()
             .find(|(_, param)| matches!(param.role, ParamRole::Input(i) if i == index))
-            .map(|(id, _)| *id);
-        let carrier = match carrier {
+            .map(|(id, param)| (*id, param.ty.clone()));
+        let (carrier, native) = match carrier {
             Some(carrier) => carrier,
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
@@ -1047,23 +1065,34 @@ fn assemble<T: Target>(
                 )))
             }
         };
+        // The conversion reads the carrier this parameter passes, so the two
+        // are the same type or the wrapper reads something else entirely.
+        let expected = run.nodes[node.0].repr.layout.wire();
+        if !same_type(&native.ty, &expected.ty) {
+            return Err(PlanningError::InternalInvariant(format!(
+                "`{}` passes parameter {index} as `{}`, and its conversion reads a `{}`",
+                element.id,
+                spell(&native.ty),
+                spell(&expected.ty)
+            )));
+        }
         let node_body = run.nodes[node.0].body.clone();
         arguments.push(node_body.inline(carrier, &mut body));
     }
 
-    let call = body.fresh();
+    let call = output.map(|_| body.fresh());
     body.push(Instr::Call {
         function: function.name.to_string(),
         args: arguments,
         result: call,
     });
 
-    let result = match output {
-        Some(node) => {
+    let result = match (output, call) {
+        (Some(node), Some(call)) => {
             let node_body = run.nodes[node.0].body.clone();
             Some(node_body.inline(call, &mut body))
         }
-        None => None,
+        _ => None,
     };
     let result = match boundary.output {
         OutputPlacement::Return => result,
@@ -1187,7 +1216,9 @@ fn plan_record<T: Target>(
                 Unsupported::new(
                     "unsupported.type.not_a_record",
                     format!(
-                        "`{}` is declared as a data type, and v2 represents only records so far",
+                        "`{}` is exposed as a data type, and the model gives it no fields to \
+                         cross through — a tuple struct or an opaque declaration is carried \
+                         whole, which v2 has no representation for yet",
                         element.rust_origin
                     ),
                 ),

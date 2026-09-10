@@ -41,11 +41,12 @@ pub enum Instr {
         parts: Vec<ValueId>,
         result: ValueId,
     },
-    /// Call the source function once.
+    /// Call the source function once, binding its result unless it returns
+    /// nothing — a `let` over a unit call names a value no one can use.
     Call {
         function: String,
         args: Vec<ValueId>,
-        result: ValueId,
+        result: Option<ValueId>,
     },
 }
 
@@ -152,12 +153,15 @@ impl NodeBody {
                     result,
                 } => {
                     let args = args.iter().map(|id| value(&map, *id)).collect();
-                    let fresh = out.fresh();
-                    map.insert(*result, fresh);
+                    let result = result.map(|id| {
+                        let fresh = out.fresh();
+                        map.insert(id, fresh);
+                        fresh
+                    });
                     Instr::Call {
                         function: function.clone(),
                         args,
-                        result: fresh,
+                        result,
                     }
                 }
             };

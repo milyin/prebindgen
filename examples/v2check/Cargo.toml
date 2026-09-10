@@ -18,6 +18,12 @@ jni = "0.21.1"
 # which means parsing both rather than diffing text.
 syn = { workspace = true }
 quote = { workspace = true }
+# One test runs the engine again, with a class renamed, which needs what the
+# build script needs.
+prebindgen = { workspace = true }
+prebindgen-registry-v2 = { workspace = true }
+prebindgen-flat = { workspace = true }
+proc-macro2 = { workspace = true }
 
 [build-dependencies]
 prebindgen = { workspace = true }

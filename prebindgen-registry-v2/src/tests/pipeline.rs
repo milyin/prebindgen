@@ -40,6 +40,12 @@ fn model() -> Flat {
             }
         ),
         syn::parse_quote!(
+            pub struct Point {
+                pub x: i64,
+                pub y: i64,
+            }
+        ),
+        syn::parse_quote!(
             pub fn stamp_sum(stamp: Stamp) -> i64 {
                 unimplemented!()
             }
@@ -82,6 +88,9 @@ enum Policy {
     /// refuses — which is what drives the retention loop rather than value
     /// planning.
     RecordWithoutSurface,
+    /// A record whose public declaration requires another element's, so a
+    /// refusal has to travel two edges.
+    RecordRequiring(String),
     Function {
         symbol: String,
         routes: Routes,
@@ -89,6 +98,10 @@ enum Policy {
         /// `arg1`, … — the well-behaved case that hides a name collision.
         param_names: Vec<String>,
     },
+    /// A boundary that passes its first parameter as a carrier its conversion
+    /// does not read — an adapter defect the registry has to catch rather than
+    /// emit.
+    FunctionWithWrongInput,
 }
 
 /// What a boundary does about failures.
@@ -126,7 +139,10 @@ impl Target for Mini {
     fn select(&self, query: &SelectionQuery<'_, Policy>) -> TargetSupport<RelationId> {
         let want_record = matches!(
             query.policy,
-            Policy::Record | Policy::FallibleRecord | Policy::RecordWithoutSurface
+            Policy::Record
+                | Policy::FallibleRecord
+                | Policy::RecordWithoutSurface
+                | Policy::RecordRequiring(_)
         );
         for (id, relation) in query.candidates {
             match (relation, want_record) {
@@ -217,6 +233,24 @@ impl Target for Mini {
         values: &ResolvedValues<'_, Payload>,
         policy: &Policy,
     ) -> TargetSupport<BoundarySpec<Payload>> {
+        if matches!(policy, Policy::FunctionWithWrongInput) {
+            return Ok(TargetAttempt::Ready(BoundarySpec {
+                abi: AbiSpec {
+                    abi: "C".to_string(),
+                    symbol: "wrong".to_string(),
+                    params: vec![NativeParam {
+                        name: quote::format_ident!("arg0"),
+                        // The conversion reads a `Stamp` aggregate.
+                        ty: WireType::abi(syn::parse_quote!(i64)),
+                        role: ParamRole::Input(0),
+                        mutable: false,
+                    }],
+                    ret: values.output.map(|value| value.repr.layout.wire().clone()),
+                },
+                output: OutputPlacement::Return,
+                failures: Vec::new(),
+            }));
+        }
         let Policy::Function {
             symbol,
             routes,
@@ -312,9 +346,12 @@ impl Target for Mini {
         }
         Ok(TargetAttempt::Ready(SurfaceSpec {
             element: request.element.id.clone(),
-            requires: match request.item {
-                SourceItem::Function(_) => requires,
-                SourceItem::Record(_) => Vec::new(),
+            requires: match (request.policy, request.item) {
+                (_, SourceItem::Function(_)) => requires,
+                (Policy::RecordRequiring(other), SourceItem::Record(_)) => {
+                    vec![crate::decl::ElementId::new(ElementKind::Type, other)]
+                }
+                (_, SourceItem::Record(_)) => Vec::new(),
             },
             rust: Vec::new(),
             payload: None,
@@ -596,13 +633,18 @@ fn a_field_override_is_part_of_its_record_conversion() {
             ),
             record,
         );
-        requests.output(ty("Stamp"), record);
+        // Order matters twice over: which function is planned first, and
+        // whether the record's own request primed the conversion before either
+        // of them. The refusal-first case must not be primed, or it would not
+        // test what happens when a refusal is met before any success.
         if defaults_first {
+            requests.output(ty("Stamp"), record);
             requests.output(function("stamp_sum"), sum);
             requests.output(function("stamp_max"), max);
         } else {
             requests.output(function("stamp_max"), max);
             requests.output(function("stamp_sum"), sum);
+            requests.output(ty("Stamp"), record);
         }
         generate(model(), &Mini, requests, "fixture").expect("plans")
     };
@@ -751,4 +793,134 @@ fn a_refused_public_declaration_skips_what_requires_it() {
         .iter()
         .any(|step| step == "type:Stamp"));
     assert!(generation.rust().is_empty());
+}
+
+/// Two supported but different child conversions make two record conversions.
+///
+/// Nothing is refused here, so this says the children belong to a conversion's
+/// identity on their own rather than only when one of them fails.
+#[test]
+fn two_supported_children_make_two_record_conversions() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    // A second entry with the same settings is still a second entry: sharing a
+    // conversion means sharing the policy, not writing an equal-looking one.
+    let other_scalar = requests.policy(Policy::Scalar);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    let max = requests.policy(exported("stamp_max", Routes::None));
+    requests.site_policies.insert(
+        (
+            crate::decl::ElementId::new(ElementKind::Function, "stamp_max"),
+            "param 0.field secs".to_string(),
+        ),
+        other_scalar,
+    );
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+    requests.output(function("stamp_max"), max);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 3);
+    // `Stamp` twice, `i64` into Rust twice, `i64` out of Rust once.
+    assert_eq!(generation.values().len(), 5);
+    assert_eq!(generation.functions().len(), 2);
+}
+
+/// A raw identifier and its plain spelling are one name, and the writer treats
+/// them as one.
+///
+/// `r#v0` reserves `v0`: a temporary that took the plain spelling would shadow
+/// the parameter, which is the same defect as an ordinary collision wearing a
+/// different hat.
+#[test]
+fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let pick = requests.policy(Policy::Function {
+        symbol: "stamp_pick".to_string(),
+        routes: Routes::None,
+        param_names: vec!["r#v0".to_string(), "r#v1".to_string()],
+    });
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_pick"), pick);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    let rust = generation.rust();
+    assert!(
+        !rust.contains("let v0 ="),
+        "`v0` names the parameter:\n{rust}"
+    );
+    assert!(
+        !rust.contains("let v1 ="),
+        "`v1` names the parameter:\n{rust}"
+    );
+    assert!(
+        rust.contains("source::stamp_pick(v4, r#v1)"),
+        "the fallback argument must still be the parameter:\n{rust}"
+    );
+}
+
+/// A refusal travels every dependency edge, not just the first.
+///
+/// The chain is declared so that propagation needs more than one pass: the
+/// function is decided before the record it requires, and that record before
+/// the one *it* requires.
+#[test]
+fn a_refusal_travels_a_chain_of_public_requirements() {
+    let mut requests = requests();
+    // Every conversion here succeeds: what fails is a public declaration, two
+    // edges away from the function that needs it.
+    let requiring = requests.policy(Policy::RecordRequiring("Point".to_string()));
+    let refused = requests.policy(Policy::RecordWithoutSurface);
+    requests
+        .type_policies
+        .insert("Stamp".to_string(), requiring);
+    requests.type_policies.insert("Point".to_string(), refused);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    requests.output(function("stamp_sum"), sum);
+    requests.output(ty("Stamp"), requiring);
+    requests.output(ty("Point"), refused);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    for element in ["type:Point", "type:Stamp", "fn:stamp_sum"] {
+        let Outcome::Skipped(skip) = outcome(&generation, element) else {
+            panic!("{element} depends on a public declaration this target refuses");
+        };
+        assert_eq!(
+            skip.capability.as_str(),
+            "unsupported.mini.no_public_record",
+            "{element} carries the one cause"
+        );
+        assert_eq!(skip.dependency_path.first().unwrap(), element);
+    }
+    // Two edges, so the far end of the chain names both of them.
+    let Outcome::Skipped(caller) = outcome(&generation, "fn:stamp_sum") else {
+        unreachable!("checked above");
+    };
+    assert_eq!(
+        caller.dependency_path,
+        vec!["fn:stamp_sum", "type:Stamp", "type:Point"]
+    );
+    assert!(generation.rust().is_empty());
+}
+
+/// A boundary that passes a carrier its conversion does not read is a defect,
+/// and fails the build rather than emitting a wrapper that reads the wrong
+/// thing.
+#[test]
+fn a_native_parameter_must_carry_what_its_conversion_reads() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let wrong = requests.policy(Policy::FunctionWithWrongInput);
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), wrong);
+
+    let error = generate(model(), &Mini, requests, "fixture").expect_err("refuses");
+    let EngineError::Planning(PlanningError::InternalInvariant(message)) = error else {
+        panic!("an adapter describing an impossible boundary is a defect, not a capability gap");
+    };
+    assert!(message.contains("its conversion reads"), "{message}");
 }

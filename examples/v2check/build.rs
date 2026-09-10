@@ -17,7 +17,7 @@ mod adapters;
 
 use std::path::{Path, PathBuf};
 
-use adapters::{CPolicy, CTarget, JniPolicy, JniTarget};
+use adapters::{CPolicy, CTarget, JniClasses, JniPolicy, JniTarget};
 use prebindgen_flat::flat::Flat;
 use prebindgen_registry_v2::{generate, BindingRequests, DeclaredElement, ElementKind, Generation};
 
@@ -33,11 +33,16 @@ fn main() {
 
     let c = generate(model(&source), &CTarget, c_requests(), SOURCE_CRATE)
         .expect("the C binding plans");
-    // The adapter is told which Kotlin class each Rust type was declared as,
-    // which is the same configuration `jni_requests` records.
-    let jni_target = JniTarget::default().with_class("Stamp", "Stamp");
-    let jni = generate(model(&source), &jni_target, jni_requests(), SOURCE_CRATE)
-        .expect("the JNI binding plans");
+    // One table names the Kotlin classes; the declarations and the signatures
+    // that mention them both read it.
+    let classes = JniClasses::in_package("example").with("Stamp", "Stamp");
+    let jni = generate(
+        model(&source),
+        &JniTarget::new(classes.clone()),
+        jni_requests(&classes),
+        SOURCE_CRATE,
+    )
+    .expect("the JNI binding plans");
 
     let c_path = c.write_rust(out_dir.join("c.rs")).expect("write c.rs");
     let jni_path = jni
@@ -104,18 +109,52 @@ fn c_requests() -> BindingRequests<CPolicy> {
         ),
         delta,
     );
+    let show = requests.policy(CPolicy::Function {
+        symbol: "stamp_show".to_string(),
+    });
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "stamp_show",
+            "stamp_show",
+            "function",
+        ),
+        show,
+    );
+    // Positional fields: the aggregate this adapter declares names its members,
+    // so it refuses rather than reading `.0` out of a struct whose C form has
+    // no such member.
+    let pair = requests.policy(CPolicy::DataStruct {
+        c_name: "Pair".to_string(),
+    });
+    requests.type_policies.insert("Pair".to_string(), pair);
+    requests.output(
+        DeclaredElement::new(ElementKind::Type, "Pair", "Pair", "data_struct"),
+        pair,
+    );
     requests
 }
 
 /// The JNI binding: `Stamp` as an `example.Stamp` object whose properties are
 /// read, `stamp_sum` as `example.Bindings.sum`.
-fn jni_requests() -> BindingRequests<JniPolicy> {
+fn jni_requests(classes: &JniClasses) -> BindingRequests<JniPolicy> {
     let mut requests = BindingRequests::new("jni", syn::parse_quote!(source), JniPolicy::Scalar);
     let stamp = requests.policy(JniPolicy::DataClass {
-        package: "example".to_string(),
-        class: "Stamp".to_string(),
+        rust: "Stamp".to_string(),
     });
     requests.type_policies.insert("Stamp".to_string(), stamp);
+    // A record whose field neither adapter can carry, declared so the report
+    // says so rather than the example quietly not mentioning it.
+    let reading = requests.policy(JniPolicy::DataClass {
+        rust: "Reading".to_string(),
+    });
+    requests
+        .type_policies
+        .insert("Reading".to_string(), reading);
+    let show = requests.policy(JniPolicy::Function {
+        placement: "example.Bindings.show".to_string(),
+    });
+    let _ = classes;
     let sum = requests.policy(JniPolicy::Function {
         placement: "example.Bindings.sum".to_string(),
     });
@@ -145,6 +184,25 @@ fn jni_requests() -> BindingRequests<JniPolicy> {
             "function",
         ),
         delta,
+    );
+    // Delivers nothing: its failure route has to terminate without a value.
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "stamp_show",
+            "example.Bindings.show",
+            "function",
+        ),
+        show,
+    );
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Type,
+            "Reading",
+            "example.Reading",
+            "data_class",
+        ),
+        reading,
     );
     requests
 }

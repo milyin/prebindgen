@@ -73,10 +73,13 @@ fn wrapper<T: Target>(
     // environment operand has to say what it is called. Everything else is
     // named here, and around those names: a temporary that shadowed a live
     // parameter would compile and read the wrong value.
+    // Reserved by their canonical spelling: `r#v0` and `v0` are one name to
+    // Rust, so reserving the raw form would leave the plain one free to shadow
+    // it.
     let mut taken: std::collections::HashSet<String> = function
         .params
         .iter()
-        .map(|(_, p)| p.name.to_string())
+        .map(|(_, p)| unraw(&p.name))
         .collect();
     let params: Vec<TokenStream> = function
         .params
@@ -177,8 +180,16 @@ fn wrapper<T: Target>(
             } => {
                 let callee = format_ident!("{callee}");
                 let args: Vec<syn::Ident> = args.iter().map(|value| names[value].clone()).collect();
-                let name = local(&mut names, &mut taken, *result);
-                statements.push(quote!(let #name = #source_module::#callee(#(#args),*);));
+                let call = quote!(#source_module::#callee(#(#args),*));
+                // A source function returning nothing produces no value, and a
+                // `let` over it would name one nobody can use.
+                statements.push(match result {
+                    Some(result) => {
+                        let name = local(&mut names, &mut taken, *result);
+                        quote!(let #name = #call;)
+                    }
+                    None => quote!(#call;),
+                });
             }
         }
     }
@@ -289,6 +300,11 @@ fn operand_name<P>(
         Operand::Value(id) => names[id].clone(),
         Operand::Context(name) => context_name(function, name),
     }
+}
+
+/// An identifier's canonical spelling: `r#type` and `type` name one binding.
+fn unraw(ident: &syn::Ident) -> String {
+    ident.to_string().trim_start_matches("r#").to_string()
 }
 
 /// A name nothing in this wrapper already uses.

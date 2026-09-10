@@ -12,7 +12,7 @@
 //! from a `ScalarKind` or from the layout of an already-planned child, never
 //! from the text of a signature.
 
-use prebindgen_flat::flat::{FieldShape, ScalarKind, TypeKind};
+use prebindgen_flat::flat::{ScalarKind, TypeKind};
 use prebindgen_registry_v2::{
     Access, Artifact, BoundarySpec, ChildValue, Direction, ElementId, ElementKind, FailureCategory,
     FailureRoute, Generation, Layout, NativeParam, OperandSpec, Operation, OperationType,
@@ -146,18 +146,6 @@ impl Target for CTarget {
                     let ident = format_ident!("{c_name}");
                     syn::parse_quote!(#ident)
                 });
-                if item.shape != FieldShape::Named {
-                    // The declared aggregate names its members, so reading the
-                    // source record positionally would address a member the C
-                    // caller never sees.
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.positional_record",
-                        format!(
-                            "`{c_name}` has positional fields, which this adapter's \
-                                 aggregate cannot name"
-                        ),
-                    )));
-                }
                 let mut members = Vec::new();
                 let mut projections = Vec::new();
                 for (field, child) in item.fields.iter().zip(children) {
@@ -263,15 +251,6 @@ impl Target for CTarget {
                         record.name
                     )));
                 };
-                if record.shape != FieldShape::Named {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.positional_record",
-                        format!(
-                            "`{c_name}` has positional fields, which this adapter's \
-                                 aggregate cannot name"
-                        ),
-                    )));
-                }
                 let ident = format_ident!("{c_name}");
                 let mut fields = Vec::new();
                 for field in &record.fields {
@@ -319,13 +298,47 @@ impl Target for CTarget {
 // Kotlin, through JNI
 // ---------------------------------------------------------------------------
 
+/// Which Kotlin class each Rust type is declared as.
+///
+/// One table, read by the declaration and by every signature naming it, because
+/// a class named in two places is a class that can be renamed in one.
+#[derive(Clone, Debug, Default)]
+pub struct JniClasses {
+    package: String,
+    classes: std::collections::HashMap<String, String>,
+}
+
+impl JniClasses {
+    pub fn in_package(package: impl Into<String>) -> Self {
+        JniClasses {
+            package: package.into(),
+            classes: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Declare that this Rust type crosses as that Kotlin class.
+    pub fn with(mut self, rust: impl Into<String>, kotlin: impl Into<String>) -> Self {
+        self.classes.insert(rust.into(), kotlin.into());
+        self
+    }
+
+    pub fn package(&self) -> &str {
+        &self.package
+    }
+
+    pub fn kotlin(&self, rust: &str) -> Option<&str> {
+        self.classes.get(rust).map(String::as_str)
+    }
+}
+
 /// What the JNI frontend recorded for one value or one function.
 #[derive(Clone, Debug)]
 pub enum JniPolicy {
     /// A scalar crossing as its JNI carrier.
     Scalar,
-    /// A JVM object whose properties are read, declared as this Kotlin class.
-    DataClass { package: String, class: String },
+    /// A JVM object whose properties are read, declared as the Kotlin class
+    /// this Rust type is registered under.
+    DataClass { rust: String },
     /// An exported function at this Kotlin placement, `example.Bindings.sum`.
     Function { placement: String },
 }
@@ -373,16 +386,13 @@ pub enum JniPayload {
 /// Kotlin signature has to name the class the frontend chose — not the Rust
 /// type it was built from. Renaming a class in the configuration therefore
 /// moves it in the declaration and in every signature mentioning it.
-#[derive(Default)]
 pub struct JniTarget {
-    classes: std::collections::HashMap<String, String>,
+    classes: JniClasses,
 }
 
 impl JniTarget {
-    /// Record that this Rust type crosses as that Kotlin class.
-    pub fn with_class(mut self, rust: impl Into<String>, kotlin: impl Into<String>) -> Self {
-        self.classes.insert(rust.into(), kotlin.into());
-        self
+    pub fn new(classes: JniClasses) -> Self {
+        JniTarget { classes }
     }
 }
 
@@ -640,8 +650,8 @@ impl Target for JniTarget {
                 let mut params = Vec::new();
                 for (param, value) in function.params.iter().zip(&values.inputs) {
                     let kotlin = match named(&value.crossing.ty) {
-                        Some(name) => match self.classes.get(&name) {
-                            Some(class) => class.clone(),
+                        Some(name) => match self.classes.kotlin(&name) {
+                            Some(class) => class.to_string(),
                             None => {
                                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                                     "unsupported.jni.undeclared_class",
@@ -696,10 +706,16 @@ impl Target for JniTarget {
                 }))
             }
             SourceItem::Record(record) => {
-                let JniPolicy::DataClass { package, class } = request.policy else {
+                let JniPolicy::DataClass { rust } = request.policy else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is exposed as a data type under a policy that is not one",
                         record.name
+                    )));
+                };
+                let package = self.classes.package().to_string();
+                let Some(class) = self.classes.kotlin(rust) else {
+                    return Err(PlanningError::InvalidInput(format!(
+                        "`{rust}` is exposed as a data class and registered as no Kotlin class"
                     )));
                 };
                 let mut properties = Vec::new();
@@ -723,8 +739,8 @@ impl Target for JniTarget {
                     requires: Vec::new(),
                     rust: Vec::new(),
                     payload: Some(JniPayload::Class {
-                        package: package.clone(),
-                        class: class.clone(),
+                        package,
+                        class: class.to_string(),
                         properties,
                     }),
                 }))

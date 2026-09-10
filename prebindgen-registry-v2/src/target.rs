@@ -611,9 +611,15 @@ pub struct SelectionQuery<'a, Policy> {
 
 /// What `represent` is given: the selected relation, resolved against the
 /// model.
+///
+/// No position, deliberately. A representation is reused wherever a conversion
+/// with the same identity is needed, and that identity is the crossing, the
+/// relation, the effective policy and the children — a target that could answer
+/// differently for two positions would have its second answer silently
+/// bypassed. Varying by position is what a policy recorded at that position is
+/// for.
 pub struct ResolvedShape<'a> {
     pub crossing: &'a Crossing,
-    pub position: &'a Position,
     pub relation: &'a Relation,
     /// The record behind a record relation, for a target that renders its own
     /// declaration of it.

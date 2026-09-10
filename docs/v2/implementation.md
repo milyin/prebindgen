@@ -168,6 +168,13 @@ contradictory configuration fails rather than becoming a capability claim.
    is a conversion rule recorded at the child's position, which the recursion
    consults when it plans that child. The precedence question is gone because one
    of the two ways to express it no longer exists.
+
+   For the same reason, `represent` is not told the position it is answering
+   for. A representation is reused wherever a conversion of the same identity is
+   needed — crossing, relation, effective policy, children — so a target that
+   answered differently for two positions would have its second answer silently
+   bypassed by the first one's node. Varying by position is what a policy
+   recorded at that position is for, and that policy is in the identity.
 4. **How an adapter declares its types and artifacts.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
    plus whether it may appear in an extern signature — carried inline in the
@@ -176,12 +183,16 @@ contradictory configuration fails rather than becoming a capability claim.
    only those a retained output needs.
 
    These descriptions are checked where they meet the values in hand, which is
-   the registry and nowhere else: a carrier that may not cross the ABI cannot be
-   a native parameter or return, an operation's operand and result types must be
-   the carriers it is actually applied to and produces, a member read must name a
-   member the representation declared, no projection may consume a carrier its
-   siblings still read, and a failure route must report the error type the
-   operation raises.
+   the registry and nowhere else. What is checked today, and nothing beyond it:
+   a carrier that may not cross the ABI cannot be a native parameter or return;
+   a native parameter must carry what its conversion reads, and a native return
+   what the result conversion produces; where an operation states an operand or
+   result *carrier*, it must be the carrier it is applied to and produces; a
+   member read must name a member the representation declared; no projection may
+   consume a carrier its siblings still read; and a failure route must report the
+   error carrier the operation raises. An operand or result stated as a source
+   type is carried and not compared, because nothing yet needs to relate a
+   conversion's Rust type to an operation's.
 5. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
    role: an operation declares `Context("jni.env")` where it needs the
    environment, the boundary names the native parameter that supplies it, and the

@@ -18,6 +18,14 @@ pub mod source;
 include!(env!("V2CHECK_C"));
 include!(env!("V2CHECK_JNI"));
 
+// The adapters `build.rs` generated with, compiled again for the tests that run
+// the engine themselves. One copy, two compilations — and this one exercises
+// the JNI half, while `build.rs` uses both.
+#[cfg(test)]
+#[path = "adapters.rs"]
+#[allow(dead_code)]
+mod adapters;
+
 #[cfg(test)]
 mod tests {
     /// The generated C entry point, called the way a C program calls it.
@@ -26,12 +34,25 @@ mod tests {
     /// same spelling, different type, which is the whole point of the two
     /// declarations.
     #[test]
-    fn the_c_wrapper_computes_the_sum() {
+    fn the_c_wrappers_compute_and_place_their_arguments() {
         let stamp = crate::Stamp {
             secs: 12,
             nanos: 34,
         };
         assert_eq!(crate::stamp_sum(stamp), 46);
+        // Addition would survive the two fields arriving in the wrong order;
+        // subtraction is what says `secs` reached `secs`.
+        let stamp = crate::Stamp {
+            secs: 12,
+            nanos: 34,
+        };
+        assert_eq!(crate::stamp_delta(stamp), -22);
+        // A wrapper that delivers nothing still runs.
+        let stamp = crate::Stamp {
+            secs: 12,
+            nanos: 34,
+        };
+        crate::stamp_show(stamp);
     }
 
     /// Every Rust item the specification's emit pages show is emitted, token
@@ -119,21 +140,128 @@ mod tests {
 
     /// Every requested element was emitted, and the report says so.
     #[test]
-    fn both_targets_report_every_declared_element_as_emitted() {
+    fn both_targets_report_every_generated_element_as_emitted() {
         for target in ["c", "jni"] {
-            let report = std::fs::read_to_string(
-                std::path::Path::new(env!("V2CHECK_C"))
-                    .parent()
-                    .unwrap()
-                    .join(format!("{target}-report.json")),
-            )
-            .expect("the report");
+            let report = report(target);
+            // The record, and the three functions over it.
             assert_eq!(
                 report.matches("\"outcome\": \"emitted\"").count(),
-                3,
+                4,
                 "{target} report: {report}"
             );
         }
+    }
+
+    /// Every declared element the two targets could not generate is reported
+    /// as skipped, with the capability that would unblock it.
+    ///
+    /// Both are declared deliberately: a record whose field has no carrier, and
+    /// one the model gives no fields at all. An adapter that quietly emitted
+    /// either would produce Rust that does not compile.
+    #[test]
+    fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
+        for (target, element, capability) in [
+            ("c", "type:Pair", "unsupported.type.not_a_record"),
+            ("jni", "type:Reading", "unsupported.jni.carrier"),
+        ] {
+            let report = report(target);
+            let entry = report
+                .lines()
+                .collect::<Vec<_>>()
+                .windows(8)
+                .find(|window| window[0].contains(element))
+                .map(|window| window.join("\n"))
+                .unwrap_or_else(|| panic!("{target} report has no entry for {element}"));
+            assert!(
+                entry.contains("\"outcome\": \"skipped\"") && entry.contains(capability),
+                "{element} should be skipped with {capability}:\n{entry}"
+            );
+        }
+    }
+
+    /// Renaming a Kotlin class moves it in the declaration and in every
+    /// signature that mentions it.
+    ///
+    /// The class name is configuration, so it is read from one table by both;
+    /// a signature that spelled the Rust type instead would name a class the
+    /// file does not declare.
+    #[test]
+    fn renaming_a_kotlin_class_moves_every_mention_of_it() {
+        use prebindgen_registry_v2::{generate, BindingRequests, DeclaredElement, ElementKind};
+
+        use crate::adapters::{JniClasses, JniPolicy, JniTarget};
+
+        let location = prebindgen::SourceLocation {
+            crate_name: Some("v2check".to_string()),
+            ..Default::default()
+        };
+        let text = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src")
+                .join("source.rs"),
+        )
+        .expect("read src/source.rs");
+        let items: Vec<(syn::Item, prebindgen::SourceLocation)> = syn::parse_file(&text)
+            .expect("src/source.rs parses")
+            .items
+            .into_iter()
+            .map(|item| (item, location.clone()))
+            .collect();
+        let model = prebindgen_flat::flat::Flat::builder()
+            .items(items)
+            .build()
+            .expect("the fixture builds a model");
+
+        let classes = JniClasses::in_package("example").with("Stamp", "Timestamp");
+        let mut requests =
+            BindingRequests::new("jni", syn::parse_quote!(source), JniPolicy::Scalar);
+        let stamp = requests.policy(JniPolicy::DataClass {
+            rust: "Stamp".to_string(),
+        });
+        requests.type_policies.insert("Stamp".to_string(), stamp);
+        let sum = requests.policy(JniPolicy::Function {
+            placement: "example.Bindings.sum".to_string(),
+        });
+        requests.output(
+            DeclaredElement::new(
+                ElementKind::Type,
+                "Stamp",
+                "example.Timestamp",
+                "data_class",
+            ),
+            stamp,
+        );
+        requests.output(
+            DeclaredElement::new(
+                ElementKind::Function,
+                "stamp_sum",
+                "example.Bindings.sum",
+                "function",
+            ),
+            sum,
+        );
+        let generation = generate(model, &JniTarget::new(classes), requests, "v2check")
+            .expect("the renamed binding plans");
+        let kotlin = crate::adapters::write_kotlin(&generation);
+        assert!(
+            kotlin.contains("data class Timestamp(val secs: Long, val nanos: Long)"),
+            "{kotlin}"
+        );
+        assert!(
+            kotlin.contains("external fun sum(stamp: Timestamp): Long"),
+            "the signature must name the class, not the Rust type:\n{kotlin}"
+        );
+    }
+
+    /// One target's report, as JSON.
+    fn report(target: &str) -> String {
+        std::fs::read_to_string(
+            std::path::Path::new(env!("V2CHECK_C"))
+                .parent()
+                .unwrap()
+                .join(format!("{target}-report.json")),
+        )
+        .expect("the report")
     }
 
     /// The first fenced block of `language` on a specification page.
