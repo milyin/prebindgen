@@ -356,9 +356,9 @@ fn one_callback_signature_spelled_two_ways_is_refused() {
     assert!(message.contains("declared twice"), "{message}");
 }
 
-/// A second `api()` call cannot quietly reconfigure what the first declared.
+/// A second `declare()` call cannot quietly reconfigure what the first declared.
 #[test]
-fn a_declaration_repeated_in_another_api_call_is_refused() {
+fn a_declaration_repeated_in_another_declare_call_is_refused() {
     let message = catch_msg(|| {
         let _ = base()
             .declare(decls!().fun(fun!(point_make).base_name("first")))
