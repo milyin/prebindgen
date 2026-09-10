@@ -35,7 +35,10 @@ fn main() {
         .expect("the C binding plans");
     // One table names the Kotlin classes; the declarations and the signatures
     // that mention them both read it.
-    let classes = JniClasses::in_package("example").with("Stamp", "Stamp");
+    let classes = JniClasses::in_package("example")
+        .with("Stamp", "Stamp")
+        .with("Reading", "Reading")
+        .with("Marker", "Marker");
     let jni = generate(
         model(&source),
         &JniTarget::new(classes.clone()),
@@ -121,6 +124,28 @@ fn c_requests() -> BindingRequests<CPolicy> {
         ),
         show,
     );
+    // No fields at all: there is no empty aggregate to declare, and no
+    // wrapper that could take one by value.
+    let marker = requests.policy(CPolicy::DataStruct {
+        c_name: "Marker".to_string(),
+    });
+    requests.type_policies.insert("Marker".to_string(), marker);
+    requests.output(
+        DeclaredElement::new(ElementKind::Type, "Marker", "Marker", "data_struct"),
+        marker,
+    );
+    let marker_value = requests.policy(CPolicy::Function {
+        symbol: "marker_value".to_string(),
+    });
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "marker_value",
+            "marker_value",
+            "function",
+        ),
+        marker_value,
+    );
     // Positional fields: the aggregate this adapter declares names its members,
     // so it refuses rather than reading `.0` out of a struct whose C form has
     // no such member.
@@ -203,6 +228,28 @@ fn jni_requests(classes: &JniClasses) -> BindingRequests<JniPolicy> {
             "data_class",
         ),
         reading,
+    );
+    // A Kotlin data class needs a property; this record has none, and neither
+    // it nor the function taking it can be generated.
+    let marker = requests.policy(JniPolicy::DataClass {
+        rust: "Marker".to_string(),
+    });
+    requests.type_policies.insert("Marker".to_string(), marker);
+    requests.output(
+        DeclaredElement::new(ElementKind::Type, "Marker", "example.Marker", "data_class"),
+        marker,
+    );
+    let marker_value = requests.policy(JniPolicy::Function {
+        placement: "example.Bindings.markerValue".to_string(),
+    });
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "marker_value",
+            "example.Bindings.markerValue",
+            "function",
+        ),
+        marker_value,
     );
     requests
 }

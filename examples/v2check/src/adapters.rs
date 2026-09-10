@@ -142,6 +142,18 @@ impl Target for CTarget {
                         "a record relation without its record".to_string(),
                     ));
                 };
+                if item.fields.is_empty() {
+                    // A `repr(C)` struct with no members has no portable C
+                    // representation, and rustc's FFI lint says so about
+                    // passing one across an `extern "C"` boundary.
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.empty_aggregate",
+                        format!(
+                            "`{c_name}` has no fields, and an empty aggregate has no \
+                                 portable C form"
+                        ),
+                    )));
+                }
                 let aggregate = WireType::abi({
                     let ident = format_ident!("{c_name}");
                     syn::parse_quote!(#ident)
@@ -251,6 +263,15 @@ impl Target for CTarget {
                         record.name
                     )));
                 };
+                if record.fields.is_empty() {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.empty_aggregate",
+                        format!(
+                            "`{c_name}` has no fields, and an empty aggregate has no \
+                                 portable C form"
+                        ),
+                    )));
+                }
                 let ident = format_ident!("{c_name}");
                 let mut fields = Vec::new();
                 for field in &record.fields {
@@ -479,6 +500,19 @@ impl Target for JniTarget {
                         "a record relation without its record".to_string(),
                     ));
                 };
+                if item.fields.is_empty() {
+                    // A Kotlin data class needs at least one property, so
+                    // there is no declaration to read this object's properties
+                    // from.
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.jni.empty_class",
+                        format!(
+                            "`{}` has no fields, and a Kotlin data class needs at least \
+                                 one property",
+                            record.record
+                        ),
+                    )));
+                }
                 let object = WireType::abi(syn::parse_quote!(JObject<'_>));
                 let mut projections = Vec::new();
                 for (field, child) in item.fields.iter().zip(children) {
@@ -718,6 +752,16 @@ impl Target for JniTarget {
                         "`{rust}` is exposed as a data class and registered as no Kotlin class"
                     )));
                 };
+                if record.fields.is_empty() {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.jni.empty_class",
+                        format!(
+                            "`{}` has no fields, and a Kotlin data class needs at least \
+                                 one property",
+                            record.name
+                        ),
+                    )));
+                }
                 let mut properties = Vec::new();
                 for field in &record.fields {
                     let Some(name) = field.name.as_ref() else {

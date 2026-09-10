@@ -21,6 +21,16 @@ pub struct Reading {
     pub level: i32,
 }
 
+/// A record with no fields at all. The model keeps it as a record, so it
+/// reaches both adapters — and neither an empty `repr(C)` aggregate nor a
+/// Kotlin data class with no properties is a thing that exists.
+pub struct Marker;
+
+pub fn marker_value(marker: Marker) -> i64 {
+    let _ = marker;
+    7
+}
+
 /// A function that delivers nothing, so a wrapper with no native return — and,
 /// through JNI, a failure route that must terminate without a value — is
 /// compiled rather than described.

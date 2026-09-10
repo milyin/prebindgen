@@ -155,14 +155,20 @@ mod tests {
     /// Every declared element the two targets could not generate is reported
     /// as skipped, with the capability that would unblock it.
     ///
-    /// Both are declared deliberately: a record whose field has no carrier, and
-    /// one the model gives no fields at all. An adapter that quietly emitted
-    /// either would produce Rust that does not compile.
+    /// All three are declared deliberately: a record whose field has no
+    /// carrier, one the model lowers to an opaque declaration, and one with no
+    /// fields at all. An adapter that quietly emitted any of them would produce
+    /// an empty `repr(C)` aggregate crossing an `extern "C"` boundary, or a
+    /// Kotlin data class with no properties — neither of which exists.
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, element, capability) in [
             ("c", "type:Pair", "unsupported.type.not_a_record"),
+            ("c", "type:Marker", "unsupported.c.empty_aggregate"),
+            ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
             ("jni", "type:Reading", "unsupported.jni.carrier"),
+            ("jni", "type:Marker", "unsupported.jni.empty_class"),
+            ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
         ] {
             let report = report(target);
             let entry = report
@@ -175,6 +181,19 @@ mod tests {
             assert!(
                 entry.contains("\"outcome\": \"skipped\"") && entry.contains(capability),
                 "{element} should be skipped with {capability}:\n{entry}"
+            );
+        }
+        // Nothing partial reaches the file either: no empty aggregate, no
+        // wrapper taking one, no Kotlin class with no properties.
+        for file in [
+            env!("V2CHECK_C"),
+            env!("V2CHECK_JNI"),
+            env!("V2CHECK_KOTLIN"),
+        ] {
+            let generated = std::fs::read_to_string(file).expect("the generated file");
+            assert!(
+                !generated.contains("Marker"),
+                "{file} mentions a record neither target can carry:\n{generated}"
             );
         }
     }
