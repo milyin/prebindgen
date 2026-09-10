@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a>//!   its raw `c_int` is validated against the mirror's variants before the Rust
 <a href=#39 id=39 data-nosnippet>39</a>//!   value is built. An unmatched value is a fallible-input error (see below),
 <a href=#40 id=40 data-nosnippet>40</a>//!   so a function taking an enum by value needs either a `Result` return or
-<a href=#41 id=41 data-nosnippet>41</a>//!   [`panic`](crate::FunDecl::panic). This relies on cbindgen's C rendering; the `C++`
+<a href=#41 id=41 data-nosnippet>41</a>//!   [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error). This relies on cbindgen's C rendering; the `C++`
 <a href=#42 id=42 data-nosnippet>42</a>//!   language mode is not supported.
 <a href=#43 id=43 data-nosnippet>43</a>//! * **Tagged union** (declared with [`tagged_union!`](crate::tagged_union)): a
 <a href=#44 id=44 data-nosnippet>44</a>//!   data-carrying enum crossing by value as a `#[repr(C)]` enum with payload
@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>//! directly through `E`'s output converter.
 <a href=#85 id=85 data-nosnippet>85</a>//!
 <a href=#86 id=86 data-nosnippet>86</a>//! If a function can produce such an internal message but does **not** return
-<a href=#87 id=87 data-nosnippet>87</a>//! `Result`, that is a build error — suppress it by chaining [`panic`](crate::FunDecl::panic)
+<a href=#87 id=87 data-nosnippet>87</a>//! `Result`, that is a build error — suppress it by chaining [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error)
 <a href=#88 id=88 data-nosnippet>88</a>//! after the function declaration, which makes the wrapper `panic!` on the
 <a href=#89 id=89 data-nosnippet>89</a>//! internal error instead.
 <a href=#90 id=90 data-nosnippet>90</a>//!
@@ -230,13 +230,13 @@
 <a href=#230 id=230 data-nosnippet>230</a>    /// the Rust fn ident. Set by [`base_name`](crate::PtrTypeDecl::base_name). `None` ⇒ the fn ident.
 <a href=#231 id=231 data-nosnippet>231</a>    </span>base: <span class="prelude-ty">Option</span>&lt;String&gt;,
 <a href=#232 id=232 data-nosnippet>232</a>    <span class="doccomment">/// Allow the generated wrapper to `panic!` on an internal error message
-<a href=#233 id=233 data-nosnippet>233</a>    /// (set by [`panic`](crate::FunDecl::panic)). Only meaningful for non-`Result` functions
+<a href=#233 id=233 data-nosnippet>233</a>    /// (set by [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error)). Only meaningful for non-`Result` functions
 <a href=#234 id=234 data-nosnippet>234</a>    /// that have a fallible input.
 <a href=#235 id=235 data-nosnippet>235</a>    </span>panic: bool,
 <a href=#236 id=236 data-nosnippet>236</a>}
 <a href=#237 id=237 data-nosnippet>237</a>
 <a href=#238 id=238 data-nosnippet>238</a><span class="doccomment">/// The declaration a chained modifier ([`CbindgenBuilder::name`] / [`error`](crate::DataTypeDecl::error)
-<a href=#239 id=239 data-nosnippet>239</a>/// / [`panic`](crate::FunDecl::panic)) applies to. Set by each declaration method, reset to
+<a href=#239 id=239 data-nosnippet>239</a>/// / [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error)) applies to. Set by each declaration method, reset to
 <a href=#240 id=240 data-nosnippet>240</a>/// `None` by root-level modifiers (e.g. [`CbindgenBuilder::source_module`]).
 <a href=#241 id=241 data-nosnippet>241</a></span><span class="attr">#[derive(Clone)]
 <a href=#242 id=242 data-nosnippet>242</a></span><span class="kw">enum </span>CurrentDecl {
@@ -589,7 +589,7 @@
 <a href=#589 id=589 data-nosnippet>589</a></span><span class="kw">mod </span>v2;
 <a href=#590 id=590 data-nosnippet>590</a>
 <a href=#591 id=591 data-nosnippet>591</a><span class="kw">pub use </span>decl::{
-<a href=#592 id=592 data-nosnippet>592</a>    CallbackDecl, ConvertTypeDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl, ModuleDecl,
+<a href=#592 id=592 data-nosnippet>592</a>    CallbackDecl, ConvertTypeDecl, DataTypeDecl, Decls, EnumTypeDecl, ErrorTypeDecl, FunDecl,
 <a href=#593 id=593 data-nosnippet>593</a>    PtrTypeDecl, ReprCTypeDecl, TaggedUnionDecl, ValueTypeDecl,
 <a href=#594 id=594 data-nosnippet>594</a>};
 <a href=#595 id=595 data-nosnippet>595</a><span class="doccomment">/// Which engine a build script runs, and where each one writes — re-exported

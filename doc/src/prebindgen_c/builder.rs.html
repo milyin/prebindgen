@@ -769,24 +769,24 @@
 <a href=#769 id=769 data-nosnippet>769</a>}
 <a href=#770 id=770 data-nosnippet>770</a>
 <a href=#771 id=771 data-nosnippet>771</a><span class="kw">impl </span>CbindgenBuilder {
-<a href=#772 id=772 data-nosnippet>772</a>    <span class="doccomment">/// Apply everything a [`ModuleDecl`] declares.
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="doccomment">/// Apply everything a [`Decls`] declares.
 <a href=#773 id=773 data-nosnippet>773</a>    ///
-<a href=#774 id=774 data-nosnippet>774</a>    /// This is the binding's declaration surface: one tree, built in any order,
-<a href=#775 id=775 data-nosnippet>775</a>    /// applied here. Each declaration carries its own options, so nothing
+<a href=#774 id=774 data-nosnippet>774</a>    /// This is the binding's declaration surface: one flat set, built in any
+<a href=#775 id=775 data-nosnippet>775</a>    /// order, applied here. Each declaration carries its own options, so nothing
 <a href=#776 id=776 data-nosnippet>776</a>    /// depends on what was declared before it, and declaring the same function,
 <a href=#777 id=777 data-nosnippet>777</a>    /// type or callback signature twice is refused rather than resolved by the
-<a href=#778 id=778 data-nosnippet>778</a>    /// order the tree happens to be lowered in.
+<a href=#778 id=778 data-nosnippet>778</a>    /// order the set happens to be lowered in.
 <a href=#779 id=779 data-nosnippet>779</a>    ///
 <a href=#780 id=780 data-nosnippet>780</a>    /// **Set the naming hooks before this call.** `mangle_rust_type`,
 <a href=#781 id=781 data-nosnippet>781</a>    /// `mangle_type_name`, `mangle_destructor`, `mangle_take`,
 <a href=#782 id=782 data-nosnippet>782</a>    /// `mangle_callback` and `mangle_function` are read while the declarations
 <a href=#783 id=783 data-nosnippet>783</a>    /// are applied, and a [`repr_c_type!`](crate::repr_c_type) mirror caches its
 <a href=#784 id=784 data-nosnippet>784</a>    /// wire name as it is declared: configuring a mangler afterwards renames the
-<a href=#785 id=785 data-nosnippet>785</a>    /// emitted mirror while its transmute glue keeps the cached name. The tree
+<a href=#785 id=785 data-nosnippet>785</a>    /// emitted mirror while its transmute glue keeps the cached name. The set
 <a href=#786 id=786 data-nosnippet>786</a>    /// removes the order-dependence between declarations; this one is between
 <a href=#787 id=787 data-nosnippet>787</a>    /// the generator-wide settings and all of them.
-<a href=#788 id=788 data-nosnippet>788</a>    </span><span class="kw">pub fn </span>module(<span class="kw-2">mut </span><span class="self">self</span>, module: <span class="kw">crate</span>::ModuleDecl) -&gt; <span class="self">Self </span>{
-<a href=#789 id=789 data-nosnippet>789</a>        <span class="kw">let </span><span class="kw">crate</span>::decl::ModuleDecl {
+<a href=#788 id=788 data-nosnippet>788</a>    </span><span class="kw">pub fn </span>declare(<span class="kw-2">mut </span><span class="self">self</span>, decls: <span class="kw">crate</span>::Decls) -&gt; <span class="self">Self </span>{
+<a href=#789 id=789 data-nosnippet>789</a>        <span class="kw">let </span><span class="kw">crate</span>::decl::Decls {
 <a href=#790 id=790 data-nosnippet>790</a>            ptr_types,
 <a href=#791 id=791 data-nosnippet>791</a>            data_types,
 <a href=#792 id=792 data-nosnippet>792</a>            enum_types,
@@ -799,9 +799,9 @@
 <a href=#799 id=799 data-nosnippet>799</a>            funs,
 <a href=#800 id=800 data-nosnippet>800</a>            ignored_funs,
 <a href=#801 id=801 data-nosnippet>801</a>            ignored_types,
-<a href=#802 id=802 data-nosnippet>802</a>        } = module;
+<a href=#802 id=802 data-nosnippet>802</a>        } = decls;
 <a href=#803 id=803 data-nosnippet>803</a>
-<a href=#804 id=804 data-nosnippet>804</a>        <span class="comment">// A declaration tree is a set, so a repeated declaration is a mistake
+<a href=#804 id=804 data-nosnippet>804</a>        <span class="comment">// A declaration set is a set, so a repeated declaration is a mistake
 <a href=#805 id=805 data-nosnippet>805</a>        // rather than a last-write-wins update: two `fun!(f)` with different
 <a href=#806 id=806 data-nosnippet>806</a>        // options would otherwise export whichever the lowering replayed last,
 <a href=#807 id=807 data-nosnippet>807</a>        // which is exactly the order-dependence this surface removes. The
@@ -859,121 +859,94 @@
 <a href=#859 id=859 data-nosnippet>859</a>                <span class="self">self</span>.callbacks.contains_key(<span class="kw-2">&amp;</span>key),
 <a href=#860 id=860 data-nosnippet>860</a>            );
 <a href=#861 id=861 data-nosnippet>861</a>        }
-<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">let </span>methods_of = |decls: <span class="kw-2">&amp;</span>[<span class="kw">crate</span>::FunDecl]| -&gt; Vec&lt;syn::Ident&gt; {
-<a href=#863 id=863 data-nosnippet>863</a>            decls.iter().map(|decl| decl.ident.clone()).collect()
-<a href=#864 id=864 data-nosnippet>864</a>        };
-<a href=#865 id=865 data-nosnippet>865</a>        <span class="kw">for </span>ident <span class="kw">in </span>ptr_types
-<a href=#866 id=866 data-nosnippet>866</a>            .iter()
-<a href=#867 id=867 data-nosnippet>867</a>            .flat_map(|decl| methods_of(<span class="kw-2">&amp;</span>decl.methods))
-<a href=#868 id=868 data-nosnippet>868</a>            .chain(data_types.iter().flat_map(|decl| methods_of(<span class="kw-2">&amp;</span>decl.methods)))
-<a href=#869 id=869 data-nosnippet>869</a>            .chain(enum_types.iter().flat_map(|decl| methods_of(<span class="kw-2">&amp;</span>decl.methods)))
-<a href=#870 id=870 data-nosnippet>870</a>            .chain(
-<a href=#871 id=871 data-nosnippet>871</a>                tagged_unions
-<a href=#872 id=872 data-nosnippet>872</a>                    .iter()
-<a href=#873 id=873 data-nosnippet>873</a>                    .flat_map(|decl| methods_of(<span class="kw-2">&amp;</span>decl.methods)),
-<a href=#874 id=874 data-nosnippet>874</a>            )
-<a href=#875 id=875 data-nosnippet>875</a>            .chain(methods_of(<span class="kw-2">&amp;</span>funs))
-<a href=#876 id=876 data-nosnippet>876</a>        {
-<a href=#877 id=877 data-nosnippet>877</a>            <span class="kw">let </span>already = <span class="self">self</span>.functions.contains_key(<span class="kw-2">&amp;</span>ident);
-<a href=#878 id=878 data-nosnippet>878</a>            <span class="kw">let </span>name = ident.to_string();
-<a href=#879 id=879 data-nosnippet>879</a>            once(<span class="string">"function"</span>, name.clone(), <span class="kw-2">&amp;</span>name, already);
-<a href=#880 id=880 data-nosnippet>880</a>        }
-<a href=#881 id=881 data-nosnippet>881</a>        <span class="kw">for </span>decl <span class="kw">in </span>ptr_types {
-<a href=#882 id=882 data-nosnippet>882</a>            <span class="kw">let </span>methods = decl.methods;
-<a href=#883 id=883 data-nosnippet>883</a>            <span class="self">self </span>= <span class="self">self</span>.opaque_ptr(decl.ty);
-<a href=#884 id=884 data-nosnippet>884</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
-<a href=#885 id=885 data-nosnippet>885</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#886 id=886 data-nosnippet>886</a>            }
-<a href=#887 id=887 data-nosnippet>887</a>            <span class="self">self </span>= <span class="self">self</span>.funs(methods);
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">for </span>decl <span class="kw">in </span><span class="kw-2">&amp;</span>funs {
+<a href=#863 id=863 data-nosnippet>863</a>            <span class="kw">let </span>already = <span class="self">self</span>.functions.contains_key(<span class="kw-2">&amp;</span>decl.ident);
+<a href=#864 id=864 data-nosnippet>864</a>            <span class="kw">let </span>name = decl.ident.to_string();
+<a href=#865 id=865 data-nosnippet>865</a>            once(<span class="string">"function"</span>, name.clone(), <span class="kw-2">&amp;</span>name, already);
+<a href=#866 id=866 data-nosnippet>866</a>        }
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="kw">for </span>decl <span class="kw">in </span>ptr_types {
+<a href=#868 id=868 data-nosnippet>868</a>            <span class="self">self </span>= <span class="self">self</span>.opaque_ptr(decl.ty);
+<a href=#869 id=869 data-nosnippet>869</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
+<a href=#870 id=870 data-nosnippet>870</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#871 id=871 data-nosnippet>871</a>            }
+<a href=#872 id=872 data-nosnippet>872</a>        }
+<a href=#873 id=873 data-nosnippet>873</a>        <span class="kw">for </span>decl <span class="kw">in </span>data_types {
+<a href=#874 id=874 data-nosnippet>874</a>            <span class="kw">let </span>error = decl.error;
+<a href=#875 id=875 data-nosnippet>875</a>            <span class="self">self </span>= <span class="self">self</span>.data_struct(decl.ty);
+<a href=#876 id=876 data-nosnippet>876</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
+<a href=#877 id=877 data-nosnippet>877</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#878 id=878 data-nosnippet>878</a>            }
+<a href=#879 id=879 data-nosnippet>879</a>            <span class="kw">if </span>error {
+<a href=#880 id=880 data-nosnippet>880</a>                <span class="self">self </span>= <span class="self">self</span>.error();
+<a href=#881 id=881 data-nosnippet>881</a>            }
+<a href=#882 id=882 data-nosnippet>882</a>        }
+<a href=#883 id=883 data-nosnippet>883</a>        <span class="kw">for </span>decl <span class="kw">in </span>enum_types {
+<a href=#884 id=884 data-nosnippet>884</a>            <span class="self">self </span>= <span class="self">self</span>.enum_type(decl.ty);
+<a href=#885 id=885 data-nosnippet>885</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
+<a href=#886 id=886 data-nosnippet>886</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#887 id=887 data-nosnippet>887</a>            }
 <a href=#888 id=888 data-nosnippet>888</a>        }
-<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">for </span>decl <span class="kw">in </span>data_types {
-<a href=#890 id=890 data-nosnippet>890</a>            <span class="kw">let </span>(methods, error) = (decl.methods, decl.error);
-<a href=#891 id=891 data-nosnippet>891</a>            <span class="self">self </span>= <span class="self">self</span>.data_struct(decl.ty);
-<a href=#892 id=892 data-nosnippet>892</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
-<a href=#893 id=893 data-nosnippet>893</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#894 id=894 data-nosnippet>894</a>            }
-<a href=#895 id=895 data-nosnippet>895</a>            <span class="kw">if </span>error {
-<a href=#896 id=896 data-nosnippet>896</a>                <span class="self">self </span>= <span class="self">self</span>.error();
-<a href=#897 id=897 data-nosnippet>897</a>            }
-<a href=#898 id=898 data-nosnippet>898</a>            <span class="self">self </span>= <span class="self">self</span>.funs(methods);
-<a href=#899 id=899 data-nosnippet>899</a>        }
-<a href=#900 id=900 data-nosnippet>900</a>        <span class="kw">for </span>decl <span class="kw">in </span>enum_types {
-<a href=#901 id=901 data-nosnippet>901</a>            <span class="kw">let </span>methods = decl.methods;
-<a href=#902 id=902 data-nosnippet>902</a>            <span class="self">self </span>= <span class="self">self</span>.enum_type(decl.ty);
-<a href=#903 id=903 data-nosnippet>903</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
-<a href=#904 id=904 data-nosnippet>904</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#905 id=905 data-nosnippet>905</a>            }
-<a href=#906 id=906 data-nosnippet>906</a>            <span class="self">self </span>= <span class="self">self</span>.funs(methods);
-<a href=#907 id=907 data-nosnippet>907</a>        }
-<a href=#908 id=908 data-nosnippet>908</a>        <span class="kw">for </span>decl <span class="kw">in </span>tagged_unions {
-<a href=#909 id=909 data-nosnippet>909</a>            <span class="kw">let </span>methods = decl.methods;
-<a href=#910 id=910 data-nosnippet>910</a>            <span class="self">self </span>= <span class="self">self</span>.tagged_union(decl.ty);
-<a href=#911 id=911 data-nosnippet>911</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
-<a href=#912 id=912 data-nosnippet>912</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#913 id=913 data-nosnippet>913</a>            }
-<a href=#914 id=914 data-nosnippet>914</a>            <span class="self">self </span>= <span class="self">self</span>.funs(methods);
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">for </span>decl <span class="kw">in </span>tagged_unions {
+<a href=#890 id=890 data-nosnippet>890</a>            <span class="self">self </span>= <span class="self">self</span>.tagged_union(decl.ty);
+<a href=#891 id=891 data-nosnippet>891</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
+<a href=#892 id=892 data-nosnippet>892</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#893 id=893 data-nosnippet>893</a>            }
+<a href=#894 id=894 data-nosnippet>894</a>        }
+<a href=#895 id=895 data-nosnippet>895</a>        <span class="kw">for </span>decl <span class="kw">in </span>value_types {
+<a href=#896 id=896 data-nosnippet>896</a>            <span class="kw">let </span>base = decl.base;
+<a href=#897 id=897 data-nosnippet>897</a>            <span class="self">self </span>= <span class="kw">if </span>decl.owned {
+<a href=#898 id=898 data-nosnippet>898</a>                <span class="self">self</span>.opaque_owned_struct(decl.rust, decl.opaque)
+<a href=#899 id=899 data-nosnippet>899</a>            } <span class="kw">else </span>{
+<a href=#900 id=900 data-nosnippet>900</a>                <span class="self">self</span>.opaque_data_struct(decl.rust, decl.opaque)
+<a href=#901 id=901 data-nosnippet>901</a>            };
+<a href=#902 id=902 data-nosnippet>902</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
+<a href=#903 id=903 data-nosnippet>903</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#904 id=904 data-nosnippet>904</a>            }
+<a href=#905 id=905 data-nosnippet>905</a>        }
+<a href=#906 id=906 data-nosnippet>906</a>        <span class="kw">for </span>decl <span class="kw">in </span>repr_c_types {
+<a href=#907 id=907 data-nosnippet>907</a>            <span class="kw">let </span>assume = decl.assume_field_validity;
+<a href=#908 id=908 data-nosnippet>908</a>            <span class="self">self </span>= <span class="self">self</span>.repr_c_struct(decl.ty, decl.base);
+<a href=#909 id=909 data-nosnippet>909</a>            <span class="kw">if </span>assume {
+<a href=#910 id=910 data-nosnippet>910</a>                <span class="self">self </span>= <span class="self">self</span>.assume_c_field_validity();
+<a href=#911 id=911 data-nosnippet>911</a>            }
+<a href=#912 id=912 data-nosnippet>912</a>        }
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="kw">for </span>decl <span class="kw">in </span>error_types {
+<a href=#914 id=914 data-nosnippet>914</a>            <span class="self">self </span>= <span class="self">self</span>.opaque_error(decl.ty, decl.message_fn);
 <a href=#915 id=915 data-nosnippet>915</a>        }
-<a href=#916 id=916 data-nosnippet>916</a>        <span class="kw">for </span>decl <span class="kw">in </span>value_types {
-<a href=#917 id=917 data-nosnippet>917</a>            <span class="kw">let </span>base = decl.base;
-<a href=#918 id=918 data-nosnippet>918</a>            <span class="self">self </span>= <span class="kw">if </span>decl.owned {
-<a href=#919 id=919 data-nosnippet>919</a>                <span class="self">self</span>.opaque_owned_struct(decl.rust, decl.opaque)
-<a href=#920 id=920 data-nosnippet>920</a>            } <span class="kw">else </span>{
-<a href=#921 id=921 data-nosnippet>921</a>                <span class="self">self</span>.opaque_data_struct(decl.rust, decl.opaque)
-<a href=#922 id=922 data-nosnippet>922</a>            };
-<a href=#923 id=923 data-nosnippet>923</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
-<a href=#924 id=924 data-nosnippet>924</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#925 id=925 data-nosnippet>925</a>            }
-<a href=#926 id=926 data-nosnippet>926</a>        }
-<a href=#927 id=927 data-nosnippet>927</a>        <span class="kw">for </span>decl <span class="kw">in </span>repr_c_types {
-<a href=#928 id=928 data-nosnippet>928</a>            <span class="kw">let </span>assume = decl.assume_field_validity;
-<a href=#929 id=929 data-nosnippet>929</a>            <span class="self">self </span>= <span class="self">self</span>.repr_c_struct(decl.ty, decl.base);
-<a href=#930 id=930 data-nosnippet>930</a>            <span class="kw">if </span>assume {
-<a href=#931 id=931 data-nosnippet>931</a>                <span class="self">self </span>= <span class="self">self</span>.assume_c_field_validity();
-<a href=#932 id=932 data-nosnippet>932</a>            }
-<a href=#933 id=933 data-nosnippet>933</a>        }
-<a href=#934 id=934 data-nosnippet>934</a>        <span class="kw">for </span>decl <span class="kw">in </span>error_types {
-<a href=#935 id=935 data-nosnippet>935</a>            <span class="self">self </span>= <span class="self">self</span>.opaque_error(decl.ty, decl.message_fn);
-<a href=#936 id=936 data-nosnippet>936</a>        }
-<a href=#937 id=937 data-nosnippet>937</a>        <span class="kw">for </span>decl <span class="kw">in </span>callbacks {
-<a href=#938 id=938 data-nosnippet>938</a>            <span class="kw">let </span>takeable = decl.takeable;
-<a href=#939 id=939 data-nosnippet>939</a>            <span class="self">self </span>= <span class="self">self</span>.callback(decl.ty);
-<a href=#940 id=940 data-nosnippet>940</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
-<a href=#941 id=941 data-nosnippet>941</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#942 id=942 data-nosnippet>942</a>            }
-<a href=#943 id=943 data-nosnippet>943</a>            <span class="kw">for </span>index <span class="kw">in </span>takeable {
-<a href=#944 id=944 data-nosnippet>944</a>                <span class="self">self </span>= <span class="self">self</span>.takeable_param(index);
-<a href=#945 id=945 data-nosnippet>945</a>            }
-<a href=#946 id=946 data-nosnippet>946</a>        }
-<a href=#947 id=947 data-nosnippet>947</a>        <span class="kw">for </span>decl <span class="kw">in </span>converts {
-<a href=#948 id=948 data-nosnippet>948</a>            <span class="kw">let </span>base = decl.base;
-<a href=#949 id=949 data-nosnippet>949</a>            <span class="self">self </span>= <span class="self">self</span>.convert(decl.decl);
-<a href=#950 id=950 data-nosnippet>950</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
-<a href=#951 id=951 data-nosnippet>951</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#952 id=952 data-nosnippet>952</a>            }
-<a href=#953 id=953 data-nosnippet>953</a>        }
-<a href=#954 id=954 data-nosnippet>954</a>        <span class="self">self </span>= <span class="self">self</span>.funs(funs);
-<a href=#955 id=955 data-nosnippet>955</a>        <span class="kw">for </span>ident <span class="kw">in </span>ignored_funs {
-<a href=#956 id=956 data-nosnippet>956</a>            <span class="self">self </span>= <span class="self">self</span>.ignore_function(ident);
-<a href=#957 id=957 data-nosnippet>957</a>        }
-<a href=#958 id=958 data-nosnippet>958</a>        <span class="kw">for </span>ty <span class="kw">in </span>ignored_types {
-<a href=#959 id=959 data-nosnippet>959</a>            <span class="self">self </span>= <span class="self">self</span>.ignore_type(ty);
-<a href=#960 id=960 data-nosnippet>960</a>        }
-<a href=#961 id=961 data-nosnippet>961</a>        <span class="self">self
-<a href=#962 id=962 data-nosnippet>962</a>    </span>}
-<a href=#963 id=963 data-nosnippet>963</a>
-<a href=#964 id=964 data-nosnippet>964</a>    <span class="doccomment">/// Apply a run of function declarations.
-<a href=#965 id=965 data-nosnippet>965</a>    </span><span class="kw">fn </span>funs(<span class="kw-2">mut </span><span class="self">self</span>, decls: Vec&lt;<span class="kw">crate</span>::FunDecl&gt;) -&gt; <span class="self">Self </span>{
-<a href=#966 id=966 data-nosnippet>966</a>        <span class="kw">for </span>decl <span class="kw">in </span>decls {
-<a href=#967 id=967 data-nosnippet>967</a>            <span class="kw">let </span>(base, panic) = (decl.base, decl.panic);
-<a href=#968 id=968 data-nosnippet>968</a>            <span class="self">self </span>= <span class="self">self</span>.function(decl.ident);
-<a href=#969 id=969 data-nosnippet>969</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
-<a href=#970 id=970 data-nosnippet>970</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
-<a href=#971 id=971 data-nosnippet>971</a>            }
-<a href=#972 id=972 data-nosnippet>972</a>            <span class="kw">if </span>panic {
-<a href=#973 id=973 data-nosnippet>973</a>                <span class="self">self </span>= <span class="self">self</span>.panic();
-<a href=#974 id=974 data-nosnippet>974</a>            }
-<a href=#975 id=975 data-nosnippet>975</a>        }
-<a href=#976 id=976 data-nosnippet>976</a>        <span class="self">self
-<a href=#977 id=977 data-nosnippet>977</a>    </span>}
-<a href=#978 id=978 data-nosnippet>978</a>}
+<a href=#916 id=916 data-nosnippet>916</a>        <span class="kw">for </span>decl <span class="kw">in </span>callbacks {
+<a href=#917 id=917 data-nosnippet>917</a>            <span class="kw">let </span>takeable = decl.takeable;
+<a href=#918 id=918 data-nosnippet>918</a>            <span class="self">self </span>= <span class="self">self</span>.callback(decl.ty);
+<a href=#919 id=919 data-nosnippet>919</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = decl.base {
+<a href=#920 id=920 data-nosnippet>920</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#921 id=921 data-nosnippet>921</a>            }
+<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">for </span>index <span class="kw">in </span>takeable {
+<a href=#923 id=923 data-nosnippet>923</a>                <span class="self">self </span>= <span class="self">self</span>.takeable_param(index);
+<a href=#924 id=924 data-nosnippet>924</a>            }
+<a href=#925 id=925 data-nosnippet>925</a>        }
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="kw">for </span>decl <span class="kw">in </span>converts {
+<a href=#927 id=927 data-nosnippet>927</a>            <span class="kw">let </span>base = decl.base;
+<a href=#928 id=928 data-nosnippet>928</a>            <span class="self">self </span>= <span class="self">self</span>.convert(decl.decl);
+<a href=#929 id=929 data-nosnippet>929</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
+<a href=#930 id=930 data-nosnippet>930</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#931 id=931 data-nosnippet>931</a>            }
+<a href=#932 id=932 data-nosnippet>932</a>        }
+<a href=#933 id=933 data-nosnippet>933</a>        <span class="kw">for </span>decl <span class="kw">in </span>funs {
+<a href=#934 id=934 data-nosnippet>934</a>            <span class="kw">let </span>(base, abort) = (decl.base, decl.abort_on_conversion_error);
+<a href=#935 id=935 data-nosnippet>935</a>            <span class="self">self </span>= <span class="self">self</span>.function(decl.ident);
+<a href=#936 id=936 data-nosnippet>936</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
+<a href=#937 id=937 data-nosnippet>937</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
+<a href=#938 id=938 data-nosnippet>938</a>            }
+<a href=#939 id=939 data-nosnippet>939</a>            <span class="kw">if </span>abort {
+<a href=#940 id=940 data-nosnippet>940</a>                <span class="self">self </span>= <span class="self">self</span>.panic();
+<a href=#941 id=941 data-nosnippet>941</a>            }
+<a href=#942 id=942 data-nosnippet>942</a>        }
+<a href=#943 id=943 data-nosnippet>943</a>        <span class="kw">for </span>ident <span class="kw">in </span>ignored_funs {
+<a href=#944 id=944 data-nosnippet>944</a>            <span class="self">self </span>= <span class="self">self</span>.ignore_function(ident);
+<a href=#945 id=945 data-nosnippet>945</a>        }
+<a href=#946 id=946 data-nosnippet>946</a>        <span class="kw">for </span>ty <span class="kw">in </span>ignored_types {
+<a href=#947 id=947 data-nosnippet>947</a>            <span class="self">self </span>= <span class="self">self</span>.ignore_type(ty);
+<a href=#948 id=948 data-nosnippet>948</a>        }
+<a href=#949 id=949 data-nosnippet>949</a>        <span class="self">self
+<a href=#950 id=950 data-nosnippet>950</a>    </span>}
+<a href=#951 id=951 data-nosnippet>951</a>}
 </code></pre></div></section></main></body></html>
