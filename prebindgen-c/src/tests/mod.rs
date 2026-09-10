@@ -9,7 +9,7 @@ mod aliasing;
 mod boundary_invariants;
 mod builder;
 mod callbacks;
-mod decl_tree;
+mod decl_list;
 mod errors;
 mod inputs;
 mod lowering;

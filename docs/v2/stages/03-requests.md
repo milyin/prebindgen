@@ -32,18 +32,21 @@ A binding crate is an ordinary Rust crate whose build script configures a
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .module(
-        module!().data_type(
-            data_type!(Stamp)              // Stamp crosses as a C struct, by value
-                .base_name("Stamp")        // under this name, rather than the default `stamp`
-                .method(fun!(stamp_sum)),  // and this function becomes a C entry point
-        ),
+    .declare(
+        decls!()
+            .data_type(
+                data_type!(Stamp)          // Stamp crosses as a C struct, by value
+                    .base_name("Stamp"),   // under this name, not the default `stamp`
+            )
+            .fun(fun!(stamp_sum)),         // and this function becomes a C entry point
     )
     .build();
 ```
 
-A type carries the functions that operate on it, and each declaration carries its
-own options, so the tree means the same however it is ordered.
+The set is flat, because an exported C function is not a member of anything:
+`stamp_sum(Stamp)` is a free function that happens to take a `Stamp`, and the
+header declares it beside the type rather than inside it. Each declaration
+carries its own options, so the set means the same however it is ordered.
 
 Names come from the frontend's manglers. A function keeps its Rust name by
 default, which is why `stamp_sum` is the exported symbol; a type's default base

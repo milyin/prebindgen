@@ -286,14 +286,15 @@ impl CWrapper {
             )
         });
 
-        // No `Result` channel ⇒ a fallible input must be declared `.panic()`.
+        // No `Result` channel ⇒ a fallible conversion needs explicit permission
+        // to terminate, which is what the declaration's
+        // `.abort_on_conversion_error()` grants.
         if err_reading.is_none() {
             assert!(
                 !(has_fallible_input || has_fallible_output) || self.panic,
                 "Cbindgen: function `{}` has a fallible binding conversion but does not \
-                 return `Result`; add \
-                 `.panic()` after its `.function(...)` declaration to allow aborting \
-                 on the internal error, or change its signature",
+                 return `Result`; add `.abort_on_conversion_error()` to its `fun!(...)` \
+                 declaration to allow terminating on that failure, or change its signature",
                 orig,
             );
         }

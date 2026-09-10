@@ -769,24 +769,24 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
 }
 
 impl CbindgenBuilder {
-    /// Apply everything a [`ModuleDecl`] declares.
+    /// Apply everything a [`Decls`] declares.
     ///
-    /// This is the binding's declaration surface: one tree, built in any order,
-    /// applied here. Each declaration carries its own options, so nothing
+    /// This is the binding's declaration surface: one flat set, built in any
+    /// order, applied here. Each declaration carries its own options, so nothing
     /// depends on what was declared before it, and declaring the same function,
     /// type or callback signature twice is refused rather than resolved by the
-    /// order the tree happens to be lowered in.
+    /// order the set happens to be lowered in.
     ///
     /// **Set the naming hooks before this call.** `mangle_rust_type`,
     /// `mangle_type_name`, `mangle_destructor`, `mangle_take`,
     /// `mangle_callback` and `mangle_function` are read while the declarations
     /// are applied, and a [`repr_c_type!`](crate::repr_c_type) mirror caches its
     /// wire name as it is declared: configuring a mangler afterwards renames the
-    /// emitted mirror while its transmute glue keeps the cached name. The tree
+    /// emitted mirror while its transmute glue keeps the cached name. The set
     /// removes the order-dependence between declarations; this one is between
     /// the generator-wide settings and all of them.
-    pub fn module(mut self, module: crate::ModuleDecl) -> Self {
-        let crate::decl::ModuleDecl {
+    pub fn declare(mut self, decls: crate::Decls) -> Self {
+        let crate::decl::Decls {
             ptr_types,
             data_types,
             enum_types,
@@ -799,9 +799,9 @@ impl CbindgenBuilder {
             funs,
             ignored_funs,
             ignored_types,
-        } = module;
+        } = decls;
 
-        // A declaration tree is a set, so a repeated declaration is a mistake
+        // A declaration set is a set, so a repeated declaration is a mistake
         // rather than a last-write-wins update: two `fun!(f)` with different
         // options would otherwise export whichever the lowering replayed last,
         // which is exactly the order-dependence this surface removes. The
@@ -859,35 +859,19 @@ impl CbindgenBuilder {
                 self.callbacks.contains_key(&key),
             );
         }
-        let methods_of = |decls: &[crate::FunDecl]| -> Vec<syn::Ident> {
-            decls.iter().map(|decl| decl.ident.clone()).collect()
-        };
-        for ident in ptr_types
-            .iter()
-            .flat_map(|decl| methods_of(&decl.methods))
-            .chain(data_types.iter().flat_map(|decl| methods_of(&decl.methods)))
-            .chain(enum_types.iter().flat_map(|decl| methods_of(&decl.methods)))
-            .chain(
-                tagged_unions
-                    .iter()
-                    .flat_map(|decl| methods_of(&decl.methods)),
-            )
-            .chain(methods_of(&funs))
-        {
-            let already = self.functions.contains_key(&ident);
-            let name = ident.to_string();
+        for decl in &funs {
+            let already = self.functions.contains_key(&decl.ident);
+            let name = decl.ident.to_string();
             once("function", name.clone(), &name, already);
         }
         for decl in ptr_types {
-            let methods = decl.methods;
             self = self.opaque_ptr(decl.ty);
             if let Some(base) = decl.base {
                 self = self.base_name(base);
             }
-            self = self.funs(methods);
         }
         for decl in data_types {
-            let (methods, error) = (decl.methods, decl.error);
+            let error = decl.error;
             self = self.data_struct(decl.ty);
             if let Some(base) = decl.base {
                 self = self.base_name(base);
@@ -895,23 +879,18 @@ impl CbindgenBuilder {
             if error {
                 self = self.error();
             }
-            self = self.funs(methods);
         }
         for decl in enum_types {
-            let methods = decl.methods;
             self = self.enum_type(decl.ty);
             if let Some(base) = decl.base {
                 self = self.base_name(base);
             }
-            self = self.funs(methods);
         }
         for decl in tagged_unions {
-            let methods = decl.methods;
             self = self.tagged_union(decl.ty);
             if let Some(base) = decl.base {
                 self = self.base_name(base);
             }
-            self = self.funs(methods);
         }
         for decl in value_types {
             let base = decl.base;
@@ -951,27 +930,21 @@ impl CbindgenBuilder {
                 self = self.base_name(base);
             }
         }
-        self = self.funs(funs);
+        for decl in funs {
+            let (base, abort) = (decl.base, decl.abort_on_conversion_error);
+            self = self.function(decl.ident);
+            if let Some(base) = base {
+                self = self.base_name(base);
+            }
+            if abort {
+                self = self.panic();
+            }
+        }
         for ident in ignored_funs {
             self = self.ignore_function(ident);
         }
         for ty in ignored_types {
             self = self.ignore_type(ty);
-        }
-        self
-    }
-
-    /// Apply a run of function declarations.
-    fn funs(mut self, decls: Vec<crate::FunDecl>) -> Self {
-        for decl in decls {
-            let (base, panic) = (decl.base, decl.panic);
-            self = self.function(decl.ident);
-            if let Some(base) = base {
-                self = self.base_name(base);
-            }
-            if panic {
-                self = self.panic();
-            }
         }
         self
     }

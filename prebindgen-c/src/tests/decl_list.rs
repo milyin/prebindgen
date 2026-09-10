@@ -1,14 +1,14 @@
-//! The declaration tree says exactly what the declarators say, in any order,
+//! The declaration list says exactly what the declarators say, in any order,
 //! and refuses to say one thing twice.
 
 use super::*;
 use crate::{
-    callback, data_type, enum_type, error_type, fun, module, ptr_type, repr_c_type, tagged_union,
+    callback, data_type, decls, enum_type, error_type, fun, ptr_type, repr_c_type, tagged_union,
     value_type,
 };
 
 /// A record crossing by value, a function taking a `String` — a fallible input
-/// with no `Result` to report through, so it needs `.panic()` — and one that
+/// with no `Result` to report through, so it needs `.abort_on_conversion_error()` — and one that
 /// does not.
 fn items() -> Vec<(syn::Item, SourceLocation)> {
     let loc = SourceLocation::default();
@@ -44,13 +44,13 @@ fn base() -> CbindgenBuilder {
         .free_memory_function("source_free")
 }
 
-/// The tree lowers to the same binding the declarators build by hand.
+/// The list lowers to the same binding the declarators build by hand.
 ///
 /// Both modifiers are load-bearing: `pt` is not the base `Point` would default
 /// to, so a dropped `.base_name` renames the emitted type, and `point_named`
 /// takes a `String` with no `Result`, so a dropped `.panic` fails the build.
 #[test]
-fn a_tree_and_the_declarators_it_lowers_to_agree() {
+fn a_list_and_the_declarators_it_lowers_to_agree() {
     let declared = write(
         base()
             .data_struct(syn::parse_quote!(Point))
@@ -61,37 +61,40 @@ fn a_tree_and_the_declarators_it_lowers_to_agree() {
         registry(),
         "decl_flat",
     );
-    let tree = write(
-        base().module(
-            module!().data_type(
-                data_type!(Point)
-                    .base_name("pt")
-                    .method(fun!(point_named).panic())
-                    .method(fun!(point_make)),
-            ),
+    let listed = write(
+        base().declare(
+            decls!()
+                .data_type(data_type!(Point).base_name("pt"))
+                .fun(fun!(point_named).abort_on_conversion_error())
+                .fun(fun!(point_make)),
         ),
         registry(),
-        "decl_tree",
+        "decl_list",
     );
-    assert_eq!(declared, tree);
-    assert!(tree.contains("pt"), "the declared base reached the output");
+    assert_eq!(declared, listed);
+    assert!(
+        listed.contains("pt"),
+        "the declared base reached the output"
+    );
 }
 
-/// Dropping the modifier the tree carried is a build error, which is what makes
+/// Dropping the modifier the list carried is a build error, which is what makes
 /// the comparison above sensitive to it.
 #[test]
 fn a_function_needing_panic_is_refused_without_it() {
     let message = catch_msg(|| {
         let _ = write(
-            base().module(
-                module!().data_type(data_type!(Point).base_name("pt").method(fun!(point_named))),
+            base().declare(
+                decls!()
+                    .data_type(data_type!(Point).base_name("pt"))
+                    .fun(fun!(point_named)),
             ),
             registry(),
             "decl_no_panic",
         );
     });
     assert!(
-        message.contains(".panic()"),
+        message.contains(".abort_on_conversion_error()"),
         "refused for the reason the modifier addresses: {message}"
     );
 }
@@ -99,24 +102,24 @@ fn a_function_needing_panic_is_refused_without_it() {
 /// Declaring the function before the type it belongs to changes nothing, and
 /// neither does interleaving two types whose options differ.
 #[test]
-fn the_order_of_a_tree_does_not_change_it() {
+fn the_order_of_a_list_does_not_change_it() {
     let one = write(
-        base().module(
-            module!()
+        base().declare(
+            decls!()
                 .data_type(data_type!(Point).base_name("pt"))
                 .enum_type(enum_type!(Mode).base_name("mode"))
-                .fun(fun!(point_named).panic())
+                .fun(fun!(point_named).abort_on_conversion_error())
                 .fun(fun!(point_make)),
         ),
         registry_with_enum(),
         "decl_order_one",
     );
     let other = write(
-        base().module(
-            module!()
+        base().declare(
+            decls!()
                 .fun(fun!(point_make))
                 .enum_type(enum_type!(Mode).base_name("mode"))
-                .fun(fun!(point_named).panic())
+                .fun(fun!(point_named).abort_on_conversion_error())
                 .data_type(data_type!(Point).base_name("pt")),
         ),
         registry_with_enum(),
@@ -146,9 +149,13 @@ fn a_repeated_declaration_is_refused() {
     // Two declarations of one function with different options: lowering order
     // would otherwise pick one set and drop the other.
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
-                .fun(fun!(point_make).base_name("first").panic())
+        let _ = base().declare(
+            decls!()
+                .fun(
+                    fun!(point_make)
+                        .base_name("first")
+                        .abort_on_conversion_error(),
+                )
                 .fun(fun!(point_make).base_name("second")),
         );
     });
@@ -157,21 +164,16 @@ fn a_repeated_declaration_is_refused() {
         "names the clash: {message}"
     );
 
-    // The same function as a method and as a free function is the same clash,
-    // and the free one used to win by being replayed last.
+    // The same function declared twice, however it is spelled.
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
-                .data_type(data_type!(Point).method(fun!(point_make)))
-                .fun(fun!(point_make)),
-        );
+        let _ = base().declare(decls!().fun(fun!(point_make)).fun(fun!(point_make)));
     });
     assert!(message.contains("point_make"), "{message}");
 
     // A type declared under two representations is a clash too.
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
+        let _ = base().declare(
+            decls!()
                 .data_type(data_type!(Point))
                 .ptr_type(ptr_type!(Point)),
         );
@@ -179,12 +181,12 @@ fn a_repeated_declaration_is_refused() {
     assert!(message.contains("Point"), "{message}");
 }
 
-/// Every kind of declaration the tree carries reaches the builder, with the
+/// Every kind of declaration the list carries reaches the builder, with the
 /// option it was given — including the kinds neither C example declares.
 #[test]
 fn every_declaration_kind_carries_its_options() {
-    let built = base().module(
-        module!()
+    let built = base().declare(
+        decls!()
             .ptr_type(ptr_type!(Handle).base_name("handle"))
             .data_type(data_type!(Failure).base_name("failure").error())
             .enum_type(enum_type!(Mode))
@@ -309,13 +311,17 @@ fn a_declared_base_reaches_the_emitted_names() {
     .expect("index items");
 
     let src = write(
-        base().mangle_type_name(|base| format!("{base}_t")).module(
-            module!()
+        base().mangle_type_name(|base| format!("{base}_t")).declare(
+            decls!()
                 .enum_type(enum_type!(Mode).base_name("speed"))
                 .tagged_union(tagged_union!(Shape).base_name("figure"))
                 .repr_c_type(repr_c_type!(Raw).base_name("packet"))
                 .fun(fun!(raw_make).base_name("packet_make"))
-                .fun(fun!(raw_mode).base_name("packet_mode").panic()),
+                .fun(
+                    fun!(raw_mode)
+                        .base_name("packet_mode")
+                        .abort_on_conversion_error(),
+                ),
         ),
         registry,
         "decl_bases",
@@ -341,8 +347,8 @@ fn a_declared_base_reaches_the_emitted_names() {
 #[test]
 fn one_callback_signature_spelled_two_ways_is_refused() {
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
+        let _ = base().declare(
+            decls!()
                 .callback(callback!(impl Fn(i64) + Send + Sync + 'static).base_name("first"))
                 .callback(callback!(impl Fn(i64) + Sync + Send + 'static).base_name("second")),
         );
@@ -350,20 +356,35 @@ fn one_callback_signature_spelled_two_ways_is_refused() {
     assert!(message.contains("declared twice"), "{message}");
 }
 
-/// A second module cannot quietly reconfigure what the first declared.
+/// A second `api()` call cannot quietly reconfigure what the first declared.
 #[test]
-fn a_declaration_repeated_in_another_module_is_refused() {
+fn a_declaration_repeated_in_another_api_call_is_refused() {
     let message = catch_msg(|| {
         let _ = base()
-            .module(module!().fun(fun!(point_make).base_name("first")))
-            .module(module!().fun(fun!(point_make).base_name("second")));
+            .declare(decls!().fun(fun!(point_make).base_name("first")))
+            .declare(decls!().fun(fun!(point_make).base_name("second")));
     });
     assert!(message.contains("point_make"), "{message}");
 
     let message = catch_msg(|| {
         let _ = base()
-            .module(module!().data_type(data_type!(Point)))
-            .module(module!().data_type(data_type!(Point)));
+            .declare(decls!().data_type(data_type!(Point)))
+            .declare(decls!().data_type(data_type!(Point)));
     });
     assert!(message.contains("Point"), "{message}");
+}
+
+/// A takeable index the callback has no argument for is refused, rather than
+/// silently leaving argument zero on ordinary delivery.
+#[test]
+fn a_takeable_index_out_of_range_is_refused() {
+    let message = catch_msg(|| {
+        let _ = callback!(impl Fn(i64) + Send + Sync + 'static).takeable_param(1);
+    });
+    assert!(
+        message.contains("takeable_param(1)") && message.contains("1 argument"),
+        "{message}"
+    );
+    // The one it does have is accepted.
+    let _ = callback!(impl Fn(i64) + Send + Sync + 'static).takeable_param(0);
 }

@@ -742,7 +742,8 @@ fn a_declared_conversion_owns_its_own_fallibility() {
         );
     });
     assert!(
-        message.contains("fallible binding conversion") && message.contains(".panic()"),
+        message.contains("fallible binding conversion")
+            && message.contains(".abort_on_conversion_error()"),
         "the refusal names the missing opt-in: {message}"
     );
 

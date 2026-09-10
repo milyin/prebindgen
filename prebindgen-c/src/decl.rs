@@ -1,40 +1,46 @@
-//! What a C binding declares, as a tree.
+//! What a C binding declares.
 //!
-//! One [`ModuleDecl`] holds every declaration the binding makes: the types that
+//! One [`Decls`] holds every declaration the binding makes: the types that
 //! cross, the functions it exports, the callback signatures it accepts, and the
-//! conversions it supplies. Options belong to the declaration they modify —
-//! a handle's name base, a function's permission to panic, a callback's takeable
-//! arguments — rather than to whatever the builder was last told about.
+//! conversions it supplies. The set is **flat**, because an exported C function
+//! is not a member of anything: `calculator_apply(calculator_t *, …)` is a free
+//! function that happens to take a handle, and the header declares it beside
+//! the type rather than inside it. Nothing here groups a function under a type,
+//! because C has nothing for that to mean.
 //!
-//! That is the difference from calling the declarators one after another on the
-//! builder itself. There, `.base_name("value")` modifies whichever declaration
-//! came before it, so moving a line changes what it means and an option can
-//! attach to the wrong declaration without anything noticing. Here a modifier is
-//! a method on its own declaration, and the tree is the same however it is
-//! ordered.
+//! What each declaration does carry is its own options — a handle's name base,
+//! a function's permission to panic, a callback's takeable arguments — rather
+//! than the builder carrying them for whatever was declared last. That is the
+//! difference from calling the declarators one after another, where
+//! `.base_name("value")` modified whichever declaration came before it, so
+//! moving a line changed what it meant and an option could attach to the wrong
+//! declaration with nothing to notice.
 //!
 //! ```
-//! use prebindgen_c::{data_type, enum_type, fun, module, ptr_type};
+//! use prebindgen_c::{data_type, decls, enum_type, fun, ptr_type};
 //!
-//! let _ = module!()
-//!     .ptr_type(ptr_type!(Calculator).method(fun!(calculator_apply)))
+//! let _ = decls!()
+//!     .ptr_type(ptr_type!(Calculator))
 //!     .data_type(data_type!(Drawing))
 //!     .enum_type(enum_type!(Operation))
-//!     .fun(fun!(stamp_sum).panic());
+//!     .fun(fun!(calculator_apply))
+//!     .fun(fun!(stamp_sum).abort_on_conversion_error());
 //! ```
 
 use prebindgen_registry::ConvertDecl;
 
 /// One exported function.
 ///
-/// `panic` is the permission a wrapper needs when its only fallible input is a
-/// borrow and it has no `Result` to report through: without it, such a function
-/// is a declaration error rather than a wrapper that aborts.
+/// `abort_on_conversion_error` is the permission a wrapper needs when a
+/// conversion it performs can fail and it has no `Result` to report that
+/// through — an input the binding must reject, or a result it cannot encode.
+/// Without the permission such a function is a declaration error rather than a
+/// wrapper that terminates the process, which is what a C caller would observe.
 #[derive(Clone)]
 pub struct FunDecl {
     pub(crate) ident: syn::Ident,
     pub(crate) base: Option<String>,
-    pub(crate) panic: bool,
+    pub(crate) abort_on_conversion_error: bool,
 }
 
 impl FunDecl {
@@ -43,7 +49,7 @@ impl FunDecl {
         FunDecl {
             ident,
             base: None,
-            panic: false,
+            abort_on_conversion_error: false,
         }
     }
 
@@ -54,9 +60,13 @@ impl FunDecl {
         self
     }
 
-    /// Allow this wrapper to panic on an invalid input it cannot report.
-    pub fn panic(mut self) -> Self {
-        self.panic = true;
+    /// Allow this wrapper to terminate the process when a conversion fails and
+    /// it has no error channel to report through.
+    ///
+    /// C observes termination, not a catchable Rust panic, which is why the
+    /// permission is named for what the caller sees.
+    pub fn abort_on_conversion_error(mut self) -> Self {
+        self.abort_on_conversion_error = true;
         self
     }
 }
@@ -67,7 +77,6 @@ impl FunDecl {
 pub struct PtrTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A type crossing by value as a `#[repr(C)]` aggregate whose members are the
@@ -77,7 +86,6 @@ pub struct DataTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
     pub(crate) error: bool,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A fieldless enum crossing as a C `enum`.
@@ -85,7 +93,6 @@ pub struct DataTypeDecl {
 pub struct EnumTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A payload-carrying enum crossing as a `#[repr(C)]` tag plus union.
@@ -120,7 +127,6 @@ pub struct EnumTypeDecl {
 pub struct TaggedUnionDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A type crossing by value as an opaque byte-struct of identical size and
@@ -135,9 +141,9 @@ pub struct ValueTypeDecl {
 
 /// A type that is already `#[repr(C)]` in the source and crosses unchanged.
 ///
-/// Its generated mirror takes the name the manglers give when the module is
-/// applied, so the naming hooks have to be set on the builder before
-/// [`CbindgenBuilder::module`](crate::CbindgenBuilder::module).
+/// Its generated mirror takes the name the manglers give when the declarations
+/// are applied, so the naming hooks have to be set on the builder before
+/// [`CbindgenBuilder::declare`](crate::CbindgenBuilder::declare).
 #[derive(Clone)]
 pub struct ReprCTypeDecl {
     pub(crate) ty: syn::Type,
@@ -185,18 +191,7 @@ named_decl!(ReprCTypeDecl);
 impl PtrTypeDecl {
     /// Declare a handle for this Rust type.
     pub fn new(ty: syn::Type) -> Self {
-        PtrTypeDecl {
-            ty,
-            base: None,
-            methods: Vec::new(),
-        }
-    }
-
-    /// Export a function that operates on this handle. It is exported exactly
-    /// as a free function is; declaring it here says which type it belongs to.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
+        PtrTypeDecl { ty, base: None }
     }
 }
 
@@ -207,7 +202,6 @@ impl DataTypeDecl {
             ty,
             base: None,
             error: false,
-            methods: Vec::new(),
         }
     }
 
@@ -216,45 +210,19 @@ impl DataTypeDecl {
         self.error = true;
         self
     }
-
-    /// Export a function that operates on this type.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
-    }
 }
 
 impl EnumTypeDecl {
     /// Declare a C `enum` for this fieldless Rust enum.
     pub fn new(ty: syn::Type) -> Self {
-        EnumTypeDecl {
-            ty,
-            base: None,
-            methods: Vec::new(),
-        }
-    }
-
-    /// Export a function that operates on this type.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
+        EnumTypeDecl { ty, base: None }
     }
 }
 
 impl TaggedUnionDecl {
     /// Declare a tag-plus-union representation for this Rust enum.
     pub fn new(ty: syn::Type) -> Self {
-        TaggedUnionDecl {
-            ty,
-            base: None,
-            methods: Vec::new(),
-        }
-    }
-
-    /// Export a function that operates on this type.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
+        TaggedUnionDecl { ty, base: None }
     }
 }
 
@@ -317,7 +285,19 @@ impl CallbackDecl {
     }
 
     /// Deliver this argument as a takeable owned pointer rather than by value.
+    ///
+    /// The index is zero-based over the callback's own arguments, and one the
+    /// signature does not have is a declaration error: silently ignoring it
+    /// would leave the argument the author meant on ordinary delivery, with
+    /// nothing to say so.
     pub fn takeable_param(mut self, index: usize) -> Self {
+        let arity = prebindgen_registry::flat::extract_fn_trait_args(&self.ty)
+            .map(|args| args.len())
+            .unwrap_or(0);
+        assert!(
+            index < arity,
+            "takeable_param({index}) on a callback with {arity} argument(s): the index is              zero-based over the callback's arguments, and this one has none to name"
+        );
         self.takeable.push(index);
         self
     }
@@ -346,11 +326,11 @@ impl From<ConvertDecl> for ConvertTypeDecl {
     }
 }
 
-/// Everything one C binding declares.
+/// Everything one C binding declares, as one flat set.
 ///
-/// Hand it to [`CbindgenBuilder::module`](crate::CbindgenBuilder::module).
+/// Hand it to [`CbindgenBuilder::declare`](crate::CbindgenBuilder::declare).
 #[derive(Clone, Default)]
-pub struct ModuleDecl {
+pub struct Decls {
     pub(crate) ptr_types: Vec<PtrTypeDecl>,
     pub(crate) data_types: Vec<DataTypeDecl>,
     pub(crate) enum_types: Vec<EnumTypeDecl>,
@@ -365,8 +345,8 @@ pub struct ModuleDecl {
     pub(crate) ignored_types: Vec<syn::Type>,
 }
 
-impl ModuleDecl {
-    /// An empty module.
+impl Decls {
+    /// An empty declaration set.
     pub fn new() -> Self {
         Self::default()
     }
@@ -447,11 +427,11 @@ impl ModuleDecl {
     }
 }
 
-/// Build an empty [`ModuleDecl`].
+/// Build an empty [`Decls`]: `decls!()`.
 #[macro_export]
-macro_rules! module {
+macro_rules! decls {
     () => {
-        $crate::ModuleDecl::new()
+        $crate::Decls::new()
     };
 }
 

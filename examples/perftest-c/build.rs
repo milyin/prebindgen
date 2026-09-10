@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::{
-    callback, fun, module,
+    callback, decls, fun,
     pipeline::{fresh_output_root, Pipeline},
     ptr_type, repr_c_type,
 };
@@ -51,9 +51,11 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
         // consumer cannot guarantee across module/CRT boundaries.)
         .free_memory_function("perftest_free");
 
-    // Everything this binding declares, in one tree: the handles C holds, the
-    // zero-copy value struct, the two callback signatures, and the functions —
-    // each with its own options rather than with a modifier chained after it.
+    // Everything this binding declares, as one flat list — which is what the C
+    // it produces is. `string_new` is not a method on `string_t`; it is a free
+    // function that returns one, and the header says so. Each declaration
+    // carries its own options rather than the builder carrying them for
+    // whatever was declared last.
     //
     // `String` is a handle so the FFI-safe `Payload` can carry a heap string by
     // opaque pointer; `Storage` owns what the functions read and write; the two
@@ -76,39 +78,37 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     //
     // `storage_new` and the two `*_handler_new` functions return fresh handles.
     // The rest take null-checked borrows or by-value consumes with no `Result`,
-    // so they need `.panic()` to say what a null pointer does. The five
+    // so they need `.abort_on_conversion_error()` to say what a null pointer does. The five
     // `storage_put_*` / `storage_get_into_*` demonstrate the distinct C
     // parameter semantics (by-value consume, `const *` read, `*` read/write,
     // out-param-into-init, out-param-into-uninit), and the array pair adds a
     // `&[Payload]` slice in and a `Vec<Payload>` out.
-    cbindgen = cbindgen.module(
-        module!()
-            .ptr_type(
-                ptr_type!(String)
-                    .method(fun!(string_new).panic())
-                    .method(fun!(string_len).panic()),
-            )
-            .ptr_type(
-                ptr_type!(Storage)
-                    .method(fun!(storage_new))
-                    .method(fun!(storage_get).panic())
-                    .method(fun!(storage_put_by_take).panic())
-                    .method(fun!(storage_put_by_read).panic())
-                    .method(fun!(storage_put_by_read_and_update).panic())
-                    .method(fun!(storage_get_into_init).panic())
-                    .method(fun!(storage_get_into_uninit).panic())
-                    .method(fun!(storage_callback).panic())
-                    .method(fun!(storage_put_slice).panic())
-                    .method(fun!(storage_get_vec).panic())
-                    .method(fun!(storage_callback_vec).panic()),
-            )
-            .ptr_type(ptr_type!(PayloadHandler).method(fun!(payload_handler_new)))
-            .ptr_type(ptr_type!(PayloadVecHandler).method(fun!(payload_vec_handler_new)))
+    cbindgen = cbindgen.declare(
+        decls!()
+            .ptr_type(ptr_type!(String))
+            .ptr_type(ptr_type!(Storage))
+            .ptr_type(ptr_type!(PayloadHandler))
+            .ptr_type(ptr_type!(PayloadVecHandler))
             .repr_c_type(repr_c_type!(Payload).assume_field_validity())
             .callback(callback!(impl Fn(&Payload) + Send + Sync + 'static).base_name("payload"))
             .callback(
                 callback!(impl Fn(&[Payload]) + Send + Sync + 'static).base_name("payload_vec"),
-            ),
+            )
+            .fun(fun!(string_new).abort_on_conversion_error())
+            .fun(fun!(string_len).abort_on_conversion_error())
+            .fun(fun!(storage_new))
+            .fun(fun!(storage_get).abort_on_conversion_error())
+            .fun(fun!(storage_put_by_take).abort_on_conversion_error())
+            .fun(fun!(storage_put_by_read).abort_on_conversion_error())
+            .fun(fun!(storage_put_by_read_and_update).abort_on_conversion_error())
+            .fun(fun!(storage_get_into_init).abort_on_conversion_error())
+            .fun(fun!(storage_get_into_uninit).abort_on_conversion_error())
+            .fun(fun!(storage_callback).abort_on_conversion_error())
+            .fun(fun!(storage_put_slice).abort_on_conversion_error())
+            .fun(fun!(storage_get_vec).abort_on_conversion_error())
+            .fun(fun!(storage_callback_vec).abort_on_conversion_error())
+            .fun(fun!(payload_handler_new))
+            .fun(fun!(payload_vec_handler_new)),
     );
 
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
