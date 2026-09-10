@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DomainKind","ScalarValue"],"struct":["RepresentationDomain"],"trait":["DomainScalar"]};
