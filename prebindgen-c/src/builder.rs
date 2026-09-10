@@ -47,7 +47,7 @@ impl CbindgenBuilder {
     /// Set the type-name mangler: base (see [`Self::mangle_rust_type`]) → the C
     /// type name emitted for a `opaque_ptr` / `data_struct` / `enum_type` (e.g.
     /// `keyexpr` → `z_keyexpr_t`). The base can be overridden per declaration by
-    /// [`.base_name()`](Self::base_name). Root-level modifier.
+    /// a declaration's `base_name`. Root-level modifier.
     pub fn mangle_type_name(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_type_name = Some(Box::new(f));
         self.clear_current();
@@ -63,7 +63,7 @@ impl CbindgenBuilder {
     }
 
     /// Set the "take" mangler: base → the public move symbol of a `value_opaque`
-    /// type used as a [`Self::takeable_param`] (e.g. `sample` → `z_sample_take`).
+    /// type used as a [`takeable_param`](crate::CallbackDecl::takeable_param) (e.g. `sample` → `z_sample_take`).
     /// When unset, the take symbol defaults to `<destructor-base>_take`. Root-level
     /// modifier.
     pub fn mangle_take(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
@@ -74,7 +74,7 @@ impl CbindgenBuilder {
 
     /// Set the callback-struct mangler: the bases of a callback's argument types
     /// → the closure struct's C name (e.g. `["sample"]` → `z_closure_sample_t`,
-    /// `[]` → `z_closure_drop_t`). A per-declaration [`.base_name()`](Self::base_name)
+    /// `[]` → `z_closure_drop_t`). A per-declaration a declaration's `base_name`
     /// replaces the args' bases with a single explicit base. Root-level modifier.
     pub fn mangle_callback(mut self, f: impl Fn(&[String]) -> String + 'static) -> Self {
         self.mangle_callback = Some(Box::new(f));
@@ -85,7 +85,7 @@ impl CbindgenBuilder {
     /// Set the function mangler: a `#[prebindgen]` function's Rust ident → its
     /// exported `#[no_mangle]` symbol (e.g. prefix `z_`). Functions are not types,
     /// so this does not go through the base mangler; the ident can be overridden
-    /// per declaration by [`.base_name()`](Self::base_name). Root-level modifier.
+    /// per declaration by a declaration's `base_name`. Root-level modifier.
     pub fn mangle_function(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_function = Some(Box::new(f));
         self.clear_current();
@@ -363,7 +363,7 @@ impl CbindgenBuilder {
         self
     }
 
-    /// Accept a [`Self::repr_c_struct`] whose mirror has **restricted-validity**
+    /// Accept a [`repr_c_type!`](crate::repr_c_type) whose mirror has **restricted-validity**
     /// fields, taking responsibility for their bytes.
     ///
     /// A `repr_c_struct` crosses IN by one whole-struct reinterpret, so there is
@@ -380,7 +380,7 @@ impl CbindgenBuilder {
     /// this binding is trusted to write only in-domain bytes into those fields.
     /// It exists so that the audit rejects **silently unsound new declarations**
     /// without removing bindings that already ship. Chain it directly after the
-    /// [`Self::repr_c_struct`] it applies to; the panic message names every
+    /// [`repr_c_type!`](crate::repr_c_type) it applies to; the panic message names every
     /// field it would cover.
     ///
     /// Prefer, in order: move the field into a [`Self::data_struct`] (per-field
@@ -535,7 +535,7 @@ impl CbindgenBuilder {
     /// case a plain C `enum` can hold. (Mirrors `JniExt`'s `sealed_class`.)
     ///
     /// Each payload field crosses as its own wire, chosen by the same policy a
-    /// [`Self::repr_c_struct`] field uses, extended with `String` → `char *`:
+    /// [`repr_c_type!`](crate::repr_c_type) field uses, extended with `String` → `char *`:
     /// a scalar passes through, a declared [`Self::enum_type`] becomes its C
     /// enum, a `String` becomes a malloc'd `char *`, and an opaque pointer
     /// `Option<Box<T>>` / `Box<T>` (with `T` a declared [`Self::opaque_ptr`])
@@ -769,7 +769,7 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
 }
 
 impl CbindgenBuilder {
-    /// Apply everything a [`ModuleDecl`](crate::ModuleDecl) declares.
+    /// Apply everything a [`ModuleDecl`] declares.
     ///
     /// This is the binding's declaration surface: one tree, built in any order,
     /// applied here. Each declaration carries its own options, so nothing

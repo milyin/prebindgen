@@ -18,8 +18,11 @@
 
 use std::path::{Path, PathBuf};
 
-use prebindgen_c::pipeline::{fresh_output_root, Pipeline};
-use prebindgen_c::{callback, fun, module, ptr_type, repr_c_type};
+use prebindgen_c::{
+    callback, fun, module,
+    pipeline::{fresh_output_root, Pipeline},
+    ptr_type, repr_c_type,
+};
 use syn::parse_quote as pq;
 
 fn main() {

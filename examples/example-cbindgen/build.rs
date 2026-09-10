@@ -23,9 +23,10 @@
 
 use std::path::{Path, PathBuf};
 
-use prebindgen_c::pipeline::{fresh_output_root, Pipeline};
 use prebindgen_c::{
-    callback, data_type, enum_type, error_type, fun, module, ptr_type, tagged_union,
+    callback, data_type, enum_type, error_type, fun, module,
+    pipeline::{fresh_output_root, Pipeline},
+    ptr_type, tagged_union,
 };
 use syn::parse_quote as pq;
 
