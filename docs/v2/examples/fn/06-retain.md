@@ -7,9 +7,17 @@ Owner: the registry · Previous: [Assemble the native boundary][fn_boundary] · 
 
 ## Input
 
-The candidate function plan and public declaration, and everything they require:
-both conversion nodes, [the record's representation][struct_retain], and any
-generated helper the operations named.
+The candidates this function produced, and what they require:
+
+```text
+candidate: FunctionPlan(exported stamp_sum)
+candidate: SurfaceSpec(exported stamp_sum)
+
+requires:  node(Stamp, IntoRust)              // the record's conversion
+           node(i64, OutOfRust)
+           the record's public representation // from the record path
+           report_jni_error artifact          // JNI only
+```
 
 ## Result
 
@@ -38,8 +46,8 @@ outcome(exported stamp_sum) = Skipped { causes: [cause#1] }   // same cause, own
 ## Checks
 
 - Requirements are transitive: this function needs the record's conversion and
-  its public representation, so either being unsupported skips it too, carrying
-  the same cause rather than a new one.
+  [its public representation][struct_retain], so either being unsupported skips
+  it too, carrying the same cause rather than a new one.
 - Nothing partial is retained — no wrapper calling a conversion that was not.
 - A helper kept only because this function needs it stays distinguishable in the
   report from an element the user asked to export.

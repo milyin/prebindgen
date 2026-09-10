@@ -7,8 +7,14 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 
 ## Input
 
-The frozen JNI function plan, the object representation of the record, and the
-error routes the boundary fixed.
+```text
+FunctionPlan(exported stamp_sum) frozen, with
+    boundary: extern "system", symbol "Java_example_Bindings_sum",
+              (JNIEnv, JClass, JObject) -> jlong,
+              Runtime -> report_jni_error then return 0, reporting failure -> abort
+    node(input):  object carrier, property getters "getSecs" / "getNanos"
+    node(output): Scalar(jlong), identity
+```
 
 ## Result
 

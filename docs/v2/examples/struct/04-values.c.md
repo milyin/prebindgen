@@ -7,8 +7,11 @@ Owner: the registry; the C adapter describes the aggregate and its member reads
 
 ## Input
 
-The record crossing under the C policy: a by-value `Stamp` aggregate whose
-members carry the two field values.
+```text
+Crossing { source: Stamp, direction: IntoRust }
+relation: Stamp.fields, parts [secs, nanos]
+policy:   data_struct named Stamp, passed by value
+```
 
 ## Result
 

@@ -7,7 +7,13 @@ Owner: the registry, on the C adapter's `BoundarySpec`
 
 ## Input
 
-The function plan's two nodes and [the C function policy][fn_requests_c].
+```text
+node(input)  : produces an owned source Stamp, failures {}
+node(output) : produces c_i64, failures {}
+
+policy (C function): symbol "stamp_sum", extern "C",
+                     input by value, output through the native return
+```
 
 ## Result
 
@@ -30,6 +36,7 @@ pub extern "C" fn stamp_sum(arg0: Stamp) -> i64
 ## Checks
 
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
+  The symbol and the convention are [the recorded policy's][fn_requests_c].
 - An out-parameter form would be a different `OutputPlacement`, chosen by
   policy rather than by the writer.
 - No route is declared because [both nodes are infallible][fn_values_c]. A later

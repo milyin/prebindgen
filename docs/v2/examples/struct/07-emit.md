@@ -7,8 +7,12 @@ Owner: the common Rust writer, then `cbindgen` or the Kotlin writer · Previous:
 
 ## Input
 
-The frozen public declaration for the record and the representation payload the
-target attached to it.
+The frozen public declaration for this record:
+
+```text
+SurfaceSpec { element: public Stamp,
+              payload: <the target's representation metadata> }
+```
 
 ## Result
 

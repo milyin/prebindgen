@@ -7,7 +7,13 @@ Owner: Flat · Previous: [Capture source items][struct_source] · Next: [Record 
 
 ## Input
 
-The capture entry above, parsed back into the item it was.
+From capture, the line this record produced, parsed back into the item it holds:
+
+```json
+{ "kind": "struct", "name": "Stamp",
+  "content": "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+  "source_location": { "file": "src/source.rs", "line": 1, "column": 1 } }
+```
 
 ## Result
 

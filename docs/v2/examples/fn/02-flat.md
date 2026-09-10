@@ -7,8 +7,16 @@ Owner: Flat · Previous: [Capture source items][fn_source] · Next: [Record bind
 
 ## Input
 
-The capture entry above, parsed back into the item it was, in a build that also
-captured [`Stamp`][struct_flat].
+From capture, one line per marked item, parsed back into the items they hold:
+
+```json
+{ "kind": "function", "name": "stamp_sum",
+  "content": "pub fn stamp_sum(stamp: Stamp) -> i64 { /* placeholder */ }",
+  "source_location": { "file": "src/source.rs", "line": 6, "column": 1 } }
+{ "kind": "struct", "name": "Stamp",
+  "content": "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+  "source_location": { "file": "src/source.rs", "line": 1, "column": 1 } }
+```
 
 ## Result
 

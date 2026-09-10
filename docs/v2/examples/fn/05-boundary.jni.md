@@ -7,8 +7,15 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 
 ## Input
 
-The function plan's two nodes and [the JNI function policy][fn_requests_jni],
-including its error convention.
+```text
+node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
+node(output) : produces jlong, failures {}
+
+policy (JNI function): placement example.Bindings.sum, extern "system",
+                       input one object, output jlong,
+                       Runtime -> preserve pending exception else throw,
+                       failure while reporting -> abort
+```
 
 ## Result
 
@@ -58,7 +65,8 @@ the generated wrapper.
 ## Checks
 
 - Zero is not a result: it is what a native method must return while an
-  exception is pending, and Kotlin observes the exception.
+  exception is pending, and Kotlin observes the exception. That route is
+  [the recorded policy's][fn_requests_jni], not a writer default.
 - Reporting is never retried with the operation that just failed — one failed
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success

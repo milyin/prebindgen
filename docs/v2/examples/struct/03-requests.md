@@ -7,8 +7,19 @@ Owner: the language frontend · Previous: [Build and inspect the source model][s
 
 ## Input
 
-The model element for `Stamp`, and a build script that asks for it to be exposed:
-[C][struct_requests_c], [Kotlin/JNI][struct_requests_jni].
+The element Flat built for this record:
+
+```text
+Element::Type(Type::Struct(Struct {
+    name:   Stamp,
+    shape:  Named,
+    fields: [ Field { name: secs,  index: 0, ty: Scalar(I64) },
+              Field { name: nanos, index: 1, ty: Scalar(I64) } ],
+}))
+```
+
+and a build script asking for it to be exposed: [C][struct_requests_c],
+[Kotlin/JNI][struct_requests_jni].
 
 ## Result
 

@@ -7,8 +7,12 @@ Owner: the JNI adapter's Kotlin writer
 
 ## Input
 
-The frozen class metadata: package, class name, property names, their Kotlin
-types and JVM descriptors.
+```text
+SurfaceSpec(public Stamp) frozen, with
+    payload: data_class example.Stamp,
+             properties [secs: Long, nanos: Long],
+             getters "getSecs" / "getNanos", descriptor "()J"
+```
 
 ## Result
 

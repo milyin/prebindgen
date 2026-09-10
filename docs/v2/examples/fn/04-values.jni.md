@@ -7,8 +7,12 @@ Owner: the registry, on the JNI adapter's representation
 
 ## Input
 
-The two crossings under the JNI policy: object-properties input for the record,
-`jlong` for the result.
+The two crossings, with the JNI policy recorded for them:
+
+```text
+Crossing { source: Stamp, direction: IntoRust  }   policy: ObjectProperties
+Crossing { source: i64,   direction: OutOfRust }   policy: jlong carrier
+```
 
 ## Result
 

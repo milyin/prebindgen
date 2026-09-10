@@ -7,7 +7,12 @@ Owner: the common Rust writer, then `cbindgen`
 
 ## Input
 
-The frozen C function plan and the aggregate representation of the record.
+```text
+FunctionPlan(exported stamp_sum) frozen, with
+    boundary: extern "C", symbol "stamp_sum", arg 0 by value, return int64_t
+    node(input):  Aggregate { ty: Stamp, members: [secs, nanos] }, member reads
+    node(output): Scalar(c_i64), identity
+```
 
 ## Result
 

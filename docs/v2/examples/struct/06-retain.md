@@ -7,8 +7,14 @@ Owner: the registry · Previous: [Plan value conversions][struct_values] · Next
 
 ## Input
 
-The candidate public declaration for the record, its conversion node, its two
-child nodes, and the artifacts they require.
+The candidates this record produced, and what they require:
+
+```text
+candidate: SurfaceSpec(public Stamp)
+
+requires:  node(Stamp, IntoRust)     // the record conversion
+           node(i64, IntoRust) x2    // its two children
+```
 
 ## Result
 

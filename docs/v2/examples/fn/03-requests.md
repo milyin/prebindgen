@@ -7,9 +7,18 @@ Owner: the language frontend · Previous: [Build and inspect the source model][f
 
 ## Input
 
-The model element for `stamp_sum`, and a build script that asks for it to be
-exposed. What that call looks like is the language's business: [C][fn_requests_c],
-[Kotlin/JNI][fn_requests_jni].
+The element Flat built for this function:
+
+```text
+Element::Function(Function {
+    name:   stamp_sum,
+    params: [ Param { name: stamp, ty: Named { id: Stamp } } ],
+    ret:    Scalar(I64),
+})
+```
+
+and a build script asking for it to be exposed. What that call looks like is the
+language's business: [C][fn_requests_c], [Kotlin/JNI][fn_requests_jni].
 
 ## Result
 

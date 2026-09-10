@@ -7,8 +7,14 @@ Owner: the registry, on the target's native interface · Previous: [Plan value c
 
 ## Input
 
-The two conversion nodes, the function policy, and the source signature
-`stamp_sum(Stamp) -> i64`.
+The two nodes value planning produced, and the source signature they belong to:
+
+```text
+node(input)  : Stamp   IntoRust   -> an owned source Stamp
+node(output) : i64     OutOfRust  -> the target's signed 64-bit carrier
+
+source: pub fn stamp_sum(stamp: Stamp) -> i64
+```
 
 ## Result
 

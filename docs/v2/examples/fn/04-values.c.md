@@ -7,8 +7,12 @@ Owner: the registry, on the C adapter's representation
 
 ## Input
 
-The two crossings under the C policy: a by-value aggregate for the record, a
-scalar carrier for the result.
+The two crossings, with the C policy recorded for them:
+
+```text
+Crossing { source: Stamp, direction: IntoRust  }   policy: data_struct, by value
+Crossing { source: i64,   direction: OutOfRust }   policy: scalar carrier
+```
 
 ## Result
 

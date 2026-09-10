@@ -7,8 +7,17 @@ Owner: the common Rust writer, plus each target's writer · Previous: [Retain su
 
 ## Input
 
-The frozen function plan, its two conversion nodes, and the payloads the target
-attached to their operations.
+The frozen plan for this function:
+
+```text
+FunctionPlan { source: crate::source::stamp_sum,
+               inputs: [ node(input) ], output: Single(node(output)),
+               boundary: <symbol, convention, placements, failure routes>,
+               body: <instructions> }
+```
+
+with each conversion node's operations and the payloads the target attached to
+them.
 
 ## Result
 

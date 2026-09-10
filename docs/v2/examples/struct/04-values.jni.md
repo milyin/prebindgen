@@ -7,8 +7,12 @@ Owner: the registry; the JNI adapter describes the object carrier and its getter
 
 ## Input
 
-The record crossing under the JNI policy: one JVM object whose properties carry
-the two field values, read through the JNI environment.
+```text
+Crossing { source: Stamp, direction: IntoRust }
+relation: Stamp.fields, parts [secs, nanos]
+policy:   data_class example.Stamp, record_input ObjectProperties,
+          getters "getSecs" / "getNanos", descriptor "()J"
+```
 
 ## Result
 

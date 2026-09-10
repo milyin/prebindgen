@@ -7,8 +7,12 @@ Owner: the common Rust writer, then `cbindgen`
 
 ## Input
 
-The frozen aggregate representation: carrier type, member identities and their
-signed 64-bit types.
+```text
+SurfaceSpec(public Stamp) frozen, with
+    payload: Aggregate { c_name: "Stamp",
+                         members: [secs: int64_t, nanos: int64_t],
+                         passing: by value }
+```
 
 ## Result
 
