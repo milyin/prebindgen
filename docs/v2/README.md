@@ -18,6 +18,12 @@ native boundary, the retained output, and the generated code. Read that way, the
 document is an example-based specification: the general contract in a chapter and
 its concrete application to a fixed input are two views of the same requirement.
 
+This describes the **second** engine. The one that ships today is
+`prebindgen-registry`, whose own model — recipes, fragments, sites, and the
+shapes a crossing takes — is documented in [`docs/model.md`](../model.md). The
+two are different pipelines, and a reader who wants the registry a binding
+compiles through right now wants that document rather than this one.
+
 Status: this is how the pipeline works, not a proposal for one. Where a chapter
 describes something the engine does not do yet, it says so at that point, and
 [the implementation page](implementation.md#what-it-does-not-settle) keeps the
@@ -135,6 +141,16 @@ ABI) and **`prebindgen-jni-runtime`** (string and array encoding, the binding
 error type, cached JVM method ids). Generated code calls these at run time, so a
 binding crate depends on one of them the ordinary way. None of the generator
 ships inside a binding.
+
+That last sentence is why there are eight crates and not one. Generation was a
+single crate once, and it charged everyone for everything: a source crate that
+only marks its items compiled the JNI adapter and linked `jni`; a shipped
+binding library pulled in `syn`, `quote` and `prettyplease` to reach a few
+hundred lines of runtime helpers; the C adapter sat behind a feature flag that
+made its committed test artifacts feature-sensitive; and two pairs of layers
+that should have been independent formed dependency cycles — the model with the
+pipeline, and one adapter with the other. The split is what makes each of those
+a dependency you can decline.
 
 ## The pipeline
 

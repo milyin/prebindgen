@@ -261,7 +261,9 @@ Registry-library registration accepts checked relations and issues opaque `Relat
 
 The registry follows `Selection.relation` to the checked operation, obtains its fields or helper arguments, and recursively plans their conversions. Projection calls its helper once and processes the saved result through the conversion rules. The adapter describes foreign representations; the registry assembles the source-side instructions executed by the wrapper.
 
-Selection precedes child traversal: an atomic opaque representation does not inspect unused private fields. Helper arguments need not resemble fields. Child types retain wrappers, references and lifetimes; cloning needs an explicit operation. Callback arguments reverse direction. Future roles follow the same checked-construction pattern and produce unsupported outcomes until implemented.
+Selection precedes child traversal: an atomic opaque representation does not inspect unused private fields. Helper arguments need not resemble fields. Child types retain wrappers, references and lifetimes; cloning needs an explicit operation.
+
+Callback arguments reverse direction, and the reason is worth stating because no declaration says so and the registry applies it on its own. A callback crossing *into* Rust is a callable Rust receives, so that value is built; the values its arguments carry are ones Rust already holds and pushes out through the call, so each of those crosses the other way. One direction is requested, the other follows from the shape. Future roles follow the same checked-construction pattern and produce unsupported outcomes until implemented.
 
 ### Responsibility boundary with Flat
 

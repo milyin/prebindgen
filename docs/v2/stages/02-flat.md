@@ -219,6 +219,39 @@ become `= 7` — so the source's own text rides along for emission to reuse. It 
 not a second source of facts: the retained syntax is private to Flat, and the
 rule for every consumer is to analyse the model and generate from the model.
 
+That rule is about a phase, and it governs both engines. **Planning** is
+everything up to final Rust emission: recording requests, selecting relations,
+describing representations, assembling a boundary. Planning may carry a type
+opaquely and use what the model says about it — its kind, its identity, its
+parts, its declared fields, its source location — and may not obtain the syntax
+behind it, branch on rendered text to reach a decision, or generate a body in
+order to discover what that body depends on. **Emission** is where syntax is
+legitimate, and where the writers reproduce what the source wrote.
+
+Printing is not deciding: a type formatted into a diagnostic is decision code
+reporting why it decided, and a panic naming an unsupported type is exactly
+that. The prohibition is on deciding *from* text.
+
+In an ordinary build the phase is structural rather than a promise, and the
+mechanism is worth seeing because it is what keeps the rule true without asking
+anyone to remember it. Rendering is split into a protocol and a capability. The
+protocol lives with the model, in `prebindgen-flat`: object-safe, generate-only,
+emitting source types from the model's own facts — kinds, identities, field
+shapes — with no method that hands back a captured spelling or a typed syntax
+tree. The capability is the registry's: its constructor is private, it holds the
+frozen source-module map, and it implements the protocol through a private
+receiver no public API names. An emission callback receives one; nothing else
+can obtain one, and the registry does not re-export the protocol through its own
+model path, so an adapter that depends on the registry alone cannot even name
+it. Compile-fail tests pin both restrictions.
+
+Two escapes are deliberate. A test-only feature hands the capability out so an
+adapter's test suite can render in isolation, and a crate that depends on
+`prebindgen-flat` directly can implement the protocol itself — which is what
+lets a consumer that is not a binding generator reuse the model without gaining
+access to retained syntax. For those the rule is policy, stated here, rather
+than a boundary the compiler enforces.
+
 Flat answers questions about Rust; it takes no position on bindings. It will
 report that `stamp_from_millis(i64) -> Stamp` takes one integer and returns
 `Stamp`. Whether that function should therefore be used to *construct* `Stamp`

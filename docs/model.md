@@ -1,5 +1,22 @@
 # The model a binding is described in
 
+> **This is the V1 pipeline**, and it is the one that ships: `prebindgen-registry`
+> is what `.build()` selects unless `PREBINDGEN_PIPELINE=v2` says otherwise, so
+> everything below describes live code. The second engine —
+> `prebindgen-registry-v2`, and the vocabulary of requests, relations and target
+> representations it is built on — is specified separately under
+> [`docs/v2/`](v2/README.md). The two are different pipelines rather than two
+> descriptions of one: read this for the registry a binding compiles through
+> today, and that for the one being built beside it.
+>
+> One rule that used to be stated here has moved, because it governs both
+> engines and belongs with the model it constrains: an adapter analyses the Flat
+> model and generates Rust from it, never from retained syntax. [The source-model
+> chapter](v2/stages/02-flat.md) states it in full — the phase it applies to, why
+> printing a type in a diagnostic is not covered, how the split between the
+> rendering protocol and the registry's capability makes it structural, and which
+> two escapes are deliberate.
+
 `prebindgen-registry` generates a language binding from one annotated Rust
 source. What a binding author writes, and what a language adapter answers, are
 both stated in the same small vocabulary. This document is that vocabulary and
@@ -10,58 +27,11 @@ table, sites, the `Compile` hooks and the error set are documented separately.
 
 ## Non-negotiable generation rule
 
-**Analyze the Flat model; generate Rust only.** A language adapter must never
-inspect, reparse, or walk the Rust syntax retained behind a `TypeRef`. If Flat
-cannot generate the required source type from its structure, the missing fact
-belongs in Flat.
-
-**The rule is about a phase.** *Planning* is everything up to final Rust
-emission: resolving declarations, compiling fragments, planning sites, and
-validating the result. Planning may carry a `TypeRef` opaquely and use the
-answers the model gives about it — `TypeKind`, `TypeKey`, crossing mode,
-structural children, declared fields and functions, and source location. It may
-not:
-
-* obtain a `syn::Type` or tokens for a source-side `TypeRef`;
-* reparse the captured spelling, or branch on rendered text, to reach a
-  planning decision; or
-* generate a converter or wrapper body merely to discover what that body
-  depends on.
-
-Formatting a `TypeRef` for a message is not covered: `TypeRef` implements
-`Display` for diagnostics, and a panic naming an unsupported type is decision
-code reporting why it decided. The prohibition is on *deciding from* text, not
-on printing it.
-
-During final writing the stateful `RustWriter` turns Flat facts into an inert
-token fragment for the output file; it does not hand the adapter a `syn::Type`
-that could be analyzed.
-
-Adapter-authored **wire** types are outside the rule. A C adapter states
-`*mut c_void`, and a JNI adapter `jlong`, as Rust syntax because those are the
-adapter's own output vocabulary rather than source syntax hidden behind a
-`TypeRef`. Source-side positions stay `TypeRef`s in plans until the final
-renderer spells them.
-
-**How much of this the compiler holds.** In a normal build of an adapter built
-on `prebindgen-registry`, the phase rule is structural: `RustWriter`'s
-constructor is registry-private, emission callbacks receive one only during
-final file assembly, and the registry's model re-export deliberately omits
-`RustEmitter`, so such an adapter cannot supply a rendering receiver of its own.
-The private constructor and the omitted re-export are each pinned by a
-`compile_fail` example.
-
-Two escapes are deliberate rather than closed. `prebindgen-registry` has a
-non-default `testing` feature, outside semver, which exposes
-`RustWriter::for_test` and `RustWriter::for_registry_test` so the test suites of
-out-of-crate adapters can render a frozen plan directly; `prebindgen-c` and
-`prebindgen-jni` both take it as a dev-dependency, so it is absent from their
-normal builds, and a crate enabling it as an ordinary dependency would hold a
-rendering capability during planning. Separately, a crate depending on
-`prebindgen-flat` directly can implement the public, unsealed `RustEmitter`
-itself, whose default methods render from Flat facts. In both cases the phase
-rule is policy this document states rather than a boundary the compiler
-enforces.
+**Analyze the Flat model; generate Rust only.** An adapter must never inspect,
+reparse or walk the Rust syntax retained behind a `TypeRef`; if Flat cannot
+generate the required source type from its structure, the missing fact belongs
+in Flat. [The source-model chapter](v2/stages/02-flat.md) states the rule in
+full, for both engines — this document assumes it throughout.
 
 ## Where the crates sit
 
