@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["snake_case"],"macro":[["callback",1],["data_type",1],["enum_type",1],["error_type",1],["fun",1],["module",1],["ptr_type",1],["repr_c_type",1],["tagged_union",1],["value_type",1]],"mod":["decl","pipeline"],"struct":["Cbindgen","CbindgenBuilder"]};
