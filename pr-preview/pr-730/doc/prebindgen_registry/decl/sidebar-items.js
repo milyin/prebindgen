@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ConvertSpec","ExpandDecl","LocalField","LocalVariant"],"fn":["declared_origin","local_path_prefix"],"struct":["ConvertDecl","ConvertSourceDecl","ExpandParamDecl","ExpandReturnDecl","FieldsDecl","FunctionDecl"]};
