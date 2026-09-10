@@ -23,23 +23,32 @@ use prebindgen_registry_v2::{
 };
 use quote::{format_ident, quote};
 
-/// The C carrier for a scalar: what `cbindgen` will write as `int64_t`.
-fn c_scalar(kind: ScalarKind) -> Option<syn::Type> {
-    Some(match kind {
-        ScalarKind::I8 => syn::parse_quote!(i8),
-        ScalarKind::I16 => syn::parse_quote!(i16),
-        ScalarKind::I32 => syn::parse_quote!(i32),
-        ScalarKind::I64 => syn::parse_quote!(i64),
-        ScalarKind::U8 => syn::parse_quote!(u8),
-        ScalarKind::U16 => syn::parse_quote!(u16),
-        ScalarKind::U32 => syn::parse_quote!(u32),
-        ScalarKind::U64 => syn::parse_quote!(u64),
-        ScalarKind::F32 => syn::parse_quote!(f32),
-        ScalarKind::F64 => syn::parse_quote!(f64),
-        // `bool`, `isize` and `usize` cross C deliberately or not at all; the
-        // increment says so rather than guessing a width.
-        _ => return None,
-    })
+/// The C carrier for a scalar.
+///
+/// Every scalar but one crosses C as itself: the Rust spelling *is* the
+/// carrier, and `cbindgen` writes the C name for it — `int64_t` for `i64`,
+/// `uintptr_t` for `usize`. So this is derived from the kind's own spelling
+/// rather than from a table that would have to be kept in step with one.
+///
+/// `bool` is the exception. A C caller writes a `_Bool` through whatever it
+/// likes, and a Rust `bool` holding anything but 0 or 1 is undefined
+/// behaviour — so the byte cannot be *received* as a `bool` at all. It
+/// crosses as storage of the same size and alignment, which cbindgen still
+/// writes as `bool`, and is converted at each end: see
+/// [`CPayload::NormalizeBool`] and [`CPayload::StoreBool`]. The carrier is
+/// the same in both directions, so a struct member has one C type regardless
+/// of which way its aggregate travels.
+fn c_scalar(kind: ScalarKind) -> syn::Type {
+    if kind == ScalarKind::Bool {
+        return syn::parse_quote!(::core::mem::MaybeUninit<bool>);
+    }
+    rust_scalar(kind)
+}
+
+/// The Rust spelling of a scalar kind.
+fn rust_scalar(kind: ScalarKind) -> syn::Type {
+    let ident = format_ident!("{}", kind.as_str());
+    syn::parse_quote!(#ident)
 }
 
 /// The scalar kind of a type, when it is one.
@@ -47,6 +56,22 @@ fn scalar_of(ty: &prebindgen_flat::flat::TypeRef) -> Option<ScalarKind> {
     match ty.kind() {
         TypeKind::Scalar(kind) => Some(*kind),
         _ => None,
+    }
+}
+
+/// A one-operand, infallible conversion the adapter renders itself.
+///
+/// Every scalar whose carrier is not the Rust value has exactly this shape:
+/// one owned operand in, one value out, nothing that can fail. Which side is
+/// the carrier and which the source is the direction's business, so both are
+/// arguments.
+fn convert<P>(from: OperationType, to: OperationType, implementation: P) -> PrimitiveSpec<P> {
+    PrimitiveSpec {
+        operands: vec![OperandSpec::value(from, Access::Owned)],
+        result: Some(to),
+        failure: PrimitiveFailure::Infallible,
+        dependencies: Vec::new(),
+        implementation: Operation::Target(implementation),
     }
 }
 
@@ -73,11 +98,23 @@ pub enum CPolicy {
     Function { symbol: String },
 }
 
-/// C contributes no operation of its own: reading an aggregate member is a
-/// standard operation the registry renders. This type has no values, which is
-/// that fact stated so the compiler keeps it true.
+/// What C renders itself.
+///
+/// Reading an aggregate member is a standard operation the registry renders, so
+/// for a long time this type had no values at all. Both of the values it has
+/// now are the two ends of one exception: a `bool` crosses C as storage rather
+/// than as itself, which is neither an identity nor something the registry can
+/// express.
 #[derive(Clone, Debug)]
-pub enum CPayload {}
+pub enum CPayload {
+    /// `MaybeUninit<bool>` → `bool`, by reading the byte and comparing it to
+    /// zero. Any bit pattern is a legal input; every one of them produces a
+    /// valid `bool`, which is why this normalizes rather than failing.
+    NormalizeBool,
+    /// `bool` → `MaybeUninit<bool>`. A `bool` Rust built is already 0 or 1, so
+    /// this only puts it into the carrier the C side reads.
+    StoreBool,
+}
 
 pub struct CTarget;
 
@@ -113,21 +150,32 @@ impl Target for CTarget {
     ) -> TargetSupport<ReprSpec<CPayload>> {
         match shape.relation {
             Relation::Atomic => {
-                let carrier = scalar_of(&shape.crossing.ty).and_then(c_scalar);
-                let Some(carrier) = carrier else {
+                let Some(kind) = scalar_of(&shape.crossing.ty) else {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.c.carrier",
                         format!("`{}` has no C carrier yet", shape.crossing.ty.key()),
                     )));
                 };
-                let carrier = WireType::abi(carrier);
+
+                let carrier = WireType::abi(c_scalar(kind));
+
+                // The C carrier of an `i64` *is* the `i64`, so the conversion
+                // renders nothing at all. `bool` is the one scalar that
+                // travels as storage rather than as itself, so each end gets
+                // the operation that end needs.
+                let wire = OperationType::Carrier(carrier.clone());
+                let source = OperationType::Source(shape.crossing.ty.clone());
+                let codec = match (kind, shape.crossing.direction) {
+                    (ScalarKind::Bool, Direction::IntoRust) => {
+                        convert(wire, source, CPayload::NormalizeBool)
+                    }
+                    (ScalarKind::Bool, _) => convert(source, wire, CPayload::StoreBool),
+                    _ => PrimitiveSpec::identity(wire),
+                };
+
                 Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Scalar(carrier.clone()),
-                    // The C carrier of an `i64` *is* the `i64`, so the
-                    // conversion renders nothing at all.
-                    protocol: Protocol::terminal(PrimitiveSpec::identity(OperationType::Carrier(
-                        carrier,
-                    ))),
+                    layout: Layout::Scalar(carrier),
+                    protocol: Protocol::terminal(codec),
                 }))
             }
             Relation::Record(record) => {
@@ -275,7 +323,7 @@ impl Target for CTarget {
                 let ident = format_ident!("{c_name}");
                 let mut fields = Vec::new();
                 for field in &record.fields {
-                    let Some(ty) = scalar_of(&field.ty).and_then(c_scalar) else {
+                    let Some(ty) = scalar_of(&field.ty).map(c_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.c.carrier",
                             format!("field `{}` of `{c_name}` has no C carrier yet", field.index),
@@ -308,10 +356,22 @@ impl Target for CTarget {
     fn render_operation(
         &self,
         payload: &CPayload,
-        _operands: &[syn::Ident],
+        operands: &[syn::Ident],
     ) -> proc_macro2::TokenStream {
-        // C ships no operation renderer, and this is what that means.
-        match *payload {}
+        match payload {
+            CPayload::NormalizeBool => {
+                let value = &operands[0];
+                // `read` rather than `assume_init`: the byte may be neither 0
+                // nor 1, and reading it as `u8` is defined for every one.
+                quote! {
+                    unsafe { ::core::ptr::read(#value.as_ptr() as *const u8) != 0 }
+                }
+            }
+            CPayload::StoreBool => {
+                let value = &operands[0];
+                quote!(::core::mem::MaybeUninit::new(#value))
+            }
+        }
     }
 }
 
@@ -383,6 +443,12 @@ impl JniPolicy {
 pub enum JniPayload {
     /// A property read through the JVM.
     Getter { name: String, descriptor: String },
+    /// `jboolean` → `bool`: a byte a Kotlin caller filled in, where only zero
+    /// is false.
+    BoolFromJvm,
+    /// A width-preserving cast between a Rust scalar and its JVM carrier —
+    /// `u64` and `jlong`, `bool` and `jboolean`.
+    Cast { ty: syn::Type },
     /// The error-reporting helper.
     ReportError,
     /// A Kotlin data class and its properties.
@@ -417,17 +483,63 @@ impl JniTarget {
     }
 }
 
-/// The Kotlin type and JVM descriptor of a scalar.
+/// How one scalar crosses the JVM boundary.
+struct JvmScalar {
+    /// The `jni::sys` type it travels in.
+    carrier: syn::Type,
+    /// How that carrier is spelled in Kotlin.
+    kotlin: &'static str,
+    /// The JVM type descriptor letter — also the name of the `JValueOwned`
+    /// accessor that reads it, lowercased.
+    descriptor: &'static str,
+    /// Whether the carrier already *is* the Rust value, so no conversion has
+    /// to be rendered around it.
+    identical: bool,
+}
+
+/// The JVM carrier of a scalar, when it has one.
 ///
-/// One scalar, because one accessor: every getter this adapter describes is
-/// read with `JValueOwned::j`, which extracts a long. A second width needs its
-/// own accessor and its own carrier import, and until it has them, saying so is
-/// the honest answer.
-fn jvm_scalar(kind: ScalarKind) -> Option<(syn::Type, &'static str, &'static str)> {
-    Some(match kind {
-        ScalarKind::I64 => (syn::parse_quote!(jlong), "Long", "J"),
-        _ => return None,
+/// The JVM has no unsigned integers, so an unsigned Rust type rides in the
+/// signed carrier of the same width and is cast back at the Rust end — the
+/// bits are preserved, and Kotlin sees the signed reading of them. `bool` has
+/// no carrier of its own either: `jboolean` is a `u8`.
+///
+/// `usize`/`isize` are deliberately absent: their width is platform
+/// dependent, so there is no stable JVM type to pick. This is the same line
+/// `prebindgen-jni` draws for primitive arrays.
+fn jvm_scalar(kind: ScalarKind) -> Option<JvmScalar> {
+    let (carrier, kotlin, descriptor): (syn::Type, _, _) = match kind {
+        ScalarKind::Bool => (syn::parse_quote!(jboolean), "Boolean", "Z"),
+        ScalarKind::I8 | ScalarKind::U8 => (syn::parse_quote!(jbyte), "Byte", "B"),
+        ScalarKind::I16 | ScalarKind::U16 => (syn::parse_quote!(jshort), "Short", "S"),
+        ScalarKind::I32 | ScalarKind::U32 => (syn::parse_quote!(jint), "Int", "I"),
+        ScalarKind::I64 | ScalarKind::U64 => (syn::parse_quote!(jlong), "Long", "J"),
+        ScalarKind::F32 => (syn::parse_quote!(jfloat), "Float", "F"),
+        ScalarKind::F64 => (syn::parse_quote!(jdouble), "Double", "D"),
+        ScalarKind::Isize | ScalarKind::Usize => return None,
+    };
+    Some(JvmScalar {
+        carrier,
+        kotlin,
+        descriptor,
+        identical: matches!(
+            kind,
+            ScalarKind::I8
+                | ScalarKind::I16
+                | ScalarKind::I32
+                | ScalarKind::I64
+                | ScalarKind::F32
+                | ScalarKind::F64
+        ),
     })
+}
+
+/// The zero a native method returns while an exception is pending.
+fn zero(kind: Option<ScalarKind>) -> syn::Expr {
+    match kind {
+        Some(ScalarKind::F32 | ScalarKind::F64) => syn::parse_quote!(0.0),
+        _ => syn::parse_quote!(0),
+    }
 }
 
 /// The JVM getter a Kotlin `val secs` compiles to.
@@ -469,20 +581,44 @@ impl Target for JniTarget {
     ) -> TargetSupport<ReprSpec<JniPayload>> {
         match shape.relation {
             Relation::Atomic => {
-                let carrier = scalar_of(&shape.crossing.ty).and_then(jvm_scalar);
-                let Some((carrier, _, _)) = carrier else {
+                let kind = scalar_of(&shape.crossing.ty);
+                let Some((kind, scalar)) = kind.zip(kind.and_then(jvm_scalar)) else {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.jni.carrier",
                         format!("`{}` has no JNI carrier yet", shape.crossing.ty.key()),
                     )));
                 };
-                let carrier = WireType::abi(carrier);
-                Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Scalar(carrier.clone()),
+                let carrier = WireType::abi(scalar.carrier.clone());
+                let wire = OperationType::Carrier(carrier.clone());
+                let source = OperationType::Source(shape.crossing.ty.clone());
+                let entering = shape.crossing.direction == Direction::IntoRust;
+                let codec = match (kind, entering) {
                     // A source `i64` and a `jlong` are the same Rust value.
-                    protocol: Protocol::terminal(PrimitiveSpec::identity(OperationType::Carrier(
-                        carrier,
-                    ))),
+                    _ if scalar.identical => PrimitiveSpec::identity(wire),
+                    // A `jboolean` is a `u8` a Kotlin caller filled in; only 0
+                    // is false, and every other byte is true.
+                    (ScalarKind::Bool, true) => convert(wire, source, JniPayload::BoolFromJvm),
+                    // Every other conversion is a width-preserving cast:
+                    // `bool` to `jboolean`, and each unsigned type to and from
+                    // the signed carrier it rides in.
+                    (_, true) => convert(
+                        wire,
+                        source,
+                        JniPayload::Cast {
+                            ty: rust_scalar(kind),
+                        },
+                    ),
+                    (_, false) => convert(
+                        source,
+                        wire,
+                        JniPayload::Cast {
+                            ty: scalar.carrier.clone(),
+                        },
+                    ),
+                };
+                Ok(TargetAttempt::Ready(ReprSpec {
+                    layout: Layout::Scalar(carrier),
+                    protocol: Protocol::terminal(codec),
                 }))
             }
             Relation::Record(record) => {
@@ -522,7 +658,7 @@ impl Target for JniTarget {
                             "a positional field has no Kotlin property to read".to_string(),
                         )));
                     };
-                    let Some((_, _, descriptor)) = scalar_of(&field.ty).and_then(jvm_scalar) else {
+                    let Some(scalar) = scalar_of(&field.ty).and_then(jvm_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.jni.carrier",
                             format!("property `{name}` has no JNI carrier yet"),
@@ -555,7 +691,7 @@ impl Target for JniTarget {
                         dependencies: Vec::new(),
                         implementation: Operation::Target(JniPayload::Getter {
                             name: getter(&name.to_string()),
-                            descriptor: format!("(){descriptor}"),
+                            descriptor: format!("(){}", scalar.descriptor),
                         }),
                     });
                 }
@@ -653,10 +789,12 @@ impl Target for JniTarget {
                 }),
                 on_report_failure: Terminal::Abort,
                 // Zero is not a result: it is what a native method must return
-                // while an exception is pending. A wrapper that returns
-                // nothing has to terminate with nothing.
+                // while an exception is pending. Which zero depends on what
+                // the carrier is — a `jdouble` has no integer literal — so the
+                // source scalar picks the spelling. A wrapper that returns
+                // nothing terminates with nothing.
                 terminate: match values.output {
-                    Some(_) => Terminal::Return(syn::parse_quote!(0)),
+                    Some(value) => Terminal::Return(zero(scalar_of(&value.crossing.ty))),
                     None => Terminal::Return(syn::parse_quote!(())),
                 },
             }],
@@ -694,7 +832,7 @@ impl Target for JniTarget {
                             }
                         },
                         None => match scalar_of(&value.crossing.ty).and_then(jvm_scalar) {
-                            Some((_, kotlin, _)) => kotlin.to_string(),
+                            Some(scalar) => scalar.kotlin.to_string(),
                             None => {
                                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                                     "unsupported.jni.kotlin_type",
@@ -708,7 +846,7 @@ impl Target for JniTarget {
                 let ret = match values.output {
                     None => "Unit".to_string(),
                     Some(value) => match scalar_of(&value.crossing.ty).and_then(jvm_scalar) {
-                        Some((_, kotlin, _)) => kotlin.to_string(),
+                        Some(scalar) => scalar.kotlin.to_string(),
                         None => {
                             return Ok(TargetAttempt::Unsupported(Unsupported::new(
                                 "unsupported.jni.kotlin_type",
@@ -770,13 +908,13 @@ impl Target for JniTarget {
                             "a positional field has no Kotlin property name".to_string(),
                         )));
                     };
-                    let Some((_, kotlin, _)) = scalar_of(&field.ty).and_then(jvm_scalar) else {
+                    let Some(scalar) = scalar_of(&field.ty).and_then(jvm_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.jni.carrier",
                             format!("property `{name}` has no Kotlin spelling yet"),
                         )));
                     };
-                    properties.push((name.to_string(), kotlin.to_string()));
+                    properties.push((name.to_string(), scalar.kotlin.to_string()));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     element: request.element.id.clone(),
@@ -802,10 +940,36 @@ impl Target for JniTarget {
                 let (env, object) = (&operands[0], &operands[1]);
                 // One expression: it evaluates to a `Result` and stops there.
                 // The `match` on it, and what a failure does, are the wrapper's.
+                // `JValueOwned`'s accessors are named after the descriptor
+                // letters they read: `J` is read by `j`, `Z` by `z`.
+                let accessor = format_ident!(
+                    "{}",
+                    descriptor
+                        .chars()
+                        .next_back()
+                        .expect("a descriptor names a return type")
+                        .to_ascii_lowercase()
+                );
+                // `z` is the one accessor that does not produce the carrier
+                // it names: the JVM's boolean is a byte, and `JValueOwned`
+                // hands back the `bool` it read out of it.
+                let read = if descriptor.ends_with('Z') {
+                    quote!(value.z().map(|flag| flag as jboolean))
+                } else {
+                    quote!(value.#accessor())
+                };
                 quote! {
                     #env.call_method(&#object, #name, #descriptor, &[])
-                        .and_then(|value| value.j())
+                        .and_then(|value| #read)
                 }
+            }
+            JniPayload::BoolFromJvm => {
+                let value = &operands[0];
+                quote!(#value != 0)
+            }
+            JniPayload::Cast { ty } => {
+                let value = &operands[0];
+                quote!(#value as #ty)
             }
             JniPayload::ReportError => {
                 let (env, error) = (&operands[0], &operands[1]);
@@ -821,7 +985,12 @@ impl Target for JniTarget {
 /// The imports the JNI carriers are spelled with.
 fn jni_imports() -> proc_macro2::TokenStream {
     quote! {
-        use jni::{objects::{JClass, JObject}, sys::jlong, JNIEnv};
+        #[allow(unused_imports)]
+        use jni::{
+            objects::{JClass, JObject},
+            sys::{jboolean, jbyte, jdouble, jfloat, jint, jlong, jshort},
+            JNIEnv,
+        };
     }
 }
 
