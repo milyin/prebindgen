@@ -400,42 +400,54 @@ macro_rules! fun {
     };
 }
 
-macro_rules! type_macro {
-    ($(#[$doc:meta])* $macro_name:ident => $decl:ident) => {
-        $(#[$doc])*
-        #[macro_export]
-        macro_rules! $macro_name {
-            ($ty:ty) => {
-                $crate::$decl::new($crate::syn::parse_quote!($ty))
-            };
-        }
+/// Declare an opaque handle: `ptr_type!(Calculator)`.
+#[macro_export]
+macro_rules! ptr_type {
+    ($ty:ty) => {
+        $crate::PtrTypeDecl::new($crate::syn::parse_quote!($ty))
     };
 }
 
-type_macro!(
-    /// Declare an opaque handle: `ptr_type!(Calculator)`.
-    ptr_type => PtrTypeDecl
-);
-type_macro!(
-    /// Declare a by-value aggregate: `data_type!(Drawing)`.
-    data_type => DataTypeDecl
-);
-type_macro!(
-    /// Declare a C enum: `enum_type!(Operation)`.
-    enum_type => EnumTypeDecl
-);
-type_macro!(
-    /// Declare a tag-plus-union enum: `tagged_union!(Shape)`.
-    tagged_union => TaggedUnionDecl
-);
-type_macro!(
-    /// Declare an already-`#[repr(C)]` source type: `repr_c_type!(Rect)`.
-    repr_c_type => ReprCTypeDecl
-);
-type_macro!(
-    /// Declare a callback signature: `callback!(impl Fn(f64) + Send + Sync + 'static)`.
-    callback => CallbackDecl
-);
+/// Declare a by-value aggregate: `data_type!(Drawing)`.
+#[macro_export]
+macro_rules! data_type {
+    ($ty:ty) => {
+        $crate::DataTypeDecl::new($crate::syn::parse_quote!($ty))
+    };
+}
+
+/// Declare a C enum: `enum_type!(Operation)`.
+#[macro_export]
+macro_rules! enum_type {
+    ($ty:ty) => {
+        $crate::EnumTypeDecl::new($crate::syn::parse_quote!($ty))
+    };
+}
+
+/// Declare a tag-plus-union enum: `tagged_union!(Shape)`.
+#[macro_export]
+macro_rules! tagged_union {
+    ($ty:ty) => {
+        $crate::TaggedUnionDecl::new($crate::syn::parse_quote!($ty))
+    };
+}
+
+/// Declare an already-`#[repr(C)]` source type: `repr_c_type!(Payload)`.
+#[macro_export]
+macro_rules! repr_c_type {
+    ($ty:ty) => {
+        $crate::ReprCTypeDecl::new($crate::syn::parse_quote!($ty))
+    };
+}
+
+/// Declare a callback signature:
+/// `callback!(impl Fn(f64) + Send + Sync + 'static)`.
+#[macro_export]
+macro_rules! callback {
+    ($ty:ty) => {
+        $crate::CallbackDecl::new($crate::syn::parse_quote!($ty))
+    };
+}
 
 /// Declare a by-value opaque type and its counterpart:
 /// `value_type!(Payload, PayloadOpaque)`.
