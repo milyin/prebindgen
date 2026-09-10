@@ -4,8 +4,9 @@
 
 # Record binding requests
 
-Status: proposed design. The API sketches state intended contracts, not
-implemented functionality.
+Status: implemented. `BindingRequests` is what a frontend hands the engine;
+the policy types shown are illustrations of one frontend's choices, since each
+frontend defines its own.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:
@@ -31,17 +32,25 @@ A binding crate is an ordinary Rust crate whose build script configures a
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .data_struct(parse_quote!(Stamp))   // Stamp crosses as a C struct, by value
-    .function(parse_quote!(stamp_sum))  // and this function becomes a C entry point
+    .module(
+        module!().data_type(
+            data_type!(Stamp)              // Stamp crosses as a C struct, by value
+                .base_name("Stamp")        // under this name, rather than the default `stamp`
+                .method(fun!(stamp_sum)),  // and this function becomes a C entry point
+        ),
+    )
     .build();
 ```
 
-The generated C type and function keep the names the source used, `Stamp` and
-`stamp_sum`, because that is the default: a foreign name is the source name
-unless something changes it. A frontend offers naming hooks for the cases where
-that is not what you want — a crate-wide prefix, or a symbol that would collide
-with something already in the C namespace — and those hooks are configured here,
-in the same builder, not anywhere downstream.
+A type carries the functions that operate on it, and each declaration carries its
+own options, so the tree means the same however it is ordered.
+
+Names come from the frontend's manglers. A function keeps its Rust name by
+default, which is why `stamp_sum` is the exported symbol; a type's default base
+is the snake_case of its short name, so `Stamp` would reach C as `stamp`, which
+is why the declaration above names it. Generator-wide naming hooks do the same
+job for every declaration at once, and are configured on the same builder —
+before the module, since a declaration's name is derived as it is applied.
 
 Through Kotlin it is the same two items with different answers — `Stamp` becomes
 a class in a package, and the function a top-level function of that package,
@@ -60,7 +69,7 @@ JniGen::builder()
     .build();
 ```
 
-Kotlin cannot fall back on the source name the way C does, because a Kotlin
+Kotlin cannot fall back on a mangled source name the way C does, because a Kotlin
 declaration needs somewhere to live: a package, a class for a type, and for a
 function a place to be declared. That is what `package!` and the class macros
 supply, and a name given there is what the generated declaration and the native
@@ -88,7 +97,8 @@ interprets later; the registry only carries it and hands it back.
 
 This stage also fixes the names by which everything is addressed afterwards. An
 `ElementId` is one requested output — exposing the same Rust function at two
-Kotlin placements makes two of them, with separate outcomes. A **site** is a
+Kotlin placements makes two of them, with separate outcomes, which the engine
+cannot express yet (its identity is the kind and the Rust origin). A **site** is a
 position inside such an element: parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
 `Stamp`, or the single argument of a `stamp_from_millis` constructor. Overrides
@@ -288,6 +298,12 @@ Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
 `build.rs` code:
 
+**Not wired yet.** This is the shape, not today's call path: a frontend's
+`build()` under v2 hands its declarations to the engine's reporting entry point,
+and the requests-and-target path below is exercised by `examples/v2check`, which
+builds the requests itself. Connecting the two is what makes a frontend generate
+through v2 rather than report through it.
+
 ```rust
 let mut builder = FlatBuilder::new();
 builder.add_captures(Source::new(source_crate::PREBINDGEN_OUT_DIR).items_all())?;
@@ -326,7 +342,7 @@ struct OutputRequest {
 }
 ```
 
-`ElementId` identifies the requested output; `SourceItemId` identifies the source item behind it. Exposing one Rust function at two foreign placements gives two output identities. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
+`ElementId` identifies the requested output; `SourceItemId` identifies the source item behind it. Exposing one Rust function at two foreign placements gives two output identities — **not yet**: the engine's `ElementId` is the kind and the Rust origin, so one source item has one output identity, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
 ### A value's position in an exported function
 

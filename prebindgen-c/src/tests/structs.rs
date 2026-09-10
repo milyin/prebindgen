@@ -217,7 +217,7 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
         .mangle_callback(|bases| format!("closure_{}_t", bases.join("_")))
         .mangle_function(|n| n.to_string())
         .opaque_ptr(syn::parse_quote!(String))
-        .repr_c_struct(syn::parse_quote!(Foo))
+        .repr_c_struct(syn::parse_quote!(Foo), None)
         .callback(syn::parse_quote!(impl Fn(&Foo) + Send + Sync + 'static))
         .function(syn::parse_quote!(foo_make))
         .function(syn::parse_quote!(foo_put))
@@ -302,7 +302,7 @@ fn repr_c_struct_owned_inferred_field_nulls_without_default() {
         .mangle_destructor(|base| format!("{base}_drop"))
         .mangle_function(|n| n.to_string())
         .opaque_ptr(syn::parse_quote!(String))
-        .repr_c_struct(syn::parse_quote!(Foo))
+        .repr_c_struct(syn::parse_quote!(Foo), None)
         .function(syn::parse_quote!(foo_put))
         .panic()
         .function(syn::parse_quote!(string_make));
@@ -353,7 +353,7 @@ fn repr_c_struct_plain_data_has_no_writeback() {
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
         .mangle_function(|n| n.to_string())
-        .repr_c_struct(syn::parse_quote!(Pt))
+        .repr_c_struct(syn::parse_quote!(Pt), None)
         .function(syn::parse_quote!(pt_sum))
         .panic();
 
@@ -403,7 +403,7 @@ fn repr_c_struct_bare_box_field_keeps_full_gravestone() {
         .mangle_destructor(|base| format!("{base}_drop"))
         .mangle_function(|n| n.to_string())
         .opaque_ptr(syn::parse_quote!(String))
-        .repr_c_struct(syn::parse_quote!(Bar))
+        .repr_c_struct(syn::parse_quote!(Bar), None)
         .function(syn::parse_quote!(bar_put))
         .panic()
         .function(syn::parse_quote!(string_make));
@@ -471,7 +471,7 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
         .mangle_destructor(|base| format!("{base}_drop"))
         .mangle_function(|n| n.to_string())
         .opaque_ptr(syn::parse_quote!(String))
-        .repr_c_struct(syn::parse_quote!(Foo))
+        .repr_c_struct(syn::parse_quote!(Foo), None)
         .function(syn::parse_quote!(foo_update))
         .panic()
         .function(syn::parse_quote!(foo_into_uninit))
@@ -545,7 +545,7 @@ fn repr_c_struct_restricted_validity_field_is_rejected() {
                 .mangle_destructor(|base| format!("{base}_drop"))
                 .mangle_function(|n| n.to_string())
                 .enum_type(syn::parse_quote!(Operation))
-                .repr_c_struct(syn::parse_quote!(Rec))
+                .repr_c_struct(syn::parse_quote!(Rec), None)
                 .function(syn::parse_quote!(rec_take))
                 .panic();
 
@@ -587,7 +587,7 @@ fn repr_c_struct_restricted_validity_field_accepted_when_acknowledged() {
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
         .mangle_function(|n| n.to_string())
-        .repr_c_struct(syn::parse_quote!(Rec))
+        .repr_c_struct(syn::parse_quote!(Rec), None)
         .assume_c_field_validity()
         .function(syn::parse_quote!(rec_take))
         .panic();
@@ -632,7 +632,7 @@ fn repr_c_struct_restricted_validity_field_audited_even_when_output_only() {
             .mangle_type_name(|base| format!("{base}_t"))
             .mangle_destructor(|base| format!("{base}_drop"))
             .mangle_function(|n| n.to_string())
-            .repr_c_struct(syn::parse_quote!(Rec));
+            .repr_c_struct(syn::parse_quote!(Rec), None);
         if acknowledged {
             c = c.assume_c_field_validity();
         }

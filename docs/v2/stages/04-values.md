@@ -4,8 +4,10 @@
 
 # Plan value conversions
 
-Status: proposed design. The API sketches state intended contracts, not
-implemented functionality.
+Status: implemented for what the two element paths need, which is a value
+carried whole or a record read through its fields. The vocabulary below reaches
+further than that, and every part of it the engine does not have is marked where
+it is described.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:
@@ -190,6 +192,11 @@ All relation fields are private. Read-only accessors expose source types and arg
 `RelationError` reports a source function incompatible with the requested role. Validation establishes the role's internal consistency, not that every target supports it. The registry separately checks a selected role against the conversion's expected type, direction and ownership: producing `Stamp` alone does not satisfy `&Stamp` without a supported temporary-and-borrow step. Default fallible construction interprets `Result::Ok` as the value and `Err` as failure; a different treatment requires an explicit conversion role.
 
 ### Registering and selecting a relation
+
+**Implemented: `Atomic` and `Record`.** The engine has exactly two relations — a
+whole value converted by one operation, and a record's fields. The constructor
+and projector roles below are described, not built, so a target has no such
+candidate to select and fallible construction never reaches a boundary.
 
 ```rust
 pub enum Relation {
@@ -435,6 +442,10 @@ and which recovery operations are legal. Unsupported exception handling skips
 the affected binding; the planner cannot assume it is safe to continue calling
 JNI methods after a failed read.
 
+**Not implemented.** Validity is absent from a described operation for the same
+reason: every result the engine plans is a value copied out. A borrowed or
+scope-bound result is what needs the contract below.
+
 Result validity answers a different question: how long can a successfully
 produced value be used? A copied integer is independent of the object it came
 from. A reference into a buffer remains tied to that buffer. A JNI local object
@@ -465,6 +476,11 @@ or a result would escape its dependencies. `Independent` does not imply that a
 value is copyable or that it has no destructor.
 
 #### Runtime resources and generated dependencies
+
+**Not implemented.** A described operation carries its failure and its generated
+dependencies, and nothing about resources. Every operation the engine plans
+acquires nothing, which is why the omission is safe today and why the first
+handle-bearing operation cannot be written without this.
 
 `ResourceContract` describes obligations introduced or discharged by an
 operation, such as releasing a retained handle. It is separate from validity:
@@ -528,6 +544,14 @@ fragment each one renders.
 A target representation tells the registry which values carry converted data and
 how to access them using the operations above.
 
+**Implemented: two layouts, two protocols, one direction.** The engine has
+`Layout::Scalar` and `Layout::Aggregate`, and `Protocol::Terminal` and
+`Protocol::Product` — convert the whole value, or project one part per part of
+the selected relation, reading a record on the way into Rust. A record leaving
+Rust needs a target construction operation and is a reported skip until there is
+one. Slots, nested member layouts, guards, and the optional, sequence, choice and
+callable protocols below are described rather than built.
+
 A **layout** describes the values contained in a representation. A **protocol** describes the target operations through which the registry reads or constructs those values. Neither specifies how to recursively convert the corresponding Rust fields; the registry supplies that algorithm.
 
 ```rust
@@ -575,6 +599,10 @@ For sequences, variants and callbacks, adapters supply runtime operations; the r
 A layout stays nested for as long as nesting is meaningful: an aggregate whose member is itself an aggregate is described that way, and only a place that requires a flat list of values — a native signature, where each slot becomes one ABI argument — flattens it, at that point, in that use. Keeping the nesting until then is what lets the same record representation be an argument in one function and a member of another.
 
 ### Optional values
+
+**Not implemented.** Nothing carries an optional value yet: `Layout::Slots`,
+`SlotRole`, `GuardId` and the encodings below are names. The section says what
+the slot has to hold.
 
 An optional value needs both a representation of its child and a way to distinguish absence. Different targets can encode that distinction differently:
 

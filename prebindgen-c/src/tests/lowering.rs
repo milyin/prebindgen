@@ -442,7 +442,7 @@ fn borrow_terminals_stay_unrendered_until_final_write() {
     let registry = crate::test_util::reg_from_items(items).unwrap();
     let generated = CbindgenBuilder::new()
         .opaque_ptr(syn::parse_quote!(Handle))
-        .repr_c_struct(syn::parse_quote!(Record))
+        .repr_c_struct(syn::parse_quote!(Record), None)
         .function(syn::parse_quote!(read_str))
         .panic()
         .function(syn::parse_quote!(share))
@@ -486,7 +486,7 @@ fn slice_input_terminals_stay_unrendered_until_final_write() {
     .collect();
     let registry = crate::test_util::reg_from_items(items).unwrap();
     let generated = CbindgenBuilder::new()
-        .repr_c_struct(syn::parse_quote!(Record))
+        .repr_c_struct(syn::parse_quote!(Record), None)
         .function(syn::parse_quote!(scalar_slice))
         .panic()
         .function(syn::parse_quote!(record_slice))

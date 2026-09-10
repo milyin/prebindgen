@@ -12,8 +12,13 @@ Owner: the C frontend
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .data_struct(parse_quote!(Stamp))    // see the record path
-    .function(parse_quote!(stamp_sum))
+    .module(
+        module!().data_type(
+            data_type!(Stamp)
+                .base_name("Stamp")        // see the record path
+                .method(fun!(stamp_sum)),
+        ),
+    )
     .build();
 ```
 
@@ -21,7 +26,7 @@ Cbindgen::builder()
 
 ```text
 policy (C function):
-    symbol:     "stamp_sum"      // the source name; no hook renamed it
+    symbol:     "stamp_sum"      // a function keeps its Rust name; no hook renamed it
     convention: extern "C"
     input:      by value at its ABI position
     output:     native return
@@ -30,7 +35,8 @@ policy (C function):
 
 ## Checks
 
-- The symbol is the source name unless a naming hook on the builder changes it.
+- A function keeps its Rust name as the exported symbol unless a naming hook on
+  the builder changes it, which is why this one is `stamp_sum`.
 - C is opt-in: a function nobody declares produces no request, and is reported
   as unselected rather than skipped.
 - Declaring the function without declaring `Stamp` is a valid request that fails
