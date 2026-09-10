@@ -11,10 +11,9 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
 node(output) : produces jlong, failures {}
 
-policy (JNI function): placement example.Bindings.sum, extern "system",
+policy (JNI function): example.Bindings.sum, extern "system",
                        input one object, output jlong,
-                       Runtime -> preserve pending exception else throw,
-                       failure while reporting -> abort
+                       Runtime -> report to the JVM, then return a default
 ```
 
 ## Result
@@ -41,12 +40,10 @@ pub extern "system" fn Java_example_Bindings_sum(
 ) -> jlong
 ```
 
-The reporting operation is a generated artifact the JNI adapter contributes:
+The reporting operation is a generated artifact this adapter contributes:
 
 ```rust
-use jni::{errors::Error, JNIEnv};
-
-pub fn report_jni_error(env: &mut JNIEnv<'_>, error: Error)
+pub fn report_jni_error(env: &mut JNIEnv<'_>, error: jni::errors::Error)
     -> jni::errors::Result<()>
 {
     if env.exception_check()? {
@@ -66,7 +63,7 @@ the generated wrapper.
 
 - Zero is not a result: it is what a native method must return while an
   exception is pending, and Kotlin observes the exception. That route is
-  [the recorded policy's][fn_requests_jni], not a writer default.
+  [the adapter's convention][fn_requests_jni], not a writer default.
 - Reporting is never retried with the operation that just failed — one failed
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success

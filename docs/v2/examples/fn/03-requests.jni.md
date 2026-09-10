@@ -8,11 +8,14 @@ Owner: the JNI frontend
 ## Input
 
 ```rust
-// build.rs (schematic)
+// build.rs
 JniGen::builder()
-    .package(package!("example").data_class(data_class!(Stamp)))
-    .function("stamp_sum", placement!("example.Bindings.sum"))
-    .runtime_errors(RuntimeErrors::PreservePendingElseThrow("java/lang/RuntimeException"))
+    .source(source_crate::PREBINDGEN_OUT_DIR)
+    .package(
+        package!("example")
+            .class(data_class!(Stamp))   // see the record path
+            .fun(fun!(stamp_sum)),
+    )
     .build();
 ```
 
@@ -20,24 +23,23 @@ JniGen::builder()
 
 ```text
 policy (JNI function):
-    placement:  example.Bindings.sum
-    symbol:     "Java_example_Bindings_sum"      // derived from the placement
+    kotlin:     example.Bindings.sum             // the object holding the declaration
+    symbol:     "Java_example_Bindings_sum"      // derived from that placement
     convention: extern "system", with (JNIEnv, JClass) supplied by the JVM
     input:      Stamp as one object, properties read through JNI
     output:     jlong native return
-    failures:   Runtime -> preserve a pending exception, else throw RuntimeException;
-                a failure while reporting -> abort
+    failures:   reported to the JVM, then a default value returned
 ```
 
 ## Checks
 
-- Placement and symbol are one choice: renaming the Kotlin method changes the
-  symbol the wrapper must export.
-- The error convention is configuration, not a writer default. What
-  [the boundary][fn_boundary_jni] does when a property read fails is decided
-  here.
-- A Kotlin declaration needs a package and a class, so there is no source name
-  to fall back on the way C has one.
+- The Kotlin name and the symbol are one choice: `.name("…")` on the function
+  declaration moves both, since the symbol is built from the package, the class
+  holding the declaration and the method name.
+- Where a failed property read goes is the adapter's convention, which is why
+  [the boundary][fn_boundary_jni] has a route to plan at all.
+- A Kotlin declaration needs a package, so there is no source name to fall back
+  on the way C has one.
 
 [fn]: README.md
 [fn_requests]: 03-requests.md

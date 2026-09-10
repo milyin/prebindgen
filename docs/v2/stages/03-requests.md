@@ -27,10 +27,12 @@ A binding crate is an ordinary Rust crate whose build script configures a
 `prebindgen-jni` — and asks it to generate. Exposing these two items through C is two declarations:
 
 ```rust
-// build.rs of the C binding crate (schematic)
-CbindgenBuilder::new()
-    .data_struct("Stamp")     // Stamp crosses as a C struct passed by value
-    .function("stamp_sum")    // and this function becomes a C entry point
+// build.rs of the C binding crate
+Cbindgen::builder()
+    .source(source_crate::PREBINDGEN_OUT_DIR)
+    .source_module(parse_quote!(source_crate))
+    .data_struct(parse_quote!(Stamp))   // Stamp crosses as a C struct, by value
+    .function(parse_quote!(stamp_sum))  // and this function becomes a C entry point
     .build();
 ```
 
@@ -42,28 +44,32 @@ with something already in the C namespace — and those hooks are configured her
 in the same builder, not anywhere downstream.
 
 Through Kotlin it is the same two items with different answers — `Stamp` becomes
-a Kotlin class in a package, and the function becomes a method on a Kotlin
-object, reached through the Java Native Interface (JNI), the mechanism by which
-JVM code calls native functions:
+a class in a package, and the function a top-level function of that package,
+reached through the Java Native Interface (JNI), the mechanism by which JVM code
+calls native functions:
 
 ```rust
-// build.rs of the JNI binding crate (schematic)
+// build.rs of the JNI binding crate
 JniGen::builder()
-    .package(package!("example").data_class(data_class!(Stamp)))
-    .function("stamp_sum", placement!("example.Bindings.sum"))
-    // What a native method does when a JVM call inside it fails:
-    .runtime_errors(RuntimeErrors::PreservePendingElseThrow("java/lang/RuntimeException"))
+    .source(source_crate::PREBINDGEN_OUT_DIR)
+    .package(
+        package!("example")
+            .class(data_class!(Stamp))   // Stamp becomes a Kotlin data class
+            .fun(fun!(stamp_sum)),       // and this function a top-level function
+    )
     .build();
 ```
 
 Kotlin cannot fall back on the source name the way C does, because a Kotlin
-declaration needs somewhere to live: a package for the class, an object and a
-method name for the function. That is what `package!` and `placement!` supply,
-and it is why the JNI configuration says more than the C one about names. The
-macros take Rust paths rather than strings, so `data_class!(Stamp)` fails to
-compile if `Stamp` is not in scope. The `runtime_errors` call is the error
-convention, and it is worth noticing that this is configuration rather than a
-writer default: what
+declaration needs somewhere to live: a package, a class for a type, and for a
+function a place to be declared. That is what `package!` and the class macros
+supply, and a name given there is what the generated declaration and the native
+symbol are both built from. The macros take Rust paths rather than strings, so
+`data_class!(Stamp)` fails to compile if `Stamp` is not in scope.
+
+How a failing call reports is the adapter's convention rather than a per-function
+setting, and it is worth noticing that it is settled here rather than by whoever
+writes the wrapper: what
 [the native boundary](05-boundary.md) does when a JVM property read fails is
 decided here, and the wrapper it generates is only as good as this answer.
 

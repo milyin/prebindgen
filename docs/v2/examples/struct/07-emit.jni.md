@@ -16,8 +16,7 @@ SurfaceSpec(public Stamp) frozen, with
 
 ## Result
 
-In the generated Kotlin (`Bindings.kt`), beside
-[the external function][fn_emit_jni]:
+In the generated Kotlin, beside [the external function][fn_emit_jni]:
 
 ```kotlin
 package example

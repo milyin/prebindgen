@@ -18,7 +18,7 @@ FunctionPlan(exported stamp_sum) frozen, with
 
 ## Result
 
-The Kotlin declaration, beside [the data class][struct_emit_jni] (`Bindings.kt`):
+The Kotlin declaration, beside [the data class][struct_emit_jni]:
 
 ```kotlin
 package example
@@ -74,14 +74,15 @@ which the harness does.
 
 ## Checks
 
-- Symbol and Kotlin declaration come from the same recorded placement, so they
-  cannot disagree.
+- The symbol is built from the package, the object holding the declaration and
+  the method name, so renaming the Kotlin method moves both.
 - If `getSecs` fails, `getNanos` and `stamp_sum` do not run; if `getNanos` fails,
   the source `Stamp` is never constructed. Either way the JVM sees an exception
   rather than a returned zero.
-- The adapter supplies the two getter expressions; every `match`, the reporting
-  call, its failure branch, the terminal return, the construction and the call
-  are the registry's.
+- The adapter supplies the two getter expressions and the reporting helper,
+  which is generated into this module; every `match`, the reporting call, its
+  failure branch, the terminal return, the construction and the call are the
+  registry's.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
   conversions render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.

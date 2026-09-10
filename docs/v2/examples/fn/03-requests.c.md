@@ -8,10 +8,12 @@ Owner: the C frontend
 ## Input
 
 ```rust
-// build.rs (schematic)
-CbindgenBuilder::new()
-    .data_struct("Stamp")     // see the record path
-    .function("stamp_sum")
+// build.rs
+Cbindgen::builder()
+    .source(source_crate::PREBINDGEN_OUT_DIR)
+    .source_module(parse_quote!(source_crate))
+    .data_struct(parse_quote!(Stamp))    // see the record path
+    .function(parse_quote!(stamp_sum))
     .build();
 ```
 
