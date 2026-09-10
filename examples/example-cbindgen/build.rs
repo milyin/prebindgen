@@ -24,6 +24,9 @@
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::pipeline::{fresh_output_root, Pipeline};
+use prebindgen_c::{
+    callback, data_type, enum_type, error_type, fun, module, ptr_type, tagged_union,
+};
 use syn::parse_quote as pq;
 
 /// The target architecture this build targets (`x86_64`, `aarch64`, …), used to
@@ -86,158 +89,130 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
         // Keep the Rust function names verbatim as the exported C symbols.
         .mangle_function(|n| n.to_string());
 
-    // The opaque `Calculator` handle (Box-owned; `calculator_drop` generated).
-    cbindgen = cbindgen.opaque_ptr(pq!(Calculator));
+    // Everything this binding declares, as one tree. A type carries the
+    // functions that operate on it and its own naming, and a function carries
+    // its own permission to panic — so the declarations can be read type by
+    // type, and moving one cannot silently re-target a modifier.
+    //
+    // `Calculator` is a Box-owned handle (`calculator_t` / `calculator_drop`).
+    // Its constructors and `Result`-returning operations route a fallible input
+    // through the error out-param, so they need no `.panic()`; its borrow-only
+    // accessors and predicates have no `Result` channel, so `.panic()` is what
+    // lets the wrapper abort on a null handle. `calculator_merge` and
+    // `calculator_absorb` are the two shapes the alias preflight covers — two
+    // consumed handles of one type, and one consumed beside one borrowed — and
+    // both report a rejection through `char **e` rather than aborting.
+    //
+    // `Error` is opaque (a boxed std error) and reaches C as a `char *` message
+    // through `error_get_message`, which is consumed only as that accessor and
+    // so is ignored rather than exported.
+    //
+    // `Shape` is a data-carrying enum: a `#[repr(C)]` tag plus union, whose
+    // `Labeled` arm owns a `char *` that the generated `shape_drop` frees.
+    // `Note` is the same one level up (#158 part 2): its payload wires come from
+    // the resolved converter destination, which admits a nested `data_struct`
+    // by value (`Caption`, owning a `char *` the union's drop reaches through)
+    // and a converted leaf (`Millis` -> `u64`). The tag a C caller supplies is
+    // validated before the Rust enum exists — abortively where there is no
+    // `char **e`, through it where there is.
+    //
+    // `InsideFoo` and `Foo` are the multi-target cfg demonstration: the enum's
+    // discriminants and the struct's field set vary by `target_arch` (and by
+    // feature), and exactly one of each survives the target's cfg filtering, so
+    // the generated `inside_foo_t` / `foo_t` differ per target. `inside_foo_value`
+    // panics for a different reason than the borrow-takers: a C enum is an `int`
+    // at the ABI, so an out-of-range discriminant is rejected on the way in, and
+    // with no `char **e` to report it the wrapper aborts.
+    //
+    // The four callback signatures each name themselves, since the base derived
+    // from the argument type would be `f64`, `___payload` and the like. They
+    // cover the shapes a closure argument can take: a plain scalar, an
+    // `Option<f64>` (no spare bit pattern, so a `bool` beside the value), a
+    // `Vec<f64>` (a malloc'd `(double *, size_t)` the C side frees, so a NULL
+    // `call` must convert nothing at all), and an `Option<Grade>` over an enum
+    // whose discriminants skip zero — which is what says the absent slot is left
+    // unwritten rather than filled with a fabricated zero.
+    let mut module = module!()
+        .ptr_type(
+            ptr_type!(Calculator)
+                .method(fun!(calculator_new))
+                .method(fun!(calculator_new_from_str))
+                .method(fun!(calculator_apply))
+                .method(fun!(calculator_merge))
+                .method(fun!(calculator_absorb))
+                .method(fun!(calculator_new_clone).panic())
+                .method(fun!(calculator_get_value).panic())
+                .method(fun!(calculator_get_count).panic())
+                .method(fun!(calculator_is).panic())
+                .method(fun!(calculator_to_string).panic())
+                .method(fun!(calculator_get_history).panic())
+                .method(fun!(calculator_for_each).panic())
+                .method(fun!(calculator_last_or_none).panic())
+                .method(fun!(calculator_grade_or_none).panic())
+                .method(fun!(calculator_history_batch).panic()),
+        )
+        .error_type(error_type!(Error, error_get_message))
+        .ignore_fun(pq!(error_get_message))
+        .enum_type(enum_type!(Operation))
+        .tagged_union(
+            tagged_union!(Shape)
+                .method(fun!(shape_new_empty))
+                .method(fun!(shape_new_circle))
+                .method(fun!(shape_new_rect))
+                .method(fun!(shape_try_area))
+                .method(fun!(shape_area).panic())
+                .method(fun!(shape_get_label).panic())
+                .method(fun!(shape_new_labeled).panic()),
+        )
+        .data_type(
+            data_type!(Drawing)
+                .method(fun!(drawing_new).panic())
+                .method(fun!(drawing_get_shape).panic()),
+        )
+        .data_type(data_type!(Caption).method(fun!(caption_new).panic()))
+        .convert(
+            prebindgen_registry::convert!(Millis)
+                .input(prebindgen_registry::fun!(millis_from_raw))
+                .output(prebindgen_registry::fun!(millis_to_raw)),
+        )
+        .ignore_fun(pq!(millis_from_raw))
+        .ignore_fun(pq!(millis_to_raw))
+        .tagged_union(
+            tagged_union!(Note)
+                .method(fun!(note_new_silent))
+                .method(fun!(note_new_after))
+                .method(fun!(note_new_flagged))
+                .method(fun!(note_value).panic())
+                .method(fun!(note_emphatic).panic())
+                .method(fun!(note_new_titled).panic())
+                .method(fun!(note_new_sketched).panic()),
+        )
+        .enum_type(
+            enum_type!(InsideFoo)
+                .method(fun!(inside_foo_default))
+                .method(fun!(inside_foo_value).panic()),
+        )
+        .data_type(
+            data_type!(Foo)
+                .method(fun!(foo_new))
+                .method(fun!(foo_get_id)),
+        )
+        .enum_type(enum_type!(Grade))
+        .callback(callback!(impl Fn(f64) + Send + Sync + 'static).base_name("value"))
+        .callback(callback!(impl Fn(Option<f64>) + Send + Sync + 'static).base_name("maybe_value"))
+        .callback(callback!(impl Fn(Vec<f64>) + Send + Sync + 'static).base_name("history_batch"))
+        .callback(
+            callback!(impl Fn(Option<Grade>) + Send + Sync + 'static).base_name("maybe_grade"),
+        );
 
-    // `Error` is opaque (a boxed std error), marshalled to C as a `char*` message
-    // via `error_get_message(&e)`; each fallible wrapper gains a `char **e` out-param.
-    // `error_get_message` is consumed only as that message fn, so it is not also
-    // declared as an exported `.function` — mark it ignored to silence the
-    // "skipping undeclared" notice.
-    cbindgen = cbindgen
-        .opaque_error(pq!(Error), pq!(error_get_message))
-        .ignore_function(pq!(error_get_message));
-
-    // The primitive-repr `Operation` enum -> a C enum.
-    cbindgen = cbindgen.enum_type(pq!(Operation));
-
-    // The data-carrying `Shape` enum -> a `#[repr(C)]` enum with payload
-    // variants, which cbindgen renders as a C tag + `union`. Its `Labeled` arm
-    // owns a `char *`, so a typed `shape_drop` is generated to free the active
-    // arm. `Drawing` carries one as a by-value field.
-    cbindgen = cbindgen.tagged_union(pq!(Shape));
-    cbindgen = cbindgen.data_struct(pq!(Drawing));
-
-    // #158 part 2: payload wires come from the resolved CONVERTER DESTINATION,
-    // not the layout-preserving mirror policy. `Note` exercises the two shapes
-    // that admits — a nested `data_struct` by value (`Caption`, owning a
-    // `char *` the union's drop must reach through and free) and a converted
-    // leaf (`Millis` → `u64`).
-    cbindgen = cbindgen.data_struct(pq!(Caption));
-    cbindgen = cbindgen.convert(
-        prebindgen_registry::convert!(Millis)
-            .input(prebindgen_registry::fun!(millis_from_raw))
-            .output(prebindgen_registry::fun!(millis_to_raw)),
-    );
-    cbindgen = cbindgen
-        .ignore_function(pq!(millis_from_raw))
-        .ignore_function(pq!(millis_to_raw));
-    cbindgen = cbindgen.tagged_union(pq!(Note));
-
-    // Multi-target cfg demonstration: `InsideFoo` (a fieldless enum whose
-    // discriminants vary by `target_arch`) and `Foo` (a by-value data struct whose
-    // field set varies by `target_arch` + feature). Declared unconditionally —
-    // exactly one `InsideFoo` and one field-shape of `Foo` survive the target's
-    // cfg filtering, so the generated `inside_foo_t` / `foo_t` differ per target.
-    cbindgen = cbindgen.enum_type(pq!(InsideFoo));
-    cbindgen = cbindgen.data_struct(pq!(Foo));
-
-    // The history-replay callback signature -> a `closure_value_t` closure struct
-    // (`.base_name` gives the otherwise `f64`-derived struct a descriptive name).
-    cbindgen = cbindgen
-        .callback(pq!(impl Fn(f64) + Send + Sync + 'static))
-        .base_name("value");
-
-    // The OPTIONAL argument -> a `closure_maybe_value_t` whose `call` takes the
-    // fields the shape lowers to: an `Option<f64>` has no spare bit pattern, so
-    // that is a `bool` beside the value. A composite has no converter of its
-    // own, and calling the marker that stands in for one is #428.
-    cbindgen = cbindgen
-        .callback(pq!(impl Fn(Option<f64>) + Send + Sync + 'static))
-        .base_name("maybe_value");
-
-    // …and the same over an enum whose discriminants skip zero, which is what
-    // says the absent slot is left UNWRITTEN rather than filled: the wire is the
-    // Rust enum itself, so a fabricated zero would be an invalid value of it.
-    // The composite whose lowering ALLOCATES: `Vec<f64>` crosses as a malloc'd
-    // `(double *, size_t)` the C side owns and frees. A closure with a NULL
-    // `call` must therefore convert nothing at all.
-    cbindgen = cbindgen
-        .callback(pq!(impl Fn(Vec<f64>) + Send + Sync + 'static))
-        .base_name("history_batch");
-
-    cbindgen = cbindgen.enum_type(pq!(Grade));
-    cbindgen = cbindgen
-        .callback(pq!(impl Fn(Option<Grade>) + Send + Sync + 'static))
-        .base_name("maybe_grade");
-
-    // Constructors / `Result`-returning ops (fallible inputs route through the
-    // error out-param), plus the infallible by-value `Foo` accessors and the
-    // `InsideFoo` producer — none need `.panic()`. `calculator_apply` takes an
-    // `Operation` by value, so its `char **e` also carries an invalid-discriminant
-    // rejection (see `inside_foo_value` below).
-    for function in [
-        pq!(calculator_new),
-        pq!(calculator_new_from_str),
-        pq!(calculator_apply),
-        // Two consumed handles of one type, and one consumed beside one
-        // borrowed: the two shapes the alias preflight covers. Both return
-        // `Result`, so the rejection reaches the caller through `char **e`
-        // rather than aborting.
-        pq!(calculator_merge),
-        pq!(calculator_absorb),
-        pq!(foo_new),
-        pq!(foo_get_id),
-        pq!(inside_foo_default),
-        // The tagged union crossing OUT: constructed and returned. Nothing to
-        // validate on this side — Rust always writes a live arm.
-        pq!(shape_new_empty),
-        pq!(shape_new_circle),
-        pq!(shape_new_rect),
-        // The union crossing IN on a fallible function: an out-of-range tag
-        // reports through the same `char **e` as the domain error.
-        pq!(shape_try_area),
-        // `Note`'s constructors: the nested-struct, converted-leaf and `bool`
-        // payloads crossing OUT.
-        pq!(note_new_silent),
-        pq!(note_new_after),
-        pq!(note_new_flagged),
-    ] {
-        cbindgen = cbindgen.function(function);
-    }
     if unstable {
-        // `calculator_reset` mirrors an `#[unstable]` slice of the API; only present
-        // in the captured source when the feature is enabled. Its `&mut` borrow is
-        // fallible (null-checked) with no `Result`, so `.panic()`.
-        cbindgen = cbindgen.function(pq!(calculator_reset)).panic();
+        // `calculator_reset` mirrors an `#[unstable]` slice of the API; only
+        // present in the captured source when the feature is enabled. Its `&mut`
+        // borrow is fallible (null-checked) with no `Result`, so `.panic()`.
+        module = module.fun(fun!(calculator_reset).panic());
     }
 
-    // Borrow-only accessors / predicates / the callback driver: they have fallible
-    // (null-checked) borrow inputs but no `Result` channel, so `.panic()` lets the
-    // wrapper abort on a null handle. `inside_foo_value` joins them for the same
-    // reason with a different fallible input: a C enum is an `int` at the ABI, so
-    // its discriminant is validated on the way in (never materialised unchecked),
-    // and with no `char **e` to report an out-of-range one it aborts. The three
-    // union-consuming accessors are the same case one level up — the tag a C
-    // caller supplies is validated before the Rust enum exists, here abortively.
-    for function in [
-        pq!(inside_foo_value),
-        pq!(shape_area),
-        pq!(shape_get_label),
-        pq!(drawing_new),
-        pq!(drawing_get_shape),
-        // `Note` crossing IN (tag validated, so fallible without a `Result`),
-        // and its `&str`-taking constructor.
-        pq!(note_value),
-        pq!(note_emphatic),
-        pq!(note_new_titled),
-        pq!(note_new_sketched),
-        pq!(caption_new),
-        pq!(calculator_new_clone),
-        pq!(calculator_get_value),
-        pq!(calculator_get_count),
-        pq!(calculator_is),
-        pq!(calculator_to_string),
-        pq!(calculator_get_history),
-        pq!(calculator_for_each),
-        pq!(calculator_last_or_none),
-        pq!(calculator_grade_or_none),
-        pq!(calculator_history_batch),
-        // `&str` label input is fallible (null-checked) with no `Result`.
-        pq!(shape_new_labeled),
-    ] {
-        cbindgen = cbindgen.function(function).panic();
-    }
+    cbindgen = cbindgen.module(module);
 
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
     // Always written to OUT_DIR under a stable name too, so the commented-out

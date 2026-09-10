@@ -19,6 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::pipeline::{fresh_output_root, Pipeline};
+use prebindgen_c::{callback, fun, module, ptr_type, repr_c_type};
 use syn::parse_quote as pq;
 
 fn main() {
@@ -47,87 +48,65 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
         // consumer cannot guarantee across module/CRT boundaries.)
         .free_memory_function("perftest_free");
 
-    // `String` as an opaque handle: C holds it as `string_t *` (= `Box<String>`),
-    // built by `string_new`, read via `string_len`, freed by `string_drop`. This is
-    // what lets the FFI-safe `Payload` carry a heap string by opaque pointer.
-    cbindgen = cbindgen.opaque_ptr(pq!(String));
-
-    // `Storage` as an opaque handle (`storage_t *` = `Box<Storage>`, `storage_drop`):
-    // it owns the payload that the functions read/write.
-    cbindgen = cbindgen.opaque_ptr(pq!(Storage));
-
-    // `PayloadHandler` as an opaque handle (`payload_handler_t *`, `payload_handler_drop`):
-    // a prepared callback built once via `payload_handler_new` and fired by
-    // `storage_callback` — the registered-subscriber pattern.
-    cbindgen = cbindgen.opaque_ptr(pq!(PayloadHandler));
-
-    // `PayloadVecHandler` as an opaque handle: a prepared WHOLE-BATCH callback fired by
-    // `storage_callback_vec` (its closure receives the slice by reference).
-    cbindgen = cbindgen.opaque_ptr(pq!(PayloadVecHandler));
-
-    // The zero-copy, `#[repr(C)]` value struct. Emits a visible-field `payload_t`
-    // mirror (`Option<Box<String>>` -> `string_t *label`) + a `Transmute` and a
-    // compile-time size/align assert proving the reinterpret sound. Owned-ness is
-    // INFERRED from the fields: `Payload` has an opaque-pointer `label`, so a by-value
-    // consume (`storage_put_by_take`) reads the value out through a `*mut payload_t` and
-    // nulls the moved-out `label` in place, making the caller's later free a no-op (no
-    // `.owned()` modifier, no `Default` requirement — the `label` is nullable).
+    // Everything this binding declares, in one tree: the handles C holds, the
+    // zero-copy value struct, the two callback signatures, and the functions —
+    // each with its own options rather than with a modifier chained after it.
     //
-    // `.assume_c_field_validity()` acknowledges the one gap the mirror policy
-    // cannot close: `Payload::flag` is a `bool`, and the whole-struct
-    // reinterpret gives no hook to normalise a byte outside `{0, 1}` that a C
-    // caller wrote (#170 instance 3). This benchmark's C side writes the field
-    // through `_Bool`, so it is in-domain by construction; a real binding should
-    // prefer a `data_struct` field, which normalises per field.
-    cbindgen = cbindgen
-        .repr_c_struct(pq!(Payload))
-        .assume_c_field_validity();
-
-    // The `&Payload` callback signature -> a `closure_payload_t` closure struct
-    // whose `call` takes a `const payload_t *` (zero-copy borrow). `.base_name`
-    // gives it a clean name (the `&Payload` base would mangle to `___payload`).
-    cbindgen = cbindgen
-        .callback(pq!(impl Fn(&Payload) + Send + Sync + 'static))
-        .base_name("payload");
-
-    // The whole-batch `&[Payload]` callback signature -> a `closure_payload_vec_t` whose
-    // `call` takes a `const payload_t *` + `size_t` — the slice delivered **by reference**
-    // (zero-copy, no per-element materialization).
-    cbindgen = cbindgen
-        .callback(pq!(impl Fn(&[Payload]) + Send + Sync + 'static))
-        .base_name("payload_vec");
-
-    // Functions. `storage_new` returns a fresh handle (no fallible input). The others
-    // take null-checked borrows / by-value consumes with no `Result`, so they `.panic()`
-    // on a null pointer. The five `storage_put_*`/`storage_get_into_*` demonstrate the
-    // distinct C parameter semantics (by-value consume, `const *` read, `*` read/write,
-    // out-param-into-init, out-param-into-uninit).
-    cbindgen = cbindgen.function(pq!(storage_new));
-    cbindgen = cbindgen.function(pq!(storage_get)).panic();
-    cbindgen = cbindgen.function(pq!(storage_put_by_take)).panic();
-    cbindgen = cbindgen.function(pq!(storage_put_by_read)).panic();
-    cbindgen = cbindgen
-        .function(pq!(storage_put_by_read_and_update))
-        .panic();
-    cbindgen = cbindgen.function(pq!(storage_get_into_init)).panic();
-    cbindgen = cbindgen.function(pq!(storage_get_into_uninit)).panic();
-    cbindgen = cbindgen.function(pq!(payload_handler_new));
-    cbindgen = cbindgen.function(pq!(storage_callback)).panic();
-    cbindgen = cbindgen.function(pq!(string_new)).panic();
-    cbindgen = cbindgen.function(pq!(string_len)).panic();
-
-    // Array (slice / Vec) API. `storage_put_slice` takes `&[Payload]` — a
-    // `repr_c_struct` slice — which lowers to `(const payload_t *, size_t)`
-    // reinterpreted zero-copy (the slice analogue of the `&Payload` borrow).
-    // `storage_get_vec` returns `Vec<Payload>` → a malloc'd `(payload_t *, size_t)`
-    // array the C side frees per-element. Both have only null-checked borrow inputs
-    // and no `Result`, so `.panic()`.
-    cbindgen = cbindgen.function(pq!(storage_put_slice)).panic();
-    cbindgen = cbindgen.function(pq!(storage_get_vec)).panic();
-
-    // Whole-batch callback: prepare once, fire with the slice by reference.
-    cbindgen = cbindgen.function(pq!(payload_vec_handler_new));
-    cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
+    // `String` is a handle so the FFI-safe `Payload` can carry a heap string by
+    // opaque pointer; `Storage` owns what the functions read and write; the two
+    // handler types are prepared callbacks fired by `storage_callback` and
+    // `storage_callback_vec`.
+    //
+    // `Payload` is `#[repr(C)]` and crosses zero-copy: a visible-field
+    // `payload_t` mirror (`Option<Box<String>>` -> `string_t *label`) plus a
+    // `Transmute` and a size/align assert proving the reinterpret sound.
+    // Owned-ness is inferred from the fields, so a by-value consume
+    // (`storage_put_by_take`) reads the value out through a `*mut payload_t` and
+    // nulls the moved-out `label` in place. `assume_field_validity` acknowledges
+    // the one gap the mirror cannot close: `Payload::flag` is a `bool`, and a
+    // whole-struct reinterpret has no hook to normalise a byte outside `{0, 1}`
+    // (#170 instance 3). This benchmark writes it through `_Bool`; a real
+    // binding should prefer a `data_type` field, which normalises per field.
+    //
+    // The callbacks name themselves: the `&Payload` base would mangle to
+    // `___payload`.
+    //
+    // `storage_new` and the two `*_handler_new` functions return fresh handles.
+    // The rest take null-checked borrows or by-value consumes with no `Result`,
+    // so they need `.panic()` to say what a null pointer does. The five
+    // `storage_put_*` / `storage_get_into_*` demonstrate the distinct C
+    // parameter semantics (by-value consume, `const *` read, `*` read/write,
+    // out-param-into-init, out-param-into-uninit), and the array pair adds a
+    // `&[Payload]` slice in and a `Vec<Payload>` out.
+    cbindgen = cbindgen.module(
+        module!()
+            .ptr_type(
+                ptr_type!(String)
+                    .method(fun!(string_new).panic())
+                    .method(fun!(string_len).panic()),
+            )
+            .ptr_type(
+                ptr_type!(Storage)
+                    .method(fun!(storage_new))
+                    .method(fun!(storage_get).panic())
+                    .method(fun!(storage_put_by_take).panic())
+                    .method(fun!(storage_put_by_read).panic())
+                    .method(fun!(storage_put_by_read_and_update).panic())
+                    .method(fun!(storage_get_into_init).panic())
+                    .method(fun!(storage_get_into_uninit).panic())
+                    .method(fun!(storage_callback).panic())
+                    .method(fun!(storage_put_slice).panic())
+                    .method(fun!(storage_get_vec).panic())
+                    .method(fun!(storage_callback_vec).panic()),
+            )
+            .ptr_type(ptr_type!(PayloadHandler).method(fun!(payload_handler_new)))
+            .ptr_type(ptr_type!(PayloadVecHandler).method(fun!(payload_vec_handler_new)))
+            .repr_c_type(repr_c_type!(Payload).assume_field_validity())
+            .callback(callback!(impl Fn(&Payload) + Send + Sync + 'static).base_name("payload"))
+            .callback(
+                callback!(impl Fn(&[Payload]) + Send + Sync + 'static).base_name("payload_vec"),
+            ),
+    );
 
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
     let binding = cbindgen.build().expect("build prebindgen items");

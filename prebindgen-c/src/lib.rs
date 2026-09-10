@@ -577,6 +577,7 @@ mod builder;
 mod chain;
 mod compile;
 mod convert;
+pub mod decl;
 mod emit;
 mod recipes;
 #[cfg(test)]
@@ -589,6 +590,17 @@ mod v2;
 
 /// Which engine a build script runs, and where each one writes — re-exported
 /// so a build script names this crate for the whole binding.
+/// Re-exported for this crate's declaration macros, which expand to paths
+/// through `$crate` so a build script needs nothing but `prebindgen-c` in scope.
+#[doc(hidden)]
+pub use prebindgen_registry::ident;
+#[doc(hidden)]
+pub use syn;
+
+pub use decl::{
+    CallbackDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl, ModuleDecl, PtrTypeDecl,
+    ReprCTypeDecl, TaggedUnionDecl, ValueTypeDecl,
+};
 pub use prebindgen_registry::pipeline;
 
 // ── Free helpers ───────────────────────────────────────────────────────

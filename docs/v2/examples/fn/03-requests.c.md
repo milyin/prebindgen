@@ -12,8 +12,12 @@ Owner: the C frontend
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .data_struct(parse_quote!(Stamp))    // see the record path
-    .function(parse_quote!(stamp_sum))
+    .module(
+        module!().data_type(
+            data_type!(Stamp)              // see the record path
+                .method(fun!(stamp_sum)),
+        ),
+    )
     .build();
 ```
 

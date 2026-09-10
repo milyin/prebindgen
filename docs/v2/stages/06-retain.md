@@ -4,8 +4,9 @@
 
 # Retain supported output
 
-Status: proposed design. The API sketches state intended contracts, not
-implemented functionality.
+Status: implemented. Outcomes, causes, the frozen result and the report are
+what the engine produces; `Unselected` and the pruning of unreachable conversions
+are not there yet.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:

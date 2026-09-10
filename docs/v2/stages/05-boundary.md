@@ -4,8 +4,8 @@
 
 # Assemble the native boundary
 
-Status: proposed design. The API sketches state intended contracts, not
-implemented functionality.
+Status: implemented. Delivery is a native return or nothing: out-parameters,
+`Result` branches and declared sinks are variants the engine does not have yet.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:

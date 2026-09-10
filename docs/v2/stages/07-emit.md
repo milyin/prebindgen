@@ -4,8 +4,10 @@
 
 # Emit bindings
 
-Status: proposed design. Code shown as generated output illustrates required
-behavior, not bytes produced by the current scaffold.
+Status: implemented. The Rust shown is what the engine emits — `examples/v2check`
+compiles it and checks it against these pages. The Kotlin comes from that
+example's own writer, which is a reference for what a foreign writer does rather
+than the shipping JNI adapter.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:

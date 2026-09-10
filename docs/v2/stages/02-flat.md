@@ -4,8 +4,8 @@
 
 # Build and inspect the source model
 
-Status: this chapter describes the library as it stands, except for its last
-section, which is proposed design.
+Status: this chapter describes the library as it stands, and the engine reads the
+model exactly this way. Its last section is the exception: none of it is built.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:

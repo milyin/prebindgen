@@ -4,8 +4,9 @@
 
 # Record binding requests
 
-Status: proposed design. The API sketches state intended contracts, not
-implemented functionality.
+Status: implemented. `BindingRequests` is what a frontend hands the engine;
+the policy types shown are illustrations of one frontend's choices, since each
+frontend defines its own.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:
@@ -31,14 +32,20 @@ A binding crate is an ordinary Rust crate whose build script configures a
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .data_struct(parse_quote!(Stamp))   // Stamp crosses as a C struct, by value
-    .function(parse_quote!(stamp_sum))  // and this function becomes a C entry point
+    .module(
+        module!().data_type(
+            data_type!(Stamp)              // Stamp crosses as a C struct, by value
+                .method(fun!(stamp_sum)),  // and this function becomes a C entry point
+        ),
+    )
     .build();
 ```
 
-The generated C type and function keep the names the source used, `Stamp` and
-`stamp_sum`, because that is the default: a foreign name is the source name
-unless something changes it. A frontend offers naming hooks for the cases where
+A type carries the functions that operate on it, and each declaration carries its
+own options, so the tree means the same however it is ordered. The generated C
+type and function keep the names the source used, `Stamp` and `stamp_sum`,
+because that is the default: a foreign name is the source name unless something
+changes it. A frontend offers naming hooks for the cases where
 that is not what you want — a crate-wide prefix, or a symbol that would collide
 with something already in the C namespace — and those hooks are configured here,
 in the same builder, not anywhere downstream.

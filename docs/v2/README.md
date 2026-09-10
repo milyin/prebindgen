@@ -18,7 +18,10 @@ native boundary, the retained output, and the generated code. Read that way, the
 document is an example-based specification: the general contract in a chapter and
 its concrete application to a fixed input are two views of the same requirement.
 
-Status: proposed architecture for [issue #720](https://github.com/milyin/prebindgen/issues/720).
+Status: this is how the pipeline works, not a proposal for one. Where a chapter
+describes something the engine does not do yet, it says so at that point, and
+[the implementation page](implementation.md#what-it-does-not-settle) keeps the
+whole list. Tracked as [issue #720](https://github.com/milyin/prebindgen/issues/720).
 The engine switch and the unsupported-output reporting exist, and so does the
 first increment of the pipeline itself: the two element paths specified here —
 a function taking an owned record, and that record — are planned, assembled and
