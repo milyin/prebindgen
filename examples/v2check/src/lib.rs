@@ -55,6 +55,43 @@ mod tests {
         crate::stamp_show(stamp);
     }
 
+    /// Every scalar, through the generated C wrappers, by value.
+    ///
+    /// Each member is a distinct number, so a wrapper that read one member's
+    /// bytes as another's — or read a narrow member at the wrong width — comes
+    /// back with the wrong answer rather than merely compiling.
+    #[test]
+    fn the_c_wrappers_carry_every_scalar() {
+        fn scalars(flag: bool) -> crate::Scalars {
+            crate::Scalars {
+                flag: ::core::mem::MaybeUninit::new(flag),
+                tiny: -1,
+                small: -2,
+                medium: -3,
+                large: 4,
+                byte: 5,
+                word: 6,
+                dword: 7,
+                qword: u64::MAX,
+                single: 8.0,
+                double: 9.5,
+            }
+        }
+        assert_eq!(crate::scalars_large(scalars(true)), 4);
+        assert_eq!(crate::scalars_qword(scalars(true)), u64::MAX);
+        assert_eq!(crate::scalars_double(scalars(true)), 9.5);
+        // -1 - 2 - 3 + 5 + 6 + 7 + 8
+        assert_eq!(crate::scalars_narrow(scalars(true)), 20);
+        // A `bool` crosses as storage: the wrapper normalizes it on the way
+        // in and stores it back on the way out.
+        for flag in [true, false] {
+            let returned = crate::scalars_flag(scalars(flag));
+            assert_eq!(unsafe { returned.assume_init() }, !flag);
+        }
+        // The two scalars whose width is the platform's, which only C carries.
+        assert_eq!(crate::size_shift(-2, 10), 8);
+    }
+
     /// Every Rust item the specification's emit pages show is emitted, token
     /// for token.
     ///
@@ -141,12 +178,14 @@ mod tests {
     /// Every requested element was emitted, and the report says so.
     #[test]
     fn both_targets_report_every_generated_element_as_emitted() {
-        for target in ["c", "jni"] {
+        // Two records and the functions over them: three over `Stamp`, five
+        // over `Scalars`. C carries `size_shift` on top of that; the JVM has
+        // no type of the platform's width, so it does not.
+        for (target, emitted) in [("c", 11), ("jni", 10)] {
             let report = report(target);
-            // The record, and the three functions over it.
             assert_eq!(
                 report.matches("\"outcome\": \"emitted\"").count(),
-                4,
+                emitted,
                 "{target} report: {report}"
             );
         }
@@ -167,6 +206,10 @@ mod tests {
             ("c", "type:Marker", "unsupported.c.empty_aggregate"),
             ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
             ("jni", "type:Reading", "unsupported.jni.carrier"),
+            // `usize`/`isize` have no stable JVM type, and the function taking
+            // them is declared in both bindings so the report says which one
+            // carries them.
+            ("jni", "fn:size_shift", "unsupported.jni.carrier"),
             ("jni", "type:Marker", "unsupported.jni.empty_class"),
             ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
         ] {

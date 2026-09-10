@@ -600,6 +600,59 @@ For sequences, variants and callbacks, adapters supply runtime operations; the r
 
 A layout stays nested for as long as nesting is meaningful: an aggregate whose member is itself an aggregate is described that way, and only a place that requires a flat list of values — a native signature, where each slot becomes one ABI argument — flattens it, at that point, in that use. Keeping the nesting until then is what lets the same record representation be an argument in one function and a member of another.
 
+### Which scalars a target carries
+
+**Implemented.** A scalar has no parts, so its representation is one carrier and
+one terminal conversion — and which carrier that is, is entirely the target's
+answer. Nothing in the registry names a scalar type, and there is no table of
+"the FFI types" it blesses. The reference adapters answer for every scalar the
+model has, and they answer differently:
+
+| Rust | C carrier | JVM carrier | Kotlin |
+|---|---|---|---|
+| `bool` | `MaybeUninit<bool>` | `jboolean` | `Boolean` |
+| `i8` / `u8` | `i8` / `u8` | `jbyte` | `Byte` |
+| `i16` / `u16` | `i16` / `u16` | `jshort` | `Short` |
+| `i32` / `u32` | `i32` / `u32` | `jint` | `Int` |
+| `i64` / `u64` | `i64` / `u64` | `jlong` | `Long` |
+| `f32` / `f64` | `f32` / `f64` | `jfloat` / `jdouble` | `Float` / `Double` |
+| `isize` / `usize` | `isize` / `usize` | — | — |
+
+Three things in that table are worth reading as design, not as trivia.
+
+**C carries the Rust type itself**, and `cbindgen` writes the C name for it —
+`int64_t` for `i64`, `uintptr_t` for `usize`. So the C adapter has no table at
+all: it spells the kind and is done, and the conversion is an identity that
+renders nothing.
+
+**`bool` is the exception in both targets**, for the same reason. A `bool` whose
+byte is neither 0 nor 1 is undefined behaviour, and a foreign caller writes
+whatever it likes, so the byte cannot be *received* as a `bool`. It crosses C as
+`MaybeUninit<bool>` — same size, same alignment, and cbindgen still writes
+`bool` for it — and is read with `ptr::read(v.as_ptr() as *const u8) != 0` on
+the way in and stored back with `MaybeUninit::new` on the way out. The JVM's
+`jboolean` is a `u8` for the same reason. Neither is an identity, so both are
+the target's own operation rather than a `StandardOp`.
+
+The `bool` carrier is the same in both directions, and that is a consequence of
+[`represent` not being told the position it answers for](#how-the-registry-asks-a-target-for-decisions):
+one representation is reused wherever a conversion of that identity is needed,
+so a `bool` cannot be a `MaybeUninit<bool>` as a struct member and a bare `bool`
+as a return. v1, which represents each position separately, does return a bare
+`bool` from a function while carrying `MaybeUninit<bool>` in a struct — so the
+v2 output wraps where v1 does not. The wrap is a no-op: `MaybeUninit::new` of a
+value Rust already built, in a type with the layout of the one it holds.
+
+**The JVM has no unsigned integers**, so an unsigned Rust type rides in the
+signed carrier of the same width and is cast back at the Rust end: the bits
+survive, and Kotlin sees the signed reading of them. `usize`/`isize` get no
+carrier at all — their width is the platform's, and there is no stable JVM type
+to pick — so a JNI binding that declares a function taking one is told so by
+[the report](06-retain.md), with the capability `unsupported.jni.carrier`. C
+declares the same function without difficulty. That is the shape the design is
+after: a scalar one target cannot carry is a *reported* skip in that binding, not
+an error in the model and not a silent hole in the other binding.
+
 ### Optional values
 
 **Not implemented.** Nothing carries an optional value yet: `Layout::Slots`,

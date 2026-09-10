@@ -161,8 +161,12 @@ contradictory configuration fails rather than becoming a capability claim.
 2. **Registry-supplied operations inside an adapter's payload.** An operation's
    implementation is `Operation<Payload>`: either a `Standard` operation the
    registry renders — identity, member read — or the adapter's own `Payload`.
-   The payload has no standard variant to imitate, and C ships no operation
-   renderer at all, which its adapter states by giving `Payload` no values.
+   The payload has no standard variant to imitate. What each target puts in it
+   is what the registry cannot state: the C payload is two values, both ends of
+   the one scalar that crosses C as storage rather than as itself
+   ([`bool`](stages/04-values.md#which-scalars-a-target-carries)); every other C
+   conversion is an identity or a member read, and renders through the
+   registry.
 3. **`RelationSelection`'s reach.** It has none: `select` answers with the
    relation for the value in front of it, and nothing else. A choice for a child
    is a conversion rule recorded at the child's position, which the recursion

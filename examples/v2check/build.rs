@@ -38,7 +38,8 @@ fn main() {
     let classes = JniClasses::in_package("example")
         .with("Stamp", "Stamp")
         .with("Reading", "Reading")
-        .with("Marker", "Marker");
+        .with("Marker", "Marker")
+        .with("Scalars", "Scalars");
     let jni = generate(
         model(&source),
         &JniTarget::new(classes.clone()),
@@ -157,7 +158,68 @@ fn c_requests() -> BindingRequests<CPolicy> {
         DeclaredElement::new(ElementKind::Type, "Pair", "Pair", "data_struct"),
         pair,
     );
+    // The C name of each is the Rust name.
+    declare_scalars(
+        &mut requests,
+        |rust| rust.to_string(),
+        |symbol| CPolicy::Function {
+            symbol: symbol.to_string(),
+        },
+    );
+    let scalars = requests.policy(CPolicy::DataStruct {
+        c_name: "Scalars".to_string(),
+    });
     requests
+        .type_policies
+        .insert("Scalars".to_string(), scalars);
+    requests.output(
+        DeclaredElement::new(ElementKind::Type, "Scalars", "Scalars", "data_struct"),
+        scalars,
+    );
+    // C carries `usize`/`isize`; the JVM does not, which is why this one is
+    // declared for both.
+    let shift = requests.policy(CPolicy::Function {
+        symbol: "size_shift".to_string(),
+    });
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "size_shift",
+            "size_shift",
+            "function",
+        ),
+        shift,
+    );
+    requests
+}
+
+/// Every function over `Scalars`, declared the same way in both bindings.
+///
+/// One list, because what these exercise is the scalar table rather than
+/// anything either target does differently: each one reads all eleven members
+/// and delivers a different one back.
+const SCALAR_FUNCTIONS: [&str; 5] = [
+    "scalars_large",
+    "scalars_flag",
+    "scalars_qword",
+    "scalars_double",
+    "scalars_narrow",
+];
+
+/// Declare `SCALAR_FUNCTIONS`, each under the name `name` gives it and the
+/// policy `policy` builds for that name.
+fn declare_scalars<P: Clone>(
+    requests: &mut BindingRequests<P>,
+    name: impl Fn(&str) -> String,
+    policy: impl Fn(&str) -> P,
+) {
+    for rust in SCALAR_FUNCTIONS {
+        let id = requests.policy(policy(&name(rust)));
+        requests.output(
+            DeclaredElement::new(ElementKind::Function, rust, name(rust), "function"),
+            id,
+        );
+    }
 }
 
 /// The JNI binding: `Stamp` as an `example.Stamp` object whose properties are
@@ -251,7 +313,60 @@ fn jni_requests(classes: &JniClasses) -> BindingRequests<JniPolicy> {
         ),
         marker_value,
     );
+    declare_scalars(
+        &mut requests,
+        |rust| format!("example.Bindings.{}", camel(rust)),
+        |placement| JniPolicy::Function {
+            placement: placement.to_string(),
+        },
+    );
+    let scalars = requests.policy(JniPolicy::DataClass {
+        rust: "Scalars".to_string(),
+    });
     requests
+        .type_policies
+        .insert("Scalars".to_string(), scalars);
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Type,
+            "Scalars",
+            "example.Scalars",
+            "data_class",
+        ),
+        scalars,
+    );
+    // Declared here as well as in C, so the report — rather than a comment —
+    // says the JVM has no type of the platform's width.
+    let shift = requests.policy(JniPolicy::Function {
+        placement: "example.Bindings.sizeShift".to_string(),
+    });
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "size_shift",
+            "example.Bindings.sizeShift",
+            "function",
+        ),
+        shift,
+    );
+    requests
+}
+
+/// `scalars_large` as Kotlin spells a method name.
+fn camel(rust: &str) -> String {
+    let mut out = String::new();
+    let mut upper = false;
+    for ch in rust.chars() {
+        match ch {
+            '_' => upper = true,
+            _ if upper => {
+                out.extend(ch.to_uppercase());
+                upper = false;
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// The report is published beside the code, as it is for a real binding.
