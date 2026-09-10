@@ -44,13 +44,13 @@ fn base() -> CbindgenBuilder {
         .free_memory_function("source_free")
 }
 
-/// The tree lowers to the same binding the declarators build by hand.
+/// The list lowers to the same binding the declarators build by hand.
 ///
 /// Both modifiers are load-bearing: `pt` is not the base `Point` would default
 /// to, so a dropped `.base_name` renames the emitted type, and `point_named`
 /// takes a `String` with no `Result`, so a dropped `.panic` fails the build.
 #[test]
-fn a_tree_and_the_declarators_it_lowers_to_agree() {
+fn a_list_and_the_declarators_it_lowers_to_agree() {
     let declared = write(
         base()
             .data_struct(syn::parse_quote!(Point))
@@ -61,7 +61,7 @@ fn a_tree_and_the_declarators_it_lowers_to_agree() {
         registry(),
         "decl_flat",
     );
-    let tree = write(
+    let listed = write(
         base().api(
             api!()
                 .data_type(data_type!(Point).base_name("pt"))
@@ -69,13 +69,16 @@ fn a_tree_and_the_declarators_it_lowers_to_agree() {
                 .fun(fun!(point_make)),
         ),
         registry(),
-        "decl_tree",
+        "decl_list",
     );
-    assert_eq!(declared, tree);
-    assert!(tree.contains("pt"), "the declared base reached the output");
+    assert_eq!(declared, listed);
+    assert!(
+        listed.contains("pt"),
+        "the declared base reached the output"
+    );
 }
 
-/// Dropping the modifier the tree carried is a build error, which is what makes
+/// Dropping the modifier the list carried is a build error, which is what makes
 /// the comparison above sensitive to it.
 #[test]
 fn a_function_needing_panic_is_refused_without_it() {
@@ -99,7 +102,7 @@ fn a_function_needing_panic_is_refused_without_it() {
 /// Declaring the function before the type it belongs to changes nothing, and
 /// neither does interleaving two types whose options differ.
 #[test]
-fn the_order_of_a_tree_does_not_change_it() {
+fn the_order_of_a_list_does_not_change_it() {
     let one = write(
         base().api(
             api!()
@@ -174,7 +177,7 @@ fn a_repeated_declaration_is_refused() {
     assert!(message.contains("Point"), "{message}");
 }
 
-/// Every kind of declaration the tree carries reaches the builder, with the
+/// Every kind of declaration the list carries reaches the builder, with the
 /// option it was given — including the kinds neither C example declares.
 #[test]
 fn every_declaration_kind_carries_its_options() {
@@ -345,9 +348,9 @@ fn one_callback_signature_spelled_two_ways_is_refused() {
     assert!(message.contains("declared twice"), "{message}");
 }
 
-/// A second module cannot quietly reconfigure what the first declared.
+/// A second `api()` call cannot quietly reconfigure what the first declared.
 #[test]
-fn a_declaration_repeated_in_another_module_is_refused() {
+fn a_declaration_repeated_in_another_api_call_is_refused() {
     let message = catch_msg(|| {
         let _ = base()
             .api(api!().fun(fun!(point_make).base_name("first")))

@@ -801,7 +801,7 @@ impl CbindgenBuilder {
             ignored_types,
         } = api;
 
-        // A declaration tree is a set, so a repeated declaration is a mistake
+        // The declaration list is a set, so a repeated declaration is a mistake
         // rather than a last-write-wins update: two `fun!(f)` with different
         // options would otherwise export whichever the lowering replayed last,
         // which is exactly the order-dependence this surface removes. The
