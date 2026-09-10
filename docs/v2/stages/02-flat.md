@@ -219,6 +219,55 @@ become `= 7` — so the source's own text rides along for emission to reuse. It 
 not a second source of facts: the retained syntax is private to Flat, and the
 rule for every consumer is to analyse the model and generate from the model.
 
+That rule is about a phase, and it governs both engines. **Planning** is
+everything up to final Rust emission: recording requests, selecting relations,
+describing representations, assembling a boundary. Planning may carry a type
+opaquely and use what the model says about it — its kind, its identity, its
+parts, its declared fields, its source location — and may not obtain the syntax
+behind it, branch on rendered text to reach a decision, or generate a body in
+order to discover what that body depends on. **Emission** is where syntax is
+legitimate, and where the writers reproduce what the source wrote.
+
+Printing is not deciding: a type formatted into a diagnostic is decision code
+reporting why it decided, and a panic naming an unsupported type is exactly
+that. The prohibition is on deciding *from* text.
+
+The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
+`jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
+own output vocabulary rather than captured source syntax, so writing them as
+syntax during planning is what an adapter is for. That is why a carrier a target
+describes here holds a real `syn::Type`, while a source-side position stays a
+handle to the model. The rule constrains where a fact may come *from*, not which
+types may be spelled.
+
+The rule is shared; how each engine holds itself to it is not. What both share
+is the shape: rendering is split into a **protocol** and a **capability**. The
+protocol lives with the model, in `prebindgen-flat` — object-safe,
+generate-only, emitting source types from the model's own facts, with no method
+that hands back a captured spelling or a typed syntax tree. Implementing it is a
+deliberate act, which is why each engine establishes its own rather than
+borrowing the other's.
+
+In V1 the capability is `prebindgen_registry::RustWriter`, and the phase is
+structural rather than a promise: its constructor is private, it holds the
+frozen source-module map, it implements the protocol through a private receiver
+no public API names, and an emission callback is the only thing that receives
+one. The registry does not re-export the protocol through its own model path, so
+an adapter depending on the registry alone cannot even name it, and compile-fail
+tests pin both restrictions. Two escapes are deliberate: the non-default
+`testing` feature hands the capability out so an adapter's test suite can render
+in isolation — nothing stops a crate enabling that feature as an ordinary
+dependency — and a crate that depends on `prebindgen-flat` directly can
+implement the protocol itself, which is what lets a consumer that is not a
+binding generator reuse the model without gaining access to retained syntax.
+
+V2 has its own private writer, and reaches an adapter differently: a target is
+asked to render one operation and receives the payload it described plus the
+operand names the writer allocated, never a rendering capability. Same rule,
+same protocol, a different way of keeping planning away from syntax. For the
+escapes in either engine the rule is policy, stated here, rather than a boundary
+the compiler enforces.
+
 Flat answers questions about Rust; it takes no position on bindings. It will
 report that `stamp_from_millis(i64) -> Stamp` takes one integer and returns
 `Stamp`. Whether that function should therefore be used to *construct* `Stamp`

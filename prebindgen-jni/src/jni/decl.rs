@@ -414,6 +414,39 @@ impl From<syn::Type> for EnumClassDecl {
 /// Like `enum_class!` it has no `.method` / `.constructor`: a sum value has
 /// no object identity Rust-side, so a "method" on it is a free function
 /// taking it.
+///
+/// # Who closes a handle payload
+///
+/// Whoever would close a bare handle in the same position. A sum that reaches
+/// an owned handle is itself `AutoCloseable`: the generated interface declares
+/// it, each variant class overrides `close()` to close its own payload, and so
+/// the `when` over the alternatives is emitted once, in the sum, rather than at
+/// every position holding one.
+///
+/// * A **returned** sum hands the caller a value it owns and must `close()`,
+///   exactly as a returned handle does.
+/// * A sum delivered to a **callback** is closed after `run` returns —
+///   close-unless-taken, so `take()` inside the body is how a receiver keeps
+///   the payload alive across the boundary.
+/// * A sum held in a **data-class field** is closed by the container's own
+///   `close()` cascade, through a nested data class as well.
+/// * An **element of a fold** is a callback argument like any other, so it is
+///   closed after each `run`. A folder that accumulates its elements —
+///   `{ acc, e -> acc + e }`, the most natural body there is — therefore
+///   accumulates *closed* handles unless it `take()`s each one. This is not a
+///   sum-only rule: it applies to any element type that reaches a handle.
+///
+/// `take()` means taking the payload handle and keeping what it returns:
+/// retaining the original reference instead leaves you holding something the
+/// proxy has already closed. Only an **owned** handle is closed this way; a
+/// borrowed projection is not.
+///
+/// The four agree with the bare handle in each position, which is the point:
+/// ownership does not move because a value changed spelling.
+/// `examples/covertest-kotlin` asserts the returned, callback and data-class
+/// rows on the JVM — that a callback payload is usable inside `run`, closed
+/// once `run` returns, and kept by `take()`. The fold row follows from the same
+/// emitter path rather than from a JVM assertion of its own.
 pub struct SealedClassDecl {
     pub(crate) key: TypeKey,
     /// The type this declaration was **written with** — the `X` the macro

@@ -23,8 +23,8 @@
 //! `testing` feature exposes `RustWriter::for_test` and
 //! `RustWriter::for_registry_test` for out-of-crate adapter test suites, and a
 //! crate depending on `prebindgen-flat` directly can implement the unsealed
-//! `RustEmitter` itself. For those the rule is policy. `docs/model.md` states
-//! it in full.
+//! `RustEmitter` itself. For those the rule is policy, stated in full by
+//! `docs/v2/stages/02-flat.md` — it governs both engines.
 //!
 //! [`TypeRef`]: prebindgen_flat::flat::TypeRef
 //! [`RustWriter`]: crate::RustWriter
