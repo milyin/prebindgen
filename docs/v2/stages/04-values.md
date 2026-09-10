@@ -58,9 +58,6 @@ plan(type, direction, position):
                                                       # rule, else type default
     relation = target.select(type, direction, applicable rules, policy)
                                                       # cheap: no recursion yet
-    if a node exists for (type, direction, relation, policy):
-        return it                                     # the cache key is complete
-                                                      # only once the relation is known
     mark (type, direction, relation, policy) as being resolved
                                                       # meeting this mark again is a cycle
 
@@ -72,6 +69,10 @@ plan(type, direction, position):
     if any child is unsupported:
         this conversion is unsupported, and so is everything that needed it
 
+    if a node exists for (type, direction, relation, policy, children):
+        return it                                     # the identity is complete
+                                                      # only once the children are
+
     repr = target.represent(relation, children, policy)
                # which carriers hold the value, and the operations that access them
     body = compose(relation, children, repr)
@@ -81,16 +82,21 @@ plan(type, direction, position):
     record the node and return it
 ```
 
-Two details in that sketch matter more than they look. Selection happens before
-the cache is consulted, because the relation is part of what identifies a node —
-the same type converted through its fields and through a constructor are two
-different conversions. And the recursion is parameterized by *position*, not just
-by type: a `SiteId` (parameter 0 of this exported function) or a `PartId` (the
-`secs` field of this relation) is what an override is recorded against, so the
-position is what turns the recorded rules into this conversion's effective
-policy. Positions are how overrides reach a nested child; the resulting node is
-still shared by identity, so two positions that resolve to the same four-part key
-get the same node.
+Two details in that sketch matter more than they look. The relation and the
+resolved children are both part of what identifies a node, which is why neither
+selection nor the recursion can wait until after the cache is consulted: the same
+type converted through its fields and through a constructor are two different
+conversions, and so are two records whose fields were configured differently. The
+policy in that key is the one recorded for *this* value, and it says nothing
+about the values inside it — the children do, and they are what a subtree's
+choices reach.
+
+And the recursion is parameterized by *position*, not just by type: a `SiteId`
+(parameter 0 of this exported function) or a `PartId` (the `secs` field of this
+relation) is what an override is recorded against, so the position is what turns
+the recorded rules into this conversion's effective policy. Positions are how
+overrides reach a nested child; the resulting node is still shared by identity,
+so two positions that resolve to the same key get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no work
 of their own. A record with a record field simply makes `plan` call itself again,
@@ -338,6 +344,10 @@ field is `arg0.secs`, infallible, with no environment operand — a different
 `PrimitiveSpec` with the same purpose, which is why the composition around it can
 be identical.
 
+`implementation` is `Operation<Payload>`: either a **standard** operation the
+registry itself renders — the identity conversion, an aggregate member read — or
+the adapter's own `Payload`. Reading a C aggregate member is the first, which is
+why the C adapter ships no renderer at all and its payload type has no values.
 `Payload` is rendering data whose type and interpretation are defined by the language implementation, such as a JVM property descriptor or a native operation description. The adapter supplies payload values; the registry stores those values in the plans and retains the required values in the completed `Generation`. Language-provided rendering code reads the retained payloads. Policy requests a representation; payload records the chosen implementation details after planning. Language implementations can use separate payload types for primitives, representations and foreign declarations.
 
 #### The operation specification and its uses
@@ -558,7 +568,7 @@ A Rust tuple or JVM wrapper object must not appear in an extern signature merely
 
 A **slot** is one value in a multi-value representation — for a `Stamp` passed to JNI as two separate arguments rather than an object, the layout is two slots, and a function taking two such records has four native arguments in all. `SlotRole` states a slot's meaning, independent of its generated name. `GuardId` refers to an activation condition on a slot — “always,” “presence is true,” or “variant tag selects this arm” — and is unrelated to the guard items of [capture](01-source.md). Enclosing conditions also apply. Inactive slots can require valid wire defaults even though their source payload must not be read or constructed. When one layout is used for two function arguments, its slot identities are qualified by each use so their ABI positions remain separate.
 
-`ProductOps` describes member projections and a target construction operation over already converted children. For a C struct these can be ordinary member reads and a struct literal. For separate JNI arguments they map children to slots. For object input they can be JVM-property-read primitives. The registry can provide standard tuple/struct operations as reusable defaults.
+`ProductOps` describes member projections and a target construction operation over already converted children. As implemented, a product is one projection per part of the selected relation, in part order, and covers the into-Rust direction only: a record *leaving* Rust needs the construction operation, and until a target supplies one the conversion is a reported skip rather than a guess. For a C struct these can be ordinary member reads and a struct literal. For separate JNI arguments they map children to slots. For object input they can be JVM-property-read primitives. The registry can provide standard tuple/struct operations as reusable defaults.
 
 For sequences, variants and callbacks, adapters supply runtime operations; the registry supplies loops, branches and child calls. C aggregates and JNI slots/object operations reuse the same relation.
 
@@ -610,7 +620,7 @@ trait Target {
     fn select(
         &self,
         query: SelectionQuery<'_, Self::Policy>, // Source value and applicable choices.
-    ) -> TargetSupport<RelationSelection>;
+    ) -> TargetSupport<RelationId>; // One of the relations the query offered.
 
     fn represent(
         &self,
@@ -647,10 +657,15 @@ The method inputs and results serve different stages:
 
 | Method | Information available | Target's answer | Registry's next job |
 | --- | --- | --- | --- |
-| `select` | Exact source type/direction, local source facts and applicable conversion rules and policy | `RelationSelection`: the chosen relation, plus any choice it declares for a child or for a later step of the same conversion | Inspect that relation's parts and recursively resolve their conversions. |
+| `select` | Exact source type/direction, local source facts and applicable conversion rules and policy | The relation chosen for *this* value, and nothing else | Inspect that relation's parts and recursively resolve their conversions. |
 | `represent` | `ResolvedShape`: source operation with model-derived child types; `ValueDescriptor`s: completed child layouts and contracts | Representation layout and target operations | Compose the complete value conversion. |
 | `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete native wrapper. |
 | `surface` | `SurfaceRequest`: requested name, placement, policy and promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |
+
+A selection speaks for one value. It cannot declare a choice for a child,
+because a child is planned by a recursion that asks the target again, and two
+ways to say the same thing would need a precedence rule; a choice for a child is
+a conversion rule recorded at the child's position instead.
 
 `select` is on this interface, even though a relation is a source-side
 description, because the choice among the available relations depends on how the
@@ -695,6 +710,38 @@ struct ValueContract {
 
 `ConversionBodyId` points to structured instructions for locals, field access, variant matching, source construction/calls, primitive applications, conditions, and later loops or callback invocation. The common writer renders these instructions as Rust. It allocates temporary names centrally from identities.
 
+The instructions are three, and every value in them is an identity rather than a
+name:
+
+```rust
+enum Instr {
+    // Apply a registered operation to values this body already has, binding
+    // its result when it produces one.
+    Apply { primitive: PrimitiveId, operands: Vec<Operand>, result: Option<ValueId> },
+    // Build a source record from converted parts, in field order.
+    Construct { record: RecordName, parts: Vec<ValueId>, result: ValueId },
+    // Call the source function, once.
+    Call { function: FunctionName, args: Vec<ValueId>, result: ValueId },
+}
+
+enum Operand {
+    Value(ValueId),    // A value this body has.
+    Context(String),   // A runtime scope the boundary supplies under this name.
+}
+```
+
+A conversion's body is a **template**: one value identity is its carrier — the
+value handed in when the conversion is used — and one is its result. Using a
+conversion inlines its instructions under the caller's identities, so a
+conversion belongs to no function and is still written down once. An identity
+conversion is the degenerate template: no instructions, and the result *is* the
+carrier, which is why a scalar child renders nothing between a member read and
+the construction that uses it.
+
+An operation that needs a runtime scope names it, and the boundary says which
+native parameter supplies it; nothing in a rendered fragment can reach for a
+variable its caller happens to have.
+
 The registry generates all child calls and source traversal. A projector binds its intermediate result once. Optional/variant branches convert only active children. The dependency list is derived from these instructions and the resolved relation; it is a convenience index maintained by the registry.
 
 Access follows the exact source type and operation. For example, generating `&Stamp` input may require constructing an owned temporary and borrowing it for the duration of the source call. Supporting the two scalar fields alone does not implement that borrow. The conversion contract must preserve the temporary's validity through its uses.
@@ -703,12 +750,14 @@ For initial scalar/record support, ordinary owned Rust temporaries can rely on R
 
 ## What is not settled here
 
-The contracts above are complete enough to divide the work and to plan the
-conversions above, and not complete enough to implement the planner from.
-[The implementation plan](../implementation.md#what-this-design-does-not-settle-yet)
-lists what the first increment still has to decide — chiefly the instruction set
-behind `ConversionBodyId`, the shapes of the target interface's parameter types,
-and the composition protocols for products, sequences, variants and callables.
+The scalar and owned-record cases above are implemented, and
+[the first increment](../implementation.md#the-first-increment-as-built) records
+what building them settled — the instruction set, the standard-operation
+variant, the reach of a selection — and what it left open. The largest open
+items belong to this chapter: the composition protocols for sequences, variants
+and callables, the construction half of a product, optional values, and the
+validity and resource contracts that `PrimitiveSpec` does not yet carry because
+nothing in the increment produces a borrowed or resource-bearing value.
 
 ## Elements at this stage
 

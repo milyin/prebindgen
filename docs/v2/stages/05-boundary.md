@@ -113,11 +113,18 @@ struct FunctionPlan<Payload> {
 }
 ```
 
-`AbiSpec` describes the native interface, including target calling conventions and explicit environment operands such as a JNI environment. `InputPlacement` maps native argument values to a logical conversion input. `ValueMapping` maps converted values/slots to a return, output location, or invocation argument. These are transport descriptions; they do not repeat source decomposition.
+`AbiSpec` describes the native interface, including target calling conventions and explicit environment operands such as a JNI environment. Each native parameter carries its role: it feeds one source parameter's conversion, it supplies a named runtime context that operations ask for, or the convention requires it and nothing uses it. That is what `InputPlacement` is as implemented, and it is also how an operation's `Context("jni.env")` operand finds the parameter that satisfies it — a conversion needing a context its boundary does not supply is skipped, with the reason. `ValueMapping` maps converted values/slots to a return, output location, or invocation argument. These are transport descriptions; they do not repeat source decomposition.
 
 `SinkId` identifies a declared destination and signature, not the runtime callback pointer itself. `CalleeId` identifies the source operation being wrapped. `FunctionOutput` identifies the conversions for the wrapped source operation's result. `FunctionBodyId` refers to the complete structured wrapper instructions assembled by the registry.
 
 There are three relevant error categories: a domain error returned by the source API, a binding/conversion error, and a runtime error such as a JNI failure. `FailureRoutes` selects their terminal actions: return a configured status, throw, call a declared handler, or abort according to the binding's policy.
+
+One route is a reporting operation the target supplies, what to do when reporting
+itself fails, and how the route ends — returning an expression or aborting. The
+registry emits the branch, the reporting call, the check on its result and the
+terminal action; the target contributes only the operation that reports. A
+category a conversion can raise and the boundary does not list makes the function
+unsupported.
 
 For a source `Result`, `OutputPlacement::Branches` maps the error value to its configured destination, while the domain failure route specifies how that path terminates. Both describe one consistent boundary policy. Conversion failures can also happen before the source call or while encoding its result; those use their binding/runtime routes. Failure while encoding a domain error must itself have a defined route.
 

@@ -112,6 +112,9 @@ pub enum EngineError {
     /// either — so this is a contradiction in the declarations, not a gap in
     /// what v2 implements.
     DuplicateElement { entries: Vec<ElementId> },
+    /// Planning refused the input, or an internal contract was violated. A
+    /// missing capability is never one of these — that is a [`Skip`].
+    Planning(crate::target::PlanningError),
     /// Writing an artifact or a report failed.
     Io(std::io::Error),
 }
@@ -146,6 +149,7 @@ impl std::fmt::Display for EngineError {
                 }
                 write!(f, "each declared element answers to one id")
             }
+            EngineError::Planning(error) => write!(f, "v2: {error}"),
             EngineError::Io(error) => write!(f, "v2: {error}"),
         }
     }

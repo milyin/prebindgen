@@ -19,11 +19,13 @@ document is an example-based specification: the general contract in a chapter an
 its concrete application to a fixed input are two views of the same requirement.
 
 Status: proposed architecture for [issue #720](https://github.com/milyin/prebindgen/issues/720).
-The engine switch and the initial unsupported-output reporting already exist; the
-conversion contracts described here are implementation work still to do. Rust API
-sketches illustrate intended contracts, not published APIs, and code shown as
-generated output illustrates required behavior rather than bytes produced by the
-current scaffold.
+The engine switch and the unsupported-output reporting exist, and so does the
+first increment of the pipeline itself: the two element paths specified here —
+a function taking an owned record, and that record — are planned, assembled and
+emitted by `prebindgen-registry-v2`, for both targets, and `examples/v2check`
+compiles the result. [The implementation page](implementation.md#the-first-increment-as-built)
+records what building them settled and what is still only described. Elsewhere,
+Rust API sketches illustrate intended contracts rather than published APIs.
 
 ## What is being generated
 

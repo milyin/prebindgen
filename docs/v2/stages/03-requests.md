@@ -375,7 +375,8 @@ struct NodeKey {
     source: TypeKey,       // Derived internally from crossing.source.key().
     direction: Direction, // Copied from that crossing.
     relation: RelationId, // Validated selected relation.
-    policy: PolicyId,     // Registered effective conversion settings.
+    policy: PolicyId,     // Effective settings recorded for this value.
+    children: Vec<NodeId>,// The conversions its parts resolved to.
 }
 ```
 
@@ -383,7 +384,9 @@ The private cache operation accepts the validated crossing and selection, derive
 
 The existing structural reading `TypeRef` has no `Eq`/`Hash`; its `key()` returns `prebindgen_flat::TypeKey`, which supplies both. `key()` preserves references/mutability, wrappers, generic arguments, array extents and lifetime spelling. Flat normalizes parentheses and known equivalent paths, such as `std::vec::Vec<T>` and `Vec<T>`, without equating arbitrary aliases. `stripped_key()` removes outer `Box`/`Cow` wrappers for declaration lookup: `Box<Stamp>` finds the `Stamp` declaration. The proposed `TypeView::key()` delegates to its retained reading. The conversion cache uses that key to retain wrappers. Plans retain the view for model-aware inspection and emission; key text cannot recreate a view.
 
-For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override changes the policy; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
+`policy` is the entry recorded for this value, and says nothing about the values inside it; `children` is what a choice recorded for a field reaches, since that choice is looked up at the field's own position. Both belong to the key: without the children, a second use of a record whose field was configured differently would silently inherit the first use's conversion, and its support outcome with it.
+
+For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override changes the policy; a rule on one of their `secs` fields changes that child, and therefore the record's conversion; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
 
 Model membership follows the [snapshot contract](02-flat.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. The registry checks incoming views against its own model before planning. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 

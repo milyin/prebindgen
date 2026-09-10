@@ -109,58 +109,145 @@ borrow and by JVM object respectively.
 
 A capability involving JNI is complete only when the existing Kotlin covertest exercises both its generated native boundary and Kotlin API. Unit tests for planning are useful, but they do not establish runtime ownership, JNI, or foreign-interface correctness.
 
-## What this design does not settle yet
+## The first increment, as built
 
-Reading these chapters is enough to explain the architecture and to see why the
-work divides the way it does. It is not yet enough to implement the value
-planner, and the honest list of what is missing is short enough to be worth
-having in one place. Each entry is a decision the first increment has to make;
-none of them is expected to change the division of labour.
+The planning half of steps 2 and 3 above is implemented in
+`prebindgen-registry-v2`, over the two element paths this document specifies:
+both are planned, assembled and emitted, for both targets. What step 2 also asks
+for — executing the binding through both language boundaries — is met on the C
+side and not on the JNI side, where the evidence is that the generated Rust
+compiles against the real `jni` crate and that the Kotlin says what this document
+says. A JVM that loads the library and calls the method, which is what
+[the JNI completion rule](#cases-that-expose-architectural-mistakes) requires,
+comes with the covertest work rather than here. What follows records what
+building this settled, so the chapters and the engine describe the same thing.
 
-1. **The instruction set.** `ConversionBodyId` and `FunctionBodyId` stand for the
-   structured instructions the registry composes and the common Rust writer
-   renders. Their vocabulary — locals, part access, primitive application,
-   branches, construction, calls — is listed but not defined. It is the
-   registry's own intermediate representation and needs a concrete enum.
-2. **The target interface's parameter types.** `SelectionQuery`, `ResolvedShape`,
-   `ValueDescriptor`, `ResolvedValues`, `SiteDescriptor` and `SurfaceRequest` are
-   what an adapter author actually reads, and each is described in a line. They
-   need real shapes before a second target can be written against them.
-3. **`RelationSelection`'s reach.** A selection may declare a choice for a child,
-   but children are planned by a recursion that asks the target again. Which wins
-   has to be stated, and the answer should make one of the two impossible rather
-   than establish a precedence.
-4. **The composition protocols.** `ProductOps` is used throughout and defined
-   nowhere; `SequenceOps`, `ChoiceOps` and `CallableOps` cover the deferred
-   capabilities and are names only. With them goes the flattening rule: how a
-   child that produces several slots is laid out where a flat argument list is
-   required, and how its slot identities are qualified per use.
-5. **How an adapter declares its types and artifacts.** `WireTypeId` and
-   `ArtifactId` are referenced by every description, but the shapes an adapter
-   submits to register a carrier type or a generated unit are not given.
-6. **Registry-supplied operations inside an adapter's payload.** The C adapter is
-   expected to select a common `ReadMember` operation, while `Payload` is the
-   adapter's own type. Either the payload has a standard variant the registry
-   understands, or standard operations are not payloads at all; the chapters
-   assume both in different places.
-7. **Fallible construction meeting the boundary.** A constructor relation can be
-   fallible, and a source function can return `Result`. How a constructor's
-   domain failure composes into the enclosing function's failure routes — and
-   what a constructor relation means at all in the out-of-Rust direction, where
-   it has no inverse — is not stated.
+The engine is five modules. `target.rs` is the adapter interface and the
+description vocabulary; `plan.rs` is the recursion, the conversion cache, the
+wrapper assembly and the retention loop; `body.rs` is the instruction set;
+`emit.rs` is the common Rust writer; `run.rs` holds the frozen `Generation` and
+the report, which the reporting scaffold already had.
+
+`examples/v2check` is the increment's evidence. It compiles
+[the specification's source crate](source.md) for real, runs the engine over it
+twice — through a small C adapter and a small JNI adapter, a few hundred lines
+each — and compiles both generated files with rustc. Its tests read the expected
+wrappers out of [the emit pages][fn_emit] themselves, item by item, so a chapter
+and the engine cannot drift apart quietly, and read the Kotlin in order and
+without duplicates. One test calls the generated C entry point, on a function
+whose result changes if the two fields arrive in the wrong order — addition
+would not notice.
+
+The engine's own tests use a target that answers in one line, and cover what an
+adapter cannot show: that two functions taking the same record share one
+conversion, that an override on a parameter or on one of its fields makes a
+different conversion whichever order the two are planned in, that a temporary
+never takes the name of a parameter the wrapper still needs, that one
+unsupported field skips its record and its callers with one cause and each one's
+own path to it, that a public declaration the target refuses skips what requires
+it, that a declared failure with no route — or a reporting operation needing a
+context the boundary does not supply — skips its function, and that
+contradictory configuration fails rather than becoming a capability claim.
+
+### What the increment settles
+
+1. **The instruction set.** `ConversionBodyId` and `FunctionBodyId` are three
+   instructions over value identities — apply a registered operation, construct
+   a source record, call the source function — described with the rest of the
+   [conversion plans](stages/04-values.md#the-conversion-plans-the-registry-builds).
+   A conversion's body is a template whose carrier is its input; using it inlines
+   it under the caller's identities. Names are allocated by the writer from
+   definition order, never by an adapter.
+2. **Registry-supplied operations inside an adapter's payload.** An operation's
+   implementation is `Operation<Payload>`: either a `Standard` operation the
+   registry renders — identity, member read — or the adapter's own `Payload`.
+   The payload has no standard variant to imitate, and C ships no operation
+   renderer at all, which its adapter states by giving `Payload` no values.
+3. **`RelationSelection`'s reach.** It has none: `select` answers with the
+   relation for the value in front of it, and nothing else. A choice for a child
+   is a conversion rule recorded at the child's position, which the recursion
+   consults when it plans that child. The precedence question is gone because one
+   of the two ways to express it no longer exists.
+
+   For the same reason, `represent` is not told the position it is answering
+   for. A representation is reused wherever a conversion of the same identity is
+   needed — crossing, relation, effective policy, children — so a target that
+   answered differently for two positions would have its second answer silently
+   bypassed by the first one's node. Varying by position is what a policy
+   recorded at that position is for, and that policy is in the identity.
+4. **How an adapter declares its types and artifacts.** Neither is an id an
+   adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
+   plus whether it may appear in an extern signature — carried inline in the
+   description that uses it. A generated unit is an `Artifact`: a name and the
+   Rust it contributes. The registry keeps one artifact per name and publishes
+   only those a retained output needs.
+
+   These descriptions are checked where they meet the values in hand, which is
+   the registry and nowhere else. What is checked today, and nothing beyond it:
+   a carrier that may not cross the ABI cannot be a native parameter or return;
+   a native parameter must carry what its conversion reads, and a native return
+   what the result conversion produces; where an operation states an operand or
+   result *carrier*, it must be the carrier it is applied to and produces; a
+   member read must name a member the representation declared; no projection may
+   consume a carrier its siblings still read; and a failure route must report the
+   error carrier the operation raises. An operand or result stated as a source
+   type is carried and not compared, because nothing yet needs to relate a
+   conversion's Rust type to an operation's.
+5. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
+   role: an operation declares `Context("jni.env")` where it needs the
+   environment, the boundary names the native parameter that supplies it, and the
+   registry binds the two at assembly. A conversion asking for a context its
+   boundary does not supply is a reported skip, not a fragment reaching for a
+   variable its caller happens to have.
+
+### What it does not settle
+
+- **The target interface's parameter types** are real for these two paths —
+  `SelectionQuery`, `ResolvedShape`, `ChildValue` (the chapters' `ValueDescriptor`),
+  `ResolvedValues`, `SiteDescriptor`, `SurfaceRequest` — and untested by a third
+  target or a deferred capability.
+- **The composition protocols.** `ProductOps` is one projection per part, in the
+  into-Rust direction only: a record *leaving* Rust needs a target construction
+  operation, and until there is one it is a reported skip
+  (`unsupported.record.out_of_rust`). `SequenceOps`, `ChoiceOps`, `CallableOps`
+  and the flattening rule for a child that produces several slots remain names.
+- **Fallible construction meeting the boundary** is untouched, because
+  constructor and projector relations are not implemented: the only relations are
+  the record's fields and the atomic conversion.
+- **Optional values** and everything that goes with them — `Layout::Slots`,
+  `SlotRole`, `GuardId`, `AbsenceEncoding` — are not implemented.
+- **Validity and resource contracts** are absent from `PrimitiveSpec`. Every
+  operation in this increment produces an independent value and acquires nothing,
+  which is why the omission is safe; the first borrowing or handle-bearing
+  operation is what has to add them, and cannot be written without them.
+- **Delivery** is a native return or nothing. Out-parameters, `Result` branches
+  and declared sinks are `OutputPlacement` variants the increment does not have.
+- **The source model's views.** Stage 2's `FunctionView`/`TypeView` are not
+  built: the engine plans over today's borrowed `Flat` API and its frozen result
+  owns the model, so a plan cannot outlive it and a view from another snapshot
+  cannot be offered. That is enough for one model per run, and it is exactly what
+  local helpers and cross-snapshot planning will break.
+- **Node retention** keeps every conversion the run planned rather than only
+  those a retained output reaches. Nodes are referenced by nothing after
+  inlining, so this costs memory and no correctness; pruning them needs the
+  reachability the retention loop does not yet track.
+- **`ElementId` is `<kind>:<origin>`**, so exposing one Rust function at two
+  foreign placements — which [the request chapter](stages/03-requests.md) uses to
+  explain output identity — cannot be expressed yet. The `Unselected` outcome is
+  likewise absent from the report.
 
 ## Acceptance and feasibility evidence
 
 Acceptance criteria:
 
-- [ ] The design's boundaries are exercised by scalar and record bindings in existing C/JNI examples.
+- [x] The design's boundaries are exercised by scalar and record bindings — in `examples/v2check`, over the specification's own source crate. Extending that to the existing C/JNI examples waits for the frontends to build `BindingRequests`.
 - [ ] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. Target policies have explicit local interpretation APIs.
-- [ ] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
+- [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
-- [ ] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner.
-- [ ] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
+- [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither reference adapter walks a type or names a temporary.
+- [x] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
 - [ ] One immutable generation result supplies Rust output, optional foreign-writer output, reports and test selection; C headers are derived from the retained Rust output by `cbindgen`.
-- [ ] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement.
+- [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.
 - [ ] New nested combinations reuse the registry's composition algorithm instead of requiring a new per-language wrapper implementation.
 - [ ] Remaining unsupported capabilities and any API refinements discovered during implementation are documented.
 
@@ -169,4 +256,5 @@ Earlier feasibility work inspected registry relations and composition and Flat e
 Future resource, recursive and runtime capabilities require implementations and tests; until then, affected requests remain unsupported. Background: [#689](https://github.com/milyin/prebindgen/issues/689) / [#701](https://github.com/milyin/prebindgen/issues/701); earlier plans: [#713](https://github.com/milyin/prebindgen/issues/713) / [#717](https://github.com/milyin/prebindgen/issues/717).
 
 [fn]: examples/fn/README.md
+[fn_emit]: examples/fn/07-emit.md
 [struct]: examples/struct/README.md
