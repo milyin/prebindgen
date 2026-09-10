@@ -628,11 +628,20 @@ renders nothing.
 **`bool` is the exception in both targets**, for the same reason. A `bool` whose
 byte is neither 0 nor 1 is undefined behaviour, and a foreign caller writes
 whatever it likes, so the byte cannot be *received* as a `bool`. It crosses C as
-`MaybeUninit<bool>` — same size, same alignment, still written as `bool` in the
-header — and is read with `ptr::read(..) as u8 != 0` on the way in and stored
-back with `MaybeUninit::new` on the way out. The JVM's `jboolean` is a `u8` for
-the same reason. Neither is an identity, so both are the target's own operation
-rather than a `StandardOp`.
+`MaybeUninit<bool>` — same size, same alignment, and cbindgen still writes
+`bool` for it — and is read with `ptr::read(v.as_ptr() as *const u8) != 0` on
+the way in and stored back with `MaybeUninit::new` on the way out. The JVM's
+`jboolean` is a `u8` for the same reason. Neither is an identity, so both are
+the target's own operation rather than a `StandardOp`.
+
+The `bool` carrier is the same in both directions, and that is a consequence of
+[`represent` not being told the position it answers for](#how-the-registry-asks-a-target-for-decisions):
+one representation is reused wherever a conversion of that identity is needed,
+so a `bool` cannot be a `MaybeUninit<bool>` as a struct member and a bare `bool`
+as a return. v1, which represents each position separately, does return a bare
+`bool` from a function while carrying `MaybeUninit<bool>` in a struct — so the
+v2 output wraps where v1 does not. The wrap is a no-op: `MaybeUninit::new` of a
+value Rust already built, in a type with the layout of the one it holds.
 
 **The JVM has no unsigned integers**, so an unsigned Rust type rides in the
 signed carrier of the same width and is cast back at the Rust end: the bits

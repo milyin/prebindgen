@@ -35,9 +35,14 @@ use quote::{format_ident, quote};
 /// behaviour — so the byte cannot be *received* as a `bool` at all. It
 /// crosses as storage of the same size and alignment, which cbindgen still
 /// writes as `bool`, and is converted at each end: see
-/// [`CPayload::NormalizeBool`] and [`CPayload::StoreBool`]. The carrier is
-/// the same in both directions, so a struct member has one C type regardless
-/// of which way its aggregate travels.
+/// [`CPayload::NormalizeBool`] and [`CPayload::StoreBool`].
+///
+/// The carrier is the same in both directions because a representation is
+/// reused wherever a conversion of the same identity is needed, so there is no
+/// position to answer differently for. v1, which represents each position
+/// separately, returns a bare `bool` from a function and carries
+/// `MaybeUninit<bool>` in a struct; this wraps in both places. The wrap is a
+/// no-op on a value Rust already built.
 fn c_scalar(kind: ScalarKind) -> syn::Type {
     if kind == ScalarKind::Bool {
         return syn::parse_quote!(::core::mem::MaybeUninit<bool>);
