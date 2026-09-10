@@ -589,7 +589,7 @@ mod trait_impl;
 mod v2;
 
 pub use decl::{
-    CallbackDecl, ConvertTypeDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl, ModuleDecl,
+    ApiDecl, CallbackDecl, ConvertTypeDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl,
     PtrTypeDecl, ReprCTypeDecl, TaggedUnionDecl, ValueTypeDecl,
 };
 /// Which engine a build script runs, and where each one writes — re-exported

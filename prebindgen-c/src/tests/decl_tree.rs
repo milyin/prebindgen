@@ -1,9 +1,9 @@
-//! The declaration tree says exactly what the declarators say, in any order,
+//! The declaration list says exactly what the declarators say, in any order,
 //! and refuses to say one thing twice.
 
 use super::*;
 use crate::{
-    callback, data_type, enum_type, error_type, fun, module, ptr_type, repr_c_type, tagged_union,
+    api, callback, data_type, enum_type, error_type, fun, ptr_type, repr_c_type, tagged_union,
     value_type,
 };
 
@@ -62,13 +62,11 @@ fn a_tree_and_the_declarators_it_lowers_to_agree() {
         "decl_flat",
     );
     let tree = write(
-        base().module(
-            module!().data_type(
-                data_type!(Point)
-                    .base_name("pt")
-                    .method(fun!(point_named).panic())
-                    .method(fun!(point_make)),
-            ),
+        base().api(
+            api!()
+                .data_type(data_type!(Point).base_name("pt"))
+                .fun(fun!(point_named).panic())
+                .fun(fun!(point_make)),
         ),
         registry(),
         "decl_tree",
@@ -83,8 +81,10 @@ fn a_tree_and_the_declarators_it_lowers_to_agree() {
 fn a_function_needing_panic_is_refused_without_it() {
     let message = catch_msg(|| {
         let _ = write(
-            base().module(
-                module!().data_type(data_type!(Point).base_name("pt").method(fun!(point_named))),
+            base().api(
+                api!()
+                    .data_type(data_type!(Point).base_name("pt"))
+                    .fun(fun!(point_named)),
             ),
             registry(),
             "decl_no_panic",
@@ -101,8 +101,8 @@ fn a_function_needing_panic_is_refused_without_it() {
 #[test]
 fn the_order_of_a_tree_does_not_change_it() {
     let one = write(
-        base().module(
-            module!()
+        base().api(
+            api!()
                 .data_type(data_type!(Point).base_name("pt"))
                 .enum_type(enum_type!(Mode).base_name("mode"))
                 .fun(fun!(point_named).panic())
@@ -112,8 +112,8 @@ fn the_order_of_a_tree_does_not_change_it() {
         "decl_order_one",
     );
     let other = write(
-        base().module(
-            module!()
+        base().api(
+            api!()
                 .fun(fun!(point_make))
                 .enum_type(enum_type!(Mode).base_name("mode"))
                 .fun(fun!(point_named).panic())
@@ -146,8 +146,8 @@ fn a_repeated_declaration_is_refused() {
     // Two declarations of one function with different options: lowering order
     // would otherwise pick one set and drop the other.
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
+        let _ = base().api(
+            api!()
                 .fun(fun!(point_make).base_name("first").panic())
                 .fun(fun!(point_make).base_name("second")),
         );
@@ -157,21 +157,16 @@ fn a_repeated_declaration_is_refused() {
         "names the clash: {message}"
     );
 
-    // The same function as a method and as a free function is the same clash,
-    // and the free one used to win by being replayed last.
+    // The same function declared twice, however it is spelled.
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
-                .data_type(data_type!(Point).method(fun!(point_make)))
-                .fun(fun!(point_make)),
-        );
+        let _ = base().api(api!().fun(fun!(point_make)).fun(fun!(point_make)));
     });
     assert!(message.contains("point_make"), "{message}");
 
     // A type declared under two representations is a clash too.
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
+        let _ = base().api(
+            api!()
                 .data_type(data_type!(Point))
                 .ptr_type(ptr_type!(Point)),
         );
@@ -183,8 +178,8 @@ fn a_repeated_declaration_is_refused() {
 /// option it was given — including the kinds neither C example declares.
 #[test]
 fn every_declaration_kind_carries_its_options() {
-    let built = base().module(
-        module!()
+    let built = base().api(
+        api!()
             .ptr_type(ptr_type!(Handle).base_name("handle"))
             .data_type(data_type!(Failure).base_name("failure").error())
             .enum_type(enum_type!(Mode))
@@ -309,8 +304,8 @@ fn a_declared_base_reaches_the_emitted_names() {
     .expect("index items");
 
     let src = write(
-        base().mangle_type_name(|base| format!("{base}_t")).module(
-            module!()
+        base().mangle_type_name(|base| format!("{base}_t")).api(
+            api!()
                 .enum_type(enum_type!(Mode).base_name("speed"))
                 .tagged_union(tagged_union!(Shape).base_name("figure"))
                 .repr_c_type(repr_c_type!(Raw).base_name("packet"))
@@ -341,8 +336,8 @@ fn a_declared_base_reaches_the_emitted_names() {
 #[test]
 fn one_callback_signature_spelled_two_ways_is_refused() {
     let message = catch_msg(|| {
-        let _ = base().module(
-            module!()
+        let _ = base().api(
+            api!()
                 .callback(callback!(impl Fn(i64) + Send + Sync + 'static).base_name("first"))
                 .callback(callback!(impl Fn(i64) + Sync + Send + 'static).base_name("second")),
         );
@@ -355,15 +350,15 @@ fn one_callback_signature_spelled_two_ways_is_refused() {
 fn a_declaration_repeated_in_another_module_is_refused() {
     let message = catch_msg(|| {
         let _ = base()
-            .module(module!().fun(fun!(point_make).base_name("first")))
-            .module(module!().fun(fun!(point_make).base_name("second")));
+            .api(api!().fun(fun!(point_make).base_name("first")))
+            .api(api!().fun(fun!(point_make).base_name("second")));
     });
     assert!(message.contains("point_make"), "{message}");
 
     let message = catch_msg(|| {
         let _ = base()
-            .module(module!().data_type(data_type!(Point)))
-            .module(module!().data_type(data_type!(Point)));
+            .api(api!().data_type(data_type!(Point)))
+            .api(api!().data_type(data_type!(Point)));
     });
     assert!(message.contains("Point"), "{message}");
 }

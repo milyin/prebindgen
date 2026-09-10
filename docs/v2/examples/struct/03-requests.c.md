@@ -12,7 +12,7 @@ Owner: the C frontend
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .module(module!().data_type(data_type!(Stamp).base_name("Stamp")))
+    .api(api!().data_type(data_type!(Stamp).base_name("Stamp")))
     .build();
 ```
 

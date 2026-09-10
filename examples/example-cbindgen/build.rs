@@ -24,7 +24,7 @@
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::{
-    callback, data_type, enum_type, error_type, fun, module,
+    api, callback, data_type, enum_type, error_type, fun,
     pipeline::{fresh_output_root, Pipeline},
     ptr_type, tagged_union,
 };
@@ -90,10 +90,11 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
         // Keep the Rust function names verbatim as the exported C symbols.
         .mangle_function(|n| n.to_string());
 
-    // Everything this binding declares, as one tree. A type carries the
-    // functions that operate on it and its own naming, and a function carries
-    // its own permission to panic — so the declarations can be read type by
-    // type, and moving one cannot silently re-target a modifier.
+    // Everything this binding declares, as one flat list — which is what the C
+    // header is. `calculator_apply(calculator_t *, …)` is a free function that
+    // takes a handle, not a method on one, so nothing here groups functions
+    // under the types they operate on. Each declaration carries its own
+    // options, so moving a line cannot re-target a modifier.
     //
     // `Calculator` is a Box-owned handle (`calculator_t` / `calculator_drop`).
     // Its constructors and `Result`-returning operations route a fallible input
@@ -133,44 +134,14 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     // `call` must convert nothing at all), and an `Option<Grade>` over an enum
     // whose discriminants skip zero — which is what says the absent slot is left
     // unwritten rather than filled with a fabricated zero.
-    let mut module = module!()
-        .ptr_type(
-            ptr_type!(Calculator)
-                .method(fun!(calculator_new))
-                .method(fun!(calculator_new_from_str))
-                .method(fun!(calculator_apply))
-                .method(fun!(calculator_merge))
-                .method(fun!(calculator_absorb))
-                .method(fun!(calculator_new_clone).panic())
-                .method(fun!(calculator_get_value).panic())
-                .method(fun!(calculator_get_count).panic())
-                .method(fun!(calculator_is).panic())
-                .method(fun!(calculator_to_string).panic())
-                .method(fun!(calculator_get_history).panic())
-                .method(fun!(calculator_for_each).panic())
-                .method(fun!(calculator_last_or_none).panic())
-                .method(fun!(calculator_grade_or_none).panic())
-                .method(fun!(calculator_history_batch).panic()),
-        )
+    let mut api = api!()
+        .ptr_type(ptr_type!(Calculator))
         .error_type(error_type!(Error, error_get_message))
         .ignore_fun(pq!(error_get_message))
         .enum_type(enum_type!(Operation))
-        .tagged_union(
-            tagged_union!(Shape)
-                .method(fun!(shape_new_empty))
-                .method(fun!(shape_new_circle))
-                .method(fun!(shape_new_rect))
-                .method(fun!(shape_try_area))
-                .method(fun!(shape_area).panic())
-                .method(fun!(shape_get_label).panic())
-                .method(fun!(shape_new_labeled).panic()),
-        )
-        .data_type(
-            data_type!(Drawing)
-                .method(fun!(drawing_new).panic())
-                .method(fun!(drawing_get_shape).panic()),
-        )
-        .data_type(data_type!(Caption).method(fun!(caption_new).panic()))
+        .tagged_union(tagged_union!(Shape))
+        .data_type(data_type!(Drawing))
+        .data_type(data_type!(Caption))
         .convert(
             prebindgen_registry::convert!(Millis)
                 .input(prebindgen_registry::fun!(millis_from_raw))
@@ -178,42 +149,65 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
         )
         .ignore_fun(pq!(millis_from_raw))
         .ignore_fun(pq!(millis_to_raw))
-        .tagged_union(
-            tagged_union!(Note)
-                .method(fun!(note_new_silent))
-                .method(fun!(note_new_after))
-                .method(fun!(note_new_flagged))
-                .method(fun!(note_value).panic())
-                .method(fun!(note_emphatic).panic())
-                .method(fun!(note_new_titled).panic())
-                .method(fun!(note_new_sketched).panic()),
-        )
-        .enum_type(
-            enum_type!(InsideFoo)
-                .method(fun!(inside_foo_default))
-                .method(fun!(inside_foo_value).panic()),
-        )
-        .data_type(
-            data_type!(Foo)
-                .method(fun!(foo_new))
-                .method(fun!(foo_get_id)),
-        )
+        .tagged_union(tagged_union!(Note))
+        .enum_type(enum_type!(InsideFoo))
+        .data_type(data_type!(Foo))
         .enum_type(enum_type!(Grade))
         .callback(callback!(impl Fn(f64) + Send + Sync + 'static).base_name("value"))
         .callback(callback!(impl Fn(Option<f64>) + Send + Sync + 'static).base_name("maybe_value"))
         .callback(callback!(impl Fn(Vec<f64>) + Send + Sync + 'static).base_name("history_batch"))
         .callback(
             callback!(impl Fn(Option<Grade>) + Send + Sync + 'static).base_name("maybe_grade"),
-        );
+        )
+        // Constructors and `Result`-returning operations: a fallible input
+        // routes through the error out-param, so none needs `.panic()`.
+        .fun(fun!(calculator_new))
+        .fun(fun!(calculator_new_from_str))
+        .fun(fun!(calculator_apply))
+        .fun(fun!(calculator_merge))
+        .fun(fun!(calculator_absorb))
+        .fun(fun!(foo_new))
+        .fun(fun!(foo_get_id))
+        .fun(fun!(inside_foo_default))
+        .fun(fun!(shape_new_empty))
+        .fun(fun!(shape_new_circle))
+        .fun(fun!(shape_new_rect))
+        .fun(fun!(shape_try_area))
+        .fun(fun!(note_new_silent))
+        .fun(fun!(note_new_after))
+        .fun(fun!(note_new_flagged))
+        // Borrow-only accessors, predicates and the callback drivers: fallible
+        // inputs with no `Result` channel, so `.panic()` lets the wrapper abort.
+        .fun(fun!(inside_foo_value).panic())
+        .fun(fun!(shape_area).panic())
+        .fun(fun!(shape_get_label).panic())
+        .fun(fun!(shape_new_labeled).panic())
+        .fun(fun!(drawing_new).panic())
+        .fun(fun!(drawing_get_shape).panic())
+        .fun(fun!(note_value).panic())
+        .fun(fun!(note_emphatic).panic())
+        .fun(fun!(note_new_titled).panic())
+        .fun(fun!(note_new_sketched).panic())
+        .fun(fun!(caption_new).panic())
+        .fun(fun!(calculator_new_clone).panic())
+        .fun(fun!(calculator_get_value).panic())
+        .fun(fun!(calculator_get_count).panic())
+        .fun(fun!(calculator_is).panic())
+        .fun(fun!(calculator_to_string).panic())
+        .fun(fun!(calculator_get_history).panic())
+        .fun(fun!(calculator_for_each).panic())
+        .fun(fun!(calculator_last_or_none).panic())
+        .fun(fun!(calculator_grade_or_none).panic())
+        .fun(fun!(calculator_history_batch).panic());
 
     if unstable {
         // `calculator_reset` mirrors an `#[unstable]` slice of the API; only
         // present in the captured source when the feature is enabled. Its `&mut`
         // borrow is fallible (null-checked) with no `Result`, so `.panic()`.
-        module = module.fun(fun!(calculator_reset).panic());
+        api = api.fun(fun!(calculator_reset).panic());
     }
 
-    cbindgen = cbindgen.module(module);
+    cbindgen = cbindgen.api(api);
 
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
     // Always written to OUT_DIR under a stable name too, so the commented-out

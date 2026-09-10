@@ -1,25 +1,29 @@
-//! What a C binding declares, as a tree.
+//! What a C binding declares.
 //!
-//! One [`ModuleDecl`] holds every declaration the binding makes: the types that
+//! One [`ApiDecl`] holds every declaration the binding makes: the types that
 //! cross, the functions it exports, the callback signatures it accepts, and the
-//! conversions it supplies. Options belong to the declaration they modify —
-//! a handle's name base, a function's permission to panic, a callback's takeable
-//! arguments — rather than to whatever the builder was last told about.
+//! conversions it supplies. The list is **flat**, because the C it produces is:
+//! a header is a sequence of type and function declarations in one namespace,
+//! and `calculator_apply(calculator_t *, …)` is a free function that happens to
+//! take a handle. Nothing here groups a function under a type, because C has
+//! nothing for that to mean.
 //!
-//! That is the difference from calling the declarators one after another on the
-//! builder itself. There, `.base_name("value")` modifies whichever declaration
-//! came before it, so moving a line changes what it means and an option can
-//! attach to the wrong declaration without anything noticing. Here a modifier is
-//! a method on its own declaration, and the tree is the same however it is
-//! ordered.
+//! What each declaration does carry is its own options — a handle's name base,
+//! a function's permission to panic, a callback's takeable arguments — rather
+//! than the builder carrying them for whatever was declared last. That is the
+//! difference from calling the declarators one after another, where
+//! `.base_name("value")` modified whichever declaration came before it, so
+//! moving a line changed what it meant and an option could attach to the wrong
+//! declaration with nothing to notice.
 //!
 //! ```
-//! use prebindgen_c::{data_type, enum_type, fun, module, ptr_type};
+//! use prebindgen_c::{api, data_type, enum_type, fun, ptr_type};
 //!
-//! let _ = module!()
-//!     .ptr_type(ptr_type!(Calculator).method(fun!(calculator_apply)))
+//! let _ = api!()
+//!     .ptr_type(ptr_type!(Calculator))
 //!     .data_type(data_type!(Drawing))
 //!     .enum_type(enum_type!(Operation))
+//!     .fun(fun!(calculator_apply))
 //!     .fun(fun!(stamp_sum).panic());
 //! ```
 
@@ -67,7 +71,6 @@ impl FunDecl {
 pub struct PtrTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A type crossing by value as a `#[repr(C)]` aggregate whose members are the
@@ -77,7 +80,6 @@ pub struct DataTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
     pub(crate) error: bool,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A fieldless enum crossing as a C `enum`.
@@ -85,7 +87,6 @@ pub struct DataTypeDecl {
 pub struct EnumTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A payload-carrying enum crossing as a `#[repr(C)]` tag plus union.
@@ -120,7 +121,6 @@ pub struct EnumTypeDecl {
 pub struct TaggedUnionDecl {
     pub(crate) ty: syn::Type,
     pub(crate) base: Option<String>,
-    pub(crate) methods: Vec<FunDecl>,
 }
 
 /// A type crossing by value as an opaque byte-struct of identical size and
@@ -135,9 +135,9 @@ pub struct ValueTypeDecl {
 
 /// A type that is already `#[repr(C)]` in the source and crosses unchanged.
 ///
-/// Its generated mirror takes the name the manglers give when the module is
+/// Its generated mirror takes the name the manglers give when the API is
 /// applied, so the naming hooks have to be set on the builder before
-/// [`CbindgenBuilder::module`](crate::CbindgenBuilder::module).
+/// [`CbindgenBuilder::api`](crate::CbindgenBuilder::api).
 #[derive(Clone)]
 pub struct ReprCTypeDecl {
     pub(crate) ty: syn::Type,
@@ -185,18 +185,7 @@ named_decl!(ReprCTypeDecl);
 impl PtrTypeDecl {
     /// Declare a handle for this Rust type.
     pub fn new(ty: syn::Type) -> Self {
-        PtrTypeDecl {
-            ty,
-            base: None,
-            methods: Vec::new(),
-        }
-    }
-
-    /// Export a function that operates on this handle. It is exported exactly
-    /// as a free function is; declaring it here says which type it belongs to.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
+        PtrTypeDecl { ty, base: None }
     }
 }
 
@@ -207,7 +196,6 @@ impl DataTypeDecl {
             ty,
             base: None,
             error: false,
-            methods: Vec::new(),
         }
     }
 
@@ -216,45 +204,19 @@ impl DataTypeDecl {
         self.error = true;
         self
     }
-
-    /// Export a function that operates on this type.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
-    }
 }
 
 impl EnumTypeDecl {
     /// Declare a C `enum` for this fieldless Rust enum.
     pub fn new(ty: syn::Type) -> Self {
-        EnumTypeDecl {
-            ty,
-            base: None,
-            methods: Vec::new(),
-        }
-    }
-
-    /// Export a function that operates on this type.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
+        EnumTypeDecl { ty, base: None }
     }
 }
 
 impl TaggedUnionDecl {
     /// Declare a tag-plus-union representation for this Rust enum.
     pub fn new(ty: syn::Type) -> Self {
-        TaggedUnionDecl {
-            ty,
-            base: None,
-            methods: Vec::new(),
-        }
-    }
-
-    /// Export a function that operates on this type.
-    pub fn method(mut self, decl: FunDecl) -> Self {
-        self.methods.push(decl);
-        self
+        TaggedUnionDecl { ty, base: None }
     }
 }
 
@@ -346,11 +308,11 @@ impl From<ConvertDecl> for ConvertTypeDecl {
     }
 }
 
-/// Everything one C binding declares.
+/// Everything one C binding declares, as one flat list.
 ///
-/// Hand it to [`CbindgenBuilder::module`](crate::CbindgenBuilder::module).
+/// Hand it to [`CbindgenBuilder::api`](crate::CbindgenBuilder::api).
 #[derive(Clone, Default)]
-pub struct ModuleDecl {
+pub struct ApiDecl {
     pub(crate) ptr_types: Vec<PtrTypeDecl>,
     pub(crate) data_types: Vec<DataTypeDecl>,
     pub(crate) enum_types: Vec<EnumTypeDecl>,
@@ -365,8 +327,8 @@ pub struct ModuleDecl {
     pub(crate) ignored_types: Vec<syn::Type>,
 }
 
-impl ModuleDecl {
-    /// An empty module.
+impl ApiDecl {
+    /// An empty API.
     pub fn new() -> Self {
         Self::default()
     }
@@ -447,11 +409,11 @@ impl ModuleDecl {
     }
 }
 
-/// Build an empty [`ModuleDecl`].
+/// Build an empty [`ApiDecl`]: `api!()`.
 #[macro_export]
-macro_rules! module {
+macro_rules! api {
     () => {
-        $crate::ModuleDecl::new()
+        $crate::ApiDecl::new()
     };
 }
 
