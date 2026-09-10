@@ -62,30 +62,64 @@ mod tests {
     }
 
     /// The Kotlin the JNI adapter's own writer produced is what the
-    /// specification's emit pages show.
+    /// specification's emit pages show, in that order and no more than once.
+    ///
+    /// Order and multiplicity both matter: a writer that emitted the class
+    /// twice, or a second `object Bindings` for the second method, would
+    /// satisfy a set of lines while producing Kotlin that does not compile.
     #[test]
     fn the_generated_kotlin_is_what_the_specification_shows() {
         let kotlin = std::fs::read_to_string(env!("V2CHECK_KOTLIN")).expect("the Kotlin file");
+        let emitted: Vec<&str> = kotlin.lines().map(str::trim).collect();
         for page in [
             "examples/struct/07-emit.jni.md",
             "examples/fn/07-emit.jni.md",
         ] {
+            let mut next = 0;
             for line in fence(page, "kotlin").lines() {
                 let line = line.trim();
                 if line.is_empty() {
                     continue;
                 }
-                assert!(
-                    kotlin.lines().any(|emitted| emitted.trim() == line),
-                    "{page} shows a Kotlin line the writer did not produce: {line}\n\n{kotlin}"
-                );
+                let found = emitted[next..]
+                    .iter()
+                    .position(|emitted| *emitted == line)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{page} shows a Kotlin line the writer did not produce in order: \
+                             {line}\n\n{kotlin}"
+                        )
+                    });
+                next += found + 1;
             }
+        }
+        for once in [
+            "package example",
+            "data class Stamp(val secs: Long, val nanos: Long)",
+            "object Bindings {",
+        ] {
+            assert_eq!(
+                emitted.iter().filter(|line| **line == once).count(),
+                1,
+                "`{once}` must appear exactly once:\n{kotlin}"
+            );
+        }
+        // Both methods live in that one object.
+        for method in [
+            "external fun sum(stamp: Stamp): Long",
+            "external fun delta(stamp: Stamp): Long",
+        ] {
+            assert_eq!(
+                emitted.iter().filter(|line| **line == method).count(),
+                1,
+                "`{method}` must appear exactly once:\n{kotlin}"
+            );
         }
     }
 
-    /// Both requested elements were emitted, and the report says so.
+    /// Every requested element was emitted, and the report says so.
     #[test]
-    fn both_targets_report_two_emitted_elements() {
+    fn both_targets_report_every_declared_element_as_emitted() {
         for target in ["c", "jni"] {
             let report = std::fs::read_to_string(
                 std::path::Path::new(env!("V2CHECK_C"))
@@ -94,8 +128,9 @@ mod tests {
                     .join(format!("{target}-report.json")),
             )
             .expect("the report");
-            assert!(
-                report.matches("\"outcome\": \"emitted\"").count() == 2,
+            assert_eq!(
+                report.matches("\"outcome\": \"emitted\"").count(),
+                3,
                 "{target} report: {report}"
             );
         }

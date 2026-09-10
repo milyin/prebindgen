@@ -33,7 +33,10 @@ fn main() {
 
     let c = generate(model(&source), &CTarget, c_requests(), SOURCE_CRATE)
         .expect("the C binding plans");
-    let jni = generate(model(&source), &JniTarget, jni_requests(), SOURCE_CRATE)
+    // The adapter is told which Kotlin class each Rust type was declared as,
+    // which is the same configuration `jni_requests` records.
+    let jni_target = JniTarget::default().with_class("Stamp", "Stamp");
+    let jni = generate(model(&source), &jni_target, jni_requests(), SOURCE_CRATE)
         .expect("the JNI binding plans");
 
     let c_path = c.write_rust(out_dir.join("c.rs")).expect("write c.rs");
@@ -78,8 +81,11 @@ fn c_requests() -> BindingRequests<CPolicy> {
         c_name: "Stamp".to_string(),
     });
     requests.type_policies.insert("Stamp".to_string(), stamp);
-    let function = requests.policy(CPolicy::Function {
+    let sum = requests.policy(CPolicy::Function {
         symbol: "stamp_sum".to_string(),
+    });
+    let delta = requests.policy(CPolicy::Function {
+        symbol: "stamp_delta".to_string(),
     });
     requests.output(
         DeclaredElement::new(ElementKind::Type, "Stamp", "Stamp", "data_struct"),
@@ -87,7 +93,16 @@ fn c_requests() -> BindingRequests<CPolicy> {
     );
     requests.output(
         DeclaredElement::new(ElementKind::Function, "stamp_sum", "stamp_sum", "function"),
-        function,
+        sum,
+    );
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "stamp_delta",
+            "stamp_delta",
+            "function",
+        ),
+        delta,
     );
     requests
 }
@@ -101,8 +116,13 @@ fn jni_requests() -> BindingRequests<JniPolicy> {
         class: "Stamp".to_string(),
     });
     requests.type_policies.insert("Stamp".to_string(), stamp);
-    let function = requests.policy(JniPolicy::Function {
+    let sum = requests.policy(JniPolicy::Function {
         placement: "example.Bindings.sum".to_string(),
+    });
+    // A second method on the same Kotlin object: one `object Bindings`, two
+    // declarations in it.
+    let delta = requests.policy(JniPolicy::Function {
+        placement: "example.Bindings.delta".to_string(),
     });
     requests.output(
         DeclaredElement::new(ElementKind::Type, "Stamp", "example.Stamp", "data_class"),
@@ -115,7 +135,16 @@ fn jni_requests() -> BindingRequests<JniPolicy> {
             "example.Bindings.sum",
             "function",
         ),
-        function,
+        sum,
+    );
+    requests.output(
+        DeclaredElement::new(
+            ElementKind::Function,
+            "stamp_delta",
+            "example.Bindings.delta",
+            "function",
+        ),
+        delta,
     );
     requests
 }

@@ -11,3 +11,11 @@ pub struct Stamp {
 pub fn stamp_sum(stamp: Stamp) -> i64 {
     stamp.secs.wrapping_add(stamp.nanos)
 }
+
+/// Not part of the specification's fixture, and here for one reason: addition
+/// is commutative, so a wrapper that read the two fields into the wrong
+/// arguments would still compute `stamp_sum` correctly. Subtraction says which
+/// field went where.
+pub fn stamp_delta(stamp: Stamp) -> i64 {
+    stamp.secs.wrapping_sub(stamp.nanos)
+}

@@ -69,6 +69,15 @@ fn wrapper<T: Target>(
     function: &FunctionPlan<T::Payload>,
 ) -> TokenStream {
     let mut names: HashMap<ValueId, syn::Ident> = HashMap::new();
+    // Parameters are named by the boundary, because a target that requires an
+    // environment operand has to say what it is called. Everything else is
+    // named here, and around those names: a temporary that shadowed a live
+    // parameter would compile and read the wrong value.
+    let mut taken: std::collections::HashSet<String> = function
+        .params
+        .iter()
+        .map(|(_, p)| p.name.to_string())
+        .collect();
     let params: Vec<TokenStream> = function
         .params
         .iter()
@@ -80,12 +89,21 @@ fn wrapper<T: Target>(
             quote!(#mutable #name: #ty)
         })
         .collect();
+    let ok_binding = free_name("value", &mut taken);
+    let error_binding = free_name("error", &mut taken);
     // Temporaries are numbered by definition order, which is why the same
     // operation used twice cannot collide with itself.
     let mut next_local = 0;
-    let mut local = |names: &mut HashMap<ValueId, syn::Ident>, id: ValueId| {
-        let name = format_ident!("v{next_local}");
-        next_local += 1;
+    let mut local = |names: &mut HashMap<ValueId, syn::Ident>,
+                     taken: &mut std::collections::HashSet<String>,
+                     id: ValueId| {
+        let name = loop {
+            let candidate = format!("v{next_local}");
+            next_local += 1;
+            if taken.insert(candidate.clone()) {
+                break format_ident!("{candidate}");
+            }
+        };
         names.insert(id, name.clone());
         name
     };
@@ -106,24 +124,27 @@ fn wrapper<T: Target>(
                 let expression = operation(target, primitive, &operand_names);
                 let statement = match (&primitive.failure, result) {
                     (PrimitiveFailure::Infallible, Some(result)) => {
-                        let name = local(&mut names, *result);
+                        let name = local(&mut names, &mut taken, *result);
                         quote!(let #name = #expression;)
                     }
                     (PrimitiveFailure::Infallible, None) => quote!(#expression;),
                     (PrimitiveFailure::Fallible { category, .. }, Some(result)) => {
-                        let name = local(&mut names, *result);
-                        let route = failure_arm(target, function, *category);
+                        let name = local(&mut names, &mut taken, *result);
+                        let route = failure_arm(target, function, *category, &error_binding);
+                        let ok = &ok_binding;
+                        let error = &error_binding;
                         quote! {
                             let #name = match #expression {
-                                Ok(value) => value,
-                                Err(error) => { #route }
+                                Ok(#ok) => #ok,
+                                Err(#error) => { #route }
                             };
                         }
                     }
                     (PrimitiveFailure::Fallible { category, .. }, None) => {
-                        let route = failure_arm(target, function, *category);
+                        let route = failure_arm(target, function, *category, &error_binding);
+                        let error = &error_binding;
                         quote! {
-                            if let Err(error) = #expression { #route }
+                            if let Err(#error) = #expression { #route }
                         }
                     }
                 };
@@ -146,7 +167,7 @@ fn wrapper<T: Target>(
                     .map(|(field, value)| field.bind(&names[value]))
                     .collect();
                 let value = Writer.shape_struct(item, head, &bound);
-                let name = local(&mut names, *result);
+                let name = local(&mut names, &mut taken, *result);
                 statements.push(quote!(let #name = #value;));
             }
             Instr::Call {
@@ -156,7 +177,7 @@ fn wrapper<T: Target>(
             } => {
                 let callee = format_ident!("{callee}");
                 let args: Vec<syn::Ident> = args.iter().map(|value| names[value].clone()).collect();
-                let name = local(&mut names, *result);
+                let name = local(&mut names, &mut taken, *result);
                 statements.push(quote!(let #name = #source_module::#callee(#(#args),*);));
             }
         }
@@ -215,6 +236,7 @@ fn failure_arm<T: Target>(
     target: &T,
     function: &FunctionPlan<T::Payload>,
     category: FailureCategory,
+    error: &syn::Ident,
 ) -> TokenStream {
     let route = function
         .failures
@@ -227,8 +249,12 @@ fn failure_arm<T: Target>(
             .iter()
             .map(|operand| match &operand.role {
                 crate::target::OperandRole::Context(name) => context_name(function, name),
-                crate::target::OperandRole::Error => format_ident!("error"),
-                crate::target::OperandRole::Value => format_ident!("error"),
+                crate::target::OperandRole::Error => error.clone(),
+                // Refused when the boundary is assembled: a reporting operation
+                // is given the error and the contexts, and has no value to read.
+                crate::target::OperandRole::Value => {
+                    unreachable!("a reporting operation with a value operand is refused")
+                }
             })
             .collect();
         let expression = operation(target, report, &operands);
@@ -261,9 +287,22 @@ fn operand_name<P>(
 ) -> syn::Ident {
     match operand {
         Operand::Value(id) => names[id].clone(),
-        Operand::Context(name) if name == "__error" => format_ident!("error"),
         Operand::Context(name) => context_name(function, name),
     }
+}
+
+/// A name nothing in this wrapper already uses.
+fn free_name(preferred: &str, taken: &mut std::collections::HashSet<String>) -> syn::Ident {
+    if taken.insert(preferred.to_string()) {
+        return format_ident!("{preferred}");
+    }
+    for suffix in 1.. {
+        let candidate = format!("{preferred}_{suffix}");
+        if taken.insert(candidate.clone()) {
+            return format_ident!("{candidate}");
+        }
+    }
+    unreachable!("the search above only ends by returning")
 }
 
 /// The wrapper parameter supplying a runtime context.

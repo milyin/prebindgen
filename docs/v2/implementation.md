@@ -111,9 +111,16 @@ A capability involving JNI is complete only when the existing Kotlin covertest e
 
 ## The first increment, as built
 
-Steps 2 and 3 above are implemented in `prebindgen-registry-v2`, over the two
-element paths this document specifies. What follows records what that settled,
-so the chapters and the engine describe the same thing.
+The planning half of steps 2 and 3 above is implemented in
+`prebindgen-registry-v2`, over the two element paths this document specifies:
+both are planned, assembled and emitted, for both targets. What step 2 also asks
+for — executing the binding through both language boundaries — is met on the C
+side and not on the JNI side, where the evidence is that the generated Rust
+compiles against the real `jni` crate and that the Kotlin says what this document
+says. A JVM that loads the library and calls the method, which is what
+[the JNI completion rule](#cases-that-expose-architectural-mistakes) requires,
+comes with the covertest work rather than here. What follows records what
+building this settled, so the chapters and the engine describe the same thing.
 
 The engine is five modules. `target.rs` is the adapter interface and the
 description vocabulary; `plan.rs` is the recursion, the conversion cache, the
@@ -123,15 +130,23 @@ the report, which the reporting scaffold already had.
 
 `examples/v2check` is the increment's evidence. It compiles
 [the specification's source crate](source.md) for real, runs the engine over it
-twice — through a C adapter and a JNI adapter of about 150 lines each — and
-compiles both generated files with rustc. Its tests read the expected wrappers
-out of [the emit pages][fn_emit] themselves, item by item, so a chapter and the
-engine cannot drift apart quietly; one test calls the generated C entry point and
-checks that `stamp_sum(Stamp { 12, 34 })` is 46. The engine's own tests use a
-target that answers in one line, and cover what an adapter cannot show: that two
-functions taking the same record share one conversion, that a site override does
-not share it, that one unsupported field skips its record and its callers with
-one cause, that a declared failure with no route skips its function, and that
+twice — through a small C adapter and a small JNI adapter, a few hundred lines
+each — and compiles both generated files with rustc. Its tests read the expected
+wrappers out of [the emit pages][fn_emit] themselves, item by item, so a chapter
+and the engine cannot drift apart quietly, and read the Kotlin in order and
+without duplicates. One test calls the generated C entry point, on a function
+whose result changes if the two fields arrive in the wrong order — addition
+would not notice.
+
+The engine's own tests use a target that answers in one line, and cover what an
+adapter cannot show: that two functions taking the same record share one
+conversion, that an override on a parameter or on one of its fields makes a
+different conversion whichever order the two are planned in, that a temporary
+never takes the name of a parameter the wrapper still needs, that one
+unsupported field skips its record and its callers with one cause and each one's
+own path to it, that a public declaration the target refuses skips what requires
+it, that a declared failure with no route — or a reporting operation needing a
+context the boundary does not supply — skips its function, and that
 contradictory configuration fails rather than becoming a capability claim.
 
 ### What the increment settles
@@ -159,6 +174,14 @@ contradictory configuration fails rather than becoming a capability claim.
    description that uses it. A generated unit is an `Artifact`: a name and the
    Rust it contributes. The registry keeps one artifact per name and publishes
    only those a retained output needs.
+
+   These descriptions are checked where they meet the values in hand, which is
+   the registry and nowhere else: a carrier that may not cross the ABI cannot be
+   a native parameter or return, an operation's operand and result types must be
+   the carriers it is actually applied to and produces, a member read must name a
+   member the representation declared, no projection may consume a carrier its
+   siblings still read, and a failure route must report the error type the
+   operation raises.
 5. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
    role: an operation declares `Context("jni.env")` where it needs the
    environment, the boundary names the native parameter that supplies it, and the

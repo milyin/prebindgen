@@ -12,7 +12,7 @@
 //! from a `ScalarKind` or from the layout of an already-planned child, never
 //! from the text of a signature.
 
-use prebindgen_flat::flat::{ScalarKind, TypeKind};
+use prebindgen_flat::flat::{FieldShape, ScalarKind, TypeKind};
 use prebindgen_registry_v2::{
     Access, Artifact, BoundarySpec, ChildValue, Direction, ElementId, ElementKind, FailureCategory,
     FailureRoute, Generation, Layout, NativeParam, OperandSpec, Operation, OperationType,
@@ -146,6 +146,18 @@ impl Target for CTarget {
                     let ident = format_ident!("{c_name}");
                     syn::parse_quote!(#ident)
                 });
+                if item.shape != FieldShape::Named {
+                    // The declared aggregate names its members, so reading the
+                    // source record positionally would address a member the C
+                    // caller never sees.
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.positional_record",
+                        format!(
+                            "`{c_name}` has positional fields, which this adapter's \
+                                 aggregate cannot name"
+                        ),
+                    )));
+                }
                 let mut members = Vec::new();
                 let mut projections = Vec::new();
                 for (field, child) in item.fields.iter().zip(children) {
@@ -251,6 +263,15 @@ impl Target for CTarget {
                         record.name
                     )));
                 };
+                if record.shape != FieldShape::Named {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.positional_record",
+                        format!(
+                            "`{c_name}` has positional fields, which this adapter's \
+                                 aggregate cannot name"
+                        ),
+                    )));
+                }
                 let ident = format_ident!("{c_name}");
                 let mut fields = Vec::new();
                 for field in &record.fields {
@@ -346,13 +367,34 @@ pub enum JniPayload {
     },
 }
 
-pub struct JniTarget;
+/// The JNI adapter.
+///
+/// It carries the Kotlin class name declared for each Rust type, because a
+/// Kotlin signature has to name the class the frontend chose — not the Rust
+/// type it was built from. Renaming a class in the configuration therefore
+/// moves it in the declaration and in every signature mentioning it.
+#[derive(Default)]
+pub struct JniTarget {
+    classes: std::collections::HashMap<String, String>,
+}
+
+impl JniTarget {
+    /// Record that this Rust type crosses as that Kotlin class.
+    pub fn with_class(mut self, rust: impl Into<String>, kotlin: impl Into<String>) -> Self {
+        self.classes.insert(rust.into(), kotlin.into());
+        self
+    }
+}
 
 /// The Kotlin type and JVM descriptor of a scalar.
+///
+/// One scalar, because one accessor: every getter this adapter describes is
+/// read with `JValueOwned::j`, which extracts a long. A second width needs its
+/// own accessor and its own carrier import, and until it has them, saying so is
+/// the honest answer.
 fn jvm_scalar(kind: ScalarKind) -> Option<(syn::Type, &'static str, &'static str)> {
     Some(match kind {
         ScalarKind::I64 => (syn::parse_quote!(jlong), "Long", "J"),
-        ScalarKind::I32 => (syn::parse_quote!(jint), "Int", "I"),
         _ => return None,
     })
 }
@@ -566,7 +608,13 @@ impl Target for JniTarget {
                     implementation: Operation::Target(JniPayload::ReportError),
                 }),
                 on_report_failure: Terminal::Abort,
-                terminate: Terminal::Return(syn::parse_quote!(0)),
+                // Zero is not a result: it is what a native method must return
+                // while an exception is pending. A wrapper that returns
+                // nothing has to terminate with nothing.
+                terminate: match values.output {
+                    Some(_) => Terminal::Return(syn::parse_quote!(0)),
+                    None => Terminal::Return(syn::parse_quote!(())),
+                },
             }],
         }))
     }
@@ -592,7 +640,15 @@ impl Target for JniTarget {
                 let mut params = Vec::new();
                 for (param, value) in function.params.iter().zip(&values.inputs) {
                     let kotlin = match named(&value.crossing.ty) {
-                        Some(name) => name,
+                        Some(name) => match self.classes.get(&name) {
+                            Some(class) => class.clone(),
+                            None => {
+                                return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                                    "unsupported.jni.undeclared_class",
+                                    format!("`{name}` has no declared Kotlin class"),
+                                )))
+                            }
+                        },
                         None => match scalar_of(&value.crossing.ty).and_then(jvm_scalar) {
                             Some((_, kotlin, _)) => kotlin.to_string(),
                             None => {
@@ -731,56 +787,75 @@ fn report_jni_error() -> proc_macro2::TokenStream {
 /// from, so a renamed property moves in the getter and in the class or in
 /// neither.
 pub fn write_kotlin(generation: &Generation<JniPayload>) -> String {
-    let mut package = String::new();
-    let mut declarations = Vec::new();
-    let mut methods = Vec::new();
+    use std::collections::BTreeMap;
+
+    // One file per package would be the real shape; this adapter writes one
+    // file and refuses to guess when two packages are configured, rather than
+    // emitting declarations under a package their native symbols do not match.
+    let mut classes: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut objects: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
     for surface in generation.surfaces() {
         match &surface.payload {
             Some(JniPayload::Class {
-                package: pkg,
+                package,
                 class,
                 properties,
             }) => {
-                package = pkg.clone();
                 let properties: Vec<String> = properties
                     .iter()
                     .map(|(name, ty)| format!("val {name}: {ty}"))
                     .collect();
-                declarations.push(format!("data class {class}({})", properties.join(", ")));
+                classes
+                    .entry(package.clone())
+                    .or_default()
+                    .push(format!("data class {class}({})", properties.join(", ")));
             }
             Some(JniPayload::Method {
-                package: pkg,
+                package,
                 object,
                 method,
                 params,
                 ret,
             }) => {
-                package = pkg.clone();
                 let params: Vec<String> = params
                     .iter()
                     .map(|(name, ty)| format!("{name}: {ty}"))
                     .collect();
-                methods.push((
-                    object.clone(),
-                    format!(
+                objects
+                    .entry(package.clone())
+                    .or_default()
+                    .entry(object.clone())
+                    .or_default()
+                    .push(format!(
                         "    @JvmStatic\n    external fun {method}({}): {ret}",
                         params.join(", ")
-                    ),
-                ));
+                    ));
             }
             _ => {}
         }
     }
+
+    let packages: Vec<&String> = classes.keys().chain(objects.keys()).collect();
+    let package = match packages.first() {
+        Some(first) => (*first).clone(),
+        None => return String::new(),
+    };
+    assert!(
+        packages.iter().all(|name| **name == package),
+        "this reference adapter writes one Kotlin file, so it takes one package; \
+         configured: {packages:?}"
+    );
+
     let mut out = format!("package {package}\n");
-    for declaration in declarations {
+    for declaration in classes.get(&package).into_iter().flatten() {
         out.push_str(&format!("\n{declaration}\n"));
     }
-    let mut objects: Vec<String> = Vec::new();
-    for (object, method) in methods {
-        objects.push(format!("\nobject {object} {{\n{method}\n}}\n"));
-    }
-    for object in objects {
-        out.push_str(&object);
+    // Every method of one object goes in that object, once.
+    for (object, methods) in objects.get(&package).into_iter().flatten() {
+        out.push_str(&format!(
+            "\nobject {object} {{\n{}\n}}\n",
+            methods.join("\n\n")
+        ));
     }
     out
 }

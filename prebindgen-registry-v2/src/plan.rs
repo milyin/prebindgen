@@ -16,11 +16,11 @@ use crate::{
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
     target::{
-        AbiSpec, ChildValue, Crossing, Direction, FailureCategory, FailureRoute, OperandRole,
-        OutputPlacement, ParamRole, Part, PlanningError, PrimitiveId, PrimitiveSpec, Protocol,
-        RecordRelation, Relation, RelationId, ResolvedShape, ResolvedValues, SelectionQuery,
-        SiteDescriptor, SourceItem, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
-        Unsupported,
+        AbiSpec, ChildValue, Crossing, Direction, FailureCategory, FailureRoute, Layout,
+        OperandRole, OutputPlacement, ParamRole, Part, PlanningError, PrimitiveFailure,
+        PrimitiveId, PrimitiveSpec, Protocol, RecordRelation, Relation, RelationId, ResolvedShape,
+        ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, SurfaceRequest, SurfaceSpec,
+        Target, TargetAttempt, Unsupported,
     },
 };
 
@@ -103,7 +103,8 @@ impl<Policy> BindingRequests<Policy> {
 pub struct ValuePlan<P> {
     pub id: NodeId,
     pub crossing: Crossing,
-    pub relation: RelationId,
+    /// How the Rust value is built or read, as the target chose it.
+    pub relation: Relation,
     pub repr: crate::target::ReprSpec<P>,
     pub children: Vec<NodeId>,
     pub body: NodeBody,
@@ -130,26 +131,58 @@ pub struct FunctionPlan<P> {
     pub result: Option<ValueId>,
 }
 
-/// What a conversion attempt is, while and after it is planned.
-enum NodeState {
-    /// Being resolved: meeting this again is a cycle.
-    InProgress,
-    Ready(NodeId),
-    Unsupported(Unsupported),
-}
-
-#[derive(PartialEq, Eq, Hash)]
-struct NodeKey {
+/// A conversion whose planning has begun, for cycle detection.
+///
+/// Deliberately coarser than [`NodeKey`]: what makes a cycle is a type reaching
+/// its own conversion, which its children cannot be known before.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct ResolvingKey {
     ty: prebindgen_flat::TypeKey,
     direction: Direction,
     relation: RelationId,
     policy: PolicyId,
 }
 
+/// What makes two conversions the same conversion.
+///
+/// The children are part of it. A choice recorded for a field is looked up at
+/// that field's position, so two records with the same policy whose fields were
+/// configured differently resolve to different children — and must not share a
+/// node, or the second use would silently inherit the first one's conversion.
+#[derive(PartialEq, Eq, Hash)]
+struct NodeKey {
+    ty: prebindgen_flat::TypeKey,
+    direction: Direction,
+    relation: RelationId,
+    policy: PolicyId,
+    children: Vec<NodeId>,
+}
+
+/// A capability that stopped a conversion, and where it was met.
+struct Refusal {
+    reason: Unsupported,
+    at: crate::target::Position,
+}
+
 /// A planned value, or the capability that stopped it.
 enum Planned {
     Ready(NodeId),
-    Unsupported(Unsupported),
+    Unsupported(Refusal),
+}
+
+impl Planned {
+    fn refused(reason: Unsupported, at: &crate::target::Position) -> Self {
+        Planned::Unsupported(Refusal::at(reason, at))
+    }
+}
+
+impl Refusal {
+    fn at(reason: Unsupported, at: &crate::target::Position) -> Self {
+        Refusal {
+            reason,
+            at: at.clone(),
+        }
+    }
 }
 
 /// The working state of one `generate` call.
@@ -160,7 +193,8 @@ struct Run<'a, T: Target> {
     relations: Vec<Relation>,
     primitives: Vec<PrimitiveSpec<T::Payload>>,
     nodes: Vec<ValuePlan<T::Payload>>,
-    cache: HashMap<NodeKey, NodeState>,
+    cache: HashMap<NodeKey, NodeId>,
+    resolving: std::collections::HashSet<ResolvingKey>,
     /// The relations offered for a type, registered the first time it is
     /// planned. A relation's identity is part of a conversion's identity, so
     /// registering a fresh one per visit would give every value its own node
@@ -178,6 +212,7 @@ impl<'a, T: Target> Run<'a, T> {
             primitives: Vec::new(),
             nodes: Vec::new(),
             cache: HashMap::new(),
+            resolving: std::collections::HashSet::new(),
             offered: HashMap::new(),
         }
     }
@@ -265,7 +300,7 @@ impl<'a, T: Target> Run<'a, T> {
 
         let candidates = match self.candidates(&crossing.ty) {
             Ok(candidates) => candidates,
-            Err(unsupported) => return Ok(Planned::Unsupported(unsupported)),
+            Err(reason) => return Ok(Planned::refused(reason, position)),
         };
 
         let query = SelectionQuery {
@@ -276,9 +311,7 @@ impl<'a, T: Target> Run<'a, T> {
         };
         let relation_id = match target.select(&query)? {
             TargetAttempt::Ready(relation) => relation,
-            TargetAttempt::Unsupported(unsupported) => {
-                return Ok(Planned::Unsupported(unsupported))
-            }
+            TargetAttempt::Unsupported(reason) => return Ok(Planned::refused(reason, position)),
         };
         let relation = match candidates
             .iter()
@@ -294,46 +327,30 @@ impl<'a, T: Target> Run<'a, T> {
             }
         };
 
-        let key = NodeKey {
+        // Meeting a conversion that is already being resolved is a cycle: a
+        // type whose conversion needs its own. The mark is bookkeeping, not a
+        // plan, and it is dropped whichever way this call ends.
+        let resolving = ResolvingKey {
             ty: crossing.ty.key(),
             direction: crossing.direction,
             relation: relation_id,
             policy: policy_id,
         };
-        match self.cache.get(&key) {
-            Some(NodeState::Ready(id)) => return Ok(Planned::Ready(*id)),
-            Some(NodeState::Unsupported(unsupported)) => {
-                return Ok(Planned::Unsupported(unsupported.clone()))
-            }
-            Some(NodeState::InProgress) => {
-                return Ok(Planned::Unsupported(Unsupported::new(
+        if !self.resolving.insert(resolving.clone()) {
+            return Ok(Planned::refused(
+                Unsupported::new(
                     "unsupported.conversion.recursive",
                     format!(
                         "converting `{}` needs its own conversion; v2 has no recursive \
                          conversion yet",
                         crossing.ty.key()
                     ),
-                )))
-            }
-            None => {}
+                ),
+                position,
+            ));
         }
-        self.cache.insert(
-            NodeKey {
-                ty: crossing.ty.key(),
-                direction: crossing.direction,
-                relation: relation_id,
-                policy: policy_id,
-            },
-            NodeState::InProgress,
-        );
-
         let planned = self.plan_relation(&crossing, position, relation_id, &relation, policy_id);
-        let state = match &planned {
-            Ok(Planned::Ready(id)) => NodeState::Ready(*id),
-            Ok(Planned::Unsupported(unsupported)) => NodeState::Unsupported(unsupported.clone()),
-            Err(_) => NodeState::InProgress,
-        };
-        self.cache.insert(key, state);
+        self.resolving.remove(&resolving);
         planned
     }
 
@@ -351,6 +368,10 @@ impl<'a, T: Target> Run<'a, T> {
         let requests = self.requests;
         let parts = relation.parts().to_vec();
 
+        // Children are planned before this conversion's identity is known,
+        // because a choice recorded for one of them makes this a different
+        // conversion: two values with the same policy whose fields disagree
+        // must not share a node.
         let mut children = Vec::new();
         for part in &parts {
             let child = Crossing {
@@ -363,8 +384,19 @@ impl<'a, T: Target> Run<'a, T> {
                 // One unsupported part makes the whole conversion unsupported.
                 // Nothing partial is recorded: a record missing a field is a
                 // different type, not a reduced one.
-                Planned::Unsupported(unsupported) => return Ok(Planned::Unsupported(unsupported)),
+                Planned::Unsupported(refusal) => return Ok(Planned::Unsupported(refusal)),
             }
+        }
+
+        let key = NodeKey {
+            ty: crossing.ty.key(),
+            direction: crossing.direction,
+            relation: relation_id,
+            policy: policy_id,
+            children: children.clone(),
+        };
+        if let Some(id) = self.cache.get(&key) {
+            return Ok(Planned::Ready(*id));
         }
 
         let record = match relation {
@@ -380,20 +412,14 @@ impl<'a, T: Target> Run<'a, T> {
         let child_values: Vec<ChildValue<'_>> = parts
             .iter()
             .zip(&children)
-            .map(|(part, id)| {
-                let child = &self.nodes[id.0];
-                ChildValue {
-                    part,
-                    layout: &child.repr.layout,
-                    fallible: !child.failures.is_empty(),
-                }
+            .map(|(part, id)| ChildValue {
+                part,
+                layout: &self.nodes[id.0].repr.layout,
             })
             .collect();
         let repr = match target.represent(&shape, &child_values, requests.get(policy_id))? {
             TargetAttempt::Ready(repr) => repr,
-            TargetAttempt::Unsupported(unsupported) => {
-                return Ok(Planned::Unsupported(unsupported))
-            }
+            TargetAttempt::Unsupported(reason) => return Ok(Planned::refused(reason, position)),
         };
         drop(child_values);
 
@@ -407,13 +433,9 @@ impl<'a, T: Target> Run<'a, T> {
         let carrier = body.fresh();
         let result = match (&repr.protocol, crossing.direction) {
             (Protocol::Terminal { codec }, _) => {
-                if codec.value_operands() != 1 {
-                    return Err(PlanningError::InternalInvariant(
-                        "a terminal conversion takes exactly one value operand".to_string(),
-                    ));
-                }
+                check_operation(codec, repr.layout.wire(), repr.layout.wire())?;
                 failures.extend(codec.failure_category());
-                self.apply(&mut body, (**codec).clone(), &[carrier])
+                self.apply(&mut body, (**codec).clone(), &[carrier])?
             }
             (Protocol::Product { projections }, Direction::IntoRust) => {
                 if projections.len() != parts.len() {
@@ -423,6 +445,16 @@ impl<'a, T: Target> Run<'a, T> {
                         projections.len(),
                         parts.len()
                     )));
+                }
+                if let Layout::Aggregate { members, .. } = &repr.layout {
+                    if members.len() != parts.len() {
+                        return Err(PlanningError::InternalInvariant(format!(
+                            "the representation of `{}` names {} member(s) for {} part(s)",
+                            crossing.ty.key(),
+                            members.len(),
+                            parts.len()
+                        )));
+                    }
                 }
                 let record = match relation {
                     Relation::Record(record) => record.record.clone(),
@@ -434,13 +466,40 @@ impl<'a, T: Target> Run<'a, T> {
                 };
                 let mut converted = Vec::new();
                 for (projection, child) in projections.iter().zip(&children) {
-                    if projection.value_operands() != 1 {
-                        return Err(PlanningError::InternalInvariant(
-                            "a projection takes exactly one value operand".to_string(),
-                        ));
+                    check_operation(
+                        projection,
+                        repr.layout.wire(),
+                        self.nodes[child.0].repr.layout.wire(),
+                    )?;
+                    // Every projection reads the same carrier, so none of them
+                    // may claim to consume it.
+                    if projections.len() > 1 && projection.consumes_value() {
+                        return Err(PlanningError::InternalInvariant(format!(
+                            "a projection of `{}` consumes the value the other projections \
+                             still read",
+                            crossing.ty.key()
+                        )));
+                    }
+                    // A member read has to name a member the representation
+                    // declared, or the wrapper reads something the foreign
+                    // caller never filled in.
+                    if let (
+                        crate::target::Operation::Standard(crate::target::StandardOp::ReadMember {
+                            member,
+                        }),
+                        Layout::Aggregate { members, .. },
+                    ) = (&projection.implementation, &repr.layout)
+                    {
+                        if !members.iter().any(|declared| same_member(declared, member)) {
+                            return Err(PlanningError::InternalInvariant(format!(
+                                "a projection of `{}` reads a member its representation does \
+                                 not declare",
+                                crossing.ty.key()
+                            )));
+                        }
                     }
                     failures.extend(projection.failure_category());
-                    let obtained = self.apply(&mut body, projection.clone(), &[carrier]);
+                    let obtained = self.apply(&mut body, projection.clone(), &[carrier])?;
                     let obtained = match obtained {
                         Some(value) => value,
                         None => {
@@ -461,14 +520,17 @@ impl<'a, T: Target> Run<'a, T> {
                 Some(result)
             }
             (Protocol::Product { .. }, Direction::OutOfRust) => {
-                return Ok(Planned::Unsupported(Unsupported::new(
-                    "unsupported.record.out_of_rust",
-                    format!(
-                        "`{}` leaves Rust as a composed value; v2 has no target construction \
-                         operation yet",
-                        crossing.ty.key()
+                return Ok(Planned::refused(
+                    Unsupported::new(
+                        "unsupported.record.out_of_rust",
+                        format!(
+                            "`{}` leaves Rust as a composed value; v2 has no target \
+                             construction operation yet",
+                            crossing.ty.key()
+                        ),
                     ),
-                )))
+                    position,
+                ))
             }
         };
         let result = match result {
@@ -486,7 +548,7 @@ impl<'a, T: Target> Run<'a, T> {
         self.nodes.push(ValuePlan {
             id,
             crossing: crossing.clone(),
-            relation: relation_id,
+            relation: relation.clone(),
             repr,
             children,
             body: NodeBody {
@@ -496,6 +558,7 @@ impl<'a, T: Target> Run<'a, T> {
             },
             failures,
         });
+        self.cache.insert(key, id);
         Ok(Planned::Ready(id))
     }
 
@@ -509,7 +572,7 @@ impl<'a, T: Target> Run<'a, T> {
         body: &mut BodyBuilder,
         primitive: PrimitiveSpec<T::Payload>,
         values: &[ValueId],
-    ) -> Option<ValueId> {
+    ) -> Result<Option<ValueId>, PlanningError> {
         if matches!(
             primitive.implementation,
             crate::target::Operation::Standard(crate::target::StandardOp::Identity)
@@ -517,22 +580,33 @@ impl<'a, T: Target> Run<'a, T> {
             primitive.failure,
             crate::target::PrimitiveFailure::Infallible
         ) {
-            return values.first().copied();
+            return Ok(values.first().copied());
         }
         let mut supplied = values.iter();
-        let operands: Vec<Operand> = primitive
-            .operands
-            .iter()
-            .map(|operand| match &operand.role {
-                OperandRole::Value => Operand::Value(
-                    *supplied
-                        .next()
-                        .expect("operand arity is checked before applying"),
-                ),
+        let mut operands = Vec::new();
+        for operand in &primitive.operands {
+            operands.push(match &operand.role {
+                OperandRole::Value => match supplied.next() {
+                    Some(value) => Operand::Value(*value),
+                    None => {
+                        return Err(PlanningError::InternalInvariant(
+                            "an operation takes more values than this conversion supplies"
+                                .to_string(),
+                        ))
+                    }
+                },
                 OperandRole::Context(name) => Operand::Context(name.clone()),
-                OperandRole::Error => Operand::Context("__error".to_string()),
-            })
-            .collect();
+                // An error value exists on a failure route and nowhere else:
+                // inside a conversion there is nothing to bind it to.
+                OperandRole::Error => {
+                    return Err(PlanningError::InternalInvariant(
+                        "a conversion operation asks for an error value, which only a failure \
+                         route has"
+                            .to_string(),
+                    ))
+                }
+            });
+        }
         let produces = primitive.result.is_some();
         let id = self.register(primitive);
         let result = produces.then(|| body.fresh());
@@ -541,8 +615,66 @@ impl<'a, T: Target> Run<'a, T> {
             operands,
             result,
         });
-        result
+        Ok(result)
     }
+}
+
+/// Check one operation against the values it will be applied to.
+///
+/// An operation states the type of every operand and of its result, and the
+/// registry is the only place those statements meet the carriers actually in
+/// hand. `carrier` is what this conversion is given; `produces` is what the
+/// application must yield — the child's carrier for a projection, the
+/// conversion's own for a terminal codec.
+fn check_operation<P>(
+    primitive: &PrimitiveSpec<P>,
+    carrier: &crate::target::WireType,
+    produces: &crate::target::WireType,
+) -> Result<(), PlanningError> {
+    if primitive.value_operands() != 1 {
+        return Err(PlanningError::InternalInvariant(format!(
+            "this operation takes {} value operand(s); a conversion supplies exactly one",
+            primitive.value_operands()
+        )));
+    }
+    let value = primitive
+        .operands
+        .iter()
+        .find(|operand| matches!(operand.role, OperandRole::Value))
+        .expect("the arity check above found one");
+    if let crate::target::OperationType::Carrier(wire) = &value.ty {
+        if !same_type(&wire.ty, &carrier.ty) {
+            return Err(PlanningError::InternalInvariant(format!(
+                "this operation reads a `{}` and is applied to a `{}`",
+                spell(&wire.ty),
+                spell(&carrier.ty)
+            )));
+        }
+    }
+    match &primitive.result {
+        Some(crate::target::OperationType::Carrier(wire)) if !same_type(&wire.ty, &produces.ty) => {
+            Err(PlanningError::InternalInvariant(format!(
+                "this operation produces a `{}` where a `{}` is expected",
+                spell(&wire.ty),
+                spell(&produces.ty)
+            )))
+        }
+        _ => Ok(()),
+    }
+}
+
+fn spell(ty: &syn::Type) -> String {
+    use quote::ToTokens;
+    ty.to_token_stream().to_string()
+}
+
+fn same_type(left: &syn::Type, right: &syn::Type) -> bool {
+    spell(left) == spell(right)
+}
+
+fn same_member(left: &syn::Member, right: &syn::Member) -> bool {
+    use quote::ToTokens;
+    left.to_token_stream().to_string() == right.to_token_stream().to_string()
 }
 
 /// The name of a nominal type, for a policy lookup.
@@ -589,9 +721,12 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            kind => Err(Unsupported::new(
-                format!("unsupported.{}.not_implemented", kind.as_str()),
-                format!("the v2 engine has no {} lowering yet", kind.as_str()),
+            kind => Err(Refusal::at(
+                Unsupported::new(
+                    format!("unsupported.{}.not_implemented", kind.as_str()),
+                    format!("the v2 engine has no {} lowering yet", kind.as_str()),
+                ),
+                &crate::target::Position::root(element.id.clone()),
             )),
         };
         match planned {
@@ -602,13 +737,16 @@ pub fn generate<T: Target>(
                 surfaces.push(surface);
                 outcomes.insert(element.id.clone(), Outcome::Emitted);
             }
-            Err(unsupported) => {
+            Err(refusal) => {
+                // The path is where the walk actually stopped — the exported
+                // function, the parameter, the field — so the report says what
+                // to look at rather than only which element vanished.
                 outcomes.insert(
                     element.id.clone(),
                     Outcome::Skipped(Skip {
-                        capability: unsupported.capability,
-                        explanation: unsupported.explanation,
-                        dependency_path: vec![element.id.to_string()],
+                        capability: refusal.reason.capability,
+                        explanation: refusal.reason.explanation,
+                        dependency_path: refusal.at.dependency_path(),
                     }),
                 );
             }
@@ -751,7 +889,7 @@ fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
     element: &DeclaredElement,
     policy: &T::Policy,
-) -> Result<Result<Emitted<T::Payload>, Unsupported>, PlanningError> {
+) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
     let function: &Function = flat
         .function(element.rust_origin.as_str())
@@ -769,7 +907,7 @@ fn plan_function<T: Target>(
             &position,
         )? {
             Planned::Ready(id) => inputs.push(id),
-            Planned::Unsupported(unsupported) => return Ok(Err(unsupported)),
+            Planned::Unsupported(refusal) => return Ok(Err(refusal)),
         }
     }
     let output = if matches!(function.ret.kind(), TypeKind::Unit) {
@@ -783,7 +921,7 @@ fn plan_function<T: Target>(
             &root.child("return"),
         )? {
             Planned::Ready(id) => Some(id),
-            Planned::Unsupported(unsupported) => return Ok(Err(unsupported)),
+            Planned::Unsupported(refusal) => return Ok(Err(refusal)),
         }
     };
 
@@ -794,7 +932,7 @@ fn plan_function<T: Target>(
     let site = SiteDescriptor { element, function };
     let boundary = match run.target.boundary(&site, &values, policy)? {
         TargetAttempt::Ready(boundary) => boundary,
-        TargetAttempt::Unsupported(unsupported) => return Ok(Err(unsupported)),
+        TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
     };
     // Every failure the conversions declare needs a terminal action here.
     for category in values.failure_categories() {
@@ -803,13 +941,16 @@ fn plan_function<T: Target>(
             .iter()
             .any(|route| route.category == category)
         {
-            return Ok(Err(Unsupported::new(
-                "unsupported.boundary.unrouted_failure",
-                format!(
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.boundary.unrouted_failure",
+                    format!(
                     "a conversion can fail with a {} error and this boundary declares no route \
                      for it",
                     category.as_str()
                 ),
+                ),
+                &root,
             )));
         }
     }
@@ -822,7 +963,7 @@ fn plan_function<T: Target>(
         &values,
     )? {
         TargetAttempt::Ready(surface) => surface,
-        TargetAttempt::Unsupported(unsupported) => return Ok(Err(unsupported)),
+        TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
     };
     drop(values);
 
@@ -846,16 +987,49 @@ fn assemble<T: Target>(
     output: Option<NodeId>,
     boundary: crate::target::BoundarySpec<T::Payload>,
     // The boundary is consumed: its routes and its ABI belong to the plan.
-) -> Result<Result<FunctionPlan<T::Payload>, Unsupported>, PlanningError> {
+) -> Result<Result<FunctionPlan<T::Payload>, Refusal>, PlanningError> {
+    let refuse = |reason: Unsupported| {
+        Ok(Err(Refusal::at(
+            reason,
+            &crate::target::Position::root(element.id.clone()),
+        )))
+    };
+    // A symbol reaches generated Rust as a function name, so a policy that
+    // supplies something else is contradictory input rather than a name the
+    // writer has to escape.
+    if syn::parse_str::<syn::Ident>(&boundary.abi.symbol).is_err() {
+        return Err(PlanningError::InvalidInput(format!(
+            "`{}` exports the symbol `{}`, which is not a Rust identifier",
+            element.id, boundary.abi.symbol
+        )));
+    }
     let mut body = BodyBuilder::new();
     let mut params = Vec::new();
     let mut contexts: BTreeMap<String, ValueId> = BTreeMap::new();
     for param in &boundary.abi.params {
+        // A carrier that never leaves generated Rust cannot be an extern
+        // parameter, whatever the adapter would like to pass through it.
+        if !param.ty.abi {
+            return Err(PlanningError::InternalInvariant(format!(
+                "`{}` takes `{}` natively, which is not an ABI carrier",
+                element.id,
+                spell(&param.ty.ty)
+            )));
+        }
         let id = body.fresh();
         if let ParamRole::Context(name) = &param.role {
             contexts.insert(name.clone(), id);
         }
         params.push((id, param.clone()));
+    }
+    if let Some(ret) = &boundary.abi.ret {
+        if !ret.abi {
+            return Err(PlanningError::InternalInvariant(format!(
+                "`{}` returns `{}` natively, which is not an ABI carrier",
+                element.id,
+                spell(&ret.ty)
+            )));
+        }
     }
 
     let mut arguments = Vec::new();
@@ -897,23 +1071,93 @@ fn assemble<T: Target>(
     };
 
     let instrs = body.into_instrs();
-    // A conversion that asks for a runtime context the boundary does not
-    // supply cannot be assembled — the route exists or the function is skipped.
+    // An operation that asks for a runtime context the boundary does not supply
+    // cannot be assembled. That covers the reporting operations as much as the
+    // conversions: a route whose reporter needs an environment nobody passes
+    // would otherwise reach the writer and fail there.
+    let mut needed: Vec<&String> = Vec::new();
     for instr in &instrs {
         if let Instr::Apply { operands, .. } = instr {
             for operand in operands {
                 if let Operand::Context(name) = operand {
-                    if name != "__error" && !contexts.contains_key(name) {
-                        return Ok(Err(Unsupported::new(
-                            "unsupported.boundary.missing_context",
-                            format!(
-                                "an operation needs the `{name}` runtime context and this \
-                                 boundary supplies none"
-                            ),
-                        )));
-                    }
+                    needed.push(name);
                 }
             }
+        }
+    }
+    for route in &boundary.failures {
+        let Some(report) = &route.report else {
+            continue;
+        };
+        for operand in &report.operands {
+            match &operand.role {
+                OperandRole::Context(name) => needed.push(name),
+                OperandRole::Error => {}
+                // A reporting operation is handed the error and its contexts,
+                // and there is no converted value at that point to give it.
+                OperandRole::Value => {
+                    return Err(PlanningError::InternalInvariant(format!(
+                        "the {} failure route of `{}` reports through an operation that reads a \
+                         value",
+                        route.category.as_str(),
+                        element.id
+                    )))
+                }
+            }
+        }
+    }
+    // The reporter is handed the error the operation produced, so the two have
+    // to be the same type; a route that reports something else would not
+    // compile.
+    for instr in &instrs {
+        let Instr::Apply { primitive, .. } = instr else {
+            continue;
+        };
+        let PrimitiveFailure::Fallible { error, category } = &run.primitives[primitive.0].failure
+        else {
+            continue;
+        };
+        let Some(route) = boundary
+            .failures
+            .iter()
+            .find(|route| route.category == *category)
+        else {
+            continue;
+        };
+        let Some(report) = &route.report else {
+            continue;
+        };
+        for operand in &report.operands {
+            if !matches!(operand.role, OperandRole::Error) {
+                continue;
+            }
+            if let (
+                crate::target::OperationType::Carrier(reported),
+                crate::target::OperationType::Carrier(raised),
+            ) = (&operand.ty, &**error)
+            {
+                if !same_type(&reported.ty, &raised.ty) {
+                    return Err(PlanningError::InternalInvariant(format!(
+                        "the {} failure route of `{}` reports a `{}` where the operation raises \
+                         a `{}`",
+                        category.as_str(),
+                        element.id,
+                        spell(&reported.ty),
+                        spell(&raised.ty)
+                    )));
+                }
+            }
+        }
+    }
+    for name in needed {
+        if !contexts.contains_key(name) {
+            return refuse(Unsupported::new(
+                "unsupported.boundary.missing_context",
+                format!(
+                    "an operation needs the `{name}` runtime context and this boundary supplies \
+                     none"
+                ),
+            ));
         }
     }
 
@@ -934,17 +1178,20 @@ fn plan_record<T: Target>(
     run: &mut Run<'_, T>,
     element: &DeclaredElement,
     policy: &T::Policy,
-) -> Result<Result<Emitted<T::Payload>, Unsupported>, PlanningError> {
+) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
     let record: &Struct = match flat.struct_type(element.rust_origin.as_str()) {
         Some(record) => record,
         None => {
-            return Ok(Err(Unsupported::new(
-                "unsupported.type.not_a_record",
-                format!(
-                    "`{}` is declared as a data type, and v2 represents only records so far",
-                    element.rust_origin
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.type.not_a_record",
+                    format!(
+                        "`{}` is declared as a data type, and v2 represents only records so far",
+                        element.rust_origin
+                    ),
                 ),
+                &crate::target::Position::root(element.id.clone()),
             )))
         }
     };
@@ -957,7 +1204,7 @@ fn plan_record<T: Target>(
         &root,
     )? {
         Planned::Ready(id) => id,
-        Planned::Unsupported(unsupported) => return Ok(Err(unsupported)),
+        Planned::Unsupported(refusal) => return Ok(Err(refusal)),
     };
 
     let values = ResolvedValues {
@@ -973,7 +1220,7 @@ fn plan_record<T: Target>(
         &values,
     )? {
         TargetAttempt::Ready(surface) => surface,
-        TargetAttempt::Unsupported(unsupported) => return Ok(Err(unsupported)),
+        TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
     };
     drop(values);
     Ok(Ok(Emitted {

@@ -54,6 +54,11 @@ fn model() -> Flat {
                 unimplemented!()
             }
         ),
+        syn::parse_quote!(
+            pub fn stamp_pick(stamp: Stamp, fallback: i64) -> i64 {
+                unimplemented!()
+            }
+        ),
     ]
     .into_iter()
     .map(|item| (item, location.clone()))
@@ -73,11 +78,37 @@ enum Policy {
     /// The same, with member reads that can fail — which is what makes a
     /// boundary's failure routes observable.
     FallibleRecord,
+    /// A record that converts, and whose public declaration this target
+    /// refuses — which is what drives the retention loop rather than value
+    /// planning.
+    RecordWithoutSurface,
     Function {
         symbol: String,
-        /// Whether the boundary routes runtime failures at all.
-        routes: bool,
+        routes: Routes,
+        /// Names for the native parameters, in order. Empty means `arg0`,
+        /// `arg1`, … — the well-behaved case that hides a name collision.
+        param_names: Vec<String>,
     },
+}
+
+/// What a boundary does about failures.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Routes {
+    /// None declared, which skips any function whose conversions can fail.
+    None,
+    /// One route, reporting through an operation that needs no context.
+    Reported,
+    /// One route whose reporting operation needs a runtime context the
+    /// boundary does not supply.
+    ReporterNeedsContext,
+}
+
+fn exported(symbol: &str, routes: Routes) -> Policy {
+    Policy::Function {
+        symbol: symbol.to_string(),
+        routes,
+        param_names: Vec::new(),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -93,7 +124,10 @@ impl Target for Mini {
     type Payload = Payload;
 
     fn select(&self, query: &SelectionQuery<'_, Policy>) -> TargetSupport<RelationId> {
-        let want_record = matches!(query.policy, Policy::Record | Policy::FallibleRecord);
+        let want_record = matches!(
+            query.policy,
+            Policy::Record | Policy::FallibleRecord | Policy::RecordWithoutSurface
+        );
         for (id, relation) in query.candidates {
             match (relation, want_record) {
                 (Relation::Record(_), true) => return Ok(TargetAttempt::Ready(*id)),
@@ -183,7 +217,12 @@ impl Target for Mini {
         values: &ResolvedValues<'_, Payload>,
         policy: &Policy,
     ) -> TargetSupport<BoundarySpec<Payload>> {
-        let Policy::Function { symbol, routes } = policy else {
+        let Policy::Function {
+            symbol,
+            routes,
+            param_names,
+        } = policy
+        else {
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` is exported under a value policy",
                 site.element.rust_origin
@@ -198,7 +237,10 @@ impl Target for Mini {
                     .iter()
                     .enumerate()
                     .map(|(index, value)| NativeParam {
-                        name: quote::format_ident!("arg{index}"),
+                        name: match param_names.get(index) {
+                            Some(name) => quote::format_ident!("{name}"),
+                            None => quote::format_ident!("arg{index}"),
+                        },
                         ty: value.repr.layout.wire().clone(),
                         role: ParamRole::Input(index),
                         mutable: false,
@@ -210,13 +252,27 @@ impl Target for Mini {
                 Some(_) => OutputPlacement::Return,
                 None => OutputPlacement::Void,
             },
-            failures: if *routes {
+            failures: if *routes == Routes::None {
+                Vec::new()
+            } else {
                 vec![crate::target::FailureRoute {
                     category: FailureCategory::Runtime,
                     report: Some(PrimitiveSpec {
-                        operands: vec![OperandSpec::error(OperationType::Carrier(
-                            WireType::internal(syn::parse_quote!(Error)),
-                        ))],
+                        operands: {
+                            let mut operands = vec![OperandSpec::error(OperationType::Carrier(
+                                WireType::internal(syn::parse_quote!(Error)),
+                            ))];
+                            if *routes == Routes::ReporterNeedsContext {
+                                operands.push(OperandSpec::context(
+                                    "mini.log",
+                                    OperationType::Carrier(WireType::internal(syn::parse_quote!(
+                                        Log
+                                    ))),
+                                    Access::Exclusive,
+                                ));
+                            }
+                            operands
+                        },
                         result: None,
                         failure: PrimitiveFailure::Infallible,
                         dependencies: Vec::new(),
@@ -225,8 +281,6 @@ impl Target for Mini {
                     on_report_failure: Terminal::Abort,
                     terminate: Terminal::Return(syn::parse_quote!(0)),
                 }]
-            } else {
-                Vec::new()
             },
         }))
     }
@@ -247,6 +301,15 @@ impl Target for Mini {
                 _ => None,
             })
             .collect();
+        if matches!(
+            (request.policy, request.item),
+            (Policy::RecordWithoutSurface, SourceItem::Record(_))
+        ) {
+            return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                "unsupported.mini.no_public_record",
+                "this record converts, and has no public declaration here",
+            )));
+        }
         Ok(TargetAttempt::Ready(SurfaceSpec {
             element: request.element.id.clone(),
             requires: match request.item {
@@ -305,14 +368,8 @@ fn one_conversion_serves_every_value_that_crosses_the_same_way() {
     let mut requests = requests();
     let record = requests.policy(Policy::Record);
     requests.type_policies.insert("Stamp".to_string(), record);
-    let sum = requests.policy(Policy::Function {
-        symbol: "stamp_sum".to_string(),
-        routes: false,
-    });
-    let max = requests.policy(Policy::Function {
-        symbol: "stamp_max".to_string(),
-        routes: false,
-    });
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    let max = requests.policy(exported("stamp_max", Routes::None));
     requests.output(ty("Stamp"), record);
     requests.output(function("stamp_sum"), sum);
     requests.output(function("stamp_max"), max);
@@ -334,14 +391,8 @@ fn a_site_override_does_not_share_the_default_conversion() {
     let record = requests.policy(Policy::Record);
     let fallible = requests.policy(Policy::FallibleRecord);
     requests.type_policies.insert("Stamp".to_string(), record);
-    let sum = requests.policy(Policy::Function {
-        symbol: "stamp_sum".to_string(),
-        routes: false,
-    });
-    let max = requests.policy(Policy::Function {
-        symbol: "stamp_max".to_string(),
-        routes: true,
-    });
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    let max = requests.policy(exported("stamp_max", Routes::Reported));
     requests.site_policies.insert(
         (
             crate::decl::ElementId::new(ElementKind::Function, "stamp_max"),
@@ -376,14 +427,8 @@ fn an_unsupported_field_skips_its_record_and_its_callers() {
     let record = requests.policy(Policy::Record);
     requests.type_policies.insert("Stamp".to_string(), record);
     requests.type_policies.insert("Label".to_string(), record);
-    let sum = requests.policy(Policy::Function {
-        symbol: "stamp_sum".to_string(),
-        routes: false,
-    });
-    let len = requests.policy(Policy::Function {
-        symbol: "label_len".to_string(),
-        routes: false,
-    });
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    let len = requests.policy(exported("label_len", Routes::None));
     requests.output(ty("Stamp"), record);
     requests.output(ty("Label"), record);
     requests.output(function("stamp_sum"), sum);
@@ -420,10 +465,7 @@ fn a_function_needing_an_undeclared_public_type_is_skipped() {
     let mut requests = requests();
     let record = requests.policy(Policy::Record);
     requests.type_policies.insert("Stamp".to_string(), record);
-    let sum = requests.policy(Policy::Function {
-        symbol: "stamp_sum".to_string(),
-        routes: false,
-    });
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -444,10 +486,7 @@ fn a_declared_failure_with_no_route_skips_the_function() {
     let mut requests = requests();
     let record = requests.policy(Policy::FallibleRecord);
     requests.type_policies.insert("Stamp".to_string(), record);
-    let sum = requests.policy(Policy::Function {
-        symbol: "stamp_sum".to_string(),
-        routes: false,
-    });
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
     requests.output(ty("Stamp"), record);
     requests.output(function("stamp_sum"), sum);
 
@@ -490,10 +529,7 @@ fn a_value_policy_on_an_exported_function_is_an_error() {
 #[test]
 fn a_declaration_naming_nothing_is_an_error() {
     let mut requests = requests();
-    let sum = requests.policy(Policy::Function {
-        symbol: "nope".to_string(),
-        routes: false,
-    });
+    let sum = requests.policy(exported("nope", Routes::None));
     requests.output(function("nope"), sum);
 
     let error = generate(model(), &Mini, requests, "fixture").expect_err("refuses");
@@ -527,14 +563,192 @@ fn a_run_over_unchanged_input_produces_the_same_output() {
         let mut requests = requests();
         let record = requests.policy(Policy::Record);
         requests.type_policies.insert("Stamp".to_string(), record);
-        let sum = requests.policy(Policy::Function {
-            symbol: "stamp_sum".to_string(),
-            routes: false,
-        });
+        let sum = requests.policy(exported("stamp_sum", Routes::None));
         requests.output(ty("Stamp"), record);
         requests.output(function("stamp_sum"), sum);
         let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
         (generation.report().to_json(), generation.rust().to_string())
     };
     assert_eq!(run(), run());
+}
+
+/// A conversion recorded for a *field* makes its record a different
+/// conversion, whichever order the two uses are planned in.
+///
+/// The cache is consulted after the children are planned for exactly this
+/// reason: keyed on the record's own policy alone, the second use would inherit
+/// the first one's conversion and its support outcome, in whichever direction
+/// the two happened to be requested.
+#[test]
+fn a_field_override_is_part_of_its_record_conversion() {
+    let plan = |defaults_first: bool| {
+        let mut requests = requests();
+        let record = requests.policy(Policy::Record);
+        requests.type_policies.insert("Stamp".to_string(), record);
+        let sum = requests.policy(exported("stamp_sum", Routes::None));
+        let max = requests.policy(exported("stamp_max", Routes::None));
+        // A record policy on a scalar field: the target offers no record
+        // relation for an `i64`, so this child cannot be selected at all.
+        requests.site_policies.insert(
+            (
+                crate::decl::ElementId::new(ElementKind::Function, "stamp_max"),
+                "param 0.field secs".to_string(),
+            ),
+            record,
+        );
+        requests.output(ty("Stamp"), record);
+        if defaults_first {
+            requests.output(function("stamp_sum"), sum);
+            requests.output(function("stamp_max"), max);
+        } else {
+            requests.output(function("stamp_max"), max);
+            requests.output(function("stamp_sum"), sum);
+        }
+        generate(model(), &Mini, requests, "fixture").expect("plans")
+    };
+    for defaults_first in [true, false] {
+        let generation = plan(defaults_first);
+        let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_max") else {
+            panic!("its `secs` field is configured with a policy nothing can serve");
+        };
+        assert_eq!(skip.capability.as_str(), "unsupported.mini.no_relation");
+        // The function that configured nothing keeps its conversion.
+        assert!(matches!(
+            outcome(&generation, "fn:stamp_sum"),
+            Outcome::Emitted
+        ));
+        assert!(generation.rust().contains("stamp_sum"));
+        assert!(!generation.rust().contains("stamp_max"));
+    }
+}
+
+/// A temporary never shadows a parameter the wrapper still needs.
+///
+/// The reference adapters name every parameter `argN`, which hides this: a
+/// boundary is free to name one `v0`, and a temporary taking that name would
+/// compile and feed the wrong value to the source call.
+#[test]
+fn a_temporary_never_takes_a_live_parameter_name() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let pick = requests.policy(Policy::Function {
+        symbol: "stamp_pick".to_string(),
+        routes: Routes::None,
+        // The names a writer would otherwise allocate for itself.
+        param_names: vec!["v0".to_string(), "v1".to_string()],
+    });
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_pick"), pick);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    assert!(matches!(
+        outcome(&generation, "fn:stamp_pick"),
+        Outcome::Emitted
+    ));
+    let rust = generation.rust();
+    // The second argument is the parameter itself, not a temporary that took
+    // its name: `v1` reaches the call unshadowed, and the fields are read into
+    // names the signature does not use.
+    assert!(rust.contains("let v2 = v0.secs;"), "{rust}");
+    assert!(rust.contains("let v3 = v0.nanos;"), "{rust}");
+    assert!(
+        rust.contains("source::stamp_pick(v4, v1)"),
+        "the fallback argument must still be the parameter:\n{rust}"
+    );
+}
+
+/// A failure route whose reporting operation needs a context the boundary does
+/// not supply skips the function.
+///
+/// The conversions here need no context at all, so only the reporter's operands
+/// can reveal it — which is what makes this different from the conversion-side
+/// check.
+#[test]
+fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::FallibleRecord);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::ReporterNeedsContext));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
+        panic!("its reporter needs a context this boundary does not supply");
+    };
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.boundary.missing_context"
+    );
+}
+
+/// A skip says where the walk stopped, not only which element vanished.
+#[test]
+fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    requests.type_policies.insert("Label".to_string(), record);
+    let len = requests.policy(exported("label_len", Routes::None));
+    requests.output(ty("Label"), record);
+    requests.output(function("label_len"), len);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    let Outcome::Skipped(caller) = outcome(&generation, "fn:label_len") else {
+        panic!("`Label` has a field nothing can carry");
+    };
+    assert_eq!(
+        caller.dependency_path,
+        vec!["fn:label_len", "param 0", "field text"]
+    );
+    // The record reached the same cause by its own path.
+    let Outcome::Skipped(record) = outcome(&generation, "type:Label") else {
+        panic!("the record cannot be represented either");
+    };
+    assert_eq!(record.dependency_path, vec!["type:Label", "field text"]);
+}
+
+/// A public declaration the target refuses skips every declaration requiring
+/// it, even though every conversion involved was planned successfully.
+///
+/// This is the retention loop rather than value planning: the record's
+/// conversion is fine, and it is the public `Stamp` that does not exist.
+#[test]
+fn a_refused_public_declaration_skips_what_requires_it() {
+    let mut requests = requests();
+    let record = requests.policy(Policy::RecordWithoutSurface);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    let len = requests.policy(exported("label_len", Routes::None));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+    // Unrelated, and skipped for a cause of its own.
+    requests
+        .type_policies
+        .insert("Label".to_string(), requests.default_policy);
+    requests.output(function("label_len"), len);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    let Outcome::Skipped(record) = outcome(&generation, "type:Stamp") else {
+        panic!("this target declares no public record");
+    };
+    assert_eq!(
+        record.capability.as_str(),
+        "unsupported.mini.no_public_record"
+    );
+    let Outcome::Skipped(caller) = outcome(&generation, "fn:stamp_sum") else {
+        panic!("a wrapper taking a type that is not declared is unusable");
+    };
+    // The same cause, reached through this function's own requirement.
+    assert_eq!(
+        caller.capability.as_str(),
+        "unsupported.mini.no_public_record"
+    );
+    assert_eq!(caller.dependency_path.first().unwrap(), "fn:stamp_sum");
+    assert!(caller
+        .dependency_path
+        .iter()
+        .any(|step| step == "type:Stamp"));
+    assert!(generation.rust().is_empty());
 }

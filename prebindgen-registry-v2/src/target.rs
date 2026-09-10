@@ -370,6 +370,13 @@ impl<P> PrimitiveSpec<P> {
             .count()
     }
 
+    /// Whether this application consumes the value it is given.
+    pub(crate) fn consumes_value(&self) -> bool {
+        self.operands.iter().any(|operand| {
+            matches!(operand.role, OperandRole::Value) && operand.access == Access::Owned
+        })
+    }
+
     pub(crate) fn failure_category(&self) -> Option<FailureCategory> {
         match &self.failure {
             PrimitiveFailure::Infallible => None,
@@ -617,8 +624,6 @@ pub struct ResolvedShape<'a> {
 pub struct ChildValue<'a> {
     pub part: &'a Part,
     pub layout: &'a Layout,
-    /// Whether converting this child can fail.
-    pub fallible: bool,
 }
 
 /// The conversions of one exported function, as the boundary and the public

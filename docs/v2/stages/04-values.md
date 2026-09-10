@@ -58,9 +58,6 @@ plan(type, direction, position):
                                                       # rule, else type default
     relation = target.select(type, direction, applicable rules, policy)
                                                       # cheap: no recursion yet
-    if a node exists for (type, direction, relation, policy):
-        return it                                     # the cache key is complete
-                                                      # only once the relation is known
     mark (type, direction, relation, policy) as being resolved
                                                       # meeting this mark again is a cycle
 
@@ -72,6 +69,10 @@ plan(type, direction, position):
     if any child is unsupported:
         this conversion is unsupported, and so is everything that needed it
 
+    if a node exists for (type, direction, relation, policy, children):
+        return it                                     # the identity is complete
+                                                      # only once the children are
+
     repr = target.represent(relation, children, policy)
                # which carriers hold the value, and the operations that access them
     body = compose(relation, children, repr)
@@ -81,16 +82,21 @@ plan(type, direction, position):
     record the node and return it
 ```
 
-Two details in that sketch matter more than they look. Selection happens before
-the cache is consulted, because the relation is part of what identifies a node —
-the same type converted through its fields and through a constructor are two
-different conversions. And the recursion is parameterized by *position*, not just
-by type: a `SiteId` (parameter 0 of this exported function) or a `PartId` (the
-`secs` field of this relation) is what an override is recorded against, so the
-position is what turns the recorded rules into this conversion's effective
-policy. Positions are how overrides reach a nested child; the resulting node is
-still shared by identity, so two positions that resolve to the same four-part key
-get the same node.
+Two details in that sketch matter more than they look. The relation and the
+resolved children are both part of what identifies a node, which is why neither
+selection nor the recursion can wait until after the cache is consulted: the same
+type converted through its fields and through a constructor are two different
+conversions, and so are two records whose fields were configured differently. The
+policy in that key is the one recorded for *this* value, and it says nothing
+about the values inside it — the children do, and they are what a subtree's
+choices reach.
+
+And the recursion is parameterized by *position*, not just by type: a `SiteId`
+(parameter 0 of this exported function) or a `PartId` (the `secs` field of this
+relation) is what an override is recorded against, so the position is what turns
+the recorded rules into this conversion's effective policy. Positions are how
+overrides reach a nested child; the resulting node is still shared by identity,
+so two positions that resolve to the same key get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no work
 of their own. A record with a record field simply makes `plan` call itself again,
