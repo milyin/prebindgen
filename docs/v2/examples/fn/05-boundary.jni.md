@@ -11,21 +11,21 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
 node(output) : produces jlong, failures {}
 
-policy (JNI function): top-level example.stampSum, extern declared on JNINative,
-                       extern "C", input one object, output jlong,
-                       Runtime -> signal the caller's error handler
+policy (JNI function): example.Bindings.sum, extern "system",
+                       input one object, output jlong,
+                       Runtime -> report to the JVM, then return a default
 ```
 
 ## Result
 
 ```text
 BoundarySpec {
-    abi:      extern "C", symbol "Java_example_JNINative_stampSum",
+    abi:      extern "system", symbol "Java_example_Bindings_sum",
               synthetic operands: JNIEnv (exclusive), JClass (unused),
-                                  __error_sink (the caller's error handler),
     inputs:   [ InputPlacement { native arg 0 (JObject) -> node(input) } ],
     output:   OutputPlacement::Return(node(output) -> jlong),
-    failures: { Runtime: signal __error_sink with the message, then return 0 },
+    failures: { Runtime: report through report_jni_error, then return 0;
+                         if reporting fails -> abort },
 }
 ```
 
@@ -33,33 +33,39 @@ Fixing the signature that [emission][fn_emit_jni] renders:
 
 ```rust
 #[no_mangle]
-pub unsafe extern "C" fn Java_example_JNINative_stampSum<'a>(
-    mut env: jni::JNIEnv<'a>,
-    _class: jni::objects::JClass<'a>,
-    arg0: jni::objects::JObject<'a>,
-    __error_sink: jni::objects::JObject<'a>,
-) -> jni::sys::jlong
+pub extern "system" fn Java_example_Bindings_sum(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    arg0: JObject<'_>,
+) -> jlong
 ```
 
-The reporting operation takes the environment, the sink and a message, produces
-no value, and depends on the cached identifier for the handler's method:
+The reporting operation is a generated artifact this adapter contributes:
 
-```text
-PrimitiveSpec {
-    operands: [ JNIEnv (exclusive), the sink object (shared), the message ],
-    results:  [],
-    implementation: call the runtime's signal_binding_error,
-    dependencies:   [ the cached handler method id ],
+```rust
+pub fn report_jni_error(env: &mut JNIEnv<'_>, error: jni::errors::Error)
+    -> jni::errors::Result<()>
+{
+    if env.exception_check()? {
+        Ok(())
+    } else {
+        env.throw_new("java/lang/RuntimeException", error.to_string())
+    }
 }
 ```
 
+Its specification takes an exclusive environment operand and an owned error,
+produces no value, can fail with a runtime error, and depends on that artifact.
+The `?` inside propagates its own failure to its caller; it never returns from
+the generated wrapper.
+
 ## Checks
 
-- Zero is not a result: a native method must return something, and the Kotlin
-  wrapper checks the handler before looking at the returned value. That route is
-  [the frontend's convention][fn_requests_jni], not a writer default.
-- One report per failure: nothing re-reports through an operation that has
-  already failed.
+- Zero is not a result: it is what a native method must return while an
+  exception is pending, and Kotlin observes the exception. That route is
+  [the adapter's convention][fn_requests_jni], not a writer default.
+- Reporting is never retried with the operation that just failed — one failed
+  report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success
   path. The route exists because [the input node declares that
   failure][fn_values_jni]; a category the policy leaves unrouted would skip the

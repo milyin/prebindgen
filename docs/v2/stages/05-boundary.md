@@ -31,22 +31,20 @@ For this example, the two targets end up with these signatures:
 pub extern "C" fn stamp_sum(arg0: Stamp) -> i64
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_example_JNINative_stampSum<'a>(
-    mut env: jni::JNIEnv<'a>,
-    _class: jni::objects::JClass<'a>,
-    arg0: jni::objects::JObject<'a>,
-    __error_sink: jni::objects::JObject<'a>,
-) -> jni::sys::jlong
+pub extern "system" fn Java_example_Bindings_sum(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    arg0: JObject<'_>,
+) -> jlong
 ```
 
 Both wrap the same Rust function through the same input conversion, yet neither
-signature can be derived from the other. The C one is what a C caller can write.
-The JNI one is what the JVM demands — a symbol built from the Kotlin package,
-the object holding the declaration and the method name, plus the environment and
-calling class the JVM passes to every native method — and it carries one more
-argument the source knows nothing about: the error handler the Kotlin caller
-supplied, through which this wrapper reports anything that goes wrong. The target
-supplies all of that; the registry places the conversions inside it.
+signature can be derived from the other. The C one is what a C caller can write;
+the JNI one is what the JVM demands — a symbol built from the Kotlin package, the
+class holding the declaration and the method name, plus two parameters, the
+environment and the calling class, that the JVM passes to every native method and
+that no source parameter corresponds to. The target supplies those conventions;
+the registry places the conversions inside them.
 
 Three things are decided here. **Where inputs come from**: which native argument
 feeds which input conversion, including arguments the target added for its own
@@ -59,13 +57,15 @@ the actions differ by category — a `Result::Err` returned by the source functi
 is not the same event as a JNI call failing mid-conversion.
 
 The JNI wrapper shows why that last part is not a detail. Reading `getSecs()` can
-fail; the conversion says so but decides nothing. The route is the JNI adapter's
-existing convention: hand the message to the error handler the caller passed, and
-return a default value, because a native method must return something. The Kotlin
-side never sees that default — the generated wrapper checks whether the handler
-was signalled and calls the caller's `onError` instead of returning. The registry
-emits the branch, the call to the reporting operation and the terminal return;
-the adapter supplies the operation and the convention.
+fail; the conversion says so but decides nothing. The route comes from the
+adapter, and the one this example's adapter takes is to report the failure to the
+JVM and return zero — zero being merely what a native method must return while an
+exception is pending, since the caller sees the exception rather than a result.
+Reporting can itself fail, and that path terminates by aborting. The registry
+emits the branch, the reporting call, the check on its result and the terminal
+return; the adapter supplies the operation that reports. (The shipping JNI
+adapter routes errors differently — through a handler object the Kotlin caller
+passes — which is a choice in the same slot, not a different pipeline.)
 
 If a requested delivery or failure route is not supported, the function is
 skipped and the report says why. It is never quietly given a different ABI than

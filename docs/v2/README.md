@@ -59,8 +59,7 @@ generated Rust function that the JVM calls:
 
 ```kotlin
 data class Stamp(val secs: Long, val nanos: Long)
-
-fun stampSum(stamp: Stamp, onError: JniErrorHandler<Long>): Long
+object Bindings { @JvmStatic external fun sum(stamp: Stamp): Long }
 ```
 
 The C declarations carry the source names, because a foreign name defaults to the

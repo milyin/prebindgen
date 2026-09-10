@@ -23,24 +23,21 @@ JniGen::builder()
 
 ```text
 policy (JNI function):
-    kotlin:     top-level fun example.stampSum   // camel-cased Rust name
-    extern:     example.JNINative.stampSum       // where the external fun is declared
-    symbol:     "Java_example_JNINative_stampSum"
-    convention: extern "C", with (JNIEnv, JClass) supplied by the JVM
+    kotlin:     example.Bindings.sum             // the object holding the declaration
+    symbol:     "Java_example_Bindings_sum"      // derived from that placement
+    convention: extern "system", with (JNIEnv, JClass) supplied by the JVM
     input:      Stamp as one object, properties read through JNI
     output:     jlong native return
-    failures:   signalled to the error handler the caller passed, and the
-                wrapper returns a default the Kotlin side never observes
+    failures:   reported to the JVM, then a default value returned
 ```
 
 ## Checks
 
 - The Kotlin name and the symbol are one choice: `.name("…")` on the function
-  declaration moves both, since the symbol is built from the package, the
-  `JNINative` object and the method name.
-- The error handler is part of every generated function's signature, which is
-  why [the boundary][fn_boundary_jni] has somewhere to report a failed property
-  read.
+  declaration moves both, since the symbol is built from the package, the class
+  holding the declaration and the method name.
+- Where a failed property read goes is the adapter's convention, which is why
+  [the boundary][fn_boundary_jni] has a route to plan at all.
 - A Kotlin declaration needs a package, so there is no source name to fall back
   on the way C has one.
 

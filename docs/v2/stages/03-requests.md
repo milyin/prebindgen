@@ -61,17 +61,15 @@ JniGen::builder()
 ```
 
 Kotlin cannot fall back on the source name the way C does, because a Kotlin
-declaration needs somewhere to live: a package, and for a type a class within it.
-That is what `package!` and the class macros supply. A free function becomes a
-top-level function of that package, named by camel-casing the Rust name unless
-`.name("…")` says otherwise, and the `external fun` it calls is emitted into a
-generated `internal object JNINative` alongside it. The macros take Rust paths
-rather than strings, so `data_class!(Stamp)` fails to compile if `Stamp` is not
-in scope.
+declaration needs somewhere to live: a package, a class for a type, and for a
+function a place to be declared. That is what `package!` and the class macros
+supply, and a name given there is what the generated declaration and the native
+symbol are both built from. The macros take Rust paths rather than strings, so
+`data_class!(Stamp)` fails to compile if `Stamp` is not in scope.
 
-The error convention is a frontend-wide setting rather than a per-function one:
-every generated Kotlin function takes an error handler, and the native side
-reports through it instead of throwing: what
+How a failing call reports is the adapter's convention rather than a per-function
+setting, and it is worth noticing that it is settled here rather than by whoever
+writes the wrapper: what
 [the native boundary](05-boundary.md) does when a JVM property read fails is
 decided here, and the wrapper it generates is only as good as this answer.
 
