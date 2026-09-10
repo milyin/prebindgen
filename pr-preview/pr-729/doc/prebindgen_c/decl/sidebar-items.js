@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CallbackDecl","ConvertTypeDecl","DataTypeDecl","EnumTypeDecl","ErrorTypeDecl","FunDecl","ModuleDecl","PtrTypeDecl","ReprCTypeDecl","TaggedUnionDecl","ValueTypeDecl"]};
