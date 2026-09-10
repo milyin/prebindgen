@@ -1,6 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "07-emit", "language": "jni"} -->
 
 [Stage chapter](../../stages/07-emit.md) · [Common cell][fn_emit] · [Element path][fn]
+Owner: the common Rust writer and the JNI adapter's Kotlin writer
 
 # Function taking an owned record — Emit bindings — Kotlin/JNI
 
@@ -9,30 +10,9 @@
 The frozen JNI function plan, the object representation of the record, and the
 error routes the boundary fixed.
 
-## Owner
-
-The common Rust writer renders the native wrapper, calling the JNI operation
-renderer for each getter expression. The JNI implementation's Kotlin writer
-renders the public declaration.
-
 ## Result
 
-The Kotlin side declares the external function next to
-[the data class][struct_emit_jni]; the Rust side exports the matching symbol.
-After the application loads the native library, `Bindings.sum(Stamp(12, 34))`
-returns `46L`.
-
-## Checks
-
-The Kotlin declaration and the exported symbol have to agree, and both come from
-the same recorded placement. If `getSecs` fails, `getNanos` and `stamp_sum` do
-not run; if `getNanos` fails, the source `Stamp` is never constructed. In both
-cases the JVM sees an exception rather than a returned zero. Loading the native
-library belongs to the test harness, not to the generated code.
-
-## Representation
-
-The generated Kotlin (`Bindings.kt`), alongside the data class:
+The Kotlin declaration, beside [the data class][struct_emit_jni] (`Bindings.kt`):
 
 ```kotlin
 package example
@@ -43,8 +23,7 @@ object Bindings {
 }
 ```
 
-The generated Rust (`kotlin.rs`), combining the getter expressions supplied by
-the JNI renderer with the registry's control flow:
+The native wrapper it calls (`kotlin.rs`):
 
 ```rust
 use crate::{jni_support::report_jni_error, source};
@@ -84,20 +63,22 @@ pub extern "system" fn Java_example_Bindings_sum(
 }
 ```
 
-The JNI adapter supplies the symbol and calling convention, the environment and
-class parameter conventions, the carrier types, the getter operations and the
-error policy. The registry supplies each `match`, the placement of the reporting
-operation, its failure branch, the terminal return, the source construction and
-the source call.
+`Bindings.sum(Stamp(12, 34))` returns `46L` once the native library is loaded,
+which the harness does.
 
-The source `i64` and JNI `jlong` use the same Rust value representation here. A
-target scalar rule declares that relationship, and the registry resolves the
-identity conversions. More complicated child types would insert their own
-registry-planned conversions between each getter and `Stamp` construction.
+## Checks
 
-## Along this element
-
-See the [common cell][fn_emit] for the instruction-by-instruction mapping.
+- Symbol and Kotlin declaration come from the same recorded placement, so they
+  cannot disagree.
+- If `getSecs` fails, `getNanos` and `stamp_sum` do not run; if `getNanos` fails,
+  the source `Stamp` is never constructed. Either way the JVM sees an exception
+  rather than a returned zero.
+- The adapter supplies the two getter expressions; every `match`, the reporting
+  call, its failure branch, the terminal return, the construction and the call
+  are the registry's.
+- Source `i64` and `jlong` are the same Rust value here, so the scalar
+  conversions render nothing. A child type needing real work would insert its
+  own conversion between a getter and the construction.
 
 [fn]: README.md
 [fn_emit]: 07-emit.md

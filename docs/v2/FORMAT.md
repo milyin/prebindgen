@@ -68,14 +68,18 @@ crate, external URLs.
 
 ## Required content
 
-A cell and a variant each have exactly one **Input**, **Owner**, **Result**,
-**Checks** and **Representation** section, all non-empty. Input is what the stage
-receives for this element, Owner is the component that decides, Result is the
-exact resulting state, Checks are the observable obligations and failure
-behavior, and Representation shows the concrete artifact at that stage: the
-captured item, the views, the request, the plan, the boundary, the retained entry
-or the generated code. A variant specializes its common cell rather than
-repeating it.
+A cell and a variant show code. The point of the appendix is the chain of
+artifacts an element passes through — marked source, capture entry, model
+elements, request, plans, boundary, retained output, generated bindings — so each
+page carries the artifact itself and says only what the artifact cannot.
+
+Each has exactly one **Input**, **Result** and **Checks** section, all non-empty,
+and a `Owner: …` line in its header naming the component that acts. Input is the
+artifact this stage receives, Result is the artifact it produces, and both lead
+with code wherever the artifact can be written down. Prose around them is for
+what the code does not show: an identity, a rule, a reason. Checks are the
+observable obligations and the failure behavior, in short items. A variant
+specializes its common cell rather than repeating it.
 
 Navigation lives above the title, between the metadata line and the heading: a
 chapter's line carries the link to the contents and its previous/next chapters, a

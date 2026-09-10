@@ -1,59 +1,39 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "02-flat"} -->
 
 [Stage chapter](../../stages/02-flat.md) · [Element path][struct] · [Source crate](../../source.md)
-Previous: [Capture source items][struct_source] · Next: [Record binding requests][struct_requests]
+Owner: Flat · Previous: [Capture source items][struct_source] · Next: [Record binding requests][struct_requests]
 
 # Record with scalar fields — Build and inspect the source model
 
 ## Input
 
-The captured `Stamp` record.
-
-## Owner
-
-Flat, which lowers the declaration into an element in the namespace and
-publishes the views over it.
+The capture entry above, parsed back into the item it was.
 
 ## Result
 
-`model.declared_type("Stamp")` returns a `TypeDeclView`, whose `ty()` is a
-`TypeView` of `Stamp`, whose `as_record()` is a `RecordView` with a named field
-shape and two `FieldView`s: index 0 named `secs` and index 1 named `nanos`, each
-with a `TypeView` of `i64`. The same record view is what [the function
-path][fn_flat] reaches by following its parameter's type.
+One element in the namespace, under the name `Stamp`:
+
+```text
+Element::Type(Type::Struct(Struct {
+    name:   Stamp,
+    shape:  FieldShape::Named,
+    fields: [ Field { name: Some(secs),  index: 0, ty: TypeRef { kind: Scalar(I64) } },
+              Field { name: Some(nanos), index: 1, ty: TypeRef { kind: Scalar(I64) } } ],
+    origin: <the captured syntax, src/source.rs:1>,
+}))
+```
+
+This is the element [the function's parameter][fn_flat] resolves to, and the one
+every later stage takes apart.
 
 ## Checks
 
-The views report source facts and nothing more: field order and names are the
-declaration's, `i64` is the exact type as written, and no view says how a field
-should cross a boundary. Field identity includes its owner, so `secs` here is not
-interchangeable with a field of the same name and index in another record. A view
-obtained from a different snapshot is rejected even when its type key is equal.
-An opaque declaration stays opaque — `as_record()` returns nothing for a type
-whose fields Flat does not model, rather than an empty record.
-
-## Representation
-
-```rust
-let decl = model.declared_type("Stamp").expect("captured");
-let record = decl.ty().as_record().expect("named-field record");
-
-let fields: Vec<_> = record.fields().collect();
-assert_eq!(fields.len(), 2);
-assert_eq!(fields[0].name(), Some("secs"));
-assert_eq!(fields[0].index(), 0);
-assert_eq!(fields[1].name(), Some("nanos"));
-assert_eq!(fields[1].index(), 1);
-
-for field in record.fields() {
-    let ty = field.ty();                 // TypeView of i64, same snapshot
-    assert!(ty.as_record().is_none());
-}
-```
-
-What leaves this stage is one record view and two field type views. Everything
-the later stages do to this record — selecting a relationship, converting the
-children, mapping them onto members or getters — is derived from exactly these.
+- Field order and names are the declaration's; `i64` is the exact type as
+  written; no view says how a field crosses a boundary.
+- Field identity includes its owner, so `secs` here is not interchangeable with
+  a `secs` at index 0 of another record.
+- A type whose fields Flat does not model is an `Extern` instead — a name with
+  nothing behind it — not a `Struct` with an empty field list.
 
 [struct]: README.md
 [struct_source]: 01-source.md

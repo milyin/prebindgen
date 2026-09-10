@@ -15,7 +15,7 @@ ROOT_PAGES = {
     "source.md": "fixture",
     "implementation.md": "implementation",
 }
-REQUIRED_SECTIONS = ("Input", "Owner", "Result", "Checks", "Representation")
+REQUIRED_SECTIONS = ("Input", "Result", "Checks")
 META = re.compile(r"^<!-- spec: (\{.*\}) -->$")
 DEFINITION = re.compile(r"^\[([A-Za-z0-9_]+)\]:\s*(\S+)\s*$", re.M)
 REFERENCE = re.compile(r"\[[^\]^]*?\]\[([A-Za-z0-9_]+)\]")
@@ -238,6 +238,8 @@ def check_anchors(page, pages, root, links):
 def check_cell(page, ids, root, manifest, stage_by_id, example_by_id, order):
     for heading in REQUIRED_SECTIONS:
         section(page, heading)
+    if "Owner:" not in header(page):
+        fail(f"{page.relative}: the header must name the owner of this step")
     example = page.meta["example"]
     stage = stage_by_id[page.meta["stage"]]
     chapter = f"../../stages/{stage['id']}.md"

@@ -87,10 +87,14 @@ class SpecStructure(unittest.TestCase):
     def test_empty_required_section(self):
         path = self.root / "examples/struct/06-retain.md"
         text = path.read_text()
-        start = text.index("## Owner")
+        start = text.index("## Input")
         end = text.index("## Result")
-        path.write_text(text[:start] + "## Owner\n\n" + text[end:])
-        self.rejects("empty '## Owner' section")
+        path.write_text(text[:start] + "## Input\n\n" + text[end:])
+        self.rejects("empty '## Input' section")
+
+    def test_missing_owner(self):
+        self.edit("examples/struct/06-retain.md", "Owner: the registry · ", "")
+        self.rejects("must name the owner")
 
     def test_stage_index_out_of_order(self):
         self.edit("stages/06-retain.md",
@@ -128,8 +132,6 @@ class SpecStructure(unittest.TestCase):
 
     def test_missing_language_variant_listing(self):
         self.edit("examples/struct/04-values.md", "- [C][struct_values_c]\n", "")
-        self.edit("examples/struct/04-values.md",
-                  "[struct_values_c]: 04-values.c.md", "")
         self.rejects("'Language variants' lists")
 
     def test_unlisted_markdown_file(self):

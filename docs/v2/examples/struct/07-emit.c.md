@@ -1,6 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "07-emit", "language": "c"} -->
 
 [Stage chapter](../../stages/07-emit.md) · [Common cell][struct_emit] · [Element path][struct]
+Owner: the common Rust writer, then `cbindgen`
 
 # Record with scalar fields — Emit bindings — C
 
@@ -9,29 +10,7 @@
 The frozen aggregate representation: carrier type, member identities and their
 signed 64-bit types.
 
-## Owner
-
-The common Rust writer renders the Rust type from the C adapter's aggregate
-description; `cbindgen` derives the header declaration from that Rust.
-
 ## Result
-
-A `repr(C)` struct in the generated C Rust module, and the matching `typedef` in
-the header. The struct is the ABI type the wrapper takes by value, and the member
-reads in [that wrapper][fn_emit_c] are ordinary Rust field accesses on it.
-
-## Checks
-
-The generated aggregate carries the source name, `Stamp`, and is a different type
-from `source::Stamp` — same spelling, different module, different purpose: one is
-the ABI type a C caller fills in, the other is the Rust value the source function
-takes. The Rust declaration must be `repr(C)`: without it, the member layout the
-header promises is not the layout the wrapper reads. Member order and names must match
-the aggregate description, since [the member-read operations][struct_values_c]
-refer to those identities. The header's shape is `cbindgen` output — formatting
-and include guards can differ without the binding being wrong.
-
-## Representation
 
 In the generated C Rust module (`c.rs`):
 
@@ -43,7 +22,7 @@ pub struct Stamp {
 }
 ```
 
-The header `cbindgen` derives:
+The header `cbindgen` derives from it:
 
 ```c
 #include <stdint.h>
@@ -54,9 +33,16 @@ typedef struct Stamp {
 } Stamp;
 ```
 
-## Along this element
+## Checks
 
-See the [common cell][struct_emit] for what both targets emit for this record.
+- This `Stamp` is a different type from `source::Stamp` — same spelling,
+  different module: one is the ABI type a C caller fills in, the other the Rust
+  value the source function takes.
+- `repr(C)` is required: without it the layout the header promises is not the
+  layout [the wrapper][fn_emit_c] reads.
+- Member order and names match the aggregate description, since
+  [the member reads][struct_values_c] refer to those identities.
+- The header's formatting and include guards are `cbindgen`'s business.
 
 [struct]: README.md
 [struct_emit]: 07-emit.md

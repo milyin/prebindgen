@@ -1,58 +1,41 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "03-requests"} -->
 
 [Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source crate](../../source.md)
-Previous: [Build and inspect the source model][struct_flat] · Next: [Plan value conversions][struct_values]
+Owner: the language frontend · Previous: [Build and inspect the source model][struct_flat] · Next: [Plan value conversions][struct_values]
 
 # Record with scalar fields — Record binding requests
 
 ## Input
 
-The published source model and the user's call asking for `Stamp` to be part of
-the generated API.
-
-## Owner
-
-The language frontend.
+The model element for `Stamp`, and a build script that asks for it to be exposed:
+[C][struct_requests_c], [Kotlin/JNI][struct_requests_jni].
 
 ## Result
 
-One `OutputRequest` for the type, and the choices that decide how values of it
-are converted wherever they appear: the source relationship — construct and read
-`Stamp` through its two fields — and the target representation recorded in the
-policy. A record request is a root in its own right: it is requested even if no
-exported function mentions it, and it stays requested if the function that does
-mention it is skipped.
+```text
+OutputRequest {
+    id:     ElementId(public Stamp in this target),
+    source: SourceItemId(crate::source::Stamp),
+    policy: PolicyId(this target's record policy),
+}
 
-The fields are addressable from here on. `(Stamp.fields, None, Field("secs"))`
-and its `nanos` counterpart are the parts a per-field rule would attach to; this
-path records none, so both take the default scalar treatment.
+relation: Stamp.fields = Relation::Record(over the Stamp record element)
+
+parts:
+    PartId { owner: Stamp.fields, arm: None, position: Field("secs")  }
+    PartId { owner: Stamp.fields, arm: None, position: Field("nanos") }
+
+conversion_rules.parts: {}    // none recorded for this path
+```
 
 ## Checks
 
-Choosing a representation is not the same as choosing a source relationship: the
-policy says "C aggregate" or "JVM object", while `Stamp.fields` says "built from
-and read as these two fields". A different relationship — a `stamp_from_millis`
-constructor, say — would change the parts without changing the representation,
-and an object-input override would change the representation without changing the
-parts. Both stay separately recorded so that the [conversion node
-identity][struct_values] can distinguish them.
-
-## Representation
-
-```text
-OutputRequest {
-  id:     ElementId(public Stamp in this target),
-  source: SourceItemId(crate::source::Stamp),
-  policy: PolicyId(record policy for this target),
-}
-
-relation: Stamp.fields = Relation::Record(RecordRelation over the Stamp record view)
-parts:
-  PartId { owner: Stamp.fields, arm: None, position: Field("secs")  }
-  PartId { owner: Stamp.fields, arm: None, position: Field("nanos") }
-
-conversion_rules.parts: {}   // none recorded for this path
-```
+- A record request is a root: it stands whether or not any exported function
+  mentions the type, and survives a function that is skipped.
+- Relation and representation are separate choices. A `stamp_from_millis`
+  constructor would change the parts without changing the representation; an
+  object-input override changes the representation without changing the parts.
+  [Node identity][struct_values] distinguishes both.
 
 ## Language variants
 

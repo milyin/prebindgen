@@ -1,6 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "07-emit", "language": "c"} -->
 
 [Stage chapter](../../stages/07-emit.md) · [Common cell][fn_emit] · [Element path][fn]
+Owner: the common Rust writer, then `cbindgen`
 
 # Function taking an owned record — Emit bindings — C
 
@@ -8,28 +9,10 @@
 
 The frozen C function plan and the aggregate representation of the record.
 
-## Owner
-
-The common Rust writer renders the wrapper; `cbindgen` derives the header
-declaration from it. The C adapter writes no foreign source of its own, and there
-is no generated C implementation file — the function body is the Rust wrapper.
-
 ## Result
 
-The generated Rust module contains the wrapper below, next to
-[the aggregate declaration][struct_emit_c] it takes by value. The header declares
-the same function; a C caller passing `{12, 34}` gets `46`.
-
-## Checks
-
-Compiling the module together with the source crate must succeed, and a C caller
-must observe `46` for that input. The exported symbol and the by-value ABI must
-match what [the boundary][fn_boundary_c] fixed. The two member reads are common
-Rust operations: nothing in this output requires a C-specific renderer.
-
-## Representation
-
-In the generated C Rust module (`c.rs`), after the aggregate declaration:
+In the generated C Rust module (`c.rs`), after
+[the aggregate declaration][struct_emit_c]:
 
 ```rust
 use crate::source;
@@ -44,23 +27,13 @@ pub extern "C" fn stamp_sum(arg0: Stamp) -> i64 {
 }
 ```
 
-The wrapper and the function it wraps are both called `stamp_sum`: the C name
-defaults to the source name, and the two never collide because the source one is
-only ever reached through its module path. The C adapter selects `repr(C)`, the
-extern calling convention and the public names — here, the source names. The
-common writer renders those declarations. The expressions `arg0.secs`
-and `arg0.nanos` implement the selected target primitives. The registry supplies
-their order, the local bindings, the source-record construction, the source call
-and the return placement. All native local names are allocated by the common
-writer.
-
-`cbindgen` derives the declaration, following the aggregate's `typedef`:
+The header `cbindgen` derives from it, after the aggregate's `typedef`:
 
 ```c
 int64_t stamp_sum(struct Stamp arg0);
 ```
 
-A caller can use it as follows:
+And a C caller:
 
 ```c
 #include "bindings.h"
@@ -71,11 +44,17 @@ int main(void) {
 }
 ```
 
-## Along this element
+## Checks
 
-See the [common cell][fn_emit] for the instruction-by-instruction mapping.
+- The wrapper and the function it wraps are both `stamp_sum`, and never collide:
+  the source one is only ever reached through its module path.
+- `arg0.secs` and `arg0.nanos` are the target's operations; the order, the
+  locals, the construction, the call and the return are the registry's.
+- Compiling the module with the source crate must succeed, and the caller above
+  must observe `46`.
+- The C adapter writes no foreign source of its own: there is no generated C
+  implementation file, because the body is the Rust wrapper.
 
 [fn]: README.md
 [fn_emit]: 07-emit.md
-[fn_boundary_c]: 05-boundary.c.md
 [struct_emit_c]: ../struct/07-emit.c.md
