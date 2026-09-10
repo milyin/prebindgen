@@ -436,10 +436,17 @@ impl From<syn::Type> for EnumClassDecl {
 ///   accumulates *closed* handles unless it `take()`s each one. This is not a
 ///   sum-only rule: it applies to any element type that reaches a handle.
 ///
+/// `take()` means taking the payload handle and keeping what it returns:
+/// retaining the original reference instead leaves you holding something the
+/// proxy has already closed. Only an **owned** handle is closed this way; a
+/// borrowed projection is not.
+///
 /// The four agree with the bare handle in each position, which is the point:
-/// ownership does not move because a value changed spelling. `examples/covertest-kotlin`
-/// exercises every row on the JVM, including that a callback payload is usable
-/// inside `run`, closed once `run` returns, and kept by `take()`.
+/// ownership does not move because a value changed spelling.
+/// `examples/covertest-kotlin` asserts the returned, callback and data-class
+/// rows on the JVM — that a callback payload is usable inside `run`, closed
+/// once `run` returns, and kept by `take()`. The fold row follows from the same
+/// emitter path rather than from a JVM assertion of its own.
 pub struct SealedClassDecl {
     pub(crate) key: TypeKey,
     /// The type this declaration was **written with** — the `X` the macro

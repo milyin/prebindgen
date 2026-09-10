@@ -89,6 +89,33 @@ pub struct EnumTypeDecl {
 }
 
 /// A payload-carrying enum crossing as a `#[repr(C)]` tag plus union.
+///
+/// # Who frees a payload
+///
+/// The union crosses **by value**, like a [`data_type!`](crate::data_type). If
+/// any variant's payload wire owns memory — a `char *`, an opaque pointer — the
+/// declaration also produces a typed `<base>_drop` that frees the **active
+/// arm**. An owning payload with no drop is a generation error rather than a
+/// leak.
+///
+/// Ownership follows the wire, so a payload that is itself a declared data type
+/// is owning when its own mirror has owning fields, even though that payload
+/// crosses as a struct by value rather than as a pointer. The drop reaches
+/// through it and releases each of them, nulling the slot so a second drop is a
+/// no-op. The reach goes one level further: a struct payload's field may itself
+/// be a declared tagged union with an owning arm, and the outer drop delegates
+/// to that union's typed drop, which nulls what it frees — so idempotence
+/// composes.
+///
+/// Nothing else can reach those bytes. At top level the data-type contract is
+/// that C releases each owning field itself, but a union arm is not a top-level
+/// field. One predicate decides both whether the drop is emitted and whether a
+/// containing struct calls it, so a nested union cannot be freed through a
+/// symbol that was never emitted.
+///
+/// The drop is a second C entry point into the same bytes, so it range-checks
+/// the tag exactly as an inbound conversion does, and treats an out-of-range
+/// one as nothing to release.
 #[derive(Clone)]
 pub struct TaggedUnionDecl {
     pub(crate) ty: syn::Type,
