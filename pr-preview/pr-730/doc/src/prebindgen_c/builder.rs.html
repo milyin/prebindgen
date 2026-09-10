@@ -769,24 +769,24 @@
 <a href=#769 id=769 data-nosnippet>769</a>}
 <a href=#770 id=770 data-nosnippet>770</a>
 <a href=#771 id=771 data-nosnippet>771</a><span class="kw">impl </span>CbindgenBuilder {
-<a href=#772 id=772 data-nosnippet>772</a>    <span class="doccomment">/// Apply everything an [`ApiDecl`] declares.
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="doccomment">/// Apply everything a [`Decls`] declares.
 <a href=#773 id=773 data-nosnippet>773</a>    ///
-<a href=#774 id=774 data-nosnippet>774</a>    /// This is the binding's declaration surface: one flat list, built in any
+<a href=#774 id=774 data-nosnippet>774</a>    /// This is the binding's declaration surface: one flat set, built in any
 <a href=#775 id=775 data-nosnippet>775</a>    /// order, applied here. Each declaration carries its own options, so nothing
 <a href=#776 id=776 data-nosnippet>776</a>    /// depends on what was declared before it, and declaring the same function,
 <a href=#777 id=777 data-nosnippet>777</a>    /// type or callback signature twice is refused rather than resolved by the
-<a href=#778 id=778 data-nosnippet>778</a>    /// order the list happens to be lowered in.
+<a href=#778 id=778 data-nosnippet>778</a>    /// order the set happens to be lowered in.
 <a href=#779 id=779 data-nosnippet>779</a>    ///
 <a href=#780 id=780 data-nosnippet>780</a>    /// **Set the naming hooks before this call.** `mangle_rust_type`,
 <a href=#781 id=781 data-nosnippet>781</a>    /// `mangle_type_name`, `mangle_destructor`, `mangle_take`,
 <a href=#782 id=782 data-nosnippet>782</a>    /// `mangle_callback` and `mangle_function` are read while the declarations
 <a href=#783 id=783 data-nosnippet>783</a>    /// are applied, and a [`repr_c_type!`](crate::repr_c_type) mirror caches its
 <a href=#784 id=784 data-nosnippet>784</a>    /// wire name as it is declared: configuring a mangler afterwards renames the
-<a href=#785 id=785 data-nosnippet>785</a>    /// emitted mirror while its transmute glue keeps the cached name. The list
+<a href=#785 id=785 data-nosnippet>785</a>    /// emitted mirror while its transmute glue keeps the cached name. The set
 <a href=#786 id=786 data-nosnippet>786</a>    /// removes the order-dependence between declarations; this one is between
 <a href=#787 id=787 data-nosnippet>787</a>    /// the generator-wide settings and all of them.
-<a href=#788 id=788 data-nosnippet>788</a>    </span><span class="kw">pub fn </span>api(<span class="kw-2">mut </span><span class="self">self</span>, api: <span class="kw">crate</span>::ApiDecl) -&gt; <span class="self">Self </span>{
-<a href=#789 id=789 data-nosnippet>789</a>        <span class="kw">let </span><span class="kw">crate</span>::decl::ApiDecl {
+<a href=#788 id=788 data-nosnippet>788</a>    </span><span class="kw">pub fn </span>declare(<span class="kw-2">mut </span><span class="self">self</span>, decls: <span class="kw">crate</span>::Decls) -&gt; <span class="self">Self </span>{
+<a href=#789 id=789 data-nosnippet>789</a>        <span class="kw">let </span><span class="kw">crate</span>::decl::Decls {
 <a href=#790 id=790 data-nosnippet>790</a>            ptr_types,
 <a href=#791 id=791 data-nosnippet>791</a>            data_types,
 <a href=#792 id=792 data-nosnippet>792</a>            enum_types,
@@ -799,9 +799,9 @@
 <a href=#799 id=799 data-nosnippet>799</a>            funs,
 <a href=#800 id=800 data-nosnippet>800</a>            ignored_funs,
 <a href=#801 id=801 data-nosnippet>801</a>            ignored_types,
-<a href=#802 id=802 data-nosnippet>802</a>        } = api;
+<a href=#802 id=802 data-nosnippet>802</a>        } = decls;
 <a href=#803 id=803 data-nosnippet>803</a>
-<a href=#804 id=804 data-nosnippet>804</a>        <span class="comment">// The declaration list is a set, so a repeated declaration is a mistake
+<a href=#804 id=804 data-nosnippet>804</a>        <span class="comment">// A declaration set is a set, so a repeated declaration is a mistake
 <a href=#805 id=805 data-nosnippet>805</a>        // rather than a last-write-wins update: two `fun!(f)` with different
 <a href=#806 id=806 data-nosnippet>806</a>        // options would otherwise export whichever the lowering replayed last,
 <a href=#807 id=807 data-nosnippet>807</a>        // which is exactly the order-dependence this surface removes. The
@@ -931,12 +931,12 @@
 <a href=#931 id=931 data-nosnippet>931</a>            }
 <a href=#932 id=932 data-nosnippet>932</a>        }
 <a href=#933 id=933 data-nosnippet>933</a>        <span class="kw">for </span>decl <span class="kw">in </span>funs {
-<a href=#934 id=934 data-nosnippet>934</a>            <span class="kw">let </span>(base, panic) = (decl.base, decl.panic);
+<a href=#934 id=934 data-nosnippet>934</a>            <span class="kw">let </span>(base, abort) = (decl.base, decl.abort_on_conversion_error);
 <a href=#935 id=935 data-nosnippet>935</a>            <span class="self">self </span>= <span class="self">self</span>.function(decl.ident);
 <a href=#936 id=936 data-nosnippet>936</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(base) = base {
 <a href=#937 id=937 data-nosnippet>937</a>                <span class="self">self </span>= <span class="self">self</span>.base_name(base);
 <a href=#938 id=938 data-nosnippet>938</a>            }
-<a href=#939 id=939 data-nosnippet>939</a>            <span class="kw">if </span>panic {
+<a href=#939 id=939 data-nosnippet>939</a>            <span class="kw">if </span>abort {
 <a href=#940 id=940 data-nosnippet>940</a>                <span class="self">self </span>= <span class="self">self</span>.panic();
 <a href=#941 id=941 data-nosnippet>941</a>            }
 <a href=#942 id=942 data-nosnippet>942</a>        }
