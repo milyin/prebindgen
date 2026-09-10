@@ -769,24 +769,24 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
 }
 
 impl CbindgenBuilder {
-    /// Apply everything an [`ApiDecl`] declares.
+    /// Apply everything a [`Decls`] declares.
     ///
-    /// This is the binding's declaration surface: one flat list, built in any
+    /// This is the binding's declaration surface: one flat set, built in any
     /// order, applied here. Each declaration carries its own options, so nothing
     /// depends on what was declared before it, and declaring the same function,
     /// type or callback signature twice is refused rather than resolved by the
-    /// order the list happens to be lowered in.
+    /// order the set happens to be lowered in.
     ///
     /// **Set the naming hooks before this call.** `mangle_rust_type`,
     /// `mangle_type_name`, `mangle_destructor`, `mangle_take`,
     /// `mangle_callback` and `mangle_function` are read while the declarations
     /// are applied, and a [`repr_c_type!`](crate::repr_c_type) mirror caches its
     /// wire name as it is declared: configuring a mangler afterwards renames the
-    /// emitted mirror while its transmute glue keeps the cached name. The list
+    /// emitted mirror while its transmute glue keeps the cached name. The set
     /// removes the order-dependence between declarations; this one is between
     /// the generator-wide settings and all of them.
-    pub fn api(mut self, api: crate::ApiDecl) -> Self {
-        let crate::decl::ApiDecl {
+    pub fn declare(mut self, decls: crate::Decls) -> Self {
+        let crate::decl::Decls {
             ptr_types,
             data_types,
             enum_types,
@@ -799,9 +799,9 @@ impl CbindgenBuilder {
             funs,
             ignored_funs,
             ignored_types,
-        } = api;
+        } = decls;
 
-        // The declaration list is a set, so a repeated declaration is a mistake
+        // A declaration set is a set, so a repeated declaration is a mistake
         // rather than a last-write-wins update: two `fun!(f)` with different
         // options would otherwise export whichever the lowering replayed last,
         // which is exactly the order-dependence this surface removes. The
@@ -931,12 +931,12 @@ impl CbindgenBuilder {
             }
         }
         for decl in funs {
-            let (base, panic) = (decl.base, decl.panic);
+            let (base, abort) = (decl.base, decl.abort_on_conversion_error);
             self = self.function(decl.ident);
             if let Some(base) = base {
                 self = self.base_name(base);
             }
-            if panic {
+            if abort {
                 self = self.panic();
             }
         }

@@ -24,7 +24,7 @@
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::{
-    api, callback, data_type, enum_type, error_type, fun,
+    callback, data_type, decls, enum_type, error_type, fun,
     pipeline::{fresh_output_root, Pipeline},
     ptr_type, tagged_union,
 };
@@ -98,8 +98,8 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     //
     // `Calculator` is a Box-owned handle (`calculator_t` / `calculator_drop`).
     // Its constructors and `Result`-returning operations route a fallible input
-    // through the error out-param, so they need no `.panic()`; its borrow-only
-    // accessors and predicates have no `Result` channel, so `.panic()` is what
+    // through the error out-param, so they need no `.abort_on_conversion_error()`; its borrow-only
+    // accessors and predicates have no `Result` channel, so `.abort_on_conversion_error()` is what
     // lets the wrapper abort on a null handle. `calculator_merge` and
     // `calculator_absorb` are the two shapes the alias preflight covers — two
     // consumed handles of one type, and one consumed beside one borrowed — and
@@ -134,7 +134,7 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     // `call` must convert nothing at all), and an `Option<Grade>` over an enum
     // whose discriminants skip zero — which is what says the absent slot is left
     // unwritten rather than filled with a fabricated zero.
-    let mut api = api!()
+    let mut api = decls!()
         .ptr_type(ptr_type!(Calculator))
         .error_type(error_type!(Error, error_get_message))
         .ignore_fun(pq!(error_get_message))
@@ -160,7 +160,7 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
             callback!(impl Fn(Option<Grade>) + Send + Sync + 'static).base_name("maybe_grade"),
         )
         // Constructors and `Result`-returning operations: a fallible input
-        // routes through the error out-param, so none needs `.panic()`.
+        // routes through the error out-param, so none needs `.abort_on_conversion_error()`.
         .fun(fun!(calculator_new))
         .fun(fun!(calculator_new_from_str))
         .fun(fun!(calculator_apply))
@@ -177,37 +177,37 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
         .fun(fun!(note_new_after))
         .fun(fun!(note_new_flagged))
         // Borrow-only accessors, predicates and the callback drivers: fallible
-        // inputs with no `Result` channel, so `.panic()` lets the wrapper abort.
-        .fun(fun!(inside_foo_value).panic())
-        .fun(fun!(shape_area).panic())
-        .fun(fun!(shape_get_label).panic())
-        .fun(fun!(shape_new_labeled).panic())
-        .fun(fun!(drawing_new).panic())
-        .fun(fun!(drawing_get_shape).panic())
-        .fun(fun!(note_value).panic())
-        .fun(fun!(note_emphatic).panic())
-        .fun(fun!(note_new_titled).panic())
-        .fun(fun!(note_new_sketched).panic())
-        .fun(fun!(caption_new).panic())
-        .fun(fun!(calculator_new_clone).panic())
-        .fun(fun!(calculator_get_value).panic())
-        .fun(fun!(calculator_get_count).panic())
-        .fun(fun!(calculator_is).panic())
-        .fun(fun!(calculator_to_string).panic())
-        .fun(fun!(calculator_get_history).panic())
-        .fun(fun!(calculator_for_each).panic())
-        .fun(fun!(calculator_last_or_none).panic())
-        .fun(fun!(calculator_grade_or_none).panic())
-        .fun(fun!(calculator_history_batch).panic());
+        // inputs with no `Result` channel, so `.abort_on_conversion_error()` lets the wrapper abort.
+        .fun(fun!(inside_foo_value).abort_on_conversion_error())
+        .fun(fun!(shape_area).abort_on_conversion_error())
+        .fun(fun!(shape_get_label).abort_on_conversion_error())
+        .fun(fun!(shape_new_labeled).abort_on_conversion_error())
+        .fun(fun!(drawing_new).abort_on_conversion_error())
+        .fun(fun!(drawing_get_shape).abort_on_conversion_error())
+        .fun(fun!(note_value).abort_on_conversion_error())
+        .fun(fun!(note_emphatic).abort_on_conversion_error())
+        .fun(fun!(note_new_titled).abort_on_conversion_error())
+        .fun(fun!(note_new_sketched).abort_on_conversion_error())
+        .fun(fun!(caption_new).abort_on_conversion_error())
+        .fun(fun!(calculator_new_clone).abort_on_conversion_error())
+        .fun(fun!(calculator_get_value).abort_on_conversion_error())
+        .fun(fun!(calculator_get_count).abort_on_conversion_error())
+        .fun(fun!(calculator_is).abort_on_conversion_error())
+        .fun(fun!(calculator_to_string).abort_on_conversion_error())
+        .fun(fun!(calculator_get_history).abort_on_conversion_error())
+        .fun(fun!(calculator_for_each).abort_on_conversion_error())
+        .fun(fun!(calculator_last_or_none).abort_on_conversion_error())
+        .fun(fun!(calculator_grade_or_none).abort_on_conversion_error())
+        .fun(fun!(calculator_history_batch).abort_on_conversion_error());
 
     if unstable {
         // `calculator_reset` mirrors an `#[unstable]` slice of the API; only
         // present in the captured source when the feature is enabled. Its `&mut`
-        // borrow is fallible (null-checked) with no `Result`, so `.panic()`.
-        api = api.fun(fun!(calculator_reset).panic());
+        // borrow is fallible (null-checked) with no `Result`, so `.abort_on_conversion_error()`.
+        api = api.fun(fun!(calculator_reset).abort_on_conversion_error());
     }
 
-    cbindgen = cbindgen.api(api);
+    cbindgen = cbindgen.declare(api);
 
     // Reads example-flat's `#[prebindgen]` output straight from its directory.
     // Always written to OUT_DIR under a stable name too, so the commented-out

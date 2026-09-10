@@ -1,12 +1,12 @@
 //! What a C binding declares.
 //!
-//! One [`ApiDecl`] holds every declaration the binding makes: the types that
+//! One [`Decls`] holds every declaration the binding makes: the types that
 //! cross, the functions it exports, the callback signatures it accepts, and the
-//! conversions it supplies. The list is **flat**, because the C it produces is:
-//! a header is a sequence of type and function declarations in one namespace,
-//! and `calculator_apply(calculator_t *, …)` is a free function that happens to
-//! take a handle. Nothing here groups a function under a type, because C has
-//! nothing for that to mean.
+//! conversions it supplies. The set is **flat**, because an exported C function
+//! is not a member of anything: `calculator_apply(calculator_t *, …)` is a free
+//! function that happens to take a handle, and the header declares it beside
+//! the type rather than inside it. Nothing here groups a function under a type,
+//! because C has nothing for that to mean.
 //!
 //! What each declaration does carry is its own options — a handle's name base,
 //! a function's permission to panic, a callback's takeable arguments — rather
@@ -17,28 +17,30 @@
 //! declaration with nothing to notice.
 //!
 //! ```
-//! use prebindgen_c::{api, data_type, enum_type, fun, ptr_type};
+//! use prebindgen_c::{data_type, decls, enum_type, fun, ptr_type};
 //!
-//! let _ = api!()
+//! let _ = decls!()
 //!     .ptr_type(ptr_type!(Calculator))
 //!     .data_type(data_type!(Drawing))
 //!     .enum_type(enum_type!(Operation))
 //!     .fun(fun!(calculator_apply))
-//!     .fun(fun!(stamp_sum).panic());
+//!     .fun(fun!(stamp_sum).abort_on_conversion_error());
 //! ```
 
 use prebindgen_registry::ConvertDecl;
 
 /// One exported function.
 ///
-/// `panic` is the permission a wrapper needs when its only fallible input is a
-/// borrow and it has no `Result` to report through: without it, such a function
-/// is a declaration error rather than a wrapper that aborts.
+/// `abort_on_conversion_error` is the permission a wrapper needs when a
+/// conversion it performs can fail and it has no `Result` to report that
+/// through — an input the binding must reject, or a result it cannot encode.
+/// Without the permission such a function is a declaration error rather than a
+/// wrapper that terminates the process, which is what a C caller would observe.
 #[derive(Clone)]
 pub struct FunDecl {
     pub(crate) ident: syn::Ident,
     pub(crate) base: Option<String>,
-    pub(crate) panic: bool,
+    pub(crate) abort_on_conversion_error: bool,
 }
 
 impl FunDecl {
@@ -47,7 +49,7 @@ impl FunDecl {
         FunDecl {
             ident,
             base: None,
-            panic: false,
+            abort_on_conversion_error: false,
         }
     }
 
@@ -58,9 +60,13 @@ impl FunDecl {
         self
     }
 
-    /// Allow this wrapper to panic on an invalid input it cannot report.
-    pub fn panic(mut self) -> Self {
-        self.panic = true;
+    /// Allow this wrapper to terminate the process when a conversion fails and
+    /// it has no error channel to report through.
+    ///
+    /// C observes termination, not a catchable Rust panic, which is why the
+    /// permission is named for what the caller sees.
+    pub fn abort_on_conversion_error(mut self) -> Self {
+        self.abort_on_conversion_error = true;
         self
     }
 }
@@ -135,9 +141,9 @@ pub struct ValueTypeDecl {
 
 /// A type that is already `#[repr(C)]` in the source and crosses unchanged.
 ///
-/// Its generated mirror takes the name the manglers give when the API is
-/// applied, so the naming hooks have to be set on the builder before
-/// [`CbindgenBuilder::api`](crate::CbindgenBuilder::api).
+/// Its generated mirror takes the name the manglers give when the declarations
+/// are applied, so the naming hooks have to be set on the builder before
+/// [`CbindgenBuilder::declare`](crate::CbindgenBuilder::declare).
 #[derive(Clone)]
 pub struct ReprCTypeDecl {
     pub(crate) ty: syn::Type,
@@ -308,11 +314,11 @@ impl From<ConvertDecl> for ConvertTypeDecl {
     }
 }
 
-/// Everything one C binding declares, as one flat list.
+/// Everything one C binding declares, as one flat set.
 ///
-/// Hand it to [`CbindgenBuilder::api`](crate::CbindgenBuilder::api).
+/// Hand it to [`CbindgenBuilder::declare`](crate::CbindgenBuilder::declare).
 #[derive(Clone, Default)]
-pub struct ApiDecl {
+pub struct Decls {
     pub(crate) ptr_types: Vec<PtrTypeDecl>,
     pub(crate) data_types: Vec<DataTypeDecl>,
     pub(crate) enum_types: Vec<EnumTypeDecl>,
@@ -327,8 +333,8 @@ pub struct ApiDecl {
     pub(crate) ignored_types: Vec<syn::Type>,
 }
 
-impl ApiDecl {
-    /// An empty API.
+impl Decls {
+    /// An empty declaration set.
     pub fn new() -> Self {
         Self::default()
     }
@@ -409,11 +415,11 @@ impl ApiDecl {
     }
 }
 
-/// Build an empty [`ApiDecl`]: `api!()`.
+/// Build an empty [`Decls`]: `decls!()`.
 #[macro_export]
-macro_rules! api {
+macro_rules! decls {
     () => {
-        $crate::ApiDecl::new()
+        $crate::Decls::new()
     };
 }
 

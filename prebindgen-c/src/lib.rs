@@ -38,7 +38,7 @@
 //!   its raw `c_int` is validated against the mirror's variants before the Rust
 //!   value is built. An unmatched value is a fallible-input error (see below),
 //!   so a function taking an enum by value needs either a `Result` return or
-//!   [`panic`](crate::FunDecl::panic). This relies on cbindgen's C rendering; the `C++`
+//!   [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error). This relies on cbindgen's C rendering; the `C++`
 //!   language mode is not supported.
 //! * **Tagged union** (declared with [`tagged_union!`](crate::tagged_union)): a
 //!   data-carrying enum crossing by value as a `#[repr(C)]` enum with payload
@@ -84,7 +84,7 @@
 //! directly through `E`'s output converter.
 //!
 //! If a function can produce such an internal message but does **not** return
-//! `Result`, that is a build error — suppress it by chaining [`panic`](crate::FunDecl::panic)
+//! `Result`, that is a build error — suppress it by chaining [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error)
 //! after the function declaration, which makes the wrapper `panic!` on the
 //! internal error instead.
 //!
@@ -230,13 +230,13 @@ struct FnCfg {
     /// the Rust fn ident. Set by [`base_name`](crate::PtrTypeDecl::base_name). `None` ⇒ the fn ident.
     base: Option<String>,
     /// Allow the generated wrapper to `panic!` on an internal error message
-    /// (set by [`panic`](crate::FunDecl::panic)). Only meaningful for non-`Result` functions
+    /// (set by [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error)). Only meaningful for non-`Result` functions
     /// that have a fallible input.
     panic: bool,
 }
 
 /// The declaration a chained modifier ([`CbindgenBuilder::name`] / [`error`](crate::DataTypeDecl::error)
-/// / [`panic`](crate::FunDecl::panic)) applies to. Set by each declaration method, reset to
+/// / [`abort_on_conversion_error`](crate::FunDecl::abort_on_conversion_error)) applies to. Set by each declaration method, reset to
 /// `None` by root-level modifiers (e.g. [`CbindgenBuilder::source_module`]).
 #[derive(Clone)]
 enum CurrentDecl {
@@ -589,7 +589,7 @@ mod trait_impl;
 mod v2;
 
 pub use decl::{
-    ApiDecl, CallbackDecl, ConvertTypeDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl,
+    CallbackDecl, ConvertTypeDecl, DataTypeDecl, Decls, EnumTypeDecl, ErrorTypeDecl, FunDecl,
     PtrTypeDecl, ReprCTypeDecl, TaggedUnionDecl, ValueTypeDecl,
 };
 /// Which engine a build script runs, and where each one writes — re-exported

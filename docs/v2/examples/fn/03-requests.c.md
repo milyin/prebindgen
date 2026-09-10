@@ -12,8 +12,8 @@ Owner: the C frontend
 Cbindgen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
     .source_module(parse_quote!(source_crate))
-    .api(
-        api!()
+    .declare(
+        decls!()
             .data_type(
                 data_type!(Stamp).base_name("Stamp"),   // see the record path
             )

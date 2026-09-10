@@ -19,7 +19,7 @@
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::{
-    api, callback, fun,
+    callback, decls, fun,
     pipeline::{fresh_output_root, Pipeline},
     ptr_type, repr_c_type,
 };
@@ -78,13 +78,13 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     //
     // `storage_new` and the two `*_handler_new` functions return fresh handles.
     // The rest take null-checked borrows or by-value consumes with no `Result`,
-    // so they need `.panic()` to say what a null pointer does. The five
+    // so they need `.abort_on_conversion_error()` to say what a null pointer does. The five
     // `storage_put_*` / `storage_get_into_*` demonstrate the distinct C
     // parameter semantics (by-value consume, `const *` read, `*` read/write,
     // out-param-into-init, out-param-into-uninit), and the array pair adds a
     // `&[Payload]` slice in and a `Vec<Payload>` out.
-    cbindgen = cbindgen.api(
-        api!()
+    cbindgen = cbindgen.declare(
+        decls!()
             .ptr_type(ptr_type!(String))
             .ptr_type(ptr_type!(Storage))
             .ptr_type(ptr_type!(PayloadHandler))
@@ -94,19 +94,19 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
             .callback(
                 callback!(impl Fn(&[Payload]) + Send + Sync + 'static).base_name("payload_vec"),
             )
-            .fun(fun!(string_new).panic())
-            .fun(fun!(string_len).panic())
+            .fun(fun!(string_new).abort_on_conversion_error())
+            .fun(fun!(string_len).abort_on_conversion_error())
             .fun(fun!(storage_new))
-            .fun(fun!(storage_get).panic())
-            .fun(fun!(storage_put_by_take).panic())
-            .fun(fun!(storage_put_by_read).panic())
-            .fun(fun!(storage_put_by_read_and_update).panic())
-            .fun(fun!(storage_get_into_init).panic())
-            .fun(fun!(storage_get_into_uninit).panic())
-            .fun(fun!(storage_callback).panic())
-            .fun(fun!(storage_put_slice).panic())
-            .fun(fun!(storage_get_vec).panic())
-            .fun(fun!(storage_callback_vec).panic())
+            .fun(fun!(storage_get).abort_on_conversion_error())
+            .fun(fun!(storage_put_by_take).abort_on_conversion_error())
+            .fun(fun!(storage_put_by_read).abort_on_conversion_error())
+            .fun(fun!(storage_put_by_read_and_update).abort_on_conversion_error())
+            .fun(fun!(storage_get_into_init).abort_on_conversion_error())
+            .fun(fun!(storage_get_into_uninit).abort_on_conversion_error())
+            .fun(fun!(storage_callback).abort_on_conversion_error())
+            .fun(fun!(storage_put_slice).abort_on_conversion_error())
+            .fun(fun!(storage_get_vec).abort_on_conversion_error())
+            .fun(fun!(storage_callback_vec).abort_on_conversion_error())
             .fun(fun!(payload_handler_new))
             .fun(fun!(payload_vec_handler_new)),
     );

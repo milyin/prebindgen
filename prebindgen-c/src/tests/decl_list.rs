@@ -3,12 +3,12 @@
 
 use super::*;
 use crate::{
-    api, callback, data_type, enum_type, error_type, fun, ptr_type, repr_c_type, tagged_union,
+    callback, data_type, decls, enum_type, error_type, fun, ptr_type, repr_c_type, tagged_union,
     value_type,
 };
 
 /// A record crossing by value, a function taking a `String` — a fallible input
-/// with no `Result` to report through, so it needs `.panic()` — and one that
+/// with no `Result` to report through, so it needs `.abort_on_conversion_error()` — and one that
 /// does not.
 fn items() -> Vec<(syn::Item, SourceLocation)> {
     let loc = SourceLocation::default();
@@ -62,10 +62,10 @@ fn a_list_and_the_declarators_it_lowers_to_agree() {
         "decl_flat",
     );
     let listed = write(
-        base().api(
-            api!()
+        base().declare(
+            decls!()
                 .data_type(data_type!(Point).base_name("pt"))
-                .fun(fun!(point_named).panic())
+                .fun(fun!(point_named).abort_on_conversion_error())
                 .fun(fun!(point_make)),
         ),
         registry(),
@@ -84,8 +84,8 @@ fn a_list_and_the_declarators_it_lowers_to_agree() {
 fn a_function_needing_panic_is_refused_without_it() {
     let message = catch_msg(|| {
         let _ = write(
-            base().api(
-                api!()
+            base().declare(
+                decls!()
                     .data_type(data_type!(Point).base_name("pt"))
                     .fun(fun!(point_named)),
             ),
@@ -94,7 +94,7 @@ fn a_function_needing_panic_is_refused_without_it() {
         );
     });
     assert!(
-        message.contains(".panic()"),
+        message.contains(".abort_on_conversion_error()"),
         "refused for the reason the modifier addresses: {message}"
     );
 }
@@ -104,22 +104,22 @@ fn a_function_needing_panic_is_refused_without_it() {
 #[test]
 fn the_order_of_a_list_does_not_change_it() {
     let one = write(
-        base().api(
-            api!()
+        base().declare(
+            decls!()
                 .data_type(data_type!(Point).base_name("pt"))
                 .enum_type(enum_type!(Mode).base_name("mode"))
-                .fun(fun!(point_named).panic())
+                .fun(fun!(point_named).abort_on_conversion_error())
                 .fun(fun!(point_make)),
         ),
         registry_with_enum(),
         "decl_order_one",
     );
     let other = write(
-        base().api(
-            api!()
+        base().declare(
+            decls!()
                 .fun(fun!(point_make))
                 .enum_type(enum_type!(Mode).base_name("mode"))
-                .fun(fun!(point_named).panic())
+                .fun(fun!(point_named).abort_on_conversion_error())
                 .data_type(data_type!(Point).base_name("pt")),
         ),
         registry_with_enum(),
@@ -149,9 +149,13 @@ fn a_repeated_declaration_is_refused() {
     // Two declarations of one function with different options: lowering order
     // would otherwise pick one set and drop the other.
     let message = catch_msg(|| {
-        let _ = base().api(
-            api!()
-                .fun(fun!(point_make).base_name("first").panic())
+        let _ = base().declare(
+            decls!()
+                .fun(
+                    fun!(point_make)
+                        .base_name("first")
+                        .abort_on_conversion_error(),
+                )
                 .fun(fun!(point_make).base_name("second")),
         );
     });
@@ -162,14 +166,14 @@ fn a_repeated_declaration_is_refused() {
 
     // The same function declared twice, however it is spelled.
     let message = catch_msg(|| {
-        let _ = base().api(api!().fun(fun!(point_make)).fun(fun!(point_make)));
+        let _ = base().declare(decls!().fun(fun!(point_make)).fun(fun!(point_make)));
     });
     assert!(message.contains("point_make"), "{message}");
 
     // A type declared under two representations is a clash too.
     let message = catch_msg(|| {
-        let _ = base().api(
-            api!()
+        let _ = base().declare(
+            decls!()
                 .data_type(data_type!(Point))
                 .ptr_type(ptr_type!(Point)),
         );
@@ -181,8 +185,8 @@ fn a_repeated_declaration_is_refused() {
 /// option it was given — including the kinds neither C example declares.
 #[test]
 fn every_declaration_kind_carries_its_options() {
-    let built = base().api(
-        api!()
+    let built = base().declare(
+        decls!()
             .ptr_type(ptr_type!(Handle).base_name("handle"))
             .data_type(data_type!(Failure).base_name("failure").error())
             .enum_type(enum_type!(Mode))
@@ -307,13 +311,17 @@ fn a_declared_base_reaches_the_emitted_names() {
     .expect("index items");
 
     let src = write(
-        base().mangle_type_name(|base| format!("{base}_t")).api(
-            api!()
+        base().mangle_type_name(|base| format!("{base}_t")).declare(
+            decls!()
                 .enum_type(enum_type!(Mode).base_name("speed"))
                 .tagged_union(tagged_union!(Shape).base_name("figure"))
                 .repr_c_type(repr_c_type!(Raw).base_name("packet"))
                 .fun(fun!(raw_make).base_name("packet_make"))
-                .fun(fun!(raw_mode).base_name("packet_mode").panic()),
+                .fun(
+                    fun!(raw_mode)
+                        .base_name("packet_mode")
+                        .abort_on_conversion_error(),
+                ),
         ),
         registry,
         "decl_bases",
@@ -339,8 +347,8 @@ fn a_declared_base_reaches_the_emitted_names() {
 #[test]
 fn one_callback_signature_spelled_two_ways_is_refused() {
     let message = catch_msg(|| {
-        let _ = base().api(
-            api!()
+        let _ = base().declare(
+            decls!()
                 .callback(callback!(impl Fn(i64) + Send + Sync + 'static).base_name("first"))
                 .callback(callback!(impl Fn(i64) + Sync + Send + 'static).base_name("second")),
         );
@@ -353,15 +361,15 @@ fn one_callback_signature_spelled_two_ways_is_refused() {
 fn a_declaration_repeated_in_another_api_call_is_refused() {
     let message = catch_msg(|| {
         let _ = base()
-            .api(api!().fun(fun!(point_make).base_name("first")))
-            .api(api!().fun(fun!(point_make).base_name("second")));
+            .declare(decls!().fun(fun!(point_make).base_name("first")))
+            .declare(decls!().fun(fun!(point_make).base_name("second")));
     });
     assert!(message.contains("point_make"), "{message}");
 
     let message = catch_msg(|| {
         let _ = base()
-            .api(api!().data_type(data_type!(Point)))
-            .api(api!().data_type(data_type!(Point)));
+            .declare(decls!().data_type(data_type!(Point)))
+            .declare(decls!().data_type(data_type!(Point)));
     });
     assert!(message.contains("Point"), "{message}");
 }
