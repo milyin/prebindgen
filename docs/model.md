@@ -9,6 +9,11 @@
 > descriptions of one: read this for the registry a binding compiles through
 > today, and that for the one being built beside it.
 >
+> Where this document ends and open work begins:
+> [#689](https://github.com/milyin/prebindgen/issues/689) carries the standing
+> architectural diagnosis — what a third adapter would still have to copy — and
+> is the live record now that the report which measured it has been retired.
+>
 > One rule that used to be stated here has moved, because it governs both
 > engines and belongs with the model it constrains: an adapter analyses the Flat
 > model and generates Rust from it, never from retained syntax. [The source-model

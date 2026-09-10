@@ -414,6 +414,32 @@ impl From<syn::Type> for EnumClassDecl {
 /// Like `enum_class!` it has no `.method` / `.constructor`: a sum value has
 /// no object identity Rust-side, so a "method" on it is a free function
 /// taking it.
+///
+/// # Who closes a handle payload
+///
+/// Whoever would close a bare handle in the same position. A sum that reaches
+/// an owned handle is itself `AutoCloseable`: the generated interface declares
+/// it, each variant class overrides `close()` to close its own payload, and so
+/// the `when` over the alternatives is emitted once, in the sum, rather than at
+/// every position holding one.
+///
+/// * A **returned** sum hands the caller a value it owns and must `close()`,
+///   exactly as a returned handle does.
+/// * A sum delivered to a **callback** is closed after `run` returns —
+///   close-unless-taken, so `take()` inside the body is how a receiver keeps
+///   the payload alive across the boundary.
+/// * A sum held in a **data-class field** is closed by the container's own
+///   `close()` cascade, through a nested data class as well.
+/// * An **element of a fold** is a callback argument like any other, so it is
+///   closed after each `run`. A folder that accumulates its elements —
+///   `{ acc, e -> acc + e }`, the most natural body there is — therefore
+///   accumulates *closed* handles unless it `take()`s each one. This is not a
+///   sum-only rule: it applies to any element type that reaches a handle.
+///
+/// The four agree with the bare handle in each position, which is the point:
+/// ownership does not move because a value changed spelling. `examples/covertest-kotlin`
+/// exercises every row on the JVM, including that a callback payload is usable
+/// inside `run`, closed once `run` returns, and kept by `take()`.
 pub struct SealedClassDecl {
     pub(crate) key: TypeKey,
     /// The type this declaration was **written with** — the `X` the macro
