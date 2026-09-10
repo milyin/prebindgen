@@ -21,7 +21,7 @@ Cbindgen::builder()
 ```text
 policy (C record):
     representation: data_struct
-    c_name:         "Stamp"                       // the source name
+    c_name:         "Stamp"                       // this example's name; the default base is `stamp`
     members:        secs: int64_t, nanos: int64_t // declaration order
     passing:        by value
 ```
@@ -32,9 +32,11 @@ policy (C record):
   as opposed to an opaque pointer handle or a value-opaque type. Declaring the
   type under a different one is a different policy, and therefore a different
   conversion node.
-- The C name defaults to the source name and a naming hook could change it
-  without touching the source; the aggregate's member identities stay distinct
-  from the record's source field identities even when both spell `secs`.
+- The C name is the frontend's, not the source's: a type's default base is the
+  snake_case of its short name, so the default here would be `stamp`, and this
+  example names the aggregate `Stamp`. Either way the aggregate's member
+  identities stay distinct from the record's source field identities even when
+  both spell `secs`.
 
 [struct]: README.md
 [struct_requests]: 03-requests.md

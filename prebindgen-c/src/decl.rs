@@ -103,13 +103,19 @@ pub struct ValueTypeDecl {
     pub(crate) rust: syn::Type,
     pub(crate) opaque: syn::Type,
     pub(crate) owned: bool,
+    pub(crate) base: Option<String>,
 }
 
 /// A type that is already `#[repr(C)]` in the source and crosses unchanged.
+///
+/// Its generated mirror takes the name the manglers give when the module is
+/// applied, so the naming hooks have to be set on the builder before
+/// [`CbindgenBuilder::module`](crate::CbindgenBuilder::module).
 #[derive(Clone)]
 pub struct ReprCTypeDecl {
     pub(crate) ty: syn::Type,
     pub(crate) assume_field_validity: bool,
+    pub(crate) base: Option<String>,
 }
 
 /// An error type that is not a data struct: it reaches C as the message the
@@ -146,6 +152,8 @@ named_decl!(DataTypeDecl);
 named_decl!(EnumTypeDecl);
 named_decl!(TaggedUnionDecl);
 named_decl!(CallbackDecl);
+named_decl!(ValueTypeDecl);
+named_decl!(ReprCTypeDecl);
 
 impl PtrTypeDecl {
     /// Declare a handle for this Rust type.
@@ -231,6 +239,7 @@ impl ValueTypeDecl {
             rust,
             opaque,
             owned: true,
+            base: None,
         }
     }
 
@@ -249,6 +258,7 @@ impl ReprCTypeDecl {
         ReprCTypeDecl {
             ty,
             assume_field_validity: false,
+            base: None,
         }
     }
 
@@ -286,6 +296,29 @@ impl CallbackDecl {
     }
 }
 
+/// A declared conversion between a source type and its wire form, with the
+/// naming base its generated constants take.
+#[derive(Clone)]
+pub struct ConvertTypeDecl {
+    pub(crate) decl: ConvertDecl,
+    pub(crate) base: Option<String>,
+}
+
+named_decl!(ConvertTypeDecl);
+
+impl ConvertTypeDecl {
+    /// Declare the conversion.
+    pub fn new(decl: ConvertDecl) -> Self {
+        ConvertTypeDecl { decl, base: None }
+    }
+}
+
+impl From<ConvertDecl> for ConvertTypeDecl {
+    fn from(decl: ConvertDecl) -> Self {
+        ConvertTypeDecl::new(decl)
+    }
+}
+
 /// Everything one C binding declares.
 ///
 /// Hand it to [`CbindgenBuilder::module`](crate::CbindgenBuilder::module).
@@ -299,7 +332,7 @@ pub struct ModuleDecl {
     pub(crate) repr_c_types: Vec<ReprCTypeDecl>,
     pub(crate) error_types: Vec<ErrorTypeDecl>,
     pub(crate) callbacks: Vec<CallbackDecl>,
-    pub(crate) converts: Vec<ConvertDecl>,
+    pub(crate) converts: Vec<ConvertTypeDecl>,
     pub(crate) funs: Vec<FunDecl>,
     pub(crate) ignored_funs: Vec<syn::Ident>,
     pub(crate) ignored_types: Vec<syn::Type>,
@@ -360,8 +393,11 @@ impl ModuleDecl {
     }
 
     /// Add a declared conversion between a source type and its wire form.
-    pub fn convert(mut self, decl: ConvertDecl) -> Self {
-        self.converts.push(decl);
+    ///
+    /// Takes the conversion itself, or one wrapped in a [`ConvertTypeDecl`]
+    /// when its generated constants need a naming base of their own.
+    pub fn convert(mut self, decl: impl Into<ConvertTypeDecl>) -> Self {
+        self.converts.push(decl.into());
         self
     }
 

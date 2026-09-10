@@ -598,8 +598,8 @@ pub use prebindgen_registry::ident;
 pub use syn;
 
 pub use decl::{
-    CallbackDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl, ModuleDecl, PtrTypeDecl,
-    ReprCTypeDecl, TaggedUnionDecl, ValueTypeDecl,
+    CallbackDecl, ConvertTypeDecl, DataTypeDecl, EnumTypeDecl, ErrorTypeDecl, FunDecl, ModuleDecl,
+    PtrTypeDecl, ReprCTypeDecl, TaggedUnionDecl, ValueTypeDecl,
 };
 pub use prebindgen_registry::pipeline;
 

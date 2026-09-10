@@ -760,7 +760,18 @@ impl CbindgenBuilder {
     ///
     /// This is the binding's declaration surface: one tree, built in any order,
     /// applied here. Each declaration carries its own options, so nothing
-    /// depends on what was declared before it.
+    /// depends on what was declared before it, and declaring the same function,
+    /// type or callback signature twice is refused rather than resolved by the
+    /// order the tree happens to be lowered in.
+    ///
+    /// **Set the naming hooks before this call.** `mangle_rust_type`,
+    /// `mangle_type_name`, `mangle_destructor`, `mangle_take`,
+    /// `mangle_callback` and `mangle_function` are read while the declarations
+    /// are applied, and a [`repr_c_type!`](crate::repr_c_type) mirror caches its
+    /// wire name as it is declared: configuring a mangler afterwards renames the
+    /// emitted mirror while its transmute glue keeps the cached name. The tree
+    /// removes the order-dependence between declarations; this one is between
+    /// the generator-wide settings and all of them.
     pub fn module(mut self, module: crate::ModuleDecl) -> Self {
         let crate::decl::ModuleDecl {
             ptr_types,
@@ -776,6 +787,63 @@ impl CbindgenBuilder {
             ignored_funs,
             ignored_types,
         } = module;
+
+        // A declaration tree is a set, so a repeated declaration is a mistake
+        // rather than a last-write-wins update: two `fun!(f)` with different
+        // options would otherwise export whichever the lowering replayed last,
+        // which is exactly the order-dependence this surface removes.
+        let mut names: HashSet<String> = HashSet::new();
+        let mut seen = |what: &str, name: String| {
+            assert!(
+                names.insert(format!("{what} {name}")),
+                "`{name}` is declared twice in one module. A declaration carries its own                  options, so two of them would silently keep one set and drop the other;                  declare it once, with the options it needs"
+            );
+        };
+        for decl in &ptr_types {
+            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+        }
+        for decl in &data_types {
+            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+        }
+        for decl in &enum_types {
+            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+        }
+        for decl in &tagged_unions {
+            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+        }
+        for decl in &value_types {
+            seen("type", TypeKey::from_type(&decl.rust).as_str().to_string());
+        }
+        for decl in &repr_c_types {
+            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+        }
+        for decl in &error_types {
+            seen("type", TypeKey::from_type(&decl.ty).as_str().to_string());
+        }
+        for decl in &callbacks {
+            seen(
+                "callback",
+                TypeKey::from_type(&decl.ty).as_str().to_string(),
+            );
+        }
+        let methods_of = |decls: &[crate::FunDecl]| -> Vec<String> {
+            decls.iter().map(|decl| decl.ident.to_string()).collect()
+        };
+        for name in ptr_types
+            .iter()
+            .flat_map(|decl| methods_of(&decl.methods))
+            .chain(data_types.iter().flat_map(|decl| methods_of(&decl.methods)))
+            .chain(enum_types.iter().flat_map(|decl| methods_of(&decl.methods)))
+            .chain(
+                tagged_unions
+                    .iter()
+                    .flat_map(|decl| methods_of(&decl.methods)),
+            )
+            .chain(methods_of(&funs))
+        {
+            seen("function", name);
+        }
+        drop(seen);
 
         for decl in ptr_types {
             let methods = decl.methods;
@@ -813,17 +881,24 @@ impl CbindgenBuilder {
             self = self.funs(methods);
         }
         for decl in value_types {
+            let base = decl.base;
             self = if decl.owned {
                 self.opaque_owned_struct(decl.rust, decl.opaque)
             } else {
                 self.opaque_data_struct(decl.rust, decl.opaque)
             };
+            if let Some(base) = base {
+                self = self.base_name(base);
+            }
         }
         for decl in repr_c_types {
-            let assume = decl.assume_field_validity;
+            let (assume, base) = (decl.assume_field_validity, decl.base);
             self = self.repr_c_struct(decl.ty);
             if assume {
                 self = self.assume_c_field_validity();
+            }
+            if let Some(base) = base {
+                self = self.base_name(base);
             }
         }
         for decl in error_types {
@@ -840,7 +915,11 @@ impl CbindgenBuilder {
             }
         }
         for decl in converts {
-            self = self.convert(decl);
+            let base = decl.base;
+            self = self.convert(decl.decl);
+            if let Some(base) = base {
+                self = self.base_name(base);
+            }
         }
         self = self.funs(funs);
         for ident in ignored_funs {
