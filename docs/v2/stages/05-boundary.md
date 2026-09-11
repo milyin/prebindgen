@@ -33,7 +33,7 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 #[no_mangle]
 pub extern "system" fn Java_example_JNINative_stampSum(
     mut env: jni::JNIEnv<'_>,
-    _class: jni::objects::JClass<'_>,
+    _this: jni::objects::JObject<'_>,
     stamp: jni::objects::JObject<'_>,
 ) -> jni::sys::jlong
 ```
@@ -42,8 +42,9 @@ Both wrap the same Rust function through the same input conversion, yet neither
 signature can be derived from the other. The C one is what a C caller can write;
 the JNI one is what the JVM demands — a symbol built from the Kotlin package, the
 harness object holding the native declaration and the method name, plus two
-parameters, the environment and the calling class, that the JVM passes to every
-native method and that no source parameter corresponds to. The target supplies
+parameters, the environment and the receiver — the harness singleton, since the
+native method is an instance method of a Kotlin `object` — that the JVM passes
+to every native method and that no source parameter corresponds to. The target supplies
 those conventions; the registry places the conversions inside them. The source
 parameter keeps its name in both, because the boundary said so — a parameter is
 the one name the writer does not allocate.

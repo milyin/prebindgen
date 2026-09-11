@@ -27,7 +27,7 @@ policy (JNI function):
     kotlin:     example.stampSum                    // the function a caller uses
     native:     example.JNINative.stampSum          // the harness method it delegates to
     symbol:     "Java_example_JNINative_stampSum"   // derived from that placement
-    convention: extern "system", with (JNIEnv, JClass) supplied by the JVM
+    convention: extern "system", with (JNIEnv, receiver) supplied by the JVM
     input:      Stamp as one object, properties read through JNI
     output:     jlong native return
     failures:   reported to the JVM, then a default value returned

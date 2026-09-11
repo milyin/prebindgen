@@ -10,7 +10,7 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 ```text
 FunctionPlan(exported stamp_sum) frozen, with
     boundary: extern "system", symbol "Java_example_JNINative_stampSum",
-              (JNIEnv, JClass, JObject) -> jlong,
+              (JNIEnv, receiver JObject, JObject) -> jlong,
               Runtime -> report_jni_error then return 0, reporting failure -> abort
     node(input):  object carrier, property getters "getSecs" / "getNanos"
     node(output): Scalar(jlong), identity
@@ -52,7 +52,7 @@ pub fn report_jni_error(
 #[no_mangle]
 pub extern "system" fn Java_example_JNINative_stampSum(
     mut env: jni::JNIEnv<'_>,
-    _class: jni::objects::JClass<'_>,
+    _this: jni::objects::JObject<'_>,
     stamp: jni::objects::JObject<'_>,
 ) -> jni::sys::jlong {
     let v0 = match env.call_method(&stamp, "getSecs", "()J", &[])

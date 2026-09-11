@@ -263,7 +263,8 @@ Acceptance criteria:
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
 - [x] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
-- [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`. Test selection from the manifest is not built.
+- [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`.
+- [ ] Test selection from the manifest.
 - [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.
 - [ ] New nested combinations reuse the registry's composition algorithm instead of requiring a new per-language wrapper implementation.
 - [ ] Remaining unsupported capabilities and any API refinements discovered during implementation are documented.

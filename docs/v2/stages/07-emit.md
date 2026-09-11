@@ -66,7 +66,7 @@ attributable to one of the three contributions above:
 #[no_mangle]
 pub extern "system" fn Java_example_JNINative_stampSum(  // symbol: JNI adapter
     mut env: jni::JNIEnv<'_>,                            // environment: JNI adapter
-    _class: jni::objects::JClass<'_>,
+    _this: jni::objects::JObject<'_>,                    // the harness singleton
     stamp: jni::objects::JObject<'_>,                    // the source parameter's name
 ) -> jni::sys::jlong {
     let v0 = match env.call_method(&stamp, "getSecs", "()J", &[])

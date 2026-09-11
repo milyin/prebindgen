@@ -317,9 +317,11 @@ impl Target for JniTarget {
                 role: ParamRole::Context("jni.env".to_string()),
                 mutable: true,
             },
+            // The native method is an instance method of the harness `object`,
+            // so what the JVM passes here is the singleton, not a class.
             NativeParam {
-                name: format_ident!("_class"),
-                ty: WireType::abi(syn::parse_quote!(jni::objects::JClass<'_>)),
+                name: format_ident!("_this"),
+                ty: WireType::abi(syn::parse_quote!(jni::objects::JObject<'_>)),
                 role: ParamRole::Unused,
                 mutable: false,
             },

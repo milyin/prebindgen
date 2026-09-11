@@ -170,7 +170,7 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
     assert!(
         compact.contains(
             "pubextern\"system\"fnJava_io_test_jni_JNINative_stampSum(mutenv:jni::JNIEnv<'_>,\
-             _class:jni::objects::JClass<'_>,stamp:jni::objects::JObject<'_>,)->jni::sys::jlong{"
+             _this:jni::objects::JObject<'_>,stamp:jni::objects::JObject<'_>,)->jni::sys::jlong{"
         ),
         "{rust}"
     );

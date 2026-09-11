@@ -21,7 +21,7 @@ policy (JNI function): example.JNINative.stampSum, extern "system",
 ```text
 BoundarySpec {
     abi:      extern "system", symbol "Java_example_JNINative_stampSum",
-              synthetic operands: JNIEnv (exclusive), JClass (unused),
+              synthetic operands: JNIEnv (exclusive), receiver JObject (unused),
     inputs:   [ InputPlacement { native arg `stamp` (JObject) -> node(input) } ],
     output:   OutputPlacement::Return(node(output) -> jlong),
     failures: { Runtime: report through report_jni_error, then return 0;
@@ -35,7 +35,7 @@ Fixing the signature that [emission][fn_emit_jni] renders:
 #[no_mangle]
 pub extern "system" fn Java_example_JNINative_stampSum(
     mut env: jni::JNIEnv<'_>,
-    _class: jni::objects::JClass<'_>,
+    _this: jni::objects::JObject<'_>,
     stamp: jni::objects::JObject<'_>,
 ) -> jni::sys::jlong
 ```
