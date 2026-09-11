@@ -152,14 +152,16 @@ fn plain(ident: &syn::Ident) -> String {
 /// The JVM getter a Kotlin property compiles to.
 ///
 /// `val secs` becomes `getSecs()`. A property whose name starts with `is` and
-/// continues with anything but a lowercase letter — `isReady`, `is_ready`,
-/// `is2` — keeps its name as the getter, for every type and not only
-/// `Boolean`: that is Kotlin's JVM interop rule, and `island` is not an
-/// instance of it.
+/// continues with anything but an ASCII lowercase letter — `isReady`,
+/// `is_ready`, `is2`, `isé` — keeps its name as the getter, for every type and
+/// not only `Boolean`: that is Kotlin's JVM interop rule. `island` is not an
+/// instance of it, and neither is a property called `is` — `kotlinc` gives
+/// both a `get` prefix.
 fn getter(name: &str) -> String {
-    let rest = &name[name.len().min(2)..];
-    let is_prefixed = name.starts_with("is") && !rest.starts_with(|c: char| c.is_lowercase());
-    if is_prefixed {
+    let keeps_its_name = name.strip_prefix("is").is_some_and(|rest| {
+        !rest.is_empty() && !rest.starts_with(|c: char| c.is_ascii_lowercase())
+    });
+    if keeps_its_name {
         return name.to_string();
     }
     let mut chars = name.chars();

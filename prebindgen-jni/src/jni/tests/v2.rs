@@ -375,11 +375,20 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
 }
 
 /// A setting v2 does not lower — a per-function or a type-level boundary
-/// declaration — refuses what it applies to, rather than being dropped and the
-/// default interface emitted as if it were the one asked for.
+/// declaration — refuses the function it applies to, rather than being dropped
+/// and the default interface emitted as if it were the one asked for. A
+/// type-level declaration takes effect at boundaries, so the class it names is
+/// still emitted; and it applies whether or not its type has a class at all.
 #[test]
 fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
-    let items = || stamp_items(&["pub fn stamp_new(secs: i64) -> Stamp { unimplemented!() }"]);
+    let items = || {
+        stamp_items(&[
+            "pub fn stamp_new(secs: i64) -> Stamp { unimplemented!() }",
+            "pub fn from_parts(a: i32, b: i32) -> i64 { unimplemented!() }",
+            "pub fn take_value(value: i64) -> i64 { unimplemented!() }",
+            "pub fn give_value() -> i64 { unimplemented!() }",
+        ])
+    };
     // Per function.
     let generated = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
@@ -405,7 +414,7 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         "the class alone"
     );
 
-    // For a type: every value of it, and the class itself.
+    // For a declared class: the function taking it is refused, the class stays.
     let generated = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .items(items())
@@ -423,8 +432,39 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         skip_of(&generated, "fn:stamp_sum"),
         (
             "unsupported.jni.expand_param".to_string(),
-            "fn:stamp_sum -> param 0".to_string()
+            "fn:stamp_sum".to_string()
         )
+    );
+    assert_eq!(
+        generated.manifest().unwrap().counts().emitted,
+        1,
+        "the class alone"
+    );
+
+    // For a scalar with no class: a parameter of that type, and a result of it.
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items())
+        .expand(
+            prebindgen_registry::expand_param!(i64).variant(prebindgen_registry::fun!(from_parts)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(i64).field(prebindgen_registry::fun!(take_value)),
+        )
+        .package(
+            crate::package!()
+                .fun(prebindgen_registry::fun!(take_value))
+                .fun(prebindgen_registry::fun!(give_value)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert_eq!(
+        skip_of(&generated, "fn:take_value").0,
+        "unsupported.jni.expand_param"
+    );
+    assert_eq!(
+        skip_of(&generated, "fn:give_value").0,
+        "unsupported.jni.expand_return"
     );
     assert_eq!(generated.manifest().unwrap().counts().emitted, 0);
 }
@@ -522,7 +562,8 @@ fn an_is_prefixed_property_is_read_through_its_own_name() {
     let items = declare_referenced(vec![
         (
             syn::parse_str(
-                "pub struct Flags { pub isReady: i64, pub is_set: i64, pub island: i64 }",
+                "pub struct Flags { pub isReady: i64, pub is_set: i64, pub island: i64, \
+                 pub is: i64, pub isé: i64, pub aé: i64 }",
             )
             .unwrap(),
             loc.clone(),
@@ -544,7 +585,17 @@ fn an_is_prefixed_property_is_read_through_its_own_name() {
         .expect("v2 plans");
     let dir = unique_test_dir("jnigen_v2_is_getter");
     let rust = std::fs::read_to_string(generated.write_rust(dir.join("b.rs")).unwrap()).unwrap();
-    for getter in ["\"isReady\"", "\"is_set\"", "\"getIsland\""] {
+    // What `kotlinc` names each accessor, checked with `javap`: a bare `is`
+    // gets the prefix, a non-ASCII suffix does not, and a non-ASCII name is
+    // not an `is` at all.
+    for getter in [
+        "\"isReady\"",
+        "\"is_set\"",
+        "\"getIsland\"",
+        "\"getIs\"",
+        "\"isé\"",
+        "\"getAé\"",
+    ] {
         assert!(rust.contains(getter), "missing {getter}:\n{rust}");
     }
     let _ = std::fs::remove_dir_all(&dir);

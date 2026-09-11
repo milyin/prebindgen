@@ -42,7 +42,7 @@ impl Declarations {
             .keys()
             .filter_map(|key| Some((key.as_str().to_string(), self.kotlin_fqn(key)?)))
             .collect();
-        let requests = self.requests(source_module);
+        let requests = self.requests(&flat, source_module);
         generate(flat, &JniTarget::new(classes), requests, declaring_crate)
     }
 
@@ -60,7 +60,11 @@ impl Declarations {
     /// One entry per declaration, in any order — the report sorts. Which
     /// declarator a thing came from is this adapter's word for its
     /// representation, printed back by the report rather than re-derived.
-    fn requests(&self, source_module: syn::Path) -> BindingRequests<JniPolicy> {
+    fn requests(
+        &self,
+        flat: &prebindgen_registry::flat::Flat,
+        source_module: syn::Path,
+    ) -> BindingRequests<JniPolicy> {
         let mut requests = BindingRequests::new("jni", source_module, JniPolicy::Scalar);
 
         // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
@@ -86,23 +90,8 @@ impl Declarations {
             let config = &self.types[key];
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
-            // A type-level boundary declaration changes how every value of the
-            // type crosses, and v2 has no lowering for it: the type is refused
-            // under that declarator, whatever class it was declared as.
-            let expanded = self
-                .param_expand_decls
-                .iter()
-                .any(|decl| decl.key() == key)
-                .then_some("expand_param")
-                .or_else(|| {
-                    self.return_expand_decls
-                        .iter()
-                        .any(|decl| decl.key() == key)
-                        .then_some("expand_return")
-                });
-            let policy = requests.policy(match (&config.kind, expanded) {
-                (_, Some(declarator)) => JniPolicy::Unimplemented { declarator },
-                (crate::jni::DeclaredKind::Data, None) => JniPolicy::DataClass {
+            let policy = requests.policy(match config.kind {
+                crate::jni::DeclaredKind::Data => JniPolicy::DataClass {
                     class: placement.clone(),
                 },
                 _ => JniPolicy::Unimplemented { declarator },
@@ -159,15 +148,16 @@ impl Declarations {
                 // and the harness has one namespace.
                 let native = self
                     .mangle_jni_method(&crate::util::snake_to_camel(&entry.rust_ident.to_string()));
-                let policy = requests.policy(match self.unimplemented_setting(&entry.rust_ident) {
-                    Some(declarator) => JniPolicy::Unimplemented { declarator },
-                    None => JniPolicy::Function {
-                        package: package.clone(),
-                        symbol: self.native_method_symbol(&native),
-                        native,
-                        method,
-                    },
-                });
+                let policy =
+                    requests.policy(match self.unimplemented_setting(flat, &entry.rust_ident) {
+                        Some(declarator) => JniPolicy::Unimplemented { declarator },
+                        None => JniPolicy::Function {
+                            package: package.clone(),
+                            symbol: self.native_method_symbol(&native),
+                            native,
+                            method,
+                        },
+                    });
                 requests.output(
                     stated(
                         DeclaredElement::new(
@@ -283,12 +273,20 @@ impl Declarations {
 }
 
 impl Declarations {
-    /// A per-function setting v2 does not lower yet, if the function has one.
+    /// A setting v2 does not lower yet that applies to this function, if any.
     ///
-    /// A function declared with such a setting is refused under it rather than
+    /// Either the function's own — a per-function `expand_param`,
+    /// `expand_return` or `split_on_param` — or a type-level boundary
+    /// declaration for the type of one of its parameters or of its result,
+    /// which is where such a declaration takes effect (a field of that type is
+    /// not a boundary). A function under such a setting is refused rather than
     /// emitted with the setting silently dropped: the default interface is not
     /// the one the binding asked for.
-    fn unimplemented_setting(&self, ident: &syn::Ident) -> Option<&'static str> {
+    fn unimplemented_setting(
+        &self,
+        flat: &prebindgen_registry::flat::Flat,
+        ident: &syn::Ident,
+    ) -> Option<&'static str> {
         if self.fn_param_expands.iter().any(|(fun, ..)| fun == ident) {
             return Some("expand_param");
         }
@@ -297,6 +295,23 @@ impl Declarations {
         }
         if self.fn_split_params.iter().any(|(fun, ..)| fun == ident) {
             return Some("split_on_param");
+        }
+        // A binding-local function is not in the model; the engine refuses it
+        // on its own account.
+        let function = flat.function(&ident.to_string())?;
+        if function.params.iter().any(|param| {
+            self.param_expand_decls
+                .iter()
+                .any(|decl| *decl.key() == param.ty.key())
+        }) {
+            return Some("expand_param");
+        }
+        if self
+            .return_expand_decls
+            .iter()
+            .any(|decl| *decl.key() == function.ret.key())
+        {
+            return Some("expand_return");
         }
         None
     }

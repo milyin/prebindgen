@@ -75,11 +75,16 @@ JniGen::builder()
 Kotlin cannot fall back on a mangled source name the way C does, because a Kotlin
 declaration needs somewhere to live: a package, a class for a type, and for a
 function a place to be declared. That is what `package!` and the class macros
-supply, and a name given there is what the generated declaration and the native
-symbol are both built from. The macros take a type as written rather than a
-string — `data_class!(Stamp)`, not `data_class!("Stamp")` — and record its
-spelling; whether the source captured a `Stamp` is checked when the requests
-meet the model, and a name it did not capture is an error there.
+supply. A name given there names the Kotlin declaration a caller uses; the
+native method behind it, and so the `Java_…` symbol, is named from the Rust
+identifier through the method-name hook — the harness object has one namespace,
+and two packages may each export a `value`. The macros take a type as written
+rather than a string — `data_class!(Stamp)`, not `data_class!("Stamp")` — and
+record its spelling. A function declaration must name a captured function, and
+one that does not is an error when the requests meet the model; a class
+declaration need not name a captured type at all — a target may represent
+`String` without the source exporting one — so `data_class!(Absent)` is a
+reported skip (`unsupported.type.not_a_record`) rather than an error.
 
 How a failing call reports is the adapter's convention rather than a per-function
 setting, and it is worth noticing that it is settled here rather than by whoever
@@ -265,7 +270,7 @@ Policy guides the selection of these descriptions. The registry turns the descri
 
 ### The registry API called by the frontend
 
-The registry separates what should be generated from how values should be converted. An **output request** asks for one element, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries:
+The registry separates what should be generated from how values should be converted. An **output request** asks for one element, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries. As a design sketch — the built structure has `type_policies` and `site_policies` in place of `conversion_rules`, and no `unsupported` list, since a frontend states what it cannot lower as a request under a refusing policy:
 
 ```rust
 struct BindingRequests<Policy> {
@@ -298,7 +303,7 @@ pub fn generate<T: Target>(
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); a declaration naming nothing the source captured, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
@@ -330,13 +335,17 @@ The frontend and registry independently use `prebindgen-flat` to inspect source 
 
 Request construction must lose no recorded frontend choice. Today it carries the
 choices this increment lowers — names, the class a type is declared as, the
-ignore rules — and turns every other setting into a **refusal** of what it
-applies to: a per-function `expand_param`/`expand_return`/`split_on_param`
-refuses the function, a type-level boundary declaration refuses every value of
-the type and the class itself, a declarator the target does not lower refuses
-by that declarator's name. Emitting the default interface in place of the one a
-setting asked for is not honoring the declaration; the report says which setting
-the element waits on. Local helpers and declared conversion operations are
+ignore rules — and turns the settings it does not lower into a **refusal** of
+what they apply to: a per-function `expand_param`/`expand_return`/
+`split_on_param` refuses the function; a type-level boundary declaration refuses
+every function with a parameter or result of that type, declared class or bare
+scalar alike, and leaves the class itself; a declarator the target does not
+lower refuses by that declarator's name. Emitting the default interface in place
+of the one a setting asked for is not honoring the declaration; the report says
+which setting the element waits on. Settings that have no effect within this
+increment are carried without refusing: a C function's
+`abort_on_conversion_error` says what a fallible input does, and no conversion
+here can fail. Local helpers and declared conversion operations are
 refused the same way (`unsupported.fn.binding_local`,
 `unsupported.conversion.not_implemented`) until they are registered as typed
 source descriptions. Naming closures remain owned configuration objects,
