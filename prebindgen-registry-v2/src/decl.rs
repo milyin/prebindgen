@@ -1,10 +1,10 @@
 //! What a binding declared, in terms neither language owns.
 //!
-//! The v2 engine is handed the frontend's **own** declaration storage, borrowed
-//! live behind [`BindingDeclarations`] — no JSON round trip, no replay of
-//! builder calls, and nothing copied out that could go stale or lose a closure.
-//! What the trait exposes is what v2 can currently *ask*; growing a capability
-//! grows the questions, never the encoding.
+//! A frontend turns its own declaration storage into these — one
+//! [`DeclaredElement`] per thing the user asked for, inside the
+//! [`BindingRequests`](crate::BindingRequests) it hands the engine. The
+//! element is what the report accounts for; the request carries the target's
+//! configuration for it.
 
 use serde::Serialize;
 
@@ -164,25 +164,5 @@ impl DeclaredElement {
     pub fn sourced_as(mut self, source: SourceKind) -> Self {
         self.source = source;
         self
-    }
-}
-
-/// A binding's declarations, borrowed live from the frontend that accumulated
-/// them.
-///
-/// Implemented by the v1 facades over their existing builder storage, which is
-/// what lets an example submit its unchanged declarations to either engine.
-pub trait BindingDeclarations {
-    /// The target this binding generates for — `"c"`, `"jni"`. Names the
-    /// report and the output directory.
-    fn target(&self) -> &'static str;
-
-    /// Every element the binding asked for, in any order: the report sorts.
-    fn declared_elements(&self) -> Vec<DeclaredElement>;
-
-    /// Every element the binding explicitly told the generator to leave alone.
-    /// Accounted for separately — an ignore is a decision, not a gap.
-    fn ignored_elements(&self) -> Vec<DeclaredElement> {
-        Vec::new()
     }
 }

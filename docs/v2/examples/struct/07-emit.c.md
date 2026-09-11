@@ -20,6 +20,7 @@ In the generated C Rust module (`c.rs`):
 
 ```rust
 #[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct Stamp {
     pub secs: i64,
     pub nanos: i64,
@@ -44,6 +45,9 @@ typedef struct Stamp {
   value the source function takes.
 - `repr(C)` is required: without it the layout the header promises is not the
   layout [the wrapper][fn_emit_c] reads.
+- The name is the frontend's: the specification's binding keeps the source name,
+  and a real binding usually mangles it C-style — `stamp_t` — which is why the
+  case lint is silenced on every aggregate.
 - Member order and names match the aggregate description, since
   [the member reads][struct_values_c] refer to those identities.
 - The header's formatting and include guards are `cbindgen`'s business.

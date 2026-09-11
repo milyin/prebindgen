@@ -97,9 +97,119 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let counts = manifest.counts();
-    assert_eq!(counts.emitted, 0, "no Kotlin lowering is implemented yet");
+    assert_eq!(
+        counts.emitted, 0,
+        "nothing here is a data class or a scalar"
+    );
     assert_eq!(counts.skipped, 4);
     assert_eq!(counts.ignored, 1);
+
+    // Each skip says what the value waits on and where the walk stopped: a
+    // borrowed handle is a reference, which no v2 carrier holds yet.
+    let skip = |id: &str| {
+        manifest
+            .elements
+            .iter()
+            .find(|entry| entry.element.id.as_str() == id)
+            .and_then(|entry| entry.outcome.skip())
+            .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
+            .expect("skipped")
+    };
+    assert_eq!(
+        skip("fn:z_thing_describe"),
+        (
+            "unsupported.jni.carrier".to_string(),
+            "fn:z_thing_describe -> param 0".to_string()
+        )
+    );
+}
+
+/// The implemented subset, through the ordinary frontend: a `data_class!` of
+/// scalars and a `fun!` taking it by value. The Rust reads the object's
+/// properties through the environment and exports the harness's symbol; the
+/// Kotlin declares the class, the native method on the harness, and the
+/// function a caller uses — under the package prefix and the function-name
+/// hook this binding set.
+#[test]
+fn a_data_class_and_a_function_over_it_are_emitted() {
+    let loc = myflat_loc();
+    let sources: &[&str] = &[
+        "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+        "pub fn stamp_sum(stamp: Stamp) -> i64 { unimplemented!() }",
+        "pub fn stamp_new(secs: i64) -> Stamp { unimplemented!() }",
+    ];
+    let items = declare_referenced(
+        sources
+            .iter()
+            .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .set_jni_native_init("io.test.jni.Lib.load()")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp).name("Timestamp"))
+                .fun(prebindgen_registry::fun!(stamp_sum))
+                .fun(prebindgen_registry::fun!(stamp_new)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let counts = manifest.counts();
+    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{manifest:?}");
+
+    let dir = unique_test_dir("jnigen_v2_emitted");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains(
+            "pubextern\"system\"fnJava_io_test_jni_JNINative_stampSum(mutenv:jni::JNIEnv<'_>,\
+             _class:jni::objects::JClass<'_>,stamp:jni::objects::JObject<'_>,)->jni::sys::jlong{"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("env.call_method(&stamp,\"getSecs\",\"()J\",&[])"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("myflat::Stamp{secs:v0,nanos:v1,}"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("report_jni_error(&mutenv,error)"),
+        "{rust}"
+    );
+    assert!(
+        !rust.contains("stampNew"),
+        "a record leaving Rust is a skip: {rust}"
+    );
+
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    assert_eq!(written.len(), 1, "{written:?}");
+    let kotlin = std::fs::read_to_string(&written[0]).unwrap();
+    for line in [
+        "package io.test.jni",
+        "public data class Timestamp(val secs: Long, val nanos: Long)",
+        "public fun stampSum(stamp: Timestamp): Long = JNINative.stampSum(stamp)",
+        "internal object JNINative {",
+        "io.test.jni.Lib.load()",
+        "external fun stampSum(stamp: Timestamp): Long",
+    ] {
+        assert!(
+            kotlin.lines().any(|emitted| emitted.trim() == line),
+            "missing `{line}`:\n{kotlin}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Class members are separately selected: the class and each of its methods are
@@ -153,8 +263,9 @@ fn the_ordinary_writers_run_under_v2() {
         "the file names the engine that produced it: {contents}"
     );
 
-    // No Kotlin is generated yet, and the root still exists — a Gradle source
-    // set pointed at it resolves to an empty set, not to a missing directory.
+    // Nothing here is lowered, so no Kotlin is written — and the root still
+    // exists, so a Gradle source set pointed at it resolves to an empty set
+    // rather than a missing directory.
     let kotlin_root = dir.join("kotlin");
     assert!(generated
         .write_kotlin(&kotlin_root)

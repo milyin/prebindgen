@@ -31,8 +31,13 @@ whole list. Tracked as [issue #720](https://github.com/milyin/prebindgen/issues/
 The engine switch and the unsupported-output reporting exist, and so does the
 first increment of the pipeline itself: the two element paths specified here —
 a function taking an owned record, and that record — are planned, assembled and
-emitted by `prebindgen-registry-v2`, for both targets, and `examples/v2check`
-compiles the result. [The implementation page](implementation.md#the-first-increment-as-built)
+emitted by `prebindgen-registry-v2`, for both targets, through the real
+frontends. A binding crate's `build.rs` is the same under either engine;
+`PREBINDGEN_PIPELINE=v2` makes `prebindgen-c` and `prebindgen-jni` hand their
+declarations to this engine instead of v1's, and every declaration the engine
+cannot lower yet comes back as a reported skip. `examples/v2check` compiles the
+result for the source crate below.
+[The implementation page](implementation.md#the-first-increment-as-built)
 records what building them settled and what is still only described. Elsewhere,
 Rust API sketches illustrate intended contracts rather than published APIs.
 
@@ -60,20 +65,23 @@ calls:
 
 ```c
 typedef struct Stamp { int64_t secs; int64_t nanos; } Stamp;
-int64_t stamp_sum(struct Stamp arg0);
+int64_t stamp_sum(struct Stamp stamp);
 ```
 
-and the Kotlin/JNI output is a Kotlin class and method, backed by a different
-generated Rust function that the JVM calls:
+and the Kotlin/JNI output is a Kotlin class and function, backed by a different
+generated Rust function that the JVM calls through a native method on the
+binding's harness object:
 
 ```kotlin
 data class Stamp(val secs: Long, val nanos: Long)
-object Bindings { @JvmStatic external fun sum(stamp: Stamp): Long }
+fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)
+internal object JNINative { external fun stampSum(stamp: Stamp): Long }
 ```
 
 The C declarations carry the source names, because a foreign name defaults to the
 name the source used; Kotlin's cannot, since a Kotlin declaration also needs a
-package and a class to live in, which the binding crate supplies.
+package to live in and a name spelled the way Kotlin spells one, which the
+binding crate's settings supply.
 
 Neither generated Rust function is written by hand, and neither is a
 transliteration of the other: the C one receives a struct by value and reads its

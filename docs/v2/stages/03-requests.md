@@ -301,21 +301,27 @@ Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
 `build.rs` code:
 
-**Not wired yet.** This is the shape, not today's call path: a frontend's
-`build()` under v2 hands its declarations to the engine's reporting entry point,
-and the requests-and-target path below is exercised by `examples/v2check`, which
-builds the requests itself. Connecting the two is what makes a frontend generate
-through v2 rather than report through it.
+**Implemented.** This is today's call path: `CbindgenBuilder::build()` under v2
+reads its own declaration storage once, turns it into a request set, and hands
+that to the engine with the C target. The JNI frontend does the same with its
+declarations and the JNI target. Nothing of v1 runs on this route — no
+`declare_into`, no resolution, no assembly — and the frontend's part is
+naming: which C name a type or a symbol gets is its manglers applied, the same
+answer v1 gives.
 
 ```rust
-let mut builder = FlatBuilder::new();
-builder.add_captures(Source::new(source_crate::PREBINDGEN_OUT_DIR).items_all())?;
-let source_model = builder.build()?;              // stage 2: the snapshot
+let source_model = self.sources.clone().build()?;   // stage 2: the snapshot
 
-let requests = c_builder.into_requests(&source_model)?;  // this stage
-let registry = Registry::new(source_model);
-let generation = registry.generate(&c_adapter, requests)?; // stages 4 to 6
+let requests = self.requests(source_module);        // this stage
+let generation = generate(source_model, &CTarget, requests, declaring_crate)?;
+                                                     // stages 4 to 6
 ```
+
+The request set is built in one pass over the builder's storage, sorted so that
+a run over unchanged input emits the same file. A declarator the target has no
+lowering for — an opaque handle, an enum, a callback — still becomes a request,
+under a policy that says which declarator it came from, so the target refuses it
+by name and the report groups the skips by the capability they wait for.
 
 The frontend and registry independently use `prebindgen-flat` to inspect source items. The frontend interprets user declarations and validates their source references; the registry discovers required fields or helper arguments and plans their conversions. The registry supplies no separate source-inspection API to the frontend.
 

@@ -42,10 +42,11 @@ PrimitiveSpec {
 }
 ```
 
-Applied to an aggregate the writer has named `arg0`, that description renders:
+Applied to an aggregate the wrapper holds under the name `stamp` — the source
+parameter's name, which the boundary keeps — that description renders:
 
 ```rust
-arg0.secs
+stamp.secs
 ```
 
 ## Checks
@@ -53,8 +54,8 @@ arg0.secs
 - The whole record conversion is infallible: reading a member cannot fail, and
   the copied integer is independent of the aggregate afterwards.
 - `implementation` stores the operation and the member identity, not the string
-  `arg0.secs`. The caller's value comes from the application, and the name from
-  the writer.
+  `stamp.secs`. The caller's value comes from the application, and the name from
+  the boundary.
 - `ReadMember` is a common Rust operation, so C ships no field-read renderer.
 - A member identity is not a source field identity: the adapter's representation
   maps one to the other, and the registry validates that mapping. The aggregate

@@ -5,10 +5,62 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::{BindingDeclarations, DeclaredElement, ElementKind, SourceKind},
+    decl::{DeclaredElement, ElementKind, SourceKind},
     outcome::{EngineError, Outcome},
-    run::plan,
+    plan::{generate, BindingRequests},
+    run::Generation,
+    target::{
+        BoundarySpec, ChildValue, RelationId, ReprSpec, ResolvedShape, ResolvedValues,
+        SelectionQuery, SiteDescriptor, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
+        TargetSupport, Unsupported,
+    },
 };
+
+/// A target that carries nothing: every value is refused at selection, so a
+/// run over it exercises the accounting and nothing else.
+struct Nothing;
+
+impl Target for Nothing {
+    type Policy = ();
+    type Payload = ();
+
+    fn select(&self, query: &SelectionQuery<'_, ()>) -> TargetSupport<RelationId> {
+        Ok(TargetAttempt::Unsupported(Unsupported::new(
+            "unsupported.nothing.carrier",
+            format!("`{}` is carried by no target here", query.crossing.ty.key()),
+        )))
+    }
+
+    fn represent(
+        &self,
+        _: &ResolvedShape<'_>,
+        _: &[ChildValue<'_>],
+        _: &(),
+    ) -> TargetSupport<ReprSpec<()>> {
+        unreachable!("nothing is selected")
+    }
+
+    fn boundary(
+        &self,
+        _: &SiteDescriptor<'_>,
+        _: &ResolvedValues<'_, ()>,
+        _: &(),
+    ) -> TargetSupport<BoundarySpec<()>> {
+        unreachable!("nothing is selected")
+    }
+
+    fn surface(
+        &self,
+        _: &SurfaceRequest<'_, ()>,
+        _: &ResolvedValues<'_, ()>,
+    ) -> TargetSupport<SurfaceSpec<()>> {
+        unreachable!("nothing is selected")
+    }
+
+    fn render_operation(&self, _: &(), _: &[syn::Ident]) -> proc_macro2::TokenStream {
+        unreachable!("nothing is selected")
+    }
+}
 
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
@@ -16,18 +68,18 @@ struct Stated {
     ignored: Vec<DeclaredElement>,
 }
 
-impl BindingDeclarations for Stated {
-    fn target(&self) -> &'static str {
-        "test"
+/// Run the stated binding through the engine over [`sources`].
+fn plan(
+    stated: &Stated,
+    sources: FlatBuilder,
+    crate_name: &str,
+) -> Result<Generation<()>, EngineError> {
+    let mut requests = BindingRequests::new("test", syn::parse_quote!(fixture), ());
+    for element in &stated.declared {
+        requests.output(element.clone(), requests.default_policy);
     }
-
-    fn declared_elements(&self) -> Vec<DeclaredElement> {
-        self.declared.clone()
-    }
-
-    fn ignored_elements(&self) -> Vec<DeclaredElement> {
-        self.ignored.clone()
-    }
+    requests.ignored = stated.ignored.clone();
+    generate(sources.build()?, &Nothing, requests, crate_name)
 }
 
 /// Two captured functions and a captured struct, in the shape a source crate
@@ -188,6 +240,8 @@ fn skips_are_grouped_by_capability_code() {
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let groups = generation.report().skips_by_capability();
-    assert_eq!(groups["unsupported.fn.not_implemented"].len(), 2);
-    assert_eq!(groups["unsupported.type.not_implemented"].len(), 1);
+    // One cause, three roots: each stops at the first value the target is
+    // asked about.
+    assert_eq!(groups["unsupported.nothing.carrier"].len(), 3);
+    assert_eq!(groups.len(), 1);
 }

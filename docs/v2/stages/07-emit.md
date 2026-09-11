@@ -35,9 +35,9 @@ has to be able to say what that operand is called in the signature it dictated.
 
 **A fragment inside that Rust** is the one thing a target contributes, and only
 where the operation is target-specific. Reading a C aggregate member renders as
-`arg0.secs` through an operation the registry library already provides, so the C
+`stamp.secs` through an operation the registry library already provides, so the C
 adapter ships no renderer at all. Reading a JVM property renders as
-`env.call_method(&arg0, "getSecs", "()J", &[]).and_then(|value| value.j())`,
+`env.call_method(&stamp, "getSecs", "()J", &[]).and_then(|value| value.j())`,
 which only the JNI adapter can produce. A fragment is one expression: this one
 evaluates to a `Result`, and the `and_then` is part of performing the read, not
 part of handling its failure. Nothing decides what happens when that `Result` is
@@ -47,9 +47,10 @@ wrapper's job, and the wrapper is the registry's.
 **The foreign declaration** is what the other language compiles against, and
 writing it belongs to the adapter for that language: nothing else knows what a
 declaration in it should look like. The JNI adapter therefore renders the data
-class and the `external fun` itself, from the same retained plans, using the same
-class metadata that the property-read operations used — so a renamed getter moves
-in both places or neither.
+class, the `external fun` on its harness object and the Kotlin function that
+calls it, from the same retained plans, using the same class metadata that the
+property-read operations used — so a renamed getter moves in both places or
+neither.
 
 C is the exception, and for a practical reason rather than an architectural one:
 `cbindgen` already derives C headers from Rust source and is the established way
@@ -63,14 +64,14 @@ attributable to one of the three contributions above:
 
 ```rust
 #[no_mangle]
-pub extern "system" fn Java_example_Bindings_sum(   // symbol: JNI adapter
-    mut env: JNIEnv<'_>,                            // environment: JNI adapter
-    _class: JClass<'_>,
-    arg0: JObject<'_>,
-) -> jlong {
-    let v0 = match env.call_method(&arg0, "getSecs", "()J", &[])
-        .and_then(|value| value.j())                // fragment: JNI adapter
-    {                                               // everything else: registry
+pub extern "system" fn Java_example_JNINative_stampSum(  // symbol: JNI adapter
+    mut env: jni::JNIEnv<'_>,                            // environment: JNI adapter
+    _class: jni::objects::JClass<'_>,
+    stamp: jni::objects::JObject<'_>,                    // the source parameter's name
+) -> jni::sys::jlong {
+    let v0 = match env.call_method(&stamp, "getSecs", "()J", &[])
+        .and_then(|value| value.j())                     // fragment: JNI adapter
+    {                                                    // everything else: registry
         Ok(value) => value,
         Err(error) => {
             if report_jni_error(&mut env, error).is_err() {
@@ -79,7 +80,7 @@ pub extern "system" fn Java_example_Bindings_sum(   // symbol: JNI adapter
             return 0;
         }
     };
-    let v1 = match env.call_method(&arg0, "getNanos", "()J", &[])
+    let v1 = match env.call_method(&stamp, "getNanos", "()J", &[])
         .and_then(|value| value.j())
     {
         Ok(value) => value,
@@ -108,22 +109,26 @@ because its member reads cannot fail:
 
 ```rust
 #[no_mangle]
-pub extern "C" fn stamp_sum(arg0: Stamp) -> i64 {
-    let v0 = arg0.secs;
-    let v1 = arg0.nanos;
+pub extern "C" fn stamp_sum(stamp: Stamp) -> i64 {
+    let v0 = stamp.secs;
+    let v1 = stamp.nanos;
     let v2 = source::Stamp { secs: v0, nanos: v1 };
     let v3 = source::stamp_sum(v2);
     v3
 }
 ```
 
-On the Kotlin side, the public API here is a single declaration: because the
-record crosses as an object, the `external fun` can take the data class itself,
-and there is nothing to wrap. Had the configuration chosen to pass the two fields
-as separate JNI arguments, the native declaration would take two `Long`s, and the
-writer would add a Kotlin method taking a `Stamp` in front of it — that is the
-"typed wrapper" the component table mentions, and it exists only when the native
-signature is not the one Kotlin callers should see.
+On the Kotlin side, the public API is one function per exported function,
+`stampSum(stamp: Stamp): Long`, delegating to the native method the JVM binds
+the wrapper to. The native method lives on one harness object, `JNINative`,
+whichever package the function is declared in — the `Java_…` symbol names that
+object, so the two have to agree — and because the record crosses as an object,
+it takes the data class itself. Had the configuration chosen to pass the two
+fields as separate JNI arguments, the native declaration would take two `Long`s
+and the Kotlin function in front of it would read them out of the `Stamp` — that
+is the "typed wrapper" the component table mentions, and it does more than
+delegate only when the native signature is not the one Kotlin callers should
+see.
 
 ## What lands on disk
 
@@ -189,10 +194,10 @@ concrete contributions stay separate throughout planning and writing:
 | Contribution | C aggregate | Kotlin/JNI object | Component responsible |
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
-| Requested public API | `Stamp`, `stamp_sum` — the source names, since nothing renamed them | `example.Stamp`, `Bindings.sum` | Language frontend records user choices. |
+| Requested public API | `Stamp`, `stamp_sum` — the source names, since nothing renamed them | `example.Stamp`, `example.stampSum` | Language frontend records user choices. |
 | Target representation | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
 | `PrimitiveSpec.implementation` | Common `ReadMember` plus member identity | `CallLongGetter` plus getter metadata | Adapter selects payload; registry retains it. |
-| One primitive's rendered operation | `arg0.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
+| One primitive's rendered operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
 | Source construction and call | `source::Stamp { ... }`, then `stamp_sum` | Same source instructions | Registry plans; common Rust writer renders. |
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |

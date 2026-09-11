@@ -711,6 +711,22 @@ pub fn generate<T: Target>(
         let element = &output.element;
         let policy = requests.get(output.policy);
         let planned = match element.kind {
+            // A function the binding defines itself has no captured item to
+            // plan from: its signature is the binding's, and reading one is a
+            // capability this engine does not have yet.
+            ElementKind::Function if element.source == crate::decl::SourceKind::BindingLocal => {
+                Err(Refusal::at(
+                    Unsupported::new(
+                        "unsupported.fn.binding_local",
+                        format!(
+                            "`{}` is defined by the binding, not captured from the source; v2 \
+                             plans captured functions only",
+                            element.rust_origin
+                        ),
+                    ),
+                    &crate::target::Position::root(element.id.clone()),
+                ))
+            }
             ElementKind::Function => {
                 plan_function(&mut run, element, policy).map_err(EngineError::Planning)?
             }
