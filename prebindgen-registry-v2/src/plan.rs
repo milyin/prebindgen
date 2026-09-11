@@ -911,6 +911,25 @@ fn plan_function<T: Target>(
         .expect("declarations are checked against the model before planning");
     let root = crate::target::Position::root(element.id.clone());
 
+    // The wrapper is a safe function, and the writer renders a plain call.
+    // Wrapping an `unsafe fn` would need the wrapper to state the caller's
+    // obligations, which nothing here can do yet; hiding them in an `unsafe`
+    // block would make a safe public function out of a contract it does not
+    // uphold.
+    if function.is_unsafe() {
+        return Ok(Err(Refusal::at(
+            Unsupported::new(
+                "unsupported.fn.unsafe",
+                format!(
+                    "`{}` is an `unsafe fn`, and v2 has no way to carry its safety contract \
+                     through a wrapper yet",
+                    function.name
+                ),
+            ),
+            &root,
+        )));
+    }
+
     let mut inputs = Vec::new();
     for (index, param) in function.params.iter().enumerate() {
         let position = root.child(format!("param {index}"));

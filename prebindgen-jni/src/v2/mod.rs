@@ -86,8 +86,23 @@ impl Declarations {
             let config = &self.types[key];
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
-            let policy = requests.policy(match config.kind {
-                crate::jni::DeclaredKind::Data => JniPolicy::DataClass {
+            // A type-level boundary declaration changes how every value of the
+            // type crosses, and v2 has no lowering for it: the type is refused
+            // under that declarator, whatever class it was declared as.
+            let expanded = self
+                .param_expand_decls
+                .iter()
+                .any(|decl| decl.key() == key)
+                .then_some("expand_param")
+                .or_else(|| {
+                    self.return_expand_decls
+                        .iter()
+                        .any(|decl| decl.key() == key)
+                        .then_some("expand_return")
+                });
+            let policy = requests.policy(match (&config.kind, expanded) {
+                (_, Some(declarator)) => JniPolicy::Unimplemented { declarator },
+                (crate::jni::DeclaredKind::Data, None) => JniPolicy::DataClass {
                     class: placement.clone(),
                 },
                 _ => JniPolicy::Unimplemented { declarator },
@@ -138,10 +153,20 @@ impl Declarations {
             };
             for entry in &config.functions {
                 let method = self.effective_function_name(subpackage, entry);
-                let policy = requests.policy(JniPolicy::Function {
-                    package: package.clone(),
-                    symbol: self.native_method_symbol(&method),
-                    method,
+                // The native method is named from the Rust identifier, through
+                // the method-name hook, as v1 names it — never from the public
+                // function's `.name()`: two packages may each export a `value`,
+                // and the harness has one namespace.
+                let native = self
+                    .mangle_jni_method(&crate::util::snake_to_camel(&entry.rust_ident.to_string()));
+                let policy = requests.policy(match self.unimplemented_setting(&entry.rust_ident) {
+                    Some(declarator) => JniPolicy::Unimplemented { declarator },
+                    None => JniPolicy::Function {
+                        package: package.clone(),
+                        symbol: self.native_method_symbol(&native),
+                        native,
+                        method,
+                    },
                 });
                 requests.output(
                     stated(
@@ -254,6 +279,26 @@ impl Declarations {
             );
         }
         requests
+    }
+}
+
+impl Declarations {
+    /// A per-function setting v2 does not lower yet, if the function has one.
+    ///
+    /// A function declared with such a setting is refused under it rather than
+    /// emitted with the setting silently dropped: the default interface is not
+    /// the one the binding asked for.
+    fn unimplemented_setting(&self, ident: &syn::Ident) -> Option<&'static str> {
+        if self.fn_param_expands.iter().any(|(fun, ..)| fun == ident) {
+            return Some("expand_param");
+        }
+        if self.fn_return_expands.iter().any(|(fun, ..)| fun == ident) {
+            return Some("expand_return");
+        }
+        if self.fn_split_params.iter().any(|(fun, ..)| fun == ident) {
+            return Some("split_on_param");
+        }
+        None
     }
 }
 

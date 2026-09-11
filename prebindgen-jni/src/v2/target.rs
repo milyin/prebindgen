@@ -37,9 +37,11 @@ pub enum JniPolicy {
     Function {
         /// The package the Kotlin function is declared in.
         package: String,
-        /// The Kotlin name of both the function and its native method.
+        /// The Kotlin name of the function a caller uses.
         method: String,
-        /// The `Java_…` symbol the JVM looks the native method up by.
+        /// The name of its native method on the harness object.
+        native: String,
+        /// The `Java_…` symbol the JVM looks that native method up by.
         symbol: String,
     },
     /// A declarator v1 lowers and v2 does not yet — a handle class, an enum
@@ -65,7 +67,10 @@ pub enum JniPayload {
     /// A native method on the harness object, and the Kotlin function over it.
     Method {
         package: String,
+        /// The Kotlin function's name.
         method: String,
+        /// The native method's name on the harness.
+        native: String,
         params: Vec<(String, String)>,
         ret: String,
     },
@@ -132,13 +137,52 @@ fn named(ty: &TypeRef) -> Option<String> {
     }
 }
 
-/// The JVM getter a Kotlin `val secs` compiles to.
+/// A source identifier as Kotlin spells it: the raw-identifier prefix Rust
+/// needs for `r#type` dropped, and a Kotlin keyword back-ticked. What a Kotlin
+/// declaration and the expression calling it both use, so the two agree.
+fn kotlin_ident(ident: &syn::Ident) -> String {
+    kotlin_codegen::escape_kotlin_ident(&plain(ident))
+}
+
+/// A source identifier's spelling without Rust's raw-identifier prefix.
+fn plain(ident: &syn::Ident) -> String {
+    ident.to_string().trim_start_matches("r#").to_string()
+}
+
+/// The JVM getter a Kotlin property compiles to.
+///
+/// `val secs` becomes `getSecs()`. A property whose name starts with `is` and
+/// continues with anything but a lowercase letter — `isReady`, `is_ready`,
+/// `is2` — keeps its name as the getter, for every type and not only
+/// `Boolean`: that is Kotlin's JVM interop rule, and `island` is not an
+/// instance of it.
 fn getter(name: &str) -> String {
+    let rest = &name[name.len().min(2)..];
+    let is_prefixed = name.starts_with("is") && !rest.starts_with(|c: char| c.is_lowercase());
+    if is_prefixed {
+        return name.to_string();
+    }
     let mut chars = name.chars();
     match chars.next() {
         Some(first) => format!("get{}{}", first.to_uppercase(), chars.as_str()),
         None => "get".to_string(),
     }
+}
+
+/// A name for a wrapper parameter the target adds — the environment, the
+/// receiver — that no source parameter already uses.
+fn free_name(preferred: &str, function: &prebindgen_registry::flat::Function) -> syn::Ident {
+    let taken = |name: &str| {
+        function
+            .params
+            .iter()
+            .any(|param| plain(&param.name) == name)
+    };
+    let mut candidate = preferred.to_string();
+    while taken(&candidate) {
+        candidate.push('_');
+    }
+    format_ident!("{candidate}")
 }
 
 impl Target for JniTarget {
@@ -269,7 +313,7 @@ impl Target for JniTarget {
                         ),
                         dependencies: Vec::new(),
                         implementation: Operation::Target(JniPayload::Getter {
-                            name: getter(&name.to_string()),
+                            name: getter(&plain(name)),
                             descriptor: format!("(){descriptor}"),
                         }),
                     });
@@ -310,9 +354,12 @@ impl Target for JniTarget {
                 )));
             }
         };
+        // The two parameters the JVM adds are named around the source's: a
+        // source parameter called `env` keeps its name, and the environment
+        // steps aside.
         let mut params = vec![
             NativeParam {
-                name: format_ident!("env"),
+                name: free_name("env", site.function),
                 ty: WireType::abi(syn::parse_quote!(jni::JNIEnv<'_>)),
                 role: ParamRole::Context("jni.env".to_string()),
                 mutable: true,
@@ -320,7 +367,7 @@ impl Target for JniTarget {
             // The native method is an instance method of the harness `object`,
             // so what the JVM passes here is the singleton, not a class.
             NativeParam {
-                name: format_ident!("_this"),
+                name: free_name("_this", site.function),
                 ty: WireType::abi(syn::parse_quote!(jni::objects::JObject<'_>)),
                 role: ParamRole::Unused,
                 mutable: false,
@@ -392,7 +439,10 @@ impl Target for JniTarget {
         match request.item {
             SourceItem::Function(function) => {
                 let JniPolicy::Function {
-                    package, method, ..
+                    package,
+                    method,
+                    native,
+                    ..
                 } = request.policy
                 else {
                     return Err(PlanningError::InvalidInput(format!(
@@ -408,7 +458,7 @@ impl Target for JniTarget {
                             format!("`{}` has no Kotlin spelling yet", param.name),
                         )));
                     };
-                    params.push((param.name.to_string(), kotlin));
+                    params.push((kotlin_ident(&param.name), kotlin));
                 }
                 let ret = match values.output {
                     None => "Unit".to_string(),
@@ -438,6 +488,7 @@ impl Target for JniTarget {
                     payload: Some(JniPayload::Method {
                         package: package.clone(),
                         method: method.clone(),
+                        native: native.clone(),
                         params,
                         ret,
                     }),
@@ -474,7 +525,7 @@ impl Target for JniTarget {
                             format!("property `{name}` has no Kotlin spelling yet"),
                         )));
                     };
-                    properties.push((name.to_string(), kotlin.to_string()));
+                    properties.push((kotlin_ident(name), kotlin.to_string()));
                 }
                 // The class was declared under a fully qualified name; the
                 // writer files it by package.

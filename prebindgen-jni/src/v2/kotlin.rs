@@ -64,6 +64,7 @@ pub(super) fn write(
             Some(JniPayload::Method {
                 package,
                 method,
+                native,
                 params,
                 ret,
             }) => {
@@ -75,7 +76,7 @@ pub(super) fn write(
                 };
                 // The native method, on the harness.
                 natives.push(
-                    signature(KtFun::new(method))
+                    signature(KtFun::new(native))
                         .annotation("JvmSynthetic")
                         .external()
                         .into(),
@@ -87,7 +88,7 @@ pub(super) fn write(
                     false => harness_fqn.as_str(),
                 };
                 let args: Vec<&str> = params.iter().map(|(name, _)| name.as_str()).collect();
-                let call = format!("{harness}.{method}({})", args.join(", "));
+                let call = format!("{harness}.{native}({})", args.join(", "));
                 file(package, &mut files).decls.push(
                     signature(KtFun::new(method))
                         .vis(KtVis::Public)

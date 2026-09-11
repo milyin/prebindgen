@@ -76,8 +76,10 @@ Kotlin cannot fall back on a mangled source name the way C does, because a Kotli
 declaration needs somewhere to live: a package, a class for a type, and for a
 function a place to be declared. That is what `package!` and the class macros
 supply, and a name given there is what the generated declaration and the native
-symbol are both built from. The macros take Rust paths rather than strings, so
-`data_class!(Stamp)` fails to compile if `Stamp` is not in scope.
+symbol are both built from. The macros take a type as written rather than a
+string — `data_class!(Stamp)`, not `data_class!("Stamp")` — and record its
+spelling; whether the source captured a `Stamp` is checked when the requests
+meet the model, and a name it did not capture is an error there.
 
 How a failing call reports is the adapter's convention rather than a per-function
 setting, and it is worth noticing that it is settled here rather than by whoever
@@ -196,10 +198,10 @@ common Rust writer belongs to the engine.
 
 The implementation divides the registry's data between two structures:
 
-- **`Registry`** uses an existing `Flat` model and adds the binding-generation operation, `generate(adapter, requests)`. `adapter` is the language implementation's object implementing the proposed `Target` interface; `requests` contains the choices recorded by the frontend. The registry determines how to construct or read Rust values—through their fields, constructors, accessors or conversion helpers—then combines the required conversions, checks dependencies and assembles binding plans. Source types, fields and signatures remain described by `Flat`.
-- **`GenerationRun`** holds the temporary planning state inside `Registry::generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and report; on failure, the registry returns an error.
+- **The generation operation**, `generate(flat, target, requests, crate)` — a free function, since the engine keeps no state between runs. `target` is the language implementation's object implementing the `Target` interface; `requests` contains the choices recorded by the frontend. The registry determines how to construct or read Rust values—through their fields, constructors, accessors or conversion helpers—then combines the required conversions, checks dependencies and assembles binding plans. Source types, fields and signatures remain described by `Flat`.
+- **The run** (`Run` in `plan.rs`) holds the temporary planning state inside `generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and report; on failure, the registry returns an error.
 
-A binding crate normally builds one configured frontend. The frontend calls `Registry::generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using `GenerationRun` working state.
+A binding crate normally builds one configured frontend. The frontend calls `generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using the run's working state.
 
 ## Binding requests and target policy
 
@@ -285,17 +287,18 @@ Identical type, construction and representation choices can share a converter; t
 
 `UnsupportedRequest` retains request identity, location and reason when a frontend cannot honor a setting. The registry reports and propagates that failure.
 
-`Registry` exposes this generation method (signature only):
+The engine's one entry point (signature only):
 
 ```rust
-pub fn generate<A: Target>(
-    &self,
-    adapter: &A,
-    requests: BindingRequests<A::Policy>,
-) -> Result<Generation<A::Payload>, PlanningError>;
+pub fn generate<T: Target>(
+    flat: Flat,
+    target: &T,
+    requests: BindingRequests<T::Policy>,
+    declaring_crate: impl Into<String>,
+) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`A: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The method borrows the registry and adapter, consumes requests, and builds private working state. The returned `Generation` owns retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); invalid input or invariant failures return `PlanningError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); a declaration naming nothing the source captured, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
@@ -325,7 +328,19 @@ by name and the report groups the skips by the capability they wait for.
 
 The frontend and registry independently use `prebindgen-flat` to inspect source items. The frontend interprets user declarations and validates their source references; the registry discovers required fields or helper arguments and plans their conversions. The registry supplies no separate source-inspection API to the frontend.
 
-Request construction preserves all recorded frontend choices, including defaults, overrides, source mappings, helper signatures and ignore rules. Local helpers and declared Rust conversion operations are registered as typed source descriptions before planning. Unimplemented settings remain visible as unsupported requests. Naming closures may remain owned configuration objects; serialization is unnecessary.
+Request construction must lose no recorded frontend choice. Today it carries the
+choices this increment lowers — names, the class a type is declared as, the
+ignore rules — and turns every other setting into a **refusal** of what it
+applies to: a per-function `expand_param`/`expand_return`/`split_on_param`
+refuses the function, a type-level boundary declaration refuses every value of
+the type and the class itself, a declarator the target does not lower refuses
+by that declarator's name. Emitting the default interface in place of the one a
+setting asked for is not honoring the declaration; the report says which setting
+the element waits on. Local helpers and declared conversion operations are
+refused the same way (`unsupported.fn.binding_local`,
+`unsupported.conversion.not_implemented`) until they are registered as typed
+source descriptions. Naming closures remain owned configuration objects,
+applied where the requests are built; nothing is serialized.
 
 ## Identifying requests, value positions and reusable conversions
 

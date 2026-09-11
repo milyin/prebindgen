@@ -275,6 +275,33 @@ fn the_manifest_is_written_as_json_and_markdown() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// An `unsafe fn` is refused: the wrapper is a safe function and the call it
+/// renders is a plain one, and hiding the contract in an `unsafe` block would
+/// not establish it. Under v1 the wrapper itself is `unsafe`, so the same
+/// declaration builds there.
+#[test]
+fn an_unsafe_source_function_is_a_reported_skip() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub unsafe fn raw_sum(a: i64, b: i64) -> i64 {
+                unimplemented!()
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .function(syn::parse_quote!(raw_sum))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let skip = manifest.elements[0].outcome.skip().expect("skipped");
+    assert_eq!(skip.capability.as_str(), "unsupported.fn.unsafe");
+    assert_eq!(skip.path(), "fn:raw_sum");
+}
+
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole
 /// existing surface, and no manifest.
 #[test]
