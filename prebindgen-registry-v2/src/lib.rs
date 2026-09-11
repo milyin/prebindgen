@@ -12,9 +12,15 @@
 //! and never a reason to run v1 for that element.
 //!
 //! ```text
-//! v2: 0 emitted, 45 skipped, 4 ignored (c target)
-//! SKIP unsupported.function.not_implemented: fn:calculator_new, fn:calculator_apply (+18 more)
+//! v2: 2 emitted, 45 skipped, 4 ignored (c target)
+//! SKIP unsupported.c.opaque_ptr: fn:calculator_new, fn:calculator_apply (+18 more)
 //! ```
+//!
+//! The language frontends drive it: under `PREBINDGEN_PIPELINE=v2` a
+//! `prebindgen-c` or `prebindgen-jni` build turns its declarations into
+//! [`BindingRequests`], hands them to [`generate`] with its own [`Target`], and
+//! writes the [`Generation`] that comes back. The user's `build.rs` is the same
+//! under either engine.
 //!
 //! # What lives here, and what does not
 //!
@@ -46,13 +52,13 @@ pub mod target;
 mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
-pub use decl::{BindingDeclarations, DeclaredElement, ElementId, ElementKind, SourceKind};
+pub use decl::{DeclaredElement, ElementId, ElementKind, SourceKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{
     generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, PolicyId, ValuePlan,
 };
 pub use report::{Counts, Report, SCHEMA_VERSION};
-pub use run::{plan, Generation, PIPELINE};
+pub use run::{Generation, PIPELINE};
 pub use target::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Direction, FailureCategory,
     FailureRoute, Layout, NativeParam, OperandRole, OperandSpec, Operation, OperationType,

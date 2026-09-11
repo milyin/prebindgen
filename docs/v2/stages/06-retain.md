@@ -174,7 +174,7 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend creates BindingRequests internally and calls Registry::generate
+ -> v2 frontend creates BindingRequests internally and calls generate
  -> registry validates/imports source references, policies and requests
  -> for each requested value: select its source relation
  -> registry resolves the selected source operation's children

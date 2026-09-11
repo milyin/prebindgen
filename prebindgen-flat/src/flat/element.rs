@@ -222,6 +222,16 @@ impl Function {
             ret,
         }
     }
+
+    /// Whether calling this function is `unsafe`.
+    ///
+    /// A fact about the contract, not about the shape: an `unsafe fn` takes the
+    /// same parameters and returns the same type as its safe twin, and a
+    /// wrapper that calls it has to be an unsafe context or state why it is
+    /// not.
+    pub fn is_unsafe(&self) -> bool {
+        self.origin.as_syn().sig.unsafety.is_some()
+    }
 }
 
 /// One parameter of a [`Function`].

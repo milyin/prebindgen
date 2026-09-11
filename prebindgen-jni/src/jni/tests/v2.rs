@@ -97,9 +97,119 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let counts = manifest.counts();
-    assert_eq!(counts.emitted, 0, "no Kotlin lowering is implemented yet");
+    assert_eq!(
+        counts.emitted, 0,
+        "nothing here is a data class or a scalar"
+    );
     assert_eq!(counts.skipped, 4);
     assert_eq!(counts.ignored, 1);
+
+    // Each skip says what the value waits on and where the walk stopped: a
+    // borrowed handle is a reference, which no v2 carrier holds yet.
+    let skip = |id: &str| {
+        manifest
+            .elements
+            .iter()
+            .find(|entry| entry.element.id.as_str() == id)
+            .and_then(|entry| entry.outcome.skip())
+            .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
+            .expect("skipped")
+    };
+    assert_eq!(
+        skip("fn:z_thing_describe"),
+        (
+            "unsupported.jni.carrier".to_string(),
+            "fn:z_thing_describe -> param 0".to_string()
+        )
+    );
+}
+
+/// The implemented subset, through the ordinary frontend: a `data_class!` of
+/// scalars and a `fun!` taking it by value. The Rust reads the object's
+/// properties through the environment and exports the harness's symbol; the
+/// Kotlin declares the class, the native method on the harness, and the
+/// function a caller uses — under the package prefix and the function-name
+/// hook this binding set.
+#[test]
+fn a_data_class_and_a_function_over_it_are_emitted() {
+    let loc = myflat_loc();
+    let sources: &[&str] = &[
+        "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+        "pub fn stamp_sum(stamp: Stamp) -> i64 { unimplemented!() }",
+        "pub fn stamp_new(secs: i64) -> Stamp { unimplemented!() }",
+    ];
+    let items = declare_referenced(
+        sources
+            .iter()
+            .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .set_jni_native_init("io.test.jni.Lib.load()")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp).name("Timestamp"))
+                .fun(prebindgen_registry::fun!(stamp_sum))
+                .fun(prebindgen_registry::fun!(stamp_new)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let counts = manifest.counts();
+    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{manifest:?}");
+
+    let dir = unique_test_dir("jnigen_v2_emitted");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains(
+            "pubextern\"system\"fnJava_io_test_jni_JNINative_stampSum(mutenv:jni::JNIEnv<'_>,\
+             _this:jni::objects::JObject<'_>,stamp:jni::objects::JObject<'_>,)->jni::sys::jlong{"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("env.call_method(&stamp,\"getSecs\",\"()J\",&[])"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("myflat::Stamp{secs:v0,nanos:v1,}"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("report_jni_error(&mutenv,error)"),
+        "{rust}"
+    );
+    assert!(
+        !rust.contains("stampNew"),
+        "a record leaving Rust is a skip: {rust}"
+    );
+
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    assert_eq!(written.len(), 1, "{written:?}");
+    let kotlin = std::fs::read_to_string(&written[0]).unwrap();
+    for line in [
+        "package io.test.jni",
+        "public data class Timestamp(val secs: Long, val nanos: Long)",
+        "public fun stampSum(stamp: Timestamp): Long = JNINative.stampSum(stamp)",
+        "internal object JNINative {",
+        "io.test.jni.Lib.load()",
+        "external fun stampSum(stamp: Timestamp): Long",
+    ] {
+        assert!(
+            kotlin.lines().any(|emitted| emitted.trim() == line),
+            "missing `{line}`:\n{kotlin}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Class members are separately selected: the class and each of its methods are
@@ -153,8 +263,9 @@ fn the_ordinary_writers_run_under_v2() {
         "the file names the engine that produced it: {contents}"
     );
 
-    // No Kotlin is generated yet, and the root still exists — a Gradle source
-    // set pointed at it resolves to an empty set, not to a missing directory.
+    // Nothing here is lowered, so no Kotlin is written — and the root still
+    // exists, so a Gradle source set pointed at it resolves to an empty set
+    // rather than a missing directory.
     let kotlin_root = dir.join("kotlin");
     assert!(generated
         .write_kotlin(&kotlin_root)
@@ -231,6 +342,332 @@ fn a_function_backed_constant_resolves_against_the_function() {
     assert_eq!(constant.element.kind, ElementKind::Const);
     // The target gets a `val`; the source must hold a function.
     assert_eq!(constant.element.source, SourceKind::Function);
+}
+
+/// The `Stamp` fixture the edge-case tests below build on: a record of two
+/// `i64`s, a function taking it, and whatever `extra` items a test adds.
+fn stamp_items(extra: &[&str]) -> Vec<(syn::Item, SourceLocation)> {
+    let loc = myflat_loc();
+    let mut sources = vec![
+        "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+        "pub fn stamp_sum(stamp: Stamp) -> i64 { unimplemented!() }",
+    ];
+    sources.extend_from_slice(extra);
+    declare_referenced(
+        sources
+            .iter()
+            .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// The skip recorded for `id`, as `(capability, path)`.
+fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
+    generated
+        .manifest()
+        .expect("v2 produces a manifest")
+        .elements
+        .iter()
+        .find(|entry| entry.element.id.as_str() == id)
+        .and_then(|entry| entry.outcome.skip())
+        .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
+        .unwrap_or_else(|| panic!("{id} is not skipped"))
+}
+
+/// A setting v2 does not lower — a per-function or a type-level boundary
+/// declaration — refuses the function it applies to, rather than being dropped
+/// and the default interface emitted as if it were the one asked for. A
+/// type-level declaration takes effect at boundaries, so the class it names is
+/// still emitted; and it applies whether or not its type has a class at all.
+#[test]
+fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
+    let items = || {
+        stamp_items(&[
+            "pub fn stamp_new(secs: i64) -> Stamp { unimplemented!() }",
+            "pub fn from_parts(a: i32, b: i32) -> i64 { unimplemented!() }",
+            "pub fn take_value(value: i64) -> i64 { unimplemented!() }",
+            "pub fn give_value() -> i64 { unimplemented!() }",
+        ])
+    };
+    // Per function.
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items())
+        .package(
+            crate::package!().class(crate::data_class!(Stamp)).fun(
+                prebindgen_registry::fun!(stamp_sum).expand_param(
+                    "stamp",
+                    prebindgen_registry::expand_param!(Stamp)
+                        .variant(prebindgen_registry::fun!(stamp_new)),
+                ),
+            ),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert_eq!(
+        skip_of(&generated, "fn:stamp_sum").0,
+        "unsupported.jni.expand_param"
+    );
+    assert_eq!(
+        generated.manifest().unwrap().counts().emitted,
+        1,
+        "the class alone"
+    );
+
+    // For a declared class: the function taking it is refused, the class stays.
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items())
+        .expand(
+            prebindgen_registry::expand_param!(Stamp).variant(prebindgen_registry::fun!(stamp_new)),
+        )
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .fun(prebindgen_registry::fun!(stamp_sum)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert_eq!(
+        skip_of(&generated, "fn:stamp_sum"),
+        (
+            "unsupported.jni.expand_param".to_string(),
+            "fn:stamp_sum".to_string()
+        )
+    );
+    assert_eq!(
+        generated.manifest().unwrap().counts().emitted,
+        1,
+        "the class alone"
+    );
+
+    // For a scalar with no class: a parameter of that type, and a result of it.
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items())
+        .expand(
+            prebindgen_registry::expand_param!(i64).variant(prebindgen_registry::fun!(from_parts)),
+        )
+        .expand(
+            prebindgen_registry::expand_return!(i64).field(prebindgen_registry::fun!(take_value)),
+        )
+        .package(
+            crate::package!()
+                .fun(prebindgen_registry::fun!(take_value))
+                .fun(prebindgen_registry::fun!(give_value)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert_eq!(
+        skip_of(&generated, "fn:take_value").0,
+        "unsupported.jni.expand_param"
+    );
+    assert_eq!(
+        skip_of(&generated, "fn:give_value").0,
+        "unsupported.jni.expand_return"
+    );
+    assert_eq!(generated.manifest().unwrap().counts().emitted, 0);
+}
+
+/// Two packages may each export a function called `value`; the harness has one
+/// namespace, so its native methods are named from the Rust identifier — as
+/// v1 names them — and the public function's `.name()` does not reach it.
+#[test]
+fn a_public_name_does_not_name_the_native_method() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("example")
+        .items(stamp_items(&[
+            "pub fn first_value() -> i64 { unimplemented!() }",
+            "pub fn second_value() -> i64 { unimplemented!() }",
+        ]))
+        .package(crate::package!("a").fun(prebindgen_registry::fun!(first_value).name("value")))
+        .package(crate::package!("b").fun(prebindgen_registry::fun!(second_value).name("value")))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert_eq!(generated.manifest().unwrap().counts().emitted, 2);
+
+    let dir = unique_test_dir("jnigen_v2_two_values");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = std::fs::read_to_string(generated.write_rust(dir.join("b.rs")).unwrap()).unwrap();
+    assert!(
+        rust.contains("fn Java_example_JNINative_firstValue("),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("fn Java_example_JNINative_secondValue("),
+        "{rust}"
+    );
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("two packages, no clash");
+    let kotlin: String = written
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+    assert!(
+        kotlin.contains("public fun value(): Long = example.JNINative.firstValue()"),
+        "{kotlin}"
+    );
+    assert!(
+        kotlin.contains("public fun value(): Long = example.JNINative.secondValue()"),
+        "{kotlin}"
+    );
+    assert!(
+        kotlin.contains("external fun firstValue(): Long"),
+        "{kotlin}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A source parameter may be called `env` or `_this`; the two parameters the
+/// JVM adds step aside rather than shadowing it.
+#[test]
+fn the_jvm_parameters_are_named_around_the_source_ones() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("example")
+        .items(stamp_items(&[
+            "pub fn stamp_env(env: Stamp, _this: i64) -> i64 { unimplemented!() }",
+        ]))
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .fun(prebindgen_registry::fun!(stamp_env)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let dir = unique_test_dir("jnigen_v2_env_param");
+    let rust = std::fs::read_to_string(generated.write_rust(dir.join("b.rs")).unwrap()).unwrap();
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains(
+            "(mutenv_:jni::JNIEnv<'_>,_this_:jni::objects::JObject<'_>,env:jni::objects::JObject<'_>,\
+             _this:jni::sys::jlong,)"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("env_.call_method(&env,\"getSecs\""),
+        "{rust}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Kotlin's JVM accessor rule: a property starting with `is` followed by
+/// anything but a lowercase letter keeps its name as the getter, whatever its
+/// type. Reading `getIsReady` on such a class is a `NoSuchMethodError` at run
+/// time, which no compiler catches.
+#[test]
+fn an_is_prefixed_property_is_read_through_its_own_name() {
+    let loc = myflat_loc();
+    let items = declare_referenced(vec![
+        (
+            syn::parse_str(
+                "pub struct Flags { pub isReady: i64, pub is_set: i64, pub island: i64, \
+                 pub is: i64, pub isé: i64, pub aé: i64 }",
+            )
+            .unwrap(),
+            loc.clone(),
+        ),
+        (
+            syn::parse_str("pub fn flags_sum(flags: Flags) -> i64 { unimplemented!() }").unwrap(),
+            loc,
+        ),
+    ]);
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("example")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Flags))
+                .fun(prebindgen_registry::fun!(flags_sum)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let dir = unique_test_dir("jnigen_v2_is_getter");
+    let rust = std::fs::read_to_string(generated.write_rust(dir.join("b.rs")).unwrap()).unwrap();
+    // What `kotlinc` names each accessor, checked with `javap`: a bare `is`
+    // gets the prefix, a non-ASCII suffix does not, and a non-ASCII name is
+    // not an `is` at all.
+    for getter in [
+        "\"isReady\"",
+        "\"is_set\"",
+        "\"getIsland\"",
+        "\"getIs\"",
+        "\"isé\"",
+        "\"getAé\"",
+    ] {
+        assert!(rust.contains(getter), "missing {getter}:\n{rust}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A Rust identifier that is a Kotlin keyword, or a raw identifier, is spelled
+/// the way Kotlin can read it — in the declaration, in the delegating call and
+/// in the getter name alike — rather than failing in the Kotlin writer after
+/// planning reported the declaration emitted.
+#[test]
+fn keyword_and_raw_identifiers_are_spelled_for_kotlin() {
+    let loc = myflat_loc();
+    let items = declare_referenced(vec![
+        (
+            syn::parse_str("pub struct Kind { pub r#fun: i64 }").unwrap(),
+            loc.clone(),
+        ),
+        (
+            syn::parse_str("pub fn kind_of(when: Kind) -> i64 { unimplemented!() }").unwrap(),
+            loc,
+        ),
+    ]);
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("example")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Kind))
+                .fun(prebindgen_registry::fun!(kind_of)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let dir = unique_test_dir("jnigen_v2_keywords");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = std::fs::read_to_string(generated.write_rust(dir.join("b.rs")).unwrap()).unwrap();
+    assert!(rust.contains("\"getFun\""), "{rust}");
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("valid Kotlin");
+    let kotlin = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(
+        kotlin.contains("data class Kind(val `fun`: Long)"),
+        "{kotlin}"
+    );
+    assert!(
+        kotlin.contains("fun kindOf(`when`: Kind): Long = JNINative.kindOf(`when`)"),
+        "{kotlin}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An `unsafe fn` is refused: the wrapper is a safe function and the call it
+/// renders is a plain one, and hiding the contract in an `unsafe` block would
+/// not establish it.
+#[test]
+fn an_unsafe_source_function_is_a_reported_skip() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("example")
+        .items(stamp_items(&[
+            "pub unsafe fn stamp_raw(stamp: Stamp) -> i64 { unimplemented!() }",
+        ]))
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .fun(prebindgen_registry::fun!(stamp_raw)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert_eq!(
+        skip_of(&generated, "fn:stamp_raw").0,
+        "unsupported.fn.unsafe"
+    );
 }
 
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole

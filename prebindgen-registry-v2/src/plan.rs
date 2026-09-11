@@ -711,6 +711,22 @@ pub fn generate<T: Target>(
         let element = &output.element;
         let policy = requests.get(output.policy);
         let planned = match element.kind {
+            // A function the binding defines itself has no captured item to
+            // plan from: its signature is the binding's, and reading one is a
+            // capability this engine does not have yet.
+            ElementKind::Function if element.source == crate::decl::SourceKind::BindingLocal => {
+                Err(Refusal::at(
+                    Unsupported::new(
+                        "unsupported.fn.binding_local",
+                        format!(
+                            "`{}` is defined by the binding, not captured from the source; v2 \
+                             plans captured functions only",
+                            element.rust_origin
+                        ),
+                    ),
+                    &crate::target::Position::root(element.id.clone()),
+                ))
+            }
             ElementKind::Function => {
                 plan_function(&mut run, element, policy).map_err(EngineError::Planning)?
             }
@@ -894,6 +910,25 @@ fn plan_function<T: Target>(
         .function(element.rust_origin.as_str())
         .expect("declarations are checked against the model before planning");
     let root = crate::target::Position::root(element.id.clone());
+
+    // The wrapper is a safe function, and the writer renders a plain call.
+    // Wrapping an `unsafe fn` would need the wrapper to state the caller's
+    // obligations, which nothing here can do yet; hiding them in an `unsafe`
+    // block would make a safe public function out of a contract it does not
+    // uphold.
+    if function.is_unsafe() {
+        return Ok(Err(Refusal::at(
+            Unsupported::new(
+                "unsupported.fn.unsafe",
+                format!(
+                    "`{}` is an `unsafe fn`, and v2 has no way to carry its safety contract \
+                     through a wrapper yet",
+                    function.name
+                ),
+            ),
+            &root,
+        )));
+    }
 
     let mut inputs = Vec::new();
     for (index, param) in function.params.iter().enumerate() {

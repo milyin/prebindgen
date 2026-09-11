@@ -11,8 +11,9 @@ Owner: the JNI frontend
 // build.rs
 JniGen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
+    .set_package_prefix("example")
     .package(
-        package!("example")
+        package!()
             .class(data_class!(Stamp))   // see the record path
             .fun(fun!(stamp_sum)),
     )
@@ -23,9 +24,10 @@ JniGen::builder()
 
 ```text
 policy (JNI function):
-    kotlin:     example.Bindings.sum             // the object holding the declaration
-    symbol:     "Java_example_Bindings_sum"      // derived from that placement
-    convention: extern "system", with (JNIEnv, JClass) supplied by the JVM
+    kotlin:     example.stampSum                    // the function a caller uses
+    native:     example.JNINative.stampSum          // the harness method it delegates to
+    symbol:     "Java_example_JNINative_stampSum"   // derived from that placement
+    convention: extern "system", with (JNIEnv, receiver) supplied by the JVM
     input:      Stamp as one object, properties read through JNI
     output:     jlong native return
     failures:   reported to the JVM, then a default value returned
@@ -34,8 +36,9 @@ policy (JNI function):
 ## Checks
 
 - The Kotlin name and the symbol are one choice: `.name("…")` on the function
-  declaration moves both, since the symbol is built from the package, the class
-  holding the declaration and the method name.
+  declaration moves both, since the symbol is built from the package prefix, the
+  harness object and the method name. The default name is the Rust name in
+  camel case, through the binding's function-name hook if it set one.
 - Where a failed property read goes is the adapter's convention, which is why
   [the boundary][fn_boundary_jni] has a route to plan at all.
 - A Kotlin declaration needs a package, so there is no source name to fall back

@@ -99,13 +99,14 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let counts = manifest.counts();
-    assert_eq!(counts.emitted, 0, "no C lowering is implemented yet");
+    assert_eq!(counts.emitted, 0, "nothing here is a data struct or scalar");
     assert_eq!(counts.skipped, 4);
     assert_eq!(counts.ignored, 1, "an ignore is a decision, not a gap");
 }
 
 /// An unimplemented capability is a skip with a code and a path — never a
-/// silent omission, and never an error.
+/// silent omission, and never an error. The code names the declarator the
+/// value was declared with, and the path says where the walk stopped.
 #[test]
 fn a_missing_capability_is_reported_per_element() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
@@ -116,19 +117,99 @@ fn a_missing_capability_is_reported_per_element() {
         .iter()
         .find(|entry| entry.element.id.as_str() == "fn:calculator_new")
         .expect("the declared function is in the manifest");
-    let skip = function.outcome.skip().expect("nothing is emitted yet");
+    let skip = function
+        .outcome
+        .skip()
+        .expect("an opaque return is not lowered");
     assert_eq!(
         skip.capability.as_str(),
-        "unsupported.fn.not_implemented",
-        "a stable code, one per kind, so the report can be diffed"
+        "unsupported.c.opaque_ptr",
+        "a stable code, one per declarator, so the report can be diffed"
     );
-    assert_eq!(skip.path(), "calculator_new");
+    assert_eq!(skip.path(), "fn:calculator_new -> return");
 
     // Grouped by cause, so one missing capability is stated once with the list
-    // of roots it took down.
+    // of roots it took down: the handle, and the function returning it.
     let groups = manifest.skips_by_capability();
-    assert_eq!(groups["unsupported.type.not_implemented"].len(), 2);
-    assert_eq!(groups["unsupported.fn.not_implemented"].len(), 1);
+    assert_eq!(groups["unsupported.c.opaque_ptr"].len(), 2);
+    // An enum has no fields to walk, so the registry refuses it before the
+    // target is asked; the entry's representation still says `enum_type`.
+    assert_eq!(groups["unsupported.type.not_a_record"].len(), 1);
+    assert_eq!(groups["unsupported.callback.not_implemented"].len(), 1);
+}
+
+/// The implemented subset, through the ordinary frontend: a by-value data
+/// struct of scalars and a function taking it. Both are emitted, under the
+/// manglers' names, and the wrapper reads the struct's members.
+#[test]
+fn a_data_struct_and_a_function_over_it_are_emitted() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub struct Stamp {
+                    pub secs: i64,
+                    pub nanos: i64,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn stamp_sum(stamp: Stamp) -> i64 {
+                    unimplemented!()
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn stamp_new(secs: i64) -> Stamp {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_function(|name| format!("z_{name}"))
+        .data_struct(syn::parse_quote!(Stamp))
+        .function(syn::parse_quote!(stamp_sum))
+        .function(syn::parse_quote!(stamp_new))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let counts = manifest.counts();
+    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{manifest:?}");
+
+    let dir = unique_test_dir("cbindgen_v2_emitted");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let compact: String = rust.split_whitespace().collect();
+    assert!(
+        compact.contains(
+            "#[repr(C)]#[allow(non_camel_case_types)]pubstructstamp_t{pubsecs:i64,pubnanos:i64,}"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("pubextern\"C\"fnz_stamp_sum(stamp:stamp_t)->i64{"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("fixture::Stamp{secs:v0,nanos:v1,}"),
+        "{rust}"
+    );
+    assert!(compact.contains("fixture::stamp_sum(v2)"), "{rust}");
+    // A record leaving Rust needs a construction the target does not supply
+    // yet, so the function returning one is a reported skip, not a wrapper.
+    assert!(!rust.contains("z_stamp_new"), "{rust}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// An ignore keeps its meaning under v2 and is counted apart from the gaps.
@@ -188,10 +269,37 @@ fn the_manifest_is_written_as_json_and_markdown() {
     let json = std::fs::read_to_string(&written[0]).unwrap();
     assert!(json.contains("\"schema_version\": 1"), "{json}");
     assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
-    assert!(json.contains("unsupported.fn.not_implemented"), "{json}");
+    assert!(json.contains("unsupported.c.opaque_ptr"), "{json}");
     let markdown = std::fs::read_to_string(&written[1]).unwrap();
     assert!(markdown.contains("## Skipped, by cause"), "{markdown}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An `unsafe fn` is refused: the wrapper is a safe function and the call it
+/// renders is a plain one, and hiding the contract in an `unsafe` block would
+/// not establish it. Under v1 the wrapper itself is `unsafe`, so the same
+/// declaration builds there.
+#[test]
+fn an_unsafe_source_function_is_a_reported_skip() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub unsafe fn raw_sum(a: i64, b: i64) -> i64 {
+                unimplemented!()
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .function(syn::parse_quote!(raw_sum))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let skip = manifest.elements[0].outcome.skip().expect("skipped");
+    assert_eq!(skip.capability.as_str(), "unsupported.fn.unsafe");
+    assert_eq!(skip.path(), "fn:raw_sum");
 }
 
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole

@@ -11,7 +11,7 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
 node(output) : produces jlong, failures {}
 
-policy (JNI function): example.Bindings.sum, extern "system",
+policy (JNI function): example.JNINative.stampSum, extern "system",
                        input one object, output jlong,
                        Runtime -> report to the JVM, then return a default
 ```
@@ -20,9 +20,9 @@ policy (JNI function): example.Bindings.sum, extern "system",
 
 ```text
 BoundarySpec {
-    abi:      extern "system", symbol "Java_example_Bindings_sum",
-              synthetic operands: JNIEnv (exclusive), JClass (unused),
-    inputs:   [ InputPlacement { native arg 0 (JObject) -> node(input) } ],
+    abi:      extern "system", symbol "Java_example_JNINative_stampSum",
+              synthetic operands: JNIEnv (exclusive), receiver JObject (unused),
+    inputs:   [ InputPlacement { native arg `stamp` (JObject) -> node(input) } ],
     output:   OutputPlacement::Return(node(output) -> jlong),
     failures: { Runtime: report through report_jni_error, then return 0;
                          if reporting fails -> abort },
@@ -33,17 +33,17 @@ Fixing the signature that [emission][fn_emit_jni] renders:
 
 ```rust
 #[no_mangle]
-pub extern "system" fn Java_example_Bindings_sum(
-    mut env: JNIEnv<'_>,
-    _class: JClass<'_>,
-    arg0: JObject<'_>,
-) -> jlong
+pub extern "system" fn Java_example_JNINative_stampSum(
+    mut env: jni::JNIEnv<'_>,
+    _this: jni::objects::JObject<'_>,
+    stamp: jni::objects::JObject<'_>,
+) -> jni::sys::jlong
 ```
 
 The reporting operation is a generated artifact this adapter contributes:
 
 ```rust
-pub fn report_jni_error(env: &mut JNIEnv<'_>, error: jni::errors::Error)
+pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
     -> jni::errors::Result<()>
 {
     if env.exception_check()? {

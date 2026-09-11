@@ -338,18 +338,18 @@ PrimitiveSpec {
 }
 ```
 
-Applied to an environment the registry has named `env` and an object it has named
-`arg0`, that one description renders exactly this much Rust:
+Applied to an environment the boundary has named `env` and an object it has
+named `stamp`, that one description renders exactly this much Rust:
 
 ```rust
-env.call_method(&arg0, "getSecs", "()J", &[])
+env.call_method(&stamp, "getSecs", "()J", &[])
     .and_then(|value| value.j())
 ```
 
 An expression of type `Result<jlong, jni::errors::Error>`, and nothing more: no
 `let`, no `match` on that result, no return from the enclosing function. Those
 belong to the wrapper the registry composes. The C adapter's answer for the same
-field is `arg0.secs`, infallible, with no environment operand — a different
+field is `stamp.secs`, infallible, with no environment operand — a different
 `PrimitiveSpec` with the same purpose, which is why the composition around it can
 be identical.
 

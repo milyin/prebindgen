@@ -28,23 +28,26 @@ For this example, the two targets end up with these signatures:
 
 ```rust
 #[no_mangle]
-pub extern "C" fn stamp_sum(arg0: Stamp) -> i64
+pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 
 #[no_mangle]
-pub extern "system" fn Java_example_Bindings_sum(
-    mut env: JNIEnv<'_>,
-    _class: JClass<'_>,
-    arg0: JObject<'_>,
-) -> jlong
+pub extern "system" fn Java_example_JNINative_stampSum(
+    mut env: jni::JNIEnv<'_>,
+    _this: jni::objects::JObject<'_>,
+    stamp: jni::objects::JObject<'_>,
+) -> jni::sys::jlong
 ```
 
 Both wrap the same Rust function through the same input conversion, yet neither
 signature can be derived from the other. The C one is what a C caller can write;
 the JNI one is what the JVM demands — a symbol built from the Kotlin package, the
-class holding the declaration and the method name, plus two parameters, the
-environment and the calling class, that the JVM passes to every native method and
-that no source parameter corresponds to. The target supplies those conventions;
-the registry places the conversions inside them.
+harness object holding the native declaration and the method name, plus two
+parameters, the environment and the receiver — the harness singleton, since the
+native method is an instance method of a Kotlin `object` — that the JVM passes
+to every native method and that no source parameter corresponds to. The target supplies
+those conventions; the registry places the conversions inside them. The source
+parameter keeps its name in both, because the boundary said so — a parameter is
+the one name the writer does not allocate.
 
 Three things are decided here. **Where inputs come from**: which native argument
 feeds which input conversion, including arguments the target added for its own

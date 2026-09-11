@@ -9,8 +9,8 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 
 ```text
 FunctionPlan(exported stamp_sum) frozen, with
-    boundary: extern "system", symbol "Java_example_Bindings_sum",
-              (JNIEnv, JClass, JObject) -> jlong,
+    boundary: extern "system", symbol "Java_example_JNINative_stampSum",
+              (JNIEnv, receiver JObject, JObject) -> jlong,
               Runtime -> report_jni_error then return 0, reporting failure -> abort
     node(input):  object carrier, property getters "getSecs" / "getNanos"
     node(output): Scalar(jlong), identity
@@ -18,30 +18,44 @@ FunctionPlan(exported stamp_sum) frozen, with
 
 ## Result
 
-The Kotlin declaration, beside [the data class][struct_emit_jni]:
+The Kotlin declarations, beside [the data class][struct_emit_jni]: the function
+a caller uses, and the native method it delegates to on the harness object
+every native call routes through — `JNINative`, the same object v1's bindings
+use.
 
 ```kotlin
 package example
 
-object Bindings {
-    @JvmStatic
-    external fun sum(stamp: Stamp): Long
+public fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)
+
+internal object JNINative {
+    @JvmSynthetic
+    external fun stampSum(stamp: Stamp): Long
 }
 ```
 
-The native wrapper it calls (`kotlin.rs`):
+The native wrapper the JVM binds that method to (`kotlin.rs`), after the
+reporting helper the adapter contributes once per file:
 
 ```rust
-use crate::{jni_support::report_jni_error, source};
-use jni::{objects::{JClass, JObject}, sys::jlong, JNIEnv};
+pub fn report_jni_error(
+    env: &mut jni::JNIEnv<'_>,
+    error: jni::errors::Error,
+) -> jni::errors::Result<()> {
+    if env.exception_check()? {
+        Ok(())
+    } else {
+        env.throw_new("java/lang/RuntimeException", error.to_string())
+    }
+}
 
 #[no_mangle]
-pub extern "system" fn Java_example_Bindings_sum(
-    mut env: JNIEnv<'_>,
-    _class: JClass<'_>,
-    arg0: JObject<'_>,
-) -> jlong {
-    let v0 = match env.call_method(&arg0, "getSecs", "()J", &[])
+pub extern "system" fn Java_example_JNINative_stampSum(
+    mut env: jni::JNIEnv<'_>,
+    _this: jni::objects::JObject<'_>,
+    stamp: jni::objects::JObject<'_>,
+) -> jni::sys::jlong {
+    let v0 = match env.call_method(&stamp, "getSecs", "()J", &[])
         .and_then(|value| value.j())
     {
         Ok(value) => value,
@@ -52,7 +66,7 @@ pub extern "system" fn Java_example_Bindings_sum(
             return 0;
         }
     };
-    let v1 = match env.call_method(&arg0, "getNanos", "()J", &[])
+    let v1 = match env.call_method(&stamp, "getNanos", "()J", &[])
         .and_then(|value| value.j())
     {
         Ok(value) => value,
@@ -69,13 +83,18 @@ pub extern "system" fn Java_example_Bindings_sum(
 }
 ```
 
-`Bindings.sum(Stamp(12, 34))` returns `46L` once the native library is loaded,
-which the harness does.
+`stampSum(Stamp(12, 34))` returns `46L` once the native library is loaded —
+which is what the harness's `init` block does when the binding's
+`set_jni_native_init(..)` names a loader; this binding sets none.
 
 ## Checks
 
-- The symbol is built from the package, the object holding the declaration and
-  the method name, so renaming the Kotlin method moves both.
+- The symbol is built from the package, the harness object and the method name
+  — `Java_example_JNINative_stampSum` — so renaming the Kotlin function moves
+  both, and the package prefix moves all three.
+- The `jni` crate's types are spelled in full, because the wrapper lands in a
+  file the binding crate `include!`s and must not depend on that crate's
+  imports.
 - If `getSecs` fails, `getNanos` and `stamp_sum` do not run; if `getNanos` fails,
   the source `Stamp` is never constructed. Either way the JVM sees an exception
   rather than a returned zero.

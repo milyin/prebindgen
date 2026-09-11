@@ -18,14 +18,6 @@ pub mod source;
 include!(env!("V2CHECK_C"));
 include!(env!("V2CHECK_JNI"));
 
-// The adapters `build.rs` generated with, compiled again for the tests that run
-// the engine themselves. One copy, two compilations — and this one exercises
-// the JNI half, while `build.rs` uses both.
-#[cfg(test)]
-#[path = "adapters.rs"]
-#[allow(dead_code)]
-mod adapters;
-
 #[cfg(test)]
 mod tests {
     /// The generated C entry point, called the way a C program calls it.
@@ -86,7 +78,7 @@ mod tests {
     /// specification's emit pages show, in that order and no more than once.
     ///
     /// Order and multiplicity both matter: a writer that emitted the class
-    /// twice, or a second `object Bindings` for the second method, would
+    /// twice, or a second `object JNINative` for the second method, would
     /// satisfy a set of lines while producing Kotlin that does not compile.
     #[test]
     fn the_generated_kotlin_is_what_the_specification_shows() {
@@ -116,8 +108,8 @@ mod tests {
         }
         for once in [
             "package example",
-            "data class Stamp(val secs: Long, val nanos: Long)",
-            "object Bindings {",
+            "public data class Stamp(val secs: Long, val nanos: Long)",
+            "internal object JNINative {",
         ] {
             assert_eq!(
                 emitted.iter().filter(|line| **line == once).count(),
@@ -125,10 +117,13 @@ mod tests {
                 "`{once}` must appear exactly once:\n{kotlin}"
             );
         }
-        // Both methods live in that one object.
+        // Every native method lives in that one object, and each has the
+        // function a caller uses.
         for method in [
-            "external fun sum(stamp: Stamp): Long",
-            "external fun delta(stamp: Stamp): Long",
+            "external fun stampSum(stamp: Stamp): Long",
+            "external fun stampDelta(stamp: Stamp): Long",
+            "public fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)",
+            "public fun stampDelta(stamp: Stamp): Long = JNINative.stampDelta(stamp)",
         ] {
             assert_eq!(
                 emitted.iter().filter(|line| **line == method).count(),
@@ -206,12 +201,10 @@ mod tests {
     /// file does not declare.
     #[test]
     fn renaming_a_kotlin_class_moves_every_mention_of_it() {
-        use prebindgen_registry_v2::{generate, BindingRequests, DeclaredElement, ElementKind};
-
-        use crate::adapters::{JniClasses, JniPolicy, JniTarget};
+        use prebindgen_jni::pipeline::Pipeline;
 
         let location = prebindgen::SourceLocation {
-            crate_name: Some("v2check".to_string()),
+            crate_name: Some("source".to_string()),
             ..Default::default()
         };
         let text = std::fs::read_to_string(
@@ -226,48 +219,28 @@ mod tests {
             .into_iter()
             .map(|item| (item, location.clone()))
             .collect();
-        let model = prebindgen_flat::flat::Flat::builder()
-            .items(items)
-            .build()
-            .expect("the fixture builds a model");
 
-        let classes = JniClasses::in_package("example").with("Stamp", "Timestamp");
-        let mut requests =
-            BindingRequests::new("jni", syn::parse_quote!(source), JniPolicy::Scalar);
-        let stamp = requests.policy(JniPolicy::DataClass {
-            rust: "Stamp".to_string(),
-        });
-        requests.type_policies.insert("Stamp".to_string(), stamp);
-        let sum = requests.policy(JniPolicy::Function {
-            placement: "example.Bindings.sum".to_string(),
-        });
-        requests.output(
-            DeclaredElement::new(
-                ElementKind::Type,
-                "Stamp",
-                "example.Timestamp",
-                "data_class",
-            ),
-            stamp,
-        );
-        requests.output(
-            DeclaredElement::new(
-                ElementKind::Function,
-                "stamp_sum",
-                "example.Bindings.sum",
-                "function",
-            ),
-            sum,
-        );
-        let generation = generate(model, &JniTarget::new(classes), requests, "v2check")
+        let generation = prebindgen_jni::JniGen::builder()
+            .items(items)
+            .set_package_prefix("example")
+            .package(
+                prebindgen_jni::package!()
+                    .class(prebindgen_jni::data_class!(Stamp).name("Timestamp"))
+                    .fun(prebindgen_registry::fun!(stamp_sum)),
+            )
+            .build_with(Pipeline::V2)
             .expect("the renamed binding plans");
-        let kotlin = crate::adapters::write_kotlin(&generation);
+        let dir = std::env::temp_dir().join(format!("v2check-rename-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let written = generation.write_kotlin(&dir).expect("write the Kotlin");
+        let kotlin = std::fs::read_to_string(&written[0]).expect("the Kotlin file");
+        let _ = std::fs::remove_dir_all(&dir);
         assert!(
             kotlin.contains("data class Timestamp(val secs: Long, val nanos: Long)"),
             "{kotlin}"
         );
         assert!(
-            kotlin.contains("external fun sum(stamp: Timestamp): Long"),
+            kotlin.contains("fun stampSum(stamp: Timestamp): Long"),
             "the signature must name the class, not the Rust type:\n{kotlin}"
         );
     }

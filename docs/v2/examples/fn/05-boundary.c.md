@@ -30,7 +30,7 @@ Fixing the signature that [emission][fn_emit_c] renders:
 
 ```rust
 #[no_mangle]
-pub extern "C" fn stamp_sum(arg0: Stamp) -> i64
+pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 ```
 
 ## Checks

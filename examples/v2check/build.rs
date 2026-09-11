@@ -1,269 +1,107 @@
-//! Runs the v2 engine over `src/source.rs` for both targets, so **rustc** gets
-//! to judge what it emitted.
+//! Runs the v2 engine over `src/source.rs` through both real frontends, so
+//! **rustc** gets to judge what it emitted.
 //!
 //! This is `docs/v2`'s worked example, executed: the same two declarations, the
-//! same two targets, the same expected wrappers. The engine plans; the adapters
-//! in `src/adapters.rs` answer the local questions; the common Rust writer
-//! renders. What lands in `OUT_DIR` is compiled by `src/lib.rs`, and the tests
+//! same two targets, the same expected wrappers. `prebindgen-c` and
+//! `prebindgen-jni` take the declarations exactly as a consumer's build script
+//! writes them, hand them to `prebindgen-registry-v2`, and write what it
+//! planned. What lands in `OUT_DIR` is compiled by `src/lib.rs`, and the tests
 //! there check it against the specification pages themselves.
 //!
 //! Like `emitcheck`, this crate has no captured source crate: it parses one
-//! file and hands its items to `Flat::builder().items(..)`, which is the entry
+//! file and hands its items to the frontends' `.items(..)`, which is the entry
 //! point the unit-test fixtures use.
-
-// One copy of the adapters, compiled both here and into the library.
-#[path = "src/adapters.rs"]
-mod adapters;
 
 use std::path::{Path, PathBuf};
 
-use adapters::{CPolicy, CTarget, JniClasses, JniPolicy, JniTarget};
-use prebindgen_flat::flat::Flat;
-use prebindgen_registry_v2::{generate, BindingRequests, DeclaredElement, ElementKind, Generation};
+use prebindgen_c::pipeline::Pipeline;
 
-/// The crate name stamped on every item.
-const SOURCE_CRATE: &str = "v2check";
+/// The crate name stamped on every item, and so the qualifier the generated
+/// code calls through (`source::stamp_sum(..)`). `src/lib.rs` mounts
+/// `src/source.rs` under this name to match — as `emitcheck` does with
+/// `myflat`.
+const SOURCE_CRATE: &str = "source";
 
 fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets the manifest dir");
     let source = PathBuf::from(&manifest_dir).join("src").join("source.rs");
     println!("cargo:rerun-if-changed={}", source.display());
-    println!("cargo:rerun-if-changed=src/adapters.rs");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
 
-    let c = generate(model(&source), &CTarget, c_requests(), SOURCE_CRATE)
+    // The C binding: `Stamp` as a by-value aggregate, the functions as entry
+    // points. Both keep the source name, because nothing renamed them.
+    //
+    // `Pair` has positional fields, `Marker` none at all, and `Reading` a scalar
+    // neither adapter carries: all three are declared so that a target refusing
+    // them is visible in the report rather than only in a comment.
+    let c = prebindgen_c::Cbindgen::builder()
+        .items(items(&source))
+        .source_module(syn::parse_quote!(source))
+        // The specification keeps the source name; the frontend's default is
+        // the C-style `snake_case`, and a real binding usually adds `_t`.
+        .mangle_rust_type(|name| name.to_string())
+        .declare(
+            prebindgen_c::decls!()
+                .data_type(prebindgen_c::data_type!(Stamp))
+                .data_type(prebindgen_c::data_type!(Pair))
+                .data_type(prebindgen_c::data_type!(Marker))
+                .fun(prebindgen_c::fun!(stamp_sum))
+                .fun(prebindgen_c::fun!(stamp_delta))
+                .fun(prebindgen_c::fun!(stamp_show))
+                .fun(prebindgen_c::fun!(marker_value)),
+        )
+        .build_with(Pipeline::V2)
         .expect("the C binding plans");
-    // One table names the Kotlin classes; the declarations and the signatures
-    // that mention them both read it.
-    let classes = JniClasses::in_package("example")
-        .with("Stamp", "Stamp")
-        .with("Reading", "Reading")
-        .with("Marker", "Marker");
-    let jni = generate(
-        model(&source),
-        &JniTarget::new(classes.clone()),
-        jni_requests(&classes),
-        SOURCE_CRATE,
-    )
-    .expect("the JNI binding plans");
+
+    // The JNI binding: `Stamp` as an `example.Stamp` object whose properties are
+    // read, the functions as `example.stampSum` and friends over the harness.
+    let jni = prebindgen_jni::JniGen::builder()
+        .items(items(&source))
+        .set_package_prefix("example")
+        .package(
+            prebindgen_jni::package!()
+                .class(prebindgen_jni::data_class!(Stamp))
+                .class(prebindgen_jni::data_class!(Reading))
+                .class(prebindgen_jni::data_class!(Marker))
+                .fun(prebindgen_registry::fun!(stamp_sum))
+                .fun(prebindgen_registry::fun!(stamp_delta))
+                .fun(prebindgen_registry::fun!(stamp_show))
+                .fun(prebindgen_registry::fun!(marker_value)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("the JNI binding plans");
 
     let c_path = c.write_rust(out_dir.join("c.rs")).expect("write c.rs");
     let jni_path = jni
         .write_rust(out_dir.join("kotlin.rs"))
         .expect("write kotlin.rs");
-    let kotlin_path = out_dir.join("Bindings.kt");
-    std::fs::write(&kotlin_path, adapters::write_kotlin(&jni)).expect("write Bindings.kt");
+    let kotlin_root = out_dir.join("kotlin");
+    let written = jni.write_kotlin(&kotlin_root).expect("write the Kotlin");
+    let kotlin_path = match written.as_slice() {
+        [one] => one.clone(),
+        other => panic!("one package, one Kotlin file; written: {other:?}"),
+    };
 
-    report(&c, &out_dir, "c");
-    report(&jni, &out_dir, "jni");
+    // The report is published beside the code, as it is for a real binding.
+    c.write_manifest(&out_dir).expect("write the C report");
+    jni.write_manifest(&out_dir).expect("write the JNI report");
 
     println!("cargo:rustc-env=V2CHECK_C={}", c_path.display());
     println!("cargo:rustc-env=V2CHECK_JNI={}", jni_path.display());
     println!("cargo:rustc-env=V2CHECK_KOTLIN={}", kotlin_path.display());
 }
 
-/// The source model, built from the one file this crate compiles.
-fn model(source: &Path) -> Flat {
+/// The fixture's items, as a captured source crate would hand them over.
+fn items(source: &Path) -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     let location = prebindgen::SourceLocation {
         crate_name: Some(SOURCE_CRATE.to_string()),
         ..Default::default()
     };
     let text = std::fs::read_to_string(source).expect("read src/source.rs");
-    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = syn::parse_file(&text)
+    syn::parse_file(&text)
         .expect("src/source.rs parses")
         .items
         .into_iter()
         .map(|item| (item, location.clone()))
-        .collect();
-    Flat::builder()
-        .items(items)
-        .build()
-        .expect("the fixture builds a model")
-}
-
-/// The C binding: `Stamp` as a by-value aggregate, `stamp_sum` as an entry
-/// point. Both keep the source name, because nothing renamed them.
-fn c_requests() -> BindingRequests<CPolicy> {
-    let mut requests = BindingRequests::new("c", syn::parse_quote!(source), CPolicy::Scalar);
-    let stamp = requests.policy(CPolicy::DataStruct {
-        c_name: "Stamp".to_string(),
-    });
-    requests.type_policies.insert("Stamp".to_string(), stamp);
-    let sum = requests.policy(CPolicy::Function {
-        symbol: "stamp_sum".to_string(),
-    });
-    let delta = requests.policy(CPolicy::Function {
-        symbol: "stamp_delta".to_string(),
-    });
-    requests.output(
-        DeclaredElement::new(ElementKind::Type, "Stamp", "Stamp", "data_struct"),
-        stamp,
-    );
-    requests.output(
-        DeclaredElement::new(ElementKind::Function, "stamp_sum", "stamp_sum", "function"),
-        sum,
-    );
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "stamp_delta",
-            "stamp_delta",
-            "function",
-        ),
-        delta,
-    );
-    let show = requests.policy(CPolicy::Function {
-        symbol: "stamp_show".to_string(),
-    });
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "stamp_show",
-            "stamp_show",
-            "function",
-        ),
-        show,
-    );
-    // No fields at all: there is no empty aggregate to declare, and no
-    // wrapper that could take one by value.
-    let marker = requests.policy(CPolicy::DataStruct {
-        c_name: "Marker".to_string(),
-    });
-    requests.type_policies.insert("Marker".to_string(), marker);
-    requests.output(
-        DeclaredElement::new(ElementKind::Type, "Marker", "Marker", "data_struct"),
-        marker,
-    );
-    let marker_value = requests.policy(CPolicy::Function {
-        symbol: "marker_value".to_string(),
-    });
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "marker_value",
-            "marker_value",
-            "function",
-        ),
-        marker_value,
-    );
-    // Positional fields: the aggregate this adapter declares names its members,
-    // so it refuses rather than reading `.0` out of a struct whose C form has
-    // no such member.
-    let pair = requests.policy(CPolicy::DataStruct {
-        c_name: "Pair".to_string(),
-    });
-    requests.type_policies.insert("Pair".to_string(), pair);
-    requests.output(
-        DeclaredElement::new(ElementKind::Type, "Pair", "Pair", "data_struct"),
-        pair,
-    );
-    requests
-}
-
-/// The JNI binding: `Stamp` as an `example.Stamp` object whose properties are
-/// read, `stamp_sum` as `example.Bindings.sum`.
-fn jni_requests(classes: &JniClasses) -> BindingRequests<JniPolicy> {
-    let mut requests = BindingRequests::new("jni", syn::parse_quote!(source), JniPolicy::Scalar);
-    let stamp = requests.policy(JniPolicy::DataClass {
-        rust: "Stamp".to_string(),
-    });
-    requests.type_policies.insert("Stamp".to_string(), stamp);
-    // A record whose field neither adapter can carry, declared so the report
-    // says so rather than the example quietly not mentioning it.
-    let reading = requests.policy(JniPolicy::DataClass {
-        rust: "Reading".to_string(),
-    });
-    requests
-        .type_policies
-        .insert("Reading".to_string(), reading);
-    let show = requests.policy(JniPolicy::Function {
-        placement: "example.Bindings.show".to_string(),
-    });
-    let _ = classes;
-    let sum = requests.policy(JniPolicy::Function {
-        placement: "example.Bindings.sum".to_string(),
-    });
-    // A second method on the same Kotlin object: one `object Bindings`, two
-    // declarations in it.
-    let delta = requests.policy(JniPolicy::Function {
-        placement: "example.Bindings.delta".to_string(),
-    });
-    requests.output(
-        DeclaredElement::new(ElementKind::Type, "Stamp", "example.Stamp", "data_class"),
-        stamp,
-    );
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "stamp_sum",
-            "example.Bindings.sum",
-            "function",
-        ),
-        sum,
-    );
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "stamp_delta",
-            "example.Bindings.delta",
-            "function",
-        ),
-        delta,
-    );
-    // Delivers nothing: its failure route has to terminate without a value.
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "stamp_show",
-            "example.Bindings.show",
-            "function",
-        ),
-        show,
-    );
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Type,
-            "Reading",
-            "example.Reading",
-            "data_class",
-        ),
-        reading,
-    );
-    // A Kotlin data class needs a property; this record has none, and neither
-    // it nor the function taking it can be generated.
-    let marker = requests.policy(JniPolicy::DataClass {
-        rust: "Marker".to_string(),
-    });
-    requests.type_policies.insert("Marker".to_string(), marker);
-    requests.output(
-        DeclaredElement::new(ElementKind::Type, "Marker", "example.Marker", "data_class"),
-        marker,
-    );
-    let marker_value = requests.policy(JniPolicy::Function {
-        placement: "example.Bindings.markerValue".to_string(),
-    });
-    requests.output(
-        DeclaredElement::new(
-            ElementKind::Function,
-            "marker_value",
-            "example.Bindings.markerValue",
-            "function",
-        ),
-        marker_value,
-    );
-    requests
-}
-
-/// The report is published beside the code, as it is for a real binding.
-fn report<P>(generation: &Generation<P>, out_dir: &Path, target: &str) {
-    std::fs::write(
-        out_dir.join(format!("{target}-report.json")),
-        generation.report().to_json(),
-    )
-    .expect("write the report");
-    std::fs::write(
-        out_dir.join(format!("{target}-report.md")),
-        generation.report().to_markdown(),
-    )
-    .expect("write the report");
+        .collect()
 }

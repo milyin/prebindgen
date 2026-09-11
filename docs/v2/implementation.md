@@ -126,17 +126,34 @@ The engine is five modules. `target.rs` is the adapter interface and the
 description vocabulary; `plan.rs` is the recursion, the conversion cache, the
 wrapper assembly and the retention loop; `body.rs` is the instruction set;
 `emit.rs` is the common Rust writer; `run.rs` holds the frozen `Generation` and
-the report, which the reporting scaffold already had.
+the report. Its one entry point is `generate(flat, &target, requests, crate)`.
+
+The two targets live in the language frontends, under their `v2` feature:
+`prebindgen-c/src/v2/` and `prebindgen-jni/src/v2/`. Each is two things. A
+`Target` implementation of a few hundred lines — `select`, `represent`,
+`boundary`, `surface`, `render_operation` — that walks no type and names no
+temporary; and a reader of the frontend's own declaration storage that turns it
+into `BindingRequests`, one entry per declaration, sorted, with the frontend's
+manglers already applied to every name. The JNI frontend also carries its Kotlin
+writer, over the payloads its declarations came back with. A frontend's
+`build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
+`build_with(Pipeline::V2)` states it — and nothing of v1 runs on that route.
+The user's `build.rs` is the same under either engine: the one thing v2 adds to
+it is the manifest beside the generated file, and the fact that a declaration the
+engine cannot lower is a reported skip rather than a build failure.
 
 `examples/v2check` is the increment's evidence. It compiles
-[the specification's source crate](source.md) for real, runs the engine over it
-twice — through a small C adapter and a small JNI adapter, a few hundred lines
-each — and compiles both generated files with rustc. Its tests read the expected
+[the specification's source crate](source.md) for real, declares it to both
+real frontends exactly as a consumer's build script would, states the v2 engine,
+and compiles both generated files with rustc. Its tests read the expected
 wrappers out of [the emit pages][fn_emit] themselves, item by item, so a chapter
 and the engine cannot drift apart quietly, and read the Kotlin in order and
 without duplicates. One test calls the generated C entry point, on a function
 whose result changes if the two fields arrive in the wrong order — addition
-would not notice.
+would not notice. The existing examples are further evidence: unchanged, built
+with `PREBINDGEN_PIPELINE=v2`, every one of their declarations reaches the engine
+and comes back with an outcome — the data classes and functions within this
+increment emitted, everything else skipped under the capability it waits for.
 
 The engine's own tests use a target that answers in one line, and cover what an
 adapter cannot show: that two functions taking the same record share one
@@ -162,7 +179,7 @@ contradictory configuration fails rather than becoming a capability claim.
    implementation is `Operation<Payload>`: either a `Standard` operation the
    registry renders — identity, member read — or the adapter's own `Payload`.
    The payload has no standard variant to imitate, and C ships no operation
-   renderer at all, which its adapter states by giving `Payload` no values.
+   renderer at all, which its target states by giving `Payload` no values.
 3. **`RelationSelection`'s reach.** It has none: `select` answers with the
    relation for the value in front of it, and nothing else. A choice for a child
    is a conversion rule recorded at the child's position, which the recursion
@@ -240,13 +257,14 @@ contradictory configuration fails rather than becoming a capability claim.
 
 Acceptance criteria:
 
-- [x] The design's boundaries are exercised by scalar and record bindings — in `examples/v2check`, over the specification's own source crate. Extending that to the existing C/JNI examples waits for the frontends to build `BindingRequests`.
-- [ ] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. Target policies have explicit local interpretation APIs.
+- [x] The design's boundaries are exercised by scalar and record bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
+- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. Target policies have explicit local interpretation APIs: `CPolicy` and `JniPolicy`, one variant per declarator, read only by the target that owns them.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
-- [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither reference adapter walks a type or names a temporary.
+- [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
 - [x] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
-- [ ] One immutable generation result supplies Rust output, optional foreign-writer output, reports and test selection; C headers are derived from the retained Rust output by `cbindgen`.
+- [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`.
+- [ ] Test selection from the manifest.
 - [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.
 - [ ] New nested combinations reuse the registry's composition algorithm instead of requiring a new per-language wrapper implementation.
 - [ ] Remaining unsupported capabilities and any API refinements discovered during implementation are documented.

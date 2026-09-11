@@ -33,7 +33,7 @@ outcome(exported stamp_sum) = Emitted { artifacts: [ native wrapper, public decl
 report entry:
     element: exported stamp_sum
     outcome: Emitted
-    symbol:  stamp_sum  |  Java_example_Bindings_sum
+    symbol:  stamp_sum  |  Java_example_JNINative_stampSum
 ```
 
 Had a field of the record been unsupported:

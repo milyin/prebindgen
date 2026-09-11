@@ -714,8 +714,9 @@ impl JniGenBuilder {
     /// and owns everything after that.
     #[cfg(feature = "v2")]
     fn build_v2(self) -> Result<JniGen, prebindgen_registry::WriteRustError> {
-        let sources = self.sources.clone();
-        let generation = prebindgen_registry_v2::plan(&self.decls, sources, declaring_crate())
+        let generation = self
+            .decls
+            .generate_v2(self.sources.clone(), declaring_crate())
             .map_err(|error| prebindgen_registry::WriteRustError::Engine {
                 pipeline: prebindgen_registry_v2::PIPELINE,
                 message: error.to_string(),
