@@ -248,7 +248,7 @@ contradictory configuration fails rather than becoming a capability claim.
   those a retained output reaches. Nodes are referenced by nothing after
   inlining, so this costs memory and no correctness; pruning them needs the
   reachability the retention loop does not yet track.
-- **`ElementId` is `<kind>:<origin>`**, so exposing one Rust function at two
+- **`DeclarationId` is `<kind>:<origin>`**, so exposing one Rust function at two
   foreign placements — which [the request chapter](stages/03-requests.md) uses to
   explain output identity — cannot be expressed yet. The `Unselected` outcome is
   likewise absent from the report.
@@ -262,7 +262,7 @@ Acceptance criteria:
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
-- [x] Complete unsupported inputs produce actionable per-element outcomes; malformed configuration and generator defects fail generation.
+- [x] Complete unsupported inputs produce actionable per-declaration outcomes; malformed configuration and generator defects fail generation.
 - [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`.
 - [ ] Test selection from the manifest.
 - [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.

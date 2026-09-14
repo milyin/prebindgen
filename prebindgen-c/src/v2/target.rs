@@ -12,7 +12,7 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, ElementId, ElementKind, Layout,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Layout,
     NativeParam, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
     PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, ResolvedShape,
     ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest,
@@ -48,7 +48,7 @@ pub struct CTarget;
 
 /// The C carrier for a scalar, when this adapter has one.
 ///
-/// One scalar today, as the specification's element paths need. The rest of
+/// One scalar today, as the specification's declaration paths need. The rest of
 /// `ScalarKind` arrives with its own increment; until then a value of another
 /// kind is a reported skip, never a guess.
 fn c_scalar(kind: ScalarKind) -> Option<syn::Type> {
@@ -216,14 +216,14 @@ impl Target for CTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 C target does not \
                          lower yet",
-                        site.element.rust_origin
+                        site.declaration.rust_origin
                     ),
                 )));
             }
             CPolicy::Scalar | CPolicy::DataStruct { .. } => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that is not a function policy",
-                    site.element.rust_origin
+                    site.declaration.rust_origin
                 )));
             }
         };
@@ -266,14 +266,14 @@ impl Target for CTarget {
     ) -> TargetSupport<SurfaceSpec<CPayload>> {
         match request.item {
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
-                element: request.element.id.clone(),
+                declaration: request.declaration.id.clone(),
                 // A wrapper taking an aggregate is unusable unless the public
                 // type it names is emitted too.
                 requires: values
                     .inputs
                     .iter()
                     .filter_map(|value| named(&value.crossing.ty))
-                    .map(|name| ElementId::new(ElementKind::Type, name))
+                    .map(|name| DeclarationId::new(DeclarationKind::Type, name))
                     .collect(),
                 rust: Vec::new(),
                 payload: None,
@@ -315,7 +315,7 @@ impl Target for CTarget {
                     fields.push(quote!(pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    element: request.element.id.clone(),
+                    declaration: request.declaration.id.clone(),
                     requires: Vec::new(),
                     // `repr(C)` is required: without it the layout the header
                     // promises is not the layout the wrapper reads. The C name

@@ -25,7 +25,7 @@ and a build script asking for it to be exposed: [C][struct_requests_c],
 
 ```text
 OutputRequest {
-    id:     ElementId(public Stamp in this target),
+    id:     DeclarationId(public Stamp in this target),
     source: SourceItemId(crate::source::Stamp),
     policy: PolicyId(this target's record policy),
 }

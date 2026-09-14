@@ -14,7 +14,7 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, ElementId, ElementKind,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
     FailureCategory, FailureRoute, Layout, NativeParam, OperandSpec, Operation, OperationType,
     OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
     RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor,
@@ -111,7 +111,7 @@ pub(crate) const REPORT_ERROR: &str = "report_jni_error";
 /// The JVM carrier, Kotlin type and descriptor of a scalar, when this adapter
 /// has one.
 ///
-/// One scalar today, as the specification's element paths need: every getter
+/// One scalar today, as the specification's declaration paths need: every getter
 /// this adapter describes is read with `JValueOwned::j`, which extracts a
 /// long. The rest of `ScalarKind` arrives with its own increment.
 fn jvm_scalar(kind: ScalarKind) -> Option<(syn::Type, &'static str, &'static str)> {
@@ -345,14 +345,14 @@ impl Target for JniTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 JNI target does \
                          not lower yet",
-                        site.element.rust_origin
+                        site.declaration.rust_origin
                     ),
                 )));
             }
             JniPolicy::Scalar | JniPolicy::DataClass { .. } => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that is not a function policy",
-                    site.element.rust_origin
+                    site.declaration.rust_origin
                 )));
             }
         };
@@ -475,14 +475,14 @@ impl Target for JniTarget {
                     },
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    element: request.element.id.clone(),
+                    declaration: request.declaration.id.clone(),
                     // A method taking a declared class is unusable unless the
                     // class it names is emitted too.
                     requires: values
                         .inputs
                         .iter()
                         .filter_map(|value| named(&value.crossing.ty))
-                        .map(|name| ElementId::new(ElementKind::Type, name))
+                        .map(|name| DeclarationId::new(DeclarationKind::Type, name))
                         .collect(),
                     // What crosses is a JVM object: the Rust side holds a
                     // reference to it and declares no type of its own.
@@ -536,7 +536,7 @@ impl Target for JniTarget {
                     None => (String::new(), class.clone()),
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    element: request.element.id.clone(),
+                    declaration: request.declaration.id.clone(),
                     requires: Vec::new(),
                     rust: Vec::new(),
                     payload: Some(JniPayload::Class {

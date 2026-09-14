@@ -45,12 +45,12 @@ not a reduced record. Its fields never cross at all — the whole value stays on
 Rust side behind a pointer — so there is no field to leave out. The rule above
 bites only where a representation promised to carry the parts.
 
-Being unsupported is a normal outcome, not a failure. Each skipped element is
+Being unsupported is a normal outcome, not a failure. Each skipped declaration is
 recorded with a stable capability code, a human-readable explanation and the
 source or configuration location that provoked it, so the report can say what to
 implement rather than just that something is missing. Two other outcomes exist so that
-the report can account for every captured item, not only the requested ones: an
-element the user explicitly excluded is *ignored*, and one that was captured but
+the report can account for every captured item, not only the requested ones: a
+declaration the user explicitly excluded is *ignored*, and an item that was captured but
 that no configuration asked for is *unselected*. The second is expected in bulk —
 a source crate typically captures more than any one binding exposes — so a report
 groups those rather than listing them beside real skips; their value is answering
@@ -113,9 +113,9 @@ Conversion dependencies are not the only conditions for valid output. A public m
 
 ```rust
 struct SurfaceSpec<Payload> {
-    element: ElementId,          // Public type/function/member this description implements.
+    declaration: DeclarationId,  // Public type/function/member this description implements.
     requires: Vec<Requirement>, // Required public types, conversions, interfaces or helpers.
-    members: Vec<ElementId>,     // Associated declarations, such as a class's methods.
+    members: Vec<DeclarationId>, // Associated declarations, such as a class's methods.
     payload: Payload,            // Chosen target name/package/modifiers and rendering metadata.
 }
 ```
@@ -141,7 +141,7 @@ the cache, resolved, or refused. Deciding what to retain is an outer loop over
 the candidate set: a public declaration can require a conversion that was not
 planned yet, planning it can produce another public requirement, and the loop
 runs until a pass adds nothing. It terminates for the same reason the walk does —
-the set of requestable elements and reachable conversions is finite, and every
+the set of declarations and reachable conversions is finite, and every
 pass either adds to the retained set or ends it — but it is iteration, not
 recursion, and a design that assumed one pass here would be wrong.
 
@@ -162,7 +162,7 @@ struct GenerationRun<'a, T: Target> {
     functions: FunctionArena<T::Payload>, // Candidate complete native wrapper plans.
     surfaces: SurfaceArena<T::Payload>, // Candidate public declaration descriptions.
     artifacts: ArtifactArena<T::Payload>, // Candidate generated units and dependencies.
-    outcomes: OutcomeTable, // Per-element decisions and shared unsupported causes.
+    outcomes: OutcomeTable, // Per-declaration decisions and shared unsupported causes.
 }
 ```
 
@@ -210,8 +210,8 @@ The report has a second consumer. The example crates' test suites are written
 against the full API, so when V2 emits a subset, tests referring to what it
 skipped would not compile — a runtime guard cannot hide a missing class from
 `kotlinc` or a missing symbol from a C compiler. Each suite is therefore divided
-into **test sections**, each naming the emitted elements it needs, and the report
-selects the sections whose elements were all emitted. A milestone still has to
+into **test sections**, each naming the emitted declarations it needs, and the report
+selects the sections whose declarations were all emitted. A milestone still has to
 require that meaningful sections run, so that skipping everything cannot pass.
 
 The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds. The report also selects existing test sections, ensuring tests match the emitted API.

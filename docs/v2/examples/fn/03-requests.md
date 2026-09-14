@@ -24,14 +24,14 @@ language's business: [C][fn_requests_c], [Kotlin/JNI][fn_requests_jni].
 
 ```text
 OutputRequest {
-    id:     ElementId(exported stamp_sum, at this target's placement),
+    id:     DeclarationId(exported stamp_sum, at this target's placement),
     source: SourceItemId(crate::source::stamp_sum),
     policy: PolicyId(this target's function policy),
 }
 
 sites:
-    SiteId { owner: <that ElementId>, path: Param(0) }   // the owned Stamp
-    SiteId { owner: <that ElementId>, path: Return }     // the i64
+    SiteId { owner: <that DeclarationId>, path: Param(0) }   // the owned Stamp
+    SiteId { owner: <that DeclarationId>, path: Return }     // the i64
 
 conversion_rules.sites: {}    // none recorded for this path
 ```
@@ -42,7 +42,7 @@ converted.
 
 ## Checks
 
-- Exposing the same function at two placements gives two `ElementId`s with
+- Exposing the same function at two placements gives two `DeclarationId`s with
   independent outcomes.
 - A setting the frontend cannot translate is recorded as an
   `UnsupportedRequest` and reaches the report; an override naming a parameter

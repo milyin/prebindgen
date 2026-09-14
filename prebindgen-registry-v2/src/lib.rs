@@ -7,9 +7,9 @@
 //! It accepts every input v1 accepts — the same captured sources, the same
 //! declarations, the same settings — and generates the subset it has
 //! implemented. Everything else is a **reported skip** with a stable capability
-//! code and the path from the declared element to the site that could not be
+//! code and the path from the declaration to the site that could not be
 //! lowered. A missing implementation is an outcome, never a fatal build error,
-//! and never a reason to run v1 for that element.
+//! and never a reason to run v1 for that declaration.
 //!
 //! ```text
 //! v2: 2 emitted, 45 skipped, 4 ignored (c target)
@@ -52,7 +52,7 @@ pub mod target;
 mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
-pub use decl::{DeclaredElement, ElementId, ElementKind, SourceKind};
+pub use decl::{Declaration, DeclarationId, DeclarationKind, SourceKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{
     generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, PolicyId, ValuePlan,

@@ -10,12 +10,12 @@
 //! same declarations and owns everything after that; the frontend's part is
 //! naming — which C name a type or a symbol gets is its manglers applied, the
 //! same answer v1 would give — and saying which declarator produced each
-//! element, so a skip can name the capability it waits for.
+//! declaration, so a skip can name the capability it waits for.
 
 mod target;
 
 use prebindgen_registry_v2::{
-    generate, BindingRequests, DeclaredElement, ElementKind, EngineError, Generation,
+    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation,
 };
 pub use target::{CPayload, CPolicy, CTarget};
 
@@ -60,7 +60,7 @@ impl CbindgenBuilder {
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
             requests.output(
-                DeclaredElement::new(ElementKind::Type, key.as_str(), c_name, "data_struct")
+                Declaration::new(DeclarationKind::Type, key.as_str(), c_name, "data_struct")
                     .local(),
                 policy,
             );
@@ -81,8 +81,8 @@ impl CbindgenBuilder {
                     .type_policies
                     .insert(key.as_str().to_string(), policy);
                 requests.output(
-                    DeclaredElement::new(
-                        ElementKind::Type,
+                    Declaration::new(
+                        DeclarationKind::Type,
                         key.as_str(),
                         self.c_type_name(key),
                         declarator,
@@ -100,8 +100,8 @@ impl CbindgenBuilder {
         });
         for key in sorted(self.callbacks.keys()) {
             requests.output(
-                DeclaredElement::new(
-                    ElementKind::Callback,
+                Declaration::new(
+                    DeclarationKind::Callback,
                     describe_callback(key),
                     self.callback_c_name(key),
                     "callback",
@@ -118,8 +118,8 @@ impl CbindgenBuilder {
         });
         for decl in &self.convert_decls {
             requests.output(
-                DeclaredElement::new(
-                    ElementKind::Conversion,
+                Declaration::new(
+                    DeclarationKind::Conversion,
                     decl.key().as_str(),
                     self.c_type_name(decl.key()),
                     "convert",
@@ -136,7 +136,12 @@ impl CbindgenBuilder {
                 symbol: symbol.clone(),
             });
             requests.output(
-                DeclaredElement::new(ElementKind::Function, ident.to_string(), symbol, "function"),
+                Declaration::new(
+                    DeclarationKind::Function,
+                    ident.to_string(),
+                    symbol,
+                    "function",
+                ),
                 policy,
             );
         }
@@ -144,8 +149,8 @@ impl CbindgenBuilder {
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_functions) {
             requests.ignored.push(
-                DeclaredElement::new(
-                    ElementKind::Function,
+                Declaration::new(
+                    DeclarationKind::Function,
                     ident.to_string(),
                     String::new(),
                     "ignore_function",
@@ -155,8 +160,8 @@ impl CbindgenBuilder {
         }
         for key in sorted(&self.ignored_types) {
             requests.ignored.push(
-                DeclaredElement::new(
-                    ElementKind::Type,
+                Declaration::new(
+                    DeclarationKind::Type,
                     key.as_str(),
                     String::new(),
                     "ignore_type",

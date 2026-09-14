@@ -9,7 +9,7 @@
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind};
 
 use crate::{
-    decl::{DeclaredElement, ElementKind},
+    decl::{Declaration, DeclarationKind},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
@@ -88,7 +88,7 @@ enum Policy {
     /// refuses — which is what drives the retention loop rather than value
     /// planning.
     RecordWithoutSurface,
-    /// A record whose public declaration requires another element's, so a
+    /// A record whose public declaration requires another declaration's, so a
     /// refusal has to travel two edges.
     RecordRequiring(String),
     Function {
@@ -259,7 +259,7 @@ impl Target for Mini {
         else {
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` is exported under a value policy",
-                site.element.rust_origin
+                site.declaration.rust_origin
             )));
         };
         Ok(TargetAttempt::Ready(BoundarySpec {
@@ -328,8 +328,8 @@ impl Target for Mini {
             .inputs
             .iter()
             .filter_map(|value| match value.crossing.ty.kind() {
-                TypeKind::Named { id, .. } => Some(crate::decl::ElementId::new(
-                    ElementKind::Type,
+                TypeKind::Named { id, .. } => Some(crate::decl::DeclarationId::new(
+                    DeclarationKind::Type,
                     id.name.clone(),
                 )),
                 _ => None,
@@ -345,11 +345,14 @@ impl Target for Mini {
             )));
         }
         Ok(TargetAttempt::Ready(SurfaceSpec {
-            element: request.element.id.clone(),
+            declaration: request.declaration.id.clone(),
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
                 (Policy::RecordRequiring(other), SourceItem::Record(_)) => {
-                    vec![crate::decl::ElementId::new(ElementKind::Type, other)]
+                    vec![crate::decl::DeclarationId::new(
+                        DeclarationKind::Type,
+                        other,
+                    )]
                 }
                 (_, SourceItem::Record(_)) => Vec::new(),
             },
@@ -380,20 +383,20 @@ fn requests() -> BindingRequests<Policy> {
     BindingRequests::new("mini", syn::parse_quote!(source), Policy::Scalar)
 }
 
-fn ty(origin: &str) -> DeclaredElement {
-    DeclaredElement::new(ElementKind::Type, origin, origin, "record")
+fn ty(origin: &str) -> Declaration {
+    Declaration::new(DeclarationKind::Type, origin, origin, "record")
 }
 
-fn function(origin: &str) -> DeclaredElement {
-    DeclaredElement::new(ElementKind::Function, origin, origin, "function")
+fn function(origin: &str) -> Declaration {
+    Declaration::new(DeclarationKind::Function, origin, origin, "function")
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
     &generation
         .report()
-        .elements
+        .declarations
         .iter()
-        .find(|entry| entry.element.id.as_str() == id)
+        .find(|entry| entry.declaration.id.as_str() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }
@@ -432,7 +435,7 @@ fn a_site_override_does_not_share_the_default_conversion() {
     let max = requests.policy(exported("stamp_max", Routes::Reported));
     requests.site_policies.insert(
         (
-            crate::decl::ElementId::new(ElementKind::Function, "stamp_max"),
+            crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
             "param 0".to_string(),
         ),
         fallible,
@@ -561,7 +564,7 @@ fn a_value_policy_on_an_exported_function_is_an_error() {
     ));
 }
 
-/// A declared element the source never captured is an error, not a skip — the
+/// A declaration the source never captured is an error, not a skip — the
 /// same rule the engine already held for its report-only run.
 #[test]
 fn a_declaration_naming_nothing_is_an_error() {
@@ -573,10 +576,10 @@ fn a_declaration_naming_nothing_is_an_error() {
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
 }
 
-/// An ignored element is accounted for apart from a skipped one: an ignore is a
+/// An ignored declaration is accounted for apart from a skipped one: an ignore is a
 /// decision, not a gap.
 #[test]
-fn an_ignored_element_is_neither_emitted_nor_skipped() {
+fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
     let mut requests = requests();
     let record = requests.policy(Policy::Record);
     requests.type_policies.insert("Stamp".to_string(), record);
@@ -628,7 +631,7 @@ fn a_field_override_is_part_of_its_record_conversion() {
         // relation for an `i64`, so this child cannot be selected at all.
         requests.site_policies.insert(
             (
-                crate::decl::ElementId::new(ElementKind::Function, "stamp_max"),
+                crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
                 "param 0.field secs".to_string(),
             ),
             record,
@@ -725,7 +728,7 @@ fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
     );
 }
 
-/// A skip says where the walk stopped, not only which element vanished.
+/// A skip says where the walk stopped, not only which declaration vanished.
 #[test]
 fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
     let mut requests = requests();
@@ -811,7 +814,7 @@ fn two_supported_children_make_two_record_conversions() {
     let max = requests.policy(exported("stamp_max", Routes::None));
     requests.site_policies.insert(
         (
-            crate::decl::ElementId::new(ElementKind::Function, "stamp_max"),
+            crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
             "param 0.field secs".to_string(),
         ),
         other_scalar,
@@ -884,16 +887,16 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
     requests.output(ty("Point"), refused);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
-    for element in ["type:Point", "type:Stamp", "fn:stamp_sum"] {
-        let Outcome::Skipped(skip) = outcome(&generation, element) else {
-            panic!("{element} depends on a public declaration this target refuses");
+    for declaration in ["type:Point", "type:Stamp", "fn:stamp_sum"] {
+        let Outcome::Skipped(skip) = outcome(&generation, declaration) else {
+            panic!("{declaration} depends on a public declaration this target refuses");
         };
         assert_eq!(
             skip.capability.as_str(),
             "unsupported.mini.no_public_record",
-            "{element} carries the one cause"
+            "{declaration} carries the one cause"
         );
-        assert_eq!(skip.dependency_path.first().unwrap(), element);
+        assert_eq!(skip.dependency_path.first().unwrap(), declaration);
     }
     // Two edges, so the far end of the chain names both of them.
     let Outcome::Skipped(caller) = outcome(&generation, "fn:stamp_sum") else {

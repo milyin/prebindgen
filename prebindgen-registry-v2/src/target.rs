@@ -21,7 +21,7 @@ use prebindgen_flat::flat::{Function, Struct, TypeRef};
 use proc_macro2::TokenStream;
 
 use crate::{
-    decl::{DeclaredElement, ElementId},
+    decl::{Declaration, DeclarationId},
     outcome::Capability,
 };
 
@@ -544,9 +544,9 @@ pub struct BoundarySpec<P> {
 /// A target's description of one public declaration and what it requires.
 #[derive(Clone, Debug)]
 pub struct SurfaceSpec<P> {
-    pub element: ElementId,
-    /// Other requested elements that must be emitted for this one to be.
-    pub requires: Vec<ElementId>,
+    pub declaration: DeclarationId,
+    /// Other requested declarations that must be emitted for this one to be.
+    pub requires: Vec<DeclarationId>,
     /// Rust this declaration contributes: the `repr(C)` aggregate a C caller
     /// fills in, for instance. A target whose public declaration is not Rust
     /// contributes none.
@@ -563,15 +563,15 @@ pub struct SurfaceSpec<P> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position {
     /// The requested output this conversion is reached from.
-    pub element: ElementId,
+    pub declaration: DeclarationId,
     /// Root to here: `param 0`, then `field secs`.
     pub path: Vec<String>,
 }
 
 impl Position {
-    pub fn root(element: ElementId) -> Self {
+    pub fn root(declaration: DeclarationId) -> Self {
         Position {
-            element,
+            declaration,
             path: Vec::new(),
         }
     }
@@ -580,14 +580,14 @@ impl Position {
         let mut path = self.path.clone();
         path.push(step.into());
         Position {
-            element: self.element.clone(),
+            declaration: self.declaration.clone(),
             path,
         }
     }
 
     /// This position as a report's dependency path.
     pub fn dependency_path(&self) -> Vec<String> {
-        std::iter::once(self.element.to_string())
+        std::iter::once(self.declaration.to_string())
             .chain(self.path.iter().cloned())
             .collect()
     }
@@ -656,13 +656,13 @@ impl<P> ResolvedValues<'_, P> {
 
 /// What `boundary` is given: the exported call and its source signature.
 pub struct SiteDescriptor<'a> {
-    pub element: &'a DeclaredElement,
+    pub declaration: &'a Declaration,
     pub function: &'a Function,
 }
 
 /// What `surface` is given: the requested public declaration.
 pub struct SurfaceRequest<'a, Policy> {
-    pub element: &'a DeclaredElement,
+    pub declaration: &'a Declaration,
     pub policy: &'a Policy,
     pub item: SourceItem<'a>,
 }
