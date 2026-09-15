@@ -67,7 +67,7 @@ the generated [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary
 - Reporting is never retried with the operation that just failed — one failed
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success
-  path. The route exists because [the input node declares that
+  path. The route exists because the input [node](../../stages/04-values.md#plan-value-conversions) [declares that
   failure][fn_values_jni]; a category the [policy](../../stages/03-requests.md#what-policy-means) leaves unrouted would skip the
   function.
 

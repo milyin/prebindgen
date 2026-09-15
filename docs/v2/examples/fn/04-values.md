@@ -30,7 +30,7 @@ node(output) = Crossing { i64, OutOfRust }
                body:     identity — source i64 and the target carrier are one value
 ```
 
-The input node is [the record's own conversion][struct_values]; this function
+The input node is the record's own [conversion](../../stages/04-values.md#plan-value-conversions), [planned on its own path][struct_values]; this function
 refers to it, and so does anything else taking an owned `Stamp` under the same
 [policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are what [the boundary][fn_boundary] assembles.
 

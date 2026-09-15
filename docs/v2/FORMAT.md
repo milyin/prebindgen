@@ -102,8 +102,11 @@ term is **defined**, set in bold, under that heading and nowhere else;
 [concepts.md](concepts.md) introduces every term in a `### Term` entry that
 itself links to the definition; and on every other page the first mention of
 the term in prose links to the definition. A mention inside a code span, a code
-block, a heading, a link target, or a title quoted in a reference-style link is
-not a mention; Markdown wrapped across lines is read as one text. A term used in another sense — "wrapper" for `Option<T>`,
+block, a heading, a link target, or a chapter, element or language title quoted
+in a reference-style link is not a mention; Markdown wrapped across lines is
+read as one text. Any other reference-style link is prose: a first mention
+inside one is unlinked to its definition, so write the term as a plain linked
+word and give the cross-reference a link of its own with its own text. A term used in another sense — "wrapper" for `Option<T>`,
 "site" for a use site — is reworded rather than linked: the rule exists so a
 reader meets each word once with its meaning, and a link to the wrong meaning
 defeats it.

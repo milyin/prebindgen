@@ -247,6 +247,7 @@ def blank(match):
 
 
 CODE_SPAN = re.compile(r"`[^`]*`", re.S)
+REFERENCE_TEXT = re.compile(r"\[([^\]^]*?)\]\[[A-Za-z0-9_]+\]", re.S)
 INLINE_SPAN = re.compile(r"\[([^\]]*)\]\(([^)]+)\)", re.S)
 
 
@@ -287,7 +288,9 @@ def check_vocabulary(pages, manifest, root):
     concepts = pages.get("concepts.md")
     if concepts is None:
         fail("concepts.md: missing; the vocabulary lives there")
-    concept_prose = prose(concepts.text)
+    titles = {stage["title"] for stage in manifest["stages"]}
+    titles |= {example["title"] for example in manifest["examples"]}
+    titles |= {language["title"] for language in manifest["languages"]}
     for entry in manifest.get("vocabulary", []):
         term, pattern = entry["term"], entry["match"]
         defined = entry["defined"]
@@ -339,10 +342,14 @@ def check_vocabulary(pages, manifest, root):
                      f"{defined_page} and other pages link there")
             if page.relative == defined_page or not entry.get("link_first_mention", True):
                 continue
-            # A title quoted in a reference-style link is not a mention, and
-            # neither is a link's target; blank both before searching.
-            searched = REFERENCE.sub(blank, text)
-            searched = re.sub(r"\]\([^)]*\)", blank, searched)
+            # A chapter or element title quoted in a reference-style link — in
+            # the navigation header, an element TOC, a chapter's index — is not
+            # a mention. Any other reference-style link is prose like any
+            # other, and one that wraps a first mention leaves it unlinked to
+            # the definition. A link's target is never a mention.
+            searched = REFERENCE_TEXT.sub(
+                lambda m: blank(m) if m.group(1) in titles else m.group(0), text)
+            searched = re.sub(r"\]\([^)]*\)|\]\[[A-Za-z0-9_]+\]", blank, searched)
             mention = word.search(searched)
             if mention is None:
                 continue

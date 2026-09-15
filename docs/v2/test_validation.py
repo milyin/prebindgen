@@ -207,6 +207,22 @@ class SpecStructure(unittest.TestCase):
                   "[What a relation is](stages/04-values.md#what-a-relation-is)\n\n### Crossing")
         self.rejects("the 'conversion' entry does not link")
 
+    def test_vocabulary_first_mention_inside_a_reference_link_is_rejected(self):
+        # Copilot's mutation on #736: the term's only mention wrapped in a
+        # reference-style link to somewhere else.
+        self.edit("examples/struct/07-emit.md",
+                  "in the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) "
+                  "of [the function that uses the record][fn_emit]:",
+                  "in the [wrapper][fn_emit] of the function that uses the record:")
+        self.rejects("first mention of 'wrapper'")
+
+    def test_vocabulary_quoted_title_in_a_reference_link_is_not_a_mention(self):
+        # An element TOC quotes "Plan value conversions" as a link; the rule
+        # must not read that as the page's first mention of "conversion".
+        self.assertIn("[Plan value conversions][fn_values]",
+                      (self.root / "examples/fn/README.md").read_text())
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
     def test_vocabulary_entry_missing_from_concepts(self):
         self.edit("concepts.md", "### Relation\n", "### Relations\n")
         self.rejects("no '### relation' entry")
