@@ -20,7 +20,7 @@ its concrete application to a fixed input are two views of the same requirement.
 
 This describes the **second** engine. The one that ships today is
 `prebindgen-registry`, whose own model — recipes, fragments, and the
-shapes a crossing takes — is documented in [`docs/model.md`](../model.md). The
+shapes a value takes as it crosses — is documented in [`docs/model.md`](../model.md). The
 two are different pipelines, and a reader who wants the registry a binding
 compiles through right now wants that document rather than this one.
 

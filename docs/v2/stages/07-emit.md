@@ -99,7 +99,7 @@ pub extern "system" fn Java_example_JNINative_stampSum(  // symbol: JNI adapter
 
 Both reads render the same way and neither name collides, because the
 temporaries came from the plan rather than from the operation. `report_jni_error`
-is neither a fragment nor part of the wrapper: it is a generated [artifact](04-values.md#the-operation-specification-and-its-uses) the JNI
+is neither a fragment nor part of the wrapper: it is a generated [artifact](04-values.md#individual-target-operations) the JNI
 adapter contributes — a small helper function emitted into the same module — and
 the [primitive](04-values.md#plan-value-conversions) that calls it lists that artifact among its dependencies, which is
 how retention knew to keep it.
@@ -176,7 +176,7 @@ A target contributes fragments and declarations, never control flow. The C
 adapter contributes `repr(C)`, the extern calling convention, the exported symbol
 and member identities; its member reads render through a common Rust operation,
 so C ships no field-read renderer of its own. The JNI adapter contributes the JNI
-symbol and calling convention, the environment and class parameters, the [carrier](04-values.md#individual-target-operations)
+symbol and calling convention, the environment and class parameters, the [carrier](04-values.md#describing-target-values-and-operations)
 types, the getter descriptors and the error [policy](03-requests.md#what-policy-means) — and a renderer for the JNI
 operations, which produces one expression per operation and nothing around it.
 

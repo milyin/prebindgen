@@ -236,13 +236,13 @@ that. The prohibition is on deciding *from* text.
 The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
 `jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
 own output vocabulary rather than captured source syntax, so writing them as
-syntax during planning is what an adapter is for. That is why a [carrier](04-values.md#individual-target-operations) a target
+syntax during planning is what an adapter is for. That is why a [carrier](04-values.md#describing-target-values-and-operations) a target
 describes here holds a real `syn::Type`, while a source-side position stays a
 handle to the model. The rule constrains where a fact may come *from*, not which
 types may be spelled.
 
 The rule is shared; how each engine holds itself to it is not. What both share
-is the shape: rendering is split into a **protocol** and a **capability**. The
+is the shape: rendering is split into a **protocol** and an **emission capability**. The
 protocol lives with the model, in `prebindgen-flat` — object-safe,
 generate-only, emitting source types from the model's own facts, with no method
 that hands back a captured spelling or a typed syntax tree. Implementing it is a
@@ -540,7 +540,7 @@ silently peel `Box`, `Cow`, references or optional values. `as_record()` returns
 a record only when the exact type is a structurally available record.
 `referent()` explicitly follows `&T` or `&mut T`; the original view retains the
 reference and its mutability. Equivalent explicit accessors are needed for the
-other supported [wrappers](05-boundary.md#assemble-the-native-boundary).
+other supported type forms.
 
 `FieldShape` preserves named, tuple and unit forms. `FieldView::name()` is absent
 for a positional field, while `index()` always records source order. Field

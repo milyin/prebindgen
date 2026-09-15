@@ -40,7 +40,7 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ) -> jni::sys::jlong
 ```
 
-The reporting operation is a generated [artifact](../../stages/04-values.md#the-operation-specification-and-its-uses) this adapter contributes:
+The reporting operation is a generated [artifact](../../stages/04-values.md#individual-target-operations) this adapter contributes:
 
 ```rust
 pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)

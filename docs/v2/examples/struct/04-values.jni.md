@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "04-values", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-values.md) · [Common cell][struct_values] · [Element path][struct]
-Owner: the registry; the JNI adapter describes the object [carrier](../../stages/04-values.md#individual-target-operations) and its getters
+Owner: the registry; the JNI adapter describes the object [carrier](../../stages/04-values.md#describing-target-values-and-operations) and its getters
 
 # Record with scalar fields — Plan value conversions — Kotlin/JNI
 

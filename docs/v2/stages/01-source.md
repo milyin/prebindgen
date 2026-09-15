@@ -11,8 +11,11 @@ these snippets.
 
 A **source crate** is an ordinary Rust library that marks the items it wants
 available to binding generators; each marked item is a **source item**, the thing
-every later stage reads and every binding declaration names. The chapters use
-this crate throughout:
+every later stage reads its source facts from. Most of what a binding declares
+names one; a binding may also declare things the source never exported — a
+callback signature, a helper of its own, a type such as `String` — which the
+[request chapter](03-requests.md) covers. The chapters use this crate
+throughout:
 
 ```rust
 use prebindgen::prebindgen;

@@ -79,7 +79,7 @@ The initial implementation should demonstrate the architecture with both existin
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
 3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/04-values.md#plan-value-conversions) using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
-5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete [artifacts](stages/04-values.md#the-operation-specification-and-its-uses).
+5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
 
 Steps 2 and 3 are exactly the two element paths specified in this document: the
 [function path][fn] is the scalar function and its owned record argument, and the
@@ -172,7 +172,7 @@ contradictory configuration fails rather than becoming a capability claim.
    instructions over value identities — apply a registered operation, construct
    a source record, call the source function — described with the rest of the
    [conversion plans](stages/04-values.md#the-conversion-plans-the-registry-builds).
-   A conversion's body is a template whose [carrier](stages/04-values.md#individual-target-operations) is its input; using it inlines
+   A conversion's body is a template whose [carrier](stages/04-values.md#describing-target-values-and-operations) is its input; using it inlines
    it under the caller's identities. Names are allocated by the writer from
    definition order, never by an adapter.
 2. **Registry-supplied operations inside an adapter's payload.** An operation's
@@ -188,15 +188,15 @@ contradictory configuration fails rather than becoming a capability claim.
 
    For the same reason, `represent` is not told the position it is answering
    for. A representation is reused wherever a conversion of the same identity is
-   needed — crossing, relation, effective [policy](stages/03-requests.md#what-policy-means), children — so a target that
+   needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, effective [policy](stages/03-requests.md#what-policy-means), children — so a target that
    answered differently for two positions would have its second answer silently
    bypassed by the first one's [node](stages/04-values.md#plan-value-conversions). Varying by position is what a policy
    recorded at that position is for, and that policy is in the identity.
-4. **How an adapter declares its types and artifacts.** Neither is an id an
+4. **How an adapter declares its types and generated units.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
    plus whether it may appear in an extern signature — carried inline in the
    description that uses it. A generated unit is an `Artifact`: a name and the
-   Rust it contributes. The registry keeps one artifact per name and publishes
+   Rust it contributes. The registry keeps one [artifact](stages/04-values.md#individual-target-operations) per name and publishes
    only those a retained output needs.
 
    These descriptions are checked where they meet the values in hand, which is

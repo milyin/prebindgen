@@ -112,7 +112,8 @@ separate [outcomes](06-retain.md#retain-supported-output), which the engine cann
 and the Rust origin). A **site** is a position inside such a declaration:
 parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
-`Stamp`, or the single argument of a `stamp_from_millis` constructor. Overrides
+`Stamp`, or the single argument of a `stamp_from_millis` constructor. Sites and
+parts together are the **positions** a conversion can be planned at. Overrides
 attach to sites and parts, and so do diagnostics, which is why a skipped binding
 can later say *which* parameter of *which* exported function was the problem.
 
@@ -409,7 +410,7 @@ For example, `(Stamp.fields, None, Field("secs"))` identifies a struct field; `(
 
 ### Finding an existing conversion plan
 
-Conversion planning takes a `TypeView` and a direction, represented by `Crossing`. A `TypeView` is a read-only handle retaining an exact Rust type reading and the immutable Flat model in which it is interpreted; [type readings and type views](02-flat.md#type-readings-and-type-views) define its lookup and navigation API. Frontends and adapters supply source descriptions, not cache keys:
+Conversion planning takes a **crossing**: an exact source type together with the direction it travels — into Rust as a parameter, out of Rust as a result — represented by `Crossing`. A `TypeView` is a read-only handle retaining an exact Rust type reading and the immutable Flat model in which it is interpreted; [type readings and type views](02-flat.md#type-readings-and-type-views) define its lookup and navigation API. Frontends and adapters supply source descriptions, not cache keys:
 
 ```rust
 enum Direction {

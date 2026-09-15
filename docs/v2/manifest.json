@@ -212,14 +212,31 @@
       "defined": "stages/03-requests.md#what-policy-means"
     },
     {
+      "term": "root",
+      "match": "roots?",
+      "defined": "stages/03-requests.md#where-planning-starts",
+      "link_first_mention": false
+    },
+    {
       "term": "site",
       "match": "sites?",
       "defined": "stages/03-requests.md#a-values-position-in-an-exported-function"
     },
     {
+      "term": "part",
+      "match": "parts?",
+      "defined": "stages/03-requests.md#record-binding-requests",
+      "link_first_mention": false
+    },
+    {
       "term": "conversion",
       "match": "conversions?",
       "defined": "stages/04-values.md#plan-value-conversions"
+    },
+    {
+      "term": "crossing",
+      "match": "crossings?",
+      "defined": "stages/03-requests.md#finding-an-existing-conversion-plan"
     },
     {
       "term": "relation",
@@ -234,7 +251,7 @@
     {
       "term": "carrier",
       "match": "carriers?",
-      "defined": "stages/04-values.md#individual-target-operations"
+      "defined": "stages/04-values.md#describing-target-values-and-operations"
     },
     {
       "term": "primitive",
@@ -249,7 +266,7 @@
     {
       "term": "artifact",
       "match": "artifacts?",
-      "defined": "stages/04-values.md#the-operation-specification-and-its-uses"
+      "defined": "stages/04-values.md#individual-target-operations"
     },
     {
       "term": "wrapper",
@@ -260,6 +277,12 @@
       "term": "outcome",
       "match": "outcomes?",
       "defined": "stages/06-retain.md#retain-supported-output"
+    },
+    {
+      "term": "capability",
+      "match": "capabilit(?:y|ies)",
+      "defined": "stages/06-retain.md#retain-supported-output",
+      "link_first_mention": false
     }
   ]
 }

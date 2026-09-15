@@ -27,7 +27,7 @@ node(Stamp, IntoRust) {
 }
 ```
 
-The [carriers](../../stages/04-values.md#individual-target-operations) and the operations that obtain them are the target's:
+The [carriers](../../stages/04-values.md#describing-target-values-and-operations) and the operations that obtain them are the target's:
 [C][struct_values_c], [Kotlin/JNI][struct_values_jni]. The two `i64` children are
 identity [conversions](../../stages/04-values.md#plan-value-conversions) in both, and render no code of their own.
 

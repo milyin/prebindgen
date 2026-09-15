@@ -7,7 +7,7 @@ Owner: the registry, on the JNI adapter's [representation](../../stages/04-value
 
 ## Input
 
-The two crossings, with the JNI [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the JNI [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
 
 ```text
 Crossing { source: Stamp, direction: IntoRust  }   policy: ObjectProperties

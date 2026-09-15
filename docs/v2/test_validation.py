@@ -162,6 +162,51 @@ class SpecStructure(unittest.TestCase):
                   "[relations](04-values.md#plan-value-conversions)")
         self.rejects("first mention of 'relation'")
 
+    def test_vocabulary_definition_under_another_heading_is_rejected(self):
+        # The heading exists and the bold definition exists, but not under it.
+        manifest = self.root / "manifest.json"
+        manifest.write_text(manifest.read_text().replace(
+            "stages/04-values.md#what-a-relation-is",
+            "stages/04-values.md#responsibility-boundary-with-flat"))
+        for page in self.root.rglob("*.md"):
+            text = page.read_text()
+            if "04-values.md#what-a-relation-is" in text or "#what-a-relation-is" in text:
+                page.write_text(text.replace("#what-a-relation-is",
+                                             "#responsibility-boundary-with-flat"))
+        self.rejects("does not define 'relation' in bold under")
+
+    def test_vocabulary_link_wrapped_across_lines_is_a_link(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "[relations\n](04-values.md#what-a-relation-is)")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
+    def test_vocabulary_mention_in_a_wrapped_code_span_is_not_a_mention(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "`a\nrelation` [relations](04-values.md#what-a-relation-is)")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
+    def test_vocabulary_first_mention_before_a_soft_break_is_found(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "a\nrelation and [relations](04-values.md#what-a-relation-is)")
+        self.rejects("first mention of 'relation'")
+
+    def test_vocabulary_bold_inside_code_is_not_a_definition(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "`**relation**` [relations](04-values.md#what-a-relation-is)")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
+    def test_vocabulary_concepts_entry_linking_elsewhere_is_rejected(self):
+        # Another entry on the page links to the same destination; this one must
+        # link there itself.
+        self.edit("concepts.md",
+                  "[Plan value conversions](stages/04-values.md#plan-value-conversions)\n\n### Crossing",
+                  "[What a relation is](stages/04-values.md#what-a-relation-is)\n\n### Crossing")
+        self.rejects("the 'conversion' entry does not link")
+
     def test_vocabulary_entry_missing_from_concepts(self):
         self.edit("concepts.md", "### Relation\n", "### Relations\n")
         self.rejects("no '### relation' entry")

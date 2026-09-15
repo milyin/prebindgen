@@ -57,17 +57,19 @@ def fail(message):
 def strip_fences(text, where):
     """Replace fenced code with a marker: it is content, but not links or headings."""
     kept, fence = [], None
+    # One line out per line in, so a reported line number is the file's.
     for line in text.splitlines():
         marker = re.match(r"^\s*(`{3,}|~{3,})", line)
         if marker:
             run = marker.group(1)
             if fence is None:
-                fence, kept = run, kept + ["<code>"]
+                fence = run
+                kept.append("<code>")
             elif run[0] == fence[0] and len(run) >= len(fence):
                 fence = None
+                kept.append("")
             continue
-        if fence is None:
-            kept.append(line)
+        kept.append(line if fence is None else "")
     if fence is not None:
         fail(f"{where}: unclosed code fence")
     return "\n".join(kept)
@@ -239,88 +241,123 @@ def check_anchors(page, pages, root, links):
             fail(f"{page.relative}: link to {target} has no matching heading")
 
 
-def prose_lines(text):
-    """The lines a reader reads: no headings, no link definitions, no metadata."""
-    for line in text.splitlines():
+def blank(match):
+    """Replace a match with spaces, keeping every offset and every newline."""
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+CODE_SPAN = re.compile(r"`[^`]*`", re.S)
+INLINE_SPAN = re.compile(r"\[([^\]]*)\]\(([^)]+)\)", re.S)
+
+
+def prose(text):
+    """The page as a reader reads it, offsets preserved: headings, link
+    definitions, metadata and code spans blanked out."""
+    out = []
+    for line in text.split("\n"):
         if HEADING.match(line) or DEFINITION.match(line) or META.match(line):
+            out.append(" " * len(line))
+        else:
+            out.append(line)
+    return CODE_SPAN.sub(blank, "\n".join(out))
+
+
+def section_of(text, anchor):
+    """The text under the heading whose anchor this is, up to the next heading
+    of the same or a higher level — a subsection belongs to its section."""
+    counts = {}
+    headings = list(HEADING.finditer(text))
+    for index, heading in enumerate(headings):
+        base = re.sub(r"[^\w\- ]", "", heading.group(2).strip().lower()).replace(" ", "-")
+        seen = counts.get(base, 0)
+        counts[base] = seen + 1
+        if (base if seen == 0 else f"{base}-{seen}") != anchor:
             continue
-        yield line
-
-
-def link_spans(line):
-    """Each inline link on the line: its span, and its target."""
-    for match in INLINE.finditer(line):
-        yield match.span(), match.group(1)
+        level = len(heading.group(1))
+        end = next((later.start() for later in headings[index + 1:]
+                    if len(later.group(1)) <= level), len(text))
+        return text[heading.end():end]
+    return None
 
 
 def check_vocabulary(pages, manifest, root):
-    """Each term is defined on one page and introduced on the concepts page,
-    and every other page's first mention of it links to the definition."""
+    """Each term is defined in bold once, under the heading the manifest names;
+    the concepts page introduces it with a link there; and every other page's
+    first mention of it in prose is a link there."""
     concepts = pages.get("concepts.md")
     if concepts is None:
         fail("concepts.md: missing; the vocabulary lives there")
+    concept_prose = prose(concepts.text)
     for entry in manifest.get("vocabulary", []):
         term, pattern = entry["term"], entry["match"]
         defined = entry["defined"]
         defined_page, _, defined_anchor = defined.partition("#")
         word = re.compile(r"\b(?:" + pattern + r")\b", re.I)
-        # On the defining page the term may be defined inside a longer bold
-        # phrase (`**target policy**`); elsewhere only the bare term set in bold
-        # is a redefinition — `**conversion rule**` is another term.
+        # On the defining page the term may sit inside a longer bold phrase
+        # (`**target policy**`); elsewhere only the bare term set in bold is a
+        # redefinition — `**conversion rule**` is another term.
         bold = re.compile(r"\*\*(?:[^*\n]*\b)?(?:" + pattern + r")\b[^*\n]*\*\*", re.I)
         rebold = re.compile(r"\*\*(?:(?:the|a|an) )?(?:" + pattern + r")\*\*", re.I)
+
         if defined_page not in pages:
             fail(f"manifest: vocabulary term '{term}' is defined on {defined_page}, "
                  "which is not a page")
-        if defined_anchor and defined_anchor not in pages[defined_page].anchors:
+        owner = pages[defined_page]
+        if defined_anchor and defined_anchor not in owner.anchors:
             fail(f"manifest: vocabulary term '{term}' points at {defined}, "
                  "which has no matching heading")
-        if not bold.search(pages[defined_page].text):
-            fail(f"{defined_page}: does not define '{term}' in bold, "
-                 "and the manifest says it does")
-        # One heading on the concepts page, linking to the definition.
+        # The definition has to sit under the heading the reader is sent to.
+        scope = section_of(owner.text, defined_anchor) if defined_anchor else owner.text
+        if not bold.search(CODE_SPAN.sub(blank, scope or "")):
+            fail(f"{defined_page}: does not define '{term}' in bold under "
+                 f"#{defined_anchor or '(top)'}, and the manifest says it does")
+
+        # One entry on the concepts page, and that entry links to the definition.
         heading = re.compile(r"^###\s+" + re.escape(term) + r"\s*$", re.I | re.M)
-        if not heading.search(concepts.text):
+        match = heading.search(concepts.text)
+        if match is None:
             fail(f"concepts.md: no '### {term}' entry")
-        if defined not in INLINE.findall(concepts.text):
+        entry_end = concepts.text.find("\n###", match.end())
+        entry_text = concepts.text[match.end():entry_end if entry_end >= 0 else None]
+        if not any(resolves(concepts, target, root) == defined
+                   for _, target in INLINE_SPAN.findall(entry_text)):
             fail(f"concepts.md: the '{term}' entry does not link to {defined}")
+
         # A definition in a chapter's opening prose is anchored at its title, and
         # a link to the chapter itself lands there.
-        title = HEADING.search(pages[defined_page].text)
+        title = HEADING.search(owner.text)
         accepted = {defined}
         if title and defined_anchor == anchors(title.group(0)).pop():
             accepted.add(defined_page)
+
         for page in pages.values():
             if page.relative in VOCABULARY_EXEMPT:
                 continue
-            if page.relative != defined_page and rebold.search(page.text):
+            text = prose(page.text)
+            if page.relative != defined_page and rebold.search(text):
                 fail(f"{page.relative}: sets '{term}' in bold; it is defined on "
                      f"{defined_page} and other pages link there")
             if page.relative == defined_page or not entry.get("link_first_mention", True):
                 continue
-            # A title quoted in a reference-style link is not a mention, and a
-            # mention inside one cannot carry a link of its own; blank those
-            # out — across lines, keeping every offset — before searching.
-            masked = REFERENCE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), page.text)
-            for line, original in zip(prose_lines(masked), prose_lines(page.text)):
-                # Neither code spans nor link targets are mentions: the anchor
-                # `#plan-value-conversions` names a heading, not the concept.
-                searched = re.sub(r"`[^`]*`|\]\([^)]*\)", lambda m: " " * len(m.group(0)), line)
-                match = word.search(searched)
-                if match is None:
-                    continue
-                line = original
-                linked = any(start <= match.start() < end
-                             and resolves(page, target, root) in accepted
-                             for (start, end), target in link_spans(line))
-                if not linked:
-                    fail(f"{page.relative}: the first mention of '{term}' "
-                         f"('{line.strip()[:60]}…') must link to {defined}")
-                break
+            # A title quoted in a reference-style link is not a mention, and
+            # neither is a link's target; blank both before searching.
+            searched = REFERENCE.sub(blank, text)
+            searched = re.sub(r"\]\([^)]*\)", blank, searched)
+            mention = word.search(searched)
+            if mention is None:
+                continue
+            linked = any(span.start() <= mention.start() < span.end()
+                         and resolves(page, span.group(2).strip(), root) in accepted
+                         for span in INLINE_SPAN.finditer(text))
+            if not linked:
+                line = text.count("\n", 0, mention.start()) + 1
+                fail(f"{page.relative}:{line}: the first mention of '{term}' must "
+                     f"link to {defined}")
 
 
 def resolves(page, target, root):
     """A link target on `page`, as a root-relative path with its anchor."""
+    target = re.sub(r"\s+", "", target)
     file, _, anchor = target.partition("#")
     if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target):
         return None

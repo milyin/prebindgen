@@ -135,7 +135,7 @@ and every request that needed it is skipped with that reason. No half-built node
 is ever published: while planning is in progress the registry marks the
 conversion as being resolved, which is how it detects a cycle, but that mark is
 bookkeeping, not a plan, and it is replaced by a node or by an unsupported
-[outcome](06-retain.md#retain-supported-output). No later stage sees a conversion that half exists.
+result. No later stage sees a conversion that half exists.
 
 ## Describing source construction and decomposition
 
@@ -330,7 +330,7 @@ The registry follows `Selection.relation` to the checked operation, obtains its 
 
 Selection precedes child traversal: an atomic opaque representation does not inspect unused private fields. Helper arguments need not resemble fields. Child types retain wrappers, references and lifetimes; cloning needs an explicit operation.
 
-Callback arguments reverse direction, and the reason is worth stating because no declaration says so and the registry applies it on its own. A callback crossing *into* Rust is a callable Rust receives, so that value is built; the values its arguments carry are ones Rust already holds and pushes out through the call, so each of those crosses the other way. One direction is requested, the other follows from the shape. Future roles follow the same checked-construction pattern and produce unsupported outcomes until implemented.
+Callback arguments reverse direction, and the reason is worth stating because no declaration says so and the registry applies it on its own. A callback [crossing](03-requests.md#finding-an-existing-conversion-plan) *into* Rust is a callable Rust receives, so that value is built; the values its arguments carry are ones Rust already holds and pushes out through the call, so each of those crosses the other way. One direction is requested, the other follows from the shape. Future roles follow the same checked-construction pattern and produce unsupported [outcomes](06-retain.md#retain-supported-output) until implemented.
 
 ### Responsibility boundary with Flat
 
