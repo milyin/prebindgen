@@ -257,7 +257,7 @@ and each frontend fills it with whatever its own adapter will later have to
 interpret. That is what lets one engine serve two languages whose choices have
 nothing in common.
 
-Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a **relation**: a description of how a Rust value is constructed or read, such as using its fields or calling a helper. Relations are the subject of [source construction and decomposition](04-values.md#describing-source-construction-and-decomposition); where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
+Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [**relation**](04-values.md#what-a-relation-is): a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument. Relations are introduced in [the value-planning chapter](04-values.md#what-a-relation-is); where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
 
 Three concepts stay separate throughout the design:
 

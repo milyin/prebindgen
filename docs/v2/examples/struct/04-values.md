@@ -36,7 +36,7 @@ identity conversions in both, and render no code of their own.
 - Selection precedes traversal: an opaque representation would never inspect the
   fields, which is what makes a record with unreadable private fields
   representable as a handle.
-- Parts come from the selected relation, so a constructor relation would give
+- Parts come from the selected [relation](../../stages/04-values.md#what-a-relation-is), so a constructor relation would give
   one `millis` argument instead of two fields, with no change to this stage.
 - Construction follows declaration order, and the mapping from parts to carriers
   is validated.

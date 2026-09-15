@@ -77,7 +77,7 @@ The initial implementation should demonstrate the architecture with both existin
 
 1. Construct `BindingRequests` from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
-3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI representation using the same source relation algorithm.
+3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI representation using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
 5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete artifacts.
 

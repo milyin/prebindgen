@@ -203,7 +203,7 @@ concrete contributions stay separate throughout planning and writing:
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
 | Public foreign source | Header derived from Rust | Kotlin classes and native declaration | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
 
-For the input record, the registry asks the selected relation for its fields,
+For the input record, the registry asks the selected [relation](04-values.md#what-a-relation-is) for its fields,
 resolves the child conversions, and asks the target for a representation using
 those child descriptions. The target returns the member/getter mappings and
 primitive specifications. The registry registers their definitions, creates

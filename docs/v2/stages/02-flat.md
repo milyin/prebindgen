@@ -220,7 +220,8 @@ not a second source of facts: the retained syntax is private to Flat, and the
 rule for every consumer is to analyse the model and generate from the model.
 
 That rule is about a phase, and it governs both engines. **Planning** is
-everything up to final Rust emission: recording requests, selecting relations,
+everything up to final Rust emission: recording requests, selecting
+[relations](04-values.md#what-a-relation-is),
 describing representations, assembling a boundary. Planning may carry a type
 opaquely and use what the model says about it — its kind, its identity, its
 parts, its declared fields, its source location — and may not obtain the syntax
