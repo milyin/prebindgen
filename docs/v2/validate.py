@@ -64,7 +64,7 @@ def strip_fences(text, where):
             run = marker.group(1)
             if fence is None:
                 fence = run
-                kept.append("<code>")
+                kept.append("{code}")
             elif run[0] == fence[0] and len(run) >= len(fence):
                 fence = None
                 kept.append("")
@@ -250,6 +250,9 @@ def blank(match):
 # run of the same length; a shorter run inside is content, so ``a ` b`` is one
 # span, and an unmatched run is text.
 CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(?:(?!(?<!`)\1(?!`))[\s\S])+?(?<!`)\1(?!`)")
+# The one HTML construct the document writes is a table, and a `<code>` cell
+# in it is code the way a backtick span is.
+HTML_CODE = re.compile(r"<code>[\s\S]*?</code>")
 # A backslash-escaped punctuation character has no Markdown meaning: \` opens
 # no code span, \[ no link, \* no emphasis.
 ESCAPE = re.compile(r"\\[\\`*_\[\]()#]")
@@ -267,7 +270,8 @@ def prose(text):
             out.append(" " * len(line))
         else:
             out.append(line)
-    return CODE_SPAN.sub(blank, ESCAPE.sub(blank, "\n".join(out)))
+    text = ESCAPE.sub(blank, "\n".join(out))
+    return HTML_CODE.sub(blank, CODE_SPAN.sub(blank, text))
 
 
 def section_of(text, anchor):

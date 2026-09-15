@@ -307,6 +307,16 @@ class SpecStructure(unittest.TestCase):
                   "[\nCapture source items\n][fn_source]")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
+    def test_vocabulary_html_code_cell_is_code_and_its_row_is_prose(self):
+        # The requests chapter's HTML table: a `<code>` cell is code, the rest
+        # of the cell is prose.
+        self.edit("stages/03-requests.md", "Expose <code>Stamp</code> as a C data struct",
+                  "Expose <code>relation</code> as a C data struct")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+        self.edit("stages/03-requests.md", "Expose <code>relation</code> as a C data struct",
+                  "Expose <code>Stamp</code> as a C data struct relation")
+        self.rejects("first mention of 'relation'")
+
     def test_vocabulary_entry_missing_from_concepts(self):
         self.edit("concepts.md", "### Relation\n", "### Relations\n")
         self.rejects("no '### relation' entry")

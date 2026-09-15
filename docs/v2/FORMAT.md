@@ -116,11 +116,12 @@ its plural), define it in bold on one page under a heading the entry names, add
 its `### Term` entry to `concepts.md`, then run the validator and link what it
 reports. The validator reads Markdown as this document writes it — fenced code, `**`
 or `__` for strong emphasis, inline and reference-style links, backslash
-escapes, code spans of any delimiter length — and not as a CommonMark
-implementation: an indented code block, an HTML block or a link reference
-defined by title are not recognized, and the document does not use them. A
-new construct the document needs is added to the validator with a test, not
-worked around.
+escapes, code spans of any delimiter length, and the one HTML construct in
+use, a table whose `<code>` cells are code and whose other cells are prose —
+and not as a CommonMark implementation: an indented code block, any other
+HTML, or a link reference defined by title are not recognized, and the
+document does not use them. A new construct the document needs is added to
+the validator with a test, not worked around.
 
 A term the rule fits badly — one the chapters must also use in its
 ordinary English sense — is entered with `"link_first_mention": false`, which
