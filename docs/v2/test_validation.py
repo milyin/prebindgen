@@ -217,10 +217,49 @@ class SpecStructure(unittest.TestCase):
         self.rejects("first mention of 'wrapper'")
 
     def test_vocabulary_quoted_title_in_a_reference_link_is_not_a_mention(self):
-        # An element TOC quotes "Plan value conversions" as a link; the rule
-        # must not read that as the page's first mention of "conversion".
-        self.assertIn("[Plan value conversions][fn_values]",
-                      (self.root / "examples/fn/README.md").read_text())
+        # A quoted title placed before the page's linked prose mention of
+        # "conversion" must not count as the first mention.
+        self.edit("examples/fn/05-boundary.c.md",
+                  "# Function taking an owned record — Assemble the native boundary — C\n",
+                  "# Function taking an owned record — Assemble the native boundary — C\n\n"
+                  "See [Plan value conversions][fn_values_c] first.\n")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+        # And the same words outside a title-quoting link are a first mention.
+        self.edit("examples/fn/05-boundary.c.md",
+                  "See [Plan value conversions][fn_values_c] first.",
+                  "See how value conversions are planned first.")
+        self.rejects("first mention of 'conversion'")
+
+    def test_vocabulary_multiword_first_mention_across_a_soft_break_is_found(self):
+        self.edit("stages/03-requests.md", "# Record binding requests\n",
+                  "# Record binding requests\n\nA source\nitem comes from capture.\n")
+        self.rejects("first mention of 'source item'")
+
+    def test_vocabulary_double_backtick_code_is_code(self):
+        # Neither a definition nor a mention, whatever the delimiter length.
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "``**relation**`` [relations](04-values.md#what-a-relation-is)")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+        self.edit("stages/02-flat.md",
+                  "``**relation**``",
+                  "``a\nrelation `here` too``")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+        self.edit("stages/06-retain.md", "exactly one **outcome**", "exactly one ``**outcome**``")
+        self.rejects("does not define 'outcome' in bold")
+
+    def test_vocabulary_concepts_entry_ends_at_a_group_heading(self):
+        # The next group's introduction must not satisfy the previous entry.
+        self.edit("concepts.md",
+                  "[Record binding requests](stages/03-requests.md#record-binding-requests)\n\n"
+                  "## What the registry plans\n",
+                  "Record binding requests\n\n## What the registry plans\n\n"
+                  "See [Record binding requests](stages/03-requests.md#record-binding-requests).\n")
+        self.rejects("the 'part' entry does not link")
+
+    def test_vocabulary_wrapped_title_in_a_reference_link_is_still_a_title(self):
+        self.edit("examples/fn/README.md", "[Capture source items][fn_source]",
+                  "[Capture\nsource items][fn_source]")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
     def test_vocabulary_entry_missing_from_concepts(self):

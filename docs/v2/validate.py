@@ -246,7 +246,9 @@ def blank(match):
     return re.sub(r"[^\n]", " ", match.group(0))
 
 
-CODE_SPAN = re.compile(r"`[^`]*`", re.S)
+# A code span opens with a run of backticks and closes with a run of the same
+# length; a shorter run inside is content, so ``a ` b`` is one span.
+CODE_SPAN = re.compile(r"(`+)(?:(?!\1)[\s\S])+?\1")
 REFERENCE_TEXT = re.compile(r"\[([^\]^]*?)\]\[[A-Za-z0-9_]+\]", re.S)
 INLINE_SPAN = re.compile(r"\[([^\]]*)\]\(([^)]+)\)", re.S)
 
@@ -295,7 +297,9 @@ def check_vocabulary(pages, manifest, root):
         term, pattern = entry["term"], entry["match"]
         defined = entry["defined"]
         defined_page, _, defined_anchor = defined.partition("#")
-        word = re.compile(r"\b(?:" + pattern + r")\b", re.I)
+        # A space in a multi-word term is any whitespace, a soft line break
+        # included: "source\nitem" is a mention of the source item.
+        word = re.compile(r"\b(?:" + pattern.replace(" ", r"\s+") + r")\b", re.I)
         # On the defining page the term may sit inside a longer bold phrase
         # (`**target policy**`); elsewhere only the bare term set in bold is a
         # redefinition — `**conversion rule**` is another term.
@@ -315,13 +319,14 @@ def check_vocabulary(pages, manifest, root):
             fail(f"{defined_page}: does not define '{term}' in bold under "
                  f"#{defined_anchor or '(top)'}, and the manifest says it does")
 
-        # One entry on the concepts page, and that entry links to the definition.
+        # One entry on the concepts page, and that entry — up to the next
+        # heading of its level or higher, so a group heading ends it — links to
+        # the definition itself.
         heading = re.compile(r"^###\s+" + re.escape(term) + r"\s*$", re.I | re.M)
         match = heading.search(concepts.text)
         if match is None:
             fail(f"concepts.md: no '### {term}' entry")
-        entry_end = concepts.text.find("\n###", match.end())
-        entry_text = concepts.text[match.end():entry_end if entry_end >= 0 else None]
+        entry_text = section_of(concepts.text, anchors(match.group(0)).pop()) or ""
         if not any(resolves(concepts, target, root) == defined
                    for _, target in INLINE_SPAN.findall(entry_text)):
             fail(f"concepts.md: the '{term}' entry does not link to {defined}")
@@ -348,7 +353,8 @@ def check_vocabulary(pages, manifest, root):
             # other, and one that wraps a first mention leaves it unlinked to
             # the definition. A link's target is never a mention.
             searched = REFERENCE_TEXT.sub(
-                lambda m: blank(m) if m.group(1) in titles else m.group(0), text)
+                lambda m: blank(m) if re.sub(r"\s+", " ", m.group(1)) in titles else m.group(0),
+                text)
             searched = re.sub(r"\]\([^)]*\)|\]\[[A-Za-z0-9_]+\]", blank, searched)
             mention = word.search(searched)
             if mention is None:

@@ -36,7 +36,9 @@ Read it first; come back when a chapter uses a word you have not met.
 
 Every word below is **defined** — set in bold — on exactly one page, under the
 heading its entry links to, and every other page links its first mention of the
-word there. [`validate.py`](FORMAT.md#vocabulary) checks both.
+word there — except for the four that are also ordinary English words the
+chapters need in that sense (declaration, root, part, capability), which keep
+only the single definition. [`validate.py`](FORMAT.md#vocabulary) checks both.
 
 ## What the source provides
 
@@ -82,8 +84,9 @@ what a skip's diagnostic path names. — [A value's position in an exported func
 
 ### Part
 
-A position inside a source value — the `secs` field of `Stamp`, or the one
-argument of a constructor — as a relation exposes it. Sites and parts together
+A position inside a source value — the `secs` field of `Stamp`, or (once
+constructor relations are built) the one argument of a constructor — as a
+relation exposes it. Sites and parts together
 are the **positions** planning happens at. — [Record binding requests](stages/03-requests.md#record-binding-requests)
 
 ## What the registry plans
