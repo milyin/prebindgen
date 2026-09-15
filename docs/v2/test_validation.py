@@ -262,6 +262,51 @@ class SpecStructure(unittest.TestCase):
                   "[Capture\nsource items][fn_source]")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
+    def test_vocabulary_unmatched_backticks_and_escapes_are_text(self):
+        # An unmatched run and an escaped backtick open no code span, so the
+        # word between them is prose — and an unlinked first mention.
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "``relation` [relations](04-values.md#what-a-relation-is)")
+        self.rejects("first mention of 'relation'")
+
+    def test_vocabulary_escaped_backticks_are_text(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "\\`relation\\` [relations](04-values.md#what-a-relation-is)")
+        self.rejects("first mention of 'relation'")
+
+    def test_vocabulary_link_that_renders_as_text_is_not_a_link(self):
+        # An escaped bracket renders literally; so does a link inside code.
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "\\[relations](04-values.md#what-a-relation-is)")
+        self.rejects("first mention of 'relation'")
+
+    def test_vocabulary_concepts_link_inside_code_does_not_count(self):
+        self.edit("concepts.md",
+                  "which function it serves. — [Plan value conversions](stages/04-values.md#plan-value-conversions)",
+                  "which function it serves. — `[Plan value conversions](stages/04-values.md#plan-value-conversions)`")
+        self.rejects("the 'conversion' entry does not link")
+
+    def test_vocabulary_underscore_strong_is_strong(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "[relations](04-values.md#what-a-relation-is) and __relation__")
+        self.rejects("sets 'relation' in bold")
+        self.edit("stages/02-flat.md", " and __relation__", "")
+        self.edit("stages/06-retain.md", "exactly one **outcome**", "exactly one __outcome__")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
+    def test_vocabulary_definition_wrapped_across_lines_is_a_definition(self):
+        self.edit("stages/01-source.md", "**source item**", "**source\nitem**")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
+    def test_vocabulary_padded_title_is_still_a_title(self):
+        self.edit("examples/fn/README.md", "[Capture source items][fn_source]",
+                  "[\nCapture source items\n][fn_source]")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+
     def test_vocabulary_entry_missing_from_concepts(self):
         self.edit("concepts.md", "### Relation\n", "### Relations\n")
         self.rejects("no '### relation' entry")
