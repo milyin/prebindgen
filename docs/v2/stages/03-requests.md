@@ -206,7 +206,7 @@ common Rust writer belongs to the engine.
 The implementation divides the registry's data between two structures:
 
 - **The generation operation**, `generate(flat, target, requests, crate)` — a free function, since the engine keeps no state between runs. `target` is the language implementation's object implementing the `Target` interface; `requests` contains the choices recorded by the frontend. The registry determines how to construct or read Rust values—through their fields, constructors, accessors or conversion helpers—then combines the required conversions, checks dependencies and assembles binding plans. Source types, fields and signatures remain described by `Flat`.
-- **The run** (`Run` in `plan.rs`) holds the temporary planning state inside `generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and report; on failure, the registry returns an error.
+- **The run** (`Run` in `plan.rs`) holds the temporary planning state inside `generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and every declaration's outcome; on failure, the registry returns an error.
 
 A binding crate normally builds one configured frontend. The frontend calls `generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using the run's working state.
 

@@ -45,7 +45,7 @@ converted.
 - Exposing the same function at two placements gives two `DeclarationId`s with
   independent [outcomes](../../stages/06-retain.md#retain-supported-output).
 - A setting the frontend cannot translate is recorded as an
-  `UnsupportedRequest` and reaches the report; an override naming a parameter
+  `UnsupportedRequest` and becomes a skipped outcome; an override naming a parameter
   this function does not have fails the build.
 - Nothing here claims the function can be generated.
 
