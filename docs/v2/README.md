@@ -198,11 +198,11 @@ paths are added.
 - [Function taking an owned record][fn] — `stamp_sum(Stamp) -> i64`
 - [Record with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
 
-An **element kind** is a kind of source declaration — a function, a record, an
-enum — as this appendix organizes it. (Inside the pipeline, the chapters use
-`ElementId` for something narrower: one *requested output*, such as `stamp_sum`
-exposed at one Kotlin placement. Same adjective, different noun; the chapters say
-which they mean.) Element kinds form a tree: a kind at the root, more specific
+An **element kind** is a kind of source item — a function, a record, an enum —
+as this appendix organizes it. (Inside the pipeline the word is not used: the
+chapters say *source item* for what the model captured and *declaration* for
+what the binding asked to expose, identified by a `DeclarationId` — such as
+`stamp_sum` exposed at one Kotlin placement.) Element kinds form a tree: a kind at the root, more specific
 variants below it, each becoming its own path when its behavior differs from its
 parent's. Two paths are specified today; the rest name the id they will use when
 they are written.

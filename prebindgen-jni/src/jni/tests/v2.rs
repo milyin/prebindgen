@@ -5,7 +5,7 @@
 //! explicitly, so a test never depends on the runner's `PREBINDGEN_PIPELINE`.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{ElementKind, Outcome, SourceKind};
+use prebindgen_registry_v2::{DeclarationKind, Outcome, SourceKind};
 
 use super::*;
 
@@ -53,7 +53,7 @@ fn fixture_items() -> Vec<(syn::Item, SourceLocation)> {
 }
 
 /// The gate #719 §A names: the whole declaration set reaches v2, and every
-/// requested element comes back accounted for — placed where this adapter's
+/// requested declaration comes back accounted for — placed where this adapter's
 /// package prefix and name-mangle hooks put it, not where v2 guesses.
 #[test]
 fn every_declared_element_is_accounted_for() {
@@ -61,9 +61,9 @@ fn every_declared_element_is_accounted_for() {
     let manifest = generated.manifest().expect("v2 produces a manifest");
 
     let ids: Vec<&str> = manifest
-        .elements
+        .declarations
         .iter()
-        .map(|entry| entry.element.id.as_str())
+        .map(|entry| entry.declaration.id.as_str())
         .collect();
     assert_eq!(
         ids,
@@ -78,10 +78,10 @@ fn every_declared_element_is_accounted_for() {
 
     let placement = |id: &str| {
         manifest
-            .elements
+            .declarations
             .iter()
-            .find(|entry| entry.element.id.as_str() == id)
-            .map(|entry| entry.element.placement.clone())
+            .find(|entry| entry.declaration.id.as_str() == id)
+            .map(|entry| entry.declaration.placement.clone())
             .unwrap_or_default()
     };
     assert_eq!(placement("type:ZThing"), "io.test.jni.thing.ZThing");
@@ -108,9 +108,9 @@ fn every_declared_element_is_accounted_for() {
     // borrowed handle is a reference, which no v2 carrier holds yet.
     let skip = |id: &str| {
         manifest
-            .elements
+            .declarations
             .iter()
-            .find(|entry| entry.element.id.as_str() == id)
+            .find(|entry| entry.declaration.id.as_str() == id)
             .and_then(|entry| entry.outcome.skip())
             .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
             .expect("skipped")
@@ -213,17 +213,17 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
 }
 
 /// Class members are separately selected: the class and each of its methods are
-/// elements in their own right, so one can be skipped without the others.
+/// declarations in their own right, so one can be skipped without the others.
 #[test]
 fn class_members_are_elements_of_their_own() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let manifest = generated.manifest().expect("v2 produces a manifest");
     let representation = |id: &str| {
         manifest
-            .elements
+            .declarations
             .iter()
-            .find(|entry| entry.element.id.as_str() == id)
-            .map(|entry| entry.element.representation.clone())
+            .find(|entry| entry.declaration.id.as_str() == id)
+            .map(|entry| entry.declaration.representation.clone())
             .unwrap_or_default()
     };
     assert_eq!(representation("type:ZThing"), "ptr_class");
@@ -238,9 +238,9 @@ fn an_ignore_is_classified_separately() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let manifest = generated.manifest().expect("v2 produces a manifest");
     let ignored = manifest
-        .elements
+        .declarations
         .iter()
-        .find(|entry| entry.element.id.as_str() == "fn:z_thing_internal")
+        .find(|entry| entry.declaration.id.as_str() == "fn:z_thing_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
 }
@@ -306,11 +306,11 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
     let manifest = generated.manifest().expect("v2 produces a manifest");
 
     // Once each: a helper is stated where it is bound, and a second entry for
-    // the helper itself would give one id to two elements.
+    // the helper itself would give one id to two declarations.
     let ids: Vec<&str> = manifest
-        .elements
+        .declarations
         .iter()
-        .map(|entry| entry.element.id.as_str())
+        .map(|entry| entry.declaration.id.as_str())
         .collect();
     assert_eq!(ids, ["type:ZThing", "fn:local_size", "fn:local_tag"]);
 }
@@ -334,14 +334,14 @@ fn a_function_backed_constant_resolves_against_the_function() {
         .expect("a function-backed constant resolves");
     let manifest = generated.manifest().expect("v2 produces a manifest");
     let constant = manifest
-        .elements
+        .declarations
         .iter()
-        .find(|entry| entry.element.representation == "constant_fun")
+        .find(|entry| entry.declaration.representation == "constant_fun")
         .expect("the constant is accounted for");
-    assert_eq!(constant.element.rust_origin, "z_thing_describe");
-    assert_eq!(constant.element.kind, ElementKind::Const);
+    assert_eq!(constant.declaration.rust_origin, "z_thing_describe");
+    assert_eq!(constant.declaration.kind, DeclarationKind::Const);
     // The target gets a `val`; the source must hold a function.
-    assert_eq!(constant.element.source, SourceKind::Function);
+    assert_eq!(constant.declaration.source, SourceKind::Function);
 }
 
 /// The `Stamp` fixture the edge-case tests below build on: a record of two
@@ -366,9 +366,9 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
     generated
         .manifest()
         .expect("v2 produces a manifest")
-        .elements
+        .declarations
         .iter()
-        .find(|entry| entry.element.id.as_str() == id)
+        .find(|entry| entry.declaration.id.as_str() == id)
         .and_then(|entry| entry.outcome.skip())
         .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))

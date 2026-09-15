@@ -20,7 +20,7 @@ requires:  node(Stamp, IntoRust)     // the record conversion
 
 ```text
 SurfaceSpec {
-    element:  ElementId(public Stamp in this target),
+    declaration: DeclarationId(public Stamp in this target),
     requires: [ node(Stamp, IntoRust), node(i64, IntoRust) x2 ],
     members:  [],
     payload:  the repr(C) aggregate  |  the example.Stamp data class

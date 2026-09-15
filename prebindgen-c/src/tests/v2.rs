@@ -5,7 +5,7 @@
 //! `PREBINDGEN_PIPELINE` happens to hold in the runner's environment.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{ElementKind, Outcome};
+use prebindgen_registry_v2::{DeclarationKind, Outcome};
 
 use super::*;
 use crate::test_util::unique_test_dir;
@@ -64,7 +64,7 @@ fn binding() -> CbindgenBuilder {
 }
 
 /// The gate #719 §A names: the whole declaration set reaches v2, and every
-/// requested element comes back accounted for — under the names this adapter's
+/// requested declaration comes back accounted for — under the names this adapter's
 /// manglers give them, not under a v2 invention.
 #[test]
 fn every_declared_element_is_accounted_for() {
@@ -72,9 +72,9 @@ fn every_declared_element_is_accounted_for() {
     let manifest = generated.manifest().expect("v2 produces a manifest");
 
     let ids: Vec<&str> = manifest
-        .elements
+        .declarations
         .iter()
-        .map(|entry| entry.element.id.as_str())
+        .map(|entry| entry.declaration.id.as_str())
         .collect();
     assert_eq!(
         ids,
@@ -89,9 +89,9 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let placements: Vec<&str> = manifest
-        .elements
+        .declarations
         .iter()
-        .map(|entry| entry.element.placement.as_str())
+        .map(|entry| entry.declaration.placement.as_str())
         .collect();
     assert!(
         placements.contains(&"calculator_t") && placements.contains(&"z_calculator_new"),
@@ -113,9 +113,9 @@ fn a_missing_capability_is_reported_per_element() {
     let manifest = generated.manifest().expect("v2 produces a manifest");
 
     let function = manifest
-        .elements
+        .declarations
         .iter()
-        .find(|entry| entry.element.id.as_str() == "fn:calculator_new")
+        .find(|entry| entry.declaration.id.as_str() == "fn:calculator_new")
         .expect("the declared function is in the manifest");
     let skip = function
         .outcome
@@ -218,12 +218,12 @@ fn an_ignore_is_classified_separately() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let manifest = generated.manifest().expect("v2 produces a manifest");
     let ignored = manifest
-        .elements
+        .declarations
         .iter()
-        .find(|entry| entry.element.id.as_str() == "fn:calculator_internal")
+        .find(|entry| entry.declaration.id.as_str() == "fn:calculator_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
-    assert_eq!(ignored.element.kind, ElementKind::Function);
+    assert_eq!(ignored.declaration.kind, DeclarationKind::Function);
 }
 
 /// A declared function the source never captured is a build error under v2 as
@@ -267,7 +267,7 @@ fn the_manifest_is_written_as_json_and_markdown() {
     let written = generated.write_manifest(&dir).expect("write_manifest");
     assert_eq!(written.len(), 2);
     let json = std::fs::read_to_string(&written[0]).unwrap();
-    assert!(json.contains("\"schema_version\": 1"), "{json}");
+    assert!(json.contains("\"schema_version\": 2"), "{json}");
     assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
     assert!(json.contains("unsupported.c.opaque_ptr"), "{json}");
     let markdown = std::fs::read_to_string(&written[1]).unwrap();
@@ -297,7 +297,7 @@ fn an_unsafe_source_function_is_a_reported_skip() {
         .build_with(Pipeline::V2)
         .expect("v2 plans");
     let manifest = generated.manifest().expect("v2 produces a manifest");
-    let skip = manifest.elements[0].outcome.skip().expect("skipped");
+    let skip = manifest.declarations[0].outcome.skip().expect("skipped");
     assert_eq!(skip.capability.as_str(), "unsupported.fn.unsafe");
     assert_eq!(skip.path(), "fn:raw_sum");
 }

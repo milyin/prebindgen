@@ -133,9 +133,9 @@ mod tests {
         }
     }
 
-    /// Every requested element was emitted, and the report says so.
+    /// Every declaration was emitted, and the report says so.
     #[test]
-    fn both_targets_report_every_generated_element_as_emitted() {
+    fn both_targets_report_every_declaration_as_emitted() {
         for target in ["c", "jni"] {
             let report = report(target);
             // The record, and the three functions over it.
@@ -147,7 +147,7 @@ mod tests {
         }
     }
 
-    /// Every declared element the two targets could not generate is reported
+    /// Every declaration the two targets could not generate is reported
     /// as skipped, with the capability that would unblock it.
     ///
     /// All three are declared deliberately: a record whose field has no
@@ -157,7 +157,7 @@ mod tests {
     /// Kotlin data class with no properties — neither of which exists.
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
-        for (target, element, capability) in [
+        for (target, declaration, capability) in [
             ("c", "type:Pair", "unsupported.type.not_a_record"),
             ("c", "type:Marker", "unsupported.c.empty_aggregate"),
             ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
@@ -170,12 +170,12 @@ mod tests {
                 .lines()
                 .collect::<Vec<_>>()
                 .windows(8)
-                .find(|window| window[0].contains(element))
+                .find(|window| window[0].contains(declaration))
                 .map(|window| window.join("\n"))
-                .unwrap_or_else(|| panic!("{target} report has no entry for {element}"));
+                .unwrap_or_else(|| panic!("{target} report has no entry for {declaration}"));
             assert!(
                 entry.contains("\"outcome\": \"skipped\"") && entry.contains(capability),
-                "{element} should be skipped with {capability}:\n{entry}"
+                "{declaration} should be skipped with {capability}:\n{entry}"
             );
         }
         // Nothing partial reaches the file either: no empty aggregate, no

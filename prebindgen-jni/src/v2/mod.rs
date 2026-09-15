@@ -16,7 +16,7 @@ mod kotlin;
 mod target;
 
 use prebindgen_registry_v2::{
-    generate, BindingRequests, DeclaredElement, ElementKind, EngineError, Generation, SourceKind,
+    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation, SourceKind,
 };
 pub use target::{JniPayload, JniPolicy, JniTarget};
 
@@ -71,13 +71,13 @@ impl Declarations {
         // other, as a class member or as a package function, but the binding
         // defines it, so the source never captured it. It is stated where it is
         // bound and nowhere else: a second entry for the helper itself would
-        // give one id to two elements.
+        // give one id to two declarations.
         let is_local = |ident: &syn::Ident| self.local_fns.iter().any(|(local, ..)| local == ident);
-        let stated = |element: DeclaredElement, ident: &syn::Ident| {
+        let stated = |declaration: Declaration, ident: &syn::Ident| {
             if is_local(ident) {
-                element.local()
+                declaration.local()
             } else {
-                element
+                declaration
             }
         };
 
@@ -100,8 +100,8 @@ impl Declarations {
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
             requests.output(
-                DeclaredElement::new(
-                    ElementKind::Type,
+                Declaration::new(
+                    DeclarationKind::Type,
                     key.as_str(),
                     placement.clone(),
                     declarator,
@@ -111,15 +111,15 @@ impl Declarations {
             );
 
             // Members are separately selected: a class can be emitted with one
-            // of its methods skipped, so each is an element of its own. None is
+            // of its methods skipped, so each is a declaration of its own. None is
             // lowered yet: a method's receiver is a handle.
             for member in self.class_members.get(key).into_iter().flatten() {
                 let declarator = member_representation(member);
                 let policy = requests.policy(JniPolicy::Unimplemented { declarator });
                 requests.output(
                     stated(
-                        DeclaredElement::new(
-                            ElementKind::Function,
+                        Declaration::new(
+                            DeclarationKind::Function,
                             member.rust_ident.to_string(),
                             format!("{placement}.{}", self.effective_method_name(key, member)),
                             declarator,
@@ -160,8 +160,8 @@ impl Declarations {
                     });
                 requests.output(
                     stated(
-                        DeclaredElement::new(
-                            ElementKind::Function,
+                        Declaration::new(
+                            DeclarationKind::Function,
                             entry.rust_ident.to_string(),
                             placed(entry),
                             "fun",
@@ -177,8 +177,8 @@ impl Declarations {
             });
             for entry in &config.constants {
                 requests.output(
-                    DeclaredElement::new(
-                        ElementKind::Const,
+                    Declaration::new(
+                        DeclarationKind::Const,
                         entry.rust_ident.to_string(),
                         placed(entry),
                         "constant",
@@ -190,22 +190,25 @@ impl Declarations {
             // captured **function**, so its target kind and its source kind
             // differ — and a binding-local one names no captured item at all.
             for entry in &config.constant_functions {
-                let element = DeclaredElement::new(
-                    ElementKind::Const,
+                let declaration = Declaration::new(
+                    DeclarationKind::Const,
                     entry.rust_ident.to_string(),
                     placed(entry),
                     "constant_fun",
                 );
                 requests.output(
-                    stated(element.sourced_as(SourceKind::Function), &entry.rust_ident),
+                    stated(
+                        declaration.sourced_as(SourceKind::Function),
+                        &entry.rust_ident,
+                    ),
                     unimplemented,
                 );
             }
             // A `constant!(X).expr(..)` has no Rust item behind it at all.
             for decl in &config.constant_exprs {
                 requests.output(
-                    DeclaredElement::new(
-                        ElementKind::Const,
+                    Declaration::new(
+                        DeclarationKind::Const,
                         decl.kotlin_name.clone(),
                         format!("{package}.{}", decl.kotlin_name),
                         "constant_expr",
@@ -219,7 +222,7 @@ impl Declarations {
         // Declared conversions: the wire mapping for one Rust type, defined by
         // the binding rather than selected out of the source.
         //
-        // A binding-local fn is NOT an element of its own. It is a helper the
+        // A binding-local fn is NOT a declaration of its own. It is a helper the
         // binding defines, and what the target exports is the member or the
         // package function it was bound to — already stated above. Listing it
         // twice would give one id to two entries.
@@ -228,8 +231,8 @@ impl Declarations {
         });
         for decl in &self.convert_decls {
             requests.output(
-                DeclaredElement::new(
-                    ElementKind::Conversion,
+                Declaration::new(
+                    DeclarationKind::Conversion,
                     decl.key().as_str(),
                     self.kotlin_fqn(decl.key()).unwrap_or_default(),
                     "convert",
@@ -242,8 +245,8 @@ impl Declarations {
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_fns) {
             requests.ignored.push(
-                DeclaredElement::new(
-                    ElementKind::Function,
+                Declaration::new(
+                    DeclarationKind::Function,
                     ident.to_string(),
                     String::new(),
                     "ignore",
@@ -253,14 +256,14 @@ impl Declarations {
         }
         for key in sorted(&self.ignored_class_types) {
             requests.ignored.push(
-                DeclaredElement::new(ElementKind::Type, key.as_str(), String::new(), "ignore")
+                Declaration::new(DeclarationKind::Type, key.as_str(), String::new(), "ignore")
                     .local(),
             );
         }
         for ident in sorted(&self.ignored_const_idents) {
             requests.ignored.push(
-                DeclaredElement::new(
-                    ElementKind::Const,
+                Declaration::new(
+                    DeclarationKind::Const,
                     ident.to_string(),
                     String::new(),
                     "ignore_const",

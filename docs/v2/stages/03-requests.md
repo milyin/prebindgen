@@ -99,17 +99,18 @@ that structure; frontends do, which is why the two builders above can be as
 different as their languages while everything after this stage is shared.
 
 A request set separates two kinds of statement. An **output request** names one
-element to expose: this function, that type, at this foreign placement. A
+declaration: this function, that type, exposed at this foreign placement. A
 **target policy** is the bag of target-specific choices that applies to it —
 `Stamp` as a by-value C aggregate or as a JVM object whose properties are read,
 this exported symbol, that error convention. Policy is data the target itself
 interprets later; the registry only carries it and hands it back.
 
-This stage also fixes the names by which everything is addressed afterwards. An
-`ElementId` is one requested output — exposing the same Rust function at two
-Kotlin placements makes two of them, with separate outcomes, which the engine
-cannot express yet (its identity is the kind and the Rust origin). A **site** is a
-position inside such an element: parameter 0 of the exported `stamp_sum`, or its
+This stage also fixes the names by which everything is addressed afterwards. A
+**declaration** is one requested output, identified by a `DeclarationId` —
+exposing the same Rust function at two Kotlin placements makes two of them, with
+separate outcomes, which the engine cannot express yet (its identity is the kind
+and the Rust origin). A **site** is a position inside such a declaration:
+parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
 `Stamp`, or the single argument of a `stamp_from_millis` constructor. Overrides
 attach to sites and parts, and so do diagnostics, which is why a skipped binding
@@ -270,7 +271,7 @@ Policy guides the selection of these descriptions. The registry turns the descri
 
 ### The registry API called by the frontend
 
-The registry separates what should be generated from how values should be converted. An **output request** asks for one element, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries. As a design sketch — the built structure has `type_policies` and `site_policies` in place of `conversion_rules`, and no `unsupported` list, since a frontend states what it cannot lower as a request under a refusing policy:
+The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries. As a design sketch — the built structure has `type_policies` and `site_policies` in place of `conversion_rules`, and no `unsupported` list, since a frontend states what it cannot lower as a request under a refusing policy:
 
 ```rust
 struct BindingRequests<Policy> {
@@ -278,7 +279,7 @@ struct BindingRequests<Policy> {
     conversion_rules: ConversionRules, // Source-operation selections and applicability.
     policies: PolicyTable<Policy>,// Target configurations referenced by PolicyId.
     unsupported: Vec<UnsupportedRequest>, // Requests the frontend cannot yet fully translate.
-    ignored: Vec<ElementId>,      // Explicit user opt-outs retained for reporting.
+    ignored: Vec<DeclarationId>,  // Explicit user opt-outs retained for reporting.
 }
 ```
 
@@ -342,7 +343,7 @@ every function with a parameter or result of that type, declared class or bare
 scalar alike, and leaves the class itself; a declarator the target does not
 lower refuses by that declarator's name. Emitting the default interface in place
 of the one a setting asked for is not honoring the declaration; the report says
-which setting the element waits on. Settings that have no effect within this
+which setting the declaration waits on. Settings that have no effect within this
 increment are carried without refusing: a C function's
 `abort_on_conversion_error` says what a fallible input does, and no conversion
 here can fail. Local helpers and declared conversion operations are
@@ -355,7 +356,7 @@ applied where the requests are built; nothing is serialized.
 
 Names ending in `Id` follow one convention throughout. Each is a handle into a
 table the registry owns, valid inside one generation run, and each is issued by
-whoever owns that table: the frontend's request set issues `ElementId` and
+whoever owns that table: the frontend's request set issues `DeclarationId` and
 `PolicyId`, the registry issues `RelationId`, `NodeId`, `PrimitiveId` and the
 rest as it registers what a target described. A few are structured rather than
 opaque — `SiteId` and `PartId` are positions, so they carry their owner and their
@@ -368,14 +369,14 @@ To generate `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conv
 
 ```rust
 struct OutputRequest {
-    id: ElementId,        // This requested output, e.g. normalize at one Kotlin placement.
+    id: DeclarationId,    // This declaration, e.g. normalize at one Kotlin placement.
     source: SourceItemId, // The Rust function/type/constant or registered local helper.
     policy: PolicyId,     // Entry in BindingRequests.policies configuring this output.
     requirements: Vec<SemanticRequirement>, // Promises that must hold for this output.
 }
 ```
 
-`ElementId` identifies the requested output; `SourceItemId` identifies the source item behind it. Exposing one Rust function at two foreign placements gives two output identities — **not yet**: the engine's `ElementId` is the kind and the Rust origin, so one source item has one output identity, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
+`DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `DeclarationId` is the kind and the Rust origin, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
 ### A value's position in an exported function
 
@@ -383,7 +384,7 @@ The registry needs to locate the parameter affected by a per-function override. 
 
 ```rust
 struct SiteId {
-    owner: ElementId, // Requested function containing the position, e.g. normalize.
+    owner: DeclarationId, // The declared function containing the position, e.g. normalize.
     path: SitePath,   // Param(0), Return, or a nested callback argument position.
 }
 ```

@@ -1,5 +1,5 @@
 //! One finished v2 generation run: what was planned, what was emitted, and the
-//! manifest that accounts for every declared element.
+//! manifest that accounts for every declaration.
 //!
 //! The run owns its whole pipeline — parsing, resolution, plans, emission and
 //! the report. It reads the same model and the same declarations v1 does and
@@ -133,36 +133,36 @@ impl<P> Generation<P> {
     }
 }
 
-/// Check declared elements against the model before anything is planned.
+/// Check declarations against the model before anything is planned.
 ///
 /// A declaration is a statement of intent, so a declared item the source never
 /// captured is an error and not a capability question — the same rule v1 holds.
 ///
-/// Each element says which of the three captured kinds its origin must name —
+/// Each declaration says which of the three captured kinds its origin must name —
 /// which is not always its own kind, since a Kotlin `val` may be backed by a
 /// nullary function. Looking a function up among the constants reported a typo
 /// that was not there; looking it up in the whole namespace let a
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
 pub(crate) fn check_declarations(
-    declared: &[crate::decl::DeclaredElement],
+    declared: &[crate::decl::Declaration],
     flat: &Flat,
 ) -> Result<(), EngineError> {
     let missing: Vec<_> = declared
         .iter()
-        .filter(|element| {
-            let origin = element.rust_origin.as_str();
-            match element.source {
+        .filter(|declaration| {
+            let origin = declaration.rust_origin.as_str();
+            match declaration.source {
                 SourceKind::Function => flat.function(origin).is_none(),
                 SourceKind::Type => flat.declared_type(origin).is_none(),
                 SourceKind::Const => flat.constant(origin).is_none(),
                 SourceKind::BindingLocal => false,
             }
         })
-        .map(|element| {
+        .map(|declaration| {
             (
-                element.id.clone(),
-                element.source,
-                element.rust_origin.clone(),
+                declaration.id.clone(),
+                declaration.source,
+                declaration.rust_origin.clone(),
             )
         })
         .collect();
@@ -170,18 +170,18 @@ pub(crate) fn check_declarations(
         return Err(EngineError::DeclaredNotFound { entries: missing });
     }
 
-    // One id, one element: the manifest is read by id, and a repeat would leave
+    // One id, one declaration: the manifest is read by id, and a repeat would leave
     // one of the two entries unaccounted for.
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|element| !seen.insert(&element.id))
-        .map(|element| element.id.clone())
+        .filter(|declaration| !seen.insert(&declaration.id))
+        .map(|declaration| declaration.id.clone())
         .collect();
     repeated.sort();
     repeated.dedup();
     if !repeated.is_empty() {
-        return Err(EngineError::DuplicateElement { entries: repeated });
+        return Err(EngineError::DuplicateDeclaration { entries: repeated });
     }
     Ok(())
 }
