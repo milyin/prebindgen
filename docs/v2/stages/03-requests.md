@@ -305,7 +305,7 @@ pub fn generate<T: Target>(
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](06-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
@@ -331,7 +331,7 @@ The request set is built in one pass over the builder's storage, sorted so that
 a run over unchanged input emits the same file. A declarator the target has no
 lowering for — an opaque handle, an enum, a callback — still becomes a request,
 under a policy that says which declarator it came from, so the target refuses it
-by name and the report groups the skips by the capability they wait for.
+by name, and the skip carries the capability it waits for.
 
 The frontend and registry independently use `prebindgen-flat` to inspect [source items](01-source.md#capture-source-items). The frontend interprets user declarations and validates their source references; the registry discovers required fields or helper arguments and plans their conversions. The registry supplies no separate source-inspection API to the frontend.
 
@@ -343,8 +343,8 @@ what they apply to: a per-function `expand_param`/`expand_return`/
 every function with a parameter or result of that type, declared class or bare
 scalar alike, and leaves the class itself; a declarator the target does not
 lower refuses by that declarator's name. Emitting the default interface in place
-of the one a setting asked for is not honoring the declaration; the report says
-which setting the declaration waits on. Settings that have no effect within this
+of the one a setting asked for is not honoring the declaration; the skip names
+the setting the declaration waits on. Settings that have no effect within this
 increment are carried without refusing: a C function's
 `abort_on_conversion_error` says what a fallible input does, and no conversion
 here can fail. Local helpers and declared conversion operations are
@@ -447,7 +447,7 @@ For example, two owned `Stamp` inputs with the same two-integer JNI representati
 
 Model membership follows the [snapshot contract](02-flat.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. The registry checks incoming views against its own model before planning. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 
-Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Naming hooks are closures, and two closures cannot be compared, so two policies that contain them are distinct unless the frontend deliberately gives them the same `PolicyId`. Sharing a conversion between two configured values therefore requires sharing the policy entry, not writing an equal-looking one. Report entries are keyed by source and configuration identities that do not vary between runs over unchanged inputs, so two builds of the same crate produce the same report and a diff of it means something.
+Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Naming hooks are closures, and two closures cannot be compared, so two policies that contain them are distinct unless the frontend deliberately gives them the same `PolicyId`. Sharing a conversion between two configured values therefore requires sharing the policy entry, not writing an equal-looking one. Outcomes are keyed by source and configuration identities that do not vary between runs over unchanged inputs, so two builds of the same crate decide the same things.
 
 ## Elements at this stage
 

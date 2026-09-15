@@ -6,16 +6,19 @@
 
 A diagnostic the engine writes beside the generated code, saying what became of
 each [declaration](stages/03-requests.md#record-binding-requests). It is an
-output and nothing else: generation reads no report, no stage consults one, and
-a binding built with the report deleted is the same binding. The pipeline
-chapters mention it only where an [outcome](stages/06-retain.md#retain-supported-output)
-is decided; what it is and how to read it is this page.
+output and nothing else: no generation decision depends on it, no stage reads a
+report back, and a binding built with the report files deleted is the same
+binding. (The one thing generation takes from the in-memory value is the count
+line in the generated file's header comment.) The pipeline chapters mention it
+only where an [outcome](stages/06-retain.md#retain-supported-output) is decided
+and where the generated files are written; what it is and how to read it is this
+page.
 
 ## What it says
 
 The run's identity — which engine, which target, the crate that declared the
-binding, the source directories it read and how many items they held — followed
-by every declaration with its outcome. An emitted declaration is listed as such.
+binding, the source modules the model was built from and how many items they
+held — followed by every declaration with its outcome. An emitted declaration is listed as such.
 A skipped one carries the [capability](stages/06-retain.md#retain-supported-output)
 it waits on, a sentence saying why, and the path from the declaration to the
 [site](stages/03-requests.md#a-values-position-in-an-exported-function) where
@@ -48,9 +51,15 @@ Declared by `v2check` over 8 captured item(s) from: source
 | declaration | representation | placement | outcome |
 | --- | --- | --- | --- |
 | `type:Marker` | data_class | `example.Marker` | skipped: `unsupported.jni.empty_class` |
-| `type:Stamp`  | data_class | `example.Stamp`  | emitted |
+| `type:Reading` | data_class | `example.Reading` | skipped: `unsupported.jni.carrier` |
+| `type:Stamp` | data_class | `example.Stamp` | emitted |
+| `fn:marker_value` | fun | `example.markerValue` | skipped: `unsupported.jni.empty_class` |
+| `fn:stamp_delta` | fun | `example.stampDelta` | emitted |
+| `fn:stamp_show` | fun | `example.stampShow` | emitted |
 | `fn:stamp_sum` | fun | `example.stampSum` | emitted |
 ```
+
+That is `examples/v2check`'s JNI report, in full.
 
 Skips are grouped by cause first, because that is how the next piece of work is
 chosen: one missing capability is stated once with every declaration it took
@@ -59,13 +68,15 @@ down.
 ## Where it lands
 
 Two renderings of the same data, written by the frontend's `write_report(dir)`
-into the directory the build script names — beside the generated Rust, under
-the engine's own output root:
+into whatever directory the build script names — the examples put them beside
+the generated Rust, under the engine's own output root, which is a convention
+and not something the call enforces:
 
 - `<target>-report.json` — for tools. Its `schema_version` says which shape it
   has; a consumer checks it before trusting the fields. The CI job that builds
-  every example through v2 reads these to assert that each example's whole
-  declaration set reached the engine and came back accounted for.
+  every example through v2 reads these as a smoke check: the file exists, says
+  `v2`, and lists at least one declaration. It does not check that every
+  declaration the example made is in it.
 - `<target>-report.md` — the rendering above, for a person.
 
 `write_report` also prints the summary line and the grouped skips as cargo
@@ -76,9 +87,12 @@ report. A build script can therefore call it under either engine.
 
 ## How the frontends expose it
 
-`Cbindgen::report()` and `JniGen::report()` return the `Report` value for a v2
-build and `None` for a v1 one. It is the same value `write_report` writes;
-tests read it to assert counts, outcomes and capabilities without touching the
+`Cbindgen::report()` and `JniGen::report()` exist when the frontend is compiled
+with its `v2` feature — the type they return comes from the v2 crate — and
+return `Option<&Report>`: the value for a v2 build, `None` when the feature is
+compiled in but the selected engine is v1. `write_report` is available under
+either feature set and, as said above, writes nothing for v1. Tests read
+`report()` to assert counts, outcomes and capabilities without touching the
 file system. (`JniGen::surface_report()` is a different, v1-only thing: a
 Markdown explanation of the resolved Kotlin surface.)
 

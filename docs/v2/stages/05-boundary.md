@@ -71,7 +71,7 @@ adapter routes errors differently — through a handler object the Kotlin caller
 passes — which is a choice in the same slot, not a different pipeline.)
 
 If a requested delivery or failure route is not supported, the function is
-skipped and the report says why. It is never quietly given a different ABI than
+skipped, with the reason recorded in its [outcome](06-retain.md#retain-supported-output). It is never quietly given a different ABI than
 the one the configuration asked for, because a caller compiled against the header
 or the Kotlin declaration would then be calling something else.
 
