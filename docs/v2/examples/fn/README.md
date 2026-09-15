@@ -21,7 +21,7 @@ run the same source-side plan: obtain two field values, construct `Stamp`, call
 
 The record half of that work belongs to [the record path][struct], which this path
 depends on at value planning. What is specific here is everything around the
-conversion: the request that names the exported function, the boundary that maps
+[conversion](../../stages/04-values.md#plan-value-conversions): the request that names the exported function, the boundary that maps
 native arguments and the return, and the failure routes — which is where the two
 targets diverge most, because the JNI property reads can fail and the C member
 reads cannot.

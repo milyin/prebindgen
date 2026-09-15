@@ -92,6 +92,29 @@ Every stage chapter lists all of its declared cells and variants, and every
 element TOC lists all of that element's, both in manifest order. Cross-element
 links document dependencies; they never replace an index or a backlink.
 
+## Vocabulary
+
+The nouns that name what flows between stages — declaration, policy, site,
+conversion, relation, representation, carrier, primitive, node, artifact,
+wrapper, outcome, source item — are listed in the manifest's `vocabulary` with
+the page and heading that define each. A term is **defined**, set in bold, on
+that one page only; [concepts.md](concepts.md) introduces every term in a
+`### Term` entry linking to its definition; and on every other page the first
+mention of the term in prose links to the definition. A mention inside a code
+span, a code block, a heading, or a title quoted in a reference-style link is
+not a mention. A term used in another sense — "wrapper" for `Option<T>`,
+"site" for a use site — is reworded rather than linked: the rule exists so a
+reader meets each word once with its meaning, and a link to the wrong meaning
+defeats it.
+
+Adding a term: add its entry to the manifest with a `match` pattern (the word and
+its plural), define it in bold on one page under a heading the entry names, add
+its `### Term` entry to `concepts.md`, then run the validator and link what it
+reports. A term the rule fits badly — one the chapters must also use in its
+ordinary English sense — is entered with `"link_first_mention": false`, which
+keeps the single-definition rule and drops the linking one; `declaration` is
+the one such term today.
+
 A stage marked `language_dependent` requires both languages for each of its
 applicable cells: capture, source-model inspection and retention are shared
 across targets, while requests, value planning, the boundary and emission are

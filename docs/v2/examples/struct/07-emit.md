@@ -16,8 +16,8 @@ SurfaceSpec { element: public Stamp,
 
 ## Result
 
-One public type per target, carrying no conversion code — the conversions live
-in the wrapper of [the function that uses the record][fn_emit]:
+One public type per target, carrying no [conversion](../../stages/04-values.md#plan-value-conversions) code — the conversions live
+in the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) of [the function that uses the record][fn_emit]:
 
 | Contribution | C | Kotlin/JNI |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ Rendered: [C][struct_emit_c], [Kotlin/JNI][struct_emit_jni].
 ## Checks
 
 - Both fields are emitted, in declaration order, with types matching the chosen
-  representation.
+  [representation](../../stages/04-values.md#plan-value-conversions).
 - The member and property names are the ones [the record's operations
   read][struct_values], because both come from the same retained metadata.
 - A declaration is emitted only if it was retained; the writer adds nothing.

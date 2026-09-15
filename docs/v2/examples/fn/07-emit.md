@@ -16,7 +16,7 @@ FunctionPlan { source: crate::source::stamp_sum,
                body: <instructions> }
 ```
 
-with each conversion node's operations and the payloads the target attached to
+with each [node](../../stages/04-values.md#plan-value-conversions)'s operations and the payloads the target attached to
 them.
 
 ## Result
@@ -36,11 +36,11 @@ each instruction has one owner:
 
 ## Checks
 
-- Temporaries are allocated from the plan, so two operations in one wrapper
+- Temporaries are allocated from the plan, so two operations in one [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
   cannot collide over a name; the parameters are named by the boundary, since a
   target that requires an environment operand has to name it.
 - The source function appears exactly once in the generated body.
-- The writer adds nothing planning did not decide: no conversion without a node,
+- The writer adds nothing planning did not decide: no [conversion](../../stages/04-values.md#plan-value-conversions) without a node,
   no dependency discovered while rendering.
 
 ## Language variants

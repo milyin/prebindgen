@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "04-values", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-values.md) · [Common cell][struct_values] · [Element path][struct]
-Owner: the registry; the JNI adapter describes the object carrier and its getters
+Owner: the registry; the JNI adapter describes the object [carrier](../../stages/04-values.md#individual-target-operations) and its getters
 
 # Record with scalar fields — Plan value conversions — Kotlin/JNI
 
@@ -16,7 +16,7 @@ policy:   data_class example.Stamp, record_input ObjectProperties,
 
 ## Result
 
-The representation, and one operation per property:
+The [representation](../../stages/04-values.md#plan-value-conversions), and one operation per property:
 
 ```text
 ReprSpec {
@@ -61,7 +61,7 @@ env.call_method(&stamp, "getSecs", "()J", &[])
 
 - The expression evaluates to `Result<jlong, jni::errors::Error>` and stops
   there: no `let`, no `match` on that result, no return. Those belong to the
-  wrapper the registry composes.
+  [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) the registry composes.
 - The environment is an operand, so no rendered fragment can depend on a
   variable named `env` in its caller.
 - Getter names and descriptors come from the class metadata recorded with the

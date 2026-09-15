@@ -45,10 +45,10 @@ outcome(exported stamp_sum) = Skipped { causes: [cause#1] }   // same cause, own
 
 ## Checks
 
-- Requirements are transitive: this function needs the record's conversion and
+- Requirements are transitive: this function needs the record's [conversion](../../stages/04-values.md#plan-value-conversions) and
   [its public representation][struct_retain], so either being unsupported skips
   it too, carrying the same cause rather than a new one.
-- Nothing partial is retained — no wrapper calling a conversion that was not.
+- Nothing partial is retained — no [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) calling a conversion that was not.
 - A helper kept only because this function needs it stays distinguishable in the
   report from an element the user asked to export.
 

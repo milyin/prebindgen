@@ -38,9 +38,9 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
   The symbol and the convention are [the recorded policy's][fn_requests_c].
 - An out-parameter form would be a different `OutputPlacement`, chosen by
-  policy rather than by the writer.
+  [policy](../../stages/03-requests.md#what-policy-means) rather than by the writer.
 - No route is declared because [both nodes are infallible][fn_values_c]. A later
-  change that makes an input conversion fallible must skip this function until
+  change that makes an input [conversion](../../stages/04-values.md#plan-value-conversions) fallible must skip this function until
   the C policy says where that failure goes.
 
 [fn]: README.md

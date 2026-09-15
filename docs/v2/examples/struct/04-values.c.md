@@ -15,7 +15,7 @@ policy:   data_struct named Stamp, passed by value
 
 ## Result
 
-The representation, and one operation per member:
+The [representation](../../stages/04-values.md#plan-value-conversions), and one operation per member:
 
 ```text
 ReprSpec {
@@ -42,7 +42,7 @@ PrimitiveSpec {
 }
 ```
 
-Applied to an aggregate the wrapper holds under the name `stamp` — the source
+Applied to an aggregate the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) holds under the name `stamp` — the source
 parameter's name, which the boundary keeps — that description renders:
 
 ```rust
@@ -51,7 +51,7 @@ stamp.secs
 
 ## Checks
 
-- The whole record conversion is infallible: reading a member cannot fail, and
+- The whole record [conversion](../../stages/04-values.md#plan-value-conversions) is infallible: reading a member cannot fail, and
   the copied integer is independent of the aggregate afterwards.
 - `implementation` stores the operation and the member identity, not the string
   `stamp.secs`. The caller's value comes from the application, and the name from

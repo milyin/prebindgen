@@ -26,7 +26,7 @@ arranged around.
 Consider what has to happen for a foreign caller to call `stamp_sum`. The Rust
 function needs an owned `Stamp`. No foreign caller has one: a C
 caller has a struct of two integers, a Kotlin caller has a JVM object. So the
-generated wrapper has to obtain two field values from whatever the caller
+generated [wrapper](05-boundary.md#assemble-the-native-boundary) has to obtain two field values from whatever the caller
 actually passed, build `Stamp { secs, nanos }` out of them, call the function,
 and turn the returned `i64` into something the caller can receive. Each of those
 value-shaped problems is a **conversion**, and planning one is what this stage
@@ -89,7 +89,7 @@ resolved children are both part of what identifies a node, which is why neither
 selection nor the recursion can wait until after the cache is consulted: the same
 type converted through its fields and through a constructor are two different
 conversions, and so are two records whose fields were configured differently. The
-policy in that key is the one recorded for *this* value, and it says nothing
+[policy](03-requests.md#what-policy-means) in that key is the one recorded for *this* value, and it says nothing
 about the values inside it — the children do, and they are what a subtree's
 choices reach.
 
@@ -135,7 +135,7 @@ and every request that needed it is skipped with that reason. No half-built node
 is ever published: while planning is in progress the registry marks the
 conversion as being resolved, which is how it detects a cycle, but that mark is
 bookkeeping, not a plan, and it is replaced by a node or by an unsupported
-outcome. No later stage sees a conversion that half exists.
+[outcome](06-retain.md#retain-supported-output). No later stage sees a conversion that half exists.
 
 ## Describing source construction and decomposition
 

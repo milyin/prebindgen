@@ -27,20 +27,20 @@ node(Stamp, IntoRust) {
 }
 ```
 
-The carriers and the operations that obtain them are the target's:
+The [carriers](../../stages/04-values.md#individual-target-operations) and the operations that obtain them are the target's:
 [C][struct_values_c], [Kotlin/JNI][struct_values_jni]. The two `i64` children are
-identity conversions in both, and render no code of their own.
+identity [conversions](../../stages/04-values.md#plan-value-conversions) in both, and render no code of their own.
 
 ## Checks
 
-- Selection precedes traversal: an opaque representation would never inspect the
+- Selection precedes traversal: an opaque [representation](../../stages/04-values.md#plan-value-conversions) would never inspect the
   fields, which is what makes a record with unreadable private fields
   representable as a handle.
 - Parts come from the selected [relation](../../stages/04-values.md#what-a-relation-is), so a constructor relation would give
   one `millis` argument instead of two fields, with no change to this stage.
 - Construction follows declaration order, and the mapping from parts to carriers
   is validated.
-- An unsupported child makes this node unsupported, which propagates to
+- An unsupported child makes this [node](../../stages/04-values.md#plan-value-conversions) unsupported, which propagates to
   [everything requiring the record][struct_retain] rather than producing a record
   missing a field.
 

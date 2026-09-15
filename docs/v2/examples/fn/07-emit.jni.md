@@ -34,7 +34,7 @@ internal object JNINative {
 }
 ```
 
-The native wrapper the JVM binds that method to (`kotlin.rs`), after the
+The native [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) the JVM binds that method to (`kotlin.rs`), after the
 reporting helper the adapter contributes once per file:
 
 ```rust
@@ -103,7 +103,7 @@ which is what the harness's `init` block does when the binding's
   failure branch, the terminal return, the construction and the call are the
   registry's.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
-  conversions render nothing. A child type needing real work would insert its
+  [conversions](../../stages/04-values.md#plan-value-conversions) render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.
 
 [fn]: README.md

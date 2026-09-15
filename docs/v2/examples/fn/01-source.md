@@ -31,7 +31,7 @@ The item stays in the source crate, compiled and callable from Rust as before.
 
 ## Checks
 
-- The body is replaced by a placeholder: the generated wrapper calls
+- The body is replaced by a placeholder: the generated [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) calls
   `stamp_sum`, so only the signature has to travel.
 - `content` is text. `Stamp` here is a name in a string, matched to
   [the record's own capture][struct_source] only by the next stage.

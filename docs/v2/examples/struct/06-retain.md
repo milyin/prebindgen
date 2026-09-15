@@ -37,7 +37,7 @@ artifact order: type declaration -> the wrapper that takes it by value
   retained if [the function that does][fn_retain] is skipped for a reason of its
   own.
 - Propagation runs the other way too: an unsupported field makes the record's
-  conversion unsupported, which skips the record and every declaration requiring
+  [conversion](../../stages/04-values.md#plan-value-conversions) unsupported, which skips the record and every declaration requiring
   it, all carrying the one cause with their own dependency paths.
 - Retention is all or nothing. A record is never emitted with a field omitted,
   because a foreign type missing a field is a different type.

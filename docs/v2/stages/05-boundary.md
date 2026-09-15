@@ -21,8 +21,8 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 A conversion knows how to turn a value into another value. It does not know which
 exported function it serves, where that function's result is supposed to go, or
 what should happen if a conversion inside it fails. That is this stage: taking
-the conversions planned for one requested function and assembling the actual
-native function a foreign caller will call.
+the conversions planned for one requested function and assembling the
+**wrapper** — the actual native function a foreign caller will call.
 
 For this example, the two targets end up with these signatures:
 
@@ -120,7 +120,7 @@ struct FunctionPlan<Payload> {
 
 `SinkId` identifies a declared destination and signature, not the runtime callback pointer itself. `CalleeId` identifies the source operation being wrapped. `FunctionOutput` identifies the conversions for the wrapped source operation's result. `FunctionBodyId` refers to the complete structured wrapper instructions assembled by the registry.
 
-There are three relevant error categories: a domain error returned by the source API, a binding/conversion error, and a runtime error such as a JNI failure. `FailureRoutes` selects their terminal actions: return a configured status, throw, call a declared handler, or abort according to the binding's policy.
+There are three relevant error categories: a domain error returned by the source API, a binding/conversion error, and a runtime error such as a JNI failure. `FailureRoutes` selects their terminal actions: return a configured status, throw, call a declared handler, or abort according to the binding's [policy](03-requests.md#what-policy-means).
 
 One route is a reporting operation the target supplies, what to do when reporting
 itself fails, and how the route ends — returning an expression or aborting. The

@@ -14,7 +14,7 @@ Crossing { source: i64,   direction: OutOfRust }    // for Return
 
 ## Result
 
-Two nodes, neither of which contains the call to `stamp_sum`:
+Two [nodes](../../stages/04-values.md#plan-value-conversions), neither of which contains the call to `stamp_sum`:
 
 ```text
 node(input)  = Crossing { Stamp, IntoRust }
@@ -32,7 +32,7 @@ node(output) = Crossing { i64, OutOfRust }
 
 The input node is [the record's own conversion][struct_values]; this function
 refers to it, and so does anything else taking an owned `Stamp` under the same
-policy. Their `NodeId`s are what [the boundary][fn_boundary] assembles.
+[policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are what [the boundary][fn_boundary] assembles.
 
 ## Checks
 

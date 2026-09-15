@@ -148,7 +148,7 @@ back together. The two **enum** shapes are one Rust keyword covering two
 concepts, and the model separates them because they are identified differently: a
 fieldless enum's members are identified by the value Rust assigns, which a C
 header restates and a Kotlin enum entry carries, while an enum with payloads is a
-sum whose alternatives are identified by position, since a foreign representation
+sum whose alternatives are identified by position, since a foreign [representation](04-values.md#plan-value-conversions)
 numbers its own arms and Rust's discriminant would be the wrong number to use. An
 **extern** is a name with nothing behind it — `pub type Session = zenoh::Session;`,
 or a marked tuple struct — which is how a value that crosses as an opaque handle
@@ -207,13 +207,13 @@ stage that builds a native boundary out of it.
 
 The grammar also keeps distinctions a destination language may well erase.
 `String` and `str` are different kinds; so are `Vec<T>` and `[T]`; `Box<T>` and
-`Cow<'a, T>` stay visible as wrappers rather than being flattened to what they
+`Cow<'a, T>` stay visible as the enclosing types they are rather than being flattened to what they
 contain. That a C binding treats several of these alike is a decision for the C
 adapter to take deliberately, at the point where it matters — not a decision the
 source model takes for everyone by throwing the difference away.
 
 Spelling survives all of this because each element also keeps its **origin**: the
-exact syntax it was built from, and the source it arrived in. Generated Rust is the one artifact
+exact syntax it was built from, and the source it arrived in. Generated Rust is the one output
 that needs that fidelity — `B()` must not be re-spelled `B`, `= 0x07` must not
 become `= 7` — so the source's own text rides along for emission to reuse. It is
 not a second source of facts: the retained syntax is private to Flat, and the
@@ -236,7 +236,7 @@ that. The prohibition is on deciding *from* text.
 The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
 `jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
 own output vocabulary rather than captured source syntax, so writing them as
-syntax during planning is what an adapter is for. That is why a carrier a target
+syntax during planning is what an adapter is for. That is why a [carrier](04-values.md#individual-target-operations) a target
 describes here holds a real `syn::Type`, while a source-side position stays a
 handle to the model. The rule constrains where a fact may come *from*, not which
 types may be spelled.
@@ -266,7 +266,7 @@ V2 has its own private writer, and reaches an adapter differently: a target is
 asked to render one operation and receives the payload it described plus the
 operand names the writer allocated, never a rendering capability. Same rule,
 same protocol, a different way of keeping planning away from syntax. For the
-escapes in either engine the rule is policy, stated here, rather than a boundary
+escapes in either engine the rule is a convention, stated here, rather than a boundary
 the compiler enforces.
 
 Flat answers questions about Rust; it takes no position on bindings. It will
@@ -294,7 +294,7 @@ returns `&Function`, borrowed from the model, and
 [`Function`, `Struct`, `Param`, and `Field`](../../../prebindgen-flat/src/flat/element.rs)
 hold the facts an inspecting consumer needs.
 [`TypeRef`](../../../prebindgen-flat/src/flat/ty.rs) already classifies a source
-type and preserves its wrappers and references. Following a parameter's type to a
+type and preserves its enclosing types and references. Following a parameter's type to a
 declaration is then the caller's job: take the name out of the reference, call
 `Flat::resolve`, keep the model in hand for the next hop.
 
@@ -540,14 +540,14 @@ silently peel `Box`, `Cow`, references or optional values. `as_record()` returns
 a record only when the exact type is a structurally available record.
 `referent()` explicitly follows `&T` or `&mut T`; the original view retains the
 reference and its mutability. Equivalent explicit accessors are needed for the
-other supported wrappers.
+other supported [wrappers](05-boundary.md#assemble-the-native-boundary).
 
 `FieldShape` preserves named, tuple and unit forms. `FieldView::name()` is absent
 for a positional field, while `index()` always records source order. Field
 identity includes its owner; fields in two enum variants remain distinct even
 when both occupy index zero. Extending enum views should preserve variant
 identity, payload shape, and modeled discriminant information. This source
-variant identity does not choose a registry conversion alternative or foreign
+variant identity does not choose a registry [conversion](04-values.md#plan-value-conversions) alternative or foreign
 tag encoding.
 
 `result_parts()` returns the `Ok` and `Err` type views of a `Result`, without

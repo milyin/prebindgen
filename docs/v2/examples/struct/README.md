@@ -13,10 +13,10 @@ pub struct Stamp {
 
 A record is not something a foreign caller can hold directly. Both targets have
 to answer two questions about it — what carries its data, and through which
-operations are the parts of that carrier read — and the answers differ sharply:
+operations are the parts of that [carrier](../../stages/04-values.md#individual-target-operations) read — and the answers differ sharply:
 C copies an aggregate by value and reads its members, Kotlin/JNI passes an object
 and calls its property getters through the JVM. What does not differ is the
-source-side work: the same two fields, converted by the same child conversions,
+source-side work: the same two fields, converted by the same child [conversions](../../stages/04-values.md#plan-value-conversions),
 assembled into the same `Stamp { secs, nanos }`.
 
 This path is where that split is visible in the smallest possible form. It is

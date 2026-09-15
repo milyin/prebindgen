@@ -147,6 +147,29 @@ class SpecStructure(unittest.TestCase):
         path.write_text(path.read_text() + "\n```rust\nlet unterminated = 1;\n")
         self.rejects("unclosed code fence")
 
+    def test_vocabulary_term_defined_twice(self):
+        self.edit("stages/05-boundary.md", "the same input conversion", "the same input **conversion**")
+        self.rejects("sets 'conversion' in bold")
+
+    def test_vocabulary_first_mention_unlinked(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)", "relations")
+        self.rejects("first mention of 'relation'")
+
+    def test_vocabulary_first_mention_links_elsewhere(self):
+        self.edit("stages/02-flat.md",
+                  "[relations](04-values.md#what-a-relation-is)",
+                  "[relations](04-values.md#plan-value-conversions)")
+        self.rejects("first mention of 'relation'")
+
+    def test_vocabulary_entry_missing_from_concepts(self):
+        self.edit("concepts.md", "### Relation\n", "### Relations\n")
+        self.rejects("no '### relation' entry")
+
+    def test_vocabulary_definition_missing(self):
+        self.edit("stages/06-retain.md", "exactly one **outcome**", "exactly one outcome")
+        self.rejects("does not define 'outcome' in bold")
+
     def test_language_dependent_stage_needs_every_language(self):
         path = self.root / "manifest.json"
         manifest = json.loads(path.read_text())
