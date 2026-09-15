@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["warn_unclaimed"],"struct":["Claimed"]};
