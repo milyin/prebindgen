@@ -1,4 +1,4 @@
-//! The emitted-surface manifest: what v2 generated, what it skipped, and why.
+//! The report: what v2 generated, what it skipped, and why.
 //!
 //! Two renderings of one value — JSON for tooling (test-section selection reads
 //! it) and Markdown for a person. Both are deterministic: declarations sort by kind
@@ -18,7 +18,7 @@ use crate::{
     outcome::{EngineError, Outcome},
 };
 
-/// The manifest's own version. A consumer that reads the JSON checks this
+/// The report's own version. A consumer that reads the JSON checks this
 /// before trusting the shape; it changes whenever a field's meaning does.
 pub const SCHEMA_VERSION: u32 = 2;
 
@@ -97,12 +97,12 @@ impl Report {
         )
     }
 
-    /// The manifest as JSON.
+    /// The report as JSON.
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("a report is plain data and always serializes")
     }
 
-    /// The manifest as Markdown.
+    /// The report as Markdown.
     pub fn to_markdown(&self) -> String {
         use std::fmt::Write as _;
         let mut out = String::new();
@@ -191,7 +191,7 @@ impl Report {
 
     /// Print the summary and one actionable line per skip cause as cargo
     /// warnings. The full detail stays in the written report — a build log is
-    /// not the manifest.
+    /// not the report.
     pub fn warn(&self) {
         println!("cargo:warning={}", self.summary());
         for (capability, entries) in self.skips_by_capability() {

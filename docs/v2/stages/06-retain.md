@@ -49,7 +49,7 @@ Every declaration ends this stage with exactly one **outcome**: *emitted*,
 *skipped*, or *ignored*. Being unsupported is a normal outcome, not a failure. Each skipped declaration is
 recorded with a **capability** — a stable code naming the support it waits on,
 such as `unsupported.jni.carrier` — a human-readable explanation and the source
-or configuration location that provoked it, so the report can say what to
+or configuration location that provoked it, so [the report](../report.md) can say what to
 implement rather than just that something is missing. Two other outcomes exist so that
 the report can account for every captured item, not only the requested ones: a
 declaration the user explicitly excluded is *ignored*, and an item that was captured but
@@ -189,7 +189,7 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> common Rust writer emits native wrappers and supporting Rust types
  -> C: cbindgen derives headers from generated Rust
     JNI: optional foreign-writer interface is implemented by the Kotlin writer
- -> publish generated artifacts, report and test-selection manifest
+ -> publish generated artifacts and the report
 ```
 
 Selection, child resolution and representation happen together for each node. A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
@@ -208,15 +208,7 @@ Freezing retains all referenced tables (bodies, primitives, layouts, helpers) an
 
 **Frozen** means planning is complete and the records are immutable. `FrozenArena` retains ID-based lookup without insertion or replanning. As implemented, the outer loop retains a public declaration only when every element it requires was emitted, propagating the underlying cause with each dependent's own path to it; conversions are all kept rather than pruned to the ones a retained output reaches, since after inlining nothing refers to them. `OrderedArtifacts` provides an emission order appropriate to generated dependencies, including any required forward declarations. `GenerationReport` records emitted/skipped/ignored/unselected outcomes, pipeline identity, capability causes, native/foreign artifacts and symbol identities. Helper-only items remain distinguishable from explicitly requested exports.
 
-The report has a second consumer. The example crates' test suites are written
-against the full API, so when V2 emits a subset, tests referring to what it
-skipped would not compile — a runtime guard cannot hide a missing class from
-`kotlinc` or a missing symbol from a C compiler. Each suite is therefore divided
-into **test sections**, each naming the emitted declarations it needs, and the report
-selects the sections whose declarations were all emitted. A milestone still has to
-require that meaningful sections run, so that skipping everything cannot pass.
-
-The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds. The report also selects existing test sections, ensuring tests match the emitted API.
+The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds.
 
 ## Elements at this stage
 

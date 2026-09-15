@@ -38,7 +38,7 @@
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
 //! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
-//! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
+//! | `JniGen::surface_report()` (C7)       | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
@@ -979,11 +979,11 @@ fn main() {
         println!("cargo:warning=Wrote {}", path.display());
     }
 
-    // The emitted-surface manifest, for an engine that produces one. Empty
+    // The report, for an engine that produces one. Empty
     // under v1, whose answer is "everything declared, or the build failed".
     for path in jni
-        .write_manifest(&destinations.reports)
-        .expect("write_manifest failed")
+        .write_report(&destinations.reports)
+        .expect("write_report failed")
     {
         println!("cargo:warning=Wrote {}", path.display());
     }
@@ -992,7 +992,7 @@ fn main() {
         // The resolved-surface report (C7): committed next to the regen so a
         // decl's effect is reviewable in a PR without reading generated Kotlin.
         // V1-only — it is a presentation of the v1 resolution.
-        std::fs::write(destinations.reports.join("REPORT.md"), jni.report())
+        std::fs::write(destinations.reports.join("REPORT.md"), jni.surface_report())
             .expect("write REPORT.md");
     }
 }

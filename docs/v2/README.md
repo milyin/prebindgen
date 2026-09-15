@@ -187,7 +187,9 @@ those words once; read it first.
 7. [Emit bindings](stages/07-emit.md)
 
 Then: [implementation sequence and acceptance](implementation.md), which is not a
-pipeline stage but the plan for building one.
+pipeline stage but the plan for building one. Beside the generated code the
+engine also writes [a report](report.md) of what became of each declaration —
+a diagnostic that nothing in the pipeline reads, described on its own page.
 
 This order is the order of information dependencies, not a requirement to make
 seven passes over the project. The registry interleaves selection, child planning

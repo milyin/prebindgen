@@ -55,9 +55,9 @@ the source never exported, such as a callback signature or a type like
 ### Declaration
 
 One thing a binding asked to expose: this function, that type, at this foreign
-placement — `Stamp` as a C struct, `stamp_sum` as a Kotlin function. The report
-accounts for declarations; a source item nothing declared currently has no
-entry in it. Identified by a `DeclarationId` built from the source name, so a
+placement — `Stamp` as a C struct, `stamp_sum` as a Kotlin function. [The
+report](report.md) accounts for declarations; a source item nothing declared
+currently has no entry in it. Identified by a `DeclarationId` built from the source name, so a
 foreign rename does not change what a test or a report is talking about. —
 [Record binding requests](stages/03-requests.md#record-binding-requests)
 
@@ -159,8 +159,8 @@ target dictates. — [Assemble the native boundary](stages/05-boundary.md#assemb
 ### Outcome
 
 What became of a declaration on a run that completed: emitted, skipped, or
-ignored because the user said so. Every declaration has exactly one, and the
-report lists them all. A run that fails — contradictory configuration, a
+ignored because the user said so. Every declaration has exactly one, and [the
+report](report.md) lists them all. A run that fails — contradictory configuration, a
 violated invariant — produces no outcomes at all. — [Retain supported output](stages/06-retain.md#retain-supported-output)
 
 ### Capability

@@ -69,7 +69,7 @@ PREBINDGEN_PIPELINE=v2 cargo build -p covertest-kotlin --features v2
 
 Both engines receive the complete current configuration through their respective paths. V2 generates its supported subset without falling back to v1 for individual items. Output paths and publication must support v1 → v2 → v1 without manual cleanup or stale generated declarations.
 
-Existing Kotlin tests can directly refer to classes absent from v2 output. Select complete supported test sections before Kotlin compilation; runtime guards cannot hide missing symbols from the compiler. C tests need equivalent selection. The manifest must still require meaningful supported tests to execute, so skipping everything cannot pass a milestone.
+Existing Kotlin tests can directly refer to classes absent from v2 output. Select complete supported test sections before Kotlin compilation; runtime guards cannot hide missing symbols from the compiler. C tests need equivalent selection. The selection must still require meaningful supported tests to execute, so skipping everything cannot pass a milestone.
 
 ### First executable increment
 
@@ -139,7 +139,7 @@ writer, over the payloads its declarations came back with. A frontend's
 `build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
 `build_with(Pipeline::V2)` states it — and nothing of v1 runs on that route.
 The user's `build.rs` is the same under either engine: the one thing v2 adds to
-it is the manifest beside the generated file, and the fact that a declaration the
+it is [the report](report.md) beside the generated file, and the fact that a declaration the
 engine cannot lower is a reported skip rather than a build failure.
 
 `examples/v2check` is the increment's evidence. It compiles
@@ -264,7 +264,7 @@ Acceptance criteria:
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
 - [x] Complete unsupported inputs produce actionable per-declaration outcomes; malformed configuration and generator defects fail generation.
 - [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`.
-- [ ] Test selection from the manifest.
+- [ ] Test selection from the report.
 - [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.
 - [ ] New nested combinations reuse the registry's composition algorithm instead of requiring a new per-language wrapper implementation.
 - [ ] Remaining unsupported capabilities and any API refinements discovered during implementation are documented.

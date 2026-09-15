@@ -69,9 +69,9 @@ fn binding() -> CbindgenBuilder {
 #[test]
 fn every_declared_element_is_accounted_for() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let report = generated.report().expect("v2 produces a report");
 
-    let ids: Vec<&str> = manifest
+    let ids: Vec<&str> = report
         .declarations
         .iter()
         .map(|entry| entry.declaration.id.as_str())
@@ -88,7 +88,7 @@ fn every_declared_element_is_accounted_for() {
         "every declaration, sorted deterministically"
     );
 
-    let placements: Vec<&str> = manifest
+    let placements: Vec<&str> = report
         .declarations
         .iter()
         .map(|entry| entry.declaration.placement.as_str())
@@ -98,7 +98,7 @@ fn every_declared_element_is_accounted_for() {
         "the frontend's manglers name the C surface: {placements:?}"
     );
 
-    let counts = manifest.counts();
+    let counts = report.counts();
     assert_eq!(counts.emitted, 0, "nothing here is a data struct or scalar");
     assert_eq!(counts.skipped, 4);
     assert_eq!(counts.ignored, 1, "an ignore is a decision, not a gap");
@@ -110,13 +110,13 @@ fn every_declared_element_is_accounted_for() {
 #[test]
 fn a_missing_capability_is_reported_per_element() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let report = generated.report().expect("v2 produces a report");
 
-    let function = manifest
+    let function = report
         .declarations
         .iter()
         .find(|entry| entry.declaration.id.as_str() == "fn:calculator_new")
-        .expect("the declared function is in the manifest");
+        .expect("the declared function is in the report");
     let skip = function
         .outcome
         .skip()
@@ -130,7 +130,7 @@ fn a_missing_capability_is_reported_per_element() {
 
     // Grouped by cause, so one missing capability is stated once with the list
     // of roots it took down: the handle, and the function returning it.
-    let groups = manifest.skips_by_capability();
+    let groups = report.skips_by_capability();
     assert_eq!(groups["unsupported.c.opaque_ptr"].len(), 2);
     // An enum has no fields to walk, so the registry refuses it before the
     // target is asked; the entry's representation still says `enum_type`.
@@ -181,9 +181,9 @@ fn a_data_struct_and_a_function_over_it_are_emitted() {
         .function(syn::parse_quote!(stamp_new))
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
-    let counts = manifest.counts();
-    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{manifest:?}");
+    let report = generated.report().expect("v2 produces a report");
+    let counts = report.counts();
+    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{report:?}");
 
     let dir = unique_test_dir("cbindgen_v2_emitted");
     let path = generated
@@ -216,8 +216,8 @@ fn a_data_struct_and_a_function_over_it_are_emitted() {
 #[test]
 fn an_ignore_is_classified_separately() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
-    let ignored = manifest
+    let report = generated.report().expect("v2 produces a report");
+    let ignored = report
         .declarations
         .iter()
         .find(|entry| entry.declaration.id.as_str() == "fn:calculator_internal")
@@ -259,12 +259,12 @@ fn the_generated_rust_is_stamped_with_its_pipeline() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Both renderings of the manifest land beside the generated file.
+/// Both renderings of the report land beside the generated file.
 #[test]
-fn the_manifest_is_written_as_json_and_markdown() {
+fn the_report_is_written_as_json_and_markdown() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let dir = unique_test_dir("cbindgen_v2_manifest");
-    let written = generated.write_manifest(&dir).expect("write_manifest");
+    let dir = unique_test_dir("cbindgen_v2_report");
+    let written = generated.write_report(&dir).expect("write_report");
     assert_eq!(written.len(), 2);
     let json = std::fs::read_to_string(&written[0]).unwrap();
     assert!(json.contains("\"schema_version\": 2"), "{json}");
@@ -296,19 +296,19 @@ fn an_unsafe_source_function_is_a_reported_skip() {
         .function(syn::parse_quote!(raw_sum))
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
-    let skip = manifest.declarations[0].outcome.skip().expect("skipped");
+    let report = generated.report().expect("v2 produces a report");
+    let skip = report.declarations[0].outcome.skip().expect("skipped");
     assert_eq!(skip.capability.as_str(), "unsupported.fn.unsafe");
     assert_eq!(skip.path(), "fn:raw_sum");
 }
 
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole
-/// existing surface, and no manifest.
+/// existing surface, and no report.
 #[test]
 fn v1_is_unchanged_and_reachable_by_name() {
     let generated = binding().build_with(Pipeline::V1).expect("v1 resolves");
     assert_eq!(generated.pipeline(), Pipeline::V1);
-    assert!(generated.manifest().is_none());
+    assert!(generated.report().is_none());
     assert!(generated
         .registry()
         .flat()
