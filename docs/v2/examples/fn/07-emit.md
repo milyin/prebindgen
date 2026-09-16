@@ -27,9 +27,9 @@ each instruction has one owner:
 
 | Instruction | Rendered by | C | Kotlin/JNI |
 | --- | --- | --- | --- |
-| read the first member | adapter fragment | `arg0.secs` | `env.call_method(&arg0, "getSecs", "()J", &[])…` |
+| read the first member | adapter fragment | `stamp.secs` | `env.call_method(&stamp, "getSecs", "()J", &[])…` |
 | bind it to a local | registry | `let v0 = …;` | `let v0 = match … { … };` |
-| read the second member | adapter fragment | `arg0.nanos` | `env.call_method(&arg0, "getNanos", "()J", &[])…` |
+| read the second member | adapter fragment | `stamp.nanos` | `env.call_method(&stamp, "getNanos", "()J", &[])…` |
 | construct the record | registry | `source::Stamp { secs: v0, nanos: v1 }` | same |
 | call the source once | registry | `source::stamp_sum(v2)` | same |
 | deliver the result | boundary | `v3` returned | `v3` returned as `jlong` |

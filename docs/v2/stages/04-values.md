@@ -37,7 +37,7 @@ them apart is what lets one algorithm serve both languages:
 
 - **How is the Rust value built or read?** For `Stamp`, from its two fields — or,
   if the configuration said so, by calling `stamp_from_millis`. This answer is a
-  **relation**. Relations are described in source terms only, and the registry
+  [**relation**](#what-a-relation-is). Relations are described in source terms only, and the registry
   alone knows how to walk one; but *which* relation applies can still depend on
   the target, because a target that carries `Stamp` as an opaque handle needs no
   fields at all. So the target picks from the relations available, and must
@@ -141,7 +141,73 @@ outcome. No later stage sees a conversion that half exists.
 
 For `normalize(stamp: Stamp) -> Stamp`, the wrapper converts foreign input into a Rust `Stamp`, calls `normalize`, and converts its result for foreign code. Here, **value** means a runtime argument, result or field. Input **construction** can assemble `Stamp { secs, nanos }` from converted fields or call `stamp_from_millis` with one converted argument. Output **decomposition** can read fields or call an accessor. A constructor does not automatically provide an inverse accessor.
 
-A **relation** is the registry's description of how to construct or read a Rust value for a conversion. The same function can be exported directly, selected as a constructor, or used to extract another value. Those are binding roles, so relation construction belongs in the common registry library. Flat supplies the checked source facts used to validate those roles.
+### What a relation is
+
+A **relation** is a link inside the source domain: from one Rust type to the
+Rust values it is built from or read into, together with the source-level means
+of getting between them. `Stamp` is related to `(secs: i64, nanos: i64)` by its
+fields; it would be related to `(millis: i64)` by `stamp_from_millis`, and to
+`StampParts` by an accessor `stamp_parts(&Stamp)`. Each of those is a relation
+of `Stamp`, and a type can stand in several at once. Nothing in a relation names
+a carrier, a wire type, a Kotlin class or a C struct: it is the answer to "how is
+the Rust value built or read?", and that answer is the same whichever language
+is on the other side.
+
+As built, the engine has the two relations its element paths need:
+
+```rust
+/// How the registry constructs or reads a Rust value.
+pub enum Relation {
+    /// The whole value converted by one target operation: no parts, no
+    /// recursion. An `i64`.
+    Atomic,
+    /// The record's fields. `Stamp` is `secs` and `nanos`.
+    Record(RecordRelation),
+}
+
+pub struct RecordRelation {
+    /// The record's declared name, which is how the writer finds its shape
+    /// again when it renders a construction.
+    pub record: String,
+    pub parts: Vec<Part>,
+}
+
+/// One field of a record relation, or one argument of a constructor relation.
+pub struct Part {
+    pub name: Option<String>,  // `secs`; `None` for a positional field
+    pub index: usize,
+    pub ty: TypeRef,           // a source type — the part is another Rust value
+}
+```
+
+`Part::ty` is a Flat `TypeRef`, a source type: a relation's parts are other Rust
+values, which the registry plans recursively with the same algorithm. That is
+what makes a relation the registry's to walk and nobody else's. The constructor
+and projector relations sketched [below](#the-registry-validates-conversion-roles)
+are the same shape with different parts and a source function as the means, which
+is why adding one changes nothing under this type.
+
+Flat stores no such links — its references are names, resolved on lookup — so a
+relation is the registry making a source-domain link explicit for the duration
+of one run. `Run::candidates` registers the relations it offers for a type the
+first time the type is planned (the atomic one for every type; the record one
+when the model resolves the name to a struct) and hands the target the list as
+`(RelationId, Relation)` pairs. The target answers `select` with a
+**`RelationId`**, an index into that run's table under the same convention as
+every other `…Id` here. The id rather than the value is what matters: the
+relation is part of a conversion's identity, and `Stamp` through its fields and
+`Stamp` through `stamp_from_millis` must never share a node.
+
+The word is the mathematical one — a relation between a type and a set of parts
+— chosen because a type has several and one of them is *selected*. "Shape",
+v1's word, describes a type's structure as a fixed fact; a relation is one of
+possibly many ways to relate the type to parts, and which one applies is a
+decision the configuration and the target make.
+
+The same function can be exported directly, selected as a constructor, or used
+to extract another value. Those are binding roles, so relation construction
+belongs in the common registry library. Flat supplies the checked source facts
+used to validate those roles.
 
 ### Flat provides neutral source views
 
@@ -193,10 +259,11 @@ All relation fields are private. Read-only accessors expose source types and arg
 
 ### Registering and selecting a relation
 
-**Implemented: `Atomic` and `Record`.** The engine has exactly two relations — a
-whole value converted by one operation, and a record's fields. The constructor
-and projector roles below are described, not built, so a target has no such
-candidate to select and fallible construction never reaches a boundary.
+**Implemented: `Atomic` and `Record`** — [the two relations above](#what-a-relation-is).
+The constructor and projector roles below are described, not built, so a target
+has no such candidate to select and fallible construction never reaches a
+boundary. The sketch that follows is the designed shape of the table, not the
+built one.
 
 ```rust
 pub enum Relation {
@@ -338,18 +405,18 @@ PrimitiveSpec {
 }
 ```
 
-Applied to an environment the registry has named `env` and an object it has named
-`arg0`, that one description renders exactly this much Rust:
+Applied to an environment the boundary has named `env` and an object it has
+named `stamp`, that one description renders exactly this much Rust:
 
 ```rust
-env.call_method(&arg0, "getSecs", "()J", &[])
+env.call_method(&stamp, "getSecs", "()J", &[])
     .and_then(|value| value.j())
 ```
 
 An expression of type `Result<jlong, jni::errors::Error>`, and nothing more: no
 `let`, no `match` on that result, no return from the enclosing function. Those
 belong to the wrapper the registry composes. The C adapter's answer for the same
-field is `arg0.secs`, infallible, with no environment operand — a different
+field is `stamp.secs`, infallible, with no environment operand — a different
 `PrimitiveSpec` with the same purpose, which is why the composition around it can
 be identical.
 

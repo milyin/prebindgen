@@ -159,13 +159,11 @@ impl super::JniGen {
     /// `write_rust`. Returns every path written (one per non-empty
     /// package).
     pub fn write_kotlin(&self, kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // An engine with no Kotlin lowering writes no Kotlin. The root is still
-        // created, so a Gradle source set pointed at it resolves to an empty set
-        // rather than to a missing directory.
+        // The v2 engine renders Rust only; its Kotlin is this adapter's own
+        // writer over what the run retained.
         #[cfg(feature = "v2")]
-        if self.pipeline() != prebindgen_registry::pipeline::Pipeline::V1 {
-            std::fs::create_dir_all(kotlin_root)?;
-            return Ok(Vec::new());
+        if let Engine::V2(generation) = &self.engine {
+            return self.decls.write_kotlin_v2(generation, kotlin_root);
         }
         self.declarations()
             .write_kotlin(self.registry().flat(), kotlin_root)

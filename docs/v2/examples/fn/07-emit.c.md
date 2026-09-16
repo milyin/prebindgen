@@ -20,22 +20,24 @@ In the generated C Rust module (`c.rs`), after
 [the aggregate declaration][struct_emit_c]:
 
 ```rust
-use crate::source;
-
 #[no_mangle]
-pub extern "C" fn stamp_sum(arg0: Stamp) -> i64 {
-    let v0 = arg0.secs;
-    let v1 = arg0.nanos;
+pub extern "C" fn stamp_sum(stamp: Stamp) -> i64 {
+    let v0 = stamp.secs;
+    let v1 = stamp.nanos;
     let v2 = source::Stamp { secs: v0, nanos: v1 };
     let v3 = source::stamp_sum(v2);
     v3
 }
 ```
 
+`source` is the module the binding crate reaches the source items through — the
+one the build script named with `.source_module(..)`, or the source crate's own
+name.
+
 The header `cbindgen` derives from it, after the aggregate's `typedef`:
 
 ```c
-int64_t stamp_sum(struct Stamp arg0);
+int64_t stamp_sum(struct Stamp stamp);
 ```
 
 And a C caller:
@@ -53,7 +55,9 @@ int main(void) {
 
 - The wrapper and the function it wraps are both `stamp_sum`, and never collide:
   the source one is only ever reached through its module path.
-- `arg0.secs` and `arg0.nanos` are the target's operations; the order, the
+- The parameter keeps the source parameter's name, `stamp`, as the boundary
+  stated it; the locals are the writer's, numbered so that none can shadow it.
+- `stamp.secs` and `stamp.nanos` are the target's operations; the order, the
   locals, the construction, the call and the return are the registry's.
 - Compiling the module with the source crate must succeed, and the caller above
   must observe `46`.

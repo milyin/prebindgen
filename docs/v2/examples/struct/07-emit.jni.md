@@ -21,7 +21,7 @@ In the generated Kotlin, beside [the external function][fn_emit_jni]:
 ```kotlin
 package example
 
-data class Stamp(val secs: Long, val nanos: Long)
+public data class Stamp(val secs: Long, val nanos: Long)
 ```
 
 No Rust type is generated for this record: what crosses is a JVM object, and the

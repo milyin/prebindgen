@@ -75,9 +75,16 @@ JniGen::builder()
 Kotlin cannot fall back on a mangled source name the way C does, because a Kotlin
 declaration needs somewhere to live: a package, a class for a type, and for a
 function a place to be declared. That is what `package!` and the class macros
-supply, and a name given there is what the generated declaration and the native
-symbol are both built from. The macros take Rust paths rather than strings, so
-`data_class!(Stamp)` fails to compile if `Stamp` is not in scope.
+supply. A name given there names the Kotlin declaration a caller uses; the
+native method behind it, and so the `Java_…` symbol, is named from the Rust
+identifier through the method-name hook — the harness object has one namespace,
+and two packages may each export a `value`. The macros take a type as written
+rather than a string — `data_class!(Stamp)`, not `data_class!("Stamp")` — and
+record its spelling. A function declaration must name a captured function, and
+one that does not is an error when the requests meet the model; a class
+declaration need not name a captured type at all — a target may represent
+`String` without the source exporting one — so `data_class!(Absent)` is a
+reported skip (`unsupported.type.not_a_record`) rather than an error.
 
 How a failing call reports is the adapter's convention rather than a per-function
 setting, and it is worth noticing that it is settled here rather than by whoever
@@ -92,17 +99,18 @@ that structure; frontends do, which is why the two builders above can be as
 different as their languages while everything after this stage is shared.
 
 A request set separates two kinds of statement. An **output request** names one
-element to expose: this function, that type, at this foreign placement. A
+declaration: this function, that type, exposed at this foreign placement. A
 **target policy** is the bag of target-specific choices that applies to it —
 `Stamp` as a by-value C aggregate or as a JVM object whose properties are read,
 this exported symbol, that error convention. Policy is data the target itself
 interprets later; the registry only carries it and hands it back.
 
-This stage also fixes the names by which everything is addressed afterwards. An
-`ElementId` is one requested output — exposing the same Rust function at two
-Kotlin placements makes two of them, with separate outcomes, which the engine
-cannot express yet (its identity is the kind and the Rust origin). A **site** is a
-position inside such an element: parameter 0 of the exported `stamp_sum`, or its
+This stage also fixes the names by which everything is addressed afterwards. A
+**declaration** is one requested output, identified by a `DeclarationId` —
+exposing the same Rust function at two Kotlin placements makes two of them, with
+separate outcomes, which the engine cannot express yet (its identity is the kind
+and the Rust origin). A **site** is a position inside such a declaration:
+parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
 `Stamp`, or the single argument of a `stamp_from_millis` constructor. Overrides
 attach to sites and parts, and so do diagnostics, which is why a skipped binding
@@ -196,10 +204,10 @@ common Rust writer belongs to the engine.
 
 The implementation divides the registry's data between two structures:
 
-- **`Registry`** uses an existing `Flat` model and adds the binding-generation operation, `generate(adapter, requests)`. `adapter` is the language implementation's object implementing the proposed `Target` interface; `requests` contains the choices recorded by the frontend. The registry determines how to construct or read Rust values—through their fields, constructors, accessors or conversion helpers—then combines the required conversions, checks dependencies and assembles binding plans. Source types, fields and signatures remain described by `Flat`.
-- **`GenerationRun`** holds the temporary planning state inside `Registry::generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and report; on failure, the registry returns an error.
+- **The generation operation**, `generate(flat, target, requests, crate)` — a free function, since the engine keeps no state between runs. `target` is the language implementation's object implementing the `Target` interface; `requests` contains the choices recorded by the frontend. The registry determines how to construct or read Rust values—through their fields, constructors, accessors or conversion helpers—then combines the required conversions, checks dependencies and assembles binding plans. Source types, fields and signatures remain described by `Flat`.
+- **The run** (`Run` in `plan.rs`) holds the temporary planning state inside `generate`: binding requests, conversion plans being built, dependencies and skip reasons. The registry creates this state internally and processes the complete request set in it. On success, the registry returns a **`Generation`** containing the completed plans and report; on failure, the registry returns an error.
 
-A binding crate normally builds one configured frontend. The frontend calls `Registry::generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using `GenerationRun` working state.
+A binding crate normally builds one configured frontend. The frontend calls `generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using the run's working state.
 
 ## Binding requests and target policy
 
@@ -249,7 +257,7 @@ and each frontend fills it with whatever its own adapter will later have to
 interpret. That is what lets one engine serve two languages whose choices have
 nothing in common.
 
-Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a **relation**: a description of how a Rust value is constructed or read, such as using its fields or calling a helper. Relations are the subject of [source construction and decomposition](04-values.md#describing-source-construction-and-decomposition); where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
+Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [**relation**](04-values.md#what-a-relation-is): a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument. Relations are introduced in [the value-planning chapter](04-values.md#what-a-relation-is); where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
 
 Three concepts stay separate throughout the design:
 
@@ -263,7 +271,7 @@ Policy guides the selection of these descriptions. The registry turns the descri
 
 ### The registry API called by the frontend
 
-The registry separates what should be generated from how values should be converted. An **output request** asks for one element, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries:
+The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries. As a design sketch — the built structure has `type_policies` and `site_policies` in place of `conversion_rules`, and no `unsupported` list, since a frontend states what it cannot lower as a request under a refusing policy:
 
 ```rust
 struct BindingRequests<Policy> {
@@ -271,7 +279,7 @@ struct BindingRequests<Policy> {
     conversion_rules: ConversionRules, // Source-operation selections and applicability.
     policies: PolicyTable<Policy>,// Target configurations referenced by PolicyId.
     unsupported: Vec<UnsupportedRequest>, // Requests the frontend cannot yet fully translate.
-    ignored: Vec<ElementId>,      // Explicit user opt-outs retained for reporting.
+    ignored: Vec<DeclarationId>,  // Explicit user opt-outs retained for reporting.
 }
 ```
 
@@ -285,47 +293,70 @@ Identical type, construction and representation choices can share a converter; t
 
 `UnsupportedRequest` retains request identity, location and reason when a frontend cannot honor a setting. The registry reports and propagates that failure.
 
-`Registry` exposes this generation method (signature only):
+The engine's one entry point (signature only):
 
 ```rust
-pub fn generate<A: Target>(
-    &self,
-    adapter: &A,
-    requests: BindingRequests<A::Policy>,
-) -> Result<Generation<A::Payload>, PlanningError>;
+pub fn generate<T: Target>(
+    flat: Flat,
+    target: &T,
+    requests: BindingRequests<T::Policy>,
+    declaring_crate: impl Into<String>,
+) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`A: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The method borrows the registry and adapter, consumes requests, and builds private working state. The returned `Generation` owns retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); invalid input or invariant failures return `PlanningError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
 `build.rs` code:
 
-**Not wired yet.** This is the shape, not today's call path: a frontend's
-`build()` under v2 hands its declarations to the engine's reporting entry point,
-and the requests-and-target path below is exercised by `examples/v2check`, which
-builds the requests itself. Connecting the two is what makes a frontend generate
-through v2 rather than report through it.
+**Implemented.** This is today's call path: `CbindgenBuilder::build()` under v2
+reads its own declaration storage once, turns it into a request set, and hands
+that to the engine with the C target. The JNI frontend does the same with its
+declarations and the JNI target. Nothing of v1 runs on this route — no
+`declare_into`, no resolution, no assembly — and the frontend's part is
+naming: which C name a type or a symbol gets is its manglers applied, the same
+answer v1 gives.
 
 ```rust
-let mut builder = FlatBuilder::new();
-builder.add_captures(Source::new(source_crate::PREBINDGEN_OUT_DIR).items_all())?;
-let source_model = builder.build()?;              // stage 2: the snapshot
+let source_model = self.sources.clone().build()?;   // stage 2: the snapshot
 
-let requests = c_builder.into_requests(&source_model)?;  // this stage
-let registry = Registry::new(source_model);
-let generation = registry.generate(&c_adapter, requests)?; // stages 4 to 6
+let requests = self.requests(source_module);        // this stage
+let generation = generate(source_model, &CTarget, requests, declaring_crate)?;
+                                                     // stages 4 to 6
 ```
+
+The request set is built in one pass over the builder's storage, sorted so that
+a run over unchanged input emits the same file. A declarator the target has no
+lowering for — an opaque handle, an enum, a callback — still becomes a request,
+under a policy that says which declarator it came from, so the target refuses it
+by name and the report groups the skips by the capability they wait for.
 
 The frontend and registry independently use `prebindgen-flat` to inspect source items. The frontend interprets user declarations and validates their source references; the registry discovers required fields or helper arguments and plans their conversions. The registry supplies no separate source-inspection API to the frontend.
 
-Request construction preserves all recorded frontend choices, including defaults, overrides, source mappings, helper signatures and ignore rules. Local helpers and declared Rust conversion operations are registered as typed source descriptions before planning. Unimplemented settings remain visible as unsupported requests. Naming closures may remain owned configuration objects; serialization is unnecessary.
+Request construction must lose no recorded frontend choice. Today it carries the
+choices this increment lowers — names, the class a type is declared as, the
+ignore rules — and turns the settings it does not lower into a **refusal** of
+what they apply to: a per-function `expand_param`/`expand_return`/
+`split_on_param` refuses the function; a type-level boundary declaration refuses
+every function with a parameter or result of that type, declared class or bare
+scalar alike, and leaves the class itself; a declarator the target does not
+lower refuses by that declarator's name. Emitting the default interface in place
+of the one a setting asked for is not honoring the declaration; the report says
+which setting the declaration waits on. Settings that have no effect within this
+increment are carried without refusing: a C function's
+`abort_on_conversion_error` says what a fallible input does, and no conversion
+here can fail. Local helpers and declared conversion operations are
+refused the same way (`unsupported.fn.binding_local`,
+`unsupported.conversion.not_implemented`) until they are registered as typed
+source descriptions. Naming closures remain owned configuration objects,
+applied where the requests are built; nothing is serialized.
 
 ## Identifying requests, value positions and reusable conversions
 
 Names ending in `Id` follow one convention throughout. Each is a handle into a
 table the registry owns, valid inside one generation run, and each is issued by
-whoever owns that table: the frontend's request set issues `ElementId` and
+whoever owns that table: the frontend's request set issues `DeclarationId` and
 `PolicyId`, the registry issues `RelationId`, `NodeId`, `PrimitiveId` and the
 rest as it registers what a target described. A few are structured rather than
 opaque — `SiteId` and `PartId` are positions, so they carry their owner and their
@@ -334,18 +365,18 @@ none can be constructed from a string.
 
 ### Where planning starts
 
-To generate `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conversion, the source call and an output conversion. The request to expose `normalize` is the starting point, called a **root**. The conversions required to implement that request are its **dependencies**. A request to expose a public type is also a root, even if no function uses that type.
+To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conversion, the call to `normalize` itself and an output conversion. The request to expose `normalize` is the starting point, called a **root**. The conversions required to implement that request are its **dependencies**. A request to expose a public type is also a root, even if no function uses that type.
 
 ```rust
 struct OutputRequest {
-    id: ElementId,        // This requested output, e.g. normalize at one Kotlin placement.
+    id: DeclarationId,    // This declaration, e.g. normalize at one Kotlin placement.
     source: SourceItemId, // The Rust function/type/constant or registered local helper.
     policy: PolicyId,     // Entry in BindingRequests.policies configuring this output.
     requirements: Vec<SemanticRequirement>, // Promises that must hold for this output.
 }
 ```
 
-`ElementId` identifies the requested output; `SourceItemId` identifies the source item behind it. Exposing one Rust function at two foreign placements gives two output identities — **not yet**: the engine's `ElementId` is the kind and the Rust origin, so one source item has one output identity, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
+`DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `DeclarationId` is the kind and the Rust origin, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
 ### A value's position in an exported function
 
@@ -353,7 +384,7 @@ The registry needs to locate the parameter affected by a per-function override. 
 
 ```rust
 struct SiteId {
-    owner: ElementId, // Requested function containing the position, e.g. normalize.
+    owner: DeclarationId, // The declared function containing the position, e.g. normalize.
     path: SitePath,   // Param(0), Return, or a nested callback argument position.
 }
 ```

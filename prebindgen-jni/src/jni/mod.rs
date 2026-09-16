@@ -473,7 +473,7 @@ pub(crate) enum Engine {
     V1(Box<prebindgen_registry::Registry>),
     /// The v2 engine's finished run — see `prebindgen-registry-v2`.
     #[cfg(feature = "v2")]
-    V2(Box<prebindgen_registry_v2::Generation>),
+    V2(Box<prebindgen_registry_v2::Generation<crate::v2::JniPayload>>),
 }
 
 /// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
@@ -1161,7 +1161,7 @@ impl JniGen {
     #[cfg(feature = "v2")]
     pub(crate) fn from_v2(
         decls: Declarations,
-        generation: prebindgen_registry_v2::Generation,
+        generation: prebindgen_registry_v2::Generation<crate::v2::JniPayload>,
     ) -> Self {
         JniGen {
             decls,
@@ -1193,7 +1193,7 @@ impl JniGen {
         }
     }
 
-    /// What was generated and what was skipped, per declared element.
+    /// What was generated and what was skipped, per declaration.
     ///
     /// `None` under v1: its answer is "everything declared, or the build
     /// failed", so it has no partial surface to manifest. Producing one for v1

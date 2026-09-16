@@ -902,17 +902,15 @@ impl CbindgenBuilder {
     ///
     /// Nothing of v1 runs first: no `declare_into`, no resolution, no
     /// assembly. V2 reads the same sources and the same declarations and owns
-    /// everything after that.
+    /// everything after that — see [`crate::v2`].
     #[cfg(feature = "v2")]
     fn build_v2(self) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
-        let sources = self.sources.clone();
-        let generation =
-            prebindgen_registry_v2::plan(&self, sources, declaring_crate()).map_err(|error| {
-                prebindgen_registry::WriteRustError::Engine {
-                    pipeline: prebindgen_registry_v2::PIPELINE,
-                    message: error.to_string(),
-                }
-            })?;
+        let generation = self.generate_v2(declaring_crate()).map_err(|error| {
+            prebindgen_registry::WriteRustError::Engine {
+                pipeline: prebindgen_registry_v2::PIPELINE,
+                message: error.to_string(),
+            }
+        })?;
         Ok(Cbindgen {
             gen: self,
             engine: crate::Engine::V2(Box::new(generation)),

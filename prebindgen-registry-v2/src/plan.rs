@@ -11,7 +11,7 @@ use prebindgen_flat::flat::{Flat, Function, Struct, Type, TypeKind, TypeRef};
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::{DeclaredElement, ElementId, ElementKind},
+    decl::{Declaration, DeclarationId, DeclarationKind},
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -31,7 +31,7 @@ pub struct PolicyId(pub usize);
 /// One requested output.
 #[derive(Clone, Debug)]
 pub struct OutputRequest {
-    pub element: DeclaredElement,
+    pub declaration: Declaration,
     /// The target's configuration for this output.
     pub policy: PolicyId,
 }
@@ -54,11 +54,11 @@ pub struct BindingRequests<Policy> {
     /// Per-source-type defaults: `Stamp` crosses this way wherever it appears.
     pub type_policies: BTreeMap<String, PolicyId>,
     /// Per-site overrides: this parameter of this exported function crosses
-    /// differently. Keyed by element and the site's path, `param 0` or
+    /// differently. Keyed by declaration and the site's path, `param 0` or
     /// `return`.
-    pub site_policies: BTreeMap<(ElementId, String), PolicyId>,
-    /// Elements the user asked to leave alone.
-    pub ignored: Vec<DeclaredElement>,
+    pub site_policies: BTreeMap<(DeclarationId, String), PolicyId>,
+    /// Declarations the user asked to leave alone.
+    pub ignored: Vec<Declaration>,
 }
 
 impl<Policy> BindingRequests<Policy> {
@@ -87,9 +87,12 @@ impl<Policy> BindingRequests<Policy> {
         PolicyId(self.policies.len() - 1)
     }
 
-    /// Ask for one element to be exposed.
-    pub fn output(&mut self, element: DeclaredElement, policy: PolicyId) -> &mut Self {
-        self.outputs.push(OutputRequest { element, policy });
+    /// Ask for one declaration to be exposed.
+    pub fn output(&mut self, declaration: Declaration, policy: PolicyId) -> &mut Self {
+        self.outputs.push(OutputRequest {
+            declaration,
+            policy,
+        });
         self
     }
 
@@ -120,7 +123,7 @@ pub struct NodeId(pub(crate) usize);
 /// A complete native wrapper.
 #[derive(Debug)]
 pub struct FunctionPlan<P> {
-    pub element: ElementId,
+    pub declaration: DeclarationId,
     pub abi: AbiSpec,
     pub output: OutputPlacement,
     pub failures: Vec<FailureRoute<P>>,
@@ -224,7 +227,7 @@ impl<'a, T: Target> Run<'a, T> {
         let site = position.path.join(".");
         if let Some(policy) = requests
             .site_policies
-            .get(&(position.element.clone(), site))
+            .get(&(position.declaration.clone(), site))
         {
             return *policy;
         }
@@ -695,27 +698,45 @@ pub fn generate<T: Target>(
     requests: BindingRequests<T::Policy>,
     declaring_crate: impl Into<String>,
 ) -> Result<Generation<T::Payload>, EngineError> {
-    let declared: Vec<DeclaredElement> = requests
+    let declared: Vec<Declaration> = requests
         .outputs
         .iter()
-        .map(|output| output.element.clone())
+        .map(|output| output.declaration.clone())
         .collect();
     check_declarations(&declared, &flat)?;
 
     let mut run = Run::new(&flat, target, &requests);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
     let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
-    let mut outcomes: BTreeMap<ElementId, Outcome> = BTreeMap::new();
+    let mut outcomes: BTreeMap<DeclarationId, Outcome> = BTreeMap::new();
 
     for output in &requests.outputs {
-        let element = &output.element;
+        let declaration = &output.declaration;
         let policy = requests.get(output.policy);
-        let planned = match element.kind {
-            ElementKind::Function => {
-                plan_function(&mut run, element, policy).map_err(EngineError::Planning)?
+        let planned = match declaration.kind {
+            // A function the binding defines itself has no captured item to
+            // plan from: its signature is the binding's, and reading one is a
+            // capability this engine does not have yet.
+            DeclarationKind::Function
+                if declaration.source == crate::decl::SourceKind::BindingLocal =>
+            {
+                Err(Refusal::at(
+                    Unsupported::new(
+                        "unsupported.fn.binding_local",
+                        format!(
+                            "`{}` is defined by the binding, not captured from the source; v2 \
+                             plans captured functions only",
+                            declaration.rust_origin
+                        ),
+                    ),
+                    &crate::target::Position::root(declaration.id.clone()),
+                ))
             }
-            ElementKind::Type => {
-                plan_record(&mut run, element, policy).map_err(EngineError::Planning)?
+            DeclarationKind::Function => {
+                plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?
+            }
+            DeclarationKind::Type => {
+                plan_record(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
@@ -725,7 +746,7 @@ pub fn generate<T: Target>(
                     format!("unsupported.{}.not_implemented", kind.as_str()),
                     format!("the v2 engine has no {} lowering yet", kind.as_str()),
                 ),
-                &crate::target::Position::root(element.id.clone()),
+                &crate::target::Position::root(declaration.id.clone()),
             )),
         };
         match planned {
@@ -734,14 +755,14 @@ pub fn generate<T: Target>(
                     functions.push(function);
                 }
                 surfaces.push(surface);
-                outcomes.insert(element.id.clone(), Outcome::Emitted);
+                outcomes.insert(declaration.id.clone(), Outcome::Emitted);
             }
             Err(refusal) => {
                 // The path is where the walk actually stopped — the exported
                 // function, the parameter, the field — so the report says what
-                // to look at rather than only which element vanished.
+                // to look at rather than only which declaration vanished.
                 outcomes.insert(
-                    element.id.clone(),
+                    declaration.id.clone(),
                     Outcome::Skipped(Skip {
                         capability: refusal.reason.capability,
                         explanation: refusal.reason.explanation,
@@ -758,7 +779,7 @@ pub fn generate<T: Target>(
     loop {
         let mut changed = false;
         for surface in &surfaces {
-            if !matches!(outcomes.get(&surface.element), Some(Outcome::Emitted)) {
+            if !matches!(outcomes.get(&surface.declaration), Some(Outcome::Emitted)) {
                 continue;
             }
             for required in &surface.requires {
@@ -771,10 +792,10 @@ pub fn generate<T: Target>(
                         required.to_string(),
                     ),
                 };
-                let mut path = vec![surface.element.to_string()];
+                let mut path = vec![surface.declaration.to_string()];
                 path.extend(cause.dependency_path.iter().cloned());
                 outcomes.insert(
-                    surface.element.clone(),
+                    surface.declaration.clone(),
                     Outcome::Skipped(Skip {
                         capability: cause.capability,
                         explanation: cause.explanation,
@@ -791,22 +812,22 @@ pub fn generate<T: Target>(
     }
 
     // Only what a retained output needs is published.
-    let emitted = |id: &ElementId| matches!(outcomes.get(id), Some(Outcome::Emitted));
-    functions.retain(|function| emitted(&function.element));
-    surfaces.retain(|surface| emitted(&surface.element));
+    let emitted = |id: &DeclarationId| matches!(outcomes.get(id), Some(Outcome::Emitted));
+    functions.retain(|function| emitted(&function.declaration));
+    surfaces.retain(|surface| emitted(&surface.declaration));
 
     let mut entries: Vec<Entry> = requests
         .outputs
         .iter()
         .map(|output| Entry {
-            element: output.element.clone(),
+            declaration: output.declaration.clone(),
             outcome: outcomes
-                .get(&output.element.id)
+                .get(&output.declaration.id)
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
-        .chain(requests.ignored.iter().map(|element| Entry {
-            element: element.clone(),
+        .chain(requests.ignored.iter().map(|declaration| Entry {
+            declaration: declaration.clone(),
             outcome: Outcome::Ignored,
         }))
         .collect();
@@ -821,7 +842,7 @@ pub fn generate<T: Target>(
             sources: flat.source_modules().to_vec(),
             captured_items: flat.elements().count(),
         },
-        elements: entries,
+        declarations: entries,
     };
 
     // Planning is over: the working state hands over its tables, and the model
@@ -886,14 +907,33 @@ struct Emitted<P> {
 /// the native interface around them.
 fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
-    element: &DeclaredElement,
+    declaration: &Declaration,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
     let function: &Function = flat
-        .function(element.rust_origin.as_str())
+        .function(declaration.rust_origin.as_str())
         .expect("declarations are checked against the model before planning");
-    let root = crate::target::Position::root(element.id.clone());
+    let root = crate::target::Position::root(declaration.id.clone());
+
+    // The wrapper is a safe function, and the writer renders a plain call.
+    // Wrapping an `unsafe fn` would need the wrapper to state the caller's
+    // obligations, which nothing here can do yet; hiding them in an `unsafe`
+    // block would make a safe public function out of a contract it does not
+    // uphold.
+    if function.is_unsafe() {
+        return Ok(Err(Refusal::at(
+            Unsupported::new(
+                "unsupported.fn.unsafe",
+                format!(
+                    "`{}` is an `unsafe fn`, and v2 has no way to carry its safety contract \
+                     through a wrapper yet",
+                    function.name
+                ),
+            ),
+            &root,
+        )));
+    }
 
     let mut inputs = Vec::new();
     for (index, param) in function.params.iter().enumerate() {
@@ -928,7 +968,10 @@ fn plan_function<T: Target>(
         inputs: inputs.iter().map(|id| &run.nodes[id.0]).collect(),
         output: output.map(|id| &run.nodes[id.0]),
     };
-    let site = SiteDescriptor { element, function };
+    let site = SiteDescriptor {
+        declaration,
+        function,
+    };
     let boundary = match run.target.boundary(&site, &values, policy)? {
         TargetAttempt::Ready(boundary) => boundary,
         TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
@@ -955,7 +998,7 @@ fn plan_function<T: Target>(
     }
     let surface = match run.target.surface(
         &SurfaceRequest {
-            element,
+            declaration,
             policy,
             item: SourceItem::Function(function),
         },
@@ -966,7 +1009,7 @@ fn plan_function<T: Target>(
     };
     drop(values);
 
-    let plan = match assemble(run, element, function, &inputs, output, boundary)? {
+    let plan = match assemble(run, declaration, function, &inputs, output, boundary)? {
         Ok(plan) => plan,
         Err(unsupported) => return Ok(Err(unsupported)),
     };
@@ -980,7 +1023,7 @@ fn plan_function<T: Target>(
 /// result out.
 fn assemble<T: Target>(
     run: &mut Run<'_, T>,
-    element: &DeclaredElement,
+    declaration: &Declaration,
     function: &Function,
     inputs: &[NodeId],
     output: Option<NodeId>,
@@ -990,7 +1033,7 @@ fn assemble<T: Target>(
     let refuse = |reason: Unsupported| {
         Ok(Err(Refusal::at(
             reason,
-            &crate::target::Position::root(element.id.clone()),
+            &crate::target::Position::root(declaration.id.clone()),
         )))
     };
     // A symbol reaches generated Rust as a function name, so a policy that
@@ -999,7 +1042,7 @@ fn assemble<T: Target>(
     if syn::parse_str::<syn::Ident>(&boundary.abi.symbol).is_err() {
         return Err(PlanningError::InvalidInput(format!(
             "`{}` exports the symbol `{}`, which is not a Rust identifier",
-            element.id, boundary.abi.symbol
+            declaration.id, boundary.abi.symbol
         )));
     }
     let mut body = BodyBuilder::new();
@@ -1011,7 +1054,7 @@ fn assemble<T: Target>(
         if !param.ty.abi {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` takes `{}` natively, which is not an ABI carrier",
-                element.id,
+                declaration.id,
                 spell(&param.ty.ty)
             )));
         }
@@ -1025,7 +1068,7 @@ fn assemble<T: Target>(
         if !ret.abi {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` returns `{}` natively, which is not an ABI carrier",
-                element.id,
+                declaration.id,
                 spell(&ret.ty)
             )));
         }
@@ -1034,7 +1077,7 @@ fn assemble<T: Target>(
             Some(produced) if !same_type(&ret.ty, &produced) => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` returns `{}` natively, and its result conversion produces a `{}`",
-                    element.id,
+                    declaration.id,
                     spell(&ret.ty),
                     spell(&produced)
                 )))
@@ -1042,7 +1085,7 @@ fn assemble<T: Target>(
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` returns `{}` natively and has no result conversion to fill it",
-                    element.id,
+                    declaration.id,
                     spell(&ret.ty)
                 )))
             }
@@ -1061,7 +1104,7 @@ fn assemble<T: Target>(
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` declares no native parameter for source parameter {index}",
-                    element.id
+                    declaration.id
                 )))
             }
         };
@@ -1071,7 +1114,7 @@ fn assemble<T: Target>(
         if !same_type(&native.ty, &expected.ty) {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` passes parameter {index} as `{}`, and its conversion reads a `{}`",
-                element.id,
+                declaration.id,
                 spell(&native.ty),
                 spell(&expected.ty)
             )));
@@ -1129,7 +1172,7 @@ fn assemble<T: Target>(
                         "the {} failure route of `{}` reports through an operation that reads a \
                          value",
                         route.category.as_str(),
-                        element.id
+                        declaration.id
                     )))
                 }
             }
@@ -1170,7 +1213,7 @@ fn assemble<T: Target>(
                         "the {} failure route of `{}` reports a `{}` where the operation raises \
                          a `{}`",
                         category.as_str(),
-                        element.id,
+                        declaration.id,
                         spell(&reported.ty),
                         spell(&raised.ty)
                     )));
@@ -1191,7 +1234,7 @@ fn assemble<T: Target>(
     }
 
     Ok(Ok(FunctionPlan {
-        element: element.id.clone(),
+        declaration: declaration.id.clone(),
         abi: boundary.abi,
         output: boundary.output,
         failures: boundary.failures,
@@ -1205,11 +1248,11 @@ fn assemble<T: Target>(
 /// public declaration itself.
 fn plan_record<T: Target>(
     run: &mut Run<'_, T>,
-    element: &DeclaredElement,
+    declaration: &Declaration,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
-    let record: &Struct = match flat.struct_type(element.rust_origin.as_str()) {
+    let record: &Struct = match flat.struct_type(declaration.rust_origin.as_str()) {
         Some(record) => record,
         None => {
             return Ok(Err(Refusal::at(
@@ -1219,14 +1262,14 @@ fn plan_record<T: Target>(
                         "`{}` is exposed as a data type, and the model gives it no fields to \
                          cross through — a tuple struct or an opaque declaration is carried \
                          whole, which v2 has no representation for yet",
-                        element.rust_origin
+                        declaration.rust_origin
                     ),
                 ),
-                &crate::target::Position::root(element.id.clone()),
+                &crate::target::Position::root(declaration.id.clone()),
             )))
         }
     };
-    let root = crate::target::Position::root(element.id.clone());
+    let root = crate::target::Position::root(declaration.id.clone());
     let node = match run.plan_value(
         Crossing {
             ty: record.type_ref().clone(),
@@ -1244,7 +1287,7 @@ fn plan_record<T: Target>(
     };
     let surface = match run.target.surface(
         &SurfaceRequest {
-            element,
+            declaration,
             policy,
             item: SourceItem::Record(record),
         },

@@ -1,7 +1,7 @@
 //! The emitted-surface manifest: what v2 generated, what it skipped, and why.
 //!
 //! Two renderings of one value — JSON for tooling (test-section selection reads
-//! it) and Markdown for a person. Both are deterministic: elements sort by kind
+//! it) and Markdown for a person. Both are deterministic: declarations sort by kind
 //! then id, and skip causes are grouped by code so a single missing capability
 //! is stated once with the list of roots it took down, rather than repeated
 //! forty times.
@@ -14,19 +14,19 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    decl::{DeclaredElement, ElementKind},
+    decl::{Declaration, DeclarationKind},
     outcome::{EngineError, Outcome},
 };
 
 /// The manifest's own version. A consumer that reads the JSON checks this
 /// before trusting the shape; it changes whenever a field's meaning does.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
-/// One accounted-for element.
+/// One accounted-for declaration.
 #[derive(Clone, Debug, Serialize)]
 pub struct Entry {
     #[serde(flatten)]
-    pub element: DeclaredElement,
+    pub declaration: Declaration,
     #[serde(flatten)]
     pub outcome: Outcome,
 }
@@ -43,8 +43,8 @@ pub struct Report {
     /// Enough of the run's input to tell a stale report from a fresh one: the
     /// declaring crate and the source directories it read.
     pub source_identity: SourceIdentity,
-    /// Every declared element, sorted by kind then id.
-    pub elements: Vec<Entry>,
+    /// Every declaration, sorted by kind then id.
+    pub declarations: Vec<Entry>,
 }
 
 /// What this report was generated from.
@@ -59,10 +59,10 @@ pub struct SourceIdentity {
 }
 
 impl Report {
-    /// How many elements ended each way.
+    /// How many declarations ended each way.
     pub fn counts(&self) -> Counts {
         let mut counts = Counts::default();
-        for entry in &self.elements {
+        for entry in &self.declarations {
             match entry.outcome {
                 Outcome::Emitted => counts.emitted += 1,
                 Outcome::Skipped(_) => counts.skipped += 1,
@@ -72,12 +72,12 @@ impl Report {
         counts
     }
 
-    /// The skipped elements grouped by capability code, each group's roots
+    /// The skipped declarations grouped by capability code, each group's roots
     /// sorted. One cause, all of its casualties — which is what a reader needs
     /// to decide what to implement next.
     pub fn skips_by_capability(&self) -> BTreeMap<&str, Vec<&Entry>> {
         let mut groups: BTreeMap<&str, Vec<&Entry>> = BTreeMap::new();
-        for entry in &self.elements {
+        for entry in &self.declarations {
             if let Some(skip) = entry.outcome.skip() {
                 groups
                     .entry(skip.capability.as_str())
@@ -147,15 +147,18 @@ impl Report {
                     .skip()
                     .map(|skip| skip.path())
                     .unwrap_or_default();
-                let _ = writeln!(out, "- `{}` ({})", entry.element.id, path);
+                let _ = writeln!(out, "- `{}` ({})", entry.declaration.id, path);
             }
             let _ = writeln!(out);
         }
 
-        let _ = writeln!(out, "## Every declared element\n");
-        let _ = writeln!(out, "| element | representation | placement | outcome |");
+        let _ = writeln!(out, "## Every declaration\n");
+        let _ = writeln!(
+            out,
+            "| declaration | representation | placement | outcome |"
+        );
         let _ = writeln!(out, "| --- | --- | --- | --- |");
-        for entry in &self.elements {
+        for entry in &self.declarations {
             let outcome = match &entry.outcome {
                 Outcome::Emitted => "emitted".to_string(),
                 Outcome::Ignored => "ignored".to_string(),
@@ -164,7 +167,10 @@ impl Report {
             let _ = writeln!(
                 out,
                 "| `{}` | {} | `{}` | {} |",
-                entry.element.id, entry.element.representation, entry.element.placement, outcome
+                entry.declaration.id,
+                entry.declaration.representation,
+                entry.declaration.placement,
+                outcome
             );
         }
         out
@@ -191,7 +197,7 @@ impl Report {
         for (capability, entries) in self.skips_by_capability() {
             let roots = entries
                 .iter()
-                .map(|entry| entry.element.id.as_str())
+                .map(|entry| entry.declaration.id.as_str())
                 .collect::<Vec<_>>();
             let shown = roots.len().min(5);
             let more = match roots.len() - shown {
@@ -206,7 +212,7 @@ impl Report {
     }
 }
 
-/// How a run's elements were accounted for.
+/// How a run's declarations were accounted for.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
     pub emitted: usize,
@@ -217,18 +223,18 @@ pub struct Counts {
 /// Sort key: kind first (so a report reads types, then functions), then id.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
     entries.sort_by(|a, b| {
-        kind_order(a.element.kind)
-            .cmp(&kind_order(b.element.kind))
-            .then_with(|| a.element.id.cmp(&b.element.id))
+        kind_order(a.declaration.kind)
+            .cmp(&kind_order(b.declaration.kind))
+            .then_with(|| a.declaration.id.cmp(&b.declaration.id))
     });
 }
 
-fn kind_order(kind: ElementKind) -> u8 {
+fn kind_order(kind: DeclarationKind) -> u8 {
     match kind {
-        ElementKind::Type => 0,
-        ElementKind::Conversion => 1,
-        ElementKind::Callback => 2,
-        ElementKind::Const => 3,
-        ElementKind::Function => 4,
+        DeclarationKind::Type => 0,
+        DeclarationKind::Conversion => 1,
+        DeclarationKind::Callback => 2,
+        DeclarationKind::Const => 3,
+        DeclarationKind::Function => 4,
     }
 }

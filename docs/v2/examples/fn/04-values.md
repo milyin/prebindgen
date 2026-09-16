@@ -36,7 +36,7 @@ policy. Their `NodeId`s are what [the boundary][fn_boundary] assembles.
 
 ## Checks
 
-- Node identity is (type, direction, relation, effective policy), so C and JNI
+- Node identity is (type, direction, [relation](../../stages/04-values.md#what-a-relation-is), effective policy), so C and JNI
   never share a node, and a second function taking an owned `Stamp` reuses this
   one.
 - An unsupported child makes the input node unsupported, and this function is

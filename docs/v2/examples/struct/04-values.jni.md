@@ -49,11 +49,11 @@ PrimitiveSpec {
 }
 ```
 
-Applied to an environment named `env` and an object named `arg0`, that
+Applied to an environment named `env` and an object named `stamp`, that
 description renders one expression:
 
 ```rust
-env.call_method(&arg0, "getSecs", "()J", &[])
+env.call_method(&stamp, "getSecs", "()J", &[])
     .and_then(|value| value.j())
 ```
 

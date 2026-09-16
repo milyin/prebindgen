@@ -25,7 +25,7 @@ and a build script asking for it to be exposed: [C][struct_requests_c],
 
 ```text
 OutputRequest {
-    id:     ElementId(public Stamp in this target),
+    id:     DeclarationId(public Stamp in this target),
     source: SourceItemId(crate::source::Stamp),
     policy: PolicyId(this target's record policy),
 }
@@ -43,7 +43,7 @@ conversion_rules.parts: {}    // none recorded for this path
 
 - A record request is a root: it stands whether or not any exported function
   mentions the type, and survives a function that is skipped.
-- Relation and representation are separate choices. A `stamp_from_millis`
+- [Relation](../../stages/04-values.md#what-a-relation-is) and representation are separate choices. A `stamp_from_millis`
   constructor would change the parts without changing the representation; an
   object-input override changes the representation without changing the parts.
   [Node identity][struct_values] distinguishes both.

@@ -76,8 +76,8 @@ class SpecStructure(unittest.TestCase):
 
     def test_unknown_anchor(self):
         self.edit("stages/03-requests.md",
-                  "04-values.md#describing-source-construction-and-decomposition",
-                  "04-values.md#describing-source-construction")
+                  "04-values.md#what-a-relation-is",
+                  "04-values.md#what-a-relation")
         self.rejects("no matching heading")
 
     def test_missing_required_section(self):

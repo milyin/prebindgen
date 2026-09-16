@@ -18,17 +18,20 @@ jni = "0.21.1"
 # which means parsing both rather than diffing text.
 syn = { workspace = true }
 quote = { workspace = true }
-# One test runs the engine again, with a class renamed, which needs what the
+# One test runs the frontend again, with a class renamed, which needs what the
 # build script needs.
 prebindgen = { workspace = true }
-prebindgen-registry-v2 = { workspace = true }
-prebindgen-flat = { workspace = true }
-proc-macro2 = { workspace = true }
+prebindgen-jni = { workspace = true, features = ["v2"] }
+# `fun!` for the JNI declarations lives in the registry crate, as it does for
+# every JNI binding.
+prebindgen-registry = { workspace = true }
 
 [build-dependencies]
+# The real frontends, with the v2 engine compiled in: this crate declares its
+# binding the way any consumer does, and states the engine rather than reading
+# `PREBINDGEN_PIPELINE`.
 prebindgen = { workspace = true }
-prebindgen-registry-v2 = { workspace = true }
-prebindgen-flat = { workspace = true }
+prebindgen-c = { workspace = true, features = ["v2"] }
+prebindgen-jni = { workspace = true, features = ["v2"] }
+prebindgen-registry = { workspace = true }
 syn = { workspace = true }
-quote = { workspace = true }
-proc-macro2 = { workspace = true }

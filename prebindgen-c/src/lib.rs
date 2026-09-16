@@ -337,7 +337,7 @@ pub(crate) enum Engine {
     V1(Box<prebindgen_registry::Registry>),
     /// The v2 engine's finished run — see `prebindgen-registry-v2`.
     #[cfg(feature = "v2")]
-    V2(Box<prebindgen_registry_v2::Generation>),
+    V2(Box<prebindgen_registry_v2::Generation<v2::CPayload>>),
 }
 
 // Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.
@@ -403,7 +403,7 @@ impl Cbindgen {
         }
     }
 
-    /// What was generated and what was skipped, per declared element.
+    /// What was generated and what was skipped, per declaration.
     ///
     /// `None` under v1: its answer is "everything declared, or the build
     /// failed", so it has no partial surface to manifest. Producing one for v1
@@ -586,7 +586,7 @@ mod test_util;
 mod tests;
 mod trait_impl;
 #[cfg(feature = "v2")]
-mod v2;
+pub mod v2;
 
 pub use decl::{
     CallbackDecl, ConvertTypeDecl, DataTypeDecl, Decls, EnumTypeDecl, ErrorTypeDecl, FunDecl,
