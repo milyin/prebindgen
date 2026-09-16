@@ -10,7 +10,12 @@ a parameter names, what fields a record has — is worked out one stage later, f
 these snippets.
 
 A **source crate** is an ordinary Rust library that marks the items it wants
-available to binding generators. The chapters use this one throughout:
+available to binding generators; each marked item is a **source item**, the thing
+every later stage reads its source facts from. Most of what a binding declares
+names one; a binding may also declare things the source never exported — a
+callback signature, a helper of its own, a type such as `String` — which the
+[request chapter](03-requests.md) covers. The chapters use this crate
+throughout:
 
 ```rust
 use prebindgen::prebindgen;
@@ -82,7 +87,7 @@ Marking an item is not a statement about bindings. It does not say that `Stamp`
 can be represented in C, that `stamp_sum` can be called from Kotlin, or that
 either will appear in the generated API. It says only that the declaration is
 available for a binding crate to ask about. Which items are exposed, under which
-names and with which representation, is settled two stages later, when a
+names and with which [representation](04-values.md#plan-value-conversions), is settled two stages later, when a
 [binding request](03-requests.md) names them. Where the generated code will
 *call* them is not recorded here either: the binding crate configures the module
 path its source items are reached through, since only it knows the name the

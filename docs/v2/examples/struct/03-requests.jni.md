@@ -29,11 +29,11 @@ policy (JNI record):
 ## Checks
 
 - The alternative, `SeparateArguments`, passes the two fields as individual JNI
-  arguments and needs no property reads. It is a different effective policy, so
-  it produces a different conversion node for the same record.
+  arguments and needs no property reads. It is a different effective [policy](../../stages/03-requests.md#what-policy-means), so
+  it produces a different [node](../../stages/04-values.md#plan-value-conversions) for the same record.
 - The class metadata recorded here is what the Kotlin writer emits *and* what
   the property reads call, so the two cannot drift apart.
-- Object input means the conversion depends on the JVM at run time, which is why
+- Object input means the [conversion](../../stages/04-values.md#plan-value-conversions) depends on the JVM at run time, which is why
   [its node is fallible][struct_values_jni] where the C one is not.
 
 [struct]: README.md

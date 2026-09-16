@@ -12,15 +12,15 @@ served. Read in order, they are the developer documentation for the design.
 
 **Along one element.** The appendix takes one kind of source element — a
 function, a record — and follows it through every stage that applies to it,
-showing its exact representation at each step: the captured item, the Flat views,
-the recorded request, the conversion plans and target operation descriptions, the
+showing its exact form at each step: the captured item, the Flat views,
+the recorded request, the [conversion](stages/04-values.md#plan-value-conversions) plans and target operation descriptions, the
 native boundary, the retained output, and the generated code. Read that way, the
 document is an example-based specification: the general contract in a chapter and
 its concrete application to a fixed input are two views of the same requirement.
 
 This describes the **second** engine. The one that ships today is
-`prebindgen-registry`, whose own model — recipes, fragments, sites, and the
-shapes a crossing takes — is documented in [`docs/model.md`](../model.md). The
+`prebindgen-registry`, whose own model — recipes, fragments, and the
+shapes a value takes as it crosses — is documented in [`docs/model.md`](../model.md). The
 two are different pipelines, and a reader who wants the registry a binding
 compiles through right now wants that document rather than this one.
 
@@ -122,7 +122,7 @@ build-dependency only:
   name refers to, what fields a record has.
 - **`prebindgen-registry-v2`** is the engine this document specifies. It plans
   every conversion a requested binding needs, resolves what depends on what,
-  renders the Rust wrappers, and reports what it could not generate. It shares
+  renders the Rust [wrappers](stages/05-boundary.md#assemble-the-native-boundary), and reports what it could not generate. It shares
   the capture and model crates with the V1 engine and depends on nothing else of
   it, so "V2 never falls back to V1 for an item" is a property of the dependency
   graph rather than a promise.
@@ -155,7 +155,7 @@ single crate once, and it charged everyone for everything: a source crate that
 only marks its items compiled the JNI adapter and linked `jni`; a shipped
 binding library pulled in `syn`, `quote` and `prettyplease` to reach a few
 hundred lines of runtime helpers; the C adapter sat behind a feature flag that
-made its committed test artifacts feature-sensitive; and two pairs of layers
+made its committed test outputs feature-sensitive; and two pairs of layers
 that should have been independent formed dependency cycles — the model with the
 pipeline, and one adapter with the other. The split is what makes each of those
 a dependency you can decline.
@@ -173,6 +173,11 @@ captured Rust source + declared local helper signatures
        -> JNI's Kotlin writer -> Kotlin declarations
 ```
 
+The chapters run in that order, and their vocabulary does not: most of the
+nouns name what flows *between* stages, so a chapter uses a word before the
+chapter that specifies it. [The vocabulary](concepts.md) introduces each of
+those words once; read it first.
+
 1. [Capture source items](stages/01-source.md)
 2. [Build and inspect the source model](stages/02-flat.md)
 3. [Record binding requests](stages/03-requests.md)
@@ -186,7 +191,7 @@ pipeline stage but the plan for building one.
 
 This order is the order of information dependencies, not a requirement to make
 seven passes over the project. The registry interleaves selection, child planning
-and representation inside one recursive walk; binding choices and local helper
+and [representation](stages/04-values.md#plan-value-conversions) inside one recursive walk; binding choices and local helper
 signatures can be recorded before Flat is published, and the request stage turns
 those choices into requests once the Flat views exist.
 
@@ -237,7 +242,7 @@ to satisfy.
 Only applicable combinations exist. The record path has no native-boundary cell,
 because a record exports no function of its own; its conversion is reached
 through the function that uses it. A missing cell claims nothing about support —
-support outcomes belong in the contract of a cell that does exist.
+whether something is supported is stated in the contract of a cell that does exist.
 
 ## What V2 has to deliver
 
@@ -267,8 +272,10 @@ python3 -m unittest discover -s docs/v2 -p 'test_*.py'
 ```
 
 Both use only Python's standard library. They check structure — identities, ids,
-links, anchors, indexes, backlinks, required sections — and cannot check whether
-the prose describes a correct compiler.
+links, anchors, indexes, backlinks, required sections, and that each word of
+[the vocabulary](concepts.md) is defined once and linked at its first mention on
+every other page — and cannot check whether the prose describes a correct
+compiler.
 
 [fn]: examples/fn/README.md
 [struct]: examples/struct/README.md

@@ -1,13 +1,13 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "04-values", "language": "c"} -->
 
 [Stage chapter](../../stages/04-values.md) · [Common cell][fn_values] · [Element path][fn]
-Owner: the registry, on the C adapter's representation
+Owner: the registry, on the C adapter's [representation](../../stages/04-values.md#plan-value-conversions)
 
 # Function taking an owned record — Plan value conversions — C
 
 ## Input
 
-The two crossings, with the C policy recorded for them:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the C [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
 
 ```text
 Crossing { source: Stamp, direction: IntoRust  }   policy: data_struct, by value
@@ -31,12 +31,12 @@ The member reads are specified, with the fragment each renders, in
 
 ## Checks
 
-- Both nodes are infallible — reading a member of a by-value struct cannot fail,
+- Both [nodes](../../stages/04-values.md#plan-value-conversions) are infallible — reading a member of a by-value struct cannot fail,
   and the copied integer owes nothing to the aggregate — so this function has no
   failure route to plan, which is what [its C boundary][fn_boundary_c] relies on.
 - The representation maps every source child to a member, and the registry
   validates that mapping; an unaccounted member is an error, not a dropped field.
-- A field type that made its conversion fallible would add a failure here, and
+- A field type that made its [conversion](../../stages/04-values.md#plan-value-conversions) fallible would add a failure here, and
   the C policy would have to route it or the function would be skipped.
 
 [fn]: README.md

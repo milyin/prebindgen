@@ -5,7 +5,7 @@
 # Retain supported output
 
 Status: implemented. Outcomes, causes, the frozen result and the report are
-what the engine produces; `Unselected` and the pruning of unreachable conversions
+what the engine produces; `Unselected` and the pruning of unreachable [conversions](04-values.md#plan-value-conversions)
 are not there yet.
 
 The examples in this chapter use one small source crate — a record and a function
@@ -19,7 +19,7 @@ pub struct Stamp { pub secs: i64, pub nanos: i64 }
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
-Planning produces candidates: conversion nodes, wrapper plans, public
+Planning produces candidates: conversion [nodes](04-values.md#plan-value-conversions), [wrapper](05-boundary.md#assemble-the-native-boundary) plans, public
 declarations, generated helpers. Not all of them can be emitted, because they
 depend on each other, and V2 deliberately accepts more input than it can yet
 generate. This stage decides what survives.
@@ -32,7 +32,7 @@ and if the configuration promised that class implements an interface, it needs
 the members of that interface too.
 
 So a missing capability propagates. Suppose one field of the record had a type no
-representation covers yet. Its conversion is unsupported; the record's conversion
+[representation](04-values.md#plan-value-conversions) covers yet. Its conversion is unsupported; the record's conversion
 is therefore unsupported; the public record cannot be emitted; and the function
 that takes it is skipped as well — one underlying cause, recorded once, reached by
 several dependency paths. What is *not* affected stays: an unrelated function in
@@ -45,9 +45,11 @@ not a reduced record. Its fields never cross at all — the whole value stays on
 Rust side behind a pointer — so there is no field to leave out. The rule above
 bites only where a representation promised to carry the parts.
 
-Being unsupported is a normal outcome, not a failure. Each skipped declaration is
-recorded with a stable capability code, a human-readable explanation and the
-source or configuration location that provoked it, so the report can say what to
+Every declaration ends this stage with exactly one **outcome**: *emitted*,
+*skipped*, or *ignored*. Being unsupported is a normal outcome, not a failure. Each skipped declaration is
+recorded with a **capability** — a stable code naming the support it waits on,
+such as `unsupported.jni.carrier` — a human-readable explanation and the source
+or configuration location that provoked it, so the report can say what to
 implement rather than just that something is missing. Two other outcomes exist so that
 the report can account for every captured item, not only the requested ones: a
 declaration the user explicitly excluded is *ignored*, and an item that was captured but
@@ -101,7 +103,7 @@ enum ElementOutcome {
 }
 ```
 
-`Diagnostic` contains an error message and its relevant location. `CapabilityCode` is a stable reason code for reports and tests. `FailureLocation` identifies the root/site/part being planned; `SourceLocation` points the reader to the source or configuration entry. The target returns an unsupported description, and the registry attaches planning context and stores it as a `Cause`. `CauseId` is a reference into that registry-owned table. The registry uses the same cause representation for capabilities missing in its own algorithms.
+`Diagnostic` contains an error message and its relevant location. `CapabilityCode` is a stable reason code for reports and tests. `FailureLocation` identifies the root/[site](03-requests.md#a-values-position-in-an-exported-function)/part being planned; `SourceLocation` points the reader to the source or configuration entry. The target returns an unsupported description, and the registry attaches planning context and stores it as a `Cause`. `CauseId` is a reference into that registry-owned table. The registry uses the same cause representation for capabilities missing in its own algorithms.
 
 The distinction between an operation result and an output outcome matters: a scalar conversion can be ready while its enclosing function is skipped because another parameter is unsupported. Several skipped outputs can share one underlying cause, while reports retain each output's dependency path.
 
@@ -131,7 +133,7 @@ The registry checks the complete set of direct and indirect requirements before 
 - A shared helper is retained if any emitted output needs it.
 - An unimplemented semantic setting blocks the affected promise; it is not silently discarded.
 
-A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](07-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An artifact — one generated unit, as defined with [the operations that depend on them](04-values.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a native extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
+A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](07-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An [artifact](04-values.md#individual-target-operations) — one generated unit, as defined with [the operations that depend on them](04-values.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a native extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
 
 Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks. Public dependencies may require repeated readiness evaluation until the retained set stops changing. A new public requirement discovered after value planning must still propagate before output is finalized.
 
@@ -166,7 +168,7 @@ struct GenerationRun<'a, T: Target> {
 }
 ```
 
-`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. Primitive/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
+`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. [Primitive](04-values.md#plan-value-conversions)/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
 
 The pipeline is:
 

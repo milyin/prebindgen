@@ -30,7 +30,7 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64 {
 }
 ```
 
-`source` is the module the binding crate reaches the source items through — the
+`source` is the module the binding crate reaches the [source items](../../stages/01-source.md#capture-source-items) through — the
 one the build script named with `.source_module(..)`, or the source crate's own
 name.
 
@@ -53,7 +53,7 @@ int main(void) {
 
 ## Checks
 
-- The wrapper and the function it wraps are both `stamp_sum`, and never collide:
+- The [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) and the function it wraps are both `stamp_sum`, and never collide:
   the source one is only ever reached through its module path.
 - The parameter keeps the source parameter's name, `stamp`, as the boundary
   stated it; the locals are the writer's, numbered so that none can shadow it.

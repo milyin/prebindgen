@@ -14,7 +14,11 @@ ROOT_PAGES = {
     "FORMAT.md": "format",
     "source.md": "fixture",
     "implementation.md": "implementation",
+    "concepts.md": "concepts",
 }
+# Pages the vocabulary rule does not read: the vocabulary itself, and the page
+# about the document's format.
+VOCABULARY_EXEMPT = {"concepts.md", "FORMAT.md"}
 REQUIRED_SECTIONS = ("Input", "Result", "Checks")
 META = re.compile(r"^<!-- spec: (\{.*\}) -->$")
 DEFINITION = re.compile(r"^\[([A-Za-z0-9_]+)\]:\s*(\S+)\s*$", re.M)
@@ -53,17 +57,19 @@ def fail(message):
 def strip_fences(text, where):
     """Replace fenced code with a marker: it is content, but not links or headings."""
     kept, fence = [], None
+    # One line out per line in, so a reported line number is the file's.
     for line in text.splitlines():
         marker = re.match(r"^\s*(`{3,}|~{3,})", line)
         if marker:
             run = marker.group(1)
             if fence is None:
-                fence, kept = run, kept + ["<code>"]
+                fence = run
+                kept.append("{code}")
             elif run[0] == fence[0] and len(run) >= len(fence):
                 fence = None
+                kept.append("")
             continue
-        if fence is None:
-            kept.append(line)
+        kept.append(line if fence is None else "")
     if fence is not None:
         fail(f"{where}: unclosed code fence")
     return "\n".join(kept)
@@ -235,6 +241,165 @@ def check_anchors(page, pages, root, links):
             fail(f"{page.relative}: link to {target} has no matching heading")
 
 
+def blank(match):
+    """Replace a match with spaces, keeping every offset and every newline."""
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+# A code span opens with a complete run of backticks and closes with a complete
+# run of the same length; a shorter run inside is content, so ``a ` b`` is one
+# span, and an unmatched run is text.
+CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(?:(?!(?<!`)\1(?!`))[\s\S])+?(?<!`)\1(?!`)")
+# The one HTML construct the document writes is a table, and a `<code>` cell
+# in it is code the way a backtick span is.
+HTML_CODE = re.compile(r"<code>[\s\S]*?</code>")
+# A backslash-escaped punctuation character has no Markdown meaning: \` opens
+# no code span, \[ no link, \* no emphasis.
+ESCAPE = re.compile(r"\\[\\`*_\[\]()#]")
+STRONG = r"(?:\*\*|__)"
+REFERENCE_TEXT = re.compile(r"\[([^\]^]*?)\]\[[A-Za-z0-9_]+\]", re.S)
+INLINE_SPAN = re.compile(r"\[([^\]]*)\]\(([^)]+)\)", re.S)
+
+
+def prose(text):
+    """The page as a reader reads it, offsets preserved: headings, link
+    definitions, metadata and code spans blanked out."""
+    out = []
+    for line in text.split("\n"):
+        if HEADING.match(line) or DEFINITION.match(line) or META.match(line):
+            out.append(" " * len(line))
+        else:
+            out.append(line)
+    text = ESCAPE.sub(blank, "\n".join(out))
+    return HTML_CODE.sub(blank, CODE_SPAN.sub(blank, text))
+
+
+def section_of(text, anchor):
+    """The text under the heading whose anchor this is, up to the next heading
+    of the same or a higher level — a subsection belongs to its section."""
+    counts = {}
+    headings = list(HEADING.finditer(text))
+    for index, heading in enumerate(headings):
+        base = re.sub(r"[^\w\- ]", "", heading.group(2).strip().lower()).replace(" ", "-")
+        seen = counts.get(base, 0)
+        counts[base] = seen + 1
+        if (base if seen == 0 else f"{base}-{seen}") != anchor:
+            continue
+        level = len(heading.group(1))
+        end = next((later.start() for later in headings[index + 1:]
+                    if len(later.group(1)) <= level), len(text))
+        return text[heading.end():end]
+    return None
+
+
+def check_vocabulary(pages, manifest, root):
+    """Each term is defined in bold once, under the heading the manifest names;
+    the concepts page introduces it with a link there; and every other page's
+    first mention of it in prose is a link there."""
+    concepts = pages.get("concepts.md")
+    if concepts is None:
+        fail("concepts.md: missing; the vocabulary lives there")
+    titles = {stage["title"] for stage in manifest["stages"]}
+    titles |= {example["title"] for example in manifest["examples"]}
+    titles |= {language["title"] for language in manifest["languages"]}
+    for entry in manifest.get("vocabulary", []):
+        term, pattern = entry["term"], entry["match"]
+        defined = entry["defined"]
+        defined_page, _, defined_anchor = defined.partition("#")
+        # A space in a multi-word term is any whitespace, a soft line break
+        # included: "source\nitem" is a mention of the source item, and
+        # "**source\nitem**" its definition.
+        spaced = pattern.replace(" ", r"\s+")
+        word = re.compile(r"\b(?:" + spaced + r")\b", re.I)
+        # Strong emphasis is `**` or `__`. On the defining page the term may sit
+        # inside a longer bold phrase (`**target policy**`); elsewhere only the
+        # bare term set in bold is a redefinition — `**conversion rule**` is
+        # another term.
+        # `\b` treats `_` as a word character, so the edges are spelled out.
+        edge = r"(?<![A-Za-z0-9])", r"(?![A-Za-z0-9])"
+        bold = re.compile(STRONG + r"(?:[^*_\n]*" + edge[0] + r")?(?:" + spaced + r")" + edge[1]
+                          + r"[^*_\n]*" + STRONG, re.I)
+        rebold = re.compile(STRONG + r"(?:(?:the|a|an) )?(?:" + spaced + r")" + STRONG, re.I)
+
+        if defined_page not in pages:
+            fail(f"manifest: vocabulary term '{term}' is defined on {defined_page}, "
+                 "which is not a page")
+        owner = pages[defined_page]
+        if defined_anchor and defined_anchor not in owner.anchors:
+            fail(f"manifest: vocabulary term '{term}' points at {defined}, "
+                 "which has no matching heading")
+        # The definition has to sit under the heading the reader is sent to.
+        scope = section_of(owner.text, defined_anchor) if defined_anchor else owner.text
+        if not bold.search(prose(scope or "")):
+            fail(f"{defined_page}: does not define '{term}' in bold under "
+                 f"#{defined_anchor or '(top)'}, and the manifest says it does")
+
+        # One entry on the concepts page, and that entry — up to the next
+        # heading of its level or higher, so a group heading ends it — links to
+        # the definition itself.
+        heading = re.compile(r"^###\s+" + re.escape(term) + r"\s*$", re.I | re.M)
+        match = heading.search(concepts.text)
+        if match is None:
+            fail(f"concepts.md: no '### {term}' entry")
+        # Read as prose: a link inside a code span or behind an escape renders
+        # as text, and satisfies nothing.
+        entry_text = prose(section_of(concepts.text, anchors(match.group(0)).pop()) or "")
+        if not any(resolves(concepts, target, root) == defined
+                   for _, target in INLINE_SPAN.findall(entry_text)):
+            fail(f"concepts.md: the '{term}' entry does not link to {defined}")
+
+        # A definition in a chapter's opening prose is anchored at its title, and
+        # a link to the chapter itself lands there.
+        title = HEADING.search(owner.text)
+        accepted = {defined}
+        if title and defined_anchor == anchors(title.group(0)).pop():
+            accepted.add(defined_page)
+
+        for page in pages.values():
+            if page.relative in VOCABULARY_EXEMPT:
+                continue
+            text = prose(page.text)
+            if page.relative != defined_page and rebold.search(text):
+                fail(f"{page.relative}: sets '{term}' in bold; it is defined on "
+                     f"{defined_page} and other pages link there")
+            if page.relative == defined_page or not entry.get("link_first_mention", True):
+                continue
+            # A chapter or element title quoted in a reference-style link — in
+            # the navigation header, an element TOC, a chapter's index — is not
+            # a mention. Any other reference-style link is prose like any
+            # other, and one that wraps a first mention leaves it unlinked to
+            # the definition. A link's target is never a mention.
+            searched = REFERENCE_TEXT.sub(
+                lambda m: blank(m) if re.sub(r"\s+", " ", m.group(1)).strip() in titles
+                else m.group(0),
+                text)
+            searched = re.sub(r"\]\([^)]*\)|\]\[[A-Za-z0-9_]+\]", blank, searched)
+            mention = word.search(searched)
+            if mention is None:
+                continue
+            linked = any(span.start() <= mention.start() < span.end()
+                         and resolves(page, span.group(2).strip(), root) in accepted
+                         for span in INLINE_SPAN.finditer(text))
+            if not linked:
+                line = text.count("\n", 0, mention.start()) + 1
+                fail(f"{page.relative}:{line}: the first mention of '{term}' must "
+                     f"link to {defined}")
+
+
+def resolves(page, target, root):
+    """A link target on `page`, as a root-relative path with its anchor."""
+    target = re.sub(r"\s+", "", target)
+    file, _, anchor = target.partition("#")
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target):
+        return None
+    destination = (page.path.parent / file).resolve() if file else page.path.resolve()
+    try:
+        relative = str(destination.relative_to(root.resolve()))
+    except ValueError:
+        return None
+    return f"{relative}#{anchor}" if anchor else relative
+
+
 def check_cell(page, ids, root, manifest, stage_by_id, example_by_id, order):
     for heading in REQUIRED_SECTIONS:
         section(page, heading)
@@ -331,9 +496,10 @@ def validate(root):
             check_stage_page(page, manifest, stage_by_id, example_by_id, ids)
         elif page.kind() == "example":
             check_example_page(page, ids, order)
+    check_vocabulary(pages, manifest, root)
     return (f"Valid: {len(pages)} pages, {len(stages)} stages, "
             f"{len(examples)} element paths, {len(manifest['cells'])} cells, "
-            f"{len(ids)} link ids.")
+            f"{len(ids)} link ids, {len(manifest.get('vocabulary', []))} vocabulary terms.")
 
 
 def main():

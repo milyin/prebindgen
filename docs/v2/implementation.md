@@ -37,13 +37,13 @@ Required validation for implementation:
 - External callers cannot forge views or mutate their retained records.
 - Local helpers are validated before publication, including duplicate names and
   source-module qualification; existing opaque helper types remain representable.
-- Reference, optional and fallible navigation preserves wrappers and exact child
+- Reference, optional and fallible navigation preserves the enclosing types and exact child
   types. Modeled lifetime arguments survive field navigation and emission.
 - Opaque items, unsupported items, guards and locations survive migration.
 - Derived type views preserve model association without changing source-item
   enumeration, and type/key consistency holds by construction.
 - Flat tests validate source inspection and emission. The registry project's
-  C/JNI tests separately validate conversion behavior and ownership.
+  C/JNI tests separately validate [conversion](stages/04-values.md#plan-value-conversions) behavior and ownership.
 
 ## Integration and first implementation steps
 
@@ -77,9 +77,9 @@ The initial implementation should demonstrate the architecture with both existin
 
 1. Construct `BindingRequests` from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
-3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI representation using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
+3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/04-values.md#plan-value-conversions) using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
-5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete artifacts.
+5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
 
 Steps 2 and 3 are exactly the two element paths specified in this document: the
 [function path][fn] is the scalar function and its owned record argument, and the
@@ -102,7 +102,7 @@ borrow and by JVM object respectively.
 | A whole opaque representation of a type with unsupported private fields | Do not traverse the unused fields. |
 | Accessor/value-form helper returning a compound value | Call it once, keep its exact result type, and let the registry process its selected children. |
 | Existing `large_flat_input_sum(&ObjectBoundary64)` | Support requires an owned temporary and call-scoped borrow, beyond owned record conversion. Preserve the signature; skip with a borrow reason until implemented. |
-| The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support outcome. |
+| The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support [outcome](stages/06-retain.md#retain-supported-output). |
 | Source `Result` with configured handler/builder | Preserve both branches and existing delivery conventions; skip if a required handler or destination is unimplemented. |
 | Nested optional values | Preserve distinct states and never decode inactive payloads. |
 | Unsupported required field or promised interface member | Propagate to the complete dependent public contract, while retaining unrelated output. |
@@ -124,7 +124,7 @@ building this settled, so the chapters and the engine describe the same thing.
 
 The engine is five modules. `target.rs` is the adapter interface and the
 description vocabulary; `plan.rs` is the recursion, the conversion cache, the
-wrapper assembly and the retention loop; `body.rs` is the instruction set;
+[wrapper](stages/05-boundary.md#assemble-the-native-boundary) assembly and the retention loop; `body.rs` is the instruction set;
 `emit.rs` is the common Rust writer; `run.rs` holds the frozen `Generation` and
 the report. Its one entry point is `generate(flat, &target, requests, crate)`.
 
@@ -172,7 +172,7 @@ contradictory configuration fails rather than becoming a capability claim.
    instructions over value identities — apply a registered operation, construct
    a source record, call the source function — described with the rest of the
    [conversion plans](stages/04-values.md#the-conversion-plans-the-registry-builds).
-   A conversion's body is a template whose carrier is its input; using it inlines
+   A conversion's body is a template whose [carrier](stages/04-values.md#describing-target-values-and-operations) is its input; using it inlines
    it under the caller's identities. Names are allocated by the writer from
    definition order, never by an adapter.
 2. **Registry-supplied operations inside an adapter's payload.** An operation's
@@ -188,15 +188,15 @@ contradictory configuration fails rather than becoming a capability claim.
 
    For the same reason, `represent` is not told the position it is answering
    for. A representation is reused wherever a conversion of the same identity is
-   needed — crossing, relation, effective policy, children — so a target that
+   needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, effective [policy](stages/03-requests.md#what-policy-means), children — so a target that
    answered differently for two positions would have its second answer silently
-   bypassed by the first one's node. Varying by position is what a policy
+   bypassed by the first one's [node](stages/04-values.md#plan-value-conversions). Varying by position is what a policy
    recorded at that position is for, and that policy is in the identity.
-4. **How an adapter declares its types and artifacts.** Neither is an id an
+4. **How an adapter declares its types and generated units.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
    plus whether it may appear in an extern signature — carried inline in the
    description that uses it. A generated unit is an `Artifact`: a name and the
-   Rust it contributes. The registry keeps one artifact per name and publishes
+   Rust it contributes. The registry keeps one [artifact](stages/04-values.md#individual-target-operations) per name and publishes
    only those a retained output needs.
 
    These descriptions are checked where they meet the values in hand, which is

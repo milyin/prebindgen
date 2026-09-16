@@ -88,7 +88,7 @@ reported skip (`unsupported.type.not_a_record`) rather than an error.
 
 How a failing call reports is the adapter's convention rather than a per-function
 setting, and it is worth noticing that it is settled here rather than by whoever
-writes the wrapper: what
+writes the [wrapper](05-boundary.md#assemble-the-native-boundary): what
 [the native boundary](05-boundary.md) does when a JVM property read fails is
 decided here, and the wrapper it generates is only as good as this answer.
 
@@ -108,11 +108,12 @@ interprets later; the registry only carries it and hands it back.
 This stage also fixes the names by which everything is addressed afterwards. A
 **declaration** is one requested output, identified by a `DeclarationId` —
 exposing the same Rust function at two Kotlin placements makes two of them, with
-separate outcomes, which the engine cannot express yet (its identity is the kind
+separate [outcomes](06-retain.md#retain-supported-output), which the engine cannot express yet (its identity is the kind
 and the Rust origin). A **site** is a position inside such a declaration:
 parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
-`Stamp`, or the single argument of a `stamp_from_millis` constructor. Overrides
+`Stamp`, or the single argument of a `stamp_from_millis` constructor. Sites and
+parts together are the **positions** a conversion can be planned at. Overrides
 attach to sites and parts, and so do diagnostics, which is why a skipped binding
 can later say *which* parameter of *which* exported function was the problem.
 
@@ -155,7 +156,7 @@ Generating a binding for it requires several decisions and operations:
 4. Read and convert the returned fields.
 5. Return the result through the chosen foreign interface.
 
-A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those representations need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
+A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those [representations](04-values.md#plan-value-conversions) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
 
 **The registry owns that common work.** When a record gains another nested record field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of record traversal or wrapper assembly.
 
@@ -257,7 +258,7 @@ and each frontend fills it with whatever its own adapter will later have to
 interpret. That is what lets one engine serve two languages whose choices have
 nothing in common.
 
-Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [**relation**](04-values.md#what-a-relation-is): a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument. Relations are introduced in [the value-planning chapter](04-values.md#what-a-relation-is); where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
+Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [relation](04-values.md#what-a-relation-is) — a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument; where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
 
 Three concepts stay separate throughout the design:
 
@@ -332,7 +333,7 @@ lowering for — an opaque handle, an enum, a callback — still becomes a reque
 under a policy that says which declarator it came from, so the target refuses it
 by name and the report groups the skips by the capability they wait for.
 
-The frontend and registry independently use `prebindgen-flat` to inspect source items. The frontend interprets user declarations and validates their source references; the registry discovers required fields or helper arguments and plans their conversions. The registry supplies no separate source-inspection API to the frontend.
+The frontend and registry independently use `prebindgen-flat` to inspect [source items](01-source.md#capture-source-items). The frontend interprets user declarations and validates their source references; the registry discovers required fields or helper arguments and plans their conversions. The registry supplies no separate source-inspection API to the frontend.
 
 Request construction must lose no recorded frontend choice. Today it carries the
 choices this increment lowers — names, the class a type is declared as, the
@@ -409,7 +410,7 @@ For example, `(Stamp.fields, None, Field("secs"))` identifies a struct field; `(
 
 ### Finding an existing conversion plan
 
-Conversion planning takes a `TypeView` and a direction, represented by `Crossing`. A `TypeView` is a read-only handle retaining an exact Rust type reading and the immutable Flat model in which it is interpreted; [type readings and type views](02-flat.md#type-readings-and-type-views) define its lookup and navigation API. Frontends and adapters supply source descriptions, not cache keys:
+Conversion planning takes a **crossing**: an exact source type together with the direction it travels — into Rust as a parameter, out of Rust as a result — represented by `Crossing`. A `TypeView` is a read-only handle retaining an exact Rust type reading and the immutable Flat model in which it is interpreted; [type readings and type views](02-flat.md#type-readings-and-type-views) define its lookup and navigation API. Frontends and adapters supply source descriptions, not cache keys:
 
 ```rust
 enum Direction {
@@ -423,7 +424,7 @@ struct Crossing {
 }
 ```
 
-A reusable conversion plan is a **node**. The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
+A reusable conversion plan is a [node](04-values.md#plan-value-conversions). The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
 
 ```rust
 // Private to the registry's conversion cache module; not a public request type.

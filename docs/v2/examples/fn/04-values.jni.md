@@ -1,13 +1,13 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "04-values", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-values.md) · [Common cell][fn_values] · [Element path][fn]
-Owner: the registry, on the JNI adapter's representation
+Owner: the registry, on the JNI adapter's [representation](../../stages/04-values.md#plan-value-conversions)
 
 # Function taking an owned record — Plan value conversions — Kotlin/JNI
 
 ## Input
 
-The two crossings, with the JNI policy recorded for them:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the JNI [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
 
 ```text
 Crossing { source: Stamp, direction: IntoRust  }   policy: ObjectProperties
@@ -32,7 +32,7 @@ The getters are specified, with the fragment each renders, in
 
 ## Checks
 
-- The input node is fallible because each property read crosses into the JVM.
+- The input [node](../../stages/04-values.md#plan-value-conversions) is fallible because each property read crosses into the JVM.
   It records that; it decides nothing, so [the boundary][fn_boundary_jni] must
   route the `Runtime` category.
 - A failed read stops the success path: no second getter, no construction, no

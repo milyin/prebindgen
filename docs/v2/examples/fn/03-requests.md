@@ -36,14 +36,14 @@ sites:
 conversion_rules.sites: {}    // none recorded for this path
 ```
 
-The record's representation is not decided here: it comes from
+The record's [representation](../../stages/04-values.md#plan-value-conversions) is not decided here: it comes from
 [the record's request][struct_requests] and applies wherever a `Stamp` is
 converted.
 
 ## Checks
 
 - Exposing the same function at two placements gives two `DeclarationId`s with
-  independent outcomes.
+  independent [outcomes](../../stages/06-retain.md#retain-supported-output).
 - A setting the frontend cannot translate is recorded as an
   `UnsupportedRequest` and reaches the report; an override naming a parameter
   this function does not have fails the build.

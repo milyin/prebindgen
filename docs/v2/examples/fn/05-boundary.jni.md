@@ -40,7 +40,7 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ) -> jni::sys::jlong
 ```
 
-The reporting operation is a generated artifact this adapter contributes:
+The reporting operation is a generated [artifact](../../stages/04-values.md#individual-target-operations) this adapter contributes:
 
 ```rust
 pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
@@ -57,7 +57,7 @@ pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
 Its specification takes an exclusive environment operand and an owned error,
 produces no value, can fail with a runtime error, and depends on that artifact.
 The `?` inside propagates its own failure to its caller; it never returns from
-the generated wrapper.
+the generated [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary).
 
 ## Checks
 
@@ -67,8 +67,8 @@ the generated wrapper.
 - Reporting is never retried with the operation that just failed — one failed
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success
-  path. The route exists because [the input node declares that
-  failure][fn_values_jni]; a category the policy leaves unrouted would skip the
+  path. The route exists because the input [node](../../stages/04-values.md#plan-value-conversions) [declares that
+  failure][fn_values_jni]; a category the [policy](../../stages/03-requests.md#what-policy-means) leaves unrouted would skip the
   function.
 
 [fn]: README.md

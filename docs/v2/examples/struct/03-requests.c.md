@@ -28,10 +28,10 @@ policy (C record):
 
 ## Checks
 
-- The declarator is the representation: `data_struct` is the by-value aggregate,
+- The declarator is the [representation](../../stages/04-values.md#plan-value-conversions): `data_struct` is the by-value aggregate,
   as opposed to an opaque pointer handle or a value-opaque type. Declaring the
-  type under a different one is a different policy, and therefore a different
-  conversion node.
+  type under a different one is a different [policy](../../stages/03-requests.md#what-policy-means), and therefore a different
+  [node](../../stages/04-values.md#plan-value-conversions).
 - The C name is the frontend's, not the source's: a type's default base is the
   snake_case of its short name, so `Stamp` would reach C as `stamp` — which is
   why this declaration names it, and why the two names stay two things. The

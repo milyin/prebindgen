@@ -44,7 +44,7 @@ typedef struct Stamp {
   different module: one is the ABI type a C caller fills in, the other the Rust
   value the source function takes.
 - `repr(C)` is required: without it the layout the header promises is not the
-  layout [the wrapper][fn_emit_c] reads.
+  layout the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) reads, [as the function path shows][fn_emit_c].
 - The name is the frontend's: the specification's binding keeps the source name,
   and a real binding usually mangles it C-style — `stamp_t` — which is why the
   case lint is silenced on every aggregate.

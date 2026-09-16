@@ -6,7 +6,7 @@
 
 Every element path in the appendix is specified against one source crate, and
 this page is that crate. Sharing it is what lets the paths intersect the way real
-bindings do: the function path needs the record path's input conversion, and the
+bindings do: the function path needs the record path's input [conversion](stages/04-values.md#plan-value-conversions), and the
 record path's field conversions are what that conversion is built from. A path
 that invented its own source could not show that.
 
