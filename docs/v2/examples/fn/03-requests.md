@@ -26,7 +26,10 @@ function exists and asking to export it are separate inputs.
 
 The request associates the source function with a public declaration and the
 adapter's function settings. This sketch names the two positions whose values
-need conversion: the first parameter and the return value.
+need [conversion](../../stages/04-values.md#plan-value-conversions): the first parameter and the return value.
+The block uses design notation, not exact current fields. Current
+`OutputRequest` contains a `Declaration` and a `PolicyId`; the engine uses
+`Position { declaration, path }` rather than the proposed `SiteId` below.
 
 ```text
 OutputRequest {
@@ -39,19 +42,19 @@ sites:
     SiteId { owner: <that DeclarationId>, path: Param(0) }   // the owned Stamp
     SiteId { owner: <that DeclarationId>, path: Return }     // the i64
 
-conversion_rules.sites: {}    // none recorded for this path
+site_policies: {}             // no position-specific overrides
+type_policies: { Stamp -> <the record's policy> }
 ```
 
-The record's representation is not decided here: it comes from
+The record's [representation](../../stages/04-values.md#plan-value-conversions) is not decided here: it comes from
 [the record's request][struct_requests] and applies wherever a `Stamp` is
 converted.
 
 ## Checks
 
 - Current ids combine the kind and Rust name. Requesting two placements of the
-  same function is not yet supported; the intended richer identity is described
-  in the stage chapter.
-- A frontend setting V2 cannot translate becomes a request under a policy
+  same function is not yet supported; the stage chapter describes that extension.
+- A frontend setting V2 cannot translate becomes a request under a [policy](../../stages/03-requests.md#what-policy-means)
   that reports the missing capability. It must not disappear silently.
 - Nothing here claims the function can be generated.
 

@@ -44,7 +44,7 @@ that navigation as follows (with uninteresting branches abbreviated):
 let function = model.function("stamp_sum").unwrap();
 let TypeKind::Named { id, .. } = function.params[0].ty.kind() else { … };
 let Type::Struct(stamp) = model.resolve(id).unwrap() else { … };  // the record element
-assert_eq!(function.ret.kind(), &TypeKind::Scalar(ScalarKind::I64));
+assert!(matches!(function.ret.kind(), TypeKind::Scalar(ScalarKind::I64)));
 ```
 
 ## Checks

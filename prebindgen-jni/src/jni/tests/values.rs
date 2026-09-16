@@ -1781,7 +1781,9 @@ fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
         !rc.contains("__flat_h_"),
         "the adapter-side reconstruction fallback must disappear:\n{rust}"
     );
-    assert!(generation.report().contains("input `JObject` opt-in"));
+    assert!(generation
+        .surface_report()
+        .contains("input `JObject` opt-in"));
 }
 
 /// A payload-less struct keeps its own delimiters through the `.jobject_input()`
@@ -2220,7 +2222,9 @@ fn recursive_flattening_counts_long_as_two_and_rejects_jvm_parameter_slot_overfl
     let generation = jni
         .build_over(registry)
         .expect("JObject boundary must bypass the flattened slot limit");
-    assert!(generation.report().contains("input `JObject` opt-in"));
+    assert!(generation
+        .surface_report()
+        .contains("input `JObject` opt-in"));
 }
 
 /// An output-only `convert!` type must resolve with only its `.output()`

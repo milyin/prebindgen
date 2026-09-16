@@ -25,7 +25,7 @@
 //! # What lives here, and what does not
 //!
 //! The registry owns the run: resolution, dependency closure, plans, artifact
-//! identity and ordering, the manifest. A language adapter states target
+//! identity and ordering, the report. A language adapter states target
 //! representations, naming and rendering — it does not own a type walk or a
 //! scheduler of its own. See #719 §8.
 //!

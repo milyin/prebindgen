@@ -126,11 +126,11 @@ fn main() {
     println!("cargo:rustc-env=EMITCHECK_BINDINGS={}", written.display());
     println!("cargo:warning=emitcheck: wrote {}", written.display());
 
-    // The emitted-surface manifest, for an engine that produces one. Empty
+    // The report, for an engine that produces one. Empty
     // under v1, whose answer is "everything declared, or the build failed".
     for path in generation
-        .write_manifest(dest.parent().expect("the written file has a parent"))
-        .expect("write_manifest failed")
+        .write_report(dest.parent().expect("the written file has a parent"))
+        .expect("write_report failed")
     {
         println!("cargo:warning=emitcheck: wrote {}", path.display());
     }

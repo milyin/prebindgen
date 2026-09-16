@@ -11,7 +11,7 @@ have today and explains what an implementation must demonstrate next.
 The current increment generates scalar and owned-record input bindings through
 the real C and JNI frontends. The C entry point is executed in tests; generated
 JNI Rust is compiled and Kotlin text is checked, but that fixture does not yet
-execute a JVM call. Owned source-model views, optional conversions, resource
+execute a JVM call. Owned source-model views, optional [conversions](stages/04-values.md#plan-value-conversions), resource
 contracts and report-based test selection remain future work. The sections
 below explain the planned sequence, the completed increment and its limits.
 
@@ -43,13 +43,13 @@ Required validation for implementation:
 - External callers cannot forge views or mutate their retained records.
 - Local helpers are validated before publication, including duplicate names and
   source-module qualification; existing opaque helper types remain representable.
-- Reference, optional and fallible navigation preserves wrappers and exact child
+- Reference, optional and fallible navigation preserves the enclosing types and exact child
   types. Modeled lifetime arguments survive field navigation and emission.
 - Opaque items, unsupported items, guards and locations survive migration.
 - Derived type views preserve model association without changing source-item
   enumeration, and type/key consistency holds by construction.
 - Flat tests validate source inspection and emission. The registry project's
-  C/JNI tests separately validate conversion behavior and ownership.
+  C/JNI tests separately validate [conversion](stages/04-values.md#plan-value-conversions) behavior and ownership.
 
 ## Integration and first implementation steps
 
@@ -79,7 +79,7 @@ PREBINDGEN_PIPELINE=v2 cargo build -p covertest-kotlin --features v2
 
 Both engines receive the complete current configuration through their respective paths. V2 generates its supported subset without falling back to v1 for individual items. Output paths and publication must support v1 → v2 → v1 without manual cleanup or stale generated declarations.
 
-Existing Kotlin tests can directly refer to classes absent from v2 output. Select complete supported test sections before Kotlin compilation; runtime guards cannot hide missing symbols from the compiler. C tests need equivalent selection. The manifest must still require meaningful supported tests to execute, so skipping everything cannot pass a milestone.
+Existing Kotlin tests can directly refer to classes absent from v2 output. Select complete supported test sections before Kotlin compilation; runtime guards cannot hide missing symbols from the compiler. C tests need equivalent selection. The selection must still require meaningful supported tests to execute, so skipping everything cannot pass a milestone.
 
 ### First executable increment
 
@@ -87,9 +87,9 @@ The initial implementation should demonstrate the architecture with both existin
 
 1. Construct `BindingRequests` from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
-3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI representation using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
+3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/04-values.md#plan-value-conversions) using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
-5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete artifacts.
+5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
 
 Steps 2 and 3 are exactly the two element paths specified in this document: the
 [function path][fn] is the scalar function and its owned record argument, and the
@@ -113,7 +113,7 @@ choice and the temporary lifetime needed for a borrow.
 | A whole opaque representation of a type with unsupported private fields | Do not traverse the unused fields. |
 | Accessor/value-form helper returning a compound value | Call it once, keep its exact result type, and let the registry process its selected children. |
 | Existing `large_flat_input_sum(&ObjectBoundary64)` | Support requires an owned temporary and call-scoped borrow, beyond owned record conversion. Preserve the signature; skip with a borrow reason until implemented. |
-| The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support outcome. |
+| The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support [outcome](stages/06-retain.md#retain-supported-output). |
 | Source `Result` with configured handler/builder | Preserve both branches and existing delivery conventions; skip if a required handler or destination is unimplemented. |
 | Nested optional values | Preserve distinct states and never decode inactive payloads. |
 | Unsupported required field or promised interface member | Propagate to the complete dependent public contract, while retaining unrelated output. |
@@ -134,11 +134,11 @@ comes with the covertest work rather than here. What follows records what
 building this settled, so the chapters and the engine describe the same thing.
 
 To find the implementation, start with `generate(flat, &target, requests, crate)`
-in `prebindgen-registry-v2`. Its main responsibilities are divided across files:
+in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 - `target.rs` defines the questions adapters answer and the descriptions they return.
 - `plan.rs` selects and combines conversions, caches reusable plans, assembles
-  wrappers and checks public dependencies.
+  [wrappers](stages/05-boundary.md#assemble-the-native-boundary) and checks public dependencies.
 - `body.rs` defines the instructions stored in those plans; `emit.rs` writes
   the corresponding Rust code.
 - `run.rs` holds the completed `Generation`; `decl.rs`, `outcome.rs` and
@@ -155,11 +155,11 @@ writer, over the payloads its declarations came back with. A frontend's
 `build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
 `build_with(Pipeline::V2)` states it — and nothing of v1 runs on that route.
 The user's `build.rs` is the same under either engine: the one thing v2 adds to
-it is the manifest beside the generated file, and the fact that a declaration the
+it is [the report](report.md) beside the generated file, and the fact that a declaration the
 engine cannot lower is a reported skip rather than a build failure.
 
 `examples/v2check` provides evidence for this increment. It includes
-[the specification's source items](source.md), plus additional test cases,
+[the specification's fixture](source.md), plus additional test cases,
 parses them directly and passes them through the frontends' `.items(...)` API.
 It therefore tests generation without exercising proc-macro capture. It selects
 V2 explicitly and compiles both generated Rust files. Its tests read the expected
@@ -189,8 +189,9 @@ establish the behavior of the resulting foreign interface.
    a source record, and call the source function. These implement the body roles
    described with the rest of the
    [conversion plans](stages/04-values.md#the-conversion-plans-the-registry-builds).
-   A conversion's body is a template whose carrier is its input; using it inlines
-   it under the caller's identities. Temporary names are allocated by the writer from
+   A conversion's body is a template whose
+   [carrier](stages/04-values.md#describing-target-values-and-operations) is its
+   input; using it inlines it under the caller's identities. Temporary names are allocated by the writer from
    definition order, never by an adapter.
 2. **Registry-supplied operations inside an adapter's payload.** An operation's
    implementation is `Operation<Payload>`: either a `Standard` operation the
@@ -205,15 +206,15 @@ establish the behavior of the resulting foreign interface.
 
    For the same reason, `represent` is not told the position it is answering
    for. A representation is reused wherever a conversion of the same identity is
-   needed — crossing, relation, effective policy, children — so a target that
+   needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, effective [policy](stages/03-requests.md#what-policy-means), children — so a target that
    answered differently for two positions would have its second answer silently
-   bypassed by the first one's node. Varying by position is what a policy
+   bypassed by the first one's [node](stages/04-values.md#plan-value-conversions). Varying by position is what a policy
    recorded at that position is for, and that policy is in the identity.
-4. **How an adapter declares its types and artifacts.** Neither is an id an
+4. **How an adapter declares its types and generated units.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
    plus whether it may appear in an extern signature — carried inline in the
    description that uses it. A generated unit is an `Artifact`: a name and the
-   Rust it contributes. The registry keeps one artifact per name and publishes
+   Rust it contributes. The registry keeps one [artifact](stages/04-values.md#individual-target-operations) per name and publishes
    only those a retained output needs.
 
    These descriptions are checked where they meet the values in hand, which is
@@ -240,11 +241,17 @@ establish the behavior of the resulting foreign interface.
   `SelectionQuery`, `ResolvedShape`, `ChildValue` (the chapters' `ValueDescriptor`),
   `ResolvedValues`, `SiteDescriptor`, `SurfaceRequest` — and untested by a third
   target or a deferred capability.
-- **The composition protocols.** `ProductOps` is one projection per part, in the
-  into-Rust direction only: a record *leaving* Rust needs a target construction
-  operation, and until there is one it is a reported skip
-  (`unsupported.record.out_of_rust`). `SequenceOps`, `ChoiceOps`, `CallableOps`
-  and the flattening rule for a child that produces several slots remain names.
+- **Feature-assertion guards.** Reading captured source injects a `const _`
+  assertion to compare generation-time and linked source features. Flat retains
+  it, and V1 emits it, but the current V2 writer emits only generated supporting
+  items and wrappers. V2 therefore lacks this mismatch check. `v2check` feeds
+  parsed items directly and does not exercise the capture/guard path.
+- **The composition protocols.** `Protocol::Product { projections }` reads
+  one projection per part, in the into-Rust direction only. Record output needs
+  a construction operation that is not implemented: C reaches the registry's
+  `unsupported.record.out_of_rust` skip, while JNI refuses earlier with
+  `unsupported.jni.object_output`. `ProductOps`, `SequenceOps`, `ChoiceOps`,
+  `CallableOps` and multi-slot child flattening describe the wider design.
 - **Fallible construction meeting the boundary** is untouched, because
   constructor and projector relations are not implemented: the only relations are
   the record's fields and the atomic conversion.
@@ -281,7 +288,7 @@ Acceptance criteria:
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
 - [x] Complete unsupported inputs produce actionable per-declaration outcomes; malformed configuration and generator defects fail generation.
 - [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`.
-- [ ] Test selection from the manifest.
+- [ ] Test selection from the report.
 - [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.
 - [ ] New nested combinations reuse the registry's composition algorithm instead of requiring a new per-language wrapper implementation.
 - [ ] Remaining unsupported capabilities and any API refinements discovered during implementation are documented.

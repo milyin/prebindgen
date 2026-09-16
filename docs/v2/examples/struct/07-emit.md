@@ -18,9 +18,11 @@ SurfaceSpec { declaration: "type:Stamp",
 ## Result
 
 The generated declaration gives foreign callers a way to hold the two values.
-It does not itself contain the Rust conversion. That work is inlined into the
-wrapper of [the function that uses the record][fn_emit]. This distinction
-explains why C needs a generated Rust ABI struct while Kotlin needs a JVM class:
+It does not itself contain the Rust
+[conversion](../../stages/04-values.md#plan-value-conversions). That work is
+inlined into the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
+of [the function that uses the record][fn_emit]. This distinction explains why
+C needs a generated Rust ABI struct while Kotlin needs a JVM class:
 
 | Contribution | C | Kotlin/JNI |
 | --- | --- | --- |
@@ -33,7 +35,7 @@ Rendered: [C][struct_emit_c], [Kotlin/JNI][struct_emit_jni].
 ## Checks
 
 - Both fields are emitted, in declaration order, with types matching the chosen
-  representation.
+  [representation](../../stages/04-values.md#plan-value-conversions).
 - The member and property names match [the record's operations][struct_values]:
   the adapter derives both declarations and reads from the same source fields.
 - A declaration is emitted only if it was retained; the writer adds nothing.

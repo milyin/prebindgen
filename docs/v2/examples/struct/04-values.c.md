@@ -15,10 +15,11 @@ policy:   data_struct named Stamp, passed by value
 
 ## Result
 
-The representation contains one C-compatible struct and one read operation for
-each member. `Product` means the registry obtains the selected relation's parts
-separately and then combines their converted values. The operation below uses
-the current fields, with descriptive variables for the carrier types and member.
+The [representation](../../stages/04-values.md#plan-value-conversions) contains
+one C-compatible struct and one read operation for each member. `Product`
+means the registry obtains the selected [relation](../../stages/04-values.md#what-a-relation-is)'s parts separately, then
+combines their converted values. The operation below uses the current fields,
+with descriptive variables for the [carrier](../../stages/04-values.md#describing-target-values-and-operations) types and member.
 
 ```text
 ReprSpec {
@@ -47,7 +48,8 @@ copy. `ReadMember` is a common operation rendered by the engine, so the C adapte
 does not need to supply Rust text for it. The aggregate declaration is retained
 through the public type's description, not as a dependency on this read.
 
-Applied to the wrapper's input named `stamp`, the member-read operation renders:
+Applied to the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)'s
+input named `stamp`, the member-read operation renders:
 
 ```rust
 stamp.secs
@@ -55,15 +57,17 @@ stamp.secs
 
 ## Checks
 
-- The whole record conversion is infallible: reading a member cannot fail, and
+- The whole record [conversion](../../stages/04-values.md#plan-value-conversions) is infallible: reading a member cannot fail, and
   the copied integer is independent of the aggregate afterwards.
 - `implementation` stores the operation and the member identity, not the string
   `stamp.secs`. The caller's value comes from the application, and the name from
   the boundary.
 - `ReadMember` is a common Rust operation, so C ships no field-read renderer.
-- A member identity is not a source field identity: the adapter's representation
-  maps one to the other, and the registry validates that mapping. The aggregate
-  those members belong to is [emitted here][struct_emit_c].
+- A member identity is not a source field identity. The adapter pairs members
+  with source fields in declaration order. The registry checks the member/part
+  count and rejects reads naming undeclared members; it does not independently
+  prove that the adapter paired each member with the intended source field.
+  The aggregate those members belong to is [emitted here][struct_emit_c].
 
 [struct]: README.md
 [struct_values]: 04-values.md

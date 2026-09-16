@@ -7,7 +7,7 @@ Owner: the registry, on the target's native interface · Previous: [Plan value c
 
 ## Input
 
-The two nodes value planning produced, and the source signature they belong to:
+The two [nodes](../../stages/04-values.md#plan-value-conversions) value planning produced, and the source signature they belong to:
 
 ```text
 node(input)  : Stamp   IntoRust   -> an owned source Stamp
@@ -18,7 +18,7 @@ source: pub fn stamp_sum(stamp: Stamp) -> i64
 
 ## Result
 
-The registry now combines those reusable conversions with this specific source
+The registry now combines those reusable [conversions](../../stages/04-values.md#plan-value-conversions) with this specific source
 call. The following is a conceptual summary, not the exact Rust fields of
 `FunctionPlan`. The boundary supplies the target's symbol, calling convention
 and destinations; the body records the order in which generated code operates.
@@ -38,7 +38,7 @@ FunctionPlan {
 
 ## Checks
 
-- The source function is called once, and only after every input conversion has
+- The source function is called once, and only after every input [conversion](../../stages/04-values.md#plan-value-conversions) has
   succeeded.
 - Every failure the input node declares needs a route here; a category with no
   route is an unsupported boundary, not a default.

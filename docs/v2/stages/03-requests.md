@@ -44,14 +44,18 @@ Cbindgen::builder()
             )
             .fun(fun!(stamp_sum)),         // and this function becomes a C entry point
     )
-    .build();
+    .build_with(prebindgen_c::pipeline::Pipeline::V2)
+    .expect("generate the C binding");
 ```
 
 In this builder, `.source` locates captured Rust items, and `.source_module`
 specifies the Rust path generated code uses to reach their implementation.
 `.declare` receives the requested C API. `data_type!(Stamp)` selects a type;
-`.base_name("Stamp")` names its C representation; `fun!(stamp_sum)` selects the
-function. Finally, `.build()` runs generation with those choices.
+`.base_name("Stamp")` names its C [representation](04-values.md#plan-value-conversions); `fun!(stamp_sum)` selects the
+function. Finally, `build_with` runs generation with the V2 engine. Enable the
+frontend's `v2` Cargo feature for these examples. Plain `.build()` instead
+reads `PREBINDGEN_PIPELINE` and defaults to V1 when the variable is unset.
+Imports are omitted from the excerpts.
 
 The set is flat, because an exported C function is not a member of anything:
 `stamp_sum(Stamp)` is a free function that happens to take a `Stamp`, and the
@@ -74,17 +78,21 @@ calls native functions:
 // build.rs of the JNI binding crate
 JniGen::builder()
     .source(source_crate::PREBINDGEN_OUT_DIR)
+    .set_package_prefix("example")
     .package(
-        package!("example")
+        package!()
             .class(data_class!(Stamp))   // Stamp becomes a Kotlin data class
-            .fun(fun!(stamp_sum)),       // and this function a top-level function
+            .fun(prebindgen_registry::fun!(stamp_sum)), // a top-level function
     )
-    .build();
+    .build_with(prebindgen_jni::pipeline::Pipeline::V2)
+    .expect("generate the JNI binding");
 ```
 
-The Kotlin configuration also describes placement. `package!("example")`
-groups the public items into a Kotlin package; `data_class!(Stamp)` asks for a
-data class; `.fun(...)` places a top-level function in that package. The
+The Kotlin configuration also describes placement. `set_package_prefix("example")`
+sets the base package, including the location of `JNINative`. `package!()` puts
+these public items in that same package. A named `package!("sub")` would add a
+subpackage for its public items without moving the harness. `data_class!(Stamp)`
+asks for a data class; `.fun(...)` places a top-level function in that package. The
 frontend derives names unless configuration overrides them. A name given there
 names the Kotlin declaration a caller uses; the
 native method behind it, and so the `Java_…` symbol, is named from the Rust
@@ -98,9 +106,10 @@ declaration need not name a captured type at all — a target may represent
 reported skip (`unsupported.type.not_a_record`) rather than an error.
 
 The adapter also chooses how native failures reach the caller. For example,
-reading a JVM property can fail before the Rust function runs. The adapter must
-supply a reporting convention so the later
-[native-boundary stage](05-boundary.md) can generate the appropriate error path.
+reading a JVM property can fail before the Rust function runs. The adapter
+supplies a reporting convention, rather than a per-function setting. The
+[native-boundary stage](05-boundary.md) uses that convention when planning the
+[wrapper](05-boundary.md#assemble-the-native-boundary)'s error path.
 
 Each such call records a choice. Together they are the **binding
 configuration**, and `.build()` is where the frontend turns it into
@@ -118,11 +127,12 @@ The engine does not need to understand every C or JNI configuration option.
 This stage also fixes the names by which everything is addressed afterwards. A
 **declaration** is one requested output, identified by a `DeclarationId` —
 exposing the same Rust function at two Kotlin placements makes two of them, with
-separate outcomes, which the engine cannot express yet (its identity is the kind
+separate [outcomes](06-retain.md#retain-supported-output), which the engine cannot express yet (its identity is the kind
 and the Rust origin). A **site** is a position inside such a declaration:
 parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
-`Stamp`, or the single argument of a `stamp_from_millis` constructor. Overrides
+`Stamp`, or the single argument of a `stamp_from_millis` constructor. Sites and
+parts together are the **positions** a conversion can be planned at. Overrides
 attach to sites and parts, and so do diagnostics, which is why a skipped binding
 can later say *which* parameter of *which* exported function was the problem.
 
@@ -166,7 +176,7 @@ Generating a binding for it requires several decisions and operations:
 4. Read and convert the returned fields.
 5. Return the result through the chosen foreign interface.
 
-A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those representations need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
+A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those [representations](04-values.md#plan-value-conversions) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
 
 **The registry owns that common work.** When a record gains another nested record field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of record traversal or wrapper assembly.
 
@@ -219,9 +229,9 @@ The implementation divides the registry's data between two structures:
   free function that starts a fresh run. `target` implements the adapter
   interface; `requests` contains the frontend's choices. Current V2 selects
   atomic conversions or record-field construction. Constructors, accessors
-  and other helper relations described by the design are future extensions.
-- **The run**, private `Run` state in `plan.rs`, keeps the requests, offered
-  relations, conversion plans, cache and cycle-detection marks. `generate`
+  and other helper [relations](04-values.md#what-a-relation-is) described by the design are future extensions.
+- **The run**, private `Run` state in `plan.rs`, keeps requests, offered
+  relations, conversion plans, the cache and cycle-detection marks. `generate`
   accumulates declaration outcomes and checks public dependencies. It returns
   a completed **`Generation`** or a generation error.
 
@@ -275,7 +285,7 @@ and each frontend fills it with whatever its own adapter will later have to
 interpret. That is what lets one engine serve two languages whose choices have
 nothing in common.
 
-Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [**relation**](04-values.md#what-a-relation-is): a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument. Relations are introduced in [the value-planning chapter](04-values.md#what-a-relation-is); where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
+Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [relation](04-values.md#what-a-relation-is) — a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument; where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
 
 Three concepts stay separate throughout the design:
 
@@ -328,7 +338,7 @@ pub fn generate<T: Target>(
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests appear in [its report](06-retain.md#unsupported-requests-and-public-api-dependencies); a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](06-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
@@ -354,13 +364,14 @@ The request set is built in one pass over the builder's storage, sorted so that
 a run over unchanged input emits the same file. A declarator the target has no
 lowering for — an opaque handle, an enum, a callback — still becomes a request,
 under a policy that says which declarator it came from, so the target refuses it
-by name and the report groups the skips by the capability they wait for.
+by name, and the skip carries the capability it waits for.
 
-The frontend and registry can both inspect `prebindgen-flat` directly. The
-frontend translates user declarations; the engine validates their requested
-source names and kinds, discovers required fields and plans conversions.
-Proposed helper relations will also need argument validation and planning.
-The registry supplies no separate source-inspection API to the frontend.
+The frontend and registry can both inspect
+[source items](01-source.md#capture-source-items) through `prebindgen-flat`
+directly. The frontend translates user declarations; the engine validates
+their requested source names and kinds, discovers required fields and plans
+conversions. Proposed helper relations will also need argument validation and
+planning. The registry supplies no separate source-inspection API to the frontend.
 
 Request construction must lose no recorded frontend choice. Today it carries the
 choices this increment lowers — names, the class a type is declared as, the
@@ -370,8 +381,8 @@ what they apply to: a per-function `expand_param`/`expand_return`/
 every function with a parameter or result of that type, declared class or bare
 scalar alike, and leaves the class itself; a declarator the target does not
 lower refuses by that declarator's name. Emitting the default interface in place
-of the one a setting asked for is not honoring the declaration; the report says
-which setting the declaration waits on. Settings that have no effect within this
+of the one a setting asked for is not honoring the declaration; the skip names
+the setting the declaration waits on. Settings that have no effect within this
 increment are carried without refusing: a C function's
 `abort_on_conversion_error` says what a fallible input does, and no conversion
 here can fail. Local helpers and declared conversion operations are
@@ -457,7 +468,7 @@ struct Crossing {
 }
 ```
 
-A reusable conversion plan is a **node**. The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
+A reusable conversion plan is a [node](04-values.md#plan-value-conversions). The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
 
 ```rust
 // Private to the registry's conversion cache module; not a public request type.
@@ -484,7 +495,7 @@ For example, two owned `Stamp` inputs with the same two-integer JNI representati
 
 Model membership follows the [snapshot contract](02-flat.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. The registry checks incoming views against its own model before planning. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 
-Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Naming hooks are closures, and two closures cannot be compared, so two policies that contain them are distinct unless the frontend deliberately gives them the same `PolicyId`. Sharing a conversion between two configured values therefore requires sharing the policy entry, not writing an equal-looking one. Report entries are keyed by source and configuration identities that do not vary between runs over unchanged inputs, so two builds of the same crate produce the same report and a diff of it means something.
+Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Naming hooks are closures, and two closures cannot be compared, so two policies that contain them are distinct unless the frontend deliberately gives them the same `PolicyId`. Sharing a conversion between two configured values therefore requires sharing the policy entry, not writing an equal-looking one. Outcomes are keyed by source and configuration identities that do not vary between runs over unchanged inputs, so two builds of the same crate decide the same things.
 
 ## Elements at this stage
 

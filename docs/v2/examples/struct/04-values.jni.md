@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "04-values", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-values.md) · [Common cell][struct_values] · [Element path][struct]
-Owner: the registry; the JNI adapter describes the object carrier and its getters
+Owner: the registry; the JNI adapter describes the object [carrier](../../stages/04-values.md#describing-target-values-and-operations) and its getters
 
 # Record with scalar fields — Plan value conversions — Kotlin/JNI
 
@@ -16,10 +16,11 @@ derived getter operations: "getSecs" / "getNanos", descriptor "()J"
 
 ## Result
 
-The object is carried as one reference, but the product protocol reads two
-properties. The registry plans each read and combines the returned integers.
-The operation below uses the current fields, with descriptive variables for
-the carrier types. Its operand roles tell the registry where each input comes from.
+This [representation](../../stages/04-values.md#plan-value-conversions) carries
+the object as one reference, but its product protocol reads two properties.
+The registry plans each read and combines the returned integers. The operation
+below uses the current fields, with descriptive variables for the carrier
+types. Its operand roles tell the registry where each input comes from.
 
 ```text
 ReprSpec {
@@ -50,7 +51,7 @@ PrimitiveSpec {
 
 The environment operand allows JNI calls and is used exclusively; the object
 operand is borrowed for the getter. `Runtime` identifies the error category
-that the enclosing wrapper must handle. In the implementation the environment
+that the enclosing [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) must handle. In the implementation the environment
 has the named role `Context("jni.env")`, which the boundary binds to `env`.
 
 Applied to `env` and the input object `stamp`, the getter description renders
@@ -66,7 +67,7 @@ env.call_method(&stamp, "getSecs", "()J", &[])
 
 - The expression evaluates to `Result<jlong, jni::errors::Error>` and stops
   there: no `let`, no `match` on that result, no return. Those belong to the
-  wrapper the registry composes.
+  [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) the registry composes.
 - The environment is an operand, so no rendered fragment can depend on a
   variable named `env` in its caller.
 - Getter names and descriptors are derived from Flat's fields during planning.

@@ -29,6 +29,8 @@ existing page rather than represented by a missing file.
 | --- | --- |
 | Root | `README.md` |
 | Format contract | `FORMAT.md` |
+| Vocabulary introduction | `concepts.md` |
+| Generation report guide | `report.md` |
 | The specification's source crate | `source.md` |
 | Stage chapter | `stages/<stage>.md` |
 | Implementation plan | `implementation.md` |
@@ -41,7 +43,7 @@ stage name, such as `04-values`; `<element>` is an example id, such as `fn`;
 and `<language>` is `c` or `jni`. TOC means table of contents.
 
 Every Markdown file starts with exactly one `<!-- spec: {...} -->` metadata line.
-`kind` is `root`, `format`, `fixture`, `stage`, `implementation`, `example`,
+`kind` is `root`, `format`, `concepts`, `report`, `fixture`, `stage`, `implementation`, `example`,
 `cell` or `variant`. A stage page carries `stage`; an element TOC carries
 `example`; a cell carries both; a variant adds `language`. The identity has to
 match the canonical path, and every Markdown file under `docs/v2/` has to be one
@@ -122,6 +124,43 @@ heading `## Elements at this stage`. A language-dependent cell lists its variant
 under `## Language variants`. Every element TOC lists all of that element's
 pages. These lists follow manifest order. Cross-element
 links document dependencies; they never replace an index or a backlink.
+
+## Vocabulary
+
+The nouns that name what flows between stages — source item, declaration,
+policy, root, site, part, conversion, crossing, relation, representation,
+carrier, primitive, node, artifact, wrapper, outcome, capability — are listed
+in the manifest's `vocabulary` with the page and heading that define each. A
+term is **defined**, set in bold, under that heading and nowhere else;
+[concepts.md](concepts.md) introduces every term in a `### Term` entry that
+itself links to the definition; and on every other page the first mention of
+the term in prose links to the definition. A mention inside a code span, a code
+block, a heading, a link target, or a chapter, element or language title quoted
+in a reference-style link is not a mention; Markdown wrapped across lines is
+read as one text. Any other reference-style link is prose: a first mention
+inside one is unlinked to its definition, so write the term as a plain linked
+word and give the cross-reference a link of its own with its own text. A term used in another sense — "wrapper" for `Option<T>`,
+"site" for a use site — is reworded rather than linked: the rule exists so a
+reader meets each word once with its meaning, and a link to the wrong meaning
+defeats it.
+
+Adding a term: add its entry to the manifest with a `match` pattern (the word and
+its plural), define it in bold on one page under a heading the entry names, add
+its `### Term` entry to `concepts.md`, then run the validator and link what it
+reports. The validator reads Markdown as this document writes it — fenced code, `**`
+or `__` for strong emphasis, inline and reference-style links, backslash
+escapes, code spans of any delimiter length, and the one HTML construct in
+use, a table whose `<code>` cells are code and whose other cells are prose —
+and not as a CommonMark implementation: an indented code block, any other
+HTML, or a link reference defined by title are not recognized, and the
+document does not use them. A new construct the document needs is added to
+the validator with a test, not worked around.
+
+A term the rule fits badly — one the chapters must also use in its
+ordinary English sense — is entered with `"link_first_mention": false`, which
+keeps the single-definition rule and drops the linking one: `declaration`,
+`root`, `part` and `capability` today, each also an ordinary English word the
+chapters need.
 
 A stage marked `language_dependent` requires both languages for each of its
 applicable cells: capture, source-model inspection and retention are shared

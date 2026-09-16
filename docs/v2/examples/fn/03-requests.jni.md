@@ -15,10 +15,15 @@ JniGen::builder()
     .package(
         package!()
             .class(data_class!(Stamp))   // see the record path
-            .fun(fun!(stamp_sum)),
+            .fun(prebindgen_registry::fun!(stamp_sum)),
     )
-    .build();
+    .build_with(prebindgen_jni::pipeline::Pipeline::V2)
+    .expect("generate the JNI binding");
 ```
+
+Enable the `v2` Cargo feature on `prebindgen-jni` for this build. The explicit
+`build_with` call selects V2; plain `.build()` defaults to V1 unless
+`PREBINDGEN_PIPELINE=v2` is set. Other imports are omitted in this excerpt.
 
 ## Result
 

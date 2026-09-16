@@ -19,8 +19,13 @@ Cbindgen::builder()
             )
             .fun(fun!(stamp_sum)),
     )
-    .build();
+    .build_with(prebindgen_c::pipeline::Pipeline::V2)
+    .expect("generate the C binding");
 ```
+
+Enable the `v2` Cargo feature on `prebindgen-c` for this build. The explicit
+`build_with` call selects V2; plain `.build()` defaults to V1 unless
+`PREBINDGEN_PIPELINE=v2` is set. Imports are omitted in this excerpt.
 
 ## Result
 
@@ -43,14 +48,16 @@ policy (C function):
 
 ## Checks
 
-- A function keeps its Rust name as the exported symbol unless a naming hook on
-  the builder changes it, which is why this one is `stamp_sum`.
-- C is opt-in: a function nobody declares produces no request. A separate
-  `Unselected` report outcome is planned but not implemented.
-- Without the `Stamp` declaration, the frontend records no record policy.
+- A function keeps its Rust name as the exported symbol unless a builder naming
+  hook or per-declaration `.base_name(...)` changes it. Neither does so here,
+  which is why the symbol is `stamp_sum`.
+- C is opt-in: a function nobody declares produces no request and has no
+  [outcome](../../stages/06-retain.md#retain-supported-output). An
+  *unselected* outcome is planned, not implemented.
+- Without the `Stamp` declaration, the frontend records no record [policy](../../stages/03-requests.md#what-policy-means).
   Value planning then tries the default scalar policy and skips the function
-  with `unsupported.c.carrier`. [Retention][fn_retain] preserves that skip in
-  the final result; it does not first discover the missing conversion.
+  with `unsupported.c.carrier`. [Retention][fn_retain] preserves that skip;
+  it does not first discover the missing [conversion](../../stages/04-values.md#plan-value-conversions).
 
 [fn]: README.md
 [fn_requests]: 03-requests.md

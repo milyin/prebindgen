@@ -240,11 +240,11 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     };
     write_if_changed(&in_tree, &std::fs::read_to_string(&out_file).unwrap());
 
-    // The emitted-surface manifest, for an engine that produces one. Empty
+    // The report, for an engine that produces one. Empty
     // under v1, whose answer is "everything declared, or the build failed".
     for path in binding
-        .write_manifest(in_tree.parent().expect("the published file has a parent"))
-        .expect("write_manifest failed")
+        .write_report(in_tree.parent().expect("the published file has a parent"))
+        .expect("write_report failed")
     {
         println!("cargo:warning=Wrote {}", path.display());
     }

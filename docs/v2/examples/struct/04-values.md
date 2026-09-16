@@ -27,17 +27,19 @@ node(Stamp, IntoRust) {
 }
 ```
 
-The registry resolves a child conversion for each field, then constructs the
-source record from the converted children. A **carrier** is the target-facing
-value holding data during conversion: a C member value or a JNI getter result
-in this example. The [C][struct_values_c] and [Kotlin/JNI][struct_values_jni]
-pages show how those carriers are obtained.
+The registry resolves a child
+[conversion](../../stages/04-values.md#plan-value-conversions) for each field,
+then constructs the source record from the converted children. Each
+[carrier](../../stages/04-values.md#describing-target-values-and-operations)
+holds data during conversion: a C member value or a JNI getter result here.
+The [C][struct_values_c] and [Kotlin/JNI][struct_values_jni] pages show how
+those values are obtained.
 
-Both field positions resolve to the same cached `i64` input node under this
-policy; the wrapper applies that plan once per field. Each carrier already has
-the required Rust `i64` value, so its conversion is
-**identity**: it passes the value through without generating another operation.
-`Independent` describes the owned result, which borrows neither input; the full
+Both field positions resolve to the same cached `i64` input [node](../../stages/04-values.md#plan-value-conversions) under this
+[policy](../../stages/03-requests.md#what-policy-means); the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) applies that plan once per field. Each carrier already
+has the required Rust `i64` value, so the conversion is **identity**: it passes
+the value through without generating another operation. `Independent`
+describes the owned result, which borrows neither input; the full
 validity-contract structure remains a proposed extension.
 
 ## Checks
@@ -47,9 +49,10 @@ validity-contract structure remains a proposed extension.
 - Parts come from the selected [relation](../../stages/04-values.md#what-a-relation-is), so a constructor relation would give
   one `millis` argument instead of two fields. That relation needs an additional
   implementation; the current engine offers atomic and record relations only.
-- Construction follows declaration order, and the mapping from parts to carriers
-  is validated.
-- An unsupported child makes this node unsupported, which propagates to
+- Construction follows declaration order. The registry checks the number and
+  types of projections; the adapter is responsible for associating each read
+  with the intended source field.
+- An unsupported child makes this [node](../../stages/04-values.md#plan-value-conversions) unsupported, which propagates to
   [everything requiring the record][struct_retain] rather than producing a record
   missing a field.
 

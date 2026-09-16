@@ -22,11 +22,12 @@ generated code must read its fields and reconstruct the source Rust struct.
 Both targets then call `stamp_sum` exactly once and return the integer.
 
 Read the numbered pages in order to see each intermediate result. The
-[record walkthrough][struct] explains the reusable `Stamp` conversion in more
-detail. This function walkthrough explains how that conversion fits into an
-exported call: selecting the function, assigning native arguments and results,
-and handling failure. JNI getter calls can fail, so its wrapper needs an error
-path that the C member reads do not need.
+[record walkthrough][struct] explains the reusable `Stamp`
+[conversion](../../stages/04-values.md#plan-value-conversions) in more detail.
+This function walkthrough explains how that conversion fits into an exported
+call: selecting the function, assigning native arguments and results, and
+handling failure. JNI getter calls can fail, so its [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) needs an error path
+that the C member reads do not need.
 
 Deliberately not covered: a `Result` return, a borrowed parameter, a callback
 argument and a non-scalar result. Each is a sub-variant of this path

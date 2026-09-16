@@ -18,7 +18,7 @@ requires:  node(Stamp, IntoRust)     // the record conversion
 
 ## Result
 
-Because both field conversions succeed, the public record can be retained.
+Because both field [conversions](../../stages/04-values.md#plan-value-conversions) succeed, the public record can be retained.
 The following summarizes that dependency relationship rather than showing the
 actual `SurfaceSpec` fields: current public requirements refer to declaration
 ids, while conversion dependencies are checked during planning.
@@ -38,7 +38,7 @@ output: type declaration, followed by any generated wrappers
 
 ## Checks
 
-An explicitly requested type is a **root**, so it can remain in the output
+An explicitly requested type is a root, so it can remain in the output
 even if a function using it is skipped for a separate reason. Conversely, a
 function requiring this type cannot remain if the type is unavailable. Cause
 propagation preserves the explanation and adds the dependent declaration's path.
@@ -47,7 +47,7 @@ propagation preserves the explanation and adds the dependent declaration's path.
   retained if [the function that does][fn_retain] is skipped for a reason of its
   own.
 - Propagation runs the other way too: an unsupported field makes the record's
-  conversion unsupported, which skips the record and every declaration requiring
+  [conversion](../../stages/04-values.md#plan-value-conversions) unsupported, which skips the record and every declaration requiring
   it, all carrying the one cause with their own dependency paths.
 - Retention is all or nothing. A record is never emitted with a field omitted,
   because a foreign type missing a field is a different type.

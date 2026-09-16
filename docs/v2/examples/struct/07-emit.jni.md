@@ -27,8 +27,8 @@ Each constructor property is a Kotlin `Long`, matching Rust `i64`. `val` makes
 the property read-only in Kotlin, and the Kotlin compiler provides a JVM getter.
 The data class also supplies the usual Kotlin value operations such as equality.
 
-No additional Rust boundary struct is needed for this representation. The native
-wrapper receives a `JObject`, reads the getters and constructs the existing
+No additional Rust boundary struct is needed for this [representation](../../stages/04-values.md#plan-value-conversions). The native
+[wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) receives a `JObject`, reads the getters and constructs the existing
 source Rust `Stamp`. The source type still exists; only the extra ABI struct
 used by the C target is absent.
 
@@ -38,8 +38,9 @@ used by the C target is absent.
   `getNanos(): long` — the methods [the record's operations][struct_values_jni]
   call — so the class and the generated native code fit together by
   construction.
-- A class-name override is used consistently in the emitted class and native
-  references. Getter names are derived separately from the source field names.
+- A class-name override is used consistently in the emitted class and the Kotlin
+  native-method signatures that refer to it. The generated Rust uses `JObject`
+  rather than the class name. Getter names are derived from source field names.
 - `Long` properties are what make the `()J` descriptor and the `jlong` result
   correct.
 

@@ -14,14 +14,15 @@ Crossing { source: i64,   direction: OutOfRust }    // for Return
 
 ## Result
 
-There are two conversions: foreign argument to Rust `Stamp`, and Rust result
-to foreign integer. A **node** is a reusable conversion plan. Neither node
-calls `stamp_sum`; the next stage places that source call between them.
+There are two [conversions](../../stages/04-values.md#plan-value-conversions): foreign argument to Rust `Stamp`, and Rust result
+to foreign integer. Each becomes a reusable plan, called a
+[node](../../stages/04-values.md#plan-value-conversions). Neither plan calls
+`stamp_sum`; the next stage places that source call between them.
 
 ```text
 node(input)  = Crossing { Stamp, IntoRust }
                relation: Stamp.fields
-               children: [ node(i64, IntoRust) x2 ]   // the record path's plan
+               children: [ node(i64, IntoRust), node(i64, IntoRust) ] // same node twice
                body:     obtain secs carrier -> convert
                          obtain nanos carrier -> convert
                          construct source::Stamp { secs, nanos }
@@ -32,9 +33,9 @@ node(output) = Crossing { i64, OutOfRust }
                body:     identity — source i64 and the target carrier are one value
 ```
 
-The input node is [the record's own conversion][struct_values]; this function
+The input node is the record's own [conversion](../../stages/04-values.md#plan-value-conversions), [planned on its own path][struct_values]; this function
 refers to it, and so does anything else taking an owned `Stamp` under the same
-policy. Their `NodeId`s are what [the boundary][fn_boundary] assembles.
+[policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are what [the boundary][fn_boundary] assembles.
 
 ## Checks
 

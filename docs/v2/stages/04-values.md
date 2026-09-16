@@ -29,7 +29,7 @@ will execute later when a foreign caller uses the binding.
 Consider what has to happen for a foreign caller to call `stamp_sum`. The Rust
 function needs an owned `Stamp`. No foreign caller has one: a C
 caller has a struct of two integers, a Kotlin caller has a JVM object. So the
-generated wrapper has to obtain two field values from whatever the caller
+generated [wrapper](05-boundary.md#assemble-the-native-boundary) has to obtain two field values from whatever the caller
 actually passed, build `Stamp { secs, nanos }` out of them, call the function,
 and turn the returned `i64` into something the caller can receive. Each of those
 value-shaped problems is a **conversion**, and planning one is what this stage
@@ -91,7 +91,8 @@ The algorithm saves completed plans in a **cache** so it can reuse them. Reuse
 requires more than matching the Rust type. Building `Stamp` from two fields is
 different from calling a constructor with one integer. Even two field-based
 conversions differ if they convert `secs` differently. The cache key therefore
-includes the selected relation, the policy for this value, and the completed
+includes the selected relation, the
+[policy](03-requests.md#what-policy-means) for this value, and the completed
 child plans. The recursion resolves the children before it has that full key.
 
 The algorithm also receives the value's *position*, not just its type. In the
@@ -138,7 +139,7 @@ and every request that needed it is skipped with that reason. No half-built node
 is ever published: while planning is in progress the registry marks the
 conversion as being resolved, which is how it detects a cycle, but that mark is
 bookkeeping, not a plan, and it is replaced by a node or by an unsupported
-outcome. No later stage sees a conversion that half exists.
+result. No later stage sees a conversion that half exists.
 
 ## Describing source construction and decomposition
 
@@ -340,9 +341,10 @@ Selection precedes child traversal: an atomic opaque representation does not ins
 
 Future callback planning must reverse direction for callback arguments. Rust
 receives the callable as input, but later supplies values to the foreign
-callback as output. This follows from the callback's role, not from the user
-specifying an independent direction for each argument. V2 does not implement
-callback conversion yet.
+callback as output. Those values make the opposite
+[crossing](03-requests.md#finding-an-existing-conversion-plan). The direction
+follows from the callback's role, not from the user specifying an independent
+direction for each argument. V2 does not implement callback conversion yet.
 
 ### Responsibility boundary with Flat
 
@@ -597,7 +599,7 @@ facts before the registry can support them:
 The adapter supplies runtime acquire/release operations. The registry tracks
 those effects and schedules calls on success and failure paths. A primitive may
 clean up a temporary allocation entirely inside its own implementation, provided
-no ownership obligation escapes either outcome. Handles, callbacks and escaping
+no ownership obligation escapes either execution path. Handles, callbacks and escaping
 allocations remain unsupported until their effects can be represented and
 validated — that is, until the table above can be filled in for them and the
 registry can check what it says.
@@ -644,7 +646,9 @@ how to access them using the operations above.
 `Protocol::Product` — convert the whole value, or project one part per part of
 the selected relation, reading a record on the way into Rust. A record leaving
 Rust needs a target construction operation and is a reported skip until there is
-one. Slots, nested member layouts, guards, and the optional, sequence, choice and
+one. C reports `unsupported.record.out_of_rust` from the registry; JNI refuses
+earlier with `unsupported.jni.object_output`. Slots, nested member layouts,
+guards, and the optional, sequence, choice and
 callable protocols below are described rather than built.
 
 A **layout** describes the values contained in a representation. A **protocol**
@@ -698,7 +702,14 @@ function's calling convention belongs in `AbiSpec` at
 
 A **slot** is one value in a multi-value representation — for a `Stamp` passed to JNI as two separate arguments rather than an object, the layout is two slots, and a function taking two such records has four native arguments in all. `SlotRole` states a slot's meaning, independent of its generated name. `GuardId` refers to an activation condition on a slot — “always,” “presence is true,” or “variant tag selects this arm” — and is unrelated to the guard items of [capture](01-source.md). Enclosing conditions also apply. Inactive slots can require valid wire defaults even though their source payload must not be read or constructed. When one layout is used for two function arguments, its slot identities are qualified by each use so their ABI positions remain separate.
 
-`ProductOps` describes member projections and a target construction operation over already converted children. As implemented, a product is one projection per part of the selected relation, in part order, and covers the into-Rust direction only: a record *leaving* Rust needs the construction operation, and until a target supplies one the conversion is a reported skip rather than a guess. For a C struct these can be ordinary member reads and a struct literal. For separate JNI arguments they map children to slots. For object input they can be JVM-property-read primitives. The registry can provide standard tuple/struct operations as reusable defaults.
+`ProductOps` in the design would describe both member reads and a target
+construction operation over converted children. The implemented form is
+`Protocol::Product { projections }`: one read per part, in part order, for
+input into Rust. It has no target-construction operation yet. A future C output
+could use a struct literal, while a future separate-arguments JNI form would
+map children to argument slots. The implemented JVM-object input uses getter
+operations. These are different target operations around the same registry
+algorithm for converting the selected parts.
 
 For sequences, variants and callbacks, adapters supply runtime operations; the registry supplies loops, branches and child calls. C aggregates and JNI slots/object operations reuse the same relation.
 
@@ -784,7 +795,7 @@ trait Target {
 
 Every method answers with `TargetSupport<Answer>`, which is one of three things:
 a ready description, a specific unsupported reason, or a fatal planning error
-([defined with the other support outcomes](06-retain.md#unsupported-requests-and-public-api-dependencies)).
+([defined with the other support [outcomes](06-retain.md#retain-supported-output)](06-retain.md#unsupported-requests-and-public-api-dependencies)).
 Two of the answers are specified in later chapters, because they are about later
 stages: [`BoundarySpec`](05-boundary.md#assembling-an-exported-function) describes
 where native arguments and results go, and
@@ -864,9 +875,9 @@ enum Instr {
     // its result when it produces one.
     Apply { primitive: PrimitiveId, operands: Vec<Operand>, result: Option<ValueId> },
     // Build a source record from converted parts, in field order.
-    Construct { record: RecordName, parts: Vec<ValueId>, result: ValueId },
+    Construct { record: String, parts: Vec<ValueId>, result: ValueId },
     // Call the source function, once.
-    Call { function: FunctionName, args: Vec<ValueId>, result: Option<ValueId> },
+    Call { function: String, args: Vec<ValueId>, result: Option<ValueId> },
 }
 
 enum Operand {

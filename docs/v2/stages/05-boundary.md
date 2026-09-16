@@ -76,7 +76,7 @@ convention is a separate implementation and should not be confused with this
 V2 example.
 
 If a requested delivery or failure route is not supported, the function is
-skipped and the report says why. It is never quietly given a different ABI than
+skipped, with the reason recorded in its [outcome](06-retain.md#retain-supported-output). It is never quietly given a different ABI than
 the one the configuration asked for, because a caller compiled against the header
 or the Kotlin declaration would then be calling something else.
 
@@ -153,7 +153,7 @@ terminal action; the target contributes only the operation that reports. A
 category a conversion can raise and the boundary does not list makes the function
 unsupported.
 
-For a source `Result`, `OutputPlacement::Branches` maps the error value to its configured destination, while the domain failure route specifies how that path terminates. Both describe one consistent boundary policy. Conversion failures can also happen before the source call or while encoding its result; those use their binding/runtime routes. Failure while encoding a domain error must itself have a defined route.
+For a source `Result`, `OutputPlacement::Branches` maps the error value to its configured destination, while the domain failure route specifies how that path terminates. Both describe one consistent boundary [policy](03-requests.md#what-policy-means). Conversion failures can also happen before the source call or while encoding its result; those use their binding/runtime routes. Failure while encoding a domain error must itself have a defined route.
 
 The complete design calls for this flow; choosing source `Result` branches and
 finishing explicit resource scopes are future steps:

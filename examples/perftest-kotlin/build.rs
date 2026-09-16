@@ -152,15 +152,15 @@ fn main() {
         println!("cargo:warning=Wrote {}", path.display());
     }
 
-    // The emitted-surface manifest, for an engine that produces one. Empty
+    // The report, for an engine that produces one. Empty
     // under v1, whose answer is "everything declared, or the build failed".
-    for path in jni.write_manifest(&reports).expect("write_manifest failed") {
+    for path in jni.write_report(&reports).expect("write_report failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 }
 
 /// Where this build script writes its Rust file, its Kotlin root and its
-/// manifest, for the engine that ran.
+/// report, for the engine that ran.
 ///
 /// V1 owns the committed source-tree artifacts and keeps writing them. Any
 /// other engine writes into a root of its own, emptied first, so it can never

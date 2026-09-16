@@ -228,7 +228,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     assert_eq!(generation.report().counts().skipped, 1);
 }
 
-/// The manifest groups by cause, so one missing capability is stated once with
+/// The report groups by cause, so one missing capability is stated once with
 /// every declaration it took down.
 #[test]
 fn skips_are_grouped_by_capability_code() {

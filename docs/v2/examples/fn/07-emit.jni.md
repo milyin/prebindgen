@@ -35,7 +35,7 @@ internal object JNINative {
 }
 ```
 
-The native wrapper the JVM binds that method to (`kotlin.rs`), after the
+The native [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) the JVM binds that method to (`kotlin.rs`), after the
 reporting helper the adapter contributes once per file:
 
 ```rust
@@ -109,7 +109,7 @@ placeholder zero on the error path is not a successful result visible to Kotlin.
   reporting helper. The registry supplies each `match`, the check for reporting
   failure, the terminal return, record construction and the source function call.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
-  conversions render nothing. A child type needing real work would insert its
+  [conversions](../../stages/04-values.md#plan-value-conversions) render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.
 
 [fn]: README.md

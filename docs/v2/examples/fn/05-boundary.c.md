@@ -26,9 +26,9 @@ BoundarySpec {
 }
 ```
 
-`native arg 0` is the first C argument. The wrapper uses it to construct the
+`native arg 0` is the first C argument. The [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) uses it to construct the
 source `Stamp`, then returns the source function's integer result directly.
-The empty failure set means these conversions need no error branch. An
+The empty failure set means these [conversions](../../stages/04-values.md#plan-value-conversions) need no error branch. An
 **out-parameter**, by contrast, would be caller-provided storage that the wrapper
 writes into; this example does not use one.
 
@@ -42,11 +42,15 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 ## Checks
 
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
-  The symbol and the convention are [the recorded policy's][fn_requests_c].
+  The symbol and calling convention come from the recorded
+  [policy](../../stages/03-requests.md#what-policy-means),
+  [as the request cell shows][fn_requests_c].
 - An out-parameter form would require an additional delivery implementation;
   the current V2 increment supports only a native return or no value.
-- No route is declared because [both nodes are infallible][fn_values_c]. A later
-  change that makes an input conversion fallible must skip this function until
+- No route is declared because both
+  [nodes](../../stages/04-values.md#plan-value-conversions) are infallible,
+  [as planned][fn_values_c]. A later change that makes an input
+  [conversion](../../stages/04-values.md#plan-value-conversions) fallible must skip this function until
   the C policy says where that failure goes.
 
 [fn]: README.md

@@ -23,7 +23,7 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 ## What Flat is for
 
 After capture, the generator has Rust text such as `stamp: Stamp`. To generate
-a conversion, it needs more than that spelling: is `Stamp` a struct, which
+a [conversion](04-values.md#plan-value-conversions), it needs more than that spelling: is `Stamp` a struct, which
 fields does it have, and what are their types? **Flat**, the source model
 provided by `prebindgen-flat`, turns the captured syntax into structured answers.
 
@@ -42,7 +42,7 @@ validator can walk the same model, with no registry and no target in sight.
 Flat converts each captured item into an **element**, its structured record for
 a function, type, constant, guard or unsupported item. Compiler documentation
 often calls this conversion **lowering**: translating input into a simpler
-internal representation. Named elements enter **one flat namespace**, a single
+internal model. Named elements enter **one flat namespace**, a single
 index shared by all the source crates being read. A lookup asks for `Stamp`, not
 for a sequence of nested Rust modules.
 
@@ -135,7 +135,7 @@ enum Element {
     Function(Function),      // a name, parameters in order, and a return type
     Type(Type),              // a declared type, in one of the four shapes below
     Constant(Constant),      // a name and its type
-    Guard(Guard),            // the injected feature assertion; no name, re-emitted as is
+    Guard(Guard),            // an unnamed assertion retained for emission
     Unsupported(Unsupported),// a marked item the subset cannot express, with its diagnosis
 }
 
@@ -153,7 +153,8 @@ The four type shapes preserve different information:
   construct or read a value, provided the operation is legal and supported.
 - A **variant** describes an enum whose alternatives may contain payloads.
   Alternative positions identify its branches in the model. The foreign
-  representation separately chooses how to encode which branch is active.
+  [representation](04-values.md#plan-value-conversions) separately chooses
+  how to encode which branch is active.
 - An **enum** describes fieldless alternatives and their integer discriminants.
   A target can use those values when generating a C or Kotlin enum.
 - An **extern** deliberately exposes only a type name. An alias such as
@@ -218,13 +219,13 @@ stage that builds a native boundary out of it.
 
 The grammar also keeps distinctions a destination language may well erase.
 `String` and `str` are different kinds; so are `Vec<T>` and `[T]`; `Box<T>` and
-`Cow<'a, T>` stay visible as wrappers rather than being flattened to what they
+`Cow<'a, T>` stay visible as the enclosing types they are rather than being flattened to what they
 contain. That a C binding treats several of these alike is a decision for the C
 adapter to take deliberately, at the point where it matters — not a decision the
 source model takes for everyone by throwing the difference away.
 
 Spelling survives all of this because each element also keeps its **origin**: the
-exact syntax it was built from, and the source it arrived in. Generated Rust is the one artifact
+exact syntax it was built from, and the source it arrived in. Generated Rust is the one output
 that needs that fidelity — `B()` must not be re-spelled `B`, `= 0x07` must not
 become `= 7` — so the source's own text rides along for emission to reuse. It is
 not a second source of facts: the retained syntax is private to Flat, and the
@@ -247,14 +248,14 @@ rather than print a type and test whether its text starts with `Option`.
 The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
 `jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
 own output vocabulary rather than captured source syntax, so writing them as
-syntax during planning is what an adapter is for. That is why a carrier a target
+syntax during planning is what an adapter is for. That is why a [carrier](04-values.md#describing-target-values-and-operations) a target
 describes here holds a real `syn::Type`, while a source-side position stays a
 handle to the model. The rule constrains where a fact may come *from*, not which
 types may be spelled.
 
 The engines enforce this separation differently. Both distinguish a rendering
-**protocol** (the interface for emitting source types) from a **capability**
-(the object an engine permits its emission code to use). The
+**protocol** (the interface for emitting source types) from an **emission
+capability** (the object an engine permits its emission code to use). The
 protocol lives with the model, in `prebindgen-flat` — object-safe,
 generate-only, emitting source types from the model's own facts rather than
 exposing captured type syntax for inspection. Guards and enum discriminants
@@ -279,7 +280,7 @@ V2 has its own private writer, and reaches an adapter differently: a target is
 asked to render one operation and receives the payload it described plus the
 operand names the writer allocated, never a rendering capability. Same rule,
 same protocol, a different way of keeping planning away from syntax. For the
-escapes in either engine the rule is policy, stated here, rather than a boundary
+escapes in either engine the rule is a convention, stated here, rather than a boundary
 the compiler enforces.
 
 Flat answers questions about Rust; it takes no position on bindings. It will
@@ -307,7 +308,7 @@ returns `&Function`, borrowed from the model, and
 [`Function`, `Struct`, `Param`, and `Field`](../../../prebindgen-flat/src/flat/element.rs)
 hold the facts an inspecting consumer needs.
 [`TypeRef`](../../../prebindgen-flat/src/flat/ty.rs) already classifies a source
-type and preserves its wrappers and references. Following a parameter's type to a
+type and preserves its enclosing types and references. Following a parameter's type to a
 declaration is then the caller's job: take the name out of the reference, call
 `Flat::resolve`, keep the model in hand for the next hop.
 
@@ -481,8 +482,10 @@ impl ParameterView {
 `TypeDeclView` describes a named type declaration. `ElementView` distinguishes
 functions, type declarations, constants, guards and unsupported items. A guard
 here is the [feature assertion](01-source.md#capture-source-items) injected when
-the capture was read: an item the model carries and the writer emits, with no
-name in any foreign API. Typed lookup returns `None` when
+the capture was read: an item the model retains without giving it a foreign
+API name. V1 re-emits it; current V2 does not yet carry it into generated Rust.
+The proposed views do not by themselves close that emission gap.
+Typed lookup returns `None` when
 no accepted item of that kind exists under the name. A consumer needing to
 distinguish a missing name, wrong item kind and unsupported declaration uses
 `element`. Enumeration preserves source order.
@@ -554,14 +557,14 @@ silently peel `Box`, `Cow`, references or optional values. `as_record()` returns
 a record only when the exact type is a structurally available record.
 `referent()` explicitly follows `&T` or `&mut T`; the original view retains the
 reference and its mutability. Equivalent explicit accessors are needed for the
-other supported wrappers.
+other supported type forms.
 
 `FieldShape` preserves named, tuple and unit forms. `FieldView::name()` is absent
 for a positional field, while `index()` always records source order. Field
 identity includes its owner; fields in two enum variants remain distinct even
 when both occupy index zero. Extending enum views should preserve variant
 identity, payload shape, and modeled discriminant information. This source
-variant identity does not choose a registry conversion alternative or foreign
+variant identity does not choose a registry [conversion](04-values.md#plan-value-conversions) alternative or foreign
 tag encoding.
 
 `result_parts()` returns the `Ok` and `Err` type views of a `Result`, without

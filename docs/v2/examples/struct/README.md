@@ -15,11 +15,12 @@ This walkthrough follows the type that the function example accepts. A
 **record** here is a struct whose fields Flat can inspect. `Stamp` has two
 signed 64-bit fields; a foreign caller needs its own way to hold those values.
 C uses a generated C-compatible struct passed by value. Kotlin uses a generated
-data class whose JVM getters the native wrapper can call.
+data class whose JVM getters the native
+[wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) can call.
 
-The key question is how either foreign representation becomes the original Rust
+The key question is how either foreign [representation](../../stages/04-values.md#plan-value-conversions) becomes the original Rust
 `Stamp`. For each field, the target describes a read operation, and the registry
-combines those reads with field conversions and Rust construction. C member
+combines those reads with field [conversions](../../stages/04-values.md#plan-value-conversions) and Rust construction. C member
 reads cannot fail; JNI getter calls can. The value-planning pages explain both
 operations, including the additional contracts planned for more complex values.
 

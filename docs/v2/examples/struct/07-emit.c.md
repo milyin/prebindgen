@@ -28,7 +28,7 @@ pub struct Stamp {
 
 `#[repr(C)]` tells Rust to lay out this generated struct using the C-compatible
 rules. That promise applies to this boundary type, not to the original
-`source::Stamp`. The conversion reads the generated struct and constructs the
+`source::Stamp`. The [conversion](../../stages/04-values.md#plan-value-conversions) reads the generated struct and constructs the
 original one, so the source crate does not need to adopt a C layout.
 
 `cbindgen` reads the generated Rust declaration and produces the corresponding
@@ -49,7 +49,8 @@ typedef struct Stamp {
   different module: one is the ABI type a C caller fills in, the other the Rust
   value the source function takes.
 - `repr(C)` is required: without it the layout the header promises is not the
-  layout [the wrapper][fn_emit_c] reads.
+  layout the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
+  reads, [as the function path shows][fn_emit_c].
 - The binding explicitly chooses `Stamp`. The default type base is `stamp`,
   and a naming hook could choose another convention such as `stamp_t`.
   The generated lint allowance permits such non-CamelCase Rust type names.

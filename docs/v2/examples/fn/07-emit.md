@@ -16,11 +16,12 @@ FunctionPlan { source: crate::source::stamp_sum,
                body: <instructions> }
 ```
 
-The summary also depends on the conversion operations and the adapter's retained
-rendering data, such as getter names. **Frozen** means support decisions are
-finished; emission cannot add another conversion. In current V2, the common
-writer renders Rust before `generate` returns, and `Generation` stores that text
-alongside the retained descriptions used for Kotlin output.
+The summary also depends on each
+[node](../../stages/04-values.md#plan-value-conversions)'s operations and the
+adapter's retained rendering data, such as getter names. **Frozen** means
+support decisions are finished; emission cannot add another [conversion](../../stages/04-values.md#plan-value-conversions). In
+current V2, the common writer renders Rust before `generate` returns, and
+`Generation` stores that text alongside the descriptions used for Kotlin output.
 
 ## Result
 
@@ -44,11 +45,11 @@ fallible getter; the language-specific page shows those branches in full.
 
 ## Checks
 
-- Temporaries are allocated from the plan, so two operations in one wrapper
+- Temporaries are allocated from the plan, so two operations in one [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
   cannot collide over a name; the parameters are named by the boundary, since a
   target that requires an environment operand has to name it.
 - The source function appears exactly once in the generated body.
-- The writer adds nothing planning did not decide: no conversion without a node,
+- The writer adds nothing planning did not decide: no [conversion](../../stages/04-values.md#plan-value-conversions) without a node,
   no dependency discovered while rendering.
 
 ## Language variants

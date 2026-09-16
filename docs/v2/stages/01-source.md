@@ -15,7 +15,12 @@ for example, it connects the name `Stamp` in a function parameter to the struct
 that declares `secs` and `nanos`.
 
 A **source crate** is an ordinary Rust library that marks the items it wants
-available to binding generators. The chapters use this one throughout:
+available to binding generators; each marked item is a **source item**, the thing
+every later stage reads its source facts from. Most of what a binding declares
+names one; a binding may also declare things the source never exported — a
+callback signature, a helper of its own, a type such as `String` — which the
+[request chapter](03-requests.md) covers. The chapters use this crate
+throughout:
 
 ```rust
 use prebindgen::prebindgen;
@@ -63,7 +68,8 @@ A condition known to be false removes the item; a condition known to be true
 is removed after its decision has been applied. Conditions the reader cannot
 evaluate remain on the item. An ordinary `#[cfg]` processed by Rust before
 `#[prebindgen]` may prevent capture altogether. The feature assertion below
-checks that generation's feature decisions agree with the linked source crate.
+is intended to check that generation's feature decisions agree with the linked
+source crate. V1 emits that check; V2 currently omits it, as explained below.
 
 The second is a generated **feature assertion**. Cargo can compile the source
 crate twice with different feature sets —
@@ -74,7 +80,11 @@ one build and compiled against another. So reading the capture prepends one item
 to the stream: a `const _` assertion comparing the source crate's own `FEATURES`
 constant with the feature list the capture was filtered by, which fails
 compilation with an explanatory message when they differ. It has no name in any
-foreign API, and it is carried into the generated Rust unchanged.
+foreign API. The V1 writer carries it into generated Rust unchanged. Current
+V2 keeps the guard in Flat but does not emit it, so a V2 binding does not yet
+get this protection against mismatched source features. The
+[implementation limitations](../implementation.md#what-it-does-not-settle)
+track this gap. `v2check` bypasses capture and therefore does not test it.
 
 The source crate re-exports the capture directory as a constant, so a binding
 crate's build script can read it without knowing where Cargo put it:
@@ -94,11 +104,12 @@ Marking an item is not a statement about bindings. It does not say that `Stamp`
 can be represented in C, that `stamp_sum` can be called from Kotlin, or that
 either will appear in the generated API. It says only that the declaration is
 available for a binding crate to ask about. Which items are exposed, under which
-names and with which representation, is settled two stages later, when a
-[binding request](03-requests.md) names them. Capture metadata also records the
-source crate name, which supplies the default path for generated source calls.
-When a binding uses a different dependency name or module arrangement, it can
-override that path in its configuration.
+names and with which [representation](04-values.md#plan-value-conversions),
+is settled two stages later, when a [binding request](03-requests.md) names
+them. Capture metadata also records the source crate name, which supplies the
+default path for generated source calls. The C frontend can override that path
+with `.source_module(...)` for a different dependency name or module arrangement.
+The current JNI V2 route instead uses the first source module's crate name.
 
 Captures are not the only input to the source model. A binding crate can also
 declare a **local helper**: a Rust function that the binding crate itself

@@ -23,12 +23,12 @@ and a build script asking for it to be exposed: [C][struct_requests_c],
 
 ## Result
 
-The type request asks for a public foreign representation of `Stamp`; it is
+The type request asks for a public foreign [representation](../../stages/04-values.md#plan-value-conversions) of `Stamp`; it is
 independent of the request for `stamp_sum`. This sketch also shows the fields
-that the registry will use when it discovers the record relation during value
+that the registry will use when it discovers the record [relation](../../stages/04-values.md#what-a-relation-is) during value
 planning. All structures in the block are design notation, not exact current
 request fields. Current `OutputRequest` contains a `Declaration` and `PolicyId`.
-The frontend also records a type policy for `Stamp`, which is how a later
+The frontend also records a type [policy](../../stages/03-requests.md#what-policy-means) for `Stamp`, which is how a later
 function parameter finds this representation without repeating the configuration.
 
 ```text
@@ -52,11 +52,13 @@ conversion_rules.parts: {}    // none recorded for this path
 - A record request is a root: it stands whether or not any exported function
   mentions the type, and survives a function that is skipped.
 - A [relation](../../stages/04-values.md#what-a-relation-is) describes how Rust
-  constructs or reads the value; a representation describes the foreign values
-  carrying it. The current example selects the field relation. A future
-  constructor relation would have the constructor's arguments as parts and
-  would need a compatible target representation. [Node identity][struct_values]
-  must distinguish those choices.
+  constructs or reads the value; a
+  [representation](../../stages/04-values.md#plan-value-conversions) describes
+  the foreign values carrying it. This example selects the field relation. A
+  future constructor relation would instead have the constructor's arguments
+  as parts and would need a compatible target representation.
+  [Node](../../stages/04-values.md#plan-value-conversions) identity must
+  distinguish these choices, [as the value-planning page explains][struct_values].
 
 ## Language variants
 

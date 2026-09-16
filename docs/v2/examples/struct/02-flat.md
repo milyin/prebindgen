@@ -36,8 +36,8 @@ field's `Scalar(I64)` type tells the planner that it is a signed 64-bit integer.
 The entry describes Rust structure, not a C layout or a Kotlin class.
 
 This is the entry found when [the function's parameter][fn_flat] resolves the
-name `Stamp`. Later planning can use its fields if the selected representation
-requires structural conversion.
+name `Stamp`. Later planning can use its fields if the selected [representation](../../stages/04-values.md#plan-value-conversions)
+requires structural [conversion](../../stages/04-values.md#plan-value-conversions).
 
 ## Checks
 

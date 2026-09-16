@@ -36,8 +36,9 @@ original type; `v3` stores the result of the one source call. The qualified
 `source::stamp_sum` path distinguishes that implementation from the exported
 function with the same short name.
 
-Here `source` is the fixture's local module. A real binding uses its configured
-`.source_module(...)` path or the captured source crate's name instead.
+Here `source` is the fixture's local module. A real binding reaches its
+[source items](../../stages/01-source.md#capture-source-items) through its
+configured `.source_module(...)` path or the captured source crate's name.
 
 The header `cbindgen` derives from it, after the aggregate's `typedef`:
 
@@ -57,9 +58,14 @@ int main(void) {
 }
 ```
 
+`v2check` compiles the generated Rust and calls its C-compatible entry point
+from Rust. It does not run `cbindgen` or compile this C program; the header and
+caller above illustrate the intended C use, rather than an additional executed
+test.
+
 ## Checks
 
-- The wrapper and the function it wraps are both `stamp_sum`, and never collide:
+- The [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) and the function it wraps are both `stamp_sum`, and never collide:
   the source one is only ever reached through its module path.
 - The parameter keeps the source parameter's name, `stamp`, as the boundary
   stated it; the locals are the writer's, numbered so that none can shadow it.

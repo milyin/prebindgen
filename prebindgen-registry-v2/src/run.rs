@@ -1,5 +1,5 @@
 //! One finished v2 generation run: what was planned, what was emitted, and the
-//! manifest that accounts for every declaration.
+//! report that accounts for every declaration.
 //!
 //! The run owns its whole pipeline — parsing, resolution, plans, emission and
 //! the report. It reads the same model and the same declarations v1 does and
@@ -17,7 +17,7 @@ use crate::{decl::SourceKind, outcome::EngineError, report::Report};
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
 
-/// A finished v2 run: the model it read, what it generated, and the manifest.
+/// A finished v2 run: the model it read, what it generated, and the report.
 ///
 /// Immutable. Every writer is a pure emission over it, so they can run in any
 /// order, or not at all.
@@ -170,7 +170,7 @@ pub(crate) fn check_declarations(
         return Err(EngineError::DeclaredNotFound { entries: missing });
     }
 
-    // One id, one declaration: the manifest is read by id, and a repeat would leave
+    // One id, one declaration: the report is read by id, and a repeat would leave
     // one of the two entries unaccounted for.
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared

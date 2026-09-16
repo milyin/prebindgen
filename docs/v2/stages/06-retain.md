@@ -4,8 +4,8 @@
 
 # Retain supported output
 
-Status: implemented. Outcomes, causes, the frozen result and the report are
-what the engine produces; `Unselected` and the pruning of unreachable conversions
+Status: implemented. Outcomes, causes and the frozen result are what this stage
+produces; `Unselected` and the pruning of unreachable [conversions](04-values.md#plan-value-conversions)
 are not there yet.
 
 The examples in this chapter use one small source crate — a record and a function
@@ -27,13 +27,13 @@ whose required types or helpers are missing.
 
 There are both conversion dependencies and public API dependencies. The exported `stamp_sum` needs
 the conversion of `Stamp`, which needs a conversion for each field. The public
-`Stamp` — the C struct, the Kotlin data class — has to exist for the wrapper that
+`Stamp` — the C struct, the Kotlin data class — has to exist for the [wrapper](05-boundary.md#assemble-the-native-boundary) that
 takes it to be usable at all. A Kotlin method needs the class it is declared on,
 and if the configuration promised that class implements an interface, it needs
 the members of that interface too.
 
 So a missing capability propagates. Suppose one field of the record had a type no
-representation covers yet. Its conversion is unsupported; the record's conversion
+[representation](04-values.md#plan-value-conversions) covers yet. Its conversion is unsupported; the record's conversion
 is therefore unsupported; the public record cannot be emitted; and the function
 that takes it is skipped as well. Current reports copy the underlying reason
 and preserve each dependent's path to it. An unrelated function in
@@ -47,27 +47,27 @@ representation need not convert unused fields. That does not permit a requested
 data struct to lose a field silently, or permit V2 to replace an unsupported
 data representation with a handle.
 
-An unsupported request is a normal reported outcome. The report records a
-capability code, an explanation and a path to the failing dependency. A
-**capability** here is generator functionality needed by the request, such as
-converting a record out of Rust. The code lets tools group requests blocked by
-the same missing functionality.
+Every declaration finishes with exactly one **outcome**. *Emitted* means its
+requirements succeeded and it can be generated. *Skipped* means the request
+needs support V2 does not yet provide. *Ignored* means the user explicitly
+excluded it; that is a configuration decision, not a gap in support.
 
-Current outcomes distinguish emitted declarations, skipped requests and explicit
-user opt-outs called *ignored*. The design also calls for *unselected*: an item
-captured from Rust but never requested by this binding. That additional outcome
-is not implemented yet. It would help answer why an item is absent without
-treating every unrequested item as a failure.
+A skipped declaration carries a **capability**: a stable code naming the
+support it needs, such as `unsupported.jni.carrier`. An explanation and a path
+to the failing dependency tell the developer where planning stopped. The
+design also calls for *unselected*, to account for captured items nobody
+requested, but that fourth outcome is not implemented.
 
-Contradictory configuration and broken internal assumptions are different from
-missing capabilities. They fail generation rather than appearing as ordinary
-skips, because continuing could hide a configuration mistake or generator bug.
+Contradictory configuration and broken internal assumptions are different:
+they fail generation rather than becoming ordinary skips. On a completed run,
+[the report](../report.md) records the outcomes for inspection. It is diagnostic
+output; the pipeline does not read it back to make generation decisions.
 
-What survives is then **frozen**: planning is over, the records are immutable,
-and the retained plans determine output. Current `generate` renders Rust before
-returning `Generation`, which stores that text, the plans and the report. The
-Kotlin writer then reads retained public descriptions. Neither writer may plan
-a missing conversion, add a dependency or reverse a support decision.
+What survives is then **frozen**: planning is over and retained plans determine
+the output. Current `generate` renders Rust before returning `Generation`,
+which stores that text, the plans and the report. The Kotlin writer reads the
+retained public descriptions. Neither writer may plan a missing conversion,
+add a dependency or reverse a support decision.
 
 ## Unsupported requests and public API dependencies
 
@@ -155,7 +155,7 @@ propagation is implemented; interface and method promises extend that rule:
 - A shared helper is retained if any emitted output needs it.
 - An unimplemented semantic setting blocks the affected promise; it is not silently discarded.
 
-A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](07-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An artifact — one generated unit, as defined with [the operations that depend on them](04-values.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a native extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
+A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](07-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An [artifact](04-values.md#individual-target-operations) — one generated unit, as defined with [the operations that depend on them](04-values.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a native extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
 
 Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks. Public dependencies may require repeated readiness evaluation until the retained set stops changing. A new public requirement discovered after value planning must still propagate before output is finalized.
 
@@ -193,7 +193,7 @@ struct GenerationRun<'a, T: Target> {
 }
 ```
 
-`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. Primitive/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
+`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. [Primitive](04-values.md#plan-value-conversions)/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
 
 The pipeline is:
 
@@ -214,10 +214,11 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> return Generation with Rust text, retained descriptions and report
  -> C: cbindgen derives headers from generated Rust
     JNI: optional foreign-writer interface is implemented by the Kotlin writer
- -> publish generated files and report
+ -> publish generated files
+ -> optionally write the diagnostic report beside them
 ```
 
-Selection, child resolution and representation happen together for each node. A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
+Selection, child resolution and representation happen together for each [node](04-values.md#plan-value-conversions). A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
 
 The following is the proposed storage organization. Current `Generation` owns
 Flat, vectors of value/function/surface/primitive records, a `Report` and the
@@ -229,7 +230,7 @@ struct Generation<Payload> {
     functions: FrozenArena<FunctionPlan<Payload>>, // Retained complete native functions.
     surface: FrozenArena<SurfaceSpec<Payload>>, // Complete retained public declarations.
     artifacts: OrderedArtifacts<Payload>, // Generated units with a validated emission order.
-    report: GenerationReport, // All requested/source outcomes and their diagnostic paths.
+    outcomes: Outcomes,     // Every declaration's outcome, with its diagnostic path.
 }
 ```
 
@@ -242,26 +243,19 @@ surviving wrapper needs; the instructions have already been inlined, so this is
 extra storage rather than a dangling reference.
 
 Artifacts are currently collected and deduplicated by name before Rust rendering.
-There is no general dependency sort or forward-declaration planner. The current
-`Report` contains pipeline, target and source identity plus declaration outcomes
-and skip paths. It does not inventory artifact or native-symbol identities.
-
-The report is also intended to support test selection, which is not implemented
-yet. The example crates' test suites are written
-against the full API, so when V2 emits a subset, tests referring to what it
-skipped would not compile — a runtime guard cannot hide a missing class from
-`kotlinc` or a missing symbol from a C compiler. The intended approach divides each suite
-into **test sections**, each naming the emitted declarations it needs, and the report
-selects the sections whose declarations were all emitted. A milestone still has to
-require that meaningful sections run, so that skipping everything cannot pass.
+There is no general dependency sort or forward-declaration planner. The
+`FrozenArena` and `OrderedArtifacts` structures above describe a proposed
+extension, not types the current implementation exposes.
 
 The common Rust writer renders before `Generation` is returned;
 `Generation::write_rust` writes the stored text. The JNI writer reads retained
-public descriptions for Kotlin. The C build passes generated Rust to `cbindgen` for headers.
-Writers must not introduce a newly discovered dependency or reverse a support
-decision. Files should be published only after output generation succeeds.
-Future report-based test selection must happen before foreign-language
-compilation so tests refer only to declarations that exist.
+public descriptions for Kotlin. The C build passes generated Rust to `cbindgen`
+for headers. Writers must not introduce a newly discovered dependency or reverse
+a support decision. Files should be published only after output generation succeeds.
+
+The report's contents, frontend accessors and planned use for test selection
+are explained on [its own page](../report.md). Those are separate from the
+retention decisions described here.
 
 ## Elements at this stage
 

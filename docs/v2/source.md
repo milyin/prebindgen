@@ -12,7 +12,7 @@ the struct. Here, **record** means a struct whose fields the generator can inspe
 The two items let us follow a dependency as well as an individual function.
 Before generated code can call `stamp_sum`, it must obtain both field values
 from the foreign caller and construct a Rust `Stamp`. The record example
-explains that conversion; the function example uses it. Future examples will
+explains that [conversion](stages/04-values.md#plan-value-conversions); the function example uses it. Future examples will
 extend this same library with the items they need.
 
 ```rust
@@ -33,7 +33,7 @@ crate still owns and compiles the implementation. The function consumes its
 the example defined behavior even if the addition overflows.
 
 The binding configuration asks for two public outputs: the type `Stamp` and the
-function `stamp_sum`. These explicit requests are called **roots**, because the
+function `stamp_sum`. These explicit requests are called roots, because the
 generator starts with them and discovers the supporting conversions they need.
 
 For C, the configuration chooses a struct passed by value and explicitly names
@@ -50,9 +50,11 @@ The example does not involve an opaque handle (a reference to a Rust-owned
 object), a borrow, a callback, or an extra constructor function. Those features
 need their own examples before the appendix can specify their behavior.
 
-The emitted examples call the source module as `source::`. In a real binding
-crate this path comes from source-origin information or a configured module
-override. C and JNI produce separate target modules from the same Rust items.
+The emitted examples call the source module as `source::`. In a real binding,
+C uses a configured `.source_module(...)` path or the source crate name.
+The current JNI V2 route uses the first source module's crate name, falling back
+to `crate` when unavailable; it has no corresponding module-override setting.
+C and JNI produce separate target modules from the same Rust items.
 The Kotlin consumer is responsible for loading the native library.
 
 `examples/v2check` provides a runnable generation fixture based on this source,

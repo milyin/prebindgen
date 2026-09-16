@@ -31,7 +31,7 @@ BoundarySpec {
 
 JNI supplies two arguments in addition to the user's `stamp`: `env` permits
 calls into the JVM, and `_this` is the `JNINative` singleton receiving the native
-method call. The wrapper needs `env` for property reads and error reporting;
+method call. The [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) needs `env` for property reads and error reporting;
 it does not otherwise use `_this`. `jlong` is JNI's signed 64-bit integer type.
 
 These roles determine the signature that [emission][fn_emit_jni] renders:
@@ -45,7 +45,7 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ) -> jni::sys::jlong
 ```
 
-The reporting operation is a generated artifact this adapter contributes:
+The reporting operation is a generated [artifact](../../stages/04-values.md#individual-target-operations) this adapter contributes:
 
 ```rust
 pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
@@ -61,10 +61,11 @@ pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
 
 The helper first checks whether the JVM already has a pending exception. If so,
 it preserves it. Otherwise it throws `RuntimeException` with the JNI error's
-message. Its `Result<()>` tells the wrapper whether reporting succeeded.
-The `?` returns early if `exception_check` fails; otherwise the helper returns
-the result of `throw_new` when needed. Either reporting failure reaches the
-wrapper's planned abort path.
+message. Its `Result<()>` tells the generated
+[wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) whether
+reporting succeeded. The `?` returns from this helper if `exception_check`
+fails, not from the wrapper. The wrapper checks the helper's result and aborts
+if reporting failed.
 
 ## Checks
 
@@ -74,8 +75,8 @@ wrapper's planned abort path.
 - Reporting is never retried with the operation that just failed — one failed
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success
-  path. The route exists because [the input node declares that
-  failure][fn_values_jni]; a category the policy leaves unrouted would skip the
+  path. The route exists because the input [node](../../stages/04-values.md#plan-value-conversions) [declares that
+  failure][fn_values_jni]; a category the [policy](../../stages/03-requests.md#what-policy-means) leaves unrouted would skip the
   function.
 
 [fn]: README.md
