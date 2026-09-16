@@ -45,8 +45,12 @@ requires structural [conversion](../../stages/04-values.md#plan-value-conversion
   written; no view says how a field crosses a boundary.
 - A field is addressed within its containing record. A `secs` at index 0 of
   another record is a different position, even though its name and index match.
-- A type whose fields Flat does not model is an `Extern` instead — a name with
-  nothing behind it — not a `Struct` with an empty field list.
+- A type whose fields Flat declines to model becomes an `Extern` — a name with
+  nothing behind it — rather than a `Struct` reporting no fields. A unit struct
+  is what does produce an empty field list: `pub struct Pair(pub i64, pub i64)`
+  is the `Extern`, and `pub struct Marker;` the field-less `Struct`. Later
+  stages refuse those two for different reasons, which is why the model keeps
+  them apart.
 
 [struct]: README.md
 [struct_source]: 01-source.md
