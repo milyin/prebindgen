@@ -14,12 +14,15 @@ Crossing { source: i64,   direction: OutOfRust }    // for Return
 
 ## Result
 
-Two [nodes](../../stages/04-values.md#plan-value-conversions), neither of which contains the call to `stamp_sum`:
+There are two [conversions](../../stages/04-values.md#plan-value-conversions): foreign argument to Rust `Stamp`, and Rust result
+to foreign integer. Each becomes a reusable plan, called a
+[node](../../stages/04-values.md#plan-value-conversions). Neither plan calls
+`stamp_sum`; the next stage places that source call between them.
 
 ```text
 node(input)  = Crossing { Stamp, IntoRust }
                relation: Stamp.fields
-               children: [ node(i64, IntoRust) x2 ]   // the record path's plan
+               children: [ node(i64, IntoRust), node(i64, IntoRust) ] // same node twice
                body:     obtain secs carrier -> convert
                          obtain nanos carrier -> convert
                          construct source::Stamp { secs, nanos }
@@ -36,9 +39,9 @@ refers to it, and so does anything else taking an owned `Stamp` under the same
 
 ## Checks
 
-- Node identity is (type, direction, [relation](../../stages/04-values.md#what-a-relation-is), effective policy), so C and JNI
-  never share a node, and a second function taking an owned `Stamp` reuses this
-  one.
+- Reuse depends on type, direction, [relation](../../stages/04-values.md#what-a-relation-is),
+  effective policy and child conversions. A second owned `Stamp` input with
+  the same choices can reuse this plan. C and JNI run separate generation jobs.
 - An unsupported child makes the input node unsupported, and this function is
   skipped with that cause. Nothing partial is recorded.
 

@@ -26,8 +26,14 @@ node(output) representation: Scalar(c_i64)
              contract:       produces the carrier, validity Independent, failures {}
 ```
 
-The member reads are specified, with the fragment each renders, in
-[the record's C value plan][struct_values_c].
+`Aggregate` means the native input is one struct containing the two members.
+`Scalar(c_i64)` means the output uses one signed 64-bit value. The names here
+summarize the plan rather than declare Rust types. `Independent` describes the
+fact that copied integers and the reconstructed record do not borrow the input;
+the full validity-contract API is future work.
+
+The registry combines the two field reads with Rust record construction.
+[The record's C value plan][struct_values_c] explains those reads individually.
 
 ## Checks
 

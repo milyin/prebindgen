@@ -17,7 +17,8 @@ From capture, the line this record produced, parsed back into the item it holds:
 
 ## Result
 
-One element in the namespace, under the name `Stamp`:
+Flat creates a structured type entry indexed by `Stamp`. The following is a
+conceptual view of that entry, with field positions shown explicitly:
 
 ```text
 Element::Type(Type::Struct(Struct {
@@ -29,17 +30,27 @@ Element::Type(Type::Struct(Struct {
 }))
 ```
 
-This is the element [the function's parameter][fn_flat] resolves to, and the one
-every later stage takes apart.
+`FieldShape::Named` means construction uses named fields, as in
+`Stamp { secs, nanos }`. The positions preserve declaration order, and each
+field's `Scalar(I64)` type tells the planner that it is a signed 64-bit integer.
+The entry describes Rust structure, not a C layout or a Kotlin class.
+
+This is the entry found when [the function's parameter][fn_flat] resolves the
+name `Stamp`. Later planning can use its fields if the selected [representation](../../stages/04-values.md#plan-value-conversions)
+requires structural [conversion](../../stages/04-values.md#plan-value-conversions).
 
 ## Checks
 
 - Field order and names are the declaration's; `i64` is the exact type as
   written; no view says how a field crosses a boundary.
-- Field identity includes its owner, so `secs` here is not interchangeable with
-  a `secs` at index 0 of another record.
-- A type whose fields Flat does not model is an `Extern` instead — a name with
-  nothing behind it — not a `Struct` with an empty field list.
+- A field is addressed within its containing record. A `secs` at index 0 of
+  another record is a different position, even though its name and index match.
+- A type whose fields Flat declines to model becomes an `Extern` — a name with
+  nothing behind it — rather than a `Struct` reporting no fields. A unit struct
+  is what does produce an empty field list: `pub struct Pair(pub i64, pub i64)`
+  is the `Extern`, and `pub struct Marker;` the field-less `Struct`. Later
+  stages refuse those two for different reasons, which is why the model keeps
+  them apart.
 
 [struct]: README.md
 [struct_source]: 01-source.md

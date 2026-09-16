@@ -10,7 +10,7 @@ Owner: the registry, on the JNI adapter's [representation](../../stages/04-value
 The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the JNI [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   policy: ObjectProperties
+Crossing { source: Stamp, direction: IntoRust  }   policy: DataClass, read object properties
 Crossing { source: i64,   direction: OutOfRust }   policy: jlong carrier
 ```
 
@@ -27,16 +27,21 @@ node(output) representation: Scalar(jlong)
              contract:       produces the carrier, validity Independent, failures {}
 ```
 
-The getters are specified, with the fragment each renders, in
-[the record's JNI value plan][struct_values_jni].
+The native input is an object reference. A getter call obtains each long
+property, and the registry uses the resulting integers to construct an owned
+Rust `Stamp`. `Runtime` classifies failures from JNI so the next stage can route
+them. `Independent` describes the resulting copied value; it is not a claim
+that the full planned validity-contract API is already implemented.
+
+[The record's JNI value plan][struct_values_jni] describes the getter operations.
 
 ## Checks
 
 - The input [node](../../stages/04-values.md#plan-value-conversions) is fallible because each property read crosses into the JVM.
   It records that; it decides nothing, so [the boundary][fn_boundary_jni] must
   route the `Runtime` category.
-- A failed read stops the success path: no second getter, no construction, no
-  call. The node yields no value and no fallback.
+- If the first getter fails, the second getter does not run. If either getter
+  fails, the record is not constructed and the source function is not called.
 - `Independent` holds because both integers are copied out of the object;
   nothing in the converted value stays tied to the reference frame.
 

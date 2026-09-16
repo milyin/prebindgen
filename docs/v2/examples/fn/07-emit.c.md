@@ -30,9 +30,15 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64 {
 }
 ```
 
-`source` is the module the binding crate reaches the [source items](../../stages/01-source.md#capture-source-items) through — the
-one the build script named with `.source_module(..)`, or the source crate's own
-name.
+The argument `Stamp` is the generated C-compatible type. `source::Stamp` is the
+original Rust type. `v0` and `v1` copy the input members; `v2` constructs the
+original type; `v3` stores the result of the one source call. The qualified
+`source::stamp_sum` path distinguishes that implementation from the exported
+function with the same short name.
+
+Here `source` is the fixture's local module. A real binding reaches its
+[source items](../../stages/01-source.md#capture-source-items) through its
+configured `.source_module(...)` path or the captured source crate's name.
 
 The header `cbindgen` derives from it, after the aggregate's `typedef`:
 
@@ -40,7 +46,8 @@ The header `cbindgen` derives from it, after the aggregate's `typedef`:
 int64_t stamp_sum(struct Stamp stamp);
 ```
 
-And a C caller:
+A C caller includes the generated header and links the native library. This
+small program checks a successful call by returning zero only when the sum is 46:
 
 ```c
 #include "bindings.h"
@@ -50,6 +57,11 @@ int main(void) {
     return stamp_sum(stamp) == 46 ? 0 : 1;
 }
 ```
+
+`v2check` compiles the generated Rust and calls its C-compatible entry point
+from Rust. It does not run `cbindgen` or compile this C program; the header and
+caller above illustrate the intended C use, rather than an additional executed
+test.
 
 ## Checks
 

@@ -148,7 +148,7 @@ class SpecStructure(unittest.TestCase):
         self.rejects("unclosed code fence")
 
     def test_vocabulary_term_defined_twice(self):
-        self.edit("stages/05-boundary.md", "the same input conversion", "the same input **conversion**")
+        self.edit("stages/05-boundary.md", "A value conversion answers", "A value **conversion** answers")
         self.rejects("sets 'conversion' in bold")
 
     def test_vocabulary_first_mention_unlinked(self):
@@ -203,17 +203,17 @@ class SpecStructure(unittest.TestCase):
         # Another entry on the page links to the same destination; this one must
         # link there itself.
         self.edit("concepts.md",
-                  "[Plan value conversions](stages/04-values.md#plan-value-conversions)\n\n### Crossing",
-                  "[What a relation is](stages/04-values.md#what-a-relation-is)\n\n### Crossing")
+                  "[Plan value conversions](stages/04-values.md#plan-value-conversions).\n\n### Crossing",
+                  "[What a relation is](stages/04-values.md#what-a-relation-is).\n\n### Crossing")
         self.rejects("the 'conversion' entry does not link")
 
     def test_vocabulary_first_mention_inside_a_reference_link_is_rejected(self):
         # Copilot's mutation on #736: the term's only mention wrapped in a
         # reference-style link to somewhere else.
         self.edit("examples/struct/07-emit.md",
-                  "in the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) "
-                  "of [the function that uses the record][fn_emit]:",
-                  "in the [wrapper][fn_emit] of the function that uses the record:")
+                  "into the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)\n"
+                  "of [the function that uses the record][fn_emit].",
+                  "into the [wrapper][fn_emit] of the function that uses the record.")
         self.rejects("first mention of 'wrapper'")
 
     def test_vocabulary_quoted_title_in_a_reference_link_is_not_a_mention(self):
@@ -251,7 +251,7 @@ class SpecStructure(unittest.TestCase):
     def test_vocabulary_concepts_entry_ends_at_a_group_heading(self):
         # The next group's introduction must not satisfy the previous entry.
         self.edit("concepts.md",
-                  "[Record binding requests](stages/03-requests.md#record-binding-requests)\n\n"
+                  "[Record binding requests](stages/03-requests.md#record-binding-requests).\n\n"
                   "## What the registry plans\n",
                   "Record binding requests\n\n## What the registry plans\n\n"
                   "See [Record binding requests](stages/03-requests.md#record-binding-requests).\n")
@@ -285,8 +285,8 @@ class SpecStructure(unittest.TestCase):
 
     def test_vocabulary_concepts_link_inside_code_does_not_count(self):
         self.edit("concepts.md",
-                  "which function it serves. — [Plan value conversions](stages/04-values.md#plan-value-conversions)",
-                  "which function it serves. — `[Plan value conversions](stages/04-values.md#plan-value-conversions)`")
+                  "See [Plan value conversions](stages/04-values.md#plan-value-conversions).\n\n### Crossing",
+                  "See `[Plan value conversions](stages/04-values.md#plan-value-conversions)`.\n\n### Crossing")
         self.rejects("the 'conversion' entry does not link")
 
     def test_vocabulary_underscore_strong_is_strong(self):

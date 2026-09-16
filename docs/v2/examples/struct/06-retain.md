@@ -13,25 +13,35 @@ The candidates this record produced, and what they require:
 candidate: SurfaceSpec(public Stamp)
 
 requires:  node(Stamp, IntoRust)     // the record conversion
-           node(i64, IntoRust) x2    // its two children
+           node(i64, IntoRust)       // one cached child node used by both fields
 ```
 
 ## Result
 
+Because both field [conversions](../../stages/04-values.md#plan-value-conversions) succeed, the public record can be retained.
+The following summarizes that dependency relationship rather than showing the
+actual `SurfaceSpec` fields: current public requirements refer to declaration
+ids, while conversion dependencies are checked during planning.
+
 ```text
 SurfaceSpec {
-    declaration: DeclarationId(public Stamp in this target),
-    requires: [ node(Stamp, IntoRust), node(i64, IntoRust) x2 ],
-    members:  [],
-    payload:  the repr(C) aggregate  |  the example.Stamp data class
+    declaration: DeclarationId("type:Stamp"),
+    requires: [], // no other public declarations for these scalar fields
+    rust:     [ repr(C) aggregate artifact ] for C, [] for JNI,
+    payload:  None for C, Kotlin class metadata for JNI,
 }
 
-outcome(public Stamp) = Emitted { artifacts: [ type declaration ] }
+outcome(public Stamp) = Emitted
 
-artifact order: type declaration -> the wrapper that takes it by value
+output: type declaration, followed by any generated wrappers
 ```
 
 ## Checks
+
+An explicitly requested type is a root, so it can remain in the output
+even if a function using it is skipped for a separate reason. Conversely, a
+function requiring this type cannot remain if the type is unavailable. Cause
+propagation preserves the explanation and adds the dependent declaration's path.
 
 - The record is a root: retained even if no exported function uses it, and
   retained if [the function that does][fn_retain] is skipped for a reason of its

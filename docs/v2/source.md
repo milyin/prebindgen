@@ -4,16 +4,16 @@
 
 # The specification's source crate
 
-Every element path in the appendix is specified against one source crate, and
-this page is that crate. Sharing it is what lets the paths intersect the way real
-bindings do: the function path needs the record path's input [conversion](stages/04-values.md#plan-value-conversions), and the
-record path's field conversions are what that conversion is built from. A path
-that invented its own source could not show that.
+The appendix follows one small Rust library through the generator. This page
+defines that library so that every example starts from the same input. It has
+two items: a struct named `Stamp` and a function named `stamp_sum` that accepts
+the struct. Here, **record** means a struct whose fields the generator can inspect.
 
-It grows with the appendix. Each element kind added there — an enum, a constant,
-a callback, a fallible function — adds the declarations it needs here, so the
-paths keep describing one coherent crate rather than a collection of unrelated
-snippets. What is declared today is what the two specified paths need:
+The two items let us follow a dependency as well as an individual function.
+Before generated code can call `stamp_sum`, it must obtain both field values
+from the foreign caller and construct a Rust `Stamp`. The record example
+explains that [conversion](stages/04-values.md#plan-value-conversions); the function example uses it. Future examples will
+extend this same library with the items they need.
 
 ```rust
 pub struct Stamp {
@@ -26,29 +26,48 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
 }
 ```
 
-Both declarations are marked for capture; the source module keeps the actual
-implementation. Returning a scalar keeps these paths focused on record input:
-obtaining two foreign field values, converting them, constructing a source
-record, and calling a function with it.
+The capture examples show both items with a `#[prebindgen]` annotation.
+The annotation makes their source available to the generator; the original
+crate still owns and compiles the implementation. The function consumes its
+`Stamp` argument and returns one signed 64-bit integer. `wrapping_add` gives
+the example defined behavior even if the addition overflows.
 
-The binding configuration exposes both roots — `Stamp` as a public data type and
-`stamp_sum` as a public function. The argument is an owned record; the fields and
-the result are `i64`. C selects a by-value aggregate, which keeps the source name
-`Stamp`. Kotlin/JNI — Kotlin's JVM code calling Rust through the Java Native
-Interface — selects an `example.Stamp` object whose properties are read through
-JNI, rather than separate field arguments. No constructor helper, handle, borrow
-or callback is declared here yet; each will arrive with the path that specifies
-it.
+The binding configuration asks for two public outputs: the type `Stamp` and the
+function `stamp_sum`. These explicit requests are called roots, because the
+generator starts with them and discovers the supporting conversions they need.
 
-In generated examples, `crate::source` names this source module. The C and JNI
-outputs are distinct target modules built from the same source model. Loading the
-native library belongs to the Kotlin test harness. Capture annotations and build
-boilerplate are omitted here; the existing example crates supply the complete
-captured input.
+For C, the configuration chooses a struct passed by value and explicitly names
+it `Stamp`. The generated Rust entry point reads that C-compatible struct's
+members and builds the source crate's Rust struct. These are separate types
+even though they have the same name and fields.
 
-The pipeline chapters are not written against this crate. They illustrate each
-stage with whatever short example makes the point, and today those illustrations
-happen to look like the declarations above — a convenience, not a dependency.
+For Kotlin/JNI, the configuration chooses a data class named `example.Stamp`.
+JNI, the Java Native Interface, is how JVM code calls the Rust library. The native
+entry point receives a JVM object and reads its `secs` and `nanos` properties
+through getter methods. Both targets then call the same Rust function.
+
+The example does not involve an opaque handle (a reference to a Rust-owned
+object), a borrow, a callback, or an extra constructor function. Those features
+need their own examples before the appendix can specify their behavior.
+
+The emitted examples call the source module as `source::`. In a real binding,
+C uses a configured `.source_module(...)` path or the source crate name.
+The current JNI V2 route uses the first source module's crate name, falling back
+to `crate` when unavailable; it has no corresponding module-override setting.
+C and JNI produce separate target modules from the same Rust items.
+The Kotlin consumer is responsible for loading the native library.
+
+`examples/v2check` provides a runnable generation fixture based on this source,
+with additional cases for rejection and field-order checks. It parses its source
+file and feeds `.items(...)` directly to the frontends; it does not exercise
+the annotation/capture stage. The capture records in the appendix illustrate
+that stage separately. Its JNI checks compile Rust and inspect Kotlin text;
+they do not execute a JVM call.
+
+The general chapters sometimes use other functions to explain a feature, such
+as returning a record instead of an integer. Those sketches are separate from
+this fixed appendix input. Follow the links below for the complete paths of
+the two items defined here.
 
 The paths specified so far:
 

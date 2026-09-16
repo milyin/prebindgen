@@ -7,33 +7,44 @@ Owner: the registry · Previous: [Assemble the native boundary][fn_boundary] · 
 
 ## Input
 
-The candidates this function produced, and what they require:
+Planning has already produced the input and result
+[conversions](../../stages/04-values.md#plan-value-conversions) and a native
+[wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) plan. A
+missing conversion would have skipped the function before this point. Retention
+now checks the public declaration that the function's signature requires:
 
 ```text
 candidate: FunctionPlan(exported stamp_sum)
 candidate: SurfaceSpec(exported stamp_sum)
 
-requires:  node(Stamp, IntoRust)              // the record's conversion
-           node(i64, OutOfRust)
-           the record's public representation // from the record path
-           report_jni_error artifact          // JNI only
+SurfaceSpec.requires: [ DeclarationId("type:Stamp") ]
 ```
 
 ## Result
 
 ```text
-requirements:
-    node(input)                   ready      // needs the record's conversion
-    node(output)                  ready
-    record public representation  ready
-    report_jni_error artifact     ready      // JNI only
+required declaration: type:Stamp       emitted
+function declaration: fn:stamp_sum     emitted
 
-outcome(exported stamp_sum) = Emitted { artifacts: [ native wrapper, public declaration ] }
-
-outcome recorded for the declaration `fn:stamp_sum`: emitted
+generated C symbol:   stamp_sum
+generated JNI symbol: Java_example_JNINative_stampSum
 ```
 
-Had a field of the record been unsupported:
+The table summarizes declaration
+[outcomes](../../stages/06-retain.md#retain-supported-output), not the report's
+serialized schema. The type is available, so the function can be kept. After
+retention, generation collects supporting code needed by the kept plans,
+including the JNI error-reporting helper; it is not a separate declaration
+waiting for a readiness decision.
+
+The C report's placement is the exported symbol `stamp_sum`. The JNI report's
+placement is the public Kotlin name `example.stampSum`, not the `Java_...`
+native symbol. Both symbols are shown here to connect the retained request to
+its eventual entry point.
+
+If a field [conversion](../../stages/04-values.md#plan-value-conversions) were unsupported, the same reason would propagate to
+both the record and its caller. The cause numbers below are explanatory labels;
+current reports copy the reason and dependency path rather than use a cause-id table:
 
 ```text
 outcome(record)             = Skipped { causes: [cause#1] }
@@ -45,9 +56,11 @@ outcome(exported stamp_sum) = Skipped { causes: [cause#1] }   // same cause, own
 - Requirements are transitive: this function needs the record's [conversion](../../stages/04-values.md#plan-value-conversions) and
   its public [representation](../../stages/04-values.md#plan-value-conversions), [retained on its own path][struct_retain], so either being unsupported skips
   it too, carrying the same cause rather than a new one.
-- Nothing partial is retained — no [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) calling a conversion that was not.
-- A helper kept only because this function needs it is not a declaration, and
-  gets no [outcome](../../stages/06-retain.md#retain-supported-output) of its own.
+- Nothing partial is retained: no
+  [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) can call a conversion that was not retained.
+- The JNI reporting helper is supporting output, not a separately requested
+  public function. It has no declaration and therefore no
+  [outcome](../../stages/06-retain.md#retain-supported-output) of its own.
 
 [fn]: README.md
 [fn_boundary]: 05-boundary.md

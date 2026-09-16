@@ -20,7 +20,8 @@ From capture, one line per marked item, parsed back into the items they hold:
 
 ## Result
 
-One element in the namespace, under the name `stamp_sum`:
+Flat turns the function syntax into a structured entry indexed by `stamp_sum`.
+The following is a readable summary of that entry, not a serialized format:
 
 ```text
 Element::Function(Function {
@@ -31,13 +32,19 @@ Element::Function(Function {
 })
 ```
 
-Reached and walked as:
+`params` preserves parameter order. `Named` means the parameter refers to a
+declared type; `Scalar(I64)` identifies the built-in signed 64-bit return type.
+`origin` retains source information for diagnostics and final Rust emission.
+
+To inspect the parameter's fields, first find the function, then resolve the
+name stored in its parameter type. The existing borrowed Flat API expresses
+that navigation as follows (with uninteresting branches abbreviated):
 
 ```rust
 let function = model.function("stamp_sum").unwrap();
 let TypeKind::Named { id, .. } = function.params[0].ty.kind() else { … };
 let Type::Struct(stamp) = model.resolve(id).unwrap() else { … };  // the record element
-assert_eq!(function.ret.kind(), &TypeKind::Scalar(ScalarKind::I64));
+assert!(matches!(function.ret.kind(), TypeKind::Scalar(ScalarKind::I64)));
 ```
 
 ## Checks

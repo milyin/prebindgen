@@ -27,19 +27,31 @@ node(Stamp, IntoRust) {
 }
 ```
 
-The [carriers](../../stages/04-values.md#describing-target-values-and-operations) and the operations that obtain them are the target's:
-[C][struct_values_c], [Kotlin/JNI][struct_values_jni]. The two `i64` children are
-identity [conversions](../../stages/04-values.md#plan-value-conversions) in both, and render no code of their own.
+The registry resolves a child
+[conversion](../../stages/04-values.md#plan-value-conversions) for each field,
+then constructs the source record from the converted children. Each
+[carrier](../../stages/04-values.md#describing-target-values-and-operations)
+holds data during conversion: a C member value or a JNI getter result here.
+The [C][struct_values_c] and [Kotlin/JNI][struct_values_jni] pages show how
+those values are obtained.
+
+Both field positions resolve to the same cached `i64` input [node](../../stages/04-values.md#plan-value-conversions) under this
+[policy](../../stages/03-requests.md#what-policy-means); the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) applies that plan once per field. Each carrier already
+has the required Rust `i64` value, so the conversion is **identity**: it passes
+the value through without generating another operation. `Independent`
+describes the owned result, which borrows neither input; the full
+validity-contract structure remains a proposed extension.
 
 ## Checks
 
-- Selection precedes traversal: an opaque [representation](../../stages/04-values.md#plan-value-conversions) would never inspect the
-  fields, which is what makes a record with unreadable private fields
-  representable as a handle.
+- Selection precedes traversal. A future supported atomic-handle conversion
+  could avoid inspecting unused fields; this increment selects field conversion.
 - Parts come from the selected [relation](../../stages/04-values.md#what-a-relation-is), so a constructor relation would give
-  one `millis` argument instead of two fields, with no change to this stage.
-- Construction follows declaration order, and the mapping from parts to carriers
-  is validated.
+  one `millis` argument instead of two fields. That relation needs an additional
+  implementation; the current engine offers atomic and record relations only.
+- Construction follows declaration order. The registry checks the number and
+  types of projections; the adapter is responsible for associating each read
+  with the intended source field.
 - An unsupported child makes this [node](../../stages/04-values.md#plan-value-conversions) unsupported, which propagates to
   [everything requiring the record][struct_retain] rather than producing a record
   missing a field.

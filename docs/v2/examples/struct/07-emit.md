@@ -10,14 +10,19 @@ Owner: the common Rust writer, then `cbindgen` or the Kotlin writer · Previous:
 The frozen public declaration for this record:
 
 ```text
-SurfaceSpec { element: public Stamp,
-              payload: <the target's representation metadata> }
+SurfaceSpec { declaration: "type:Stamp",
+              rust: <C aggregate artifact, or empty for JNI>,
+              payload: <None for C, class metadata for JNI> }
 ```
 
 ## Result
 
-One public type per target, carrying no [conversion](../../stages/04-values.md#plan-value-conversions) code — the conversions live
-in the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) of [the function that uses the record][fn_emit]:
+The generated declaration gives foreign callers a way to hold the two values.
+It does not itself contain the Rust
+[conversion](../../stages/04-values.md#plan-value-conversions). That work is
+inlined into the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
+of [the function that uses the record][fn_emit]. This distinction explains why
+C needs a generated Rust ABI struct while Kotlin needs a JVM class:
 
 | Contribution | C | Kotlin/JNI |
 | --- | --- | --- |
@@ -31,8 +36,8 @@ Rendered: [C][struct_emit_c], [Kotlin/JNI][struct_emit_jni].
 
 - Both fields are emitted, in declaration order, with types matching the chosen
   [representation](../../stages/04-values.md#plan-value-conversions).
-- The member and property names are the ones [the record's operations
-  read][struct_values], because both come from the same retained metadata.
+- The member and property names match [the record's operations][struct_values]:
+  the adapter derives both declarations and reads from the same source fields.
 - A declaration is emitted only if it was retained; the writer adds nothing.
 
 ## Language variants

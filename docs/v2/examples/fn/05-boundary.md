@@ -18,6 +18,11 @@ source: pub fn stamp_sum(stamp: Stamp) -> i64
 
 ## Result
 
+The registry now combines those reusable [conversions](../../stages/04-values.md#plan-value-conversions) with this specific source
+call. The following is a conceptual summary, not the exact Rust fields of
+`FunctionPlan`. The boundary supplies the target's symbol, calling convention
+and destinations; the body records the order in which generated code operates.
+
 ```text
 FunctionPlan {
     source:   CalleeId(crate::source::stamp_sum),
@@ -39,9 +44,9 @@ FunctionPlan {
   route is an unsupported boundary, not a default.
 - An unsupported destination skips the function. Its ABI is never quietly
   changed to make it fit.
-- `FunctionOutput::Single` is the non-`Result` shape; a fallible source function
-  resolves two conversions and a branching `OutputPlacement` instead, which is
-  the `fn_fallible` path.
+- `Single` in this sketch means one ordinary result. A future `Result` example
+  will need separate success/error conversions and delivery; that branching
+  behavior is not implemented in this increment.
 
 ## Language variants
 

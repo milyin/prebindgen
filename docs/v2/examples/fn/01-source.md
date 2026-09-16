@@ -16,7 +16,10 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
 
 ## Result
 
-One line appended to the capture file in `OUT_DIR`:
+The annotation makes the function's signature available to a later binding
+build. The original implementation remains in the source crate; the generated
+[wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) will call it rather than copy its calculation. The following is a
+readable illustration of the JSON record written as one line in `OUT_DIR`:
 
 ```json
 {
@@ -27,7 +30,11 @@ One line appended to the capture file in `OUT_DIR`:
 }
 ```
 
-The item stays in the source crate, compiled and callable from Rust as before.
+`kind` tells the reader which Rust item to parse, `name` identifies it,
+`content` holds Rust token text, and `source_location` gives a location for
+diagnostics. Whitespace and the shown placeholder are illustrative. At this
+point `Stamp` is still just a name in that text; capture has not looked up its
+fields or chosen a C/JNI [representation](../../stages/04-values.md#plan-value-conversions).
 
 ## Checks
 

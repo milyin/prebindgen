@@ -18,10 +18,11 @@ FunctionPlan(exported stamp_sum) frozen, with
 
 ## Result
 
-The Kotlin declarations, beside [the data class][struct_emit_jni]: the function
-a caller uses, and the native method it delegates to on the harness object
-every native call routes through — `JNINative`, the same object v1's bindings
-use.
+The public function sits beside [the data class][struct_emit_jni]. It delegates
+to `JNINative`, the generated object that groups native method declarations.
+`external` means the implementation is in the native library. `internal`
+keeps the object out of the public Kotlin API; `@JvmSynthetic` additionally
+hides the method from ordinary Java source calls.
 
 ```kotlin
 package example
@@ -83,25 +84,30 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 }
 ```
 
-`stampSum(Stamp(12, 34))` returns `46L` once the native library is loaded —
-which is what the harness's `init` block does when the binding's
-`set_jni_native_init(..)` names a loader; this binding sets none.
+The successful call is intended to make `stampSum(Stamp(12, 34))` return `46L`.
+The consumer must first load the native library; this fixture configures no
+loader. The generated Rust compiles and the Kotlin text is checked by
+`v2check`, but that fixture does not yet execute this call in a JVM.
+
+The native body reads `secs`, then `nanos`. Each `match` either obtains an
+integer or reports the failure and returns. Only two successful reads reach
+construction of `source::Stamp` and the call to `source::stamp_sum`. The
+placeholder zero on the error path is not a successful result visible to Kotlin.
 
 ## Checks
 
-- The symbol is built from the package, the harness object and the method name
-  — `Java_example_JNINative_stampSum` — so renaming the Kotlin function moves
-  both, and the package prefix moves all three.
+- The symbol names the native method on `example.JNINative`. A public function
+  rename and a native method rename are separate choices; changing only the
+  public name need not change this symbol.
 - The `jni` crate's types are spelled in full, because the wrapper lands in a
   file the binding crate `include!`s and must not depend on that crate's
   imports.
 - If `getSecs` fails, `getNanos` and `stamp_sum` do not run; if `getNanos` fails,
   the source `Stamp` is never constructed. Either way the JVM sees an exception
   rather than a returned zero.
-- The adapter supplies the two getter expressions and the reporting helper,
-  which is generated into this module; every `match`, the reporting call, its
-  failure branch, the terminal return, the construction and the call are the
-  registry's.
+- The adapter supplies the getter expressions, reporting-call expression and
+  reporting helper. The registry supplies each `match`, the check for reporting
+  failure, the terminal return, record construction and the source function call.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
   [conversions](../../stages/04-values.md#plan-value-conversions) render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.

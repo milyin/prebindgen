@@ -1,30 +1,37 @@
 <!-- spec: {"kind": "root"} -->
 
-# V2: the binding pipeline, stage by stage and element by element
+# V2: from a Rust API to C and Kotlin bindings
 
-This is the specification for the second generation pipeline. It is written to be
-read two ways.
+Suppose you have a Rust library and want people to call it from C and Kotlin.
+Your Rust function may take a struct by value, but a Kotlin caller has a JVM
+object. Someone must read that object's properties, construct the Rust struct,
+call your function, and return the answer. C needs a different entry point, even
+though both callers ultimately use the same Rust implementation.
 
-**Down the pipeline.** Seven chapters, one per stage, from the captured Rust
-source to the emitted C and Kotlin bindings. Each chapter explains what arrives,
-who owns the decisions, what leaves, and what happens when a request cannot be
-served. Read in order, they are the developer documentation for the design.
+prebindgen generates that connecting code. You mark the Rust items that the
+generator may inspect, then configure which items each language should expose.
+This guide explains how the second generation engine, called **V2**, turns those
+inputs into bindings. It assumes familiarity with functions, types, build scripts
+and foreign function interfaces, but no knowledge of prebindgen.
 
-**Along one element.** The appendix takes one kind of source element — a
-function, a record — and follows it through every stage that applies to it,
-showing its exact form at each step: the captured item, the Flat views,
-the recorded request, the [conversion](stages/04-values.md#plan-value-conversions) plans and target operation descriptions, the
-native boundary, the retained output, and the generated code. Read that way, the
-document is an example-based specification: the general contract in a chapter and
-its concrete application to a fixed input are two views of the same requirement.
+There are two ways to read the guide:
 
-This describes the **second** engine. The one that ships today is
-`prebindgen-registry`, whose own model — recipes, fragments, and the
-shapes a value takes as it crosses — is documented in [`docs/model.md`](../model.md). The
-two are different pipelines, and a reader who wants the registry a binding
-compiles through right now wants that document rather than this one.
+**Follow the stages** to learn the architecture. The seven chapters start with
+collecting annotated Rust items and end with writing generated files. Each stage
+explains why it is needed, what information it receives, and what it produces.
 
-Status: this is how the pipeline works, not a proposal for one. Where a chapter
+**Follow one example** to see the stages work together. The appendix traces a
+function and the struct it accepts from Rust source to generated C and Kotlin.
+Each page shows the input and result of one stage. These examples are also
+specification cases: the generator's behavior should agree with them.
+
+V2 is an opt-in engine with limited implemented coverage. The default engine,
+**V1**, lives in `prebindgen-registry` and has its own
+[architecture documentation](../model.md). Use that document to understand a
+build that has not selected V2.
+
+These pages describe both the implemented V2 subset and the contract for its
+extensions. A design description is not a promise of current support. Where a chapter
 describes something the engine does not do yet, it says so at that point, and
 [the implementation page](implementation.md#what-it-does-not-settle) keeps the
 whole list. Tracked as [issue #720](https://github.com/milyin/prebindgen/issues/720).
@@ -73,15 +80,20 @@ generated Rust function that the JVM calls through a native method on the
 binding's harness object:
 
 ```kotlin
-data class Stamp(val secs: Long, val nanos: Long)
-fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)
-internal object JNINative { external fun stampSum(stamp: Stamp): Long }
+public data class Stamp(val secs: Long, val nanos: Long)
+public fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)
+internal object JNINative {
+    @JvmSynthetic
+    external fun stampSum(stamp: Stamp): Long
+}
 ```
 
-The C declarations carry the source names, because a foreign name defaults to the
-name the source used; Kotlin's cannot, since a Kotlin declaration also needs a
-package to live in and a name spelled the way Kotlin spells one, which the
-binding crate's settings supply.
+The example explicitly chooses `Stamp` as the C type name; the C frontend's
+default type base name would be `stamp`. The function keeps `stamp_sum`.
+For Kotlin, the configuration also chooses a package, and the frontend derives
+the camel-case function name `stampSum`. `JNINative` is the generated object
+that declares native methods: `external` tells the JVM that Rust supplies the
+implementation. The public Kotlin function delegates to that method.
 
 Neither generated Rust function is written by hand, and neither is a
 transliteration of the other: the C one receives a struct by value and reads its
@@ -104,12 +116,12 @@ is called Flat.) Beside it stands one **binding crate per target language**: a
 ship — a native library plus a C header, or a native library plus Kotlin sources
 in a JAR.
 
-They are two crates rather than one because a `#[no_mangle] extern "C"` function
-can only be exported from a `cdylib` or a `staticlib`. Keep the FFI layer in the
-library that implements the functionality and nothing can export it; move it into
-the binding crate and you write it again for every language you bind. Generating
-it into each binding crate, from one annotated source, is what this project is
-for.
+Separating the crates lets the source library remain useful to ordinary Rust
+callers while each binding crate chooses its own exported interface and library
+format. `cdylib` produces a native dynamic library; `staticlib` produces a native
+static library. Rust does allow an implementation crate to define foreign entry
+points itself, but keeping the generated entry points in binding crates avoids
+making that implementation responsible for every target language.
 
 **The generator**, which runs inside the binding crate's build script and is a
 build-dependency only:
@@ -121,7 +133,7 @@ build-dependency only:
   which functions exist, what a parameter's type is, which declaration a type
   name refers to, what fields a record has.
 - **`prebindgen-registry-v2`** is the engine this document specifies. It plans
-  every conversion a requested binding needs, resolves what depends on what,
+  every [conversion](stages/04-values.md#plan-value-conversions) a requested binding needs, resolves what depends on what,
   renders the Rust [wrappers](stages/05-boundary.md#assemble-the-native-boundary), and reports what it could not generate. It shares
   the capture and model crates with the V1 engine and depends on nothing else of
   it, so "V2 never falls back to V1 for an item" is a property of the dependency
@@ -150,15 +162,11 @@ error type, cached JVM method ids). Generated code calls these at run time, so a
 binding crate depends on one of them the ordinary way. None of the generator
 ships inside a binding.
 
-That last sentence is why there are eight crates and not one. Generation was a
-single crate once, and it charged everyone for everything: a source crate that
-only marks its items compiled the JNI adapter and linked `jni`; a shipped
-binding library pulled in `syn`, `quote` and `prettyplease` to reach a few
-hundred lines of runtime helpers; the C adapter sat behind a feature flag that
-made its committed test outputs feature-sensitive; and two pairs of layers
-that should have been independent formed dependency cycles — the model with the
-pipeline, and one adapter with the other. The split is what makes each of those
-a dependency you can decline.
+The crate boundaries separate build-time tools from runtime support. For example,
+the source crate needs annotation support but does not need the JNI generator.
+A shipped native library needs the runtime helpers its generated code calls,
+but does not need the parser and formatter used to generate that code. A C-only
+binding can also avoid depending on the Kotlin adapter.
 
 ## The pipeline
 
@@ -188,14 +196,16 @@ those words once; read it first.
 
 Then: [implementation sequence and acceptance](implementation.md), which is not a
 pipeline stage but the plan for building one. Beside the generated code the
-engine also writes [a report](report.md) of what became of each declaration —
-a diagnostic that nothing in the pipeline reads, described on its own page.
+engine produces [a report](report.md) of what became of each declaration.
+The build script can write it beside the code with `write_report`. It is a
+diagnostic that nothing in the pipeline reads, described on its own page.
 
 This order is the order of information dependencies, not a requirement to make
 seven passes over the project. The registry interleaves selection, child planning
 and [representation](stages/04-values.md#plan-value-conversions) inside one recursive walk; binding choices and local helper
-signatures can be recorded before Flat is published, and the request stage turns
-those choices into requests once the Flat views exist.
+signatures can be recorded before model construction, and the request stage turns
+those choices into requests once the Flat model exists. The owned view types
+described in the source-model chapter are a future extension.
 
 ## The appendix: elements and their paths
 
@@ -208,8 +218,9 @@ paths are added.
 An **element kind** is a kind of source item — a function, a record, an enum —
 as this appendix organizes it. (Inside the pipeline the word is not used: the
 chapters say *source item* for what the model captured and *declaration* for
-what the binding asked to expose, identified by a `DeclarationId` — such as
-`stamp_sum` exposed at one Kotlin placement.) Element kinds form a tree: a kind at the root, more specific
+what the binding asked to expose, identified by a `DeclarationId`, such as
+`fn:stamp_sum`. Current ids do not distinguish two foreign placements of the
+same source item.) Element kinds form a tree: a kind at the root, more specific
 variants below it, each becoming its own path when its behavior differs from its
 parent's. Two paths are specified today; the rest name the id they will use when
 they are written.

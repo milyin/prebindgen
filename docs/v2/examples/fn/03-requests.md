@@ -17,14 +17,23 @@ Element::Function(Function {
 })
 ```
 
-and a build script asking for it to be exposed. What that call looks like is the
-language's business: [C][fn_requests_c], [Kotlin/JNI][fn_requests_jni].
+The binding build script additionally asks to expose the function. The
+[C configuration][fn_requests_c] and [Kotlin/JNI configuration][fn_requests_jni]
+make that choice through their respective frontend APIs. Knowing that the
+function exists and asking to export it are separate inputs.
 
 ## Result
 
+The request associates the source function with a public declaration and the
+adapter's function settings. This sketch names the two positions whose values
+need [conversion](../../stages/04-values.md#plan-value-conversions): the first parameter and the return value.
+The block uses design notation, not exact current fields. Current
+`OutputRequest` contains a `Declaration` and a `PolicyId`; the engine uses
+`Position { declaration, path }` rather than the proposed `SiteId` below.
+
 ```text
 OutputRequest {
-    id:     DeclarationId(exported stamp_sum, at this target's placement),
+    id:     DeclarationId("fn:stamp_sum"),
     source: SourceItemId(crate::source::stamp_sum),
     policy: PolicyId(this target's function policy),
 }
@@ -33,7 +42,8 @@ sites:
     SiteId { owner: <that DeclarationId>, path: Param(0) }   // the owned Stamp
     SiteId { owner: <that DeclarationId>, path: Return }     // the i64
 
-conversion_rules.sites: {}    // none recorded for this path
+site_policies: {}             // no position-specific overrides
+type_policies: { Stamp -> <the record's policy> }
 ```
 
 The record's [representation](../../stages/04-values.md#plan-value-conversions) is not decided here: it comes from
@@ -42,11 +52,10 @@ converted.
 
 ## Checks
 
-- Exposing the same function at two placements gives two `DeclarationId`s with
-  independent [outcomes](../../stages/06-retain.md#retain-supported-output).
-- A setting the frontend cannot translate is recorded as an
-  `UnsupportedRequest` and becomes a skipped outcome; an override naming a parameter
-  this function does not have fails the build.
+- Current ids combine the kind and Rust name. Requesting two placements of the
+  same function is not yet supported; the stage chapter describes that extension.
+- A frontend setting V2 cannot translate becomes a request under a [policy](../../stages/03-requests.md#what-policy-means)
+  that reports the missing capability. It must not disappear silently.
 - Nothing here claims the function can be generated.
 
 ## Language variants
