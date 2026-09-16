@@ -4,12 +4,24 @@
 
 # The format contract
 
-The document has two axes. [manifest.json](manifest.json) lists the **stages** of
-the pipeline and the **element paths** of the appendix; one applicable
-`(element, stage)` pair is a **cell**, and a cell at a language-dependent stage
-also has one **variant** page per language. Inapplicable pairs have no file, no
-link and no placeholder. The manifest records applicability — whether the pair is
-meaningful — not whether the generator supports it.
+This page is for contributors editing or extending the guide. Its rules keep the
+stage chapters and worked examples connected, and let a script detect missing
+pages or broken navigation. You do not need to learn these rules to use the
+generator.
+
+The guide organizes information in two directions. A **stage** is one step of
+generation, such as planning conversions. An **element path** follows one kind
+of Rust item through those steps, such as the function example. A **cell** is
+the page where the two meet: the function at conversion planning, for example.
+When C and JNI behave differently at that step, the cell links to a **variant**
+page for each language.
+
+[manifest.json](manifest.json) lists those stages, examples and combinations.
+It records which combinations make sense, not which features are implemented.
+For example, the record has no native-function-boundary cell because the record
+does not itself export a callable function. There is no placeholder page for
+that combination. An unsupported feature, in contrast, is explained on an
+existing page rather than represented by a missing file.
 
 ## Canonical paths
 
@@ -24,16 +36,26 @@ meaningful — not whether the generator supports it.
 | Cell | `examples/<element>/<stage>.md` |
 | Variant | `examples/<element>/<stage>.<language>.md` |
 
+The paths in the table are relative to `docs/v2/`. `<stage>` is the numbered
+stage name, such as `04-values`; `<element>` is an example id, such as `fn`;
+and `<language>` is `c` or `jni`. TOC means table of contents.
+
 Every Markdown file starts with exactly one `<!-- spec: {...} -->` metadata line.
 `kind` is `root`, `format`, `fixture`, `stage`, `implementation`, `example`,
 `cell` or `variant`. A stage page carries `stage`; an element TOC carries
 `example`; a cell carries both; a variant adds `language`. The identity has to
 match the canonical path, and every Markdown file under `docs/v2/` has to be one
-the manifest accounts for.
+the manifest accounts for. This comment is hidden in the rendered page but lets
+the validator identify the page without guessing from its title. For example,
+a function's C value-planning page declares its kind as `variant`, its example
+as `fn`, its stage as `04-values`, and its language as `c`.
 
 ## Link ids
 
-Links into the appendix use reference-style links whose label is the element id:
+Links into the appendix use Markdown reference links: visible words followed
+by a label, with a definition at the bottom mapping that label to a relative
+file path. The complete example below shows the syntax. These ids follow a
+shared naming scheme:
 
 ```text
 <element>[_<subvariant>]        the element path's TOC
@@ -45,7 +67,10 @@ The stage slugs are `source`, `flat`, `requests`, `values`, `boundary`, `retain`
 and `emit`; the language ids are `c` and `jni`. So `fn` is the function path,
 `fn_values` is the function at value planning, and `fn_values_c` is its C
 variant. A sub-variant extends the element id and keeps the same suffixes:
-`fn_callback`, `fn_callback_values_jni`.
+`fn_callback`, `fn_callback_values_jni`. These ids are reserved for future paths;
+the validator's current element-index check must be extended before an example
+id containing underscores can be added. The existing examples use `fn` and
+`struct`.
 
 An element id names a structural kind — function, record, enum, constant, and
 the variants of those — never the names the source crate happens to use. `Stamp`
@@ -68,18 +93,22 @@ crate, external URLs.
 
 ## Required content
 
-A cell and a variant show code. The point of the appendix is the chain of
-artifacts an element passes through — marked source, capture entry, model
-elements, request, plans, boundary, retained output, generated bindings — so each
-page carries the artifact itself and says only what the artifact cannot.
+A cell or variant must show the data or code being discussed. Here, an artifact
+means a concrete result of a step: captured text, a request, a plan, or generated
+code. Showing that result lets readers compare successive steps instead of
+having to reconstruct an invisible example from prose.
 
 Each has exactly one **Input**, **Result** and **Checks** section, all non-empty,
-and a `Owner: …` line in its header naming the component that acts. Input is the
-artifact this stage receives, Result is the artifact it produces, and both lead
-with code wherever the artifact can be written down. Prose around them is for
-what the code does not show: an identity, a rule, a reason. Checks are the
-observable obligations and the failure behavior, in short items. A variant
-specializes its common cell rather than repeating it.
+and an `Owner: …` line above the title naming the component responsible for the step. Input shows
+what that component receives; Result shows what it produces. Start those
+sections with code when the data has a useful written form, then explain how to
+read it. Define unfamiliar names, explain why the transformation is needed, and
+connect the result to the next step. Code alone is not an explanation.
+
+Checks describe observable requirements and failure behavior: for example, that
+both fields are read in the intended order, or that a failed getter prevents the
+source function call. A language variant concentrates on what that language adds
+to the common cell, but should explain enough context to be read independently.
 
 Navigation lives above the title, between the metadata line and the heading: a
 chapter's line carries the link to the contents and its previous/next chapters, a
@@ -88,8 +117,10 @@ previous/next cells along that element, and a variant's carries its chapter, its
 common cell and its element TOC. Nothing navigational sits at the foot of a page
 except the link definitions.
 
-Every stage chapter lists all of its declared cells and variants, and every
-element TOC lists all of that element's, both in manifest order. Cross-element
+Every stage chapter lists all of its declared cells and variants under the exact
+heading `## Elements at this stage`. A language-dependent cell lists its variants
+under `## Language variants`. Every element TOC lists all of that element's
+pages. These lists follow manifest order. Cross-element
 links document dependencies; they never replace an index or a backlink.
 
 A stage marked `language_dependent` requires both languages for each of its

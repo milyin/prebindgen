@@ -15,35 +15,39 @@ policy:   data_struct named Stamp, passed by value
 
 ## Result
 
-The representation, and one operation per member:
+The representation contains one C-compatible struct and one read operation for
+each member. `Product` means the registry obtains the selected relation's parts
+separately and then combines their converted values. The operation below uses
+the current fields, with descriptive variables for the carrier types and member.
 
 ```text
 ReprSpec {
     layout:   Aggregate { ty: <the repr(C) Stamp>, members: [secs, nanos] },
-    protocol: Product { projections: [read_secs, read_nanos], … },
+    protocol: Product { projections: [read_secs, read_nanos] },
 }
 ```
 
 ```rust
 // read_secs; read_nanos differs only in the member it names.
 PrimitiveSpec {
-    signature: PrimitiveSignature {
-        operands: vec![OperandSpec {
-            ty: OperationType::Carrier(stamp_aggregate),   // the repr(C) Stamp
-            access: Access::Shared,
-        }],
-        results: vec![OperationType::Carrier(c_i64_type)],
-    },
+    operands: vec![OperandSpec::value(
+        OperationType::Carrier(stamp_aggregate), // the repr(C) Stamp
+        Access::Shared,
+    )],
+    result: Some(OperationType::Carrier(c_i64_type)),
     failure:      PrimitiveFailure::Infallible,
-    validity:     ValidityContract { results: vec![ResultValidity::Independent] },
-    resources:    ResourceContract::none(),
-    dependencies: vec![stamp_aggregate_decl],              // the generated type
-    implementation: COperation::Rust(StandardRustOp::ReadMember { member: secs_member }),
+    dependencies: vec![], // the public type's SurfaceSpec contributes the struct
+    implementation: Operation::Standard(StandardOp::ReadMember { member: secs_member }),
 }
 ```
 
-Applied to an aggregate the wrapper holds under the name `stamp` — the source
-parameter's name, which the boundary keeps — that description renders:
+`Access::Shared` means the read borrows its input rather than consuming the
+whole struct before the next member can be read. The resulting integer is a
+copy. `ReadMember` is a common operation rendered by the engine, so the C adapter
+does not need to supply Rust text for it. The aggregate declaration is retained
+through the public type's description, not as a dependency on this read.
+
+Applied to the wrapper's input named `stamp`, the member-read operation renders:
 
 ```rust
 stamp.secs

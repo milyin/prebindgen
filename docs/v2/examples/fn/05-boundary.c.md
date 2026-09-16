@@ -26,7 +26,13 @@ BoundarySpec {
 }
 ```
 
-Fixing the signature that [emission][fn_emit_c] renders:
+`native arg 0` is the first C argument. The wrapper uses it to construct the
+source `Stamp`, then returns the source function's integer result directly.
+The empty failure set means these conversions need no error branch. An
+**out-parameter**, by contrast, would be caller-provided storage that the wrapper
+writes into; this example does not use one.
+
+These choices determine the signature that [emission][fn_emit_c] renders:
 
 ```rust
 #[no_mangle]
@@ -37,8 +43,8 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
   The symbol and the convention are [the recorded policy's][fn_requests_c].
-- An out-parameter form would be a different `OutputPlacement`, chosen by
-  policy rather than by the writer.
+- An out-parameter form would require an additional delivery implementation;
+  the current V2 increment supports only a native return or no value.
 - No route is declared because [both nodes are infallible][fn_values_c]. A later
   change that makes an input conversion fallible must skip this function until
   the C policy says where that failure goes.

@@ -4,10 +4,16 @@
 
 # Implementation and acceptance
 
-The chapters describe the pipeline as a whole. This page is the plan for building
-it: the order in which the pieces become real, the cases that would expose a
-wrong architecture early, and what has to be true before the work counts as done.
-It is not a pipeline stage, and no element path passes through it.
+The stage chapters explain the architecture, including contracts for features
+that are not implemented. This page separates that design from the evidence we
+have today and explains what an implementation must demonstrate next.
+
+The current increment generates scalar and owned-record input bindings through
+the real C and JNI frontends. The C entry point is executed in tests; generated
+JNI Rust is compiled and Kotlin text is checked, but that fixture does not yet
+execute a JVM call. Owned source-model views, optional conversions, resource
+contracts and report-based test selection remain future work. The sections
+below explain the planned sequence, the completed increment and its limits.
 
 ## Flat implementation sequence and acceptance
 
@@ -51,7 +57,11 @@ Required validation for implementation:
 
 Keep v1 and v2 as parallel engines behind the existing frontend. Independent v2 registry and C/JNI implementation crates can share binding-configuration data modules and the source model. They must not depend on v1 conversion plans, recursive generators or emitters. Engine selection happens before v1 generation starts.
 
-Engine selection and separate output paths already have an initial implementation in [#721](https://github.com/milyin/prebindgen/pull/721) and [#722](https://github.com/milyin/prebindgen/pull/722). The current V2 scaffold reports unsupported declarations; the conversion architecture in these chapters is the next implementation work.
+Engine selection and separate output paths began in
+[#721](https://github.com/milyin/prebindgen/pull/721) and
+[#722](https://github.com/milyin/prebindgen/pull/722). V2 now also plans and emits
+the scalar/record subset described under [the built increment](#the-first-increment-as-built).
+Requests outside that subset remain visible as reported skips.
 
 The switching contract from [#719](https://github.com/milyin/prebindgen/issues/719) is:
 
@@ -89,15 +99,16 @@ Do not implement every proposed enum variant before the scalar case runs. Constr
 
 ### Cases that expose architectural mistakes
 
-The cases below are drawn from the repository's own example crates — the C and
-Kotlin coverage tests that both engines are run against, and whose declarations
-include the awkward shapes real bindings have. `large_flat_input_sum` and its
-sibling are two such existing functions, chosen because they take a record by
-borrow and by JVM object respectively.
+The cases below come from the repository's coverage tests and performance
+examples. In `perftest-flat` and `perftest-kotlin`, `large_flat_input_sum` and
+`large_object_input_sum` both take a Rust record by borrow. Their JNI
+configurations differ: one flattens the fields into native arguments, while the
+other passes a whole JVM object. That combination tests both representation
+choice and the temporary lifetime needed for a borrow.
 
 | Case | Expected behavior |
 | --- | --- |
-| `Stamp` under C aggregate, JNI separate arguments, and eventually JVM-object input | Source field discovery and Rust construction stay in the registry; target operations differ. An unimplemented requested representation is reported. |
+| `Stamp` under C aggregate and JNI JVM-object input, with separate JNI arguments as a future extension | Source field discovery and Rust construction stay in the registry; target operations differ. An unimplemented requested representation is reported. |
 | Two functions using the same `Stamp` representation | Share the conversion while retaining different parameter names and diagnostic paths. |
 | A whole opaque representation of a type with unsupported private fields | Do not traverse the unused fields. |
 | Accessor/value-form helper returning a compound value | Call it once, keep its exact result type, and let the registry process its selected children. |
@@ -122,18 +133,23 @@ says. A JVM that loads the library and calls the method, which is what
 comes with the covertest work rather than here. What follows records what
 building this settled, so the chapters and the engine describe the same thing.
 
-The engine is five modules. `target.rs` is the adapter interface and the
-description vocabulary; `plan.rs` is the recursion, the conversion cache, the
-wrapper assembly and the retention loop; `body.rs` is the instruction set;
-`emit.rs` is the common Rust writer; `run.rs` holds the frozen `Generation` and
-the report. Its one entry point is `generate(flat, &target, requests, crate)`.
+To find the implementation, start with `generate(flat, &target, requests, crate)`
+in `prebindgen-registry-v2`. Its main responsibilities are divided across files:
+
+- `target.rs` defines the questions adapters answer and the descriptions they return.
+- `plan.rs` selects and combines conversions, caches reusable plans, assembles
+  wrappers and checks public dependencies.
+- `body.rs` defines the instructions stored in those plans; `emit.rs` writes
+  the corresponding Rust code.
+- `run.rs` holds the completed `Generation`; `decl.rs`, `outcome.rs` and
+  `report.rs` describe requested declarations, their outcomes and report output.
 
 The two targets live in the language frontends, under their `v2` feature:
 `prebindgen-c/src/v2/` and `prebindgen-jni/src/v2/`. Each is two things. A
 `Target` implementation of a few hundred lines — `select`, `represent`,
 `boundary`, `surface`, `render_operation` — that walks no type and names no
 temporary; and a reader of the frontend's own declaration storage that turns it
-into `BindingRequests`, one entry per declaration, sorted, with the frontend's
+into `BindingRequests`, one entry per declaration in a stable order, with the frontend's
 manglers already applied to every name. The JNI frontend also carries its Kotlin
 writer, over the payloads its declarations came back with. A frontend's
 `build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
@@ -142,10 +158,11 @@ The user's `build.rs` is the same under either engine: the one thing v2 adds to
 it is the manifest beside the generated file, and the fact that a declaration the
 engine cannot lower is a reported skip rather than a build failure.
 
-`examples/v2check` is the increment's evidence. It compiles
-[the specification's source crate](source.md) for real, declares it to both
-real frontends exactly as a consumer's build script would, states the v2 engine,
-and compiles both generated files with rustc. Its tests read the expected
+`examples/v2check` provides evidence for this increment. It includes
+[the specification's source items](source.md), plus additional test cases,
+parses them directly and passes them through the frontends' `.items(...)` API.
+It therefore tests generation without exercising proc-macro capture. It selects
+V2 explicitly and compiles both generated Rust files. Its tests read the expected
 wrappers out of [the emit pages][fn_emit] themselves, item by item, so a chapter
 and the engine cannot drift apart quietly, and read the Kotlin in order and
 without duplicates. One test calls the generated C entry point, on a function
@@ -155,36 +172,36 @@ with `PREBINDGEN_PIPELINE=v2`, every one of their declarations reaches the engin
 and comes back with an outcome — the data classes and functions within this
 increment emitted, everything else skipped under the capability it waits for.
 
-The engine's own tests use a target that answers in one line, and cover what an
-adapter cannot show: that two functions taking the same record share one
-conversion, that an override on a parameter or on one of its fields makes a
-different conversion whichever order the two are planned in, that a temporary
-never takes the name of a parameter the wrapper still needs, that one
-unsupported field skips its record and its callers with one cause and each one's
-own path to it, that a public declaration the target refuses skips what requires
-it, that a declared failure with no route — or a reporting operation needing a
-context the boundary does not supply — skips its function, and that
-contradictory configuration fails rather than becoming a capability claim.
+The engine's unit tests use a small test adapter to isolate the planner's rules.
+They check conversion sharing and field overrides, temporary-name collisions,
+propagation from an unsupported field to its record and callers, and public
+declaration dependencies. They also check that a function is skipped when an
+operation has no error route or needs a runtime context the boundary cannot
+supply. Contradictory configuration must instead produce a generation error.
+These tests establish planner behavior; C/JNI runtime tests are still needed to
+establish the behavior of the resulting foreign interface.
 
 ### What the increment settles
 
-1. **The instruction set.** `ConversionBodyId` and `FunctionBodyId` are three
-   instructions over value identities — apply a registered operation, construct
-   a source record, call the source function — described with the rest of the
+1. **The instruction set.** Current conversion bodies are `NodeBody` values;
+   function bodies are stored in `FunctionPlan::instrs`. Both use three kinds
+   of instruction over value identities: apply a registered operation, construct
+   a source record, and call the source function. These implement the body roles
+   described with the rest of the
    [conversion plans](stages/04-values.md#the-conversion-plans-the-registry-builds).
    A conversion's body is a template whose carrier is its input; using it inlines
-   it under the caller's identities. Names are allocated by the writer from
+   it under the caller's identities. Temporary names are allocated by the writer from
    definition order, never by an adapter.
 2. **Registry-supplied operations inside an adapter's payload.** An operation's
    implementation is `Operation<Payload>`: either a `Standard` operation the
    registry renders — identity, member read — or the adapter's own `Payload`.
    The payload has no standard variant to imitate, and C ships no operation
    renderer at all, which its target states by giving `Payload` no values.
-3. **`RelationSelection`'s reach.** It has none: `select` answers with the
-   relation for the value in front of it, and nothing else. A choice for a child
-   is a conversion rule recorded at the child's position, which the recursion
-   consults when it plans that child. The precedence question is gone because one
-   of the two ways to express it no longer exists.
+3. **Selection applies to one value.** `select` chooses the source relation for
+   the value currently being planned. It does not choose conversions for that
+   value's children. Child settings are recorded at their own positions and
+   consulted when recursion reaches them. This gives each override one place
+   to be expressed and keeps child choices visible in the conversion cache key.
 
    For the same reason, `represent` is not told the position it is answering
    for. A representation is reused wherever a conversion of the same identity is
@@ -258,7 +275,7 @@ contradictory configuration fails rather than becoming a capability claim.
 Acceptance criteria:
 
 - [x] The design's boundaries are exercised by scalar and record bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
-- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. Target policies have explicit local interpretation APIs: `CPolicy` and `JniPolicy`, one variant per declarator, read only by the target that owns them.
+- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. `CPolicy` and `JniPolicy` represent implemented choices and include an `Unimplemented` case naming other declarators; their corresponding targets interpret them.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.

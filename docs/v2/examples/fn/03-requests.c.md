@@ -24,6 +24,14 @@ Cbindgen::builder()
 
 ## Result
 
+`.fun(fun!(stamp_sum))` creates the function request. The separate
+`data_type!(Stamp)` declaration chooses the argument's public C type.
+`source_module` names the Rust implementation path for a real source dependency;
+the emitted fixture pages use a local module named `source` instead.
+
+The following summarizes the requested calling interface. **ABI** means the
+binary calling convention and types a compiled C caller must use.
+
 ```text
 policy (C function):
     symbol:     "stamp_sum"      // a function keeps its Rust name; no hook renamed it
@@ -37,10 +45,12 @@ policy (C function):
 
 - A function keeps its Rust name as the exported symbol unless a naming hook on
   the builder changes it, which is why this one is `stamp_sum`.
-- C is opt-in: a function nobody declares produces no request, and is reported
-  as unselected rather than skipped.
-- Declaring the function without declaring `Stamp` is a valid request that fails
-  later, at [retention][fn_retain].
+- C is opt-in: a function nobody declares produces no request. A separate
+  `Unselected` report outcome is planned but not implemented.
+- Without the `Stamp` declaration, the frontend records no record policy.
+  Value planning then tries the default scalar policy and skips the function
+  with `unsupported.c.carrier`. [Retention][fn_retain] preserves that skip in
+  the final result; it does not first discover the missing conversion.
 
 [fn]: README.md
 [fn_requests]: 03-requests.md

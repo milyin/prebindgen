@@ -19,12 +19,13 @@ pub struct Stamp { pub secs: i64, pub nanos: i64 }
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
-Planning produces candidates: conversion nodes, wrapper plans, public
-declarations, generated helpers. Not all of them can be emitted, because they
-depend on each other, and V2 deliberately accepts more input than it can yet
-generate. This stage decides what survives.
+By now the engine has attempted to plan the requested bindings. Some plans are
+complete; others need a feature V2 does not implement. **Retention** chooses
+the complete set that can safely be published. It checks dependencies before
+letting a writer produce files, so the generated API does not contain functions
+whose required types or helpers are missing.
 
-The dependencies run both ways through a binding. The exported `stamp_sum` needs
+There are both conversion dependencies and public API dependencies. The exported `stamp_sum` needs
 the conversion of `Stamp`, which needs a conversion for each field. The public
 `Stamp` — the C struct, the Kotlin data class — has to exist for the wrapper that
 takes it to be usable at all. A Kotlin method needs the class it is declared on,
@@ -34,39 +35,47 @@ the members of that interface too.
 So a missing capability propagates. Suppose one field of the record had a type no
 representation covers yet. Its conversion is unsupported; the record's conversion
 is therefore unsupported; the public record cannot be emitted; and the function
-that takes it is skipped as well — one underlying cause, recorded once, reached by
-several dependency paths. What is *not* affected stays: an unrelated function in
+that takes it is skipped as well. Current reports copy the underlying reason
+and preserve each dependent's path to it. An unrelated function in
 the same package is still generated. Nothing is emitted in a reduced form. A
 record is never emitted with a field left out, because a foreign type missing a
 field is a different type, not a partial one.
 
-One clarification about "reduced": a record represented as an opaque handle is
-not a reduced record. Its fields never cross at all — the whole value stays on the
-Rust side behind a pointer — so there is no field to leave out. The rule above
-bites only where a representation promised to carry the parts.
+An opaque-handle representation would have a different contract: the Rust value
+stays behind a handle, and foreign callers do not receive its fields. Such a
+representation need not convert unused fields. That does not permit a requested
+data struct to lose a field silently, or permit V2 to replace an unsupported
+data representation with a handle.
 
-Being unsupported is a normal outcome, not a failure. Each skipped declaration is
-recorded with a stable capability code, a human-readable explanation and the
-source or configuration location that provoked it, so the report can say what to
-implement rather than just that something is missing. Two other outcomes exist so that
-the report can account for every captured item, not only the requested ones: a
-declaration the user explicitly excluded is *ignored*, and an item that was captured but
-that no configuration asked for is *unselected*. The second is expected in bulk —
-a source crate typically captures more than any one binding exposes — so a report
-groups those rather than listing them beside real skips; their value is answering
-"why is this not in my header" without reading the build script. Genuine
-errors — contradictory configuration, or a violated internal invariant — are not
-turned into skip reasons; they fail generation.
+An unsupported request is a normal reported outcome. The report records a
+capability code, an explanation and a path to the failing dependency. A
+**capability** here is generator functionality needed by the request, such as
+converting a record out of Rust. The code lets tools group requests blocked by
+the same missing functionality.
+
+Current outcomes distinguish emitted declarations, skipped requests and explicit
+user opt-outs called *ignored*. The design also calls for *unselected*: an item
+captured from Rust but never requested by this binding. That additional outcome
+is not implemented yet. It would help answer why an item is absent without
+treating every unrequested item as a failure.
+
+Contradictory configuration and broken internal assumptions are different from
+missing capabilities. They fail generation rather than appearing as ordinary
+skips, because continuing could hide a configuration mistake or generator bug.
 
 What survives is then **frozen**: planning is over, the records are immutable,
-and the result — retained conversions, wrappers, public declarations, and the
-generated units in a valid emission order — is handed to the writers together
-with the report. A writer reads it. It cannot plan a conversion that is missing,
-add a dependency, or change any of these decisions.
+and the retained plans determine output. Current `generate` renders Rust before
+returning `Generation`, which stores that text, the plans and the report. The
+Kotlin writer then reads retained public descriptions. Neither writer may plan
+a missing conversion, add a dependency or reverse a support decision.
 
 ## Unsupported requests and public API dependencies
 
-V2 accepts more input than it initially knows how to generate. Unsupported functionality is a normal, explicit planning result. Invalid configuration and generator defects are errors that fail generation.
+V2 accepts requests it does not yet know how to generate. Unsupported
+functionality is a normal planning result; invalid configuration and generator
+defects fail generation. The following sketch describes the fuller diagnostic
+design, including source locations, shared causes and the future `Unselected`
+outcome. Current error payloads and reports are simpler, as explained below.
 
 ```rust
 // Answer returned by a target operation; the registry owns the final accounting.
@@ -101,15 +110,29 @@ enum ElementOutcome {
 }
 ```
 
-`Diagnostic` contains an error message and its relevant location. `CapabilityCode` is a stable reason code for reports and tests. `FailureLocation` identifies the root/site/part being planned; `SourceLocation` points the reader to the source or configuration entry. The target returns an unsupported description, and the registry attaches planning context and stores it as a `Cause`. `CauseId` is a reference into that registry-owned table. The registry uses the same cause representation for capabilities missing in its own algorithms.
+In the sketch, `Diagnostic` combines a message and source location, and
+`CauseId` refers to a shared cause table. Current `PlanningError` carries a
+message string; a skipped declaration carries a `Skip` with a capability,
+explanation and dependency path. There is no current cause-id table. Propagation
+copies the reason and extends its path to explain why another output was skipped.
 
 The distinction between an operation result and an output outcome matters: a scalar conversion can be ready while its enclosing function is skipped because another parameter is unsupported. Several skipped outputs can share one underlying cause, while reports retain each output's dependency path.
 
-Planning itself determines support. There is no separate recursive `supports(type)` pass that could disagree with generation. The registry tracks each attempted conversion as unseen, currently being resolved, ready, or unsupported. Encountering a currently active conversion can reveal an expansion cycle. Cycle detection follows selected [relations](04-values.md#what-a-relation-is): an atomic handle can stop expansion of a recursive source type. A recursive conversion not yet implemented in v2 is reported as unsupported; a contradictory conversion rule remains invalid input. Panics and I/O failures are not converted into skip reasons.
+Planning itself determines support; there is no separate recursive
+`supports(type)` pass. The engine tracks active conversions to detect cycles
+and caches completed plans for reuse. Unsupported attempts are not cached today
+and may be attempted again. Cycle detection follows selected
+[relations](04-values.md#what-a-relation-is), so a future atomic handle can stop
+expansion without traversing fields. Unsupported recursive conversion is a skip;
+contradictory configuration, panics and I/O failures are not ordinary skips.
 
 ### Dependencies of public declarations
 
-Conversion dependencies are not the only conditions for valid output. A public method can require its owning class, a parameter type, and an interface member promised by configuration.
+A function also needs the public type used by its parameters. Current
+`SurfaceSpec.requires` lists required `DeclarationId`s. A required declaration
+that was never requested produces `unsupported.requirement.unrequested`.
+The design sketch below extends these requirements to interface promises and
+member associations; those richer fields are not implemented yet.
 
 ```rust
 struct SurfaceSpec<Payload> {
@@ -122,7 +145,8 @@ struct SurfaceSpec<Payload> {
 
 `Requirement` is a typed reference to a dependency that must succeed. It is the resolved obligation derived from an output request's semantic promises or actual usage. `members` describes association; a member that is essential to a promised interface must also be a requirement.
 
-The registry checks the complete set of direct and indirect requirements before deciding to emit an output:
+The full design requires the following dependency behavior. Record/caller
+propagation is implemented; interface and method promises extend that rule:
 
 - An unsupported field skips the entire record and callers that require that record representation.
 - An unsupported optional method can be omitted independently; an interface-required method can prevent its owner from being emitted.
@@ -135,19 +159,22 @@ A `SurfaceSpec` describes one public declaration and its requirements. Describin
 
 Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks. Public dependencies may require repeated readiness evaluation until the retained set stops changing. A new public requirement discovered after value planning must still propagate before output is finalized.
 
-That is a second loop, and it is worth separating from the first. Value planning
-is one recursive walk that terminates because each conversion is either found in
-the cache, resolved, or refused. Deciding what to retain is an outer loop over
-the candidate set: a public declaration can require a conversion that was not
-planned yet, planning it can produce another public requirement, and the loop
-runs until a pass adds nothing. It terminates for the same reason the walk does —
-the set of declarations and reachable conversions is finite, and every
-pass either adds to the retained set or ends it — but it is iteration, not
-recursion, and a design that assumed one pass here would be wrong.
+Retention may need several passes. Suppose declaration A needs B, and B needs
+C. The engine cannot keep A merely because A's own conversion succeeded; it
+must also know the outcome of B and C. It reevaluates dependent declarations
+until the set of decisions stops changing, a process often called reaching a
+fixed point. This check is separate from recursively planning a value's fields.
+The current implementation propagates public requirements over its candidate
+declarations; the broader design also accounts for newly discovered requirements.
 
 ## Registry state, execution order and final output
 
-During generation, `Registry` provides access to the `Flat` source model. `GenerationRun` holds the temporary plans, dependencies and diagnostics being assembled for the configured frontend. The registry returns the retained results as `Generation`. The following structures separate source information from mutable planning state:
+Generation needs three kinds of storage: the source model, mutable working
+state, and the completed result. The following design sketch calls the first
+two `Registry` and `GenerationRun`. In the implementation, `generate` uses a
+private `Run` rather than these exact public structs. It returns `Generation`,
+which owns the model and completed output. An **arena** below means a table of
+records addressed by ids, not a separate planning algorithm:
 
 ```rust
 struct Registry {
@@ -183,14 +210,18 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> target describes native delivery and public declarations
  -> registry assembles functions and resolves all required dependencies
  -> registry propagates skips and retains complete supported output
- -> freeze Generation
- -> common Rust writer emits native wrappers and supporting Rust types
+ -> common Rust writer renders the retained native plans
+ -> return Generation with Rust text, retained descriptions and report
  -> C: cbindgen derives headers from generated Rust
     JNI: optional foreign-writer interface is implemented by the Kotlin writer
- -> publish generated artifacts, report and test-selection manifest
+ -> publish generated files and report
 ```
 
 Selection, child resolution and representation happen together for each node. A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
+
+The following is the proposed storage organization. Current `Generation` owns
+Flat, vectors of value/function/surface/primitive records, a `Report` and the
+already-rendered Rust string. It does not contain an ordered artifact arena.
 
 ```rust
 struct Generation<Payload> {
@@ -204,17 +235,33 @@ struct Generation<Payload> {
 
 Freezing retains all referenced tables (bodies, primitives, layouts, helpers) and the required `Flat` source-emission data, directly or through shared ownership. Rendering uses these retained records and language-provided rendering code. The original registry, borrowed adapter and temporary working tables need not remain alive.
 
-**Frozen** means planning is complete and the records are immutable. `FrozenArena` retains ID-based lookup without insertion or replanning. As implemented, the outer loop retains a public declaration only when every element it requires was emitted, propagating the underlying cause with each dependent's own path to it; conversions are all kept rather than pruned to the ones a retained output reaches, since after inlining nothing refers to them. `OrderedArtifacts` provides an emission order appropriate to generated dependencies, including any required forward declarations. `GenerationReport` records emitted/skipped/ignored/unselected outcomes, pipeline identity, capability causes, native/foreign artifacts and symbol identities. Helper-only items remain distinguishable from explicitly requested exports.
+**Frozen** means planning is complete and consumers cannot mutate the result.
+The implemented retention loop keeps a public declaration only when its required
+declarations succeed. It retains all planned conversion nodes, including ones no
+surviving wrapper needs; the instructions have already been inlined, so this is
+extra storage rather than a dangling reference.
 
-The report has a second consumer. The example crates' test suites are written
+Artifacts are currently collected and deduplicated by name before Rust rendering.
+There is no general dependency sort or forward-declaration planner. The current
+`Report` contains pipeline, target and source identity plus declaration outcomes
+and skip paths. It does not inventory artifact or native-symbol identities.
+
+The report is also intended to support test selection, which is not implemented
+yet. The example crates' test suites are written
 against the full API, so when V2 emits a subset, tests referring to what it
 skipped would not compile — a runtime guard cannot hide a missing class from
-`kotlinc` or a missing symbol from a C compiler. Each suite is therefore divided
+`kotlinc` or a missing symbol from a C compiler. The intended approach divides each suite
 into **test sections**, each naming the emitted declarations it needs, and the report
 selects the sections whose declarations were all emitted. A milestone still has to
 require that meaningful sections run, so that skipping everything cannot pass.
 
-The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds. The report also selects existing test sections, ensuring tests match the emitted API.
+The common Rust writer renders before `Generation` is returned;
+`Generation::write_rust` writes the stored text. The JNI writer reads retained
+public descriptions for Kotlin. The C build passes generated Rust to `cbindgen` for headers.
+Writers must not introduce a newly discovered dependency or reverse a support
+decision. Files should be published only after output generation succeeds.
+Future report-based test selection must happen before foreign-language
+compilation so tests refer only to declarations that exist.
 
 ## Elements at this stage
 

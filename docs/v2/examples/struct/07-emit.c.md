@@ -9,9 +9,8 @@ Owner: the common Rust writer, then `cbindgen`
 
 ```text
 SurfaceSpec(public Stamp) frozen, with
-    payload: Aggregate { c_name: "Stamp",
-                         members: [secs: int64_t, nanos: int64_t],
-                         passing: by value }
+    rust: [the repr(C) Stamp declaration, with secs: i64 and nanos: i64]
+    payload: None
 ```
 
 ## Result
@@ -27,7 +26,13 @@ pub struct Stamp {
 }
 ```
 
-The header `cbindgen` derives from it:
+`#[repr(C)]` tells Rust to lay out this generated struct using the C-compatible
+rules. That promise applies to this boundary type, not to the original
+`source::Stamp`. The conversion reads the generated struct and constructs the
+original one, so the source crate does not need to adopt a C layout.
+
+`cbindgen` reads the generated Rust declaration and produces the corresponding
+C header declaration. `<stdint.h>` supplies the exact-width `int64_t` name:
 
 ```c
 #include <stdint.h>
@@ -45,9 +50,9 @@ typedef struct Stamp {
   value the source function takes.
 - `repr(C)` is required: without it the layout the header promises is not the
   layout [the wrapper][fn_emit_c] reads.
-- The name is the frontend's: the specification's binding keeps the source name,
-  and a real binding usually mangles it C-style — `stamp_t` — which is why the
-  case lint is silenced on every aggregate.
+- The binding explicitly chooses `Stamp`. The default type base is `stamp`,
+  and a naming hook could choose another convention such as `stamp_t`.
+  The generated lint allowance permits such non-CamelCase Rust type names.
 - Member order and names match the aggregate description, since
   [the member reads][struct_values_c] refer to those identities.
 - The header's formatting and include guards are `cbindgen`'s business.

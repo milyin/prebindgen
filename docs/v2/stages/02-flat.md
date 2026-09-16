@@ -4,8 +4,10 @@
 
 # Build and inspect the source model
 
-Status: this chapter describes the library as it stands, and the engine reads the
-model exactly this way. Its last section is the exception: none of it is built.
+The first part of this chapter describes the implemented `prebindgen-flat`
+library, which both engines use to inspect source items. The section
+[What V2 changes](#what-v2-changes) describes a planned API based on owned views;
+those views are not implemented yet. Current V2 uses the existing borrowed API.
 
 The examples in this chapter use one small source crate — a record and a function
 over it, marked for binding generation:
@@ -20,25 +22,29 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 
 ## What Flat is for
 
-Capture stored text. Of `stamp_sum` that text says its parameter is written
-`Stamp`, which is all text can say; planning a binding needs to know that `Stamp`
-is a record with two `i64` fields, declared in this same crate. **Flat**
-(`prebindgen-flat`) is what answers that.
+After capture, the generator has Rust text such as `stamp: Stamp`. To generate
+a conversion, it needs more than that spelling: is `Stamp` a struct, which
+fields does it have, and what are their types? **Flat**, the source model
+provided by `prebindgen-flat`, turns the captured syntax into structured answers.
 
-It answers it for an accepted subset of Rust, and refuses everything else at this
-edge. That refusal is the point: a consumer matches a small set of structures
-exhaustively, with no case left over for a form it has never met, and no stage
-after this one re-checks what it was handed.
+Flat recognizes a defined subset of Rust. For supported items, consumers inspect
+typed records and enums rather than parsing source text again. An item outside
+that subset is retained with an unsupported diagnosis. This lets the model say
+what was captured even when it cannot describe the item's structure. Later
+stages still check whether they can generate a binding for a modeled type;
+being valid in Flat does not establish target-language support.
 
 Nothing about it is specific to bindings — a documentation tool or a source
 validator can walk the same model, with no registry and no target in sight.
 
 ## One flat namespace
 
-Flat lowers each captured item into an **element** — a function, a type, a
-constant — and puts every element into **one flat namespace**: a single index by
-name, spanning every source crate that was read. That is what the crate's own
-name refers to, and it shapes everything else here.
+Flat converts each captured item into an **element**, its structured record for
+a function, type, constant, guard or unsupported item. Compiler documentation
+often calls this conversion **lowering**: translating input into a simpler
+internal representation. Named elements enter **one flat namespace**, a single
+index shared by all the source crates being read. A lookup asks for `Stamp`, not
+for a sequence of nested Rust modules.
 
 ```rust
 // build.rs of a binding crate, continued from the previous chapter
@@ -63,17 +69,15 @@ included, instead of wondering what went missing.
 
 ## Names, and what happens when one leads nowhere
 
-What is *not* in the model is a link between elements. Where `stamp_sum`'s
-parameter mentions `Stamp`, the model records the name `Stamp` — not a pointer to
-the declaration, not an index into a table. Whoever wants the declaration looks
-the name up in the namespace, and the model is content to store a name until then.
+When `stamp_sum`'s parameter mentions `Stamp`, its type record stores a name.
+It does not directly point to the struct declaration. A consumer uses
+`Flat::resolve` to look that name up in the completed namespace. This distinction
+explains the explicit lookup in the code example below.
 
-That is what makes the namespace usable. A capture may mention a type before the
-declaration is read, or one in another source crate entirely, and neither is a
-problem: every name is looked up against the finished namespace, so the order the
-captures arrived in changes nothing. And because a name has exactly one
-declaration in that namespace, two mentions of `Stamp` are two mentions of the
-same type — there is no way to end up holding two `Stamp`s that disagree.
+Collecting the namespace before resolving names makes forward references work.
+A function can mention a type whose capture is read later, including a type
+from another source crate. Within one model, a name identifies at most one
+declaration; duplicate names are rejected rather than chosen by arrival order.
 
 A name can fail to resolve, and the reason is worth being clear about: the
 namespace holds what was marked, not what the crate compiles. A marked function
@@ -99,7 +103,7 @@ author can act on: *names the type `Missing`, which the flat API does not declar
 — mark its declaration `#[prebindgen]`, or, for a foreign or crate-private type
 used as a handle, give it a name here with `#[prebindgen] pub type Missing = ..;`*
 
-That changes the namespace, because `Broken` has stopped being a declaration.
+That changes which entries can serve as supported type declarations.
 `use_broken` takes a `Broken` and was perfectly resolvable a moment ago; now the
 name it mentions is gone as well. So Flat goes over the elements again, refuses
 `use_broken` for the same reason, and keeps going until a pass refuses nothing
@@ -108,10 +112,11 @@ new — here, the third one.
 Nothing is discarded on the way, and this does not fail the build. A refused
 element stays in the model as an unsupported entry, and `Flat::unsupported()`
 enumerates them with their names, locations and reasons, so a consumer can report
-exactly what it cannot use. What to do about them is the consumer's decision, and
-today's registry makes a strict one: it refuses to build a binding from a model
-that contains any unsupported element, and lists all of them at once, so a source
-crate that needs fixing is fixed in one pass rather than one item per rebuild.
+exactly what it cannot use. Consumers decide what to do with those entries.
+The V1 registry rejects a model containing any unsupported element and lists
+them together. V2 checks the items its declarations actually request; unrelated
+unsupported elements do not by themselves fail the run. A request whose source
+name cannot be found as the required supported kind fails source validation.
 
 What survives has no dead ends. Every type name in a surviving element has a
 declaration in the namespace to look up, which is what lets every later stage
@@ -135,24 +140,26 @@ enum Element {
 }
 
 enum Type {
-    Struct(Struct),   // fields, each with a name or a position, and a type
+    Struct(Struct),   // named fields and their types (or no fields for a unit struct)
     Variant(Variant), // an enum with payloads: alternatives identified by position
     Enum(Enum),       // a fieldless enum: members identified by the integer Rust assigns
     Extern(Extern),   // a name, and nothing behind it
 }
 ```
 
-The four type shapes are the ones later stages actually work from. A **struct**
-has fields the model describes, so a binding can take a value apart and put one
-back together. The two **enum** shapes are one Rust keyword covering two
-concepts, and the model separates them because they are identified differently: a
-fieldless enum's members are identified by the value Rust assigns, which a C
-header restates and a Kotlin enum entry carries, while an enum with payloads is a
-sum whose alternatives are identified by position, since a foreign representation
-numbers its own arms and Rust's discriminant would be the wrong number to use. An
-**extern** is a name with nothing behind it — `pub type Session = zenoh::Session;`,
-or a marked tuple struct — which is how a value that crosses as an opaque handle
-enters the API deliberately, rather than by being mentioned somewhere.
+The four type shapes preserve different information:
+
+- A **struct** exposes modeled fields. A later planner can use those fields to
+  construct or read a value, provided the operation is legal and supported.
+- A **variant** describes an enum whose alternatives may contain payloads.
+  Alternative positions identify its branches in the model. The foreign
+  representation separately chooses how to encode which branch is active.
+- An **enum** describes fieldless alternatives and their integer discriminants.
+  A target can use those values when generating a C or Kotlin enum.
+- An **extern** deliberately exposes only a type name. An alias such as
+  `pub type Session = zenoh::Session;` can introduce an external type without
+  describing its internals. Current Flat also treats tuple structs as opaque.
+  A handle representation can use such a type without reading its fields.
 
 Every type written anywhere in those elements — a parameter, a return, a field,
 an alternative's payload, an array element — is one **type reading**: a kind,
@@ -173,13 +180,17 @@ enum TypeKind {
 }
 ```
 
-That list is the point of the crate, and reading it is most of understanding this
-stage. A consumer matches these variants and has no other case to handle: there
-is no arm for "some other Rust type", and no reason to walk `syn` looking for
-one. Enforcement happens once, here — a marked item mentioning a form with no
-variant in this grammar is refused at the door and becomes an unsupported
-element, so no adapter downstream has to re-check what it was given or decide
-what to do with a shape it has never heard of.
+Read this enum as Flat's vocabulary for a type occurrence. `Optional` holds the
+inner type of `Option<T>`; `Fallible` holds both types of `Result<T, E>`;
+`Array` holds an element type and length; `Ref` preserves a borrow's mutability
+and lifetime information. `Named` leads to a separately declared type. `Unit`
+represents `()`, so a function without a value result still has a modeled
+return type. Each nested `TypeRef` describes another occurrence using the same
+vocabulary.
+
+A consumer can match these cases exhaustively. If capture contains a form that
+the grammar cannot represent, Flat reports the enclosing item as unsupported.
+The language adapters therefore do not each need a Rust syntax parser.
 
 `Named` is the variant that holds a name — `Stamp`, plus any generic arguments
 written with it. The record it names is a separate element, and getting from one
@@ -229,9 +240,9 @@ behind it, branch on rendered text to reach a decision, or generate a body in
 order to discover what that body depends on. **Emission** is where syntax is
 legitimate, and where the writers reproduce what the source wrote.
 
-Printing is not deciding: a type formatted into a diagnostic is decision code
-reporting why it decided, and a panic naming an unsupported type is exactly
-that. The prohibition is on deciding *from* text.
+Formatting a type in an error message is allowed. The restriction is about the
+source of a decision: a planner should inspect `TypeKind::Optional`, for example,
+rather than print a type and test whether its text starts with `Option`.
 
 The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
 `jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
@@ -241,11 +252,13 @@ describes here holds a real `syn::Type`, while a source-side position stays a
 handle to the model. The rule constrains where a fact may come *from*, not which
 types may be spelled.
 
-The rule is shared; how each engine holds itself to it is not. What both share
-is the shape: rendering is split into a **protocol** and a **capability**. The
+The engines enforce this separation differently. Both distinguish a rendering
+**protocol** (the interface for emitting source types) from a **capability**
+(the object an engine permits its emission code to use). The
 protocol lives with the model, in `prebindgen-flat` — object-safe,
-generate-only, emitting source types from the model's own facts, with no method
-that hands back a captured spelling or a typed syntax tree. Implementing it is a
+generate-only, emitting source types from the model's own facts rather than
+exposing captured type syntax for inspection. Guards and enum discriminants
+are special cases copied verbatim for emission. Implementing it is a
 deliberate act, which is why each engine establishes its own rather than
 borrowing the other's.
 
@@ -298,7 +311,7 @@ type and preserves its wrappers and references. Following a parameter's type to 
 declaration is then the caller's job: take the name out of the reference, call
 `Flat::resolve`, keep the model in hand for the next hop.
 
-V2 replaces those borrows with **views**: `FunctionView`, `TypeView`,
+The proposed API replaces those borrows with **views**: `FunctionView`, `TypeView`,
 `RecordView`, `FieldView` — read-only handles that carry the model they came from
 rather than borrowing it. Three things follow.
 
@@ -487,10 +500,11 @@ a record exposes fields, and an enum exposes variants.
 
 ### Type readings and type views
 
-A **type reading**, the existing `TypeRef`, describes one Rust type's structure
-and the source information retained by Flat. A **type view**, `TypeView`, adds
-the immutable model in which that reading is interpreted. Only the type view
-can follow named types to that model's declarations.
+A **type reading**, the existing `TypeRef`, describes a type occurrence such as
+`Stamp` or `&Stamp`, including its structure and retained source information.
+The proposed **type view**, `TypeView`, pairs that reading with the model that
+gives its names meaning. A reading saying `Stamp` is not sufficient by itself
+to find fields; the view knows which model's `Stamp` declaration to consult.
 
 This design keeps both because structural readings are already useful to Flat's
 parser and emission code. V2 source inspection and registry planning use
@@ -578,9 +592,9 @@ impl TypeView {
 }
 ```
 
-`ScalarKind` is Flat's supported scalar vocabulary, so naming a scalar cannot
-fail; wrapping an existing type can, which is why only the second returns a
-`Result`. Composition retains the
+`ScalarKind` enumerates supported scalars, so choosing one needs no failure
+result. The proposed operations on `TypeView` return `Result` because a requested
+combination must be checked against the grammar. Composition retains the
 operand's snapshot and builds a consistent reading inside Flat. The resulting
 view owns the derived reading; it does not insert another captured declaration
 into the immutable snapshot. Invalid grammar combinations return `ModelError`.

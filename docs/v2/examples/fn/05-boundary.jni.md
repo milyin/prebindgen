@@ -29,7 +29,12 @@ BoundarySpec {
 }
 ```
 
-Fixing the signature that [emission][fn_emit_jni] renders:
+JNI supplies two arguments in addition to the user's `stamp`: `env` permits
+calls into the JVM, and `_this` is the `JNINative` singleton receiving the native
+method call. The wrapper needs `env` for property reads and error reporting;
+it does not otherwise use `_this`. `jlong` is JNI's signed 64-bit integer type.
+
+These roles determine the signature that [emission][fn_emit_jni] renders:
 
 ```rust
 #[no_mangle]
@@ -54,14 +59,16 @@ pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
 }
 ```
 
-Its specification takes an exclusive environment operand and an owned error,
-produces no value, can fail with a runtime error, and depends on that artifact.
-The `?` inside propagates its own failure to its caller; it never returns from
-the generated wrapper.
+The helper first checks whether the JVM already has a pending exception. If so,
+it preserves it. Otherwise it throws `RuntimeException` with the JNI error's
+message. Its `Result<()>` tells the wrapper whether reporting succeeded.
+The `?` returns early if `exception_check` fails; otherwise the helper returns
+the result of `throw_new` when needed. Either reporting failure reaches the
+wrapper's planned abort path.
 
 ## Checks
 
-- Zero is not a result: it is what a native method must return while an
+- Zero is the chosen placeholder for this integer-returning method while an
   exception is pending, and Kotlin observes the exception. That route is
   [the adapter's convention][fn_requests_jni], not a writer default.
 - Reporting is never retried with the operation that just failed — one failed

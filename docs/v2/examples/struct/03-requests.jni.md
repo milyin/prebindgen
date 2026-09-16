@@ -17,22 +17,29 @@ JniGen::builder()
 
 ## Result
 
+`package!("example")` chooses where the class lives, and `data_class!(Stamp)`
+requests public properties corresponding to the source fields. The policy's
+`class` is the fully qualified Kotlin name: package plus class name. `()J` is a
+JVM method descriptor: empty parentheses mean no arguments, and `J` means a
+64-bit `long`. It describes the getter the generated JNI code will invoke.
+
 ```text
-policy (JNI record):
-    representation: data_class
-    kotlin_fqn:     example.Stamp
-    properties:     secs:  Long -> getter "getSecs",  descriptor "()J"
-                    nanos: Long -> getter "getNanos", descriptor "()J"
-    record_input:   ObjectProperties
+recorded policy: DataClass { class: "example.Stamp" }
+
+derived during planning:
+    properties: secs:  Long -> getter "getSecs",  descriptor "()J"
+                nanos: Long -> getter "getNanos", descriptor "()J"
+    input: one JVM object, read through property getters
 ```
 
 ## Checks
 
-- The alternative, `SeparateArguments`, passes the two fields as individual JNI
-  arguments and needs no property reads. It is a different effective policy, so
-  it produces a different conversion node for the same record.
-- The class metadata recorded here is what the Kotlin writer emits *and* what
-  the property reads call, so the two cannot drift apart.
+- A separate-arguments representation would pass the two fields individually
+  and need no getter calls. That alternative is described by the design but
+  is not implemented for this V2 record path.
+- The adapter derives the public property names and native getter calls from
+  the same Flat fields. The class name comes from the recorded policy. Tests
+  check that generated Kotlin and native references agree.
 - Object input means the conversion depends on the JVM at run time, which is why
   [its node is fallible][struct_values_jni] where the C one is not.
 

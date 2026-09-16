@@ -20,8 +20,11 @@ pub struct Stamp { pub secs: i64, pub nanos: i64 }
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
-This is the stage that does the real work, and the one the whole architecture is
-arranged around.
+At this point the engine knows the Rust source and the requested foreign API.
+It now needs a recipe for moving each value between them. A **plan** is that
+recipe, stored as structured data during the build. The plan does not call your
+Rust function during generation; it describes operations that generated code
+will execute later when a foreign caller uses the binding.
 
 Consider what has to happen for a foreign caller to call `stamp_sum`. The Rust
 function needs an owned `Stamp`. No foreign caller has one: a C
@@ -56,8 +59,8 @@ loop, with the two target questions marked:
 
 ```text
 plan(type, direction, position):
-    policy   = effective policy for this position     # site override, else part
-                                                      # rule, else type default
+    policy   = effective policy for this position     # site path, else type policy,
+                                                      # else run default
     relation = target.select(type, direction, applicable rules, policy)
                                                       # cheap: no recursion yet
     mark (type, direction, relation, policy) as being resolved
@@ -84,20 +87,20 @@ plan(type, direction, position):
     record the node and return it
 ```
 
-Two details in that sketch matter more than they look. The relation and the
-resolved children are both part of what identifies a node, which is why neither
-selection nor the recursion can wait until after the cache is consulted: the same
-type converted through its fields and through a constructor are two different
-conversions, and so are two records whose fields were configured differently. The
-policy in that key is the one recorded for *this* value, and it says nothing
-about the values inside it — the children do, and they are what a subtree's
-choices reach.
+The algorithm saves completed plans in a **cache** so it can reuse them. Reuse
+requires more than matching the Rust type. Building `Stamp` from two fields is
+different from calling a constructor with one integer. Even two field-based
+conversions differ if they convert `secs` differently. The cache key therefore
+includes the selected relation, the policy for this value, and the completed
+child plans. The recursion resolves the children before it has that full key.
 
-And the recursion is parameterized by *position*, not just by type: a `SiteId`
+The algorithm also receives the value's *position*, not just its type. In the
+design vocabulary, a `SiteId`
 (parameter 0 of this exported function) or a `PartId` (the `secs` field of this
 relation) is what an override is recorded against, so the position is what turns
 the recorded rules into this conversion's effective policy. Positions are how
-overrides reach a nested child; the resulting node is still shared by identity,
+overrides reach a nested child. Current code uses `Position { declaration, path }`
+instead of separate `SiteId`/`PartId` structs. The resulting node is still shared by identity,
 so two positions that resolve to the same key get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no work
@@ -110,24 +113,24 @@ typed operation, such as "read the `secs` member of a `Stamp`" or "call the
 an operation, not a use of it — it names no variable and belongs to no exported
 function — so the same description can be applied wherever that operation is
 needed. Along with the operation, the target states what the operation needs,
-what it produces, whether it can fail, how long its result stays valid, and any
-generated helper it depends on. Those facts are what let the registry compose
+what it produces, whether it can fail, and any generated helper it depends on.
+The extended contract will also describe validity and resource obligations.
+Those facts let the registry compose
 operations safely instead of pasting text together.
 
-The result of planning one conversion is a **node**: a reusable plan holding the
-exact source type, the relation, the child conversions, the representation, the
-instructions and a contract stating what the node produces, how it may be used,
-how long it remains valid and how it can fail. A node belongs to no function, so
-two exported functions taking an owned `Stamp` the same way share one. Identity
-is the exact type, the direction, the relation and the effective policy: `Stamp`
-and `&Stamp` are different nodes, and so are the same `Stamp` under the C and the
-Kotlin configuration.
+The result is a **node**, meaning one reusable conversion plan in the engine's
+dependency graph. It records the type, direction, selected relation, child
+conversions, target representation and instructions. The broader design also
+gives it validity and resource contracts; those are not implemented for borrowed
+or resource-bearing values yet. Two functions taking an owned `Stamp` in the
+same way can share a node. A borrow such as `&Stamp` needs a different node, as
+does a use with different field conversions or target policy.
 
-The registry never asks a target to convert a record; it asks the target to
-represent one, and walks the record itself. That is the division the rest of this
-chapter specifies, and the reason a nested record, an optional field or a third
-field costs the target nothing new: the same recursion visits one more child, and
-asks the same local questions about it.
+The registry walks the record and combines its child plans. The target answers
+local representation questions, such as how to read one member. This division
+lets supported nested combinations reuse the traversal algorithm. It does not
+make a new kind of value automatically supported: an optional field still needs
+the optional-value protocol, which this increment does not implement.
 
 A conversion is planned all the way or not at all. If any child conversion is
 unsupported — a field of a type nothing can carry yet — the node is unsupported,
@@ -198,11 +201,11 @@ every other `…Id` here. The id rather than the value is what matters: the
 relation is part of a conversion's identity, and `Stamp` through its fields and
 `Stamp` through `stamp_from_millis` must never share a node.
 
-The word is the mathematical one — a relation between a type and a set of parts
-— chosen because a type has several and one of them is *selected*. "Shape",
-v1's word, describes a type's structure as a fixed fact; a relation is one of
-possibly many ways to relate the type to parts, and which one applies is a
-decision the configuration and the target make.
+The important distinction is between the structure Rust declares and the
+operation selected for a conversion. `Stamp` always has the same two fields,
+but a future constructor-based binding could accept only milliseconds and let
+a helper calculate those fields. A relation describes that selected way to
+build or read the value, rather than treating the field list as the only option.
 
 The same function can be exported directly, selected as a constructor, or used
 to extract another value. Those are binding roles, so relation construction
@@ -211,10 +214,11 @@ used to validate those roles.
 
 ### Flat provides neutral source views
 
-The registry reads the source through the same
+The planned view-based API lets the registry read source through the same
 [views everything else uses](02-flat.md#lookup-and-navigation) —
 `FunctionView::parameters`, `TypeView::as_record`, `RecordView::fields` — with no
-private channel of its own.
+private channel of its own. Current V2 uses borrowed Flat records instead;
+the view names in this section describe the intended API, not callable APIs today.
 
 `ParameterView` and `FieldView` provide their exact `TypeView`s. Flat creates the views and keeps their constructors and storage indices private. A record view exposes structural fields only when Flat models them. Reaching a record through `&Stamp` requires an explicit `referent()` step; that inspection does not itself implement a borrow conversion. Details of [storage and model checks](02-flat.md#private-storage-and-model-consistency) and [incremental adoption](../implementation.md#flat-implementation-sequence-and-acceptance) belong to the Flat project.
 
@@ -222,7 +226,10 @@ For `parse_stamp(&str) -> Result<Stamp, Error>`, Flat reports one parameter and 
 
 ### The registry validates conversion roles
 
-Registry-library constructors accept checked Flat views. The following prototypes and private internals show the first three roles:
+The following is a proposed API, not the current public structs. It combines
+the planned Flat views with checked constructors for three conversion roles.
+In particular, this proposed private `RecordRelation` replaces the public-field
+structure shown earlier; it is not a second implemented definition.
 
 ```rust
 impl RecordRelation {
@@ -289,8 +296,9 @@ struct ConversionRules {
 }
 ```
 
-Nothing in either build script registers a relation, yet this example needs three
-of them, so it is worth being explicit about where each comes from.
+The user does not register a relation for each scalar or field-based record.
+The registry discovers those candidates from Flat. Constructor and projector
+relations will additionally need explicit configuration identifying the helper:
 
 A **record relation** is implicit: for any record the source model describes, the
 registry registers the relation built from its fields, so `Stamp.fields` exists
@@ -298,9 +306,9 @@ without anyone asking for it. A **constructor or projector relation** is
 explicit: it names a function, so someone has to say which function, and that is
 a frontend declaration. A **scalar** has no parts at all — an `i64` is not built
 from anything — so its relation is the atomic one, the whole value converted by a
-single operation the target supplies. The enum above lists atomic among the roles
-still to be added; the first increment needs it before anything else, because the
-`i64` result and the `i64` fields here are exactly that case.
+single operation the target supplies. `Atomic` is implemented, as shown in the
+earlier enum; the sketch above focuses on the additional constructor and
+projector roles rather than repeating the complete implemented enum.
 
 The relation for `Stamp` is its record: two parts, the fields.
 Pinning the constructor instead is a rule recorded with the request, and changes
@@ -330,7 +338,11 @@ The registry follows `Selection.relation` to the checked operation, obtains its 
 
 Selection precedes child traversal: an atomic opaque representation does not inspect unused private fields. Helper arguments need not resemble fields. Child types retain wrappers, references and lifetimes; cloning needs an explicit operation.
 
-Callback arguments reverse direction, and the reason is worth stating because no declaration says so and the registry applies it on its own. A callback crossing *into* Rust is a callable Rust receives, so that value is built; the values its arguments carry are ones Rust already holds and pushes out through the call, so each of those crosses the other way. One direction is requested, the other follows from the shape. Future roles follow the same checked-construction pattern and produce unsupported outcomes until implemented.
+Future callback planning must reverse direction for callback arguments. Rust
+receives the callable as input, but later supplies values to the foreign
+callback as output. This follows from the callback's role, not from the user
+specifying an independent direction for each argument. V2 does not implement
+callback conversion yet.
 
 ### Responsibility boundary with Flat
 
@@ -362,7 +374,18 @@ The **public surface** is the API foreign users see: C types/functions or Kotlin
 
 A **primitive** is one typed operation supplied by the target, such as converting a scalar, reading a JVM property, allocating a handle, or signaling an error. (The word means an indivisible *operation* here, not a primitive type; a scalar conversion is one of the things a primitive can do.) The registry schedules these operations within the complete conversion.
 
-An operation may need a generated helper or type declaration. Each such generated unit is an **artifact**, referenced by an `ArtifactId` in the operation's dependency list. Several artifacts can share one output file.
+An operation may need a generated helper or type declaration. Each such unit is
+an **artifact**. Current operation descriptions carry whole `Artifact` values,
+identified by name; the registry deduplicates them. Several artifacts can share
+one output file. `ArtifactId` in the design sketches below represents a proposed
+table-based reference, not a current API type.
+
+The following signature/contract types sketch an extended API. Current
+operations have `operands`, one optional `result`, `failure`, `dependencies` and
+`implementation`. Each operand also has a role: an ordinary value, an error,
+or a named runtime context. Current carrier descriptions use inline
+`WireType { ty, abi }` values, not `WireTypeId`; source types use `TypeRef`, not
+the proposed `TypeView`. These differences matter when implementing an adapter.
 
 ```rust
 struct PrimitiveSpec<Payload> {
@@ -375,8 +398,9 @@ struct PrimitiveSpec<Payload> {
 }
 ```
 
-Filled in, that is concrete. This is the JNI adapter's description of reading the
-`secs` property of a `Stamp` object — one operation, complete:
+The following design sketch describes a getter using those fields. It explains
+the intended full contract; current `PrimitiveSpec` uses a smaller structure
+without `validity` or `resources`. The getter operation itself is implemented.
 
 ```rust
 PrimitiveSpec {
@@ -413,12 +437,13 @@ env.call_method(&stamp, "getSecs", "()J", &[])
     .and_then(|value| value.j())
 ```
 
-An expression of type `Result<jlong, jni::errors::Error>`, and nothing more: no
-`let`, no `match` on that result, no return from the enclosing function. Those
-belong to the wrapper the registry composes. The C adapter's answer for the same
-field is `stamp.secs`, infallible, with no environment operand — a different
-`PrimitiveSpec` with the same purpose, which is why the composition around it can
-be identical.
+This expression returns either a JNI integer or a JNI error. `call_method`
+invokes the getter, and `.j()` extracts the long result. The adapter renders
+that single operation. The common writer supplies the surrounding `let`, branches
+on success or failure, and follows the function's error route. For C, reading
+the same field is simply `stamp.secs`, which cannot report an error and needs
+no JNI environment. The registry combines either kind of read with the same
+source-record construction algorithm.
 
 `implementation` is `Operation<Payload>`: either a **standard** operation the
 registry itself renders — the identity conversion, an aggregate member read — or
@@ -554,8 +579,9 @@ handle-bearing operation cannot be written without this.
 `ResourceContract` describes obligations introduced or discharged by an
 operation, such as releasing a retained handle. It is separate from validity:
 a value can have a long enough lifetime and still leak if nobody releases it.
-The initial scalar/owned-record implementation uses an explicit no-extra-resource
-contract and ordinary Rust destruction for owned locals.
+The initial scalar/owned-record implementation has no resource-contract field;
+it relies on ordinary Rust destruction for its owned locals and performs no
+additional handle acquisition requiring explicit cleanup.
 
 Resource-bearing operations require a later contract implementation with these
 facts before the registry can support them:
@@ -621,7 +647,12 @@ Rust needs a target construction operation and is a reported skip until there is
 one. Slots, nested member layouts, guards, and the optional, sequence, choice and
 callable protocols below are described rather than built.
 
-A **layout** describes the values contained in a representation. A **protocol** describes the target operations through which the registry reads or constructs those values. Neither specifies how to recursively convert the corresponding Rust fields; the registry supplies that algorithm.
+A **layout** describes the values contained in a representation. A **protocol**
+describes the operations used to read or construct them. The registry supplies
+the recursion that converts the corresponding Rust fields. The following enum
+is the broader design: `Empty`, `Slots`, nested layouts and id-based references
+are not implemented. Current protocols carry operation specifications inline;
+the registry assigns operation ids when it composes instructions.
 
 ```rust
 enum Layout {
@@ -657,7 +688,13 @@ enum Protocol {
 }
 ```
 
-A Rust tuple or JVM wrapper object must not appear in an extern signature merely because it can be described as a Rust type — that is what the descriptor's ABI flag prevents. `MemberLayout` names an aggregate member and its child layout. Target-specific facts about the emitted type itself, such as C's `repr(C)` and the aggregate's C name, ride in `ReprSpec.payload`; the calling convention of a whole function rides in `AbiSpec` at [the boundary](05-boundary.md#assembling-an-exported-function) instead. `LayoutId` and `PrimitiveId`, used below, refer to registered layout and operation descriptions.
+A carrier being expressible as a Rust type does not make it safe in an extern
+signature; the `abi` flag states whether the adapter permits that use.
+`MemberLayout` and `ReprSpec.payload` above belong to the design sketch. In
+current code, the aggregate layout holds its `WireType`, and the C `repr(C)`
+declaration is a Rust artifact attached to the public `SurfaceSpec`. A whole
+function's calling convention belongs in `AbiSpec` at
+[the boundary](05-boundary.md#assembling-an-exported-function).
 
 A **slot** is one value in a multi-value representation — for a `Stamp` passed to JNI as two separate arguments rather than an object, the layout is two slots, and a function taking two such records has four native arguments in all. `SlotRole` states a slot's meaning, independent of its generated name. `GuardId` refers to an activation condition on a slot — “always,” “presence is true,” or “variant tag selects this arm” — and is unrelated to the guard items of [capture](01-source.md). Enclosing conditions also apply. Inactive slots can require valid wire defaults even though their source payload must not be read or constructed. When one layout is used for two function arguments, its slot identities are qualified by each use so their ABI positions remain separate.
 
@@ -707,7 +744,11 @@ The registry branches on presence and invokes the child conversion only on the p
 
 ## How the registry asks a target for decisions
 
-The target interface has four planning operations. Each answers a local question with a description. The registry owns recursion and calls the next planning operation when its inputs are ready.
+The target interface has four planning operations. Each answers a local question
+with a description; the registry decides when to ask it. The sketch below uses
+the design's descriptor names. Current `represent` receives `ChildValue`
+entries containing a part and layout, not full validity/resource contracts.
+The same trait also has `render_operation`, used later during Rust emission.
 
 ```rust
 trait Target {
@@ -774,7 +815,11 @@ Walking whatever it picked remains the registry's work.
 
 These views are read-only. The adapter can inspect direct child descriptors but cannot invoke the registry's recursive compiler or modify the registry's plan tables. Relations and representations that recur — a record read through its members, a scalar carried unchanged — should be available to an adapter as ready-made descriptions it names rather than builds, so that a new target's first version is a handful of choices rather than a library.
 
-Source-conversion dependencies appear in selected relations. Target operations list the generated helpers they need. When a target method needs an additional conversion, the method returns an explicit dependency request for the registry to resolve. Rendering operates on the completed result and cannot discover new conversions or support gaps.
+Source-conversion dependencies come from the selected relation's children, and
+target operations list generated helpers. Current public dependencies are
+`DeclarationId`s in `SurfaceSpec.requires`. The more general design will need
+an explicit request mechanism if a target requires additional conversions;
+that mechanism is not implemented. Rendering must not discover new conversions.
 
 Descriptions returned by a target can contain new primitive, layout, helper, or policy definitions with references local to that description. The registry validates and registers the definitions and assigns its own table IDs. Existing descriptors can reference IDs the registry already supplied. The target does not allocate entries in registry-owned tables itself.
 
@@ -782,7 +827,10 @@ The language-provided final rendering interface reads immutable plans and retain
 
 ## The conversion plans the registry builds
 
-For each supported conversion node, the registry records the selected source operation, target representation, generated instructions, and the conditions under which the result is usable.
+The extended conversion contract below brings together the proposed validity,
+resource and model-view APIs. Current `ValuePlan` instead stores `id`, `crossing`,
+`relation`, `repr`, `children`, a `NodeBody`, and failure categories. It does
+not yet contain `ValueContract`, `ResolvedRelation` or `ConversionBodyId`.
 
 ```rust
 struct ValuePlan<Payload> {
@@ -818,7 +866,7 @@ enum Instr {
     // Build a source record from converted parts, in field order.
     Construct { record: RecordName, parts: Vec<ValueId>, result: ValueId },
     // Call the source function, once.
-    Call { function: FunctionName, args: Vec<ValueId>, result: ValueId },
+    Call { function: FunctionName, args: Vec<ValueId>, result: Option<ValueId> },
 }
 
 enum Operand {

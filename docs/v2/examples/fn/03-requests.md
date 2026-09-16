@@ -17,14 +17,20 @@ Element::Function(Function {
 })
 ```
 
-and a build script asking for it to be exposed. What that call looks like is the
-language's business: [C][fn_requests_c], [Kotlin/JNI][fn_requests_jni].
+The binding build script additionally asks to expose the function. The
+[C configuration][fn_requests_c] and [Kotlin/JNI configuration][fn_requests_jni]
+make that choice through their respective frontend APIs. Knowing that the
+function exists and asking to export it are separate inputs.
 
 ## Result
 
+The request associates the source function with a public declaration and the
+adapter's function settings. This sketch names the two positions whose values
+need conversion: the first parameter and the return value.
+
 ```text
 OutputRequest {
-    id:     DeclarationId(exported stamp_sum, at this target's placement),
+    id:     DeclarationId("fn:stamp_sum"),
     source: SourceItemId(crate::source::stamp_sum),
     policy: PolicyId(this target's function policy),
 }
@@ -42,11 +48,11 @@ converted.
 
 ## Checks
 
-- Exposing the same function at two placements gives two `DeclarationId`s with
-  independent outcomes.
-- A setting the frontend cannot translate is recorded as an
-  `UnsupportedRequest` and reaches the report; an override naming a parameter
-  this function does not have fails the build.
+- Current ids combine the kind and Rust name. Requesting two placements of the
+  same function is not yet supported; the intended richer identity is described
+  in the stage chapter.
+- A frontend setting V2 cannot translate becomes a request under a policy
+  that reports the missing capability. It must not disappear silently.
 - Nothing here claims the function can be generated.
 
 ## Language variants

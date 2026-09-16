@@ -10,21 +10,23 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
 }
 ```
 
-This is the smallest exported callable that is not trivial: one parameter that is
-an owned record, and a scalar result. It is enough to exercise the pipeline's
-central claim — that the registry owns the recursive work and the target only
-answers local questions — because the argument cannot cross the boundary as one
-value in either target. C flattens it into an aggregate whose members are read;
-Kotlin/JNI passes an object whose properties are read through the JVM. Both routes
-run the same source-side plan: obtain two field values, construct `Stamp`, call
-`stamp_sum` once, deliver its `i64`.
+Imagine a C or Kotlin caller wants to add the two fields of a `Stamp`. The Rust
+function above already does the calculation. This walkthrough follows the work
+needed to make that function callable without hand-writing its foreign entry
+points.
 
-The record half of that work belongs to [the record path][struct], which this path
-depends on at value planning. What is specific here is everything around the
-conversion: the request that names the exported function, the boundary that maps
-native arguments and the return, and the failure routes — which is where the two
-targets diverge most, because the JNI property reads can fail and the C member
-reads cannot.
+The parameter is **owned**: Rust receives a `Stamp` value, not a reference to
+one. The result is a single signed 64-bit integer. C supplies one C-compatible
+struct; Kotlin supplies one JVM object. Each is one native argument, but the
+generated code must read its fields and reconstruct the source Rust struct.
+Both targets then call `stamp_sum` exactly once and return the integer.
+
+Read the numbered pages in order to see each intermediate result. The
+[record walkthrough][struct] explains the reusable `Stamp` conversion in more
+detail. This function walkthrough explains how that conversion fits into an
+exported call: selecting the function, assigning native arguments and results,
+and handling failure. JNI getter calls can fail, so its wrapper needs an error
+path that the C member reads do not need.
 
 Deliberately not covered: a `Result` return, a borrowed parameter, a callback
 argument and a non-scalar result. Each is a sub-variant of this path

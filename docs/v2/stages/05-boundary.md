@@ -18,11 +18,13 @@ pub struct Stamp { pub secs: i64, pub nanos: i64 }
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
-A conversion knows how to turn a value into another value. It does not know which
-exported function it serves, where that function's result is supposed to go, or
-what should happen if a conversion inside it fails. That is this stage: taking
-the conversions planned for one requested function and assembling the actual
-native function a foreign caller will call.
+A value conversion answers a local question, such as how to construct a Rust
+`Stamp` from a JVM object. A callable binding needs more: an exported symbol,
+a calling convention, native parameters, a return value and error handling.
+Together these form the **native boundary**, the interface the foreign runtime
+actually calls. This stage combines the value conversions into a plan for that
+complete function, called a **wrapper** because it surrounds the source call
+with conversion and error-handling code.
 
 For this example, the two targets end up with these signatures:
 
@@ -38,16 +40,21 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ) -> jni::sys::jlong
 ```
 
-Both wrap the same Rust function through the same input conversion, yet neither
-signature can be derived from the other. The C one is what a C caller can write;
-the JNI one is what the JVM demands — a symbol built from the Kotlin package, the
-harness object holding the native declaration and the method name, plus two
-parameters, the environment and the receiver — the harness singleton, since the
-native method is an instance method of a Kotlin `object` — that the JVM passes
-to every native method and that no source parameter corresponds to. The target supplies
-those conventions; the registry places the conversions inside them. The source
-parameter keeps its name in both, because the boundary said so — a parameter is
-the one name the writer does not allocate.
+Both entry points eventually call the same source function. Their input
+conversions use the same record-construction algorithm but different reads:
+C member access in one case, JNI getter calls in the other.
+
+The C function uses the C calling convention and receives a C-compatible struct.
+The JNI function uses the platform's JNI calling convention, spelled `system`
+in Rust. Its exported `Java_...` name identifies the package, `JNINative`
+object and native method. The JVM supplies `env`, the interface used to call
+back into the JVM, and `_this`, the receiver of this instance native method.
+The `stamp` parameter is the actual user argument. These extra parameters have
+no counterparts in `source::stamp_sum`.
+
+The target adapter describes that signature. The registry connects its
+parameters to the conversion plans. Native parameter names come from the
+boundary description; the common writer chooses names for internal temporaries.
 
 Three things are decided here. **Where inputs come from**: which native argument
 feeds which input conversion, including arguments the target added for its own
@@ -59,16 +66,14 @@ failure**: every failure a conversion declared needs a terminal action here, and
 the actions differ by category — a `Result::Err` returned by the source function
 is not the same event as a JNI call failing mid-conversion.
 
-The JNI wrapper shows why that last part is not a detail. Reading `getSecs()` can
-fail; the conversion says so but decides nothing. The route comes from the
-adapter, and the one this example's adapter takes is to report the failure to the
-JVM and return zero — zero being merely what a native method must return while an
-exception is pending, since the caller sees the exception rather than a result.
-Reporting can itself fail, and that path terminates by aborting. The registry
-emits the branch, the reporting call, the check on its result and the terminal
-return; the adapter supplies the operation that reports. (The shipping JNI
-adapter routes errors differently — through a handler object the Kotlin caller
-passes — which is a choice in the same slot, not a different pipeline.)
+For example, `getSecs()` can fail before the source function runs. The V2 JNI
+adapter reports that failure to the JVM and returns a placeholder zero from the
+native method. With an exception pending, the Kotlin caller observes the
+exception, not a successful result of zero. If reporting itself fails, the
+generated code aborts. The adapter supplies the reporting operation, and the
+registry plans the branch and terminal action around it. V1's handler-based
+convention is a separate implementation and should not be confused with this
+V2 example.
 
 If a requested delivery or failure route is not supported, the function is
 skipped and the report says why. It is never quietly given a different ABI than
@@ -80,7 +85,9 @@ boundary of its own; it crosses inside the functions that use it.
 
 ## Assembling an exported function
 
-A complete binding function coordinates several value plans. It converts inputs, calls the source once, converts the selected result, handles failures, and finishes resource scopes.
+A complete binding function coordinates value plans: convert inputs, call the
+source once, convert its result and handle failures. Future resource-bearing
+conversions will also require cleanup on every relevant exit path.
 
 **Delivery** specifies where converted values go. A conversion producing a record can be reused whether the enclosing function returns that record, writes it through output parameters, or passes it to a declared callback. The conversion itself need not contain a second version for each destination.
 
@@ -116,11 +123,28 @@ struct FunctionPlan<Payload> {
 }
 ```
 
+All field shapes in this block are design sketches, not exact current API
+definitions. Current `BoundarySpec` uses a non-generic `AbiSpec`, whose native
+parameters carry their placement roles, plus output and failure routes. Current
+`FunctionPlan` stores those decisions with a flat instruction list. Names such
+as `CalleeId`, `FunctionBodyId`, `SinkId` and `ValueMapping` below belong to the
+design vocabulary. Current V2 supports `Void` and a
+native return; it does not yet support the `OutParameters`, `Branches` or
+`Invoke` cases shown here. A **sink** is a configured recipient of a result,
+such as a callback, rather than a native return slot. These distinctions matter
+when extending the engine: converting a value and choosing its recipient are
+separate decisions.
+
 `AbiSpec` describes the native interface, including target calling conventions and explicit environment operands such as a JNI environment. Each native parameter carries its role: it feeds one source parameter's conversion, it supplies a named runtime context that operations ask for, or the convention requires it and nothing uses it. That is what `InputPlacement` is as implemented, and it is also how an operation's `Context("jni.env")` operand finds the parameter that satisfies it — a conversion needing a context its boundary does not supply is skipped, with the reason. `ValueMapping` maps converted values/slots to a return, output location, or invocation argument. These are transport descriptions; they do not repeat source decomposition.
 
 `SinkId` identifies a declared destination and signature, not the runtime callback pointer itself. `CalleeId` identifies the source operation being wrapped. `FunctionOutput` identifies the conversions for the wrapped source operation's result. `FunctionBodyId` refers to the complete structured wrapper instructions assembled by the registry.
 
-There are three relevant error categories: a domain error returned by the source API, a binding/conversion error, and a runtime error such as a JNI failure. `FailureRoutes` selects their terminal actions: return a configured status, throw, call a declared handler, or abort according to the binding's policy.
+The error categories distinguish source-domain, binding-conversion and runtime
+failures. Current routes are a list of `FailureRoute` values. A route may run a
+reporting operation, then either return an expression or abort. Throwing a JVM
+exception is the reporting operation in this example, not a separate terminal
+variant. Source `Result` delivery and declared handler destinations remain
+extensions to this implemented route mechanism.
 
 One route is a reporting operation the target supplies, what to do when reporting
 itself fails, and how the route ends — returning an expression or aborting. The
@@ -131,7 +155,8 @@ unsupported.
 
 For a source `Result`, `OutputPlacement::Branches` maps the error value to its configured destination, while the domain failure route specifies how that path terminates. Both describe one consistent boundary policy. Conversion failures can also happen before the source call or while encoding its result; those use their binding/runtime routes. Failure while encoding a domain error must itself have a defined route.
 
-The registry constructs this flow:
+The complete design calls for this flow; choosing source `Result` branches and
+finishing explicit resource scopes are future steps:
 
 ```text
 validate and convert inputs
@@ -142,7 +167,9 @@ validate and convert inputs
  -> finish resource scopes
 ```
 
-The registry allocates synthetic parameters required by the boundary, validates type/value mappings and ensures that partial results and errors obey the declared contract. Unit results explicitly require no result payload.
+The target declares extra native parameters required by its convention, such
+as the JNI environment. The registry binds and validates those parameters
+against the operations that need them. A unit result requires no payload.
 
 C and JNI retain configured calling conventions. Unsupported result destinations skip the function; changing its ABI is not a substitute for support.
 

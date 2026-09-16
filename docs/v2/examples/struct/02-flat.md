@@ -17,7 +17,8 @@ From capture, the line this record produced, parsed back into the item it holds:
 
 ## Result
 
-One element in the namespace, under the name `Stamp`:
+Flat creates a structured type entry indexed by `Stamp`. The following is a
+conceptual view of that entry, with field positions shown explicitly:
 
 ```text
 Element::Type(Type::Struct(Struct {
@@ -29,15 +30,21 @@ Element::Type(Type::Struct(Struct {
 }))
 ```
 
-This is the element [the function's parameter][fn_flat] resolves to, and the one
-every later stage takes apart.
+`FieldShape::Named` means construction uses named fields, as in
+`Stamp { secs, nanos }`. The positions preserve declaration order, and each
+field's `Scalar(I64)` type tells the planner that it is a signed 64-bit integer.
+The entry describes Rust structure, not a C layout or a Kotlin class.
+
+This is the entry found when [the function's parameter][fn_flat] resolves the
+name `Stamp`. Later planning can use its fields if the selected representation
+requires structural conversion.
 
 ## Checks
 
 - Field order and names are the declaration's; `i64` is the exact type as
   written; no view says how a field crosses a boundary.
-- Field identity includes its owner, so `secs` here is not interchangeable with
-  a `secs` at index 0 of another record.
+- A field is addressed within its containing record. A `secs` at index 0 of
+  another record is a different position, even though its name and index match.
 - A type whose fields Flat does not model is an `Extern` instead — a name with
   nothing behind it — not a `Struct` with an empty field list.
 

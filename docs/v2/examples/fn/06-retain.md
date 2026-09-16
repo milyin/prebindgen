@@ -30,13 +30,22 @@ requirements:
 
 outcome(exported stamp_sum) = Emitted { artifacts: [ native wrapper, public declaration ] }
 
-report entry:
+request outcome summary:
     element: exported stamp_sum
     outcome: Emitted
-    symbol:  stamp_sum  |  Java_example_JNINative_stampSum
+
+generated symbol (not a report field): stamp_sum | Java_example_JNINative_stampSum
 ```
 
-Had a field of the record been unsupported:
+The table summarizes dependency outcomes; it is not the report's serialized
+schema. `ready` means the required plan or public type is available. Only when
+all requirements succeed can the function be kept. The report identifies this
+request as `fn:stamp_sum`; generated symbols are shown here to connect the
+request to the eventual C/JNI entry points.
+
+If a field conversion were unsupported, the same reason would propagate to
+both the record and its caller. The cause numbers below are explanatory labels;
+current reports copy the reason and dependency path rather than use a cause-id table:
 
 ```text
 outcome(record)             = Skipped { causes: [cause#1] }
@@ -49,8 +58,8 @@ outcome(exported stamp_sum) = Skipped { causes: [cause#1] }   // same cause, own
   [its public representation][struct_retain], so either being unsupported skips
   it too, carrying the same cause rather than a new one.
 - Nothing partial is retained — no wrapper calling a conversion that was not.
-- A helper kept only because this function needs it stays distinguishable in the
-  report from an element the user asked to export.
+- The JNI reporting helper is supporting output, not a separately requested
+  public function. Keeping it does not add a user-facing function request.
 
 [fn]: README.md
 [fn_boundary]: 05-boundary.md

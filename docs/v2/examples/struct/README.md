@@ -11,22 +11,22 @@ pub struct Stamp {
 }
 ```
 
-A record is not something a foreign caller can hold directly. Both targets have
-to answer two questions about it — what carries its data, and through which
-operations are the parts of that carrier read — and the answers differ sharply:
-C copies an aggregate by value and reads its members, Kotlin/JNI passes an object
-and calls its property getters through the JVM. What does not differ is the
-source-side work: the same two fields, converted by the same child conversions,
-assembled into the same `Stamp { secs, nanos }`.
+This walkthrough follows the type that the function example accepts. A
+**record** here is a struct whose fields Flat can inspect. `Stamp` has two
+signed 64-bit fields; a foreign caller needs its own way to hold those values.
+C uses a generated C-compatible struct passed by value. Kotlin uses a generated
+data class whose JVM getters the native wrapper can call.
 
-This path is where that split is visible in the smallest possible form. It is
-also where the target's operation descriptions are worked out in full — the C
-member reads and the JNI getters, with their operands, failures, validity and the
-one fragment each renders — because those descriptions are what makes the
-registry's record traversal target-independent.
+The key question is how either foreign representation becomes the original Rust
+`Stamp`. For each field, the target describes a read operation, and the registry
+combines those reads with field conversions and Rust construction. C member
+reads cannot fail; JNI getter calls can. The value-planning pages explain both
+operations, including the additional contracts planned for more complex values.
 
-The record has no native boundary of its own: it crosses inside
-[the function that takes it][fn], and that is the only cell it is missing.
+Follow the pages below from capture to the emitted type. There is no separate
+native-boundary page for a record: a type is not a callable entry point. The
+record crosses the native boundary as an argument of
+[the function that takes it][fn].
 
 Deliberately not covered: a field whose type is itself a record, an optional
 field and a sequence field (`struct_nested`, `struct_option_field`,

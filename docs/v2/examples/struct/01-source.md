@@ -17,6 +17,10 @@ pub struct Stamp {
 
 ## Result
 
+Capture saves the struct's declaration as Rust text inside a JSON record. The
+record below is formatted for reading; the capture file stores it on one line.
+The location is illustrative, since actual line numbers depend on the file.
+
 ```json
 {
   "kind": "struct",
@@ -27,6 +31,11 @@ pub struct Stamp {
 ```
 
 ## Checks
+
+`content` contains the fields, including their names, order, types and `pub`
+visibility. Those are not yet separate JSON fields. The next stage parses this
+text and builds the structured record that conversion planning can inspect.
+The original Rust struct remains in the source crate.
 
 - A type is kept whole: its fields are its declaration, so field names, types,
   order and visibility all survive inside `content` without being fields of the

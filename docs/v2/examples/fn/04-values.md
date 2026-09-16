@@ -14,7 +14,9 @@ Crossing { source: i64,   direction: OutOfRust }    // for Return
 
 ## Result
 
-Two nodes, neither of which contains the call to `stamp_sum`:
+There are two conversions: foreign argument to Rust `Stamp`, and Rust result
+to foreign integer. A **node** is a reusable conversion plan. Neither node
+calls `stamp_sum`; the next stage places that source call between them.
 
 ```text
 node(input)  = Crossing { Stamp, IntoRust }
@@ -36,9 +38,9 @@ policy. Their `NodeId`s are what [the boundary][fn_boundary] assembles.
 
 ## Checks
 
-- Node identity is (type, direction, [relation](../../stages/04-values.md#what-a-relation-is), effective policy), so C and JNI
-  never share a node, and a second function taking an owned `Stamp` reuses this
-  one.
+- Reuse depends on type, direction, [relation](../../stages/04-values.md#what-a-relation-is),
+  effective policy and child conversions. A second owned `Stamp` input with
+  the same choices can reuse this plan. C and JNI run separate generation jobs.
 - An unsupported child makes the input node unsupported, and this function is
   skipped with that cause. Nothing partial is recorded.
 

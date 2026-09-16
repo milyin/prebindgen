@@ -10,47 +10,52 @@ Owner: the registry; the JNI adapter describes the object carrier and its getter
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-policy:   data_class example.Stamp, record_input ObjectProperties,
-          getters "getSecs" / "getNanos", descriptor "()J"
+policy:   DataClass { class: "example.Stamp" }
+derived getter operations: "getSecs" / "getNanos", descriptor "()J"
 ```
 
 ## Result
 
-The representation, and one operation per property:
+The object is carried as one reference, but the product protocol reads two
+properties. The registry plans each read and combines the returned integers.
+The operation below uses the current fields, with descriptive variables for
+the carrier types. Its operand roles tell the registry where each input comes from.
 
 ```text
 ReprSpec {
     layout:   Scalar(<the object reference>),
-    protocol: Product { projections: [read_secs, read_nanos], … },
+    protocol: Product { projections: [read_secs, read_nanos] },
 }
 ```
 
 ```rust
 // read_secs; read_nanos differs only in the getter it names.
 PrimitiveSpec {
-    signature: PrimitiveSignature {
-        operands: vec![
-            OperandSpec { ty: OperationType::Carrier(jni_environment), access: Access::Exclusive },
-            OperandSpec { ty: OperationType::Carrier(stamp_object),    access: Access::Shared },
-        ],
-        results: vec![OperationType::Carrier(jni_long)],
-    },
-    failure: PrimitiveFailure::Fallible {
-        error:    OperationType::Carrier(jni_error),       // jni::errors::Error
-        category: FailureCategory::Runtime,
-    },
-    validity:     ValidityContract { results: vec![ResultValidity::Independent] },
-    resources:    ResourceContract::none(),
+    operands: vec![
+        OperandSpec::context("jni.env", OperationType::Carrier(jni_environment), Access::Exclusive),
+        OperandSpec::value(OperationType::Carrier(stamp_object), Access::Shared),
+    ],
+    result: Some(OperationType::Carrier(jni_long)),
+    failure: PrimitiveFailure::fallible(
+        OperationType::Carrier(jni_error), // jni::errors::Error
+        FailureCategory::Runtime,
+    ),
     dependencies: vec![],                                   // calls the jni crate directly
-    implementation: JniOperation::CallLongGetter {
+    implementation: Operation::Target(JniPayload::Getter {
         name:       "getSecs".into(),
         descriptor: "()J".into(),                           // no arguments, returns a long
-    },
+    }),
 }
 ```
 
-Applied to an environment named `env` and an object named `stamp`, that
-description renders one expression:
+The environment operand allows JNI calls and is used exclusively; the object
+operand is borrowed for the getter. `Runtime` identifies the error category
+that the enclosing wrapper must handle. In the implementation the environment
+has the named role `Context("jni.env")`, which the boundary binds to `env`.
+
+Applied to `env` and the input object `stamp`, the getter description renders
+one expression. `call_method` invokes the zero-argument method, and `.j()`
+extracts its long value:
 
 ```rust
 env.call_method(&stamp, "getSecs", "()J", &[])
@@ -64,11 +69,11 @@ env.call_method(&stamp, "getSecs", "()J", &[])
   wrapper the registry composes.
 - The environment is an operand, so no rendered fragment can depend on a
   variable named `env` in its caller.
-- Getter names and descriptors come from the class metadata recorded with the
-  request — the same metadata [the emitted class][struct_emit_jni] is rendered
-  from.
-- Both results are `Independent`: the integers are copied out, so nothing stays
-  tied to the object or its reference frame.
+- Getter names and descriptors are derived from Flat's fields during planning.
+  The adapter also derives [the emitted class][struct_emit_jni] from those
+  fields, keeping public properties and native accesses consistent.
+- Both results are independent copies: neither integer remains tied to the
+  object's reference frame. There is no explicit validity-contract field today.
 
 [struct]: README.md
 [struct_values]: 04-values.md
