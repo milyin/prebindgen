@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["flat","pipeline","shape","types_util"],"trait":["RustEmitter"]};
