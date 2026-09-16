@@ -473,7 +473,7 @@
 <a href=#473 id=473 data-nosnippet>473</a>    </span>V1(Box&lt;prebindgen_registry::Registry&gt;),
 <a href=#474 id=474 data-nosnippet>474</a>    <span class="doccomment">/// The v2 engine's finished run — see `prebindgen-registry-v2`.
 <a href=#475 id=475 data-nosnippet>475</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#476 id=476 data-nosnippet>476</a>    </span>V2(Box&lt;prebindgen_registry_v2::Generation&gt;),
+<a href=#476 id=476 data-nosnippet>476</a>    </span>V2(Box&lt;prebindgen_registry_v2::Generation&lt;<span class="kw">crate</span>::v2::JniPayload&gt;&gt;),
 <a href=#477 id=477 data-nosnippet>477</a>}
 <a href=#478 id=478 data-nosnippet>478</a>
 <a href=#479 id=479 data-nosnippet>479</a><span class="doccomment">/// One JNI parameter as a signature writes it: name, Kotlin type, the Kotlin
@@ -1161,7 +1161,7 @@
 <a href=#1161 id=1161 data-nosnippet>1161</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
 <a href=#1162 id=1162 data-nosnippet>1162</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_v2(
 <a href=#1163 id=1163 data-nosnippet>1163</a>        decls: Declarations,
-<a href=#1164 id=1164 data-nosnippet>1164</a>        generation: prebindgen_registry_v2::Generation,
+<a href=#1164 id=1164 data-nosnippet>1164</a>        generation: prebindgen_registry_v2::Generation&lt;<span class="kw">crate</span>::v2::JniPayload&gt;,
 <a href=#1165 id=1165 data-nosnippet>1165</a>    ) -&gt; <span class="self">Self </span>{
 <a href=#1166 id=1166 data-nosnippet>1166</a>        JniGen {
 <a href=#1167 id=1167 data-nosnippet>1167</a>            decls,
@@ -1193,7 +1193,7 @@
 <a href=#1193 id=1193 data-nosnippet>1193</a>        }
 <a href=#1194 id=1194 data-nosnippet>1194</a>    }
 <a href=#1195 id=1195 data-nosnippet>1195</a>
-<a href=#1196 id=1196 data-nosnippet>1196</a>    <span class="doccomment">/// What was generated and what was skipped, per declared element.
+<a href=#1196 id=1196 data-nosnippet>1196</a>    <span class="doccomment">/// What was generated and what was skipped, per declaration.
 <a href=#1197 id=1197 data-nosnippet>1197</a>    ///
 <a href=#1198 id=1198 data-nosnippet>1198</a>    /// `None` under v1: its answer is "everything declared, or the build
 <a href=#1199 id=1199 data-nosnippet>1199</a>    /// failed", so it has no partial surface to manifest. Producing one for v1

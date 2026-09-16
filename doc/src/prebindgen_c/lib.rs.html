@@ -337,7 +337,7 @@
 <a href=#337 id=337 data-nosnippet>337</a>    </span>V1(Box&lt;prebindgen_registry::Registry&gt;),
 <a href=#338 id=338 data-nosnippet>338</a>    <span class="doccomment">/// The v2 engine's finished run — see `prebindgen-registry-v2`.
 <a href=#339 id=339 data-nosnippet>339</a>    </span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#340 id=340 data-nosnippet>340</a>    </span>V2(Box&lt;prebindgen_registry_v2::Generation&gt;),
+<a href=#340 id=340 data-nosnippet>340</a>    </span>V2(Box&lt;prebindgen_registry_v2::Generation&lt;v2::CPayload&gt;&gt;),
 <a href=#341 id=341 data-nosnippet>341</a>}
 <a href=#342 id=342 data-nosnippet>342</a>
 <a href=#343 id=343 data-nosnippet>343</a><span class="comment">// Opaque — exists so `Result&lt;Cbindgen, _&gt;::expect_err` works in tests.
@@ -403,7 +403,7 @@
 <a href=#403 id=403 data-nosnippet>403</a>        }
 <a href=#404 id=404 data-nosnippet>404</a>    }
 <a href=#405 id=405 data-nosnippet>405</a>
-<a href=#406 id=406 data-nosnippet>406</a>    <span class="doccomment">/// What was generated and what was skipped, per declared element.
+<a href=#406 id=406 data-nosnippet>406</a>    <span class="doccomment">/// What was generated and what was skipped, per declaration.
 <a href=#407 id=407 data-nosnippet>407</a>    ///
 <a href=#408 id=408 data-nosnippet>408</a>    /// `None` under v1: its answer is "everything declared, or the build
 <a href=#409 id=409 data-nosnippet>409</a>    /// failed", so it has no partial surface to manifest. Producing one for v1
@@ -586,7 +586,7 @@
 <a href=#586 id=586 data-nosnippet>586</a></span><span class="kw">mod </span>tests;
 <a href=#587 id=587 data-nosnippet>587</a><span class="kw">mod </span>trait_impl;
 <a href=#588 id=588 data-nosnippet>588</a><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
-<a href=#589 id=589 data-nosnippet>589</a></span><span class="kw">mod </span>v2;
+<a href=#589 id=589 data-nosnippet>589</a></span><span class="kw">pub mod </span>v2;
 <a href=#590 id=590 data-nosnippet>590</a>
 <a href=#591 id=591 data-nosnippet>591</a><span class="kw">pub use </span>decl::{
 <a href=#592 id=592 data-nosnippet>592</a>    CallbackDecl, ConvertTypeDecl, DataTypeDecl, Decls, EnumTypeDecl, ErrorTypeDecl, FunDecl,
