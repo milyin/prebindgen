@@ -182,7 +182,7 @@ A target contributes fragments and declarations, never control flow. The C
 adapter contributes `repr(C)`, the extern calling convention, the exported symbol
 and member identities; its member reads render through a common Rust operation,
 so C ships no field-read renderer of its own. The JNI adapter contributes the JNI
-symbol and calling convention, the environment and class parameters, the [carrier](04-values.md#describing-target-values-and-operations)
+symbol and calling convention, the environment and receiver parameters, the [carrier](04-values.md#describing-target-values-and-operations)
 types, the getter descriptors and the error [policy](03-requests.md#what-policy-means) — and a renderer for the JNI
 operations, which produces one expression per operation and nothing around it.
 
