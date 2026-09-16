@@ -1,7 +1,8 @@
-//! The emitted-surface manifest: what v2 generated, what it skipped, and why.
+//! The report: what v2 generated, what it skipped, and why.
 //!
-//! Two renderings of one value — JSON for tooling (test-section selection reads
-//! it) and Markdown for a person. Both are deterministic: declarations sort by kind
+//! Two renderings of one value — JSON for tooling (the CI smoke check reads it
+//! today; selecting test sections from it is planned) and Markdown for a
+//! person. Both are deterministic: declarations sort by kind
 //! then id, and skip causes are grouped by code so a single missing capability
 //! is stated once with the list of roots it took down, rather than repeated
 //! forty times.
@@ -18,7 +19,7 @@ use crate::{
     outcome::{EngineError, Outcome},
 };
 
-/// The manifest's own version. A consumer that reads the JSON checks this
+/// The report's own version. A consumer that reads the JSON checks this
 /// before trusting the shape; it changes whenever a field's meaning does.
 pub const SCHEMA_VERSION: u32 = 2;
 
@@ -41,7 +42,7 @@ pub struct Report {
     /// See [`SCHEMA_VERSION`].
     pub schema_version: u32,
     /// Enough of the run's input to tell a stale report from a fresh one: the
-    /// declaring crate and the source directories it read.
+    /// declaring crate and the source modules it read.
     pub source_identity: SourceIdentity,
     /// Every declaration, sorted by kind then id.
     pub declarations: Vec<Entry>,
@@ -52,9 +53,10 @@ pub struct Report {
 pub struct SourceIdentity {
     /// The crate whose build script declared the binding.
     pub declaring_crate: String,
-    /// The captured-item directories the model was read from.
+    /// The source modules the model was built from — crate or module names,
+    /// as the captured items' locations name them, not paths.
     pub sources: Vec<String>,
-    /// How many `#[prebindgen]` items those directories held.
+    /// How many `#[prebindgen]` items those modules held.
     pub captured_items: usize,
 }
 
@@ -97,12 +99,12 @@ impl Report {
         )
     }
 
-    /// The manifest as JSON.
+    /// The report as JSON.
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("a report is plain data and always serializes")
     }
 
-    /// The manifest as Markdown.
+    /// The report as Markdown.
     pub fn to_markdown(&self) -> String {
         use std::fmt::Write as _;
         let mut out = String::new();
@@ -191,7 +193,7 @@ impl Report {
 
     /// Print the summary and one actionable line per skip cause as cargo
     /// warnings. The full detail stays in the written report — a build log is
-    /// not the manifest.
+    /// not the report.
     pub fn warn(&self) {
         println!("cargo:warning={}", self.summary());
         for (capability, entries) in self.skips_by_capability() {

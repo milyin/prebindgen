@@ -30,10 +30,7 @@ requirements:
 
 outcome(exported stamp_sum) = Emitted { artifacts: [ native wrapper, public declaration ] }
 
-report entry:
-    element: exported stamp_sum
-    outcome: Emitted
-    symbol:  stamp_sum  |  Java_example_JNINative_stampSum
+outcome recorded for the declaration `fn:stamp_sum`: emitted
 ```
 
 Had a field of the record been unsupported:
@@ -49,8 +46,8 @@ outcome(exported stamp_sum) = Skipped { causes: [cause#1] }   // same cause, own
   its public [representation](../../stages/04-values.md#plan-value-conversions), [retained on its own path][struct_retain], so either being unsupported skips
   it too, carrying the same cause rather than a new one.
 - Nothing partial is retained — no [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) calling a conversion that was not.
-- A helper kept only because this function needs it stays distinguishable in the
-  report from an element the user asked to export.
+- A helper kept only because this function needs it is not a declaration, and
+  gets no [outcome](../../stages/06-retain.md#retain-supported-output) of its own.
 
 [fn]: README.md
 [fn_boundary]: 05-boundary.md

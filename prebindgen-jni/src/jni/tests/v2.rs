@@ -58,9 +58,9 @@ fn fixture_items() -> Vec<(syn::Item, SourceLocation)> {
 #[test]
 fn every_declared_element_is_accounted_for() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let report = generated.report().expect("v2 produces a report");
 
-    let ids: Vec<&str> = manifest
+    let ids: Vec<&str> = report
         .declarations
         .iter()
         .map(|entry| entry.declaration.id.as_str())
@@ -77,7 +77,7 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let placement = |id: &str| {
-        manifest
+        report
             .declarations
             .iter()
             .find(|entry| entry.declaration.id.as_str() == id)
@@ -96,7 +96,7 @@ fn every_declared_element_is_accounted_for() {
         "io.test.jni.thing.doZThingDescribe"
     );
 
-    let counts = manifest.counts();
+    let counts = report.counts();
     assert_eq!(
         counts.emitted, 0,
         "nothing here is a data class or a scalar"
@@ -107,7 +107,7 @@ fn every_declared_element_is_accounted_for() {
     // Each skip says what the value waits on and where the walk stopped: a
     // borrowed handle is a reference, which no v2 carrier holds yet.
     let skip = |id: &str| {
-        manifest
+        report
             .declarations
             .iter()
             .find(|entry| entry.declaration.id.as_str() == id)
@@ -156,9 +156,9 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
         )
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
-    let counts = manifest.counts();
-    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{manifest:?}");
+    let report = generated.report().expect("v2 produces a report");
+    let counts = report.counts();
+    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{report:?}");
 
     let dir = unique_test_dir("jnigen_v2_emitted");
     let _ = std::fs::remove_dir_all(&dir);
@@ -217,9 +217,9 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
 #[test]
 fn class_members_are_elements_of_their_own() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let report = generated.report().expect("v2 produces a report");
     let representation = |id: &str| {
-        manifest
+        report
             .declarations
             .iter()
             .find(|entry| entry.declaration.id.as_str() == id)
@@ -236,8 +236,8 @@ fn class_members_are_elements_of_their_own() {
 #[test]
 fn an_ignore_is_classified_separately() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
-    let ignored = manifest
+    let report = generated.report().expect("v2 produces a report");
+    let ignored = report
         .declarations
         .iter()
         .find(|entry| entry.declaration.id.as_str() == "fn:z_thing_internal")
@@ -273,7 +273,7 @@ fn the_ordinary_writers_run_under_v2() {
         .is_empty());
     assert!(kotlin_root.is_dir());
 
-    let written = generated.write_manifest(&dir).expect("write_manifest");
+    let written = generated.write_report(&dir).expect("write_report");
     assert_eq!(written.len(), 2);
     let json = std::fs::read_to_string(&written[0]).unwrap();
     assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
@@ -303,11 +303,11 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
         )
         .build_with(Pipeline::V2)
         .expect("a binding-local fn needs no captured item");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
+    let report = generated.report().expect("v2 produces a report");
 
     // Once each: a helper is stated where it is bound, and a second entry for
     // the helper itself would give one id to two declarations.
-    let ids: Vec<&str> = manifest
+    let ids: Vec<&str> = report
         .declarations
         .iter()
         .map(|entry| entry.declaration.id.as_str())
@@ -332,8 +332,8 @@ fn a_function_backed_constant_resolves_against_the_function() {
         )
         .build_with(Pipeline::V2)
         .expect("a function-backed constant resolves");
-    let manifest = generated.manifest().expect("v2 produces a manifest");
-    let constant = manifest
+    let report = generated.report().expect("v2 produces a report");
+    let constant = report
         .declarations
         .iter()
         .find(|entry| entry.declaration.representation == "constant_fun")
@@ -364,8 +364,8 @@ fn stamp_items(extra: &[&str]) -> Vec<(syn::Item, SourceLocation)> {
 /// The skip recorded for `id`, as `(capability, path)`.
 fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
     generated
-        .manifest()
-        .expect("v2 produces a manifest")
+        .report()
+        .expect("v2 produces a report")
         .declarations
         .iter()
         .find(|entry| entry.declaration.id.as_str() == id)
@@ -409,7 +409,7 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         "unsupported.jni.expand_param"
     );
     assert_eq!(
-        generated.manifest().unwrap().counts().emitted,
+        generated.report().unwrap().counts().emitted,
         1,
         "the class alone"
     );
@@ -436,7 +436,7 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         )
     );
     assert_eq!(
-        generated.manifest().unwrap().counts().emitted,
+        generated.report().unwrap().counts().emitted,
         1,
         "the class alone"
     );
@@ -466,7 +466,7 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         skip_of(&generated, "fn:give_value").0,
         "unsupported.jni.expand_return"
     );
-    assert_eq!(generated.manifest().unwrap().counts().emitted, 0);
+    assert_eq!(generated.report().unwrap().counts().emitted, 0);
 }
 
 /// Two packages may each export a function called `value`; the harness has one
@@ -484,7 +484,7 @@ fn a_public_name_does_not_name_the_native_method() {
         .package(crate::package!("b").fun(prebindgen_registry::fun!(second_value).name("value")))
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    assert_eq!(generated.manifest().unwrap().counts().emitted, 2);
+    assert_eq!(generated.report().unwrap().counts().emitted, 2);
 
     let dir = unique_test_dir("jnigen_v2_two_values");
     let _ = std::fs::remove_dir_all(&dir);
@@ -671,12 +671,12 @@ fn an_unsafe_source_function_is_a_reported_skip() {
 }
 
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole
-/// existing surface, and no manifest.
+/// existing surface, and no report.
 #[test]
 fn v1_is_unchanged_and_reachable_by_name() {
     let generated = binding().build_with(Pipeline::V1).expect("v1 resolves");
     assert_eq!(generated.pipeline(), Pipeline::V1);
-    assert!(generated.manifest().is_none());
+    assert!(generated.report().is_none());
     assert!(generated
         .registry()
         .flat()

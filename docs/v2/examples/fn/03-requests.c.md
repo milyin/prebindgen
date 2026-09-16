@@ -37,8 +37,9 @@ policy (C function):
 
 - A function keeps its Rust name as the exported symbol unless a naming hook on
   the builder changes it, which is why this one is `stamp_sum`.
-- C is opt-in: a function nobody declares produces no request, and is reported
-  as unselected rather than skipped.
+- C is opt-in: a function nobody declares produces no request and gets no
+  [outcome](../../stages/06-retain.md#retain-supported-output) (an *unselected*
+  outcome for it is designed, not built).
 - Declaring the function without declaring `Stamp` is a valid request that fails
   later, at [retention][fn_retain].
 

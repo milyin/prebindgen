@@ -108,7 +108,7 @@ pub enum EngineError {
         entries: Vec<(DeclarationId, SourceKind, String)>,
     },
     /// Two declarations answering to one id. An id identifies a declaration,
-    /// and a manifest that gave one id to two entries could not account for
+    /// and a report that gave one id to two entries could not account for
     /// either — so this is a contradiction in the declarations, not a gap in
     /// what v2 implements.
     DuplicateDeclaration { entries: Vec<DeclarationId> },

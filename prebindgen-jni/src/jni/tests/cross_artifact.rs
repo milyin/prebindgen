@@ -383,7 +383,7 @@ fn run_pipeline(
     let gen = jni.build_over(registry).expect("resolve");
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
-    let report = gen.report();
+    let report = gen.surface_report();
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let mut kotlin = BTreeMap::new();
     for p in &paths {

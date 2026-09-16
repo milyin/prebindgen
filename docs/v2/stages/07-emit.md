@@ -158,9 +158,8 @@ for the JVM, the binding error type, the traits behind an opaque value passed by
 value across the C ABI. A binding crate therefore depends on a few hundred lines
 at run time and on the generator only while building.
 
-The report is published alongside the code. It is what says which declarations
-were emitted, which were skipped and why — and, for the example crates,
-which test sections may be compiled against this output.
+[The report](../report.md) is written alongside the code: which declarations
+were emitted, which were skipped and why. Nothing here depends on it.
 
 The [element paths](#elements-at-this-stage) below show each generated file in
 full, including the parts elided above.

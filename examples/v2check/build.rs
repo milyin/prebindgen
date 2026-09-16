@@ -83,8 +83,8 @@ fn main() {
     };
 
     // The report is published beside the code, as it is for a real binding.
-    c.write_manifest(&out_dir).expect("write the C report");
-    jni.write_manifest(&out_dir).expect("write the JNI report");
+    c.write_report(&out_dir).expect("write the C report");
+    jni.write_report(&out_dir).expect("write the JNI report");
 
     println!("cargo:rustc-env=V2CHECK_C={}", c_path.display());
     println!("cargo:rustc-env=V2CHECK_JNI={}", jni_path.display());

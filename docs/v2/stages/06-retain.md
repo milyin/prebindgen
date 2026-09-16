@@ -4,8 +4,8 @@
 
 # Retain supported output
 
-Status: implemented. Outcomes, causes, the frozen result and the report are
-what the engine produces; `Unselected` and the pruning of unreachable [conversions](04-values.md#plan-value-conversions)
+Status: implemented. Outcomes, causes and the frozen result are what this stage
+produces; `Unselected` and the pruning of unreachable [conversions](04-values.md#plan-value-conversions)
 are not there yet.
 
 The examples in this chapter use one small source crate — a record and a function
@@ -48,23 +48,22 @@ bites only where a representation promised to carry the parts.
 Every declaration ends this stage with exactly one **outcome**: *emitted*,
 *skipped*, or *ignored*. Being unsupported is a normal outcome, not a failure. Each skipped declaration is
 recorded with a **capability** — a stable code naming the support it waits on,
-such as `unsupported.jni.carrier` — a human-readable explanation and the source
-or configuration location that provoked it, so the report can say what to
-implement rather than just that something is missing. Two other outcomes exist so that
-the report can account for every captured item, not only the requested ones: a
-declaration the user explicitly excluded is *ignored*, and an item that was captured but
-that no configuration asked for is *unselected*. The second is expected in bulk —
-a source crate typically captures more than any one binding exposes — so a report
-groups those rather than listing them beside real skips; their value is answering
-"why is this not in my header" without reading the build script. Genuine
-errors — contradictory configuration, or a violated internal invariant — are not
-turned into skip reasons; they fail generation.
+such as `unsupported.jni.carrier` — a human-readable explanation and the path
+from the declaration to where planning stopped, so what to implement can be
+read off the outcome rather than guessed from what is missing. A declaration the
+user explicitly excluded is *ignored*: a decision, accounted apart from the
+gaps. (A fourth outcome, *unselected*, for a captured item no configuration
+asked for, is designed and not built.) Genuine errors — contradictory
+configuration, or a violated internal invariant — are not turned into skip
+reasons; they fail generation. The outcomes are written out beside the
+generated code as [the report](../report.md), a diagnostic nothing in the
+pipeline reads.
 
 What survives is then **frozen**: planning is over, the records are immutable,
 and the result — retained conversions, wrappers, public declarations, and the
-generated units in a valid emission order — is handed to the writers together
-with the report. A writer reads it. It cannot plan a conversion that is missing,
-add a dependency, or change any of these decisions.
+generated units in a valid emission order — is handed to the writers. A writer
+reads those retained plans and nothing else. It cannot plan a conversion that is
+missing, add a dependency, or change any of these decisions.
 
 ## Unsupported requests and public API dependencies
 
@@ -189,7 +188,7 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> common Rust writer emits native wrappers and supporting Rust types
  -> C: cbindgen derives headers from generated Rust
     JNI: optional foreign-writer interface is implemented by the Kotlin writer
- -> publish generated artifacts, report and test-selection manifest
+ -> publish generated artifacts
 ```
 
 Selection, child resolution and representation happen together for each node. A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
@@ -200,23 +199,15 @@ struct Generation<Payload> {
     functions: FrozenArena<FunctionPlan<Payload>>, // Retained complete native functions.
     surface: FrozenArena<SurfaceSpec<Payload>>, // Complete retained public declarations.
     artifacts: OrderedArtifacts<Payload>, // Generated units with a validated emission order.
-    report: GenerationReport, // All requested/source outcomes and their diagnostic paths.
+    outcomes: Outcomes,     // Every declaration's outcome, with its diagnostic path.
 }
 ```
 
 Freezing retains all referenced tables (bodies, primitives, layouts, helpers) and the required `Flat` source-emission data, directly or through shared ownership. Rendering uses these retained records and language-provided rendering code. The original registry, borrowed adapter and temporary working tables need not remain alive.
 
-**Frozen** means planning is complete and the records are immutable. `FrozenArena` retains ID-based lookup without insertion or replanning. As implemented, the outer loop retains a public declaration only when every element it requires was emitted, propagating the underlying cause with each dependent's own path to it; conversions are all kept rather than pruned to the ones a retained output reaches, since after inlining nothing refers to them. `OrderedArtifacts` provides an emission order appropriate to generated dependencies, including any required forward declarations. `GenerationReport` records emitted/skipped/ignored/unselected outcomes, pipeline identity, capability causes, native/foreign artifacts and symbol identities. Helper-only items remain distinguishable from explicitly requested exports.
+**Frozen** means planning is complete and the records are immutable. `FrozenArena` retains ID-based lookup without insertion or replanning. As implemented, the outer loop retains a public declaration only when every element it requires was emitted, propagating the underlying cause with each dependent's own path to it; conversions are all kept rather than pruned to the ones a retained output reaches, since after inlining nothing refers to them. `OrderedArtifacts` provides an emission order appropriate to generated dependencies, including any required forward declarations. As designed, the outcomes would also record `unselected` items, generated artifacts and symbol identities; as built they record the three outcomes with their capability causes and paths, which is what [the report](../report.md) writes out. Helper-only items remain distinguishable from explicitly requested exports.
 
-The report has a second consumer. The example crates' test suites are written
-against the full API, so when V2 emits a subset, tests referring to what it
-skipped would not compile — a runtime guard cannot hide a missing class from
-`kotlinc` or a missing symbol from a C compiler. Each suite is therefore divided
-into **test sections**, each naming the emitted declarations it needs, and the report
-selects the sections whose declarations were all emitted. A milestone still has to
-require that meaningful sections run, so that skipping everything cannot pass.
-
-The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds. The report also selects existing test sections, ensuring tests match the emitted API.
+The common Rust writer reads `Generation`; JNI's optional writer reads the same result for Kotlin. C passes generated Rust to `cbindgen` for headers. Writers cannot add dependencies or change support decisions. Publish after output generation succeeds.
 
 ## Elements at this stage
 

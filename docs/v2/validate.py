@@ -15,6 +15,7 @@ ROOT_PAGES = {
     "source.md": "fixture",
     "implementation.md": "implementation",
     "concepts.md": "concepts",
+    "report.md": "report",
 }
 # Pages the vocabulary rule does not read: the vocabulary itself, and the page
 # about the document's format.

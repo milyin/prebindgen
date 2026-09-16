@@ -839,7 +839,7 @@ fn report_explains_the_resolved_surface() {
                 .field(prebindgen_registry::fun!(summary_total)),
         );
     let gen = jni.build_over(registry).expect("resolve");
-    let report = gen.report();
+    let report = gen.surface_report();
 
     // The reshaped fn: exact signature (builder callback form) + provenance.
     assert!(report.contains("`storage_summary`"), "{report}");
@@ -876,7 +876,7 @@ fn report_explains_the_resolved_surface() {
         "{report}"
     );
     // Deterministic.
-    assert_eq!(report, gen.report());
+    assert_eq!(report, gen.surface_report());
 }
 
 /// N1: `///` docs become KDoc, and shaped positions get generated notes

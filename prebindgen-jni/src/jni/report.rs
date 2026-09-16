@@ -1,4 +1,4 @@
-//! `JniGen::report()` — the resolved binding surface,
+//! `JniGen::surface_report()` — the resolved binding surface,
 //! explained.
 //!
 //! Declarations act at a distance: one `expand_return!` / `convert!` /
@@ -15,7 +15,9 @@
 //! (the `write_kotlin` seam): the *pattern* — describe your resolved
 //! surface — is adapter-universal, but the *content* is intrinsically in
 //! the destination language's vocabulary, so each adapter implements its
-//! own.
+//! own. It is v1's, and not the per-declaration [`report`](JniGen::report)
+//! the v2 engine produces: that one accounts for outcomes, this one explains
+//! a surface v1 resolved in full.
 
 use kotlin_codegen::KtFun;
 use prebindgen_registry::Conversions;
@@ -28,7 +30,7 @@ impl super::JniGen {
     /// wrapper (exactly as generated) with the expand/error plans that
     /// shaped it, then the type table (kind, Kotlin FQN, wire, conversion
     /// sources). Pure read over the resolved registry.
-    pub fn report(&self) -> String {
+    pub fn surface_report(&self) -> String {
         let ext = self.declarations();
         let registry = self.registry();
         let mut out = String::new();
