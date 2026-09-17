@@ -47,6 +47,30 @@ mod tests {
         crate::stamp_show(stamp);
     }
 
+    /// A field written under a condition nothing could answer reaches every
+    /// place the generated Rust names that field.
+    ///
+    /// The mirror's member, the read of it and the initializer that fills it,
+    /// each under the same condition — and the compiler is the other half of
+    /// this test: with the flag unset, `source::Sample` has no `extra`, so a
+    /// wrapper that named one would not have built this crate.
+    #[test]
+    fn a_conditional_source_field_is_conditional_everywhere_it_appears() {
+        let c = std::fs::read_to_string(env!("V2CHECK_C")).expect("the C file");
+        for under in [
+            "#[cfg(v2check_conditional_field)]\n    pub extra: i64,",
+            "#[cfg(v2check_conditional_field)]\n    let v1 = sample.extra;",
+            "#[cfg(v2check_conditional_field)]\n        extra: v1,",
+        ] {
+            assert!(c.contains(under), "missing:\n{under}\n\ngenerated:\n{c}");
+        }
+        assert_eq!(
+            c.matches("v2check_conditional_field").count(),
+            3,
+            "three places name it, and nothing else does:\n{c}"
+        );
+    }
+
     /// Every Rust item the specification's emit pages show is emitted, token
     /// for token.
     ///
@@ -134,14 +158,19 @@ mod tests {
     }
 
     /// Every declaration was emitted, and the report says so.
+    ///
+    /// The counts differ because only C declares `Sample`: Kotlin has no way to
+    /// write a condition, so a property standing for a field that may not exist
+    /// is a question this increment does not answer.
     #[test]
     fn both_targets_report_every_declaration_as_emitted() {
-        for target in ["c", "jni"] {
+        // The record and the three functions over it, plus `Sample` and
+        // `sample_total` for C.
+        for (target, emitted) in [("c", 6), ("jni", 4)] {
             let report = report(target);
-            // The record, and the three functions over it.
             assert_eq!(
                 report.matches("\"outcome\": \"emitted\"").count(),
-                4,
+                emitted,
                 "{target} report: {report}"
             );
         }
