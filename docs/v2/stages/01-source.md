@@ -178,7 +178,9 @@ to `HOST` when it is unset — and by the features the capture was produced with
 Each condition on a captured item then resolves in one of three ways:
 
 - **Known false** — the item is dropped, and no later stage sees it. The
-  x86_64 `InsideFoo` disappears from an aarch64 build.
+  x86_64 `InsideFoo` disappears from an aarch64 build. A feature the capture's
+  recorded list does not mention lands here too, rather than below: the reader
+  treats a feature it has never heard of as off.
 - **Known true** — the attribute is removed, having already been acted on, and
   the item stays. This is why generated Rust carries no `#[cfg]` of its own.
 - **Not evaluable** — a condition over something the reader knows nothing
@@ -243,12 +245,22 @@ enables `unstable` on one edge only, the two stop matching and the binding
 crate fails to compile with that message, instead of building a library whose
 declarations describe a different feature set than the code behind them. The
 item is an anonymous `const`, so it has no name in any foreign API and nothing
-can refer to it. This is why a binding crate depends on `konst`.
+can refer to it.
+
+Emitting it puts two requirements on the binding crate. It depends on `konst`,
+for the assertion macro. And the left-hand side is written as
+`<source crate>::FEATURES`, qualified with the source crate's own package name,
+so that crate has to be nameable from the generated code — listed in
+`[dependencies]` under its real name, whatever path a `source_module` setting
+gives the generated calls.
 
 Both engines emit it. The [source model](02-flat.md) keeps each guard as an
-element of its own, and V2's writer emits every guard the model holds before the
-supporting items and [wrappers](05-boundary.md#assemble-the-native-boundary) it
-planned. A guard belongs to no declaration, so nothing in retention decides
+element of its own, and each writer emits every guard the model holds — V2 ahead
+of the supporting items and
+[wrappers](05-boundary.md#assemble-the-native-boundary) it planned, V1 after
+them. A `const _` assertion is order-independent, so where it sits in the file
+is each writer's choice rather than a shared rule.
+A guard belongs to no declaration, so nothing in retention decides
 whether to keep it: a run that skipped every declaration it was given still
 carries the assertion, which is the case where losing it would be easiest to
 miss — the generated file is nearly empty, and the one line in it is the one
