@@ -50,11 +50,33 @@ pub enum Instr {
     },
 }
 
+/// One instruction, and the conditions under which it exists at all.
+///
+/// `conditions` is empty for all but a field whose `#[cfg]` the capture reader
+/// could not answer: every instruction serving such a field carries it, so the
+/// statements the writer renders appear exactly where the field does. Nothing
+/// reads them — they are the tokens the source wrote, conjoined by Rust when
+/// there is more than one.
+#[derive(Clone, Debug)]
+pub struct Step {
+    pub instr: Instr,
+    pub conditions: Vec<proc_macro2::TokenStream>,
+}
+
+impl Step {
+    fn new(instr: Instr) -> Self {
+        Step {
+            instr,
+            conditions: Vec::new(),
+        }
+    }
+}
+
 /// A body under construction, with its own value-identity allocator.
 #[derive(Debug, Default)]
 pub struct BodyBuilder {
     next: u32,
-    instrs: Vec<Instr>,
+    instrs: Vec<Step>,
 }
 
 impl BodyBuilder {
@@ -70,15 +92,39 @@ impl BodyBuilder {
     }
 
     pub fn push(&mut self, instr: Instr) {
-        self.instrs.push(instr);
+        self.instrs.push(Step::new(instr));
     }
 
-    pub fn instrs(&self) -> &[Instr] {
+    pub fn instrs(&self) -> &[Step] {
         &self.instrs
     }
 
-    pub fn into_instrs(self) -> Vec<Instr> {
+    pub fn into_instrs(self) -> Vec<Step> {
         self.instrs
+    }
+
+    /// How many instructions this body already has, so a caller can name the
+    /// range it is about to add.
+    pub fn len(&self) -> usize {
+        self.instrs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.instrs.is_empty()
+    }
+
+    /// Put `conditions` on every instruction added since `from`.
+    ///
+    /// The caller is whoever knows what a stretch of instructions is *for* — a
+    /// part's conversion, say. Conditions accumulate rather than replace, so a
+    /// conditional field of a conditional field carries both.
+    pub fn condition(&mut self, from: usize, conditions: &[proc_macro2::TokenStream]) {
+        if conditions.is_empty() {
+            return;
+        }
+        for step in &mut self.instrs[from..] {
+            step.conditions.extend(conditions.iter().cloned());
+        }
     }
 }
 
@@ -91,7 +137,7 @@ impl BodyBuilder {
 #[derive(Clone, Debug)]
 pub struct NodeBody {
     pub carrier: ValueId,
-    pub instrs: Vec<Instr>,
+    pub instrs: Vec<Step>,
     pub result: ValueId,
 }
 
@@ -108,8 +154,8 @@ impl NodeBody {
             *map.get(&id)
                 .expect("a body uses no value before defining it")
         };
-        for instr in &self.instrs {
-            let instr = match instr {
+        for step in &self.instrs {
+            let instr = match &step.instr {
                 Instr::Apply {
                     primitive,
                     operands,
@@ -165,7 +211,9 @@ impl NodeBody {
                     }
                 }
             };
+            let from = out.len();
             out.push(instr);
+            out.condition(from, &step.conditions);
         }
         value(&map, self.result)
     }

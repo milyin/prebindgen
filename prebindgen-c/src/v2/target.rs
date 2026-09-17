@@ -295,8 +295,12 @@ impl Target for CTarget {
                     )));
                 }
                 let ident = format_ident!("{c_name}");
+                // A member mirrors a field one for one, its condition included:
+                // a field the source crate may not have must not become a
+                // member the header always declares.
+                let conditions = request.field_conditions();
                 let mut fields = Vec::new();
-                for field in &record.fields {
+                for (index, field) in record.fields.iter().enumerate() {
                     let Some(ty) = scalar_of(&field.ty).and_then(c_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.c.carrier",
@@ -312,7 +316,8 @@ impl Target for CTarget {
                             ),
                         )));
                     };
-                    fields.push(quote!(pub #name: #ty));
+                    let condition = &conditions[index];
+                    fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     declaration: request.declaration.id.clone(),

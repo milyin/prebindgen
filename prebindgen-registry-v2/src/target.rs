@@ -17,7 +17,10 @@
 //! and sequences arrive with the capabilities that need them, and
 //! `docs/v2/implementation.md` lists exactly what is absent.
 
-use prebindgen_flat::flat::{Function, Struct, TypeRef};
+use prebindgen_flat::{
+    flat::{Function, Struct, TypeRef},
+    RustEmitter,
+};
 use proc_macro2::TokenStream;
 
 use crate::{
@@ -119,6 +122,14 @@ pub struct Part {
     pub index: usize,
     /// Its exact source type.
     pub ty: TypeRef,
+    /// The `#[cfg]` conditions the source field was written under, which the
+    /// capture reader could not answer — empty in the ordinary case.
+    ///
+    /// A target re-declaring this part as a member of its own record puts them
+    /// on that member. It must not read them: the registry puts the same
+    /// conditions on every instruction that serves this part, so a member
+    /// declared under them is read under them.
+    pub conditions: Vec<TokenStream>,
 }
 
 impl Part {
@@ -665,6 +676,27 @@ pub struct SurfaceRequest<'a, Policy> {
     pub declaration: &'a Declaration,
     pub policy: &'a Policy,
     pub item: SourceItem<'a>,
+}
+
+impl<Policy> SurfaceRequest<'_, Policy> {
+    /// The `#[cfg]` conditions of each field of the record behind this request,
+    /// in field order — empty entries for the ordinary unconditional field, and
+    /// an empty list for a request that is not a record.
+    ///
+    /// A target declaring a member per field puts its entry on that member. The
+    /// registry puts the same conditions on every instruction that serves the
+    /// field, so a member declared under them is read under them and the
+    /// initializer that consumes the read is written under them too.
+    pub fn field_conditions(&self) -> Vec<Vec<TokenStream>> {
+        match self.item {
+            SourceItem::Record(record) => record
+                .fields
+                .iter()
+                .map(|field| crate::emit::Writer.field_conditions(field))
+                .collect(),
+            SourceItem::Function(_) => Vec::new(),
+        }
+    }
 }
 
 /// The source item behind a requested output.
