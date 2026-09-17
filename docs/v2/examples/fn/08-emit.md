@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "cell", "example": "fn", "stage": "07-emit"} -->
+<!-- spec: {"kind": "cell", "example": "fn", "stage": "08-emit"} -->
 
-[Stage chapter](../../stages/07-emit.md) · [Element path][fn] · [Source crate](../../source.md)
+[Stage chapter](../../stages/08-emit.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the common Rust writer, plus each target's writer · Previous: [Retain supported output][fn_retain]
 
 # Function taking an owned record — Emit bindings
@@ -17,9 +17,9 @@ FunctionPlan { source: crate::source::stamp_sum,
 ```
 
 The summary also depends on each
-[node](../../stages/04-values.md#plan-value-conversions)'s operations and the
+[node](../../stages/05-represent.md#represent-and-compose-values)'s operations and the
 adapter's retained rendering data, such as getter names. **Frozen** means
-support decisions are finished; emission cannot add another [conversion](../../stages/04-values.md#plan-value-conversions). In
+support decisions are finished; emission cannot add another [conversion](../../stages/04-select.md#select-conversion-relations). In
 current V2, the common writer renders Rust before `generate` returns, and
 `Generation` stores that text alongside the descriptions used for Kotlin output.
 
@@ -45,11 +45,11 @@ fallible getter; the language-specific page shows those branches in full.
 
 ## Checks
 
-- Temporaries are allocated from the plan, so two operations in one [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
+- Temporaries are allocated from the plan, so two operations in one [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
   cannot collide over a name; the parameters are named by the boundary, since a
   target that requires an environment operand has to name it.
 - The source function appears exactly once in the generated body.
-- The writer adds nothing planning did not decide: no [conversion](../../stages/04-values.md#plan-value-conversions) without a node,
+- The writer adds nothing planning did not decide: no [conversion](../../stages/04-select.md#select-conversion-relations) without a node,
   no dependency discovered while rendering.
 
 ## Language variants
@@ -58,6 +58,6 @@ fallible getter; the language-specific page shows those branches in full.
 - [Kotlin/JNI][fn_emit_jni]
 
 [fn]: README.md
-[fn_retain]: 06-retain.md
-[fn_emit_c]: 07-emit.c.md
-[fn_emit_jni]: 07-emit.jni.md
+[fn_retain]: 07-retain.md
+[fn_emit_c]: 08-emit.c.md
+[fn_emit_jni]: 08-emit.jni.md

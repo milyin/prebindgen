@@ -52,13 +52,13 @@ policy (C function):
   hook or per-declaration `.base_name(...)` changes it. Neither does so here,
   which is why the symbol is `stamp_sum`.
 - C is opt-in: a function nobody declares produces no request and has no
-  [outcome](../../stages/06-retain.md#retain-supported-output). An
+  [outcome](../../stages/07-retain.md#retain-supported-output). An
   *unselected* outcome is planned, not implemented.
 - Without the `Stamp` declaration, the frontend records no record [policy](../../stages/03-requests.md#what-policy-means).
   Value planning then tries the default scalar policy and skips the function
   with `unsupported.c.carrier`. [Retention][fn_retain] preserves that skip;
-  it does not first discover the missing [conversion](../../stages/04-values.md#plan-value-conversions).
+  it does not first discover the missing [conversion](../../stages/04-select.md#select-conversion-relations).
 
 [fn]: README.md
 [fn_requests]: 03-requests.md
-[fn_retain]: 06-retain.md
+[fn_retain]: 07-retain.md

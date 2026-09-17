@@ -16,6 +16,7 @@ ROOT_PAGES = {
     "implementation.md": "implementation",
     "concepts.md": "concepts",
     "report.md": "report",
+    "extensions.md": "extensions",
 }
 # Pages the vocabulary rule does not read: the vocabulary itself, and the page
 # about the document's format.
@@ -365,15 +366,17 @@ def check_vocabulary(pages, manifest, root):
                      f"{defined_page} and other pages link there")
             if page.relative == defined_page or not entry.get("link_first_mention", True):
                 continue
-            # A chapter or element title quoted in a reference-style link — in
-            # the navigation header, an element TOC, a chapter's index — is not
-            # a mention. Any other reference-style link is prose like any
+            # A chapter or element title quoted in a link — in the navigation
+            # header, an element TOC, a chapter's index — is not a mention,
+            # whichever link syntax quotes it. Any other link is prose like any
             # other, and one that wraps a first mention leaves it unlinked to
             # the definition. A link's target is never a mention.
+            def quoted_title(m):
+                return re.sub(r"\s+", " ", m.group(1)).strip() in titles
             searched = REFERENCE_TEXT.sub(
-                lambda m: blank(m) if re.sub(r"\s+", " ", m.group(1)).strip() in titles
-                else m.group(0),
-                text)
+                lambda m: blank(m) if quoted_title(m) else m.group(0), text)
+            searched = INLINE_SPAN.sub(
+                lambda m: blank(m) if quoted_title(m) else m.group(0), searched)
             searched = re.sub(r"\]\([^)]*\)|\]\[[A-Za-z0-9_]+\]", blank, searched)
             mention = word.search(searched)
             if mention is None:

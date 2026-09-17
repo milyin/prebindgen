@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "03-requests"} -->
 
 [Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source crate](../../source.md)
-Owner: the language frontend · Previous: [Build and inspect the source model][struct_flat] · Next: [Plan value conversions][struct_values]
+Owner: the language frontend · Previous: [Build and inspect the source model][struct_flat] · Next: [Select conversion relations][struct_select]
 
 # Record with scalar fields — Record binding requests
 
@@ -23,9 +23,9 @@ and a build script asking for it to be exposed: [C][struct_requests_c],
 
 ## Result
 
-The type request asks for a public foreign [representation](../../stages/04-values.md#plan-value-conversions) of `Stamp`; it is
+The type request asks for a public foreign [representation](../../stages/05-represent.md#represent-and-compose-values) of `Stamp`; it is
 independent of the request for `stamp_sum`. This sketch also shows the fields
-that the registry will use when it discovers the record [relation](../../stages/04-values.md#what-a-relation-is) during value
+that the registry will use when it discovers the record [relation](../../stages/04-select.md#what-a-relation-is) during value
 planning. All structures in the block are design notation, not exact current
 request fields. Current `OutputRequest` contains a `Declaration` and `PolicyId`.
 The frontend also records a type [policy](../../stages/03-requests.md#what-policy-means) for `Stamp`, which is how a later
@@ -51,14 +51,14 @@ conversion_rules.parts: {}    // none recorded for this path
 
 - A record request is a root: it stands whether or not any exported function
   mentions the type, and survives a function that is skipped.
-- A [relation](../../stages/04-values.md#what-a-relation-is) describes how Rust
+- A [relation](../../stages/04-select.md#what-a-relation-is) describes how Rust
   constructs or reads the value; a
-  [representation](../../stages/04-values.md#plan-value-conversions) describes
+  [representation](../../stages/05-represent.md#represent-and-compose-values) describes
   the foreign values carrying it. This example selects the field relation. A
   future constructor relation would instead have the constructor's arguments
   as parts and would need a compatible target representation.
-  [Node](../../stages/04-values.md#plan-value-conversions) identity must
-  distinguish these choices, [as the value-planning page explains][struct_values].
+  [Node](../../stages/05-represent.md#represent-and-compose-values) identity must
+  distinguish these choices, [as the representation page explains][struct_represent].
 
 ## Language variants
 
@@ -67,6 +67,7 @@ conversion_rules.parts: {}    // none recorded for this path
 
 [struct]: README.md
 [struct_flat]: 02-flat.md
-[struct_values]: 04-values.md
+[struct_select]: 04-select.md
+[struct_represent]: 05-represent.md
 [struct_requests_c]: 03-requests.c.md
 [struct_requests_jni]: 03-requests.jni.md

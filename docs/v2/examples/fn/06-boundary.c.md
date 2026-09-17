@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "variant", "example": "fn", "stage": "05-boundary", "language": "c"} -->
+<!-- spec: {"kind": "variant", "example": "fn", "stage": "06-boundary", "language": "c"} -->
 
-[Stage chapter](../../stages/05-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
+[Stage chapter](../../stages/06-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
 Owner: the registry, on the C adapter's `BoundarySpec`
 
 # Function taking an owned record — Assemble the native boundary — C
@@ -26,9 +26,9 @@ BoundarySpec {
 }
 ```
 
-`native arg 0` is the first C argument. The [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) uses it to construct the
+`native arg 0` is the first C argument. The [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) uses it to construct the
 source `Stamp`, then returns the source function's integer result directly.
-The empty failure set means these [conversions](../../stages/04-values.md#plan-value-conversions) need no error branch. An
+The empty failure set means these [conversions](../../stages/04-select.md#select-conversion-relations) need no error branch. An
 **out-parameter**, by contrast, would be caller-provided storage that the wrapper
 writes into; this example does not use one.
 
@@ -48,13 +48,13 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 - An out-parameter form would require an additional delivery implementation;
   the current V2 increment supports only a native return or no value.
 - No route is declared because both
-  [nodes](../../stages/04-values.md#plan-value-conversions) are infallible,
-  [as planned][fn_values_c]. A later change that makes an input
-  [conversion](../../stages/04-values.md#plan-value-conversions) fallible must skip this function until
+  [nodes](../../stages/05-represent.md#represent-and-compose-values) are infallible,
+  [as planned][fn_represent_c]. A later change that makes an input
+  [conversion](../../stages/04-select.md#select-conversion-relations) fallible must skip this function until
   the C policy says where that failure goes.
 
 [fn]: README.md
-[fn_boundary]: 05-boundary.md
+[fn_boundary]: 06-boundary.md
 [fn_requests_c]: 03-requests.c.md
-[fn_values_c]: 04-values.c.md
-[fn_emit_c]: 07-emit.c.md
+[fn_represent_c]: 05-represent.c.md
+[fn_emit_c]: 08-emit.c.md

@@ -16,7 +16,7 @@ and foreign function interfaces, but no knowledge of prebindgen.
 
 There are two ways to read the guide:
 
-**Follow the stages** to learn the architecture. The seven chapters start with
+**Follow the stages** to learn the architecture. The eight chapters start with
 collecting annotated Rust items and end with writing generated files. Each stage
 explains why it is needed, what information it receives, and what it produces.
 
@@ -32,7 +32,9 @@ build that has not selected V2.
 
 These pages describe both the implemented V2 subset and the contract for its
 extensions. A design description is not a promise of current support. Where a chapter
-describes something the engine does not do yet, it says so at that point, and
+describes something the engine does not do yet, it says so at that point; the
+contracts designed for those extensions are gathered on
+[the extensions page](extensions.md), and
 [the implementation page](implementation.md#what-it-does-not-settle) keeps the
 whole list. Tracked as [issue #720](https://github.com/milyin/prebindgen/issues/720).
 The engine switch and the unsupported-output reporting exist, and so does the
@@ -44,7 +46,7 @@ frontends. A binding crate's `build.rs` is the same under either engine;
 declarations to this engine instead of v1's, and every declaration the engine
 cannot lower yet comes back as a reported skip — the arrangement that lets a V1
 configuration run through V2 during the transition, and the one that
-[ends with it](stages/06-retain.md#unsupported-requests-and-public-api-dependencies),
+[ends with it](stages/07-retain.md#unsupported-requests-and-public-api-dependencies),
 a request V2 cannot generate being a build failure in the finished engine. `examples/v2check` compiles the
 result for the source crate below.
 [The implementation page](implementation.md#the-first-increment-as-built)
@@ -136,8 +138,8 @@ build-dependency only:
   which functions exist, what a parameter's type is, which declaration a type
   name refers to, what fields a record has.
 - **`prebindgen-registry-v2`** is the engine this document specifies. It plans
-  every [conversion](stages/04-values.md#plan-value-conversions) a requested binding needs, resolves what depends on what,
-  renders the Rust [wrappers](stages/05-boundary.md#assemble-the-native-boundary), and reports what it could not generate. It shares
+  every [conversion](stages/04-select.md#select-conversion-relations) a requested binding needs, resolves what depends on what,
+  renders the Rust [wrappers](stages/06-boundary.md#assemble-the-native-boundary), and reports what it could not generate. It shares
   the capture and model crates with the V1 engine and depends on nothing else of
   it, so "V2 never falls back to V1 for an item" is a property of the dependency
   graph rather than a promise.
@@ -192,20 +194,24 @@ those words once; read it first.
 1. [Capture source items](stages/01-source.md)
 2. [Build and inspect the source model](stages/02-flat.md)
 3. [Record binding requests](stages/03-requests.md)
-4. [Plan value conversions](stages/04-values.md)
-5. [Assemble the native boundary](stages/05-boundary.md)
-6. [Retain supported output](stages/06-retain.md)
-7. [Emit bindings](stages/07-emit.md)
+4. [Select conversion relations](stages/04-select.md)
+5. [Represent and compose values](stages/05-represent.md)
+6. [Assemble the native boundary](stages/06-boundary.md)
+7. [Retain supported output](stages/07-retain.md)
+8. [Emit bindings](stages/08-emit.md)
 
 Then: [implementation sequence and acceptance](implementation.md), which is not a
-pipeline stage but the plan for building one. Beside the generated code the
+pipeline stage but the plan for building one, and
+[the extension contracts](extensions.md), the design for what the stages do not
+do yet, kept apart so that each chapter describes only what its cells show. Beside the generated code the
 engine produces [a report](report.md) of what became of each declaration.
 The build script can write it beside the code with `write_report`. It is a
 diagnostic that nothing in the pipeline reads, described on its own page.
 
 This order is the order of information dependencies, not a requirement to make
-seven passes over the project. The registry interleaves selection, child planning
-and [representation](stages/04-values.md#plan-value-conversions) inside one recursive walk; binding choices and local helper
+eight passes over the project. The registry interleaves selection, child planning
+and [representation](stages/05-represent.md#represent-and-compose-values) inside one recursive walk — the two
+chapters that describe it are the descent and the ascent of that walk; binding choices and local helper
 signatures can be recorded before model construction, and the request stage turns
 those choices into requests once the Flat model exists. The owned view types
 described in the source-model chapter are a future extension.
@@ -218,7 +224,7 @@ paths are added.
 - [Function taking an owned record][fn] — `stamp_sum(Stamp) -> i64`
 - [Record with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
 
-An **element kind** is a kind of source item — a function, a record, an enum —
+An **element kind** is a kind of [source item](stages/01-source.md#capture-source-items) — a function, a record, an enum —
 as this appendix organizes it. (Inside the pipeline the word is not used: the
 chapters say *source item* for what the model captured and *declaration* for
 what the binding asked to expose, identified by a `DeclarationId`, such as
@@ -249,7 +255,7 @@ writing one may well expose a gap in the general contract — that is what the
 appendix is for.
 
 The same ids are the document's link vocabulary. `fn` is that element's path;
-`fn_values` is that element at the value-planning stage; `fn_values_c` is the C
+`fn_select` is that element at the selection stage; `fn_select_c` is the C
 variant of that cell. A chapter links to the elements that reach it, an element
 cell links back to its chapter, and both use these ids.
 [The format contract](FORMAT.md) states the grammar and the rules a new path has

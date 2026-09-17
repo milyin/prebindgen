@@ -23,7 +23,7 @@ instead use `PREBINDGEN_PIPELINE`, defaulting to V1 when that variable is unset.
 
 ## Result
 
-`data_type!(Stamp)` requests a data [representation](../../stages/04-values.md#plan-value-conversions) rather than an opaque handle.
+`data_type!(Stamp)` requests a data [representation](../../stages/05-represent.md#represent-and-compose-values) rather than an opaque handle.
 The generated C struct will expose both fields and be passed by value.
 `.base_name("Stamp")` chooses the public type name explicitly; it is not the
 default snake-case name. The following summarizes the intended representation;
@@ -40,11 +40,11 @@ policy (C record):
 ## Checks
 
 - `data_type!` selects a by-value aggregate
-  [representation](../../stages/04-values.md#plan-value-conversions), rather
+  [representation](../../stages/05-represent.md#represent-and-compose-values), rather
   than an opaque pointer handle or value-opaque type. A different declarator
   records a different [policy](../../stages/03-requests.md#what-policy-means)
-  and would produce a different [conversion](../../stages/04-values.md#plan-value-conversions)
-  [node](../../stages/04-values.md#plan-value-conversions) if supported.
+  and would produce a different [conversion](../../stages/04-select.md#select-conversion-relations)
+  [node](../../stages/05-represent.md#represent-and-compose-values) if supported.
   This increment does not implement those opaque alternatives.
 - The C name is the frontend's, not the source's: a type's default base is the
   snake_case of its short name, so `Stamp` would reach C as `stamp` — which is

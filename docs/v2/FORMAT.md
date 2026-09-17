@@ -34,23 +34,29 @@ existing page rather than represented by a missing file.
 | The specification's source crate | `source.md` |
 | Stage chapter | `stages/<stage>.md` |
 | Implementation plan | `implementation.md` |
+| Extension contracts | `extensions.md` |
 | Element path TOC | `examples/<element>/README.md` |
 | Cell | `examples/<element>/<stage>.md` |
 | Variant | `examples/<element>/<stage>.<language>.md` |
 
 The paths in the table are relative to `docs/v2/`. `<stage>` is the numbered
-stage name, such as `04-values`; `<element>` is an example id, such as `fn`;
+stage name, such as `04-select`; `<element>` is an example id, such as `fn`;
 and `<language>` is `c` or `jni`. TOC means table of contents.
 
+A stage chapter describes what its cells demonstrate. A contract the engine
+does not implement, and no cell shows, goes on the extension contracts page
+under a section that names the stage it extends; the chapter links there at
+the point where the gap is, instead of carrying the design itself.
+
 Every Markdown file starts with exactly one `<!-- spec: {...} -->` metadata line.
-`kind` is `root`, `format`, `concepts`, `report`, `fixture`, `stage`, `implementation`, `example`,
-`cell` or `variant`. A stage page carries `stage`; an element TOC carries
+`kind` is `root`, `format`, `concepts`, `report`, `fixture`, `stage`, `implementation`,
+`extensions`, `example`, `cell` or `variant`. A stage page carries `stage`; an element TOC carries
 `example`; a cell carries both; a variant adds `language`. The identity has to
 match the canonical path, and every Markdown file under `docs/v2/` has to be one
 the manifest accounts for. This comment is hidden in the rendered page but lets
 the validator identify the page without guessing from its title. For example,
-a function's C value-planning page declares its kind as `variant`, its example
-as `fn`, its stage as `04-values`, and its language as `c`.
+a function's C relation-selection page declares its kind as `variant`, its example
+as `fn`, its stage as `04-select`, and its language as `c`.
 
 ## Link ids
 
@@ -65,11 +71,11 @@ shared naming scheme:
 <element>..._<stage-slug>_<lang>  the language variant of that cell
 ```
 
-The stage slugs are `source`, `flat`, `requests`, `values`, `boundary`, `retain`
+The stage slugs are `source`, `flat`, `requests`, `select`, `represent`, `boundary`, `retain`
 and `emit`; the language ids are `c` and `jni`. So `fn` is the function path,
-`fn_values` is the function at value planning, and `fn_values_c` is its C
+`fn_select` is the function at relation selection, and `fn_select_c` is its C
 variant. A sub-variant extends the element id and keeps the same suffixes:
-`fn_callback`, `fn_callback_values_jni`. These ids are reserved for future paths;
+`fn_callback`, `fn_callback_select_jni`. These ids are reserved for future paths;
 the validator's current element-index check must be extended before an example
 id containing underscores can be added. The existing examples use `fn` and
 `struct`.
@@ -82,9 +88,9 @@ recognizable when the declarations it works from change.
 Definitions live in one block at the foot of the page:
 
 ```markdown
-Planned as the record input described in [the record's C value plan][struct_values_c].
+Planned as the record input described in [the record's C representation][struct_represent_c].
 
-[struct_values_c]: ../struct/04-values.c.md
+[struct_represent_c]: ../struct/05-represent.c.md
 ```
 
 Every definition has to name a declared id and point at that id's canonical path,
@@ -136,7 +142,7 @@ term is **defined**, set in bold, under that heading and nowhere else;
 itself links to the definition; and on every other page the first mention of
 the term in prose links to the definition. A mention inside a code span, a code
 block, a heading, a link target, or a chapter, element or language title quoted
-in a reference-style link is not a mention; Markdown wrapped across lines is
+in a link of either syntax is not a mention; Markdown wrapped across lines is
 read as one text. Any other reference-style link is prose: a first mention
 inside one is unlinked to its definition, so write the term as a plain linked
 word and give the cross-reference a link of its own with its own text. A term used in another sense — "wrapper" for `Option<T>`,
@@ -164,7 +170,7 @@ chapters need.
 
 A stage marked `language_dependent` requires both languages for each of its
 applicable cells: capture, source-model inspection and retention are shared
-across targets, while requests, value planning, the boundary and emission are
+across targets, while requests, selection, representation, the boundary and emission are
 not. A future stage that needs a finer split should be split, rather than having
 its coverage check weakened.
 

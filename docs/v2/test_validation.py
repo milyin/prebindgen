@@ -43,12 +43,12 @@ class SpecStructure(unittest.TestCase):
         self.rejects("does not match its canonical identity")
 
     def test_definition_pointing_elsewhere(self):
-        self.edit("examples/fn/04-values.md",
-                  "[fn_values_c]: 04-values.c.md", "[fn_values_c]: 04-values.jni.md")
+        self.edit("examples/fn/04-select.md",
+                  "[fn_select_c]: 04-select.c.md", "[fn_select_c]: 04-select.jni.md")
         self.rejects("points at")
 
     def test_undefined_reference(self):
-        self.edit("examples/fn/04-values.md", "[fn_values_c]: 04-values.c.md", "")
+        self.edit("examples/fn/04-select.md", "[fn_select_c]: 04-select.c.md", "")
         self.rejects("used but not defined")
 
     def test_unused_definition(self):
@@ -63,10 +63,10 @@ class SpecStructure(unittest.TestCase):
         self.rejects("not a declared link id")
 
     def test_inline_link_into_examples(self):
-        self.edit("stages/06-retain.md", "[Record with scalar fields][struct_retain]",
-                  "[Record with scalar fields](../examples/struct/06-retain.md)")
-        self.edit("stages/06-retain.md",
-                  "[struct_retain]: ../examples/struct/06-retain.md", "")
+        self.edit("stages/07-retain.md", "[Record with scalar fields][struct_retain]",
+                  "[Record with scalar fields](../examples/struct/07-retain.md)")
+        self.edit("stages/07-retain.md",
+                  "[struct_retain]: ../examples/struct/07-retain.md", "")
         self.rejects("must use a reference-style link id")
 
     def test_broken_local_link(self):
@@ -76,16 +76,16 @@ class SpecStructure(unittest.TestCase):
 
     def test_unknown_anchor(self):
         self.edit("stages/03-requests.md",
-                  "04-values.md#what-a-relation-is",
-                  "04-values.md#what-a-relation")
+                  "04-select.md#what-a-relation-is",
+                  "04-select.md#what-a-relation")
         self.rejects("no matching heading")
 
     def test_missing_required_section(self):
-        self.edit("examples/struct/06-retain.md", "## Checks", "## Notes")
+        self.edit("examples/struct/07-retain.md", "## Checks", "## Notes")
         self.rejects("exactly one '## Checks' section")
 
     def test_empty_required_section(self):
-        path = self.root / "examples/struct/06-retain.md"
+        path = self.root / "examples/struct/07-retain.md"
         text = path.read_text()
         start = text.index("## Input")
         end = text.index("## Result")
@@ -93,11 +93,11 @@ class SpecStructure(unittest.TestCase):
         self.rejects("empty '## Input' section")
 
     def test_missing_owner(self):
-        self.edit("examples/struct/06-retain.md", "Owner: the registry · ", "")
+        self.edit("examples/struct/07-retain.md", "Owner: the registry · ", "")
         self.rejects("must name the owner")
 
     def test_stage_index_out_of_order(self):
-        self.edit("stages/06-retain.md",
+        self.edit("stages/07-retain.md",
                   "- [Function taking an owned record][fn_retain]\n"
                   "- [Record with scalar fields][struct_retain]",
                   "- [Record with scalar fields][struct_retain]\n"
@@ -105,33 +105,33 @@ class SpecStructure(unittest.TestCase):
         self.rejects("Elements at this stage")
 
     def test_stage_index_incomplete(self):
-        self.edit("stages/06-retain.md",
+        self.edit("stages/07-retain.md",
                   "- [Record with scalar fields][struct_retain]\n", "")
-        self.edit("stages/06-retain.md",
-                  "[struct_retain]: ../examples/struct/06-retain.md", "")
+        self.edit("stages/07-retain.md",
+                  "[struct_retain]: ../examples/struct/07-retain.md", "")
         self.rejects("Elements at this stage")
 
     def test_example_contents_incomplete(self):
         self.edit("examples/struct/README.md",
-                  "5. [Retain supported output][struct_retain]\n", "")
+                  "6. [Retain supported output][struct_retain]\n", "")
         self.edit("examples/struct/README.md",
-                  "[struct_retain]: 06-retain.md", "")
+                  "[struct_retain]: 07-retain.md", "")
         self.rejects("contents list")
 
     def test_missing_neighbor_link(self):
-        self.edit("examples/fn/04-values.md",
+        self.edit("examples/fn/04-select.md",
                   "Previous: [Record binding requests][fn_requests] · ", "")
-        self.edit("examples/fn/04-values.md", "[fn_requests]: 03-requests.md", "")
+        self.edit("examples/fn/04-select.md", "[fn_requests]: 03-requests.md", "")
         self.rejects("must link its previous cell")
 
     def test_variant_without_common_cell_link(self):
-        self.edit("examples/fn/04-values.c.md",
-                  "[Common cell][fn_values] · ", "")
-        self.edit("examples/fn/04-values.c.md", "[fn_values]: 04-values.md", "")
+        self.edit("examples/fn/04-select.c.md",
+                  "[Common cell][fn_select] · ", "")
+        self.edit("examples/fn/04-select.c.md", "[fn_select]: 04-select.md", "")
         self.rejects("must link to its common cell")
 
     def test_missing_language_variant_listing(self):
-        self.edit("examples/struct/04-values.md", "- [C][struct_values_c]\n", "")
+        self.edit("examples/struct/04-select.md", "- [C][struct_select_c]\n", "")
         self.rejects("'Language variants' lists")
 
     def test_unlisted_markdown_file(self):
@@ -139,79 +139,80 @@ class SpecStructure(unittest.TestCase):
         self.rejects("not declared in the manifest")
 
     def test_missing_declared_page(self):
-        (self.root / "examples/struct/06-retain.md").unlink()
+        (self.root / "examples/struct/07-retain.md").unlink()
         self.rejects("missing")
 
     def test_unclosed_code_fence(self):
-        path = self.root / "examples/fn/07-emit.c.md"
+        path = self.root / "examples/fn/08-emit.c.md"
         path.write_text(path.read_text() + "\n```rust\nlet unterminated = 1;\n")
         self.rejects("unclosed code fence")
 
     def test_vocabulary_term_defined_twice(self):
-        self.edit("stages/05-boundary.md", "A value conversion answers", "A value **conversion** answers")
+        self.edit("stages/06-boundary.md", "A value [conversion](04-select.md#select-conversion-relations) answers",
+                  "A value **conversion** answers")
         self.rejects("sets 'conversion' in bold")
 
     def test_vocabulary_first_mention_unlinked(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)", "relations")
+                  "[relations](04-select.md#what-a-relation-is)", "relations")
         self.rejects("first mention of 'relation'")
 
     def test_vocabulary_first_mention_links_elsewhere(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "[relations](04-values.md#plan-value-conversions)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "[relations](04-select.md#select-conversion-relations)")
         self.rejects("first mention of 'relation'")
 
     def test_vocabulary_definition_under_another_heading_is_rejected(self):
         # The heading exists and the bold definition exists, but not under it.
         manifest = self.root / "manifest.json"
         manifest.write_text(manifest.read_text().replace(
-            "stages/04-values.md#what-a-relation-is",
-            "stages/04-values.md#responsibility-boundary-with-flat"))
+            "stages/04-select.md#what-a-relation-is",
+            "stages/04-select.md#responsibility-boundary-with-flat"))
         for page in self.root.rglob("*.md"):
             text = page.read_text()
-            if "04-values.md#what-a-relation-is" in text or "#what-a-relation-is" in text:
+            if "04-select.md#what-a-relation-is" in text or "#what-a-relation-is" in text:
                 page.write_text(text.replace("#what-a-relation-is",
                                              "#responsibility-boundary-with-flat"))
         self.rejects("does not define 'relation' in bold under")
 
     def test_vocabulary_link_wrapped_across_lines_is_a_link(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "[relations\n](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "[relations\n](04-select.md#what-a-relation-is)")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
     def test_vocabulary_mention_in_a_wrapped_code_span_is_not_a_mention(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "`a\nrelation` [relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "`a\nrelation` [relations](04-select.md#what-a-relation-is)")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
     def test_vocabulary_first_mention_before_a_soft_break_is_found(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "a\nrelation and [relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "a\nrelation and [relations](04-select.md#what-a-relation-is)")
         self.rejects("first mention of 'relation'")
 
     def test_vocabulary_bold_inside_code_is_not_a_definition(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "`**relation**` [relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "`**relation**` [relations](04-select.md#what-a-relation-is)")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
     def test_vocabulary_concepts_entry_linking_elsewhere_is_rejected(self):
         # Another entry on the page links to the same destination; this one must
         # link there itself.
         self.edit("concepts.md",
-                  "[Plan value conversions](stages/04-values.md#plan-value-conversions).\n\n### Crossing",
-                  "[What a relation is](stages/04-values.md#what-a-relation-is).\n\n### Crossing")
+                  "[Select conversion relations](stages/04-select.md#select-conversion-relations).\n\n### Crossing",
+                  "[What a relation is](stages/04-select.md#what-a-relation-is).\n\n### Crossing")
         self.rejects("the 'conversion' entry does not link")
 
     def test_vocabulary_first_mention_inside_a_reference_link_is_rejected(self):
         # Copilot's mutation on #736: the term's only mention wrapped in a
         # reference-style link to somewhere else.
-        self.edit("examples/struct/07-emit.md",
-                  "into the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)\n"
+        self.edit("examples/struct/08-emit.md",
+                  "into the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)\n"
                   "of [the function that uses the record][fn_emit].",
                   "into the [wrapper][fn_emit] of the function that uses the record.")
         self.rejects("first mention of 'wrapper'")
@@ -219,16 +220,30 @@ class SpecStructure(unittest.TestCase):
     def test_vocabulary_quoted_title_in_a_reference_link_is_not_a_mention(self):
         # A quoted title placed before the page's linked prose mention of
         # "conversion" must not count as the first mention.
-        self.edit("examples/fn/05-boundary.c.md",
+        self.edit("examples/fn/06-boundary.c.md",
                   "# Function taking an owned record — Assemble the native boundary — C\n",
                   "# Function taking an owned record — Assemble the native boundary — C\n\n"
-                  "See [Plan value conversions][fn_values_c] first.\n")
+                  "See [Represent and compose values][fn_represent_c] first.\n")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
         # And the same words outside a title-quoting link are a first mention.
-        self.edit("examples/fn/05-boundary.c.md",
-                  "See [Plan value conversions][fn_values_c] first.",
-                  "See how value conversions are planned first.")
+        self.edit("examples/fn/06-boundary.c.md",
+                  "See [Represent and compose values][fn_represent_c] first.",
+                  "See how the conversion is represented first.")
         self.rejects("first mention of 'conversion'")
+
+    def test_vocabulary_quoted_title_in_an_inline_link_is_not_a_mention(self):
+        # A chapter index quotes titles in inline links; "Select conversion
+        # relations" placed before the page's linked mention of "relation" must
+        # not count as the first mention either.
+        self.edit("stages/02-flat.md",
+                  "# Build and inspect the source model\n",
+                  "# Build and inspect the source model\n\n"
+                  "Read [Select conversion relations](04-select.md) after this.\n")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
+        self.edit("stages/02-flat.md",
+                  "Read [Select conversion relations](04-select.md) after this.",
+                  "Read [how conversion relations are selected](04-select.md) after this.")
+        self.rejects("first mention of 'relation'")
 
     def test_vocabulary_multiword_first_mention_across_a_soft_break_is_found(self):
         self.edit("stages/03-requests.md", "# Record binding requests\n",
@@ -238,14 +253,14 @@ class SpecStructure(unittest.TestCase):
     def test_vocabulary_double_backtick_code_is_code(self):
         # Neither a definition nor a mention, whatever the delimiter length.
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "``**relation**`` [relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "``**relation**`` [relations](04-select.md#what-a-relation-is)")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
         self.edit("stages/02-flat.md",
                   "``**relation**``",
                   "``a\nrelation `here` too``")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
-        self.edit("stages/06-retain.md", "exactly one **outcome**", "exactly one ``**outcome**``")
+        self.edit("stages/07-retain.md", "exactly one **outcome**", "exactly one ``**outcome**``")
         self.rejects("does not define 'outcome' in bold")
 
     def test_vocabulary_concepts_entry_ends_at_a_group_heading(self):
@@ -266,36 +281,36 @@ class SpecStructure(unittest.TestCase):
         # An unmatched run and an escaped backtick open no code span, so the
         # word between them is prose — and an unlinked first mention.
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "``relation` [relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "``relation` [relations](04-select.md#what-a-relation-is)")
         self.rejects("first mention of 'relation'")
 
     def test_vocabulary_escaped_backticks_are_text(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "\\`relation\\` [relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "\\`relation\\` [relations](04-select.md#what-a-relation-is)")
         self.rejects("first mention of 'relation'")
 
     def test_vocabulary_link_that_renders_as_text_is_not_a_link(self):
         # An escaped bracket renders literally; so does a link inside code.
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "\\[relations](04-values.md#what-a-relation-is)")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "\\[relations](04-select.md#what-a-relation-is)")
         self.rejects("first mention of 'relation'")
 
     def test_vocabulary_concepts_link_inside_code_does_not_count(self):
         self.edit("concepts.md",
-                  "See [Plan value conversions](stages/04-values.md#plan-value-conversions).\n\n### Crossing",
-                  "See `[Plan value conversions](stages/04-values.md#plan-value-conversions)`.\n\n### Crossing")
+                  "See [Select conversion relations](stages/04-select.md#select-conversion-relations).\n\n### Crossing",
+                  "See `[Select conversion relations](stages/04-select.md#select-conversion-relations)`.\n\n### Crossing")
         self.rejects("the 'conversion' entry does not link")
 
     def test_vocabulary_underscore_strong_is_strong(self):
         self.edit("stages/02-flat.md",
-                  "[relations](04-values.md#what-a-relation-is)",
-                  "[relations](04-values.md#what-a-relation-is) and __relation__")
+                  "[relations](04-select.md#what-a-relation-is)",
+                  "[relations](04-select.md#what-a-relation-is) and __relation__")
         self.rejects("sets 'relation' in bold")
         self.edit("stages/02-flat.md", " and __relation__", "")
-        self.edit("stages/06-retain.md", "exactly one **outcome**", "exactly one __outcome__")
+        self.edit("stages/07-retain.md", "exactly one **outcome**", "exactly one __outcome__")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
     def test_vocabulary_definition_wrapped_across_lines_is_a_definition(self):
@@ -322,14 +337,14 @@ class SpecStructure(unittest.TestCase):
         self.rejects("no '### relation' entry")
 
     def test_vocabulary_definition_missing(self):
-        self.edit("stages/06-retain.md", "exactly one **outcome**", "exactly one outcome")
+        self.edit("stages/07-retain.md", "exactly one **outcome**", "exactly one outcome")
         self.rejects("does not define 'outcome' in bold")
 
     def test_language_dependent_stage_needs_every_language(self):
         path = self.root / "manifest.json"
         manifest = json.loads(path.read_text())
         for cell in manifest["cells"]:
-            if cell["stage"] == "04-values" and cell["example"] == "fn":
+            if cell["stage"] == "04-select" and cell["example"] == "fn":
                 cell["languages"] = ["c"]
         path.write_text(json.dumps(manifest, indent=2))
         self.rejects("must declare every language")

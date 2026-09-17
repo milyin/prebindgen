@@ -12,7 +12,7 @@ the struct. Here, **record** means a struct whose fields the generator can inspe
 The two items let us follow a dependency as well as an individual function.
 Before generated code can call `stamp_sum`, it must obtain both field values
 from the foreign caller and construct a Rust `Stamp`. The record example
-explains that [conversion](stages/04-values.md#plan-value-conversions); the function example uses it. Future examples will
+explains that [conversion](stages/04-select.md#select-conversion-relations); the function example uses it. Future examples will
 extend this same library with the items they need.
 
 ```rust

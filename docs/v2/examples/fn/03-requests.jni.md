@@ -57,4 +57,4 @@ policy (JNI function):
 
 [fn]: README.md
 [fn_requests]: 03-requests.md
-[fn_boundary_jni]: 05-boundary.jni.md
+[fn_boundary_jni]: 06-boundary.jni.md

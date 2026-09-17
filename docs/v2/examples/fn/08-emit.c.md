@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "variant", "example": "fn", "stage": "07-emit", "language": "c"} -->
+<!-- spec: {"kind": "variant", "example": "fn", "stage": "08-emit", "language": "c"} -->
 
-[Stage chapter](../../stages/07-emit.md) · [Common cell][fn_emit] · [Element path][fn]
+[Stage chapter](../../stages/08-emit.md) · [Common cell][fn_emit] · [Element path][fn]
 Owner: the common Rust writer, then `cbindgen`
 
 # Function taking an owned record — Emit bindings — C
@@ -65,7 +65,7 @@ test.
 
 ## Checks
 
-- The [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) and the function it wraps are both `stamp_sum`, and never collide:
+- The [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) and the function it wraps are both `stamp_sum`, and never collide:
   the source one is only ever reached through its module path.
 - The parameter keeps the source parameter's name, `stamp`, as the boundary
   stated it; the locals are the writer's, numbered so that none can shadow it.
@@ -77,5 +77,5 @@ test.
   implementation file, because the body is the Rust wrapper.
 
 [fn]: README.md
-[fn_emit]: 07-emit.md
-[struct_emit_c]: ../struct/07-emit.c.md
+[fn_emit]: 08-emit.md
+[struct_emit_c]: ../struct/08-emit.c.md

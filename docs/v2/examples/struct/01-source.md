@@ -34,7 +34,7 @@ The location is illustrative, since actual line numbers depend on the file.
 
 `content` contains the fields, including their names, order, types and `pub`
 visibility. Those are not yet separate JSON fields. The next stage parses this
-text and builds the structured record that [conversion](../../stages/04-values.md#plan-value-conversions) planning can inspect.
+text and builds the structured record that [conversion](../../stages/04-select.md#select-conversion-relations) planning can inspect.
 The original Rust struct remains in the source crate.
 
 - A type is kept whole: its fields are its declaration, so field names, types,

@@ -1,7 +1,7 @@
-<!-- spec: {"kind": "cell", "example": "struct", "stage": "06-retain"} -->
+<!-- spec: {"kind": "cell", "example": "struct", "stage": "07-retain"} -->
 
-[Stage chapter](../../stages/06-retain.md) · [Element path][struct] · [Source crate](../../source.md)
-Owner: the registry · Previous: [Plan value conversions][struct_values] · Next: [Emit bindings][struct_emit]
+[Stage chapter](../../stages/07-retain.md) · [Element path][struct] · [Source crate](../../source.md)
+Owner: the registry · Previous: [Represent and compose values][struct_represent] · Next: [Emit bindings][struct_emit]
 
 # Record with scalar fields — Retain supported output
 
@@ -18,7 +18,7 @@ requires:  node(Stamp, IntoRust)     // the record conversion
 
 ## Result
 
-Because both field [conversions](../../stages/04-values.md#plan-value-conversions) succeed, the public record can be retained.
+Because both field [conversions](../../stages/04-select.md#select-conversion-relations) succeed, the public record can be retained.
 The following summarizes that dependency relationship rather than showing the
 actual `SurfaceSpec` fields: current public requirements refer to declaration
 ids, while conversion dependencies are checked during planning.
@@ -47,12 +47,12 @@ propagation preserves the explanation and adds the dependent declaration's path.
   retained if [the function that does][fn_retain] is skipped for a reason of its
   own.
 - Propagation runs the other way too: an unsupported field makes the record's
-  [conversion](../../stages/04-values.md#plan-value-conversions) unsupported, which skips the record and every declaration requiring
+  [conversion](../../stages/04-select.md#select-conversion-relations) unsupported, which skips the record and every declaration requiring
   it, all carrying the one cause with their own dependency paths.
 - Retention is all or nothing. A record is never emitted with a field omitted,
   because a foreign type missing a field is a different type.
 
 [struct]: README.md
-[struct_values]: 04-values.md
-[struct_emit]: 07-emit.md
-[fn_retain]: ../fn/06-retain.md
+[struct_represent]: 05-represent.md
+[struct_emit]: 08-emit.md
+[fn_retain]: ../fn/07-retain.md

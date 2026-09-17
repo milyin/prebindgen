@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "stage", "stage": "07-emit"} -->
+<!-- spec: {"kind": "stage", "stage": "08-emit"} -->
 
-[Project contents](../README.md) · Previous: [Retain supported output](06-retain.md) · Next: [Implementation and acceptance](../implementation.md)
+[Project contents](../README.md) · Previous: [Retain supported output](07-retain.md) · Next: [Implementation and acceptance](../implementation.md)
 
 # Emit bindings
 
@@ -22,14 +22,14 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 
 The previous stage selected complete supported output and froze the plans.
 **Emission** now turns those plans into source files. A writer does not retry
-unsupported requests or invent another [representation](04-values.md#plan-value-conversions). It renders the decisions
+unsupported requests or invent another [representation](05-represent.md#represent-and-compose-values). It renders the decisions
 already made, which keeps the C/JNI declarations consistent with their Rust
 implementations. Three contributions combine to produce the files:
 
 **Native Rust** is generated for both targets by the same component, the common
 Rust writer, which belongs to the registry. It walks the frozen instructions and
 renders them: the locals, their order, the branches on failure, the construction
-of the source value, the call, the return. It also allocates the [wrapper](05-boundary.md#assemble-the-native-boundary)'s temporaries — `v0`, `v1`, … — from the plan, so
+of the source value, the call, the return. It also allocates the [wrapper](06-boundary.md#assemble-the-native-boundary)'s temporaries — `v0`, `v1`, … — from the plan, so
 two operations rendered into the same wrapper cannot collide over a name. The
 wrapper's *parameters* are the exception, and deliberately so: they are named in
 the boundary description, because a target that requires an environment operand
@@ -125,9 +125,9 @@ pub extern "system" fn Java_example_JNINative_stampSum(  // symbol: JNI adapter
 the source call. Central allocation gives each temporary a distinct name.
 
 The call to `report_jni_error` needs a helper definition elsewhere in the module.
-That definition is a generated [artifact](04-values.md#individual-target-operations).
+That definition is a generated [artifact](05-represent.md#individual-target-operations).
 The JNI adapter supplies the helper; the
-[primitive](04-values.md#plan-value-conversions) that calls it declares the
+[primitive](05-represent.md#represent-and-compose-values) that calls it declares the
 dependency. The common writer emits the call in the planned error branch.
 
 The C wrapper for the same function is the same shape with the branches gone,
@@ -181,7 +181,7 @@ review.
 
 Generation and execution have different dependencies. The generator runs in
 the build script. The compiled wrapper calls the source crate and any runtime
-support required by its [conversions](04-values.md#plan-value-conversions). `prebindgen-c-runtime` and
+support required by its [conversions](04-select.md#select-conversion-relations). `prebindgen-c-runtime` and
 `prebindgen-jni-runtime` provide that support, such as C opaque-value traits and
 JNI string/byte-array helpers. The simple `Stamp` example needs only a small
 subset of the overall binding machinery; it does not establish V2 support for
@@ -205,7 +205,7 @@ A target contributes fragments and declarations, never control flow. The C
 adapter contributes `repr(C)`, the extern calling convention, the exported symbol
 and member identities; its member reads render through a common Rust operation,
 so C ships no field-read renderer of its own. The JNI adapter contributes the JNI
-symbol and calling convention, the environment and receiver parameters, the [carrier](04-values.md#describing-target-values-and-operations)
+symbol and calling convention, the environment and receiver parameters, the [carrier](05-represent.md#describing-target-values-and-operations)
 types, the getter descriptors and the error [policy](03-requests.md#what-policy-means) — and a renderer for the JNI
 operations, which produces one expression per operation and nothing around it.
 
@@ -224,7 +224,7 @@ concrete contributions stay separate throughout planning and writing:
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
 | Requested public API | Explicit C type name `Stamp`; default function name `stamp_sum` | `example.Stamp`, `example.stampSum` | Language frontend records user choices. |
-| Target [representation](04-values.md#plan-value-conversions) | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
+| Target [representation](05-represent.md#represent-and-compose-values) | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
 | `PrimitiveSpec.implementation` | Common `StandardOp::ReadMember` plus member identity | `JniPayload::Getter` plus getter name and descriptor | Adapter selects operation; registry retains it. |
 | One primitive's rendered operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
@@ -232,8 +232,8 @@ concrete contributions stay separate throughout planning and writing:
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
 | Public foreign source | Header derived from Rust | Kotlin classes and native declaration | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
 
-For the input record, the registry asks the selected [relation](04-values.md#what-a-relation-is) for its fields,
-resolves the child [conversions](04-values.md#plan-value-conversions), and asks the target for a representation using
+For the input record, the registry asks the selected [relation](04-select.md#what-a-relation-is) for its fields,
+resolves the child [conversions](04-select.md#select-conversion-relations), and asks the target for a representation using
 those child descriptions. The target returns the member/getter mappings and
 primitive specifications. The registry registers their definitions, creates
 applications with concrete operand identities, composes the wrapper and freezes
@@ -253,9 +253,9 @@ the [C aggregate][struct_emit_c] and the [Kotlin data class][struct_emit_jni].
 - [Function taking an owned record][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
 - [Record with scalar fields][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
 
-[fn_emit]: ../examples/fn/07-emit.md
-[fn_emit_c]: ../examples/fn/07-emit.c.md
-[fn_emit_jni]: ../examples/fn/07-emit.jni.md
-[struct_emit]: ../examples/struct/07-emit.md
-[struct_emit_c]: ../examples/struct/07-emit.c.md
-[struct_emit_jni]: ../examples/struct/07-emit.jni.md
+[fn_emit]: ../examples/fn/08-emit.md
+[fn_emit_c]: ../examples/fn/08-emit.c.md
+[fn_emit_jni]: ../examples/fn/08-emit.jni.md
+[struct_emit]: ../examples/struct/08-emit.md
+[struct_emit_c]: ../examples/struct/08-emit.c.md
+[struct_emit_jni]: ../examples/struct/08-emit.jni.md

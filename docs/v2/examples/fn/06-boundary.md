@@ -1,13 +1,13 @@
-<!-- spec: {"kind": "cell", "example": "fn", "stage": "05-boundary"} -->
+<!-- spec: {"kind": "cell", "example": "fn", "stage": "06-boundary"} -->
 
-[Stage chapter](../../stages/05-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
-Owner: the registry, on the target's native interface · Previous: [Plan value conversions][fn_values] · Next: [Retain supported output][fn_retain]
+[Stage chapter](../../stages/06-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
+Owner: the registry, on the target's native interface · Previous: [Represent and compose values][fn_represent] · Next: [Retain supported output][fn_retain]
 
 # Function taking an owned record — Assemble the native boundary
 
 ## Input
 
-The two [nodes](../../stages/04-values.md#plan-value-conversions) value planning produced, and the source signature they belong to:
+The two [nodes](../../stages/05-represent.md#represent-and-compose-values) [representation](../../stages/05-represent.md#represent-and-compose-values) produced, and the source signature they belong to:
 
 ```text
 node(input)  : Stamp   IntoRust   -> an owned source Stamp
@@ -18,7 +18,7 @@ source: pub fn stamp_sum(stamp: Stamp) -> i64
 
 ## Result
 
-The registry now combines those reusable [conversions](../../stages/04-values.md#plan-value-conversions) with this specific source
+The registry now combines those reusable [conversions](../../stages/04-select.md#select-conversion-relations) with this specific source
 call. The following is a conceptual summary, not the exact Rust fields of
 `FunctionPlan`. The boundary supplies the target's symbol, calling convention
 and destinations; the body records the order in which generated code operates.
@@ -38,7 +38,7 @@ FunctionPlan {
 
 ## Checks
 
-- The source function is called once, and only after every input [conversion](../../stages/04-values.md#plan-value-conversions) has
+- The source function is called once, and only after every input [conversion](../../stages/04-select.md#select-conversion-relations) has
   succeeded.
 - Every failure the input node declares needs a route here; a category with no
   route is an unsupported boundary, not a default.
@@ -54,7 +54,7 @@ FunctionPlan {
 - [Kotlin/JNI][fn_boundary_jni]
 
 [fn]: README.md
-[fn_values]: 04-values.md
-[fn_retain]: 06-retain.md
-[fn_boundary_c]: 05-boundary.c.md
-[fn_boundary_jni]: 05-boundary.jni.md
+[fn_represent]: 05-represent.md
+[fn_retain]: 07-retain.md
+[fn_boundary_c]: 06-boundary.c.md
+[fn_boundary_jni]: 06-boundary.jni.md
