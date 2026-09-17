@@ -201,20 +201,30 @@ Nothing in the writer reads what one says — Rust conjoins repeated `#[cfg]`
 attributes on one item, so carrying them side by side is the whole of it.
 
 V1's writer does not, and leaves the wrapper unconditional while the function it
-calls is not. If the condition is false where the source crate compiles, such a
-binding calls a function that does not exist, and the binding crate fails to
-compile. The failure is loud rather than quiet: unlike the two mismatches below,
-it cannot produce a working binary that disagrees with its library.
+calls is not. Such a binding calls a function that does not exist wherever the
+condition is false, and the binding crate fails to compile.
 
-Two limits remain under both engines. The target's own declarations — a
-`repr(C)` mirror, a Kotlin class — name no source item and are emitted
+What V2 buys is the Rust side, and it moves the remaining failure rather than
+removing it. The declaration the *other* language compiles against is not
+conditional, because no writer gates one. For C that is recoverable: `cbindgen`
+guards a prototype only for a condition named in its `[defines]` table and
+otherwise warns and writes the prototype bare, so the mismatch surfaces as an
+undefined symbol at link and adding the entry fixes it. For Kotlin nothing
+expresses the condition at all — the `external fun` is generated, and a call to
+it raises `UnsatisfiedLinkError`. So a V2 JNI binding can build and then break
+on one call, where a V1 one could not be built at all. That is the trade, and it
+is the reason to keep a difference expressible as a feature or one of the target
+conditions: the reader evaluates those, so the item is dropped or kept on both
+sides consistently and no declaration is left standing alone.
+
+Two more limits, under both engines. A target's own type declaration — a
+`repr(C)` mirror, a Kotlin data class — names no source item and is emitted
 unconditionally, so a header can declare a type whose functions are not there.
-And a condition on a *field* is dropped rather than carried, while the C
-aggregate mirroring that field is not.
-[Issue #741](https://github.com/milyin/prebindgen/issues/741) covers what is
-left, V1 included. Expressing a difference as a feature or one of the target
-conditions avoids all of it: the reader can evaluate those, so the item is
-dropped or kept on both sides consistently.
+And a condition on a *field* is dropped: the mirror lists that field, and so
+does the source construction inside the wrapper, which then names a field the
+source struct may not have. That is this same gap one level down.
+[Issue #741](https://github.com/milyin/prebindgen/issues/741) covers all of it,
+V1 included.
 
 Concretely, for the two items above. The capture is written once, by whatever
 machine compiled the source crate, and holds every variant and every conditional

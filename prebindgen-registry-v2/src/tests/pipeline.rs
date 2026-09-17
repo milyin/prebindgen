@@ -1062,8 +1062,13 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
 }
 
 /// The same, for a record the wrapper constructs rather than the function it
-/// calls: the wrapper names both, so it inherits from both, and a condition
-/// carried by two of the items it names is stated once.
+/// calls: the wrapper names both, so it inherits from both, and one condition
+/// two of them carry is stated once.
+///
+/// The record carries a second condition the function does not, which is what
+/// separates per-condition dedup from comparing whole attribute sets. Restating
+/// a condition would compile — conjunction is idempotent — so what this holds to
+/// is the generated file being readable.
 #[test]
 fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
     let location = prebindgen::SourceLocation {
@@ -1073,6 +1078,7 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
     let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
         syn::parse_quote!(
             #[cfg(some_custom_flag)]
+            #[cfg(another_custom_flag)]
             pub struct Stamp {
                 pub secs: i64,
                 pub nanos: i64,
@@ -1105,6 +1111,11 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
     assert_eq!(
         rust.matches("#[cfg(some_custom_flag)]").count(),
         1,
-        "one condition, stated once, on the one item that names both:\n{rust}"
+        "the condition both items carry is stated once:\n{rust}"
+    );
+    assert_eq!(
+        rust.matches("#[cfg(another_custom_flag)]").count(),
+        1,
+        "and the one only the record carries reaches the wrapper too:\n{rust}"
     );
 }

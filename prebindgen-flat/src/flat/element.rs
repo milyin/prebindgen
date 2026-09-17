@@ -75,7 +75,7 @@ impl Element {
 
     /// The `#[cfg]` attributes this item was captured with — see
     /// [`conditions_from`].
-    pub(super) fn conditions(&self) -> proc_macro2::TokenStream {
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
         conditions_from(match self {
             Element::Function(f) => &f.origin.syntax.attrs,
             Element::Type(t) => t.attrs(),
@@ -587,7 +587,8 @@ pub struct Unsupported {
     pub origin: Origin<syn::Item>,
 }
 
-/// The `#[cfg]` attributes an item was captured with, as inert tokens.
+/// The `#[cfg]` attributes an item was captured with, one inert token stream
+/// each.
 ///
 /// The [capture reader](prebindgen::Source) resolves the conditions it has
 /// rules for — a feature, a `target_arch` comparison — and rewrites anything
@@ -599,18 +600,17 @@ pub struct Unsupported {
 /// classification never consults it — an attribute is not a reason to refuse an
 /// item.
 ///
-/// Several attributes may come back. Rust conjoins repeated `#[cfg]`s on one
-/// item, so carrying them side by side needs no one to know what any of them
-/// says.
-fn conditions_from(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream {
+/// One entry per attribute rather than one blob per item, so a caller carrying
+/// conditions from several items can tell one condition from another. Rust
+/// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
+/// by side and never has to know what any of them says.
+fn conditions_from(attrs: &[syn::Attribute]) -> Vec<proc_macro2::TokenStream> {
     use quote::ToTokens;
-    let mut tokens = proc_macro2::TokenStream::new();
-    for attr in attrs {
-        if attr.path().is_ident("cfg") {
-            attr.to_tokens(&mut tokens);
-        }
-    }
-    tokens
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("cfg"))
+        .map(|attr| attr.to_token_stream())
+        .collect()
 }
 
 /// The attributes of a whole item, whichever kind it is.

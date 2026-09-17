@@ -669,12 +669,34 @@ fn an_unevaluated_condition_comes_back_through_the_emitter() {
     for item in cases {
         let element = parse_one(item);
         assert_eq!(
-            tokens(&TestEmit.conditions(&element)),
-            "# [cfg (some_custom_flag)]",
+            TestEmit
+                .conditions(&element)
+                .iter()
+                .map(tokens)
+                .collect::<Vec<_>>(),
+            vec!["# [cfg (some_custom_flag)]"],
             "{:?}",
             element.name(),
         );
     }
+
+    // One entry per attribute, so a caller collecting conditions from several
+    // items can tell one from another.
+    let both = parse_one(syn::parse_quote!(
+        #[cfg(alpha)]
+        #[cfg(beta)]
+        pub struct Stamp {
+            pub secs: i64,
+        }
+    ));
+    assert_eq!(
+        TestEmit
+            .conditions(&both)
+            .iter()
+            .map(tokens)
+            .collect::<Vec<_>>(),
+        vec!["# [cfg (alpha)]", "# [cfg (beta)]"],
+    );
 
     // The ordinary case: no condition, nothing emitted.
     let plain = parse_one(syn::parse_quote!(

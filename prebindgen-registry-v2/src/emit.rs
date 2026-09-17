@@ -124,8 +124,16 @@ fn wrapper<T: Target>(
     // each one's condition: a `#[cfg]` the capture reader could not answer and
     // rewrote back onto the item. Rust conjoins repeated `#[cfg]` attributes on
     // one item, so carrying them side by side settles the wrapper's own
-    // condition without anything here reading what they say.
-    let mut conditions = TokenStream::new();
+    // condition without anything here reading what they say. Two items carrying
+    // the same condition state it once, which conjunction makes cosmetic and
+    // review makes worth doing.
+    //
+    // The instructions are where a wrapper spells a source item *in this
+    // increment*: its signature carries target wire types only. A representation
+    // that put a source type in the signature — an opaque handle spelled
+    // `*mut source::Session` — would name one from somewhere this loop does not
+    // look.
+    let mut conditions = Vec::new();
     let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
     for instr in &function.instrs {
         let named = match instr {
@@ -137,9 +145,10 @@ fn wrapper<T: Target>(
         let Some(element) = flat.element(named) else {
             continue;
         };
-        let tokens = Writer.conditions(element);
-        if !tokens.is_empty() && conditioned.insert(tokens.to_string()) {
-            conditions.extend(tokens);
+        for condition in Writer.conditions(element) {
+            if conditioned.insert(condition.to_string()) {
+                conditions.push(condition);
+            }
         }
     }
 
@@ -245,7 +254,7 @@ fn wrapper<T: Target>(
         })
         .unwrap_or_default();
     quote! {
-        #conditions
+        #(#conditions)*
         #[no_mangle]
         pub extern #abi fn #symbol(#(#params),*) #ret {
             #(#statements)*
