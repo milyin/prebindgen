@@ -504,6 +504,16 @@ pub struct Flat {
     by_type: std::collections::HashMap<String, TypeRef>,
 }
 
+/// One element [`Flat::without`] took out.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Removed {
+    /// The element that went.
+    pub name: String,
+    /// What took it: `None` for one the caller named, otherwise the name it
+    /// referred to.
+    pub because: Option<String>,
+}
+
 /// A name a lookup can be performed with.
 ///
 /// Exists because callers hold different spellings of the same fact: an adapter
@@ -644,6 +654,79 @@ impl Flat {
             Type::Struct(s) => Some(s),
             _ => None,
         }
+    }
+
+    /// This model without the named elements, and without anything that names
+    /// one of them.
+    ///
+    /// Removing an element another still refers to would leave the model
+    /// describing a signature over a type it does not declare, so the removal
+    /// closes over references: a function taking a removed record goes with it,
+    /// then a record holding a removed field type, until nothing left refers to
+    /// anything gone. A [`Guard`] refers to nothing and names nothing, so it
+    /// always stays.
+    ///
+    /// Returns what went, in the order it was decided, each with the name that
+    /// took it — `None` for one the caller named, otherwise the reference that
+    /// pulled it out. A caller reports the second kind: it is a removal nobody
+    /// asked for.
+    ///
+    /// A name this model does not hold is ignored.
+    pub fn without(&mut self, names: &std::collections::HashSet<String>) -> Vec<Removed> {
+        let mut removed: Vec<Removed> = Vec::new();
+        let mut gone: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for name in names {
+            if self.by_name.contains_key(name) && gone.insert(name.clone()) {
+                removed.push(Removed {
+                    name: name.clone(),
+                    because: None,
+                });
+            }
+        }
+        if gone.is_empty() {
+            return removed;
+        }
+        // `first_unresolved` answers against the names still standing, and the
+        // model resolved completely before this ran, so anything it finds now
+        // is something this call took out.
+        loop {
+            let standing: std::collections::HashSet<String> = self
+                .by_name
+                .keys()
+                .filter(|name| !gone.contains(*name))
+                .cloned()
+                .collect();
+            let next = self.elements.iter().find_map(|element| {
+                let name = element.name()?.to_string();
+                if gone.contains(&name) {
+                    return None;
+                }
+                let because = first_unresolved(element, &standing)?;
+                Some(Removed {
+                    name,
+                    because: Some(because),
+                })
+            });
+            match next {
+                Some(entry) => {
+                    gone.insert(entry.name.clone());
+                    removed.push(entry);
+                }
+                None => break,
+            }
+        }
+        self.elements.retain(|element| {
+            !element
+                .name()
+                .is_some_and(|name| gone.contains(&name.to_string()))
+        });
+        self.by_name = self
+            .elements
+            .iter()
+            .enumerate()
+            .filter_map(|(index, element)| Some((element.name()?.to_string(), index)))
+            .collect();
+        removed
     }
 
     /// Module name of every captured source, in first-seen order.

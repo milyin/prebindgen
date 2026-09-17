@@ -52,7 +52,7 @@
 
 use proc_macro2::TokenStream;
 
-use super::{Alternative, Element, EnumValue, Field, Struct, TypeRef};
+use super::{Alternative, Element, EnumValue, Field, Function, Struct, Type, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
@@ -86,6 +86,33 @@ use super::{Alternative, Element, EnumValue, Field, Struct, TypeRef};
 ///     .to_string(), ":: core :: option :: Option < :: std :: string :: String >");
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+/// A model node that may have been written under a condition.
+///
+/// The variants are the nodes a generator holds when it needs one: a captured
+/// item reached by name, the function or record behind a requested declaration,
+/// or one field of that record.
+#[derive(Clone, Copy)]
+pub enum Conditioned<'a> {
+    /// A whole captured item, whichever kind it is.
+    Item(&'a Element),
+    Function(&'a Function),
+    Type(&'a Type),
+    Struct(&'a Struct),
+    Field(&'a Field),
+}
+
+impl Conditioned<'_> {
+    fn conditions(self) -> Vec<TokenStream> {
+        match self {
+            Conditioned::Item(element) => element.conditions(),
+            Conditioned::Function(function) => function.conditions(),
+            Conditioned::Type(ty) => ty.conditions(),
+            Conditioned::Struct(record) => record.conditions(),
+            Conditioned::Field(field) => field.conditions(),
+        }
+    }
+}
+
 pub trait RustEmitter {
     /// Generate a source type from Flat facts, qualifying model-known nominal
     /// types and const extents to their declaration modules.
@@ -109,30 +136,22 @@ pub trait RustEmitter {
         guard.output.clone()
     }
 
-    /// Copy an item's unevaluated `#[cfg]` conditions into the final output —
+    /// Copy a node's unevaluated `#[cfg]` conditions into the final output —
     /// one token stream per attribute.
     ///
     /// The capture reader answers the conditions it has rules for and rewrites
     /// the rest back onto the item; those are what comes back here, verbatim.
-    /// Re-apply them to every declaration generated for this item, so a
-    /// declaration exists exactly where the item it names does. Nothing — not
-    /// the model, not planning, not this call — asks what a condition means.
+    /// Re-apply them to everything generated for that node, so what is
+    /// generated exists exactly where the node it names does. Nothing — not the
+    /// model, not planning, not this call — asks what a condition means.
     ///
-    /// Empty when the item kept none, which is the ordinary case.
-    fn conditions(&self, element: &Element) -> Vec<TokenStream> {
-        element.conditions()
-    }
-
-    /// The same for one field of a record — see [`Self::conditions`].
+    /// Empty when the node carries none, which is the ordinary case.
     ///
-    /// Separate from the item's because they are re-applied in different
-    /// places: an item's condition goes on the declarations generated for the
-    /// item, a field's on everything generated for that field. A caller that
-    /// re-applies one must re-apply it everywhere the field appears — the
-    /// member it mirrors, the read of that member, the initializer that fills
-    /// it — since a member that exists only sometimes cannot be read always.
-    fn field_conditions(&self, field: &Field) -> Vec<TokenStream> {
-        field.conditions()
+    /// One call rather than one per node kind: an item's condition and a
+    /// field's are the same fact at two levels, and they are re-applied in
+    /// different places only because different things are generated from them.
+    fn conditions(&self, node: Conditioned<'_>) -> Vec<TokenStream> {
+        node.conditions()
     }
 
     /// Copy an explicit enum discriminant into the final output.

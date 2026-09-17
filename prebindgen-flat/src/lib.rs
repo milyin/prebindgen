@@ -22,7 +22,7 @@
 /// collector decides which concrete key implements them and where that key is
 /// handed out. `prebindgen-registry` supplies its own private receiver behind
 /// the unconstructable `RustWriter` it hands to final callbacks.
-pub use crate::flat::emit::RustEmitter;
+pub use crate::flat::emit::{Conditioned, RustEmitter};
 pub mod flat;
 pub mod pipeline;
 pub mod shape;
