@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// something has to be their `Self`. It is unnamed in any public API, so an
 /// adapter reaches those operations only through the writer's own methods,
 /// which supply the frozen module state a caller must not choose.
-struct Renderer;
+pub(crate) struct Renderer;
 
 impl prebindgen_flat::RustEmitter for Renderer {}
 

@@ -76,7 +76,8 @@ impl Registry {
     /// a source crate that needs migrating sees one list instead of one rebuild
     /// per item. This is independent of what any binding declares: an
     /// inexpressible item is a hard error whether or not it is ever named.
-    pub fn builder(flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder, ScanError> {
+    pub fn builder(mut flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder, ScanError> {
+        drop_conditional_items(&mut flat);
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -96,6 +97,60 @@ impl Registry {
             built: HashMap::new(),
             order: None,
         })
+    }
+}
+
+/// Take out every item written under a condition, and everything that names
+/// one, reporting each to the build log.
+///
+/// The capture reader answers the conditions it has rules for and rewrites the
+/// rest back onto the item. This engine has no way to honor one: its generated
+/// file is assembled from artifacts an adapter builds, each naming its source
+/// item unconditionally, so an item kept here would be called where it does not
+/// exist and the binding crate would not compile. Dropping it costs the builds
+/// where the condition *does* hold, which is why it is said out loud rather
+/// than done quietly — and why the v2 engine, which carries a condition into
+/// everything it generates, is the answer for a binding that needs one.
+///
+/// Nothing is dropped in the ordinary case: an evaluable condition was settled
+/// by the reader and never reached the model.
+fn drop_conditional_items(flat: &mut prebindgen_flat::flat::Flat) {
+    use prebindgen_flat::RustEmitter;
+
+    let mut conditions: HashMap<String, String> = HashMap::new();
+    for element in flat.elements() {
+        let Some(name) = element.name() else {
+            continue;
+        };
+        let spelled: Vec<String> = crate::emit::Renderer
+            .conditions(prebindgen_flat::Conditioned::Item(element))
+            .iter()
+            .map(|condition| condition.to_string())
+            .collect();
+        if !spelled.is_empty() {
+            conditions.insert(name.to_string(), spelled.join(" "));
+        }
+    }
+    if conditions.is_empty() {
+        return;
+    }
+    for removed in flat.without(&conditions.keys().cloned().collect()) {
+        match removed.because {
+            None => println!(
+                "cargo:warning=prebindgen: `{}` is captured under {}, which this build cannot \
+                 evaluate, and the v1 pipeline cannot carry a condition into generated code — \
+                 it is not emitted. Select the v2 pipeline, or state the condition as a feature \
+                 or a target condition the capture reader can answer.",
+                removed.name,
+                conditions
+                    .get(&removed.name)
+                    .expect("every seed was read out of the model just above"),
+            ),
+            Some(because) => println!(
+                "cargo:warning=prebindgen: `{}` is not emitted either: it names `{because}`.",
+                removed.name
+            ),
+        }
     }
 }
 

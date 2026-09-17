@@ -2292,3 +2292,51 @@ fn a_refused_site_comes_back_for_the_adapter_to_report() {
         "and the refused site contributes no plan"
     );
 }
+
+/// An item written under a condition this build cannot evaluate does not reach
+/// a v1 registry, and neither does anything that names it.
+///
+/// This engine assembles its file from artifacts that name their source item
+/// unconditionally, so an item kept here would be called where it does not
+/// exist. Dropping it is the honest answer, and the build log says so — the
+/// warning itself is `cargo:warning=` on stdout, which this does not capture.
+#[test]
+fn an_item_written_under_a_condition_does_not_reach_the_registry() {
+    let flat = Flat::builder()
+        .items(
+            [
+                syn::parse_quote!(
+                    #[cfg(some_custom_flag)]
+                    pub struct Stamp {
+                        pub secs: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub struct Reading {
+                        pub level: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn stamp_sum(stamp: Stamp) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn reading_level(reading: Reading) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+            ]
+            .into_iter()
+            .map(|item| (item, prebindgen::SourceLocation::default())),
+        )
+        .build()
+        .expect("parses");
+    let registry: RegistryBuilder = Registry::builder(flat).expect("indexes");
+
+    assert!(registry.flat().declared_type("Stamp").is_none());
+    // Not because it carries one of its own: because its parameter does.
+    assert!(registry.flat().function("stamp_sum").is_none());
+    assert!(registry.flat().declared_type("Reading").is_some());
+    assert!(registry.flat().function("reading_level").is_some());
+}
