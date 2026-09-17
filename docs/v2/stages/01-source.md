@@ -223,7 +223,7 @@ unconditionally, so a header can declare a type whose functions are not there.
 And a condition on a *field* is dropped: the mirror lists that field, and so
 does the source construction inside the wrapper, which then names a field the
 source struct may not have. That is this same gap one level down.
-[Issue #741](https://github.com/milyin/prebindgen/issues/741) covers all of it,
+[Issue #743](https://github.com/milyin/prebindgen/issues/743) covers all of it,
 V1 included.
 
 Concretely, for the two items above. The capture is written once, by whatever

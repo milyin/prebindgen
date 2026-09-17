@@ -276,6 +276,7 @@ establish the behavior of the resulting foreign interface.
   [The capture chapter](stages/01-source.md#the-binding-crate-decides) prices
   that, and the two places the condition does not reach at all — a target's own
   type declaration, and a condition written on a field.
+  [#743](https://github.com/milyin/prebindgen/issues/743) tracks them.
 - **The source model's views.** Stage 2's `FunctionView`/`TypeView` are not
   built: the engine plans over today's borrowed `Flat` API and its frozen result
   owns the model, so a plan cannot outlive it and a view from another snapshot
