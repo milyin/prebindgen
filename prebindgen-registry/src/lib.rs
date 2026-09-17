@@ -120,13 +120,13 @@ pub(crate) mod resolve;
 pub(crate) mod test_util;
 pub mod write;
 
+pub use ::prebindgen_flat::{close_up, Element, Flat};
 /// The flat model itself lives in the separate `prebindgen-flat` crate —
 /// re-exported here so an adapter names one crate root for the whole
 /// pipeline. `RustEmitter` is deliberately omitted: registry-only adapters
 /// receive final rendering authority as [`RustWriter`] in callbacks. A different collector
 /// depends on `prebindgen-flat` directly to implement its own key.
 pub use ::prebindgen_flat::{flat, pipeline, shape, types_util};
-pub use ::prebindgen_flat::{Element, Flat};
 
 pub use self::{
     decl::{

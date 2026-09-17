@@ -2311,7 +2311,11 @@ fn declaring_a_dropped_item_is_explained_rather_than_blamed_on_a_typo() {
         Err(error @ ScanError::DeclaredNotFound { .. }) => {
             let message = error.to_string();
             assert!(
-                message.contains("which this build cannot evaluate"),
+                // As the source wrote it, not as a `TokenStream` prints it.
+                message.contains(
+                    "captured under #[cfg(some_custom_flag)], which this build \
+                                  cannot evaluate"
+                ),
                 "{message}"
             );
             assert!(

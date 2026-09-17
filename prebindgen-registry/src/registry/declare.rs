@@ -128,10 +128,13 @@ fn drop_conditional_items(
         let Some(name) = element.name() else {
             continue;
         };
+        // Spelled as the source wrote it: a `TokenStream` prints a space
+        // between every pair, and this ends up in a warning and in two errors a
+        // person reads.
         let spelled: Vec<String> = crate::emit::Renderer
             .conditions(prebindgen_flat::Conditioned::Item(element))
             .iter()
-            .map(|condition| condition.to_string())
+            .map(|condition| prebindgen_flat::close_up(&condition.to_string()))
             .collect();
         if !spelled.is_empty() {
             conditions.insert(name.to_string(), spelled.join(" "));

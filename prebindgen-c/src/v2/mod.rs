@@ -190,7 +190,7 @@ fn sorted<T: Ord>(keys: impl IntoIterator<Item = T>) -> Vec<T> {
 fn describe_callback(key: &[prebindgen_registry::TypeKey]) -> String {
     let args: Vec<String> = key
         .iter()
-        .map(|k| prebindgen_registry_v2::close_up(k.as_str()))
+        .map(|k| prebindgen_registry::close_up(k.as_str()))
         .collect();
     format!("impl Fn({})", args.join(", "))
 }

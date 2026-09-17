@@ -699,7 +699,7 @@ impl<Policy> SurfaceRequest<'_, Policy> {
         };
         conditions
             .iter()
-            .map(|condition| crate::close_up(&condition.to_string()))
+            .map(|condition| prebindgen_flat::close_up(&condition.to_string()))
             .collect()
     }
 
