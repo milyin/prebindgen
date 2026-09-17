@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>
 <a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// The `#[cfg]` attributes this item was captured with — see
 <a href=#77 id=77 data-nosnippet>77</a>    /// [`conditions_from`].
-<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>conditions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; proc_macro2::TokenStream {
+<a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>conditions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;proc_macro2::TokenStream&gt; {
 <a href=#79 id=79 data-nosnippet>79</a>        conditions_from(<span class="kw">match </span><span class="self">self </span>{
 <a href=#80 id=80 data-nosnippet>80</a>            Element::Function(f) =&gt; <span class="kw-2">&amp;</span>f.origin.syntax.attrs,
 <a href=#81 id=81 data-nosnippet>81</a>            Element::Type(t) =&gt; t.attrs(),
@@ -587,30 +587,30 @@
 <a href=#587 id=587 data-nosnippet>587</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::Item&gt;,
 <a href=#588 id=588 data-nosnippet>588</a>}
 <a href=#589 id=589 data-nosnippet>589</a>
-<a href=#590 id=590 data-nosnippet>590</a><span class="doccomment">/// The `#[cfg]` attributes an item was captured with, as inert tokens.
-<a href=#591 id=591 data-nosnippet>591</a>///
-<a href=#592 id=592 data-nosnippet>592</a>/// The [capture reader](prebindgen::Source) resolves the conditions it has
-<a href=#593 id=593 data-nosnippet>593</a>/// rules for — a feature, a `target_arch` comparison — and rewrites anything
-<a href=#594 id=594 data-nosnippet>594</a>/// else back onto the item, so what arrives here is a condition no one
-<a href=#595 id=595 data-nosnippet>595</a>/// downstream can answer either. The model carries it the way it carries a
-<a href=#596 id=596 data-nosnippet>596</a>/// [`Guard`]: verbatim, uninterpreted, and reachable only through
-<a href=#597 id=597 data-nosnippet>597</a>/// [`RustEmitter`](crate::RustEmitter), whose implementor re-applies it to the
-<a href=#598 id=598 data-nosnippet>598</a>/// declarations it generates for this item. Nothing in the model reads it, and
-<a href=#599 id=599 data-nosnippet>599</a>/// classification never consults it — an attribute is not a reason to refuse an
-<a href=#600 id=600 data-nosnippet>600</a>/// item.
-<a href=#601 id=601 data-nosnippet>601</a>///
-<a href=#602 id=602 data-nosnippet>602</a>/// Several attributes may come back. Rust conjoins repeated `#[cfg]`s on one
-<a href=#603 id=603 data-nosnippet>603</a>/// item, so carrying them side by side needs no one to know what any of them
-<a href=#604 id=604 data-nosnippet>604</a>/// says.
-<a href=#605 id=605 data-nosnippet>605</a></span><span class="kw">fn </span>conditions_from(attrs: <span class="kw-2">&amp;</span>[syn::Attribute]) -&gt; proc_macro2::TokenStream {
-<a href=#606 id=606 data-nosnippet>606</a>    <span class="kw">use </span>quote::ToTokens;
-<a href=#607 id=607 data-nosnippet>607</a>    <span class="kw">let </span><span class="kw-2">mut </span>tokens = proc_macro2::TokenStream::new();
-<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">for </span>attr <span class="kw">in </span>attrs {
-<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">if </span>attr.path().is_ident(<span class="string">"cfg"</span>) {
-<a href=#610 id=610 data-nosnippet>610</a>            attr.to_tokens(<span class="kw-2">&amp;mut </span>tokens);
-<a href=#611 id=611 data-nosnippet>611</a>        }
-<a href=#612 id=612 data-nosnippet>612</a>    }
-<a href=#613 id=613 data-nosnippet>613</a>    tokens
+<a href=#590 id=590 data-nosnippet>590</a><span class="doccomment">/// The `#[cfg]` attributes an item was captured with, one inert token stream
+<a href=#591 id=591 data-nosnippet>591</a>/// each.
+<a href=#592 id=592 data-nosnippet>592</a>///
+<a href=#593 id=593 data-nosnippet>593</a>/// The [capture reader](prebindgen::Source) resolves the conditions it has
+<a href=#594 id=594 data-nosnippet>594</a>/// rules for — a feature, a `target_arch` comparison — and rewrites anything
+<a href=#595 id=595 data-nosnippet>595</a>/// else back onto the item, so what arrives here is a condition no one
+<a href=#596 id=596 data-nosnippet>596</a>/// downstream can answer either. The model carries it the way it carries a
+<a href=#597 id=597 data-nosnippet>597</a>/// [`Guard`]: verbatim, uninterpreted, and reachable only through
+<a href=#598 id=598 data-nosnippet>598</a>/// [`RustEmitter`](crate::RustEmitter), whose implementor re-applies it to the
+<a href=#599 id=599 data-nosnippet>599</a>/// declarations it generates for this item. Nothing in the model reads it, and
+<a href=#600 id=600 data-nosnippet>600</a>/// classification never consults it — an attribute is not a reason to refuse an
+<a href=#601 id=601 data-nosnippet>601</a>/// item.
+<a href=#602 id=602 data-nosnippet>602</a>///
+<a href=#603 id=603 data-nosnippet>603</a>/// One entry per attribute rather than one blob per item, so a caller carrying
+<a href=#604 id=604 data-nosnippet>604</a>/// conditions from several items can tell one condition from another. Rust
+<a href=#605 id=605 data-nosnippet>605</a>/// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
+<a href=#606 id=606 data-nosnippet>606</a>/// by side and never has to know what any of them says.
+<a href=#607 id=607 data-nosnippet>607</a></span><span class="kw">fn </span>conditions_from(attrs: <span class="kw-2">&amp;</span>[syn::Attribute]) -&gt; Vec&lt;proc_macro2::TokenStream&gt; {
+<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">use </span>quote::ToTokens;
+<a href=#609 id=609 data-nosnippet>609</a>    attrs
+<a href=#610 id=610 data-nosnippet>610</a>        .iter()
+<a href=#611 id=611 data-nosnippet>611</a>        .filter(|attr| attr.path().is_ident(<span class="string">"cfg"</span>))
+<a href=#612 id=612 data-nosnippet>612</a>        .map(|attr| attr.to_token_stream())
+<a href=#613 id=613 data-nosnippet>613</a>        .collect()
 <a href=#614 id=614 data-nosnippet>614</a>}
 <a href=#615 id=615 data-nosnippet>615</a>
 <a href=#616 id=616 data-nosnippet>616</a><span class="doccomment">/// The attributes of a whole item, whichever kind it is.
