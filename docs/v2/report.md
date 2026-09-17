@@ -10,9 +10,12 @@ cannot generate yet? The report helps distinguish those cases. It records what
 happened to every [declaration](stages/03-requests.md#record-binding-requests):
 each type, function or other public item the binding configuration asked for.
 
-V2 can generate the supported portion of a binding while skipping requests it
-cannot handle. A successful generation run therefore does not mean that every
-requested item exists. Each declaration's
+While V2 is being brought up to V1's coverage, it generates the supported
+portion of a binding and skips the requests it cannot handle, rather than
+failing the build as the finished engine
+[will](stages/06-retain.md#unsupported-requests-and-public-api-dependencies).
+A successful generation run therefore does not mean that every requested item
+exists — which is the reason this report exists at all. Each declaration's
 [outcome](stages/06-retain.md#retain-supported-output) tells you whether it was
 emitted, skipped or explicitly ignored, and a skipped entry explains why.
 

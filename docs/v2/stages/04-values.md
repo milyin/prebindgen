@@ -71,11 +71,11 @@ answering for its own language item by item. The third is the registry's alone.
   record, and the whole value in any case — and the target names the one its
   configuration calls for. When the configuration calls for something V2 has no
   lowering for, such as one of the C declarators it does not implement yet, the
-  target answers that instead of naming a relation, and every output needing
-  that value is
-  [skipped](06-retain.md#unsupported-requests-and-public-api-dependencies) with
-  that reason. A skip is the answer to missing support, not to bad input:
-  configuration that contradicts the source fails the build instead.
+  target answers that instead of naming a relation, and nothing that needs the
+  value can be generated. Such a request fails the build; while V2's coverage is
+  still being completed it is
+  [reported as a skipped declaration](06-retain.md#unsupported-requests-and-public-api-dependencies)
+  instead, which is a property of the transition rather than of the design.
 - **On the foreign side, what carries the value, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
@@ -200,9 +200,11 @@ the optional-value protocol, which this increment does not implement.
 
 A conversion is planned all the way or not at all. If any child conversion is
 unsupported — a field of a type nothing can carry yet — the node is unsupported,
-and every request that needed it is skipped with that reason. That propagation
-runs backwards along the edges just drawn: one refused leaf refuses every
-conversion that reaches it, and then every request that needed one of those.
+and so is every request that needed it: refused with that reason, never
+generated in a reduced form. That propagation runs backwards along the edges
+just drawn: one refused leaf refuses every conversion that reaches it, and then
+every request that needed one of those. What a refusal does to the build is
+[retention's decision](06-retain.md#unsupported-requests-and-public-api-dependencies).
 
 No half-built node is ever published: while planning is in progress the registry
 marks the conversion as being resolved, which is how it detects a cycle, but
@@ -462,7 +464,7 @@ rule pinned if the rules pinned any. Pinning does not add or remove edges — th
 are all still there, and another position may take a different one — it fixes
 which edge is taken from this position. A target that cannot work with a pinned
 relation reports that as unsupported — the request is well formed, the capability is missing, and
-the affected outputs are skipped with the reason. That is different from a rule
+the affected outputs cannot be generated. That is different from a rule
 that contradicts the source, such as naming a constructor for a type it does not
 construct, which is invalid input and fails the build.
 

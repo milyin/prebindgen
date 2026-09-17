@@ -234,7 +234,9 @@ explicitly ignored. [The report](report.md) lists them so a missing function
 does not have to be diagnosed by inspecting generated code alone. An emitted
 declaration passed generation; it still needs compilation and runtime testing.
 A generation error, such as contradictory configuration, returns no completed
-generation result or report. See [Retain supported output](stages/06-retain.md#retain-supported-output).
+generation result or report. The skipped outcome belongs to the V2 transition:
+once V2 covers what V1 covers, a request it cannot generate fails the build
+instead. See [Retain supported output](stages/06-retain.md#retain-supported-output).
 
 ### Capability
 
@@ -243,4 +245,4 @@ The stable code `unsupported.jni.carrier`, for example, identifies a value that
 the JNI target cannot carry yet. The accompanying explanation and path identify
 the particular type and position. Several skipped declarations can share a
 code, helping a developer see which missing feature would unblock the most
-requests. See [Retain supported output](stages/06-retain.md#retain-supported-output).
+requests — and, while V2 is being completed, which gap to close next. See [Retain supported output](stages/06-retain.md#retain-supported-output).

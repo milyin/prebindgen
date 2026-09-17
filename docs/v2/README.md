@@ -42,7 +42,10 @@ emitted by `prebindgen-registry-v2`, for both targets, through the real
 frontends. A binding crate's `build.rs` is the same under either engine;
 `PREBINDGEN_PIPELINE=v2` makes `prebindgen-c` and `prebindgen-jni` hand their
 declarations to this engine instead of v1's, and every declaration the engine
-cannot lower yet comes back as a reported skip. `examples/v2check` compiles the
+cannot lower yet comes back as a reported skip — the arrangement that lets a V1
+configuration run through V2 during the transition, and the one that
+[ends with it](stages/06-retain.md#unsupported-requests-and-public-api-dependencies),
+a request V2 cannot generate being a build failure in the finished engine. `examples/v2check` compiles the
 result for the source crate below.
 [The implementation page](implementation.md#the-first-increment-as-built)
 records what building them settled and what is still only described. Elsewhere,

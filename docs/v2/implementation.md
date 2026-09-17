@@ -61,7 +61,11 @@ Engine selection and separate output paths began in
 [#721](https://github.com/milyin/prebindgen/pull/721) and
 [#722](https://github.com/milyin/prebindgen/pull/722). V2 now also plans and emits
 the scalar/record subset described under [the built increment](#the-first-increment-as-built).
-Requests outside that subset remain visible as reported skips.
+Requests outside that subset remain visible as reported skips. Those skips are
+scaffolding for the transition, not the specified answer to an unsupported
+request: closing the coverage gap includes turning them back into build
+failures, and until that lands no consumer arrangement should rely on a skipped
+declaration.
 
 The switching contract from [#719](https://github.com/milyin/prebindgen/issues/719) is:
 
