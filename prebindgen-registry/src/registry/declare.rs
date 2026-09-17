@@ -101,6 +101,13 @@ impl Registry {
     }
 }
 
+/// What to do about an item this engine will not emit, said wherever one is
+/// reported. Once per message, never inside the reason a chain of removals
+/// repeats.
+pub(crate) const DROPPED_ADVICE: &str = "Select the v2 pipeline, or state the condition as a \
+                                         feature or a target condition the capture reader can \
+                                         answer.";
+
 /// Take out every item written under a condition, and everything that names
 /// one, reporting each to the build log.
 ///
@@ -115,16 +122,9 @@ impl Registry {
 ///
 /// Nothing is dropped in the ordinary case: an evaluable condition was settled
 /// by the reader and never reached the model.
-/// What to do about an item this engine will not emit, said wherever one is
-/// reported. Once per message, never inside the reason a chain of removals
-/// repeats.
-pub(crate) const DROPPED_ADVICE: &str = "Select the v2 pipeline, or state the condition as a \
-                                         feature or a target condition the capture reader can \
-                                         answer.";
-
-/// Returns what went, each with the sentence a later error repeats: a
-/// declaration naming one of these is not the typo the ordinary message
-/// suggests.
+///
+/// Returns what went, each with the clause a later error repeats: a declaration
+/// naming one of these is not the typo the ordinary message suggests.
 fn drop_conditional_items(
     flat: &mut prebindgen_flat::flat::Flat,
 ) -> std::collections::BTreeMap<String, String> {
