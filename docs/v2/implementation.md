@@ -228,7 +228,17 @@ establish the behavior of the resulting foreign interface.
    error carrier the operation raises. An operand or result stated as a source
    type is carried and not compared, because nothing yet needs to relate a
    conversion's Rust type to an operation's.
-5. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
+5. **Feature-assertion guards.** Reading captured source injects a `const _`
+   assertion comparing the source crate's features against the set the capture
+   was filtered by. Flat retains it as a guard, and the V2 writer emits every
+   guard the model holds, ahead of the supporting items and
+   [wrappers](stages/05-boundary.md#assemble-the-native-boundary) it planned.
+   Guards belong to no declaration, so retention does not decide their fate: a
+   run that emits nothing still carries them, which is the case where losing the
+   check would matter most. `v2check` feeds parsed items directly and has no
+   guard to carry, so an engine test supplies one instead, and building an
+   existing example with `PREBINDGEN_PIPELINE=v2` shows it in the generated file.
+6. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
    role: an operation declares `Context("jni.env")` where it needs the
    environment, the boundary names the native parameter that supplies it, and the
    registry binds the two at assembly. A conversion asking for a context its
@@ -241,11 +251,6 @@ establish the behavior of the resulting foreign interface.
   `SelectionQuery`, `ResolvedShape`, `ChildValue` (the chapters' `ValueDescriptor`),
   `ResolvedValues`, `SiteDescriptor`, `SurfaceRequest` — and untested by a third
   target or a deferred capability.
-- **Feature-assertion guards.** Reading captured source injects a `const _`
-  assertion to compare generation-time and linked source features. Flat retains
-  it, and V1 emits it, but the current V2 writer emits only generated supporting
-  items and wrappers. V2 therefore lacks this mismatch check. `v2check` feeds
-  parsed items directly and does not exercise the capture/guard path.
 - **The composition protocols.** `Protocol::Product { projections }` reads
   one projection per part, in the into-Rust direction only. Record output needs
   a construction operation that is not implemented: C reaches the registry's
