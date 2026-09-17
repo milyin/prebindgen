@@ -1,0 +1,2 @@
+window.ALL_CRATES = ["prebindgen","prebindgen_c","prebindgen_c_runtime","prebindgen_flat","prebindgen_jni","prebindgen_jni_runtime","prebindgen_proc_macro","prebindgen_registry"];
+//{"start":21,"fragment_lengths":[12,15,23,18,17,25,24,22]}
