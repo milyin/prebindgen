@@ -927,3 +927,133 @@ fn a_native_parameter_must_carry_what_its_conversion_reads() {
     };
     assert!(message.contains("its conversion reads"), "{message}");
 }
+
+/// A guard the capture reader injected reaches the generated file, whatever
+/// else the run retained.
+///
+/// The one in production asserts that the source crate's features match the set
+/// the capture was filtered by. It belongs to no declaration, so nothing in
+/// retention decides its fate, and a run that emitted no wrapper at all must
+/// still carry it — otherwise a binding that skipped everything would also skip
+/// the check that its source crate is the one it was generated against.
+#[test]
+fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
+    let guarded = || {
+        let location = prebindgen::SourceLocation {
+            crate_name: Some("fixture".to_string()),
+            ..Default::default()
+        };
+        let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+            syn::parse_quote!(
+                const _: () = {
+                    konst::assertc_eq!(fixture::FEATURES, "fixture/unstable", "mismatch");
+                };
+            ),
+            syn::parse_quote!(
+                pub struct Stamp {
+                    pub secs: i64,
+                    pub nanos: i64,
+                }
+            ),
+            syn::parse_quote!(
+                pub fn stamp_sum(stamp: Stamp) -> i64 {
+                    unimplemented!()
+                }
+            ),
+        ]
+        .into_iter()
+        .map(|item| (item, location.clone()))
+        .collect();
+        Flat::builder()
+            .items(items)
+            .build()
+            .expect("the fixture builds a model")
+    };
+
+    // With something to emit.
+    let mut full = requests();
+    let record = full.policy(Policy::Record);
+    full.type_policies.insert("Stamp".to_string(), record);
+    let sum = full.policy(exported("stamp_sum", Routes::None));
+    full.output(ty("Stamp"), record);
+    full.output(function("stamp_sum"), sum);
+    let generation = generate(guarded(), &Mini, full, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 2);
+    assert!(
+        generation.rust().contains("konst::assertc_eq!"),
+        "the guard must reach the generated file:\n{}",
+        generation.rust()
+    );
+
+    // And with nothing to emit: the declaration is skipped, and the guard is
+    // still there.
+    let mut bare = requests();
+    let sum = bare.policy(exported("stamp_sum", Routes::None));
+    bare.output(function("stamp_sum"), sum);
+    let generation = generate(guarded(), &Mini, bare, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 0);
+    assert!(
+        generation.rust().contains("konst::assertc_eq!"),
+        "a run that emitted nothing still carries its guard:\n{}",
+        generation.rust()
+    );
+}
+
+/// A condition the capture reader could not evaluate reaches the model and
+/// stops there: the wrapper it generates is unconditional.
+///
+/// The reader rewrites such a condition back onto the item rather than guessing
+/// — `unix`, or a custom `--cfg` flag, is not something it has a rule for. The
+/// model then records what the item is and has no field for an attribute, so
+/// nothing downstream can honor the condition. This pins that behavior because
+/// `docs/v2/stages/01-source.md` describes it, and its consequence: a binding
+/// whose condition is false where the source crate compiles calls a function
+/// that is not there, and fails to compile.
+#[test]
+fn a_condition_the_reader_could_not_evaluate_does_not_reach_the_wrapper() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        syn::parse_quote!(
+            pub struct Stamp {
+                pub secs: i64,
+                pub nanos: i64,
+            }
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub fn stamp_sum(stamp: Stamp) -> i64 {
+                unimplemented!()
+            }
+        ),
+    ]
+    .into_iter()
+    .map(|item| (item, location.clone()))
+    .collect();
+    let flat = Flat::builder()
+        .items(items)
+        .build()
+        .expect("the fixture builds a model");
+    // The model takes the item as it is: an attribute it cannot interpret is
+    // not a reason to refuse one.
+    assert_eq!(flat.unsupported().count(), 0);
+    assert!(flat.function("stamp_sum").is_some());
+
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+
+    let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 2);
+    let rust = generation.rust();
+    assert!(rust.contains("fn stamp_sum"), "{rust}");
+    assert!(
+        !rust.contains("cfg"),
+        "the condition reaches neither the wrapper nor anything beside it:\n{rust}"
+    );
+}

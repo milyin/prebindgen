@@ -43,11 +43,19 @@ pub(crate) fn render<T: Target>(
     primitives: &[PrimitiveSpec<T::Payload>],
     functions: &[FunctionPlan<T::Payload>],
 ) -> String {
+    // The guards come first, and they are emitted whatever else this run
+    // retained. Each one is a compile-time assertion the capture reader
+    // injected — today, that the source crate's features match the set the
+    // capture was filtered by — and a binding that dropped it would compile
+    // happily against a source crate it disagrees with. It belongs to no
+    // declaration, so nothing in retention decides whether to keep it.
+    let guards = flat.guards().map(|guard| Writer.guard(guard));
     let artifacts = artifacts.iter().map(|artifact| &artifact.rust);
     let wrappers = functions
         .iter()
         .map(|function| wrapper(flat, target, source_module, primitives, function));
     let tokens = quote! {
+        #(#guards)*
         #(#artifacts)*
         #(#wrappers)*
     };
