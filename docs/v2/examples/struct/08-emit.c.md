@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "variant", "example": "struct", "stage": "07-emit", "language": "c"} -->
+<!-- spec: {"kind": "variant", "example": "struct", "stage": "08-emit", "language": "c"} -->
 
-[Stage chapter](../../stages/07-emit.md) · [Common cell][struct_emit] · [Element path][struct]
+[Stage chapter](../../stages/08-emit.md) · [Common cell][struct_emit] · [Element path][struct]
 Owner: the common Rust writer, then `cbindgen`
 
 # Record with scalar fields — Emit bindings — C
@@ -28,7 +28,7 @@ pub struct Stamp {
 
 `#[repr(C)]` tells Rust to lay out this generated struct using the C-compatible
 rules. That promise applies to this boundary type, not to the original
-`source::Stamp`. The [conversion](../../stages/04-values.md#plan-value-conversions) reads the generated struct and constructs the
+`source::Stamp`. The [conversion](../../stages/04-select.md#select-conversion-relations) reads the generated struct and constructs the
 original one, so the source crate does not need to adopt a C layout.
 
 `cbindgen` reads the generated Rust declaration and produces the corresponding
@@ -49,16 +49,16 @@ typedef struct Stamp {
   different module: one is the ABI type a C caller fills in, the other the Rust
   value the source function takes.
 - `repr(C)` is required: without it the layout the header promises is not the
-  layout the [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary)
+  layout the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
   reads, [as the function path shows][fn_emit_c].
 - The binding explicitly chooses `Stamp`. The default type base is `stamp`,
   and a naming hook could choose another convention such as `stamp_t`.
   The generated lint allowance permits such non-CamelCase Rust type names.
 - Member order and names match the aggregate description, since
-  [the member reads][struct_values_c] refer to those identities.
+  [the member reads][struct_represent_c] refer to those identities.
 - The header's formatting and include guards are `cbindgen`'s business.
 
 [struct]: README.md
-[struct_emit]: 07-emit.md
-[struct_values_c]: 04-values.c.md
-[fn_emit_c]: ../fn/07-emit.c.md
+[struct_emit]: 08-emit.md
+[struct_represent_c]: 05-represent.c.md
+[fn_emit_c]: ../fn/08-emit.c.md

@@ -133,7 +133,7 @@ Rust `i64` as the foreign integer type.
 
 A conversion plan does not call `stamp_sum` or belong exclusively to that
 function. Another function needing the same value transformation can reuse it.
-See [Plan value conversions](stages/04-values.md#plan-value-conversions).
+See [Select conversion relations](stages/04-select.md#select-conversion-relations).
 
 ### Crossing
 
@@ -161,7 +161,7 @@ That graph may contain cycles; the plan graph built from it may not.
 
 A relation says nothing about a C struct or Kotlin object: it describes the
 source-side work.
-See [What a relation is](stages/04-values.md#what-a-relation-is).
+See [What a relation is](stages/04-select.md#what-a-relation-is).
 
 ### Representation
 
@@ -170,7 +170,7 @@ that access them. C uses a `repr(C)` struct whose members can be read directly.
 JNI uses a JVM object whose properties are read by getter calls. Both can serve
 the same source-side record relation, but need different access operations.
 The adapter describes those operations; the registry combines them with the
-children's conversions. See [Plan value conversions](stages/04-values.md#plan-value-conversions).
+children's conversions. See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
 
 ### Carrier
 
@@ -179,7 +179,7 @@ intermediate value in generated Rust. In the JNI example, the object reference
 is one carrier and an integer returned by a getter is another. Its `WireType`
 describes the Rust type used to hold it and whether it is safe at the native
 calling boundary. An internal temporary need not itself be legal as an
-exported parameter. See [Describing target values and operations](stages/04-values.md#describing-target-values-and-operations).
+exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
 
 ### Primitive
 
@@ -189,7 +189,7 @@ type such as `i64`. Its description states its inputs, result, possible failure
 and generated-code dependencies. It does not choose the caller's local variable
 names or decide what the enclosing function does on failure. The registry
 plans those connections and control flow before the writer renders code.
-See [Plan value conversions](stages/04-values.md#plan-value-conversions).
+See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
 
 ### Node
 
@@ -203,7 +203,7 @@ Nodes and the children they name form the graph the later stages read. It is
 acyclic: a node is recorded only once every child it names exists, so no edge
 can point at a plan still being built. A conversion that would need itself is
 refused rather than followed, which is how a cyclic source type stays out of it.
-See [Plan value conversions](stages/04-values.md#plan-value-conversions).
+See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
 
 ### Artifact
 
@@ -213,7 +213,7 @@ each unit a name lets the engine collect dependencies and avoid emitting the
 same helper repeatedly. This is a build-time dependency, not a runtime resource
 that needs cleanup. Some design sketches use the word more broadly for
 generated outputs; current engine `Artifact` values contain Rust.
-See [Individual target operations](stages/04-values.md#individual-target-operations).
+See [Individual target operations](stages/05-represent.md#individual-target-operations).
 
 ## What comes out
 
@@ -225,7 +225,7 @@ delivers the result. It also handles conversion failures according to the
 target's convention. C calls an `extern "C"` function; the JVM reaches an
 `extern "system"` JNI entry point through a native method. This wrapper is
 distinct from the Kotlin convenience function that calls that native method.
-See [Assemble the native boundary](stages/05-boundary.md#assemble-the-native-boundary).
+See [Assemble the native boundary](stages/06-boundary.md#assemble-the-native-boundary).
 
 ### Outcome
 
@@ -236,7 +236,7 @@ declaration passed generation; it still needs compilation and runtime testing.
 A generation error, such as contradictory configuration, returns no completed
 generation result or report. The skipped outcome belongs to the V2 transition:
 once V2 covers what V1 covers, a request it cannot generate fails the build
-instead. See [Retain supported output](stages/06-retain.md#retain-supported-output).
+instead. See [Retain supported output](stages/07-retain.md#retain-supported-output).
 
 ### Capability
 
@@ -245,4 +245,4 @@ The stable code `unsupported.jni.carrier`, for example, identifies a value that
 the JNI target cannot carry yet. The accompanying explanation and path identify
 the particular type and position. Several skipped declarations can share a
 code, helping a developer see which missing feature would unblock the most
-requests — and, while V2 is being completed, which gap to close next. See [Retain supported output](stages/06-retain.md#retain-supported-output).
+requests — and, while V2 is being completed, which gap to close next. See [Retain supported output](stages/07-retain.md#retain-supported-output).

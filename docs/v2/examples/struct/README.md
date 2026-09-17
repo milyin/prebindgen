@@ -16,13 +16,14 @@ This walkthrough follows the type that the function example accepts. A
 signed 64-bit fields; a foreign caller needs its own way to hold those values.
 C uses a generated C-compatible struct passed by value. Kotlin uses a generated
 data class whose JVM getters the native
-[wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) can call.
+[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) can call.
 
-The key question is how either foreign [representation](../../stages/04-values.md#plan-value-conversions) becomes the original Rust
+The key question is how either foreign [representation](../../stages/05-represent.md#represent-and-compose-values) becomes the original Rust
 `Stamp`. For each field, the target describes a read operation, and the registry
-combines those reads with field [conversions](../../stages/04-values.md#plan-value-conversions) and Rust construction. C member
-reads cannot fail; JNI getter calls can. The value-planning pages explain both
-operations, including the additional contracts planned for more complex values.
+combines those reads with field [conversions](../../stages/04-select.md#select-conversion-relations) and Rust construction. C member
+reads cannot fail; JNI getter calls can. The representation pages explain both
+operations; the contracts planned for more complex values are collected on
+[the extensions page](../../extensions.md).
 
 Follow the pages below from capture to the emitted type. There is no separate
 native-boundary page for a record: a type is not a callable entry point. The
@@ -37,9 +38,10 @@ produce and would get its own cells.
 1. [Capture source items][struct_source]
 2. [Build and inspect the source model][struct_flat]
 3. [Record binding requests][struct_requests] · [C][struct_requests_c] · [Kotlin/JNI][struct_requests_jni]
-4. [Plan value conversions][struct_values] · [C][struct_values_c] · [Kotlin/JNI][struct_values_jni]
-5. [Retain supported output][struct_retain]
-6. [Emit bindings][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
+4. [Select conversion relations][struct_select] · [C][struct_select_c] · [Kotlin/JNI][struct_select_jni]
+5. [Represent and compose values][struct_represent] · [C][struct_represent_c] · [Kotlin/JNI][struct_represent_jni]
+6. [Retain supported output][struct_retain]
+7. [Emit bindings][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
 
 [fn]: ../fn/README.md
 [struct_source]: 01-source.md
@@ -47,10 +49,13 @@ produce and would get its own cells.
 [struct_requests]: 03-requests.md
 [struct_requests_c]: 03-requests.c.md
 [struct_requests_jni]: 03-requests.jni.md
-[struct_values]: 04-values.md
-[struct_values_c]: 04-values.c.md
-[struct_values_jni]: 04-values.jni.md
-[struct_retain]: 06-retain.md
-[struct_emit]: 07-emit.md
-[struct_emit_c]: 07-emit.c.md
-[struct_emit_jni]: 07-emit.jni.md
+[struct_select]: 04-select.md
+[struct_select_c]: 04-select.c.md
+[struct_select_jni]: 04-select.jni.md
+[struct_represent]: 05-represent.md
+[struct_represent_c]: 05-represent.c.md
+[struct_represent_jni]: 05-represent.jni.md
+[struct_retain]: 07-retain.md
+[struct_emit]: 08-emit.md
+[struct_emit_c]: 08-emit.c.md
+[struct_emit_jni]: 08-emit.jni.md

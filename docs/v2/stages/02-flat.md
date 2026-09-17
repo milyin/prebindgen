@@ -5,7 +5,7 @@
 # Build and inspect the source model
 
 The first part of this chapter describes the implemented `prebindgen-flat`
-library, which both engines use to inspect source items. The section
+library, which both engines use to inspect [source items](01-source.md#capture-source-items). The section
 [What V2 changes](#what-v2-changes) describes a planned API based on owned views;
 those views are not implemented yet. Current V2 uses the existing borrowed API.
 
@@ -23,7 +23,7 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 ## What Flat is for
 
 After capture, the generator has Rust text such as `stamp: Stamp`. To generate
-a [conversion](04-values.md#plan-value-conversions), it needs more than that spelling: is `Stamp` a struct, which
+a [conversion](04-select.md#select-conversion-relations), it needs more than that spelling: is `Stamp` a struct, which
 fields does it have, and what are their types? **Flat**, the source model
 provided by `prebindgen-flat`, turns the captured syntax into structured answers.
 
@@ -153,7 +153,7 @@ The four type shapes preserve different information:
   construct or read a value, provided the operation is legal and supported.
 - A **variant** describes an enum whose alternatives may contain payloads.
   Alternative positions identify its branches in the model. The foreign
-  [representation](04-values.md#plan-value-conversions) separately chooses
+  [representation](05-represent.md#represent-and-compose-values) separately chooses
   how to encode which branch is active.
 - An **enum** describes fieldless alternatives and their integer discriminants.
   A target can use those values when generating a C or Kotlin enum.
@@ -233,7 +233,7 @@ rule for every consumer is to analyse the model and generate from the model.
 
 That rule is about a phase, and it governs both engines. **Planning** is
 everything up to final Rust emission: recording requests, selecting
-[relations](04-values.md#what-a-relation-is),
+[relations](04-select.md#what-a-relation-is),
 describing representations, assembling a boundary. Planning may carry a type
 opaquely and use what the model says about it — its kind, its identity, its
 parts, its declared fields, its source location — and may not obtain the syntax
@@ -248,7 +248,7 @@ rather than print a type and test whether its text starts with `Option`.
 The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
 `jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
 own output vocabulary rather than captured source syntax, so writing them as
-syntax during planning is what an adapter is for. That is why a [carrier](04-values.md#describing-target-values-and-operations) a target
+syntax during planning is what an adapter is for. That is why a [carrier](05-represent.md#describing-target-values-and-operations) a target
 describes here holds a real `syn::Type`, while a source-side position stays a
 handle to the model. The rule constrains where a fact may come *from*, not which
 types may be spelled.
@@ -588,7 +588,7 @@ for a positional field, while `index()` always records source order. Field
 identity includes its owner; fields in two enum variants remain distinct even
 when both occupy index zero. Extending enum views should preserve variant
 identity, payload shape, and modeled discriminant information. This source
-variant identity does not choose a registry [conversion](04-values.md#plan-value-conversions) alternative or foreign
+variant identity does not choose a registry [conversion](04-select.md#select-conversion-relations) alternative or foreign
 tag encoding.
 
 `result_parts()` returns the `Ok` and `Err` type views of a `Result`, without

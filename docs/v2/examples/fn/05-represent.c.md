@@ -1,17 +1,17 @@
-<!-- spec: {"kind": "variant", "example": "fn", "stage": "04-values", "language": "c"} -->
+<!-- spec: {"kind": "variant", "example": "fn", "stage": "05-represent", "language": "c"} -->
 
-[Stage chapter](../../stages/04-values.md) · [Common cell][fn_values] · [Element path][fn]
-Owner: the registry, on the C adapter's [representation](../../stages/04-values.md#plan-value-conversions)
+[Stage chapter](../../stages/05-represent.md) · [Common cell][fn_represent] · [Element path][fn]
+Owner: the registry, on the C adapter's [representation](../../stages/05-represent.md#represent-and-compose-values)
 
-# Function taking an owned record — Plan value conversions — C
+# Function taking an owned record — Represent and compose values — C
 
 ## Input
 
-The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the C [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
+The two selected [conversions](../../stages/04-select.md#select-conversion-relations), with the C [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   policy: data_struct, by value
-Crossing { source: i64,   direction: OutOfRust }   policy: scalar carrier
+Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   policy: data_struct, by value
+i64,   OutOfRust, atomic                                               policy: scalar carrier
 ```
 
 ## Result
@@ -33,19 +33,19 @@ fact that copied integers and the reconstructed record do not borrow the input;
 the full validity-contract API is future work.
 
 The registry combines the two field reads with Rust record construction.
-[The record's C value plan][struct_values_c] explains those reads individually.
+[The record's C page][struct_represent_c] explains those reads individually.
 
 ## Checks
 
-- Both [nodes](../../stages/04-values.md#plan-value-conversions) are infallible — reading a member of a by-value struct cannot fail,
+- Both [nodes](../../stages/05-represent.md#represent-and-compose-values) are infallible — reading a member of a by-value struct cannot fail,
   and the copied integer owes nothing to the aggregate — so this function has no
   failure route to plan, which is what [its C boundary][fn_boundary_c] relies on.
 - The representation maps every source child to a member, and the registry
   validates that mapping; an unaccounted member is an error, not a dropped field.
-- A field type that made its [conversion](../../stages/04-values.md#plan-value-conversions) fallible would add a failure here, and
+- A field type that made its conversion fallible would add a failure here, and
   the C policy would have to route it or the function would be skipped.
 
 [fn]: README.md
-[fn_values]: 04-values.md
-[fn_boundary_c]: 05-boundary.c.md
-[struct_values_c]: ../struct/04-values.c.md
+[fn_represent]: 05-represent.md
+[fn_boundary_c]: 06-boundary.c.md
+[struct_represent_c]: ../struct/05-represent.c.md

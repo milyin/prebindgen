@@ -114,9 +114,9 @@ mod tests {
         let c = std::fs::read_to_string(env!("V2CHECK_C")).expect("the C file");
         let jni = std::fs::read_to_string(env!("V2CHECK_JNI")).expect("the JNI file");
         for (page, generated) in [
-            ("examples/struct/07-emit.c.md", &c),
-            ("examples/fn/07-emit.c.md", &c),
-            ("examples/fn/07-emit.jni.md", &jni),
+            ("examples/struct/08-emit.c.md", &c),
+            ("examples/fn/08-emit.c.md", &c),
+            ("examples/fn/08-emit.jni.md", &jni),
         ] {
             let expected = fence(page, "rust");
             let generated = items(generated);
@@ -141,8 +141,8 @@ mod tests {
         let kotlin = std::fs::read_to_string(env!("V2CHECK_KOTLIN")).expect("the Kotlin file");
         let emitted: Vec<&str> = kotlin.lines().map(str::trim).collect();
         for page in [
-            "examples/struct/07-emit.jni.md",
-            "examples/fn/07-emit.jni.md",
+            "examples/struct/08-emit.jni.md",
+            "examples/fn/08-emit.jni.md",
         ] {
             let mut next = 0;
             for line in fence(page, "kotlin").lines() {

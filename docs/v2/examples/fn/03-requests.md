@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "03-requests"} -->
 
 [Stage chapter](../../stages/03-requests.md) · [Element path][fn] · [Source crate](../../source.md)
-Owner: the language frontend · Previous: [Build and inspect the source model][fn_flat] · Next: [Plan value conversions][fn_values]
+Owner: the language frontend · Previous: [Build and inspect the source model][fn_flat] · Next: [Select conversion relations][fn_select]
 
 # Function taking an owned record — Record binding requests
 
@@ -26,7 +26,7 @@ function exists and asking to export it are separate inputs.
 
 The request associates the source function with a public declaration and the
 adapter's function settings. This sketch names the two positions whose values
-need [conversion](../../stages/04-values.md#plan-value-conversions): the first parameter and the return value.
+need [conversion](../../stages/04-select.md#select-conversion-relations): the first parameter and the return value.
 The block uses design notation, not exact current fields. Current
 `OutputRequest` contains a `Declaration` and a `PolicyId`; the engine uses
 `Position { declaration, path }` rather than the proposed `SiteId` below.
@@ -46,7 +46,7 @@ site_policies: {}             // no position-specific overrides
 type_policies: { Stamp -> <the record's policy> }
 ```
 
-The record's [representation](../../stages/04-values.md#plan-value-conversions) is not decided here: it comes from
+The record's [representation](../../stages/05-represent.md#represent-and-compose-values) is not decided here: it comes from
 [the record's request][struct_requests] and applies wherever a `Stamp` is
 converted.
 
@@ -65,7 +65,7 @@ converted.
 
 [fn]: README.md
 [fn_flat]: 02-flat.md
-[fn_values]: 04-values.md
+[fn_select]: 04-select.md
 [fn_requests_c]: 03-requests.c.md
 [fn_requests_jni]: 03-requests.jni.md
 [struct_requests]: ../struct/03-requests.md

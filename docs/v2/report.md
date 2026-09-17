@@ -13,10 +13,10 @@ each type, function or other public item the binding configuration asked for.
 While V2 is being brought up to V1's coverage, it generates the supported
 portion of a binding and skips the requests it cannot handle, rather than
 failing the build as the finished engine
-[will](stages/06-retain.md#unsupported-requests-and-public-api-dependencies).
+[will](stages/07-retain.md#unsupported-requests-and-public-api-dependencies).
 A successful generation run therefore does not mean that every requested item
 exists — which is the reason this report exists at all. Each declaration's
-[outcome](stages/06-retain.md#retain-supported-output) tells you whether it was
+[outcome](stages/07-retain.md#retain-supported-output) tells you whether it was
 emitted, skipped or explicitly ignored, and a skipped entry explains why.
 
 The report is diagnostic output, not configuration. No stage reads a saved
@@ -35,7 +35,7 @@ are not a content hash or proof that the files match the latest source revision.
 Next, read the counts of emitted, skipped and ignored declarations. *Ignored*
 means the user deliberately excluded an item. *Skipped* means the engine could
 not satisfy a request. A skip includes a stable
-[capability](stages/06-retain.md#retain-supported-output) code, a readable
+[capability](stages/07-retain.md#retain-supported-output) code, a readable
 explanation and a path to the problem. That path can identify the function
 [site](stages/03-requests.md#a-values-position-in-an-exported-function), such
 as parameter 0, or the record field where planning stopped.
@@ -89,7 +89,7 @@ type and its three functions remain available because they do not depend on
 `Marker`.
 
 The final table accounts for every declaration, including successful ones.
-Its [representation](stages/04-values.md#plan-value-conversions) column names the requested kind of foreign API, such as
+Its [representation](stages/05-represent.md#represent-and-compose-values) column names the requested kind of foreign API, such as
 a data class or function. Its *placement* column gives the foreign name, such
 as `example.Stamp`. The declaration id, such as `type:Stamp`, identifies the
 request by its source origin and does not change when the foreign name changes.

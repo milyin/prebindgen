@@ -194,7 +194,7 @@ planning never consults it, and an attribute is never a reason to refuse an
 item.
 
 V2 re-applies it to everything it generates from the item it was written on.
-The [wrapper](05-boundary.md#assemble-the-native-boundary) carries the
+The [wrapper](06-boundary.md#assemble-the-native-boundary) carries the
 conditions of the source items it names — the function it calls, and every
 record it constructs — because it compiles only where all of them exist. The
 Rust a target contributes for its own public declaration of that item, such as
@@ -349,7 +349,7 @@ gives the generated calls.
 Both engines emit it. The [source model](02-flat.md) keeps each guard as an
 element of its own, and each writer emits every guard the model holds — V2 ahead
 of the supporting items and
-[wrappers](05-boundary.md#assemble-the-native-boundary) it planned, V1 after
+[wrappers](06-boundary.md#assemble-the-native-boundary) it planned, V1 after
 them. A `const _` assertion is order-independent, so where it sits in the file
 is each writer's choice rather than a shared rule.
 A guard belongs to no declaration, so nothing in retention decides
@@ -376,7 +376,7 @@ Marking an item is not a statement about bindings. It does not say that `Stamp`
 can be represented in C, that `stamp_sum` can be called from Kotlin, or that
 either will appear in the generated API. It says only that the declaration is
 available for a binding crate to ask about. Which items are exposed, under which
-names and with which [representation](04-values.md#plan-value-conversions),
+names and with which [representation](05-represent.md#represent-and-compose-values),
 is settled two stages later, when a [binding request](03-requests.md) names
 them. Capture metadata also records the source crate name, which supplies the
 default path for generated source calls. The C frontend can override that path

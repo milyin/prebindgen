@@ -41,7 +41,7 @@ derived during planning:
 
 ## Checks
 
-- A separate-arguments [representation](../../stages/04-values.md#plan-value-conversions) would pass the two fields individually
+- A separate-arguments [representation](../../stages/05-represent.md#represent-and-compose-values) would pass the two fields individually
   and need no getter calls. The design describes that alternative, but this
   V2 record path does not implement it.
 - The adapter derives public property names and native getter calls from the
@@ -49,10 +49,10 @@ derived during planning:
   [policy](../../stages/03-requests.md#what-policy-means). Tests check that
   generated Kotlin and native references agree.
 - Object input means the
-  [conversion](../../stages/04-values.md#plan-value-conversions) depends on the JVM at run time, which is why
-  its [node](../../stages/04-values.md#plan-value-conversions) can fail,
-  [as the JNI value plan shows][struct_values_jni], where the C one cannot.
+  [conversion](../../stages/04-select.md#select-conversion-relations) depends on the JVM at run time, which is why
+  its [node](../../stages/05-represent.md#represent-and-compose-values) can fail,
+  [as the JNI representation shows][struct_represent_jni], where the C one cannot.
 
 [struct]: README.md
 [struct_requests]: 03-requests.md
-[struct_values_jni]: 04-values.jni.md
+[struct_represent_jni]: 05-represent.jni.md

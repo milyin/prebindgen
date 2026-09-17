@@ -1,11 +1,11 @@
-<!-- spec: {"kind": "stage", "stage": "06-retain"} -->
+<!-- spec: {"kind": "stage", "stage": "07-retain"} -->
 
-[Project contents](../README.md) · Previous: [Assemble the native boundary](05-boundary.md) · Next: [Emit bindings](07-emit.md)
+[Project contents](../README.md) · Previous: [Assemble the native boundary](06-boundary.md) · Next: [Emit bindings](08-emit.md)
 
 # Retain supported output
 
 Status: implemented. Outcomes, causes and the frozen result are what this stage
-produces; `Unselected` and the pruning of unreachable [conversions](04-values.md#plan-value-conversions)
+produces; `Unselected` and the pruning of unreachable [conversions](04-select.md#select-conversion-relations)
 are not there yet.
 
 The examples in this chapter use one small source crate — a record and a function
@@ -27,13 +27,13 @@ whose required types or helpers are missing.
 
 There are both conversion dependencies and public API dependencies. The exported `stamp_sum` needs
 the conversion of `Stamp`, which needs a conversion for each field. The public
-`Stamp` — the C struct, the Kotlin data class — has to exist for the [wrapper](05-boundary.md#assemble-the-native-boundary) that
+`Stamp` — the C struct, the Kotlin data class — has to exist for the [wrapper](06-boundary.md#assemble-the-native-boundary) that
 takes it to be usable at all. A Kotlin method needs the class it is declared on,
 and if the configuration promised that class implements an interface, it needs
 the members of that interface too.
 
 So a missing capability propagates. Suppose one field of the record had a type no
-[representation](04-values.md#plan-value-conversions) covers yet. Its conversion is unsupported; the record's conversion
+[representation](05-represent.md#represent-and-compose-values) covers yet. Its conversion is unsupported; the record's conversion
 is therefore unsupported; the public record cannot be emitted; and the function
 that takes it is skipped as well. Current reports copy the underlying reason
 and preserve each dependent's path to it. An unrelated function in
@@ -139,7 +139,7 @@ Planning itself determines support; there is no separate recursive
 `supports(type)` pass. The engine tracks active conversions to detect cycles
 and caches completed plans for reuse. Unsupported attempts are not cached today
 and may be attempted again. Cycle detection follows selected
-[relations](04-values.md#what-a-relation-is), so a future atomic handle can stop
+[relations](04-select.md#what-a-relation-is), so a future atomic handle can stop
 expansion without traversing fields. Unsupported recursive conversion is a skip;
 contradictory configuration, panics and I/O failures are not ordinary skips.
 
@@ -172,7 +172,7 @@ propagation is implemented; interface and method promises extend that rule:
 - A shared helper is retained if any emitted output needs it.
 - An unimplemented semantic setting blocks the affected promise; it is not silently discarded.
 
-A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](07-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An [artifact](04-values.md#individual-target-operations) — one generated unit, as defined with [the operations that depend on them](04-values.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a native extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
+A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](08-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An [artifact](05-represent.md#individual-target-operations) — one generated unit, as defined with [the operations that depend on them](05-represent.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a native extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
 
 Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks. Public dependencies may require repeated readiness evaluation until the retained set stops changing. A new public requirement discovered after value planning must still propagate before output is finalized.
 
@@ -210,7 +210,7 @@ struct GenerationRun<'a, T: Target> {
 }
 ```
 
-`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. [Primitive](04-values.md#plan-value-conversions)/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
+`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. [Primitive](05-represent.md#represent-and-compose-values)/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
 
 The pipeline is:
 
@@ -235,7 +235,7 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> optionally write the diagnostic report beside them
 ```
 
-Selection, child resolution and representation happen together for each [node](04-values.md#plan-value-conversions). A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
+Selection, child resolution and representation happen together for each [node](05-represent.md#represent-and-compose-values). A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
 
 The following is the proposed storage organization. Current `Generation` owns
 Flat, vectors of value/function/surface/primitive records, a `Report` and the
@@ -279,5 +279,5 @@ retention decisions described here.
 - [Function taking an owned record][fn_retain]
 - [Record with scalar fields][struct_retain]
 
-[fn_retain]: ../examples/fn/06-retain.md
-[struct_retain]: ../examples/struct/06-retain.md
+[fn_retain]: ../examples/fn/07-retain.md
+[struct_retain]: ../examples/struct/07-retain.md

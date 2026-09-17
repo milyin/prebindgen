@@ -1,12 +1,12 @@
 <!-- spec: {"kind": "stage", "stage": "03-requests"} -->
 
-[Project contents](../README.md) · Previous: [Build and inspect the source model](02-flat.md) · Next: [Plan value conversions](04-values.md)
+[Project contents](../README.md) · Previous: [Build and inspect the source model](02-flat.md) · Next: [Select conversion relations](04-select.md)
 
 # Record binding requests
 
 The implemented frontends translate user configuration into `BindingRequests`,
 the engine's input. This chapter first explains that translation, then describes
-the request identities and conversion-sharing rules. Some later types are design
+the request identities and [conversion](04-select.md#select-conversion-relations)-sharing rules. Some later types are design
 sketches: in particular, owned Flat views and placement-specific declaration ids
 are not implemented. Each frontend defines its own policy type.
 
@@ -51,7 +51,7 @@ Cbindgen::builder()
 In this builder, `.source` locates captured Rust items, and `.source_module`
 specifies the Rust path generated code uses to reach their implementation.
 `.declare` receives the requested C API. `data_type!(Stamp)` selects a type;
-`.base_name("Stamp")` names its C [representation](04-values.md#plan-value-conversions); `fun!(stamp_sum)` selects the
+`.base_name("Stamp")` names its C [representation](05-represent.md#represent-and-compose-values); `fun!(stamp_sum)` selects the
 function. Finally, `build_with` runs generation with the V2 engine. Enable the
 frontend's `v2` Cargo feature for these examples. Plain `.build()` instead
 reads `PREBINDGEN_PIPELINE` and defaults to V1 when the variable is unset.
@@ -108,8 +108,8 @@ reported skip (`unsupported.type.not_a_record`) rather than an error.
 The adapter also chooses how native failures reach the caller. For example,
 reading a JVM property can fail before the Rust function runs. The adapter
 supplies a reporting convention, rather than a per-function setting. The
-[native-boundary stage](05-boundary.md) uses that convention when planning the
-[wrapper](05-boundary.md#assemble-the-native-boundary)'s error path.
+[native-boundary stage](06-boundary.md) uses that convention when planning the
+[wrapper](06-boundary.md#assemble-the-native-boundary)'s error path.
 
 Each such call records a choice. Together they are the **binding
 configuration**, and `.build()` is where the frontend turns it into
@@ -127,7 +127,7 @@ The engine does not need to understand every C or JNI configuration option.
 This stage also fixes the names by which everything is addressed afterwards. A
 **declaration** is one requested output, identified by a `DeclarationId` —
 exposing the same Rust function at two Kotlin placements makes two of them, with
-separate [outcomes](06-retain.md#retain-supported-output), which the engine cannot express yet (its identity is the kind
+separate [outcomes](07-retain.md#retain-supported-output), which the engine cannot express yet (its identity is the kind
 and the Rust origin). A **site** is a position inside such a declaration:
 parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
@@ -176,11 +176,11 @@ Generating a binding for it requires several decisions and operations:
 4. Read and convert the returned fields.
 5. Return the result through the chosen foreign interface.
 
-A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those [representations](04-values.md#plan-value-conversions) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
+A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those [representations](05-represent.md#represent-and-compose-values) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
 
 **The registry owns that common work.** When a record gains another nested record field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of record traversal or wrapper assembly.
 
-A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](07-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
+A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](08-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
 
 The source crate and Flat have finished their work by the time requests exist.
 These are the roles that act from here on — roles, not crates: the frontend and
@@ -229,7 +229,7 @@ The implementation divides the registry's data between two structures:
   free function that starts a fresh run. `target` implements the adapter
   interface; `requests` contains the frontend's choices. Current V2 selects
   atomic conversions or record-field construction. Constructors, accessors
-  and other helper [relations](04-values.md#what-a-relation-is) described by the design are future extensions.
+  and other helper [relations](04-select.md#what-a-relation-is) described by the design are future extensions.
 - **The run**, private `Run` state in `plan.rs`, keeps requests, offered
   relations, conversion plans, the cache and cycle-detection marks. `generate`
   accumulates declaration outcomes and checks public dependencies. It returns
@@ -285,7 +285,7 @@ and each frontend fills it with whatever its own adapter will later have to
 interpret. That is what lets one engine serve two languages whose choices have
 nothing in common.
 
-Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [relation](04-values.md#what-a-relation-is) — a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument; where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
+Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [relation](04-select.md#what-a-relation-is) — a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument; where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
 
 Three concepts stay separate throughout the design:
 
@@ -338,7 +338,7 @@ pub fn generate<T: Target>(
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [policy and rendering-payload types](04-values.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](06-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [policy and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
@@ -468,7 +468,7 @@ struct Crossing {
 }
 ```
 
-A reusable conversion plan is a [node](04-values.md#plan-value-conversions). The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. The key includes the children, so it identifies a whole subgraph rather than a single value: equal subgraphs become one node, which is what makes the result a graph with sharing instead of a tree of repeated plans. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
+A reusable conversion plan is a [node](05-represent.md#represent-and-compose-values). The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. The key includes the children, so it identifies a whole subgraph rather than a single value: equal subgraphs become one node, which is what makes the result a graph with sharing instead of a tree of repeated plans. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
 
 ```rust
 // Private to the registry's conversion cache module; not a public request type.

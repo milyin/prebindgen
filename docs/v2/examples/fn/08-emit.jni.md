@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "variant", "example": "fn", "stage": "07-emit", "language": "jni"} -->
+<!-- spec: {"kind": "variant", "example": "fn", "stage": "08-emit", "language": "jni"} -->
 
-[Stage chapter](../../stages/07-emit.md) · [Common cell][fn_emit] · [Element path][fn]
+[Stage chapter](../../stages/08-emit.md) · [Common cell][fn_emit] · [Element path][fn]
 Owner: the common Rust writer and the JNI adapter's Kotlin writer
 
 # Function taking an owned record — Emit bindings — Kotlin/JNI
@@ -35,7 +35,7 @@ internal object JNINative {
 }
 ```
 
-The native [wrapper](../../stages/05-boundary.md#assemble-the-native-boundary) the JVM binds that method to (`kotlin.rs`), after the
+The native [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) the JVM binds that method to (`kotlin.rs`), after the
 reporting helper the adapter contributes once per file:
 
 ```rust
@@ -109,9 +109,9 @@ placeholder zero on the error path is not a successful result visible to Kotlin.
   reporting helper. The registry supplies each `match`, the check for reporting
   failure, the terminal return, record construction and the source function call.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
-  [conversions](../../stages/04-values.md#plan-value-conversions) render nothing. A child type needing real work would insert its
+  [conversions](../../stages/04-select.md#select-conversion-relations) render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.
 
 [fn]: README.md
-[fn_emit]: 07-emit.md
-[struct_emit_jni]: ../struct/07-emit.jni.md
+[fn_emit]: 08-emit.md
+[struct_emit_jni]: ../struct/08-emit.jni.md

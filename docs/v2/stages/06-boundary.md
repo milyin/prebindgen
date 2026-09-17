@@ -1,6 +1,6 @@
-<!-- spec: {"kind": "stage", "stage": "05-boundary"} -->
+<!-- spec: {"kind": "stage", "stage": "06-boundary"} -->
 
-[Project contents](../README.md) · Previous: [Plan value conversions](04-values.md) · Next: [Retain supported output](06-retain.md)
+[Project contents](../README.md) · Previous: [Represent and compose values](05-represent.md) · Next: [Retain supported output](07-retain.md)
 
 # Assemble the native boundary
 
@@ -18,7 +18,7 @@ pub struct Stamp { pub secs: i64, pub nanos: i64 }
 pub fn stamp_sum(stamp: Stamp) -> i64;
 ```
 
-A value conversion answers a local question, such as how to construct a Rust
+A value [conversion](04-select.md#select-conversion-relations) answers a local question, such as how to construct a Rust
 `Stamp` from a JVM object. A callable binding needs more: an exported symbol,
 a calling convention, native parameters, a return value and error handling.
 Together these form the **native boundary**, the interface the foreign runtime
@@ -76,7 +76,7 @@ convention is a separate implementation and should not be confused with this
 V2 example.
 
 If a requested delivery or failure route is not supported, the function is
-skipped, with the reason recorded in its [outcome](06-retain.md#retain-supported-output). It is never quietly given a different ABI than
+skipped, with the reason recorded in its [outcome](07-retain.md#retain-supported-output). It is never quietly given a different ABI than
 the one the configuration asked for, because a caller compiled against the header
 or the Kotlin declaration would then be calling something else.
 
@@ -177,10 +177,10 @@ C and JNI retain configured calling conventions. Unsupported result destinations
 
 - [Function taking an owned record][fn_boundary] · [C][fn_boundary_c] · [Kotlin/JNI][fn_boundary_jni]
 
-The record path has no cell here: [its conversion][struct_values] is reached
+The record path has no cell here: [its conversion][struct_represent] is reached
 through the function that uses it.
 
-[fn_boundary]: ../examples/fn/05-boundary.md
-[fn_boundary_c]: ../examples/fn/05-boundary.c.md
-[fn_boundary_jni]: ../examples/fn/05-boundary.jni.md
-[struct_values]: ../examples/struct/04-values.md
+[fn_boundary]: ../examples/fn/06-boundary.md
+[fn_boundary_c]: ../examples/fn/06-boundary.c.md
+[fn_boundary_jni]: ../examples/fn/06-boundary.jni.md
+[struct_represent]: ../examples/struct/05-represent.md

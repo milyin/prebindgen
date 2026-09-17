@@ -30,25 +30,31 @@
       "language_dependent": true
     },
     {
-      "id": "04-values",
-      "slug": "values",
-      "title": "Plan value conversions",
+      "id": "04-select",
+      "slug": "select",
+      "title": "Select conversion relations",
       "language_dependent": true
     },
     {
-      "id": "05-boundary",
+      "id": "05-represent",
+      "slug": "represent",
+      "title": "Represent and compose values",
+      "language_dependent": true
+    },
+    {
+      "id": "06-boundary",
       "slug": "boundary",
       "title": "Assemble the native boundary",
       "language_dependent": true
     },
     {
-      "id": "06-retain",
+      "id": "07-retain",
       "slug": "retain",
       "title": "Retain supported output",
       "language_dependent": false
     },
     {
-      "id": "07-emit",
+      "id": "08-emit",
       "slug": "emit",
       "title": "Emit bindings",
       "language_dependent": true
@@ -127,7 +133,7 @@
     },
     {
       "example": "fn",
-      "stage": "04-values",
+      "stage": "04-select",
       "languages": [
         "c",
         "jni"
@@ -135,7 +141,7 @@
     },
     {
       "example": "fn",
-      "stage": "05-boundary",
+      "stage": "05-represent",
       "languages": [
         "c",
         "jni"
@@ -143,12 +149,20 @@
     },
     {
       "example": "fn",
-      "stage": "06-retain",
+      "stage": "06-boundary",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "fn",
+      "stage": "07-retain",
       "languages": []
     },
     {
       "example": "fn",
-      "stage": "07-emit",
+      "stage": "08-emit",
       "languages": [
         "c",
         "jni"
@@ -174,7 +188,7 @@
     },
     {
       "example": "struct",
-      "stage": "04-values",
+      "stage": "04-select",
       "languages": [
         "c",
         "jni"
@@ -182,12 +196,20 @@
     },
     {
       "example": "struct",
-      "stage": "06-retain",
+      "stage": "05-represent",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "struct",
+      "stage": "07-retain",
       "languages": []
     },
     {
       "example": "struct",
-      "stage": "07-emit",
+      "stage": "08-emit",
       "languages": [
         "c",
         "jni"
@@ -231,7 +253,7 @@
     {
       "term": "conversion",
       "match": "conversions?",
-      "defined": "stages/04-values.md#plan-value-conversions"
+      "defined": "stages/04-select.md#select-conversion-relations"
     },
     {
       "term": "crossing",
@@ -241,47 +263,47 @@
     {
       "term": "relation",
       "match": "relations?",
-      "defined": "stages/04-values.md#what-a-relation-is"
+      "defined": "stages/04-select.md#what-a-relation-is"
     },
     {
       "term": "representation",
       "match": "representations?",
-      "defined": "stages/04-values.md#plan-value-conversions"
+      "defined": "stages/05-represent.md#represent-and-compose-values"
     },
     {
       "term": "carrier",
       "match": "carriers?",
-      "defined": "stages/04-values.md#describing-target-values-and-operations"
+      "defined": "stages/05-represent.md#describing-target-values-and-operations"
     },
     {
       "term": "primitive",
       "match": "primitives?",
-      "defined": "stages/04-values.md#plan-value-conversions"
+      "defined": "stages/05-represent.md#represent-and-compose-values"
     },
     {
       "term": "node",
       "match": "nodes?",
-      "defined": "stages/04-values.md#plan-value-conversions"
+      "defined": "stages/05-represent.md#represent-and-compose-values"
     },
     {
       "term": "artifact",
       "match": "artifacts?",
-      "defined": "stages/04-values.md#individual-target-operations"
+      "defined": "stages/05-represent.md#individual-target-operations"
     },
     {
       "term": "wrapper",
       "match": "wrappers?",
-      "defined": "stages/05-boundary.md#assemble-the-native-boundary"
+      "defined": "stages/06-boundary.md#assemble-the-native-boundary"
     },
     {
       "term": "outcome",
       "match": "outcomes?",
-      "defined": "stages/06-retain.md#retain-supported-output"
+      "defined": "stages/07-retain.md#retain-supported-output"
     },
     {
       "term": "capability",
       "match": "capabilit(?:y|ies)",
-      "defined": "stages/06-retain.md#retain-supported-output",
+      "defined": "stages/07-retain.md#retain-supported-output",
       "link_first_mention": false
     }
   ]

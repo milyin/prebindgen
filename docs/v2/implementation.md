@@ -1,6 +1,6 @@
 <!-- spec: {"kind": "implementation"} -->
 
-[Project contents](README.md) · Previous: [Emit bindings](stages/07-emit.md)
+[Project contents](README.md) · Previous: [Emit bindings](stages/08-emit.md)
 
 # Implementation and acceptance
 
@@ -11,7 +11,7 @@ have today and explains what an implementation must demonstrate next.
 The current increment generates scalar and owned-record input bindings through
 the real C and JNI frontends. The C entry point is executed in tests; generated
 JNI Rust is compiled and Kotlin text is checked, but that fixture does not yet
-execute a JVM call. Owned source-model views, optional [conversions](stages/04-values.md#plan-value-conversions), resource
+execute a JVM call. Owned source-model views, optional [conversions](stages/04-select.md#select-conversion-relations), resource
 contracts and report-based test selection remain future work. The sections
 below explain the planned sequence, the completed increment and its limits.
 
@@ -49,7 +49,7 @@ Required validation for implementation:
 - Derived type views preserve model association without changing source-item
   enumeration, and type/key consistency holds by construction.
 - Flat tests validate source inspection and emission. The registry project's
-  C/JNI tests separately validate [conversion](stages/04-values.md#plan-value-conversions) behavior and ownership.
+  C/JNI tests separately validate [conversion](stages/04-select.md#select-conversion-relations) behavior and ownership.
 
 ## Integration and first implementation steps
 
@@ -91,7 +91,7 @@ The initial implementation should demonstrate the architecture with both existin
 
 1. Construct `BindingRequests` from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
-3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/04-values.md#plan-value-conversions) using the same source [relation](stages/04-values.md#what-a-relation-is) algorithm.
+3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/05-represent.md#represent-and-compose-values) using the same source [relation](stages/04-select.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
 5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
 
@@ -117,7 +117,7 @@ choice and the temporary lifetime needed for a borrow.
 | A whole opaque representation of a type with unsupported private fields | Do not traverse the unused fields. |
 | Accessor/value-form helper returning a compound value | Call it once, keep its exact result type, and let the registry process its selected children. |
 | Existing `large_flat_input_sum(&ObjectBoundary64)` | Support requires an owned temporary and call-scoped borrow, beyond owned record conversion. Preserve the signature; skip with a borrow reason until implemented. |
-| The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support [outcome](stages/06-retain.md#retain-supported-output). |
+| The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support [outcome](stages/07-retain.md#retain-supported-output). |
 | Source `Result` with configured handler/builder | Preserve both branches and existing delivery conventions; skip if a required handler or destination is unimplemented. |
 | Nested optional values | Preserve distinct states and never decode inactive payloads. |
 | Unsupported required field or promised interface member | Propagate to the complete dependent public contract, while retaining unrelated output. |
@@ -142,7 +142,7 @@ in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 - `target.rs` defines the questions adapters answer and the descriptions they return.
 - `plan.rs` selects and combines conversions, caches reusable plans, assembles
-  [wrappers](stages/05-boundary.md#assemble-the-native-boundary) and checks public dependencies.
+  [wrappers](stages/06-boundary.md#assemble-the-native-boundary) and checks public dependencies.
 - `body.rs` defines the instructions stored in those plans; `emit.rs` writes
   the corresponding Rust code.
 - `run.rs` holds the completed `Generation`; `decl.rs`, `outcome.rs` and
@@ -192,9 +192,9 @@ establish the behavior of the resulting foreign interface.
    of instruction over value identities: apply a registered operation, construct
    a source record, and call the source function. These implement the body roles
    described with the rest of the
-   [conversion plans](stages/04-values.md#the-conversion-plans-the-registry-builds).
+   [conversion plans](stages/05-represent.md#the-conversion-plans-the-registry-builds).
    A conversion's body is a template whose
-   [carrier](stages/04-values.md#describing-target-values-and-operations) is its
+   [carrier](stages/05-represent.md#describing-target-values-and-operations) is its
    input; using it inlines it under the caller's identities. Temporary names are allocated by the writer from
    definition order, never by an adapter.
 2. **Registry-supplied operations inside an adapter's payload.** An operation's
@@ -212,13 +212,13 @@ establish the behavior of the resulting foreign interface.
    for. A representation is reused wherever a conversion of the same identity is
    needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, effective [policy](stages/03-requests.md#what-policy-means), children — so a target that
    answered differently for two positions would have its second answer silently
-   bypassed by the first one's [node](stages/04-values.md#plan-value-conversions). Varying by position is what a policy
+   bypassed by the first one's [node](stages/05-represent.md#represent-and-compose-values). Varying by position is what a policy
    recorded at that position is for, and that policy is in the identity.
 4. **How an adapter declares its types and generated units.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
    plus whether it may appear in an extern signature — carried inline in the
    description that uses it. A generated unit is an `Artifact`: a name and the
-   Rust it contributes. The registry keeps one [artifact](stages/04-values.md#individual-target-operations) per name and publishes
+   Rust it contributes. The registry keeps one [artifact](stages/05-represent.md#individual-target-operations) per name and publishes
    only those a retained output needs.
 
    These descriptions are checked where they meet the values in hand, which is
@@ -236,7 +236,7 @@ establish the behavior of the resulting foreign interface.
    assertion comparing the source crate's features against the set the capture
    was filtered by. Flat retains it as a guard, and the V2 writer emits every
    guard the model holds, ahead of the supporting items and
-   [wrappers](stages/05-boundary.md#assemble-the-native-boundary) it planned.
+   [wrappers](stages/06-boundary.md#assemble-the-native-boundary) it planned.
    Guards belong to no declaration, so retention does not decide their fate: a
    run that emits nothing still carries them, which is the case where losing the
    check would matter most. `v2check` feeds parsed items directly and has no
@@ -250,6 +250,9 @@ establish the behavior of the resulting foreign interface.
    variable its caller happens to have.
 
 ### What it does not settle
+
+The contracts designed for these are on [the extensions page](extensions.md);
+this list says what the increment left open and why.
 
 - **The target interface's parameter types** are real for these two paths —
   `SelectionQuery`, `ResolvedShape`, `ChildValue` (the chapters' `ValueDescriptor`),
@@ -320,5 +323,5 @@ Earlier feasibility work inspected registry relations and composition and Flat e
 Future resource, recursive and runtime capabilities require implementations and tests; until then, affected requests remain unsupported. Background: [#689](https://github.com/milyin/prebindgen/issues/689) / [#701](https://github.com/milyin/prebindgen/issues/701); earlier plans: [#713](https://github.com/milyin/prebindgen/issues/713) / [#717](https://github.com/milyin/prebindgen/issues/717).
 
 [fn]: examples/fn/README.md
-[fn_emit]: examples/fn/07-emit.md
+[fn_emit]: examples/fn/08-emit.md
 [struct]: examples/struct/README.md
