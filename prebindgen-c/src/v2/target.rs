@@ -295,8 +295,12 @@ impl Target for CTarget {
                     )));
                 }
                 let ident = format_ident!("{c_name}");
+                // A member mirrors a field one for one, its condition included:
+                // a field the source crate may not have must not become a
+                // member the header always declares.
+                let conditions = request.field_conditions();
                 let mut fields = Vec::new();
-                for field in &record.fields {
+                for (index, field) in record.fields.iter().enumerate() {
                     let Some(ty) = scalar_of(&field.ty).and_then(c_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.c.carrier",
@@ -312,7 +316,33 @@ impl Target for CTarget {
                             ),
                         )));
                     };
-                    fields.push(quote!(pub #name: #ty));
+                    let condition = &conditions[index];
+                    // cbindgen guards a member only for a condition its
+                    // `[defines]` table names; with no entry it writes the
+                    // member unguarded and says nothing, because its warning
+                    // goes through `log` and a build script driving its library
+                    // API installs no logger. The header then declares a member
+                    // the library may not have, which no compiler or linker
+                    // catches — the caller and the library simply disagree
+                    // about the record's size. This line is the only output
+                    // such a build produces, so it names the fix; it cannot
+                    // tell whether the fix is already in place, since reading
+                    // the consumer's cbindgen configuration would cost a
+                    // dependency for a warning.
+                    for under in condition {
+                        // Tokens print with a space between each pair, which
+                        // `close_up` removes where it separates no two words —
+                        // the same treatment a type key gets in the report.
+                        let under = super::close_up(&under.to_string());
+                        println!(
+                            "cargo:warning=prebindgen: `{c_name}.{name}` is emitted under \
+                             {under}; unless your cbindgen configuration already maps that \
+                             condition in [defines], the header declares the member \
+                             unconditionally and a C caller disagrees with the library \
+                             about the layout of `{c_name}`"
+                        );
+                    }
+                    fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     declaration: request.declaration.id.clone(),

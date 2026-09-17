@@ -52,7 +52,7 @@
 
 use proc_macro2::TokenStream;
 
-use super::{Alternative, Element, EnumValue, Struct, TypeRef};
+use super::{Alternative, Element, EnumValue, Field, Struct, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
@@ -121,6 +121,18 @@ pub trait RustEmitter {
     /// Empty when the item kept none, which is the ordinary case.
     fn conditions(&self, element: &Element) -> Vec<TokenStream> {
         element.conditions()
+    }
+
+    /// The same for one field of a record — see [`Self::conditions`].
+    ///
+    /// Separate from the item's because they are re-applied in different
+    /// places: an item's condition goes on the declarations generated for the
+    /// item, a field's on everything generated for that field. A caller that
+    /// re-applies one must re-apply it everywhere the field appears — the
+    /// member it mirrors, the read of that member, the initializer that fills
+    /// it — since a member that exists only sometimes cannot be read always.
+    fn field_conditions(&self, field: &Field) -> Vec<TokenStream> {
+        field.conditions()
     }
 
     /// Copy an explicit enum discriminant into the final output.

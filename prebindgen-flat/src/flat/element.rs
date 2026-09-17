@@ -511,6 +511,19 @@ pub struct Field {
     pub origin: Origin<syn::Field>,
 }
 
+impl Field {
+    /// The `#[cfg]` attributes this field was captured with — see
+    /// [`conditions_from`].
+    ///
+    /// A field's condition is the item's one level down, and it reaches
+    /// generated Rust the same way: everything a writer produces *for this
+    /// field* — a member of a mirrored record, the read of that member, the
+    /// initializer that fills it — carries it, or none of them can.
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(&self.origin.syntax.attrs)
+    }
+}
+
 /// Delimiters used by a Rust product constructor or pattern.
 ///
 /// This is structure, not retained syntax: it is the exact Flat fact needed

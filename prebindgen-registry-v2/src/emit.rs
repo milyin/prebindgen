@@ -30,7 +30,7 @@ use crate::{
 /// Implementing [`RustEmitter`] is a collector's deliberate decision to
 /// establish an emission boundary; v2 establishes its own rather than borrowing
 /// v1's.
-struct Writer;
+pub(crate) struct Writer;
 
 impl RustEmitter for Writer {}
 
@@ -135,8 +135,8 @@ fn wrapper<T: Target>(
     // look.
     let mut conditions = Vec::new();
     let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for instr in &function.instrs {
-        let named = match instr {
+    for step in &function.instrs {
+        let named = match &step.instr {
             Instr::Construct { record, .. } => record.as_str(),
             Instr::Call { function, .. } => function.as_str(),
             Instr::Apply { .. } => continue,
@@ -153,8 +153,13 @@ fn wrapper<T: Target>(
     }
 
     let mut statements = Vec::new();
-    for instr in &function.instrs {
-        match instr {
+    for step in &function.instrs {
+        // What a field's condition holds the statement to: a member declared
+        // only sometimes is read only sometimes, and the initializer that
+        // consumes the read exists only then. The statement is one `let`, so
+        // the attribute goes in front of it.
+        let guarded = &step.conditions;
+        match &step.instr {
             Instr::Apply {
                 primitive,
                 operands,
@@ -192,7 +197,7 @@ fn wrapper<T: Target>(
                         }
                     }
                 };
-                statements.push(statement);
+                statements.push(quote!(#(#guarded)* #statement));
             }
             Instr::Construct {
                 record,
@@ -204,15 +209,29 @@ fn wrapper<T: Target>(
                     .expect("a construction names a record the model declares");
                 let ident = &item.name;
                 let head = quote!(#source_module::#ident);
+                // An initializer carries its own field's condition: the value
+                // it names was bound by a statement under the same one, so a
+                // field the source does not have is neither read nor filled in.
+                //
+                // Read from the model here, while the statements got theirs
+                // from `Part::conditions` at plan time. The two agree because
+                // both read the same field; should a part's conditions ever
+                // become something a target contributes to, this has to read
+                // the part instead — an initializer written under a condition
+                // its read does not share names a value that is not there.
                 let bound: Vec<TokenStream> = item
                     .fields
                     .iter()
                     .zip(parts)
-                    .map(|(field, value)| field.bind(&names[value]))
+                    .map(|(field, value)| {
+                        let conditions = Writer.field_conditions(field);
+                        let bound = field.bind(&names[value]);
+                        quote!(#(#conditions)* #bound)
+                    })
                     .collect();
                 let value = Writer.shape_struct(item, head, &bound);
                 let name = local(&mut names, &mut taken, *result);
-                statements.push(quote!(let #name = #value;));
+                statements.push(quote!(#(#guarded)* let #name = #value;));
             }
             Instr::Call {
                 function: callee,
@@ -224,13 +243,14 @@ fn wrapper<T: Target>(
                 let call = quote!(#source_module::#callee(#(#args),*));
                 // A source function returning nothing produces no value, and a
                 // `let` over it would name one nobody can use.
-                statements.push(match result {
+                let statement = match result {
                     Some(result) => {
                         let name = local(&mut names, &mut taken, *result);
                         quote!(let #name = #call;)
                     }
                     None => quote!(#call;),
-                });
+                };
+                statements.push(quote!(#(#guarded)* #statement));
             }
         }
     }

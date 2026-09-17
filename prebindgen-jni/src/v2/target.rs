@@ -283,6 +283,17 @@ impl Target for JniTarget {
                             "a positional field has no Kotlin property to read".to_string(),
                         )));
                     };
+                    if !child.part.conditions.is_empty() {
+                        return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                            "unsupported.jni.conditional_field",
+                            format!(
+                                "field `{name}` is written under a condition this build \
+                                 cannot evaluate, and Kotlin cannot state one: a property \
+                                 for it would be filled in by every caller and read by the \
+                                 wrapper only sometimes"
+                            ),
+                        )));
+                    }
                     let Some((_, _, descriptor)) = scalar_of(&field.ty).and_then(jvm_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.jni.carrier",
@@ -513,14 +524,26 @@ impl Target for JniTarget {
                         ),
                     )));
                 }
+                let conditions = request.field_conditions();
                 let mut properties = Vec::new();
-                for field in &record.fields {
+                for (index, field) in record.fields.iter().enumerate() {
                     let Some(name) = field.name.as_ref() else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.jni.positional_field",
                             "a positional field has no Kotlin property name".to_string(),
                         )));
                     };
+                    if !conditions[index].is_empty() {
+                        return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                            "unsupported.jni.conditional_field",
+                            format!(
+                                "field `{name}` is written under a condition this build \
+                                 cannot evaluate, and Kotlin cannot state one: the class \
+                                 would promise a property the library reads only \
+                                 sometimes"
+                            ),
+                        )));
+                    }
                     let Some((_, kotlin, _)) = scalar_of(&field.ty).and_then(jvm_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.jni.carrier",

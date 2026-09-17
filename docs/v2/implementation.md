@@ -268,15 +268,17 @@ establish the behavior of the resulting foreign interface.
   operation is what has to add them, and cannot be written without them.
 - **Delivery** is a native return or nothing. Out-parameters, `Result` branches
   and declared sinks are `OutputPlacement` variants the increment does not have.
-- **An item's condition reaches the Rust side only.** V2 carries a `#[cfg]` the
-  capture reader could not answer onto the wrapper it generates, and no writer
-  gates the declaration the other language compiles against: the C prototype and
-  the Kotlin `external fun` are emitted whatever the condition says. So a JNI
-  binding can build and fail on the one call.
+- **A condition reaches the Rust side only.** V2 carries a `#[cfg]` the capture
+  reader could not answer onto everything it generates in Rust for the item that
+  carries it — the wrapper, the target's own declaration, and, for a field,
+  the mirrored member with the read and the initializer that serve it. No writer
+  gates the declaration the *other* language compiles against: the C prototype
+  and the Kotlin `external fun` are emitted whatever the condition says, so a
+  JNI binding can build and fail on the one call, and a C header can declare a
+  member the library's record does not have — silently, unless `cbindgen` is
+  given a `[defines]` entry for the condition.
   [The capture chapter](stages/01-source.md#the-binding-crate-decides) prices
-  that, and the two places the condition does not reach at all — a target's own
-  type declaration, and a condition written on a field.
-  [#743](https://github.com/milyin/prebindgen/issues/743) tracks them.
+  that; [#745](https://github.com/milyin/prebindgen/issues/745) tracks it.
 - **The source model's views.** Stage 2's `FunctionView`/`TypeView` are not
   built: the engine plans over today's borrowed `Flat` API and its frozen result
   owns the model, so a plan cannot outlive it and a view from another snapshot

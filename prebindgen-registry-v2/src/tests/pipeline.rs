@@ -102,6 +102,10 @@ enum Policy {
     /// does not read — an adapter defect the registry has to catch rather than
     /// emit.
     FunctionWithWrongInput,
+    /// A record whose public declaration is Rust the target contributes: a
+    /// mirror of the source record, one member per field. Only this policy
+    /// produces an artifact, so every other test's generated file is unchanged.
+    RecordWithMirror,
 }
 
 /// What a boundary does about failures.
@@ -143,6 +147,7 @@ impl Target for Mini {
                 | Policy::FallibleRecord
                 | Policy::RecordWithoutSurface
                 | Policy::RecordRequiring(_)
+                | Policy::RecordWithMirror
         );
         for (id, relation) in query.candidates {
             match (relation, want_record) {
@@ -344,6 +349,23 @@ impl Target for Mini {
                 "this record converts, and has no public declaration here",
             )));
         }
+        // The mirror is what a real C target contributes: a record of its own,
+        // one member per source field, each under that field's condition.
+        let rust = match (request.policy, request.item) {
+            (Policy::RecordWithMirror, SourceItem::Record(record)) => {
+                let ident = &record.name;
+                let conditions = request.field_conditions();
+                let members = record.fields.iter().zip(&conditions).map(|(field, under)| {
+                    let name = field.name.as_ref().expect("the fixture names its fields");
+                    quote::quote!(#(#under)* pub #name: i64)
+                });
+                vec![crate::target::Artifact::new(
+                    record.name.to_string(),
+                    quote::quote!(#[repr(C)] pub struct #ident { #(#members),* }),
+                )]
+            }
+            _ => Vec::new(),
+        };
         Ok(TargetAttempt::Ready(SurfaceSpec {
             declaration: request.declaration.id.clone(),
             requires: match (request.policy, request.item) {
@@ -356,7 +378,7 @@ impl Target for Mini {
                 }
                 (_, SourceItem::Record(_)) => Vec::new(),
             },
-            rust: Vec::new(),
+            rust,
             payload: None,
         }))
     }
@@ -1117,5 +1139,126 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
         rust.matches("#[cfg(another_custom_flag)]").count(),
         1,
         "and the one only the record carries reaches the wrapper too:\n{rust}"
+    );
+}
+
+/// A field's condition reaches everything the wrapper generates for that field,
+/// and nothing it generates for the others.
+///
+/// A member that exists only sometimes can only be read sometimes, and the
+/// initializer that consumes the read exists only then; leaving any one of the
+/// three unconditional is what used to make the wrapper name a field the source
+/// struct may not have. The mirror the target declares carries it too, which is
+/// what makes the member and its read agree.
+#[test]
+fn a_field_condition_reaches_every_statement_that_serves_the_field() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        syn::parse_quote!(
+            pub struct Stamp {
+                pub secs: i64,
+                #[cfg(some_custom_flag)]
+                pub nanos: i64,
+            }
+        ),
+        syn::parse_quote!(
+            pub fn stamp_sum(stamp: Stamp) -> i64 {
+                unimplemented!()
+            }
+        ),
+    ]
+    .into_iter()
+    .map(|item| (item, location.clone()))
+    .collect();
+    let flat = Flat::builder()
+        .items(items)
+        .build()
+        .expect("the fixture builds a model");
+
+    let mut requests = requests();
+    let record = requests.policy(Policy::RecordWithMirror);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+
+    let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
+    let rust = generation.rust();
+    // The member, the read, and the initializer — three places, one condition,
+    // and the unconditional field in none of them.
+    assert_eq!(
+        rust.matches("#[cfg(some_custom_flag)]").count(),
+        3,
+        "the member, its read and its initializer each carry it:\n{rust}"
+    );
+    for under in [
+        "#[cfg(some_custom_flag)]\n    pub nanos",
+        "#[cfg(some_custom_flag)]\n    let v1 = arg0.nanos;",
+        "#[cfg(some_custom_flag)]\n        nanos: v1,",
+    ] {
+        assert!(rust.contains(under), "missing:\n{under}\n\nin:\n{rust}");
+    }
+    assert!(
+        rust.contains("let v0 = arg0.secs;"),
+        "the unconditional field is untouched:\n{rust}"
+    );
+}
+
+/// An item's condition reaches the Rust a target contributes for its public
+/// declaration of that item, not only the wrapper.
+///
+/// A mirror emitted where the record it mirrors is absent is a type the foreign
+/// API declares and the build does not have.
+#[test]
+fn an_item_condition_reaches_the_declaration_a_target_contributes() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub struct Stamp {
+                pub secs: i64,
+                pub nanos: i64,
+            }
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub fn stamp_sum(stamp: Stamp) -> i64 {
+                unimplemented!()
+            }
+        ),
+    ]
+    .into_iter()
+    .map(|item| (item, location.clone()))
+    .collect();
+    let flat = Flat::builder()
+        .items(items)
+        .build()
+        .expect("the fixture builds a model");
+
+    let mut requests = requests();
+    let record = requests.policy(Policy::RecordWithMirror);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+
+    let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
+    let rust = generation.rust();
+    // Once on the mirror, once on the wrapper. The fields carry none of their
+    // own: the condition is the record's.
+    assert_eq!(
+        rust.matches("#[cfg(some_custom_flag)]").count(),
+        2,
+        "the mirror and the wrapper, and nothing else:\n{rust}"
+    );
+    assert!(
+        rust.contains("#[cfg(some_custom_flag)]\n#[repr(C)]"),
+        "the mirror carries it:\n{rust}"
     );
 }

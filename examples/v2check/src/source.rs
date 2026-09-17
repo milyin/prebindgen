@@ -45,3 +45,21 @@ pub fn stamp_show(stamp: Stamp) {
 pub fn stamp_delta(stamp: Stamp) -> i64 {
     stamp.secs.wrapping_sub(stamp.nanos)
 }
+
+/// A record with a field written under a condition nothing in this build can
+/// answer, and a function taking it.
+///
+/// `v2check_conditional_field` is never set, so `extra` is absent here — and
+/// the point is that the generated mirror, the read of its member and the
+/// initializer that fills it are absent with it. Setting the flag compiles the
+/// other half. Either way this crate builds, which is what a wrapper naming a
+/// field the source does not have could not do.
+pub struct Sample {
+    pub level: i64,
+    #[cfg(v2check_conditional_field)]
+    pub extra: i64,
+}
+
+pub fn sample_total(sample: Sample) -> i64 {
+    sample.level
+}

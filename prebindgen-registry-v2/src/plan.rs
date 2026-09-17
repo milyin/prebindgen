@@ -7,7 +7,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use prebindgen_flat::flat::{Flat, Function, Struct, Type, TypeKind, TypeRef};
+use prebindgen_flat::{
+    flat::{Flat, Function, Struct, Type, TypeKind, TypeRef},
+    RustEmitter,
+};
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
@@ -129,7 +132,7 @@ pub struct FunctionPlan<P> {
     pub failures: Vec<FailureRoute<P>>,
     /// Native parameters, paired with the value identity that names each.
     pub params: Vec<(ValueId, crate::target::NativeParam)>,
-    pub instrs: Vec<Instr>,
+    pub instrs: Vec<crate::body::Step>,
     /// The value delivered through [`Self::output`].
     pub result: Option<ValueId>,
 }
@@ -265,6 +268,7 @@ impl<'a, T: Target> Run<'a, T> {
                             name: field.name.as_ref().map(|name| name.to_string()),
                             index: field.index,
                             ty: field.ty.clone(),
+                            conditions: crate::emit::Writer.field_conditions(field),
                         })
                         .collect(),
                 })),
@@ -467,7 +471,13 @@ impl<'a, T: Target> Run<'a, T> {
                     }
                 };
                 let mut converted = Vec::new();
-                for (projection, child) in projections.iter().zip(&children) {
+                for (index, (projection, child)) in projections.iter().zip(&children).enumerate() {
+                    // Everything planned for this part, from the read of the
+                    // member to the last step of its conversion, exists exactly
+                    // where the source field does. The range is stamped rather
+                    // than each instruction, because a child conversion's own
+                    // instructions are inlined here and are equally the part's.
+                    let from = body.len();
                     check_operation(
                         projection,
                         repr.layout.wire(),
@@ -512,6 +522,7 @@ impl<'a, T: Target> Run<'a, T> {
                     };
                     let child_body = self.nodes[child.0].body.clone();
                     converted.push(child_body.inline(obtained, &mut body));
+                    body.condition(from, &parts[index].conditions);
                 }
                 let result = body.fresh();
                 body.push(Instr::Construct {
@@ -864,13 +875,36 @@ pub fn generate<T: Target>(
         }
     };
     for surface in &surfaces {
+        // Rust a target contributes for its own public declaration of a
+        // captured item — the `repr(C)` mirror of a record — exists only where
+        // that item does, by the rule a wrapper follows. A declaration the
+        // binding defines itself has no captured item and no condition.
+        let conditions = requests
+            .outputs
+            .iter()
+            .map(|output| &output.declaration)
+            .find(|declaration| declaration.id == surface.declaration)
+            .filter(|declaration| declaration.source != crate::decl::SourceKind::BindingLocal)
+            .and_then(|declaration| flat.element(declaration.rust_origin.as_str()))
+            .map(|element| crate::emit::Writer.conditions(element))
+            .unwrap_or_default();
         for artifact in &surface.rust {
-            keep(artifact, &mut artifacts);
+            let artifact = match conditions.is_empty() {
+                true => artifact.clone(),
+                false => {
+                    let rust = &artifact.rust;
+                    crate::target::Artifact::new(
+                        artifact.name.clone(),
+                        quote::quote!(#(#conditions)* #rust),
+                    )
+                }
+            };
+            keep(&artifact, &mut artifacts);
         }
     }
     for function in &functions {
-        for instr in &function.instrs {
-            if let Instr::Apply { primitive, .. } = instr {
+        for step in &function.instrs {
+            if let Instr::Apply { primitive, .. } = &step.instr {
                 for artifact in &primitives[primitive.0].dependencies {
                     keep(artifact, &mut artifacts);
                 }
@@ -1148,8 +1182,8 @@ fn assemble<T: Target>(
     // conversions: a route whose reporter needs an environment nobody passes
     // would otherwise reach the writer and fail there.
     let mut needed: Vec<&String> = Vec::new();
-    for instr in &instrs {
-        if let Instr::Apply { operands, .. } = instr {
+    for step in &instrs {
+        if let Instr::Apply { operands, .. } = &step.instr {
             for operand in operands {
                 if let Operand::Context(name) = operand {
                     needed.push(name);
@@ -1181,8 +1215,8 @@ fn assemble<T: Target>(
     // The reporter is handed the error the operation produced, so the two have
     // to be the same type; a route that reports something else would not
     // compile.
-    for instr in &instrs {
-        let Instr::Apply { primitive, .. } = instr else {
+    for step in &instrs {
+        let Instr::Apply { primitive, .. } = &step.instr else {
             continue;
         };
         let PrimitiveFailure::Fallible { error, category } = &run.primitives[primitive.0].failure

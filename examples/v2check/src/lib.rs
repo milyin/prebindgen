@@ -47,6 +47,30 @@ mod tests {
         crate::stamp_show(stamp);
     }
 
+    /// A field written under a condition nothing could answer reaches every
+    /// place the generated C binding's Rust names that field.
+    ///
+    /// The mirror's member, the read of it and the initializer that fills it,
+    /// each under the same condition — and the compiler is the other half of
+    /// this test: with the flag unset, `source::Sample` has no `extra`, so a
+    /// wrapper that named one would not have built this crate.
+    #[test]
+    fn a_conditional_source_field_is_conditional_everywhere_it_appears() {
+        let c = std::fs::read_to_string(env!("V2CHECK_C")).expect("the C file");
+        for under in [
+            "#[cfg(v2check_conditional_field)]\n    pub extra: i64,",
+            "#[cfg(v2check_conditional_field)]\n    let v1 = sample.extra;",
+            "#[cfg(v2check_conditional_field)]\n        extra: v1,",
+        ] {
+            assert!(c.contains(under), "missing:\n{under}\n\ngenerated:\n{c}");
+        }
+        assert_eq!(
+            c.matches("v2check_conditional_field").count(),
+            3,
+            "three places name it, and nothing else does:\n{c}"
+        );
+    }
+
     /// Every Rust item the specification's emit pages show is emitted, token
     /// for token.
     ///
@@ -134,27 +158,34 @@ mod tests {
     }
 
     /// Every declaration was emitted, and the report says so.
+    ///
+    /// The counts differ over `Sample`, which both targets declare and only C
+    /// emits: Kotlin cannot write a condition, so the JNI target refuses the
+    /// record rather than promise a property the library reads only sometimes.
     #[test]
     fn both_targets_report_every_declaration_as_emitted() {
-        for target in ["c", "jni"] {
+        // The record and the three functions over it, plus `Sample` and
+        // `sample_total` for C.
+        for (target, emitted) in [("c", 6), ("jni", 4)] {
             let report = report(target);
-            // The record, and the three functions over it.
             assert_eq!(
                 report.matches("\"outcome\": \"emitted\"").count(),
-                4,
+                emitted,
                 "{target} report: {report}"
             );
         }
     }
 
-    /// Every declaration the two targets could not generate is reported
-    /// as skipped, with the capability that would unblock it.
+    /// Every declaration a target could not generate is reported as skipped,
+    /// with the capability that would unblock it.
     ///
-    /// All three are declared deliberately: a record whose field has no
-    /// carrier, one the model lowers to an opaque declaration, and one with no
-    /// fields at all. An adapter that quietly emitted any of them would produce
-    /// an empty `repr(C)` aggregate crossing an `extern "C"` boundary, or a
-    /// Kotlin data class with no properties — neither of which exists.
+    /// Each is declared deliberately: a record whose field has no carrier, one
+    /// the model lowers to an opaque declaration, one with no fields at all,
+    /// and — for JNI only — `Sample`, whose field is written under a condition.
+    /// An adapter that quietly emitted any of them would produce an empty
+    /// `repr(C)` aggregate crossing an `extern "C"` boundary, a Kotlin data
+    /// class with no properties, or a data class promising a property the
+    /// library reads only sometimes.
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, declaration, capability) in [
@@ -164,6 +195,12 @@ mod tests {
             ("jni", "type:Reading", "unsupported.jni.carrier"),
             ("jni", "type:Marker", "unsupported.jni.empty_class"),
             ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
+            ("jni", "type:Sample", "unsupported.jni.conditional_field"),
+            (
+                "jni",
+                "fn:sample_total",
+                "unsupported.jni.conditional_field",
+            ),
         ] {
             let report = report(target);
             let entry = report

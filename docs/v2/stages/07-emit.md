@@ -40,11 +40,12 @@ It also states the wrapper's own condition. Some
 `#[cfg]` the
 [capture reader could not answer](01-source.md#the-binding-crate-decides). A
 wrapper names the items it calls and constructs and compiles only where all of
-them exist, so it carries the condition of each. The writer never reads what one
-says: Rust conjoins repeated `#[cfg]` attributes on one item, so carrying them
-side by side is the whole of it. The condition holds on the Rust side only — the
-C prototype and the Kotlin `external fun` for the same function are generated
-whatever it says, which
+them exist, so it carries the condition of each, and a field written under one
+puts it on the read of that field and on the initializer that consumes the read.
+The writer never asks what a condition says: Rust conjoins repeated `#[cfg]`
+attributes on one item, so carrying them side by side is the whole of it. The
+condition holds on the Rust side only — the C prototype and the Kotlin
+`external fun` for the same function are generated whatever it says, which
 [the capture stage](01-source.md#the-binding-crate-decides) prices.
 
 **Operation expressions** supply the target-specific parts of the Rust body.
@@ -57,6 +58,13 @@ which the JNI adapter knows how to produce. This expression returns a `Result`:
 call succeeded. The expression does not decide how the exported function
 reports an error. The common writer adds that control flow from the boundary
 plan, including the `match` and early return shown below.
+
+A target's own Rust — the `repr(C)` record below — is conditioned the same way,
+by the registry rather than by the target: the declaration carries the condition
+of the item it was requested for, and each mirrored member carries the condition
+of the field it mirrors. A target that declares members per field asks the
+registry for those conditions and puts them where its members go; it neither
+reads them nor decides anything by them.
 
 **The foreign-language source** is what the other language compiles against —
 a Kotlin class, a C prototype — and writing it belongs to the adapter for that
