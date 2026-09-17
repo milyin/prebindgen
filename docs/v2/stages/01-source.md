@@ -249,7 +249,7 @@ instead of a wrong class.
 All of which is the reason to keep a difference expressible as a feature or one
 of the target conditions: the reader evaluates those, so the item is dropped or
 kept on both sides consistently and no declaration is left standing alone.
-[Issue #743](https://github.com/milyin/prebindgen/issues/743) covers the
+[Issue #745](https://github.com/milyin/prebindgen/issues/745) covers the
 foreign declaration, and V1.
 
 Concretely, for the two items above. The capture is written once, by whatever
