@@ -63,3 +63,14 @@ pub struct Sample {
 pub fn sample_total(sample: Sample) -> i64 {
     sample.level
 }
+
+/// A function written under a condition nothing in this build can answer.
+///
+/// `v2check_conditional_fn` is never set, so neither this nor the wrapper
+/// generated for it is compiled — and the Kotlin declared for it is, because
+/// Kotlin cannot say what `#[cfg]` says. What the JNI writer can do is put the
+/// condition in the function's documentation, which is what this checks.
+#[cfg(v2check_conditional_fn)]
+pub fn stamp_ratio(stamp: Stamp) -> i64 {
+    stamp.secs / stamp.nanos.max(1)
+}

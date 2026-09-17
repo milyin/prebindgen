@@ -19,7 +19,7 @@
 
 use prebindgen_flat::{
     flat::{Function, Struct, TypeRef},
-    RustEmitter,
+    Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
 
@@ -679,6 +679,30 @@ pub struct SurfaceRequest<'a, Policy> {
 }
 
 impl<Policy> SurfaceRequest<'_, Policy> {
+    /// The `#[cfg]` conditions the captured item behind this request was
+    /// written under, spelled as the source wrote them — empty in the ordinary
+    /// case.
+    ///
+    /// Text rather than tokens, because the registry is what puts a condition
+    /// on the Rust it emits for this declaration. What is left for a target is
+    /// the declaration written in *its* language, which usually cannot state a
+    /// condition at all; saying so in that declaration's documentation is the
+    /// most such a target can do, and is better than saying nothing.
+    pub fn item_conditions(&self) -> Vec<String> {
+        let conditions = match self.item {
+            SourceItem::Record(record) => {
+                crate::emit::Writer.conditions(Conditioned::Struct(record))
+            }
+            SourceItem::Function(function) => {
+                crate::emit::Writer.conditions(Conditioned::Function(function))
+            }
+        };
+        conditions
+            .iter()
+            .map(|condition| prebindgen_flat::close_up(&condition.to_string()))
+            .collect()
+    }
+
     /// The `#[cfg]` conditions of each field of the record behind this request,
     /// in field order — empty entries for the ordinary unconditional field, and
     /// an empty list for a request that is not a record.
@@ -687,12 +711,15 @@ impl<Policy> SurfaceRequest<'_, Policy> {
     /// registry puts the same conditions on every instruction that serves the
     /// field, so a member declared under them is read under them and the
     /// initializer that consumes the read is written under them too.
+    ///
+    /// Tokens rather than text, unlike [`Self::item_conditions`]: these go into
+    /// the Rust a target contributes.
     pub fn field_conditions(&self) -> Vec<Vec<TokenStream>> {
         match self.item {
             SourceItem::Record(record) => record
                 .fields
                 .iter()
-                .map(|field| crate::emit::Writer.field_conditions(field))
+                .map(|field| crate::emit::Writer.conditions(Conditioned::Field(field)))
                 .collect(),
             SourceItem::Function(_) => Vec::new(),
         }

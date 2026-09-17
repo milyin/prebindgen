@@ -670,7 +670,7 @@ fn an_unevaluated_condition_comes_back_through_the_emitter() {
         let element = parse_one(item);
         assert_eq!(
             TestEmit
-                .conditions(&element)
+                .conditions(crate::Conditioned::Item(&element))
                 .iter()
                 .map(tokens)
                 .collect::<Vec<_>>(),
@@ -691,7 +691,7 @@ fn an_unevaluated_condition_comes_back_through_the_emitter() {
     ));
     assert_eq!(
         TestEmit
-            .conditions(&both)
+            .conditions(crate::Conditioned::Item(&both))
             .iter()
             .map(tokens)
             .collect::<Vec<_>>(),
@@ -706,5 +706,7 @@ fn an_unevaluated_condition_comes_back_through_the_emitter() {
             pub secs: i64,
         }
     ));
-    assert!(TestEmit.conditions(&plain).is_empty());
+    assert!(TestEmit
+        .conditions(crate::Conditioned::Item(&plain))
+        .is_empty());
 }

@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use prebindgen_flat::{
     flat::{Flat, Function, Struct, Type, TypeKind, TypeRef},
-    RustEmitter,
+    Conditioned, RustEmitter,
 };
 
 use crate::{
@@ -268,7 +268,7 @@ impl<'a, T: Target> Run<'a, T> {
                             name: field.name.as_ref().map(|name| name.to_string()),
                             index: field.index,
                             ty: field.ty.clone(),
-                            conditions: crate::emit::Writer.field_conditions(field),
+                            conditions: crate::emit::Writer.conditions(Conditioned::Field(field)),
                         })
                         .collect(),
                 })),
@@ -886,7 +886,7 @@ pub fn generate<T: Target>(
             .find(|declaration| declaration.id == surface.declaration)
             .filter(|declaration| declaration.source != crate::decl::SourceKind::BindingLocal)
             .and_then(|declaration| flat.element(declaration.rust_origin.as_str()))
-            .map(|element| crate::emit::Writer.conditions(element))
+            .map(|element| crate::emit::Writer.conditions(Conditioned::Item(element)))
             .unwrap_or_default();
         for artifact in &surface.rust {
             let artifact = match conditions.is_empty() {

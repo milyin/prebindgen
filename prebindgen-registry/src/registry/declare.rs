@@ -76,7 +76,8 @@ impl Registry {
     /// a source crate that needs migrating sees one list instead of one rebuild
     /// per item. This is independent of what any binding declares: an
     /// inexpressible item is a hard error whether or not it is ever named.
-    pub fn builder(flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder, ScanError> {
+    pub fn builder(mut flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder, ScanError> {
+        let dropped = drop_conditional_items(&mut flat);
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -91,12 +92,96 @@ impl Registry {
 
         let mut registry = Registry::empty();
         registry.flat = flat;
+        registry.dropped = dropped;
         Ok(RegistryBuilder {
             registry,
             built: HashMap::new(),
             order: None,
         })
     }
+}
+
+/// What to do about an item this engine will not emit, said wherever one is
+/// reported. Once per message, never inside the reason a chain of removals
+/// repeats.
+pub(crate) const DROPPED_ADVICE: &str = "Select the v2 pipeline, or state the condition as a \
+                                         feature or a target condition the capture reader can \
+                                         answer.";
+
+/// Take out every item written under a condition, and everything that names
+/// one, reporting each to the build log.
+///
+/// The capture reader answers the conditions it has rules for and rewrites the
+/// rest back onto the item. This engine has no way to honor one: its generated
+/// file is assembled from artifacts an adapter builds, each naming its source
+/// item unconditionally, so an item kept here would be called where it does not
+/// exist and the binding crate would not compile. Dropping it costs the builds
+/// where the condition *does* hold, which is why it is said out loud rather
+/// than done quietly — and why the v2 engine, which carries a condition into
+/// everything it generates, is the answer for a binding that needs one.
+///
+/// Nothing is dropped in the ordinary case: an evaluable condition was settled
+/// by the reader and never reached the model.
+///
+/// Returns what went, each with the clause a later error repeats: a declaration
+/// naming one of these is not the typo the ordinary message suggests.
+fn drop_conditional_items(
+    flat: &mut prebindgen_flat::flat::Flat,
+) -> std::collections::BTreeMap<String, String> {
+    use prebindgen_flat::RustEmitter;
+
+    let mut conditions: HashMap<String, String> = HashMap::new();
+    for element in flat.elements() {
+        let Some(name) = element.name() else {
+            continue;
+        };
+        // Spelled as the source wrote it: a `TokenStream` prints a space
+        // between every pair, and this ends up in a warning and in two errors a
+        // person reads.
+        let spelled: Vec<String> = crate::emit::Renderer
+            .conditions(prebindgen_flat::Conditioned::Item(element))
+            .iter()
+            .map(|condition| prebindgen_flat::close_up(&condition.to_string()))
+            .collect();
+        if !spelled.is_empty() {
+            conditions.insert(name.to_string(), spelled.join(" "));
+        }
+    }
+    let mut dropped = std::collections::BTreeMap::new();
+    if conditions.is_empty() {
+        return dropped;
+    }
+    for removed in flat.without(&conditions.keys().cloned().collect()) {
+        // A clause with no subject and no advice, so that it reads after `it`
+        // and after `which` alike, and a chain does not repeat the way out at
+        // every link: "names `A`, which names `B`, which is captured under …".
+        //
+        // The cause's own clause rather than a pointer to it, because this is
+        // repeated into an error listing only what the binding declared — where
+        // the line explaining the cause is not present. Removals arrive in
+        // decision order, so the cause is always already here.
+        let why = match &removed.because {
+            None => format!(
+                "is captured under {}, which this build cannot evaluate, and the v1 pipeline \
+                 cannot carry a condition into generated code",
+                conditions
+                    .get(&removed.name)
+                    .expect("every seed was read out of the model just above"),
+            ),
+            Some(because) => format!(
+                "names `{because}`, which {}",
+                dropped
+                    .get(because)
+                    .expect("a removal's cause was removed before it")
+            ),
+        };
+        println!(
+            "cargo:warning=prebindgen: `{}` {why}, so it is not emitted. {}",
+            removed.name, DROPPED_ADVICE
+        );
+        dropped.insert(removed.name, why);
+    }
+    dropped
 }
 
 impl RegistryBuilder {

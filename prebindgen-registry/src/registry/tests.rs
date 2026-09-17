@@ -156,7 +156,7 @@ fn scan_declared_missing_function_is_hard_error() {
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
     match ext.declare_into_any(reg).expect("declare").scanned() {
         Err(ScanError::DeclaredNotFound { entries }) => {
-            assert_eq!(entries, vec![("function", "typo_fn".to_string())]);
+            assert_eq!(entries, vec![("function", "typo_fn".to_string(), None)]);
         }
         Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
         Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
@@ -179,9 +179,9 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
             assert_eq!(
                 entries,
                 vec![
-                    ("constant", "TYPO_CONST".to_string()),
-                    ("function", "typo_fn".to_string()),
-                    ("helper function", "typo_helper".to_string()),
+                    ("constant", "TYPO_CONST".to_string(), None),
+                    ("function", "typo_fn".to_string(), None),
+                    ("helper function", "typo_helper".to_string(), None),
                 ]
             );
             // The message lists every entry.
@@ -2291,4 +2291,130 @@ fn a_refused_site_comes_back_for_the_adapter_to_report() {
             .any(|(site, _)| matches!(site.role, Role::CallbackArg { .. })),
         "and the refused site contributes no plan"
     );
+}
+
+/// Declaring an item this engine dropped says so, instead of suggesting a typo.
+///
+/// The warning is on stdout, and the error is what stops the build, so the
+/// error is where the explanation has to be: the item is in the source crate
+/// exactly as the build script wrote it, and the ordinary message would send a
+/// reader to look for a misspelling that is not there.
+#[test]
+fn declaring_a_dropped_item_is_explained_rather_than_blamed_on_a_typo() {
+    let reg: RegistryBuilder = crate::test_util::reg_from_items(vec![fn_item(
+        "#[cfg(some_custom_flag)] fn stamp_sum(x: u64) -> u64 { x }",
+    )])
+    .unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("stamp_sum").unwrap());
+    match ext.declare_into_any(reg).expect("declare").scanned() {
+        Err(error @ ScanError::DeclaredNotFound { .. }) => {
+            let message = error.to_string();
+            assert!(
+                // As the source wrote it, not as a `TokenStream` prints it.
+                message.contains(
+                    "captured under #[cfg(some_custom_flag)], which this build \
+                                  cannot evaluate"
+                ),
+                "{message}"
+            );
+            assert!(
+                message.contains("Select the v2 pipeline"),
+                "the message names the way out:\n{message}"
+            );
+            assert!(
+                !message.contains("typo in build.rs"),
+                "and does not send the reader looking for one:\n{message}"
+            );
+        }
+        Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
+        Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
+    }
+}
+
+/// An item dropped because it names a dropped one says why that one went.
+///
+/// The error lists what the binding declared, and a binding declaring the
+/// function need not have declared the record its parameter is. Pointing at "that
+/// reason" would point at a line the reader does not have — the warning log is
+/// somewhere above, and the error is what stopped the build.
+#[test]
+fn a_derived_removal_carries_the_reason_rather_than_referring_to_it() {
+    let record: syn::ItemStruct = syn::parse_quote!(
+        #[cfg(some_custom_flag)]
+        pub struct Stamp {
+            pub secs: u64,
+        }
+    );
+    let reg: RegistryBuilder = crate::test_util::reg_from_items(vec![
+        (syn::Item::Struct(record), SourceLocation::default()),
+        fn_item("fn stamp_sum(stamp: Stamp) -> u64 { stamp.secs }"),
+    ])
+    .unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("stamp_sum").unwrap());
+    match ext.declare_into_any(reg).expect("declare").scanned() {
+        Err(error @ ScanError::DeclaredNotFound { .. }) => {
+            let message = error.to_string();
+            assert!(
+                message
+                    .contains("it names `Stamp`, which is captured under #[cfg(some_custom_flag)]"),
+                "the cause's own sentence, not a pointer to it:\n{message}"
+            );
+            assert!(
+                message.contains("Select the v2 pipeline"),
+                "including the way out:\n{message}"
+            );
+        }
+        Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
+        Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
+    }
+}
+
+/// An item written under a condition this build cannot evaluate does not reach
+/// a v1 registry, and neither does anything that names it.
+///
+/// This engine assembles its file from artifacts that name their source item
+/// unconditionally, so an item kept here would be called where it does not
+/// exist. Dropping it is the honest answer, and the build log says so — the
+/// warning itself is `cargo:warning=` on stdout, which this does not capture.
+#[test]
+fn an_item_written_under_a_condition_does_not_reach_the_registry() {
+    let flat = Flat::builder()
+        .items(
+            [
+                syn::parse_quote!(
+                    #[cfg(some_custom_flag)]
+                    pub struct Stamp {
+                        pub secs: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub struct Reading {
+                        pub level: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn stamp_sum(stamp: Stamp) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn reading_level(reading: Reading) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+            ]
+            .into_iter()
+            .map(|item| (item, prebindgen::SourceLocation::default())),
+        )
+        .build()
+        .expect("parses");
+    let registry: RegistryBuilder = Registry::builder(flat).expect("indexes");
+
+    assert!(registry.flat().declared_type("Stamp").is_none());
+    // Not because it carries one of its own: because its parameter does.
+    assert!(registry.flat().function("stamp_sum").is_none());
+    assert!(registry.flat().declared_type("Reading").is_some());
+    assert!(registry.flat().function("reading_level").is_some());
 }

@@ -102,14 +102,18 @@ impl Registry {
         // Declared-but-missing items are collected across all three loops and
         // reported together as one hard error (see
         // [`ScanError::DeclaredNotFound`]).
-        let mut missing: Vec<(&'static str, String)> = Vec::new();
+        let mut missing: Vec<(&'static str, String, Option<String>)> = Vec::new();
 
         // Scan declared functions.
         for ident in &declared.functions {
             if let Some(func) = self.flat.function(&ident).cloned() {
                 self.scan_fn_signature(&func)?;
             } else {
-                missing.push(("function", ident.to_string()));
+                missing.push((
+                    "function",
+                    ident.to_string(),
+                    self.dropped(&ident.to_string()).cloned(),
+                ));
             }
         }
 
@@ -119,7 +123,11 @@ impl Registry {
         // adapter declarations, so a missing one is a hard error.
         for ident in &declared.helper_functions {
             if self.flat.function(&ident).is_none() {
-                missing.push(("helper function", ident.to_string()));
+                missing.push((
+                    "helper function",
+                    ident.to_string(),
+                    self.dropped(&ident.to_string()).cloned(),
+                ));
             }
         }
 
@@ -131,7 +139,11 @@ impl Registry {
             if let Some(ty) = self.flat.constant(&ident).map(|c| c.ty.clone()) {
                 self.intern_reading(Direction::Deconstruct, &ty, true);
             } else {
-                missing.push(("constant", ident.to_string()));
+                missing.push((
+                    "constant",
+                    ident.to_string(),
+                    self.dropped(&ident.to_string()).cloned(),
+                ));
             }
         }
 

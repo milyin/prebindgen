@@ -118,3 +118,45 @@ fn a_type_reachable_only_through_subs_must_still_resolve() {
         entries.iter().map(|e| e.key.to_string()).collect();
     assert_eq!(reported, ["Mid".to_string()].into_iter().collect());
 }
+
+/// A type this engine dropped is explained where it surfaces, which for a type
+/// is here rather than as a missing declaration.
+///
+/// A declared type is never checked against the model when it is declared — a
+/// binding may name a foreign one — so a dropped type reaches the build as a
+/// type that would not resolve, with nothing on the face of it to say the model
+/// ever had it.
+#[test]
+fn an_unresolved_type_this_engine_dropped_says_so() {
+    use crate::registry::Registry;
+
+    let mut reg: Registry = crate::test_util::scanned_with(&[
+        "#[cfg(some_custom_flag)] pub struct Stamp { pub secs: u64 }",
+    ]);
+    let stamp = reg
+        .intern(
+            crate::registry::Direction::Construct,
+            &syn::parse_quote!(Stamp),
+            true,
+        )
+        .expect("a declared type interns whether or not the model kept it");
+    reg.require_input(&stamp);
+
+    let message = check_complete(&reg)
+        .expect_err("a dropped type does not resolve")
+        .to_string();
+    assert!(
+        message
+            .contains("`Stamp` is not in the model: it is captured under #[cfg(some_custom_flag)]"),
+        "{message}"
+    );
+    assert!(
+        message.contains("Select the v2 pipeline"),
+        "and says the way out once:\n{message}"
+    );
+    assert_eq!(
+        message.matches("Select the v2 pipeline").count(),
+        1,
+        "{message}"
+    );
+}

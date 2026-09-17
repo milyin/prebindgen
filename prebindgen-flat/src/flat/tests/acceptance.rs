@@ -2057,3 +2057,79 @@ fn a_scalar_kind_is_recovered_from_any_spelling_of_its_type() {
     assert_eq!(ScalarKind::from_type(&syn::parse_quote!(String)), None);
     assert_eq!(ScalarKind::from_type(&syn::parse_quote!(&u8)), None);
 }
+
+/// Removing an element takes everything that names it, and stops there.
+///
+/// A model that still declared a function over a removed record would describe
+/// a signature its own namespace cannot resolve, which is why the removal
+/// closes over references rather than taking only what the caller named.
+#[test]
+fn removing_an_element_takes_what_names_it() {
+    let mut flat = Flat::builder()
+        .items(
+            [
+                syn::parse_quote!(
+                    pub struct Stamp {
+                        pub secs: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub struct Reading {
+                        pub level: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn stamp_sum(stamp: Option<Stamp>) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn reading_level(reading: Reading) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+                syn::parse_quote!(
+                    const _: () = {};
+                ),
+            ]
+            .into_iter()
+            .map(|item| (item, prebindgen::SourceLocation::default())),
+        )
+        .build()
+        .expect("the fixture builds a model");
+
+    let removed = flat.without(&["Stamp".to_string()].into_iter().collect());
+    assert_eq!(
+        removed,
+        vec![
+            super::Removed {
+                name: "Stamp".to_string(),
+                because: None
+            },
+            // Through the `Option`, which is why the walk is not a name match.
+            super::Removed {
+                name: "stamp_sum".to_string(),
+                because: Some("Stamp".to_string())
+            },
+        ]
+    );
+    assert!(flat.declared_type("Stamp").is_none());
+    assert!(flat.function("stamp_sum").is_none());
+    // Everything that named neither stays, and the guard — which names nothing
+    // and is named by nothing — stays with it.
+    assert!(flat.declared_type("Reading").is_some());
+    assert!(flat.function("reading_level").is_some());
+    assert_eq!(flat.guards().count(), 1);
+
+    // Both indexes go, or the type index answers for something the namespace no
+    // longer declares — `Option<Stamp>` as much as `Stamp`, since the mention
+    // that named it is gone with the function that wrote it.
+    assert!(flat.type_ref(&syn::parse_quote!(Stamp)).is_none());
+    assert!(flat.type_ref(&syn::parse_quote!(Option<Stamp>)).is_none());
+    assert!(flat.type_ref(&syn::parse_quote!(Reading)).is_some());
+
+    // A name the model does not hold is ignored rather than reported.
+    assert!(flat
+        .without(&["Absent".to_string()].into_iter().collect())
+        .is_empty());
+}

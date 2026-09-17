@@ -276,9 +276,11 @@ establish the behavior of the resulting foreign interface.
   and the Kotlin `external fun` are emitted whatever the condition says, so a
   JNI binding can build and fail on the one call, and a C header can declare a
   member the library's record does not have — silently, unless `cbindgen` is
-  given a `[defines]` entry for the condition.
+  given a `[defines]` entry for the condition. What is done about it instead is
+  a `cargo:warning` from the C frontend and the condition named in the Kotlin
+  function's documentation.
   [The capture chapter](stages/01-source.md#the-binding-crate-decides) prices
-  that; [#745](https://github.com/milyin/prebindgen/issues/745) tracks it.
+  that.
 - **The source model's views.** Stage 2's `FunctionView`/`TypeView` are not
   built: the engine plans over today's borrowed `Flat` API and its frozen result
   owns the model, so a plan cannot outlive it and a view from another snapshot

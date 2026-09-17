@@ -50,7 +50,8 @@ fn main() {
                 .fun(prebindgen_c::fun!(stamp_show))
                 .fun(prebindgen_c::fun!(marker_value))
                 .data_type(prebindgen_c::data_type!(Sample))
-                .fun(prebindgen_c::fun!(sample_total)),
+                .fun(prebindgen_c::fun!(sample_total))
+                .fun(prebindgen_c::fun!(stamp_ratio)),
         )
         .build_with(Pipeline::V2)
         .expect("the C binding plans");
@@ -70,7 +71,8 @@ fn main() {
                 .fun(prebindgen_registry::fun!(stamp_show))
                 .fun(prebindgen_registry::fun!(marker_value))
                 .class(prebindgen_jni::data_class!(Sample))
-                .fun(prebindgen_registry::fun!(sample_total)),
+                .fun(prebindgen_registry::fun!(sample_total))
+                .fun(prebindgen_registry::fun!(stamp_ratio)),
         )
         .build_with(Pipeline::V2)
         .expect("the JNI binding plans");
@@ -94,6 +96,7 @@ fn main() {
     // compiles a `#[cfg]` over a name rustc would otherwise report as one
     // nobody declared.
     println!("cargo::rustc-check-cfg=cfg(v2check_conditional_field)");
+    println!("cargo::rustc-check-cfg=cfg(v2check_conditional_fn)");
 
     println!("cargo:rustc-env=V2CHECK_C={}", c_path.display());
     println!("cargo:rustc-env=V2CHECK_JNI={}", jni_path.display());

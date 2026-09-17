@@ -36,6 +36,11 @@ pub struct UnresolvedEntry {
     pub key: TypeKey,
     pub direction: Direction,
     pub location: Option<SourceLocation>,
+    /// Why the type is not in the model, when this engine is what took it out —
+    /// see `Registry::dropped`. A declared type is not checked against the
+    /// model when it is declared, because a binding may name a foreign one, so
+    /// a dropped type arrives here rather than as a missing declaration.
+    pub dropped: Option<String>,
 }
 
 impl std::fmt::Display for ResolveError {
@@ -61,6 +66,15 @@ impl std::fmt::Display for ResolveError {
                     } else {
                         writeln!(f, "error: unresolved prebindgen {} type `{}`", dir, e.key)?;
                     }
+                    if let Some(why) = e.dropped.as_ref() {
+                        writeln!(f, "  `{}` is not in the model: it {why}", e.key)?;
+                    }
+                }
+                // Once, after the list: several entries can be the same dropped
+                // type in two directions, and the way out is the same for all
+                // of them.
+                if entries.iter().any(|e| e.dropped.is_some()) {
+                    writeln!(f, "{}", crate::registry::declare::DROPPED_ADVICE)?;
                 }
                 Ok(())
             }
@@ -151,6 +165,7 @@ fn collect_unresolved_descendants(
                     location: Some(cell.subject.location())
                         .filter(|l| l.has_position())
                         .cloned(),
+                    dropped: registry.dropped(key.as_str()).cloned(),
                 });
                 enqueue_edges_from(dir, &key, &mut queue, seen);
             }
@@ -192,6 +207,7 @@ pub(crate) fn check_complete(registry: &Registry) -> Result<(), ResolveError> {
                 location: Some(cell.subject.location())
                     .filter(|l| l.has_position())
                     .cloned(),
+                dropped: registry.dropped(key.as_str()).cloned(),
             });
         }
     }

@@ -144,6 +144,12 @@ impl Type {
         }
     }
 
+    /// The `#[cfg]` attributes the declaring item was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(self.attrs())
+    }
+
     /// The attributes the declaring item was captured with.
     fn attrs(&self) -> &[syn::Attribute] {
         match self {
@@ -509,6 +515,22 @@ pub struct Field {
     pub ty: TypeRef,
     /// The field as written — `pub id: u64`, attributes and docs included.
     pub origin: Origin<syn::Field>,
+}
+
+impl Function {
+    /// The `#[cfg]` attributes this function was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(&self.origin.syntax.attrs)
+    }
+}
+
+impl Struct {
+    /// The `#[cfg]` attributes this record was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(&self.origin.syntax.attrs)
+    }
 }
 
 impl Field {

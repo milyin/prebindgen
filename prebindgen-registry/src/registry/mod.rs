@@ -159,7 +159,7 @@ use crate::prebindgen::Prebindgen;
 
 mod cell;
 pub(crate) use self::cell::TypeCell;
-mod declare;
+pub(crate) mod declare;
 mod error;
 mod model;
 mod order;
@@ -189,6 +189,13 @@ pub struct Registry {
     /// later stage can ask it what a name means through the registry it already
     /// has — see [`Self::flat`].
     flat: prebindgen_flat::flat::Flat,
+    /// Captured items this engine took out of the model, each with the sentence
+    /// saying why — see `drop_conditional_items`.
+    ///
+    /// Kept so the errors a binding meets can say it. A declaration naming one
+    /// of these otherwise reads as a typo, while the item is in the source
+    /// crate exactly as the build script wrote it.
+    dropped: std::collections::BTreeMap<String, String>,
     /// What the binding declared, pushed in through `RegistryBuilder`'s
     /// `export` / `export_type` / `cross` / `reference` before its `build`.
     ///
@@ -263,9 +270,16 @@ impl Registry {
             .map(|cell| cell.entry.is_some())
     }
 
+    /// Why a captured item is not in the model, for the one kind of absence
+    /// this engine causes itself.
+    pub(crate) fn dropped(&self, name: &str) -> Option<&String> {
+        self.dropped.get(name)
+    }
+
     pub(crate) fn empty() -> Self {
         Self {
             flat: prebindgen_flat::flat::Flat::default(),
+            dropped: std::collections::BTreeMap::new(),
             declared: Declared::default(),
             input_types: Default::default(),
             output_types: Default::default(),

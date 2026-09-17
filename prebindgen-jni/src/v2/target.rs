@@ -73,6 +73,13 @@ pub enum JniPayload {
         native: String,
         params: Vec<(String, String)>,
         ret: String,
+        /// The conditions the source function was written under, as written.
+        ///
+        /// Kotlin has no conditional compilation, so the generated function
+        /// exists whatever they say and a call to an absent symbol fails at
+        /// run time. Naming them in the documentation is what the writer can
+        /// do about that; empty in the ordinary case.
+        conditions: Vec<String>,
     },
 }
 
@@ -504,6 +511,7 @@ impl Target for JniTarget {
                         native: native.clone(),
                         params,
                         ret,
+                        conditions: request.item_conditions(),
                     }),
                 }))
             }

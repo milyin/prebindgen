@@ -67,6 +67,7 @@ pub(super) fn write(
                 native,
                 params,
                 ret,
+                conditions,
             }) => {
                 let signature = |mut function: KtFun| {
                     for (name, ty) in params {
@@ -89,12 +90,36 @@ pub(super) fn write(
                 };
                 let args: Vec<&str> = params.iter().map(|(name, _)| name.as_str()).collect();
                 let call = format!("{harness}.{native}({})", args.join(", "));
-                file(package, &mut files).decls.push(
-                    signature(KtFun::new(method))
-                        .vis(KtVis::Public)
-                        .expr_body(KtCode::new().line(call))
-                        .into(),
-                );
+                let mut public = signature(KtFun::new(method))
+                    .vis(KtVis::Public)
+                    .expr_body(KtCode::new().line(call));
+                // Kotlin has no conditional compilation, so a function whose
+                // source was written under a condition is declared here
+                // whatever that condition says, and the symbol behind it is
+                // there only where the condition held. Saying so is all this
+                // writer can do about it.
+                if !conditions.is_empty() {
+                    // Backticks, because KDoc reads `[name]` as a reference to
+                    // a declaration: an unquoted `#[cfg(unix)]` would be an
+                    // unresolved link on every conditional function, and code
+                    // is what it is anyway.
+                    let spelled: Vec<String> = conditions
+                        .iter()
+                        .map(|condition| format!("`{condition}`"))
+                        .collect();
+                    // `kdoc` replaces. Nothing carries a source item's `///`
+                    // into Kotlin yet, so there is nothing to replace; whoever
+                    // adds that has to join the two rather than call this
+                    // second.
+                    public = public.kdoc(format!(
+                        "Present only where {} holds in the source crate.\n\nKotlin cannot \
+                         state a condition, so this function is declared either way; calling \
+                         it against a library built without that condition raises \
+                         UnsatisfiedLinkError.",
+                        spelled.join(" and ")
+                    ));
+                }
+                file(package, &mut files).decls.push(public.into());
             }
             _ => {}
         }
