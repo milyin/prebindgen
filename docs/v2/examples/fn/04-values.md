@@ -33,6 +33,22 @@ node(output) = Crossing { i64, OutOfRust }
                body:     identity — source i64 and the target carrier are one value
 ```
 
+Taken together the two plans are a small graph — three nodes, and one edge per
+part, with both fields landing on the same child:
+
+```text
+   Param(0) --> node(input)  Stamp, IntoRust, Stamp.fields
+                     |
+                     +-- secs  --+
+                     |           +--> node(i64, IntoRust, atomic)
+                     +-- nanos --+
+
+   Return   --> node(output) i64, OutOfRust, atomic
+```
+
+The two `i64` plans stay apart because direction is part of a node's identity,
+while the two fields share one plan because everything in theirs agrees.
+
 The input node is the record's own [conversion](../../stages/04-values.md#plan-value-conversions), [planned on its own path][struct_values]; this function
 refers to it, and so does anything else taking an owned `Stamp` under the same
 [policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are what [the boundary][fn_boundary] assembles.

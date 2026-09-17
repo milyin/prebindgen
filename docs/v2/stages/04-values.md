@@ -26,30 +26,61 @@ recipe, stored as structured data during the build. The plan does not call your
 Rust function during generation; it describes operations that generated code
 will execute later when a foreign caller uses the binding.
 
-Consider what has to happen for a foreign caller to call `stamp_sum`. The Rust
-function needs an owned `Stamp`. No foreign caller has one: a C
-caller has a struct of two integers, a Kotlin caller has a JVM object. So the
-generated [wrapper](05-boundary.md#assemble-the-native-boundary) has to obtain two field values from whatever the caller
-actually passed, build `Stamp { secs, nanos }` out of them, call the function,
-and turn the returned `i64` into something the caller can receive. Each of those
+A foreign caller does not call `stamp_sum`. It calls a generated entry point in
+its own language: a C function declared in a generated header, taking a
+`repr(C)` struct of two integers, or a Kotlin method taking a JVM object.
+Behind that entry point is the generated
+[wrapper](05-boundary.md#assemble-the-native-boundary), a Rust function whose
+ABI the foreign side can reach. It receives what the caller sent, and has to
+call `stamp_sum`, whose signature demands an owned `source::Stamp`.
+
+So the wrapper builds that `Stamp` out of what arrived, calls `stamp_sum`, and
+turns the returned `i64` into something it can send back. Under the
+configuration these chapters use, building it means reading two fields —
+members of the C struct, getters on the JVM object — and constructing
+`Stamp { secs, nanos }`. That is the selected route, not the only one: a binding
+configured to carry `Stamp` whole, as an opaque handle, reads no fields at all. Each of those
 value-shaped problems is a **conversion**, and planning one is what this stage
-does.
+does. Ordering them around the source call is
+[the next stage](05-boundary.md#assemble-the-native-boundary); here each value
+is planned on its own.
 
 Three separate questions have to be answered for every conversion, and keeping
-them apart is what lets one algorithm serve both languages:
+them apart is what lets one algorithm serve both languages. Everything here
+happens while the binding is being generated, from what the build script
+configured; no part of it is decided while the binding runs. Two of the
+questions are answered by the **target**: the
+[language adapter](../README.md#the-components) for the binding being generated
+— `prebindgen-c` or `prebindgen-jni` — in the role it plays facing the engine,
+answering for its own language item by item. The third is the registry's alone.
 
-- **How is the Rust value built or read?** For `Stamp`, from its two fields — or,
-  if the configuration said so, by calling `stamp_from_millis`. This answer is a
-  [**relation**](#what-a-relation-is). Relations are described in source terms only, and the registry
-  alone knows how to walk one; but *which* relation applies can still depend on
-  the target, because a target that carries `Stamp` as an opaque handle needs no
-  fields at all. So the target picks from the relations available, and must
-  honour a relation the configuration pinned or say why it cannot.
-- **What carries the value on the other side, and how is it accessed?** A
+- **On the Rust side, what is this value made of?** A `Stamp` is made of its two
+  fields, so obtaining one means obtaining two `i64`s and constructing
+  `Stamp { secs, nanos }` from them. An `i64` is made of nothing smaller: it is
+  converted whole. Each such answer is a
+  [**relation**](#what-a-relation-is) — a link from a Rust type to the Rust
+  values it is built from or read into, together with the source-level means of
+  getting between them. Relations are pure source-side facts, and the registry
+  is the only component that walks one.
+
+  Which relation applies is the target's answer, though, because it follows from
+  the configuration. Declared as a C struct or
+  a Kotlin data class, `Stamp` is built from its fields. Declared as an opaque
+  handle, it is carried whole and its fields are never read. So the registry
+  lists what the source model offers for the type — the fields, if the type is a
+  record, and the whole value in any case — and the target names the one its
+  configuration calls for. When the configuration calls for something V2 has no
+  lowering for, such as one of the C declarators it does not implement yet, the
+  target answers that instead of naming a relation, and nothing that needs the
+  value can be generated. Such a request fails the build; while V2's coverage is
+  still being completed it is
+  [reported as a skipped declaration](06-retain.md#unsupported-requests-and-public-api-dependencies)
+  instead, which is a property of the transition rather than of the design.
+- **On the foreign side, what carries the value, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
   through JNI. This answer is a **representation**, and only the target can give
-  it.
+  it: nothing in the registry knows what a C struct or a JVM object is.
 - **How are the pieces put together?** Read each part, convert it, construct the
   Rust value, in that order, stopping if a step fails. This is the registry's
   job, and it is identical in both languages.
@@ -62,13 +93,14 @@ plan(type, direction, position):
     policy   = effective policy for this position     # site path, else type policy,
                                                       # else run default
     relation = target.select(type, direction, applicable rules, policy)
+                                                      # which way out of this type;
                                                       # cheap: no recursion yet
     mark (type, direction, relation, policy) as being resolved
                                                       # meeting this mark again is a cycle
 
     parts    = the source model's parts of that relation
-                   # the fields of a record, the arguments of a constructor;
-                   # none at all for a scalar
+                   # where that choice leads: the fields of a record, the
+                   # arguments of a constructor; nowhere at all for a scalar
     children = [ plan(part.type, direction, that part's position)
                  for part in parts ]
     if any child is unsupported:
@@ -86,6 +118,10 @@ plan(type, direction, position):
 
     record the node and return it
 ```
+
+The algorithm is, in other words, a depth-first walk that starts at a requested
+type, takes one outgoing relation per type it reaches, and builds its answer on
+the way back up. The value it builds is a node, and equal nodes are made one.
 
 The algorithm saves completed plans in a **cache** so it can reuse them. Reuse
 requires more than matching the Rust type. Building `Stamp` from two fields is
@@ -127,6 +163,35 @@ or resource-bearing values yet. Two functions taking an owned `Stamp` in the
 same way can share a node. A borrow such as `&Stamp` needs a different node, as
 does a use with different field conversions or target policy.
 
+Nodes and the children they name form the graph that every later stage reads,
+and two of its properties are worth stating outright, because the algorithm
+above is what produces them.
+
+It is **acyclic**, by construction rather than by luck: a node is recorded only
+once every child it needs already exists, so an edge out of a node always points
+at something complete. Nothing in the graph can point back at a plan still being
+built, because such a plan is not in the graph at all.
+
+It is a graph and not a tree, because the cache makes equal subplans the same
+node. Planning `stamp_sum` produces four edges over three nodes:
+
+```text
+   wrapper for stamp_sum
+     |
+     +-- input  --> node: Stamp, into Rust, Stamp.fields
+     |                       |
+     |                       +-- part secs  --+
+     |                       |                +--> node: i64, into Rust, atomic
+     |                       +-- part nanos --+
+     |
+     +-- output --> node: i64, out of Rust, atomic
+```
+
+Both fields converge on one node, applied twice: same type, same direction, same
+relation, same policy, so the same plan. The two `i64` nodes do not merge,
+because direction is part of a node's identity — reading an integer out of a
+foreign argument and handing one back are different operations.
+
 The registry walks the record and combines its child plans. The target answers
 local representation questions, such as how to read one member. This division
 lets supported nested combinations reuse the traversal algorithm. It does not
@@ -135,11 +200,33 @@ the optional-value protocol, which this increment does not implement.
 
 A conversion is planned all the way or not at all. If any child conversion is
 unsupported — a field of a type nothing can carry yet — the node is unsupported,
-and every request that needed it is skipped with that reason. No half-built node
-is ever published: while planning is in progress the registry marks the
-conversion as being resolved, which is how it detects a cycle, but that mark is
-bookkeeping, not a plan, and it is replaced by a node or by an unsupported
-result. No later stage sees a conversion that half exists.
+and so is every request that needed it: refused with that reason, never
+generated in a reduced form. That propagation runs backwards along the edges
+just drawn: one refused leaf refuses every conversion that reaches it, and then
+every request that needed one of those. What a refusal does to the build is
+[retention's decision](06-retain.md#unsupported-requests-and-public-api-dependencies).
+
+No half-built node is ever published: while planning is in progress the registry
+marks the conversion as being resolved, which is how it detects a cycle, but
+that mark is bookkeeping, not a plan, and it is replaced by a node or by an
+unsupported result. No later stage sees a conversion that half exists.
+
+That mark is also the reason the plan graph can promise to be acyclic while the
+source graph it walks makes no such promise. A Rust type may perfectly well be
+described in terms of itself:
+
+```text
+   struct Branch { pub child: Box<Branch>, pub id: i64 }
+
+   plan(Branch, into Rust, Branch.fields)
+     +-- part child --> plan(Branch, into Rust, Branch.fields)   <-- still open
+```
+
+Meeting a conversion that is already open is a cycle in the source graph, and
+the registry answers it with `unsupported.conversion.recursive` rather than
+descending forever. Acyclicity is therefore something planning enforces at this
+one point, not something the source model guarantees; a recursive conversion
+becomes supported by giving that case a real answer, not by relaxing the check.
 
 ## Describing source construction and decomposition
 
@@ -156,6 +243,45 @@ of `Stamp`, and a type can stand in several at once. Nothing in a relation names
 a carrier, a wire type, a Kotlin class or a C struct: it is the answer to "how is
 the Rust value built or read?", and that answer is the same whichever language
 is on the other side.
+
+Relations are links between source types, so they form a graph over those types,
+and planning is a walk across it. Drawing that graph exactly is worth the effort,
+because three of its properties account for most of the algorithm above.
+
+**A relation links one type to several others at once.** `Stamp` is not related
+to `secs` and separately to `nanos`; it is related to the pair, and a conversion
+needs both or neither. So the relation is not a single edge but a bundle of them
+— a hyperedge — and the edge out to one type is a part of it. Drawing the
+relation as a box of its own puts both on the page:
+
+```text
+              relations of Stamp        parts of each
+
+    Stamp --+--> [ Stamp.fields ] --+--> i64   (secs,  part 0)
+            |                       |
+            |                       +--> i64   (nanos, part 1)
+            |
+            +--> [ atomic ]            (none)
+
+      i64 ------> [ atomic ]            (none)
+```
+
+`Relation::Atomic` is the arity-zero case: a bundle of no edges, which is exactly
+what makes a scalar a leaf. `Part` is the single edge, and that is why `Part`,
+not `Relation`, is what the recursion iterates.
+
+**A type has several outgoing relations, and they are distinct.** `Stamp` above
+offers two; a build that declared `stamp_from_millis` as a constructor would
+offer a third, landing on one `i64` instead of two. These are parallel hyperedges out of the same
+type, so the source graph is a multigraph and its edges need labels. `RelationId` is that
+label, which is why it belongs in a conversion's identity: `Stamp` through its
+fields and `Stamp` through `stamp_from_millis` produce different code from the
+same type and the same direction, and must never share a node.
+
+**The graph may contain cycles.** Nothing stops a Rust type from being described
+in terms of itself, directly or through a ring of types. The acyclicity the plan
+graph enjoys is [enforced during the walk](#plan-value-conversions), by refusing
+a conversion that is already open, and is not a property of the source.
 
 As built, the engine has the two relations its element paths need:
 
@@ -184,23 +310,28 @@ pub struct Part {
 }
 ```
 
-`Part::ty` is a Flat `TypeRef`, a source type: a relation's parts are other Rust
-values, which the registry plans recursively with the same algorithm. That is
-what makes a relation the registry's to walk and nobody else's. The constructor
-and projector relations sketched [below](#the-registry-validates-conversion-roles)
-are the same shape with different parts and a source function as the means, which
-is why adding one changes nothing under this type.
+`Part::ty` is a Flat `TypeRef`, a source type: every edge of a relation lands on
+another Rust value, which the registry plans recursively with the same algorithm.
+That is what keeps the walk the registry's and nobody else's — an edge that
+landed on a C struct or a Kotlin class would need a different traversal. The
+constructor and projector relations sketched
+[below](#the-registry-validates-conversion-roles) are the same shape with
+different edges and a source function as the means, which is why adding one
+changes nothing under this type.
 
-Flat stores no such links — its references are names, resolved on lookup — so a
-relation is the registry making a source-domain link explicit for the duration
-of one run. `Run::candidates` registers the relations it offers for a type the
-first time the type is planned (the atomic one for every type; the record one
+Flat stores no such links — its references are names, resolved on lookup — so the
+graph is not a structure the model holds. The registry builds a type's outgoing
+edges on demand and keeps them for the run. `Run::candidates` registers them the
+first time a type is planned (the atomic relation for every type; the record one
 when the model resolves the name to a struct) and hands the target the list as
-`(RelationId, Relation)` pairs. The target answers `select` with a
-**`RelationId`**, an index into that run's table under the same convention as
-every other `…Id` here. The id rather than the value is what matters: the
-relation is part of a conversion's identity, and `Stamp` through its fields and
-`Stamp` through `stamp_from_millis` must never share a node.
+`(RelationId, Relation)` pairs. Registering once per type rather than once per
+visit is what makes the label stable: a fresh id on every visit would make every
+parallel edge unique, and nothing would ever share a node.
+
+The target answers `select` with a **`RelationId`**, an index into that run's
+table under the same convention as every other `…Id` here — that is, it names
+which outgoing edge the walk takes from this type. The id rather than the value
+is what travels, because the id is what the cache key compares.
 
 The important distinction is between the structure Rust declares and the
 operation selected for a conversion. `Stamp` always has the same two fields,
@@ -270,8 +401,10 @@ All relation fields are private. Read-only accessors expose source types and arg
 **Implemented: `Atomic` and `Record`** — [the two relations above](#what-a-relation-is).
 The constructor and projector roles below are described, not built, so a target
 has no such candidate to select and fallible construction never reaches a
-boundary. The sketch that follows is the designed shape of the table, not the
-built one.
+boundary. Conversion rules are not built either: a request carries policies
+recorded for a type and for a position, and the target derives its relation from
+those, so a build script cannot yet name a relation directly. The sketch that follows is the
+designed shape of the table, not the built one.
 
 ```rust
 pub enum Relation {
@@ -298,7 +431,7 @@ struct ConversionRules {
 ```
 
 The user does not register a relation for each scalar or field-based record.
-The registry discovers those candidates from Flat. Constructor and projector
+The registry discovers those edges from Flat. Constructor and projector
 relations will additionally need explicit configuration identifying the helper:
 
 A **record relation** is implicit: for any record the source model describes, the
@@ -325,11 +458,13 @@ The registry then converts one `i64`, calls `stamp_from_millis`, and has a
 `Stamp` — one child instead of two, the same recursion, and a target that need
 not know which happened.
 
-So `select` chooses from: the implicit relation for that type, plus any explicit
-ones registered for it, and it must choose the one a conversion rule pinned if
-the rules pinned any. A target that cannot work with a pinned relation reports
-that as unsupported — the request is well formed, the capability is missing, and
-the affected outputs are skipped with the reason. That is different from a rule
+So `select` chooses from the edges leaving that type: the implicit relation,
+plus any explicit ones registered for it, and it must choose the one a conversion
+rule pinned if the rules pinned any. Pinning does not add or remove edges — they
+are all still there, and another position may take a different one — it fixes
+which edge is taken from this position. A target that cannot work with a pinned
+relation reports that as unsupported — the request is well formed, the capability is missing, and
+the affected outputs cannot be generated. That is different from a rule
 that contradicts the source, such as naming a constructor for a type it does not
 construct, which is invalid input and fails the build.
 
@@ -863,6 +998,10 @@ struct ValueContract {
 ```
 
 `ResolvedRelation` is the chosen relation after its source references and child conversions are resolved. `ValueType` says what a finished conversion produces: either a source Rust type, or a layout of carriers holding zero, one or several values. It differs from the `OperationType` above in exactly that arity — one operand or result is always a single value, whereas a conversion's product can be a group of slots. `Validity` composes the individual primitives' validity rules: for example, a produced reference remains tied to a particular temporary. `FailureSet` collects possible error categories/types; the function boundary decides their eventual handling.
+
+`dependencies` is the node's outgoing edge list, kept as an index: it is derived
+from the resolved relation and the body, never authored, and it is what a later
+stage follows to collect everything a retained conversion needs.
 
 `ConversionBodyId` points to structured instructions for locals, field access, variant matching, source construction/calls, primitive applications, conditions, and later loops or callback invocation. The common writer renders these instructions as Rust. It allocates temporary names centrally from identities.
 

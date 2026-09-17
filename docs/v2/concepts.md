@@ -32,6 +32,8 @@ directly. Three components cooperate to generate the connecting code:
   answers to the registry. For C, it describes member reads from a struct. For
   JNI, it describes getter calls on a JVM object. The registry combines those
   operations; the adapter does not independently traverse the entire type tree.
+  Where a chapter is describing what the engine asks rather than who implements
+  the answer, it calls this component simply **the target**.
 
 Frontend and adapter are two roles in the same language-specific crate, not
 two packages you configure separately. The registry is shared by both targets.
@@ -116,7 +118,8 @@ A position inside a source value, such as the `secs` field of `Stamp`. Planning
 the record means planning each of its parts and then combining the results.
 When constructor relations are implemented, a constructor's arguments can
 serve as parts instead of fields. A part is therefore not necessarily a field
-in the wider design. Sites and parts together describe the positions at which
+in the wider design: it is one step from a value to a value it is made of,
+whatever the source-level means of taking that step. Sites and parts together describe the positions at which
 planning happens. See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
 ## What the registry plans
@@ -143,14 +146,21 @@ reusable solution. See [Finding an existing conversion plan](stages/03-requests.
 
 ### Relation
 
-A description of how a Rust value can be constructed or read in terms of other
-Rust values. `Stamp` has a record relation to its two fields: obtain two `i64`
-values and construct `Stamp { secs, nanos }`. A scalar uses an atomic relation,
-meaning it is handled whole rather than broken into parts.
+A link from one Rust type to the other Rust values it is constructed from or
+read into. `Stamp` has a record relation to its two fields: obtain two `i64`
+values and construct `Stamp { secs, nanos }`. It links the type to both of them
+at once, so a relation is a bundle of edges rather than a single edge, and the
+edge to one of those values is a part. A scalar uses an atomic relation, the
+empty bundle: handled whole, with nowhere to descend.
 
-The wider design also allows a constructor relation, such as building `Stamp`
-from one `millis` argument. That is planned, not implemented. A relation says
-nothing about a C struct or Kotlin object: it describes the source-side work.
+Relations make the source types a graph, and planning a conversion is a walk
+across it. One type can have several — its fields, and, when implemented, a
+constructor such as building `Stamp` from one `millis` argument — so the edges
+carry labels, and the label taken is part of the resulting plan's identity.
+That graph may contain cycles; the plan graph built from it may not.
+
+A relation says nothing about a C struct or Kotlin object: it describes the
+source-side work.
 See [What a relation is](stages/04-values.md#what-a-relation-is).
 
 ### Representation
@@ -188,6 +198,11 @@ crossing, selected relation, policy identity and child-plan identities. Those
 details explain why “same Rust type” is not enough for sharing: two records
 whose fields need different conversions need different plans too. In the
 example, both `i64` fields can reuse one input node, applied once per field.
+
+Nodes and the children they name form the graph the later stages read. It is
+acyclic: a node is recorded only once every child it names exists, so no edge
+can point at a plan still being built. A conversion that would need itself is
+refused rather than followed, which is how a cyclic source type stays out of it.
 See [Plan value conversions](stages/04-values.md#plan-value-conversions).
 
 ### Artifact
@@ -219,7 +234,9 @@ explicitly ignored. [The report](report.md) lists them so a missing function
 does not have to be diagnosed by inspecting generated code alone. An emitted
 declaration passed generation; it still needs compilation and runtime testing.
 A generation error, such as contradictory configuration, returns no completed
-generation result or report. See [Retain supported output](stages/06-retain.md#retain-supported-output).
+generation result or report. The skipped outcome belongs to the V2 transition:
+once V2 covers what V1 covers, a request it cannot generate fails the build
+instead. See [Retain supported output](stages/06-retain.md#retain-supported-output).
 
 ### Capability
 
@@ -228,4 +245,4 @@ The stable code `unsupported.jni.carrier`, for example, identifies a value that
 the JNI target cannot carry yet. The accompanying explanation and path identify
 the particular type and position. Several skipped declarations can share a
 code, helping a developer see which missing feature would unblock the most
-requests. See [Retain supported output](stages/06-retain.md#retain-supported-output).
+requests — and, while V2 is being completed, which gap to close next. See [Retain supported output](stages/06-retain.md#retain-supported-output).

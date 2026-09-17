@@ -48,9 +48,12 @@ data struct to lose a field silently, or permit V2 to replace an unsupported
 data representation with a handle.
 
 Every declaration finishes with exactly one **outcome**. *Emitted* means its
-requirements succeeded and it can be generated. *Skipped* means the request
-needs support V2 does not yet provide. *Ignored* means the user explicitly
-excluded it; that is a configuration decision, not a gap in support.
+requirements succeeded and it can be generated. *Ignored* means the user
+explicitly excluded it; that is a configuration decision, not a gap in support.
+*Skipped* means the request needs support V2 does not yet provide — an outcome
+that exists only while V2 is being brought up to V1's coverage, as
+[the next section](#unsupported-requests-and-public-api-dependencies) sets
+out.
 
 A skipped declaration carries a **capability**: a stable code naming the
 support it needs, such as `unsupported.jni.carrier`. An explanation and a path
@@ -71,11 +74,25 @@ add a dependency or reverse a support decision.
 
 ## Unsupported requests and public API dependencies
 
-V2 accepts requests it does not yet know how to generate. Unsupported
-functionality is a normal planning result; invalid configuration and generator
-defects fail generation. The following sketch describes the fuller diagnostic
-design, including source locations, shared causes and the future `Unselected`
-outcome. Current error payloads and reports are simpler, as explained below.
+**Specified behavior: a requested binding that cannot be generated fails the
+build.** A build script asks for an exported API; quietly shipping less than it
+asked for is not something the finished engine offers, and a consumer must not
+have to read a report to learn that a function it declared does not exist.
+
+**Skipping is transitional.** V2's coverage is still smaller than V1's, so while
+that gap lasts the engine accepts a request it cannot generate, records it as a
+skipped declaration with its reason, and generates the rest. That is what lets
+an existing V1 configuration be pointed at V2 without being rewritten first, and
+what lets the two element paths here be built before the rest of the surface
+exists. It is a migration device with an end: as coverage completes, each
+remaining skip becomes a build failure, and nothing in a consumer's build should
+be arranged to depend on skipping. Invalid configuration and generator defects
+already fail generation today.
+
+The rest of this section describes that transitional accounting. The following
+sketch describes the fuller diagnostic design, including source locations,
+shared causes and the future `Unselected` outcome. Current error payloads and
+reports are simpler, as explained below.
 
 ```rust
 // Answer returned by a target operation; the registry owns the final accounting.
