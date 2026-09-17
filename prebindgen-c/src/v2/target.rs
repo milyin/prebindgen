@@ -317,6 +317,25 @@ impl Target for CTarget {
                         )));
                     };
                     let condition = &conditions[index];
+                    // cbindgen guards a member only for a condition its
+                    // `[defines]` table names; with no entry it warns on its own
+                    // stdout and writes the member unguarded. The header then
+                    // declares a member the library may not have, which no
+                    // compiler or linker catches — the caller and the library
+                    // simply disagree about the record's size. Say so here,
+                    // where the condition is known and the build log is read.
+                    for under in condition {
+                        // Tokens print with a space between each pair, which
+                        // `close_up` removes where it separates no two words —
+                        // the same treatment a type key gets in the report.
+                        let under = super::close_up(&under.to_string());
+                        println!(
+                            "cargo:warning=prebindgen: `{c_name}.{name}` is emitted under \
+                             {under}; give cbindgen a [defines] entry for that condition, or \
+                             the header declares the member unconditionally and a C caller \
+                             disagrees with the library about the layout of `{c_name}`"
+                        );
+                    }
                     fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {

@@ -68,7 +68,9 @@ fn main() {
                 .fun(prebindgen_registry::fun!(stamp_sum))
                 .fun(prebindgen_registry::fun!(stamp_delta))
                 .fun(prebindgen_registry::fun!(stamp_show))
-                .fun(prebindgen_registry::fun!(marker_value)),
+                .fun(prebindgen_registry::fun!(marker_value))
+                .class(prebindgen_jni::data_class!(Sample))
+                .fun(prebindgen_registry::fun!(sample_total)),
         )
         .build_with(Pipeline::V2)
         .expect("the JNI binding plans");

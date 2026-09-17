@@ -274,7 +274,9 @@ establish the behavior of the resulting foreign interface.
   the mirrored member with the read and the initializer that serve it. No writer
   gates the declaration the *other* language compiles against: the C prototype
   and the Kotlin `external fun` are emitted whatever the condition says, so a
-  JNI binding can build and fail on the one call.
+  JNI binding can build and fail on the one call, and a C header can declare a
+  member the library's record does not have — silently, unless `cbindgen` is
+  given a `[defines]` entry for the condition.
   [The capture chapter](stages/01-source.md#the-binding-crate-decides) prices
   that; [#743](https://github.com/milyin/prebindgen/issues/743) tracks it.
 - **The source model's views.** Stage 2's `FunctionView`/`TypeView` are not

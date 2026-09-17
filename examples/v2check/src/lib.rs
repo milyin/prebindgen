@@ -48,7 +48,7 @@ mod tests {
     }
 
     /// A field written under a condition nothing could answer reaches every
-    /// place the generated Rust names that field.
+    /// place the generated C binding's Rust names that field.
     ///
     /// The mirror's member, the read of it and the initializer that fills it,
     /// each under the same condition — and the compiler is the other half of
@@ -159,9 +159,9 @@ mod tests {
 
     /// Every declaration was emitted, and the report says so.
     ///
-    /// The counts differ because only C declares `Sample`: Kotlin has no way to
-    /// write a condition, so a property standing for a field that may not exist
-    /// is a question this increment does not answer.
+    /// The counts differ over `Sample`, which both targets declare and only C
+    /// emits: Kotlin cannot write a condition, so the JNI target refuses the
+    /// record rather than promise a property the library reads only sometimes.
     #[test]
     fn both_targets_report_every_declaration_as_emitted() {
         // The record and the three functions over it, plus `Sample` and
@@ -176,14 +176,16 @@ mod tests {
         }
     }
 
-    /// Every declaration the two targets could not generate is reported
-    /// as skipped, with the capability that would unblock it.
+    /// Every declaration a target could not generate is reported as skipped,
+    /// with the capability that would unblock it.
     ///
-    /// All three are declared deliberately: a record whose field has no
-    /// carrier, one the model lowers to an opaque declaration, and one with no
-    /// fields at all. An adapter that quietly emitted any of them would produce
-    /// an empty `repr(C)` aggregate crossing an `extern "C"` boundary, or a
-    /// Kotlin data class with no properties — neither of which exists.
+    /// Each is declared deliberately: a record whose field has no carrier, one
+    /// the model lowers to an opaque declaration, one with no fields at all,
+    /// and — for JNI only — `Sample`, whose field is written under a condition.
+    /// An adapter that quietly emitted any of them would produce an empty
+    /// `repr(C)` aggregate crossing an `extern "C"` boundary, a Kotlin data
+    /// class with no properties, or a data class promising a property the
+    /// library reads only sometimes.
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, declaration, capability) in [
@@ -193,6 +195,12 @@ mod tests {
             ("jni", "type:Reading", "unsupported.jni.carrier"),
             ("jni", "type:Marker", "unsupported.jni.empty_class"),
             ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
+            ("jni", "type:Sample", "unsupported.jni.conditional_field"),
+            (
+                "jni",
+                "fn:sample_total",
+                "unsupported.jni.conditional_field",
+            ),
         ] {
             let report = report(target);
             let entry = report

@@ -221,18 +221,33 @@ V1 does neither, and leaves the wrapper unconditional while the function it
 calls is not. Such a binding calls a function that does not exist wherever the
 condition is false, and the binding crate fails to compile.
 
-What V2 settles is the Rust side, and it moves the remaining failure rather than
-removing it. The declaration the *other* language compiles against is not
-conditional, because no writer gates one. For C that is recoverable: `cbindgen`
-guards a prototype only for a condition named in its `[defines]` table and
-otherwise warns and writes the prototype bare, so the mismatch surfaces as an
-undefined symbol at link and adding the entry fixes it. For Kotlin nothing
-expresses the condition at all — the `external fun` is generated, and a call to
-it raises `UnsatisfiedLinkError`. So a V2 JNI binding can build and then break
-on one call, where a V1 one could not be built at all. That is the trade, and it
-is the reason to keep a difference expressible as a feature or one of the target
-conditions: the reader evaluates those, so the item is dropped or kept on both
-sides consistently and no declaration is left standing alone.
+What V2 settles is the Rust side. The declaration the *other* language compiles
+against is not conditional, because no writer gates one, and what that costs
+depends on which language and on whether the condition was written on an item or
+on a field.
+
+`cbindgen` guards a declaration only for a condition its `[defines]` table
+names. With no entry it warns on its own output and writes the declaration bare.
+For a *function* the result is loud: the header declares a prototype whose
+symbol the library does not define, and the program fails to link. For a
+*member* it is not: the header declares a member the library's record does not
+have, so a caller allocates and fills a larger record than the wrapper reads,
+and nothing in the toolchain objects. That is the silent class of mismatch this
+chapter exists to prevent, so the C frontend emits a `cargo:warning` naming the
+member and the condition whenever it writes one — the `[defines]` entry is the
+fix, and the warning is the only place a build can hear that it is missing.
+
+Kotlin cannot express a condition at all. A function keeps its `external fun`,
+and a call to an absent symbol raises `UnsatisfiedLinkError`; a V2 JNI binding
+can therefore build and then break on one call, where a V1 one could not be
+built at all. A record with a conditional *field* is refused outright
+(`unsupported.jni.conditional_field`) rather than given a data class promising a
+property the library reads only sometimes, so that case is a reported skip
+instead of a wrong class.
+
+All of which is the reason to keep a difference expressible as a feature or one
+of the target conditions: the reader evaluates those, so the item is dropped or
+kept on both sides consistently and no declaration is left standing alone.
 [Issue #743](https://github.com/milyin/prebindgen/issues/743) covers the
 foreign declaration, and V1.
 

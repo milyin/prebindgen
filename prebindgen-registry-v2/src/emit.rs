@@ -212,6 +212,13 @@ fn wrapper<T: Target>(
                 // An initializer carries its own field's condition: the value
                 // it names was bound by a statement under the same one, so a
                 // field the source does not have is neither read nor filled in.
+                //
+                // Read from the model here, while the statements got theirs
+                // from `Part::conditions` at plan time. The two agree because
+                // both read the same field; should a part's conditions ever
+                // become something a target contributes to, this has to read
+                // the part instead — an initializer written under a condition
+                // its read does not share names a value that is not there.
                 let bound: Vec<TokenStream> = item
                     .fields
                     .iter()
