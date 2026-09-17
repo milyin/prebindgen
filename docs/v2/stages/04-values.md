@@ -57,8 +57,12 @@ item. The third is the registry's alone.
   [**relation**](#what-a-relation-is). Relations are described in source terms
   only, and the registry alone knows how to walk one; but *which* one applies
   still depends on the target, because a target that carries `Stamp` whole needs
-  no fields at all. So the target picks from the relations offered to it, and
-  must honour one the configuration pinned or say why it cannot.
+  no fields at all. So the target picks one of the relations the registry offers
+  it, and cannot invent one of its own. Where the build script pinned a relation
+  for a type or a position, the target has to use that one; a target that cannot
+  work with it says so, and the affected output is skipped rather than generated
+  some other way. Nothing is pinnable yet: every relation the engine has today is
+  one it derived itself, so there is only ever one sensible candidate.
 - **What carries the value on the other side, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
