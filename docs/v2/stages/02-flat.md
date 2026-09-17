@@ -510,8 +510,11 @@ to find fields; the view knows which model's `Stamp` declaration to consult.
 
 This design keeps both because structural readings are already useful to Flat's
 parser and emission code. V2 source inspection and registry planning use
-`TypeView`. Returning a reading for inspection or emission does not make that
-reading a replacement for a checked view in another model.
+`TypeView`. A bare reading carries no model identity, so one taken out of a
+view cannot be handed to a different model and resolved there: names that
+match across snapshots are not evidence of the same declaration. To resolve a
+type against another model, obtain a view from that model rather than reusing
+the reading.
 
 ```rust
 impl TypeView {
