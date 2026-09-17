@@ -217,9 +217,12 @@ V2 generates a mirror whose `extra` member, the `let` that reads it, and the
 `extra:` initializer all sit under `#[cfg(some_custom_flag)]`, and the binding
 crate compiles whether or not the flag is set.
 
-V1 does neither, and leaves the wrapper unconditional while the function it
-calls is not. Such a binding calls a function that does not exist wherever the
-condition is false, and the binding crate fails to compile.
+V1 does neither, and has no place to. Its file is assembled from pieces an
+adapter builds, each naming its source item unconditionally, so it does not
+emit such an item at all: a conditional item is dropped when the registry is
+built, together with everything that names it, and each removal is reported to
+the build log. That costs the builds where the condition does hold, which is
+why it is said out loud — and why a binding that needs one wants V2.
 
 What V2 settles is the Rust side. The declaration the *other* language compiles
 against is not conditional, because no writer gates one, and what that costs
@@ -238,19 +241,20 @@ chapter exists to prevent, so the C frontend emits a `cargo:warning` naming the
 member and the condition whenever it writes one — the `[defines]` entry is the
 fix, and that warning is the only output a build gets at all.
 
-Kotlin cannot express a condition at all. A function keeps its `external fun`,
-and a call to an absent symbol raises `UnsatisfiedLinkError`; a V2 JNI binding
-can therefore build and then break on one call, where a V1 one could not be
-built at all. A record with a conditional *field* is refused outright
-(`unsupported.jni.conditional_field`) rather than given a data class promising a
-property the library reads only sometimes, so that case is a reported skip
-instead of a wrong class.
+Kotlin cannot express a condition at all, so what it does about one depends on
+what would otherwise be promised. A record with a conditional *field* is refused
+(`unsupported.jni.conditional_field`): a data class would give every caller a
+property to fill in that the library reads only sometimes, and a reported skip
+says that better than a wrong class. A conditional *function* is declared, and
+its documentation names the condition — the symbol is there wherever the
+condition held, and a call against a library built without it raises
+`UnsatisfiedLinkError`. Declaring it is what keeps the function usable in the
+builds where it exists, which refusing would not.
 
 All of which is the reason to keep a difference expressible as a feature or one
 of the target conditions: the reader evaluates those, so the item is dropped or
-kept on both sides consistently and no declaration is left standing alone.
-[Issue #745](https://github.com/milyin/prebindgen/issues/745) covers the
-foreign declaration, and V1.
+kept on both sides consistently and nothing is left to a warning or a doc
+comment.
 
 Concretely, for the two items above. The capture is written once, by whatever
 machine compiled the source crate, and holds every variant and every conditional

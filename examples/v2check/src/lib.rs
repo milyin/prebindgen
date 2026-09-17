@@ -71,6 +71,34 @@ mod tests {
         );
     }
 
+    /// A function written under a condition keeps it in Rust and is documented
+    /// with it in Kotlin.
+    ///
+    /// Kotlin has no conditional compilation, so the declaration exists either
+    /// way and the symbol behind it does not. Naming the condition where a
+    /// caller reads it is the whole of what the writer can do, and it is worth
+    /// pinning: silence here is a method that fails at run time for a reason
+    /// nothing in the API states.
+    #[test]
+    fn a_conditional_source_function_is_documented_in_kotlin() {
+        let c = std::fs::read_to_string(env!("V2CHECK_C")).expect("the C file");
+        assert!(
+            c.contains("#[cfg(v2check_conditional_fn)]"),
+            "the C wrapper carries the condition:\n{c}"
+        );
+        let kotlin = std::fs::read_to_string(env!("V2CHECK_KOTLIN")).expect("the Kotlin file");
+        assert!(
+            kotlin.contains(
+                "Present only where #[cfg(v2check_conditional_fn)] holds in the source crate."
+            ),
+            "the Kotlin function names its condition:\n{kotlin}"
+        );
+        assert!(
+            kotlin.contains("public fun stampRatio(stamp: Stamp): Long"),
+            "and is declared regardless:\n{kotlin}"
+        );
+    }
+
     /// Every Rust item the specification's emit pages show is emitted, token
     /// for token.
     ///
@@ -162,11 +190,13 @@ mod tests {
     /// The counts differ over `Sample`, which both targets declare and only C
     /// emits: Kotlin cannot write a condition, so the JNI target refuses the
     /// record rather than promise a property the library reads only sometimes.
+    /// A conditional *function* is emitted by both, because a function has no
+    /// property to promise.
     #[test]
     fn both_targets_report_every_declaration_as_emitted() {
-        // The record and the three functions over it, plus `Sample` and
-        // `sample_total` for C.
-        for (target, emitted) in [("c", 6), ("jni", 4)] {
+        // The record, the three functions over it and `stamp_ratio`, plus
+        // `Sample` and `sample_total` for C.
+        for (target, emitted) in [("c", 7), ("jni", 5)] {
             let report = report(target);
             assert_eq!(
                 report.matches("\"outcome\": \"emitted\"").count(),
