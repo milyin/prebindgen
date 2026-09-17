@@ -424,8 +424,13 @@ records or model/type pairs. Accessors derive children from the retained parent.
 A copied public `TypeRef` cannot be reattached to a different snapshot merely
 because a type with the same key exists there.
 
-The registry does need to check that incoming views belong to its source model.
-Flat provides a check such as:
+A view therefore belongs to exactly one snapshot, and navigation stays inside
+it: `parameters()`, `declaration()` and every other accessor derive the child
+from the parent's own storage. A foreign view can only arrive at an operation
+that *accepts* a view from its caller — a `Flat` method taking one, or a
+registry ingress point such as declaring an item or planning a conversion.
+Those operations validate the view themselves and report a mismatch through
+their own result:
 
 ```rust
 impl Flat {
@@ -437,10 +442,27 @@ impl Flat {
 These methods compare snapshot association — in the `Rc`-based storage above, an
 identity comparison of the shared model data — and do not rebind the view. Equivalent
 checks cover other view kinds. `ModelError` distinguishes a mismatched model
-from other invalid model operations. Private constructors prevent forged
-indices and mismatched internal pairs; runtime checks reject valid views from
-the wrong snapshot. Rust lifetimes alone would not distinguish two models that
-happen to be borrowed for the same duration.
+from other invalid model operations. Consumers may call them to pre-validate,
+but rejection must not depend on a consumer remembering to: an operation that
+takes a view is responsible for checking it, so a new adapter cannot opt out of
+the rule by omission. One check at ingress covers everything reached from that
+handle afterwards, which costs one pointer comparison per declared item.
+
+The check runs in release builds, not only under `debug_assert`. Mixing
+snapshots does not crash: a name resolved against the wrong model finds a
+same-named declaration of a different shape and emits bindings that compile and
+are wrong at the ABI boundary. That is a silent wrong-output failure, so it has
+to fail where it happens.
+
+Private constructors prevent forged indices and mismatched internal pairs;
+runtime checks reject valid views from the wrong snapshot. Rust lifetimes alone
+would not distinguish two models that happen to be borrowed for the same
+duration. An invariant brand parameter would move the check to compile time, at
+the price of a lifetime parameter on every public type, models that cannot share
+a collection, and inference errors in place of `ModelError`; the runtime check
+is the cheaper trade here. This design assumes one build may hold more than one
+model — several source crates, or per-group snapshots — which is what makes the
+check worth its API cost.
 
 If a future consumer needs import across snapshots, that is an explicit checked
 operation with source mapping and validation. Matching names or key strings are
