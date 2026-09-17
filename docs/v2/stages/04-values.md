@@ -46,26 +46,37 @@ does. Ordering them around the source call is
 is planned on its own.
 
 Three separate questions have to be answered for every conversion, and keeping
-them apart is what lets one algorithm serve both languages. Two of them are put
-to the **target**: the [language adapter](../README.md#the-components) for the
-binding being generated — `prebindgen-c` or `prebindgen-jni` — in the role it
-plays facing the engine, answering questions about its own language item by
-item. The third is the registry's alone.
+them apart is what lets one algorithm serve both languages. Everything here
+happens while the binding is being generated, from what the build script
+configured; no part of it is decided while the binding runs. Two of the
+questions are answered by the **target**: the
+[language adapter](../README.md#the-components) for the binding being generated
+— `prebindgen-c` or `prebindgen-jni` — in the role it plays facing the engine,
+answering for its own language item by item. The third is the registry's alone.
 
-- **How is the Rust value built or read?** For `Stamp`, from its two fields — or,
-  if the configuration said so, by calling `stamp_from_millis`. This answer is a
-  [**relation**](#what-a-relation-is). Relations are described in source terms
-  only, and the registry alone knows how to walk one; but *which* one applies
-  still depends on the target, because a target that carries `Stamp` whole needs
-  no fields at all. So the target picks one of the relations the registry offers
-  it, and cannot invent one of its own. The build script can also take the choice
-  away: a conversion rule recorded for a type, for one
-  [site](03-requests.md#a-values-position-in-an-exported-function) — a parameter
-  or result of an exported function — or for one part of a relation fixes which
-  relation is used there. A target that cannot work with the fixed relation
-  reports that, and the outputs needing it are skipped; it does not quietly
-  convert the value some other way.
-- **What carries the value on the other side, and how is it accessed?** A
+- **On the Rust side, what is this value made of?** A `Stamp` is made of its two
+  fields, so obtaining one means obtaining two `i64`s and constructing
+  `Stamp { secs, nanos }` from them. An `i64` is made of nothing smaller: it is
+  converted whole. Each such answer is a
+  [**relation**](#what-a-relation-is) — a link from a Rust type to the Rust
+  values it is built from or read into, together with the source-level means of
+  getting between them. Relations are pure source-side facts, and the registry
+  is the only component that walks one.
+
+  Which relation applies is the target's answer, though, because it follows from
+  the configuration. Declared as a C struct or
+  a Kotlin data class, `Stamp` is built from its fields. Declared as an opaque
+  handle, it is carried whole and its fields are never read. So the registry
+  lists what the source model offers for the type — the fields, if the type is a
+  record, and the whole value in any case — and the target names the one its
+  configuration calls for. When the configuration calls for something V2 has no
+  lowering for, such as one of the C declarators it does not implement yet, the
+  target answers that instead of naming a relation, and every output needing
+  that value is
+  [skipped](06-retain.md#unsupported-requests-and-public-api-dependencies) with
+  that reason. A skip is the answer to missing support, not to bad input:
+  configuration that contradicts the source fails the build instead.
+- **On the foreign side, what carries the value, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
   through JNI. This answer is a **representation**, and only the target can give
@@ -388,9 +399,9 @@ All relation fields are private. Read-only accessors expose source types and arg
 **Implemented: `Atomic` and `Record`** — [the two relations above](#what-a-relation-is).
 The constructor and projector roles below are described, not built, so a target
 has no such candidate to select and fallible construction never reaches a
-boundary. Conversion rules are not built either: requests carry type and site
-policies, and a target chooses its relation from those, so nothing fixes a
-relation against the target's choice yet. The sketch that follows is the
+boundary. Conversion rules are not built either: a request carries policies
+recorded for a type and for a position, and the target derives its relation from
+those, so a build script cannot yet name a relation directly. The sketch that follows is the
 designed shape of the table, not the built one.
 
 ```rust
