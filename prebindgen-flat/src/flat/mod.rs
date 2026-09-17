@@ -726,6 +726,13 @@ impl Flat {
             .enumerate()
             .filter_map(|(index, element)| Some((element.name()?.to_string(), index)))
             .collect();
+        // Both indexes, or the second answers for a type the first no longer
+        // declares: `Flat::type_ref` says `None` means the API does not mention
+        // that type, and after this it does not. A mention naming something
+        // gone goes with it; every other reading is still exactly what it was.
+        let standing: std::collections::HashSet<String> = self.by_name.keys().cloned().collect();
+        self.by_type
+            .retain(|_, ty| ty.first_unresolved(&standing).is_none());
         removed
     }
 

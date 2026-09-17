@@ -77,7 +77,7 @@ impl Registry {
     /// per item. This is independent of what any binding declares: an
     /// inexpressible item is a hard error whether or not it is ever named.
     pub fn builder(mut flat: prebindgen_flat::flat::Flat) -> Result<RegistryBuilder, ScanError> {
-        drop_conditional_items(&mut flat);
+        let dropped = drop_conditional_items(&mut flat);
         let entries: Vec<NotExpressibleEntry> = flat
             .unsupported()
             .map(|u| NotExpressibleEntry {
@@ -92,6 +92,7 @@ impl Registry {
 
         let mut registry = Registry::empty();
         registry.flat = flat;
+        registry.dropped = dropped;
         Ok(RegistryBuilder {
             registry,
             built: HashMap::new(),
@@ -114,7 +115,12 @@ impl Registry {
 ///
 /// Nothing is dropped in the ordinary case: an evaluable condition was settled
 /// by the reader and never reached the model.
-fn drop_conditional_items(flat: &mut prebindgen_flat::flat::Flat) {
+/// Returns what went, each with the sentence a later error repeats: a
+/// declaration naming one of these is not the typo the ordinary message
+/// suggests.
+fn drop_conditional_items(
+    flat: &mut prebindgen_flat::flat::Flat,
+) -> std::collections::BTreeMap<String, String> {
     use prebindgen_flat::RustEmitter;
 
     let mut conditions: HashMap<String, String> = HashMap::new();
@@ -131,27 +137,29 @@ fn drop_conditional_items(flat: &mut prebindgen_flat::flat::Flat) {
             conditions.insert(name.to_string(), spelled.join(" "));
         }
     }
+    let mut dropped = std::collections::BTreeMap::new();
     if conditions.is_empty() {
-        return;
+        return dropped;
     }
     for removed in flat.without(&conditions.keys().cloned().collect()) {
-        match removed.because {
-            None => println!(
-                "cargo:warning=prebindgen: `{}` is captured under {}, which this build cannot \
-                 evaluate, and the v1 pipeline cannot carry a condition into generated code — \
-                 it is not emitted. Select the v2 pipeline, or state the condition as a feature \
-                 or a target condition the capture reader can answer.",
-                removed.name,
+        let why = match &removed.because {
+            None => format!(
+                "it is captured under {}, which this build cannot evaluate, and the v1 pipeline \
+                 cannot carry a condition into generated code. Select the v2 pipeline, or state \
+                 the condition as a feature or a target condition the capture reader can answer",
                 conditions
                     .get(&removed.name)
                     .expect("every seed was read out of the model just above"),
             ),
-            Some(because) => println!(
-                "cargo:warning=prebindgen: `{}` is not emitted either: it names `{because}`.",
-                removed.name
-            ),
-        }
+            Some(because) => format!("it names `{because}`, which was dropped for that reason"),
+        };
+        println!(
+            "cargo:warning=prebindgen: `{}` is not emitted: {why}.",
+            removed.name
+        );
+        dropped.insert(removed.name, why);
     }
+    dropped
 }
 
 impl RegistryBuilder {

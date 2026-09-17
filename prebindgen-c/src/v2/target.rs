@@ -333,7 +333,7 @@ impl Target for CTarget {
                         // Tokens print with a space between each pair, which
                         // `close_up` removes where it separates no two words —
                         // the same treatment a type key gets in the report.
-                        let under = super::close_up(&under.to_string());
+                        let under = prebindgen_registry_v2::close_up(&under.to_string());
                         println!(
                             "cargo:warning=prebindgen: `{c_name}.{name}` is emitted under \
                              {under}; unless your cbindgen configuration already maps that \

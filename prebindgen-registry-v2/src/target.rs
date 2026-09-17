@@ -679,14 +679,6 @@ pub struct SurfaceRequest<'a, Policy> {
 }
 
 impl<Policy> SurfaceRequest<'_, Policy> {
-    /// The `#[cfg]` conditions of each field of the record behind this request,
-    /// in field order — empty entries for the ordinary unconditional field, and
-    /// an empty list for a request that is not a record.
-    ///
-    /// A target declaring a member per field puts its entry on that member. The
-    /// registry puts the same conditions on every instruction that serves the
-    /// field, so a member declared under them is read under them and the
-    /// initializer that consumes the read is written under them too.
     /// The `#[cfg]` conditions the captured item behind this request was
     /// written under, spelled as the source wrote them — empty in the ordinary
     /// case.
@@ -705,9 +697,23 @@ impl<Policy> SurfaceRequest<'_, Policy> {
                 crate::emit::Writer.conditions(Conditioned::Function(function))
             }
         };
-        conditions.iter().map(spell_condition).collect()
+        conditions
+            .iter()
+            .map(|condition| crate::close_up(&condition.to_string()))
+            .collect()
     }
 
+    /// The `#[cfg]` conditions of each field of the record behind this request,
+    /// in field order — empty entries for the ordinary unconditional field, and
+    /// an empty list for a request that is not a record.
+    ///
+    /// A target declaring a member per field puts its entry on that member. The
+    /// registry puts the same conditions on every instruction that serves the
+    /// field, so a member declared under them is read under them and the
+    /// initializer that consumes the read is written under them too.
+    ///
+    /// Tokens rather than text, unlike [`Self::item_conditions`]: these go into
+    /// the Rust a target contributes.
     pub fn field_conditions(&self) -> Vec<Vec<TokenStream>> {
         match self.item {
             SourceItem::Record(record) => record
@@ -718,29 +724,6 @@ impl<Policy> SurfaceRequest<'_, Policy> {
             SourceItem::Function(_) => Vec::new(),
         }
     }
-}
-
-/// One condition as the source wrote it.
-///
-/// Tokens print with a space between every pair, so `#[cfg(unix)]` comes back
-/// as `# [cfg (unix)]`. A space that separates two word characters is the only
-/// one that carried meaning, so every other one goes.
-fn spell_condition(condition: &TokenStream) -> String {
-    let spaced = condition.to_string();
-    let characters: Vec<char> = spaced.chars().collect();
-    let word = |c: char| c.is_alphanumeric() || c == '_';
-    let mut out = String::with_capacity(spaced.len());
-    for (index, &character) in characters.iter().enumerate() {
-        if character == ' ' {
-            let before = index.checked_sub(1).map(|i| characters[i]);
-            let after = characters.get(index + 1).copied();
-            if !(before.is_some_and(word) && after.is_some_and(word)) {
-                continue;
-            }
-        }
-        out.push(character);
-    }
-    out
 }
 
 /// The source item behind a requested output.

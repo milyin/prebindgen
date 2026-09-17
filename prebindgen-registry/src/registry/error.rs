@@ -73,7 +73,11 @@ pub enum ScanError {
     /// crate), so this is a hard error, unlike the soft warnings for stale
     /// *ignore* entries. All missing names are collected before failing.
     DeclaredNotFound {
-        entries: Vec<(&'static str, String)>,
+        /// `(kind, name, why it is absent when this engine knows)`. The reason
+        /// is `Some` only for an item the engine took out of the model itself —
+        /// see `Registry::dropped` — which is the one absence that is neither a
+        /// typo nor a change in the source crate.
+        entries: Vec<(&'static str, String, Option<String>)>,
     },
     /// Declared type keys that qualify a source item with its crate path
     /// (`ptr_class!(myflat::Foo)` where `myflat` is a chained source crate).
@@ -157,14 +161,26 @@ impl fmt::Display for ScanError {
                     "{} declared item(s) not found among #[prebindgen] items:",
                     entries.len()
                 )?;
-                for (kind, name) in entries {
-                    writeln!(f, "  - {kind} `{name}`")?;
+                for (kind, name, why) in entries {
+                    match why {
+                        Some(why) => writeln!(f, "  - {kind} `{name}` — {why}")?,
+                        None => writeln!(f, "  - {kind} `{name}`")?,
+                    }
                 }
-                write!(
-                    f,
-                    "a declaration names an item that does not exist — typo in build.rs, \
-                     or renamed/removed in the source crate?"
-                )
+                // The generic hint is about the entries nothing else explains,
+                // so an error made only of explained ones does not offer it.
+                match entries.iter().all(|(_, _, why)| why.is_some()) {
+                    true => write!(
+                        f,
+                        "each of these is in the source crate as written; this build is what \
+                         left it out"
+                    ),
+                    false => write!(
+                        f,
+                        "a declaration names an item that does not exist — typo in build.rs, \
+                         or renamed/removed in the source crate?"
+                    ),
+                }
             }
             ScanError::QualifiedDeclaredTypes { entries } => {
                 writeln!(

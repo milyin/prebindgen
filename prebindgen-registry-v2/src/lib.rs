@@ -67,3 +67,52 @@ pub use target::{
     ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest,
     SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
 };
+
+/// A spelling with the spaces a reader does not want: `Option < Grade >` becomes
+/// `Option<Grade>`, `# [cfg (unix)]` becomes `#[cfg(unix)]`, and the space in
+/// `dyn Error` — the only kind that separates two words — stays.
+///
+/// Both callers arrive at the same problem from different directions: a
+/// canonical type key spells a generic with spaces around its brackets, and a
+/// `TokenStream` prints a space between every pair of tokens. Neither is wrong,
+/// and neither is what a report or a doc comment should show.
+pub fn close_up(spaced: &str) -> String {
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    let characters: Vec<char> = spaced.chars().collect();
+    let mut out = String::with_capacity(spaced.len());
+    for (index, &character) in characters.iter().enumerate() {
+        if character == ' ' {
+            let before = index.checked_sub(1).map(|i| characters[i]);
+            let after = characters.get(index + 1).copied();
+            let separates_words = before.is_some_and(word) && after.is_some_and(word);
+            if !separates_words {
+                continue;
+            }
+        }
+        out.push(character);
+    }
+    out
+}
+
+#[cfg(test)]
+mod close_up_tests {
+    #[test]
+    fn punctuation_closes_up_and_words_stay_apart() {
+        for (key, expected) in [
+            ("Option < Grade >", "Option<Grade>"),
+            ("& [Payload]", "&[Payload]"),
+            ("dyn Error", "dyn Error"),
+            (
+                "Result < Box < dyn Error > , u8 >",
+                "Result<Box<dyn Error>,u8>",
+            ),
+            ("# [cfg (unix)]", "#[cfg(unix)]"),
+            (
+                "# [cfg (target_os = \"linux\")]",
+                "#[cfg(target_os=\"linux\")]",
+            ),
+        ] {
+            assert_eq!(super::close_up(key), expected, "{key}");
+        }
+    }
+}

@@ -156,7 +156,7 @@ fn scan_declared_missing_function_is_hard_error() {
     ext.functions.insert(syn::parse_str("typo_fn").unwrap());
     match ext.declare_into_any(reg).expect("declare").scanned() {
         Err(ScanError::DeclaredNotFound { entries }) => {
-            assert_eq!(entries, vec![("function", "typo_fn".to_string())]);
+            assert_eq!(entries, vec![("function", "typo_fn".to_string(), None)]);
         }
         Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
         Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
@@ -179,9 +179,9 @@ fn scan_declared_collects_all_missing_kinds_in_one_error() {
             assert_eq!(
                 entries,
                 vec![
-                    ("constant", "TYPO_CONST".to_string()),
-                    ("function", "typo_fn".to_string()),
-                    ("helper function", "typo_helper".to_string()),
+                    ("constant", "TYPO_CONST".to_string(), None),
+                    ("function", "typo_fn".to_string(), None),
+                    ("helper function", "typo_helper".to_string(), None),
                 ]
             );
             // The message lists every entry.
@@ -2291,6 +2291,41 @@ fn a_refused_site_comes_back_for_the_adapter_to_report() {
             .any(|(site, _)| matches!(site.role, Role::CallbackArg { .. })),
         "and the refused site contributes no plan"
     );
+}
+
+/// Declaring an item this engine dropped says so, instead of suggesting a typo.
+///
+/// The warning is on stdout, and the error is what stops the build, so the
+/// error is where the explanation has to be: the item is in the source crate
+/// exactly as the build script wrote it, and the ordinary message would send a
+/// reader to look for a misspelling that is not there.
+#[test]
+fn declaring_a_dropped_item_is_explained_rather_than_blamed_on_a_typo() {
+    let reg: RegistryBuilder = crate::test_util::reg_from_items(vec![fn_item(
+        "#[cfg(some_custom_flag)] fn stamp_sum(x: u64) -> u64 { x }",
+    )])
+    .unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("stamp_sum").unwrap());
+    match ext.declare_into_any(reg).expect("declare").scanned() {
+        Err(error @ ScanError::DeclaredNotFound { .. }) => {
+            let message = error.to_string();
+            assert!(
+                message.contains("which this build cannot evaluate"),
+                "{message}"
+            );
+            assert!(
+                message.contains("Select the v2 pipeline"),
+                "the message names the way out:\n{message}"
+            );
+            assert!(
+                !message.contains("typo in build.rs"),
+                "and does not send the reader looking for one:\n{message}"
+            );
+        }
+        Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
+        Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
+    }
 }
 
 /// An item written under a condition this build cannot evaluate does not reach

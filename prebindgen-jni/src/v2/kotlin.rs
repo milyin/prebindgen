@@ -99,12 +99,24 @@ pub(super) fn write(
                 // there only where the condition held. Saying so is all this
                 // writer can do about it.
                 if !conditions.is_empty() {
+                    // Backticks, because KDoc reads `[name]` as a reference to
+                    // a declaration: an unquoted `#[cfg(unix)]` would be an
+                    // unresolved link on every conditional function, and code
+                    // is what it is anyway.
+                    let spelled: Vec<String> = conditions
+                        .iter()
+                        .map(|condition| format!("`{condition}`"))
+                        .collect();
+                    // `kdoc` replaces. Nothing carries a source item's `///`
+                    // into Kotlin yet, so there is nothing to replace; whoever
+                    // adds that has to join the two rather than call this
+                    // second.
                     public = public.kdoc(format!(
                         "Present only where {} holds in the source crate.\n\nKotlin cannot \
                          state a condition, so this function is declared either way; calling \
                          it against a library built without that condition raises \
                          UnsatisfiedLinkError.",
-                        conditions.join(" and ")
+                        spelled.join(" and ")
                     ));
                 }
                 file(package, &mut files).decls.push(public.into());

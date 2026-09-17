@@ -2121,6 +2121,13 @@ fn removing_an_element_takes_what_names_it() {
     assert!(flat.function("reading_level").is_some());
     assert_eq!(flat.guards().count(), 1);
 
+    // Both indexes go, or the type index answers for something the namespace no
+    // longer declares — `Option<Stamp>` as much as `Stamp`, since the mention
+    // that named it is gone with the function that wrote it.
+    assert!(flat.type_ref(&syn::parse_quote!(Stamp)).is_none());
+    assert!(flat.type_ref(&syn::parse_quote!(Option<Stamp>)).is_none());
+    assert!(flat.type_ref(&syn::parse_quote!(Reading)).is_some());
+
     // A name the model does not hold is ignored rather than reported.
     assert!(flat
         .without(&["Absent".to_string()].into_iter().collect())

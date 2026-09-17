@@ -79,6 +79,10 @@ mod tests {
     /// caller reads it is the whole of what the writer can do, and it is worth
     /// pinning: silence here is a method that fails at run time for a reason
     /// nothing in the API states.
+    ///
+    /// The backticks are load-bearing. KDoc reads `[name]` as a reference to a
+    /// declaration, so an unquoted condition is an unresolved link in Dokka on
+    /// every conditional function.
     #[test]
     fn a_conditional_source_function_is_documented_in_kotlin() {
         let c = std::fs::read_to_string(env!("V2CHECK_C")).expect("the C file");
@@ -89,7 +93,7 @@ mod tests {
         let kotlin = std::fs::read_to_string(env!("V2CHECK_KOTLIN")).expect("the Kotlin file");
         assert!(
             kotlin.contains(
-                "Present only where #[cfg(v2check_conditional_fn)] holds in the source crate."
+                "Present only where `#[cfg(v2check_conditional_fn)]` holds in the source crate."
             ),
             "the Kotlin function names its condition:\n{kotlin}"
         );
