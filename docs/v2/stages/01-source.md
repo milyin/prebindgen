@@ -198,13 +198,26 @@ That leaves the generated
 [wrapper](05-boundary.md#assemble-the-native-boundary) unconditional while the
 item it calls is not.
 If the condition is false where the source crate compiles, the binding calls a
-function that does not exist, and the binding crate fails to compile. That is a
-loud failure rather than a quiet one — unlike the two mismatches below, it
-cannot produce a working binary that disagrees with its library — but it is
-still a condition the generator dropped rather than honored.
+function that does not exist, and the binding crate fails to compile. The
+failure is loud rather than quiet — unlike the two mismatches below, it cannot
+produce a working binary that disagrees with its library.
 
-Expressing such a condition as a feature, or as one of the target conditions,
-is what keeps it inside the mechanism: the reader can evaluate those, so the
+This is a gap in the model rather than a decision. Before the model existed the
+generator copied captured items into its output as tokens, so a condition it did
+not understand travelled to the generated code untouched and remained the
+consumer's business; the reader that came later resolved what it could and
+deliberately preserved the rest, which only makes sense if something downstream
+still honors it. The model ended that, not by ruling the condition irrelevant
+but by having nowhere to put it. Nothing else in the chain drops it.
+
+The shape of a fix is already in the model twice over. A guard is an item the
+model carries and the writers copy without interpreting, and an enum's
+discriminant is a token blob under the same contract — carried for emission,
+never read to decide anything. An item's condition wants that treatment and does
+not have it.
+
+Until it does, expressing such a condition as a feature or one of the target
+conditions keeps it inside the mechanism: the reader can evaluate those, so the
 item is dropped or kept on both sides consistently.
 
 Concretely, for the two items above. The capture is written once, by whatever
