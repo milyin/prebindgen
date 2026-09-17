@@ -193,18 +193,35 @@ verbatim, uninterpreted, reachable only through the emission capability — so
 planning never consults it, and an attribute is never a reason to refuse an
 item.
 
-V2's writer re-applies it to the
-[wrapper](05-boundary.md#assemble-the-native-boundary) it generates. A wrapper
-names source items: the function it calls, and every record it constructs. It
-compiles only where all of them exist, so it carries the condition of each.
-Nothing in the writer reads what one says — Rust conjoins repeated `#[cfg]`
-attributes on one item, so carrying them side by side is the whole of it.
+V2 re-applies it to everything it generates from the item it was written on.
+The [wrapper](05-boundary.md#assemble-the-native-boundary) carries the
+conditions of the source items it names — the function it calls, and every
+record it constructs — because it compiles only where all of them exist. The
+Rust a target contributes for its own public declaration of that item, such as
+the `repr(C)` record a C caller fills in, carries them too. Nothing in the
+writer reads what one says: Rust conjoins repeated `#[cfg]` attributes on an
+item, so carrying them side by side is the whole of it.
 
-V1's writer does not, and leaves the wrapper unconditional while the function it
+A condition written on a *field* is the same rule one level down, and it lands
+in three places at once. The member a target mirrors that field with carries it,
+the read of that member carries it, and the initializer that fills the source
+field from the read carries it. All three or none: a member declared only
+sometimes cannot be read always, and a field the source struct does not have
+cannot be named in a constructor. For
+
+```rust
+pub struct Sample { pub level: i64, #[cfg(some_custom_flag)] pub extra: i64 }
+```
+
+V2 generates a mirror whose `extra` member, the `let` that reads it, and the
+`extra:` initializer all sit under `#[cfg(some_custom_flag)]`, and the binding
+crate compiles whether or not the flag is set.
+
+V1 does neither, and leaves the wrapper unconditional while the function it
 calls is not. Such a binding calls a function that does not exist wherever the
 condition is false, and the binding crate fails to compile.
 
-What V2 buys is the Rust side, and it moves the remaining failure rather than
+What V2 settles is the Rust side, and it moves the remaining failure rather than
 removing it. The declaration the *other* language compiles against is not
 conditional, because no writer gates one. For C that is recoverable: `cbindgen`
 guards a prototype only for a condition named in its `[defines]` table and
@@ -216,15 +233,8 @@ on one call, where a V1 one could not be built at all. That is the trade, and it
 is the reason to keep a difference expressible as a feature or one of the target
 conditions: the reader evaluates those, so the item is dropped or kept on both
 sides consistently and no declaration is left standing alone.
-
-Two more limits, under both engines. A target's own type declaration — a
-`repr(C)` mirror, a Kotlin data class — names no source item and is emitted
-unconditionally, so a header can declare a type whose functions are not there.
-And a condition on a *field* is dropped: the mirror lists that field, and so
-does the source construction inside the wrapper, which then names a field the
-source struct may not have. That is this same gap one level down.
-[Issue #743](https://github.com/milyin/prebindgen/issues/743) covers all of it,
-V1 included.
+[Issue #743](https://github.com/milyin/prebindgen/issues/743) covers the
+foreign declaration, and V1.
 
 Concretely, for the two items above. The capture is written once, by whatever
 machine compiled the source crate, and holds every variant and every conditional
