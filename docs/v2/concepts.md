@@ -116,7 +116,8 @@ A position inside a source value, such as the `secs` field of `Stamp`. Planning
 the record means planning each of its parts and then combining the results.
 When constructor relations are implemented, a constructor's arguments can
 serve as parts instead of fields. A part is therefore not necessarily a field
-in the wider design. Sites and parts together describe the positions at which
+in the wider design: it is one step from a value to a value it is made of,
+whatever the source-level means of taking that step. Sites and parts together describe the positions at which
 planning happens. See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
 ## What the registry plans
@@ -143,14 +144,21 @@ reusable solution. See [Finding an existing conversion plan](stages/03-requests.
 
 ### Relation
 
-A description of how a Rust value can be constructed or read in terms of other
-Rust values. `Stamp` has a record relation to its two fields: obtain two `i64`
-values and construct `Stamp { secs, nanos }`. A scalar uses an atomic relation,
-meaning it is handled whole rather than broken into parts.
+A link from one Rust type to the other Rust values it is constructed from or
+read into. `Stamp` has a record relation to its two fields: obtain two `i64`
+values and construct `Stamp { secs, nanos }`. It links the type to both of them
+at once, so a relation is a bundle of edges rather than a single edge, and the
+edge to one of those values is a part. A scalar uses an atomic relation, the
+empty bundle: handled whole, with nowhere to descend.
 
-The wider design also allows a constructor relation, such as building `Stamp`
-from one `millis` argument. That is planned, not implemented. A relation says
-nothing about a C struct or Kotlin object: it describes the source-side work.
+Relations make the source types a graph, and planning a conversion is a walk
+across it. One type can have several — its fields, and, when implemented, a
+constructor such as building `Stamp` from one `millis` argument — so the edges
+carry labels, and the label taken is part of the resulting plan's identity.
+That graph may contain cycles; the plan graph built from it may not.
+
+A relation says nothing about a C struct or Kotlin object: it describes the
+source-side work.
 See [What a relation is](stages/04-values.md#what-a-relation-is).
 
 ### Representation
@@ -188,6 +196,11 @@ crossing, selected relation, policy identity and child-plan identities. Those
 details explain why “same Rust type” is not enough for sharing: two records
 whose fields need different conversions need different plans too. In the
 example, both `i64` fields can reuse one input node, applied once per field.
+
+Nodes and the children they name form the graph the later stages read. It is
+acyclic: a node is recorded only once every child it names exists, so no edge
+can point at a plan still being built. A conversion that would need itself is
+refused rather than followed, which is how a cyclic source type stays out of it.
 See [Plan value conversions](stages/04-values.md#plan-value-conversions).
 
 ### Artifact
