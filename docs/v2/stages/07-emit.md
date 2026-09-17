@@ -149,7 +149,10 @@ Everything the registry retained is emitted into that file: the wrappers, the
 type declarations the target needed, and any generated helper an operation
 depended on. Current generation collects and deduplicates the supporting Rust
 items, then emits them before wrappers; it has no general artifact-dependency
-sort. The C build then runs `cbindgen` over the crate to
+sort. Ahead of all of them go the model's guards — the
+[feature assertions](01-source.md#capture-source-items) the capture reader
+injected, which belong to no declaration and are emitted whatever this run
+retained. The C build then runs `cbindgen` over the crate to
 produce the header a C program includes. The JNI build instead runs its Kotlin
 writer, which writes `.kt` files into a source directory the build script names,
 where the Kotlin compiler finds them; checking those into the repository is a

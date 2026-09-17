@@ -483,8 +483,7 @@ impl ParameterView {
 functions, type declarations, constants, guards and unsupported items. A guard
 here is the [feature assertion](01-source.md#capture-source-items) injected when
 the capture was read: an item the model retains without giving it a foreign
-API name. V1 re-emits it; current V2 does not yet carry it into generated Rust.
-The proposed views do not by themselves close that emission gap.
+API name. Both engines re-emit it into the generated Rust.
 Typed lookup returns `None` when
 no accepted item of that kind exists under the name. A consumer needing to
 distinguish a missing name, wrong item kind and unsupported declaration uses
