@@ -119,6 +119,30 @@ fn wrapper<T: Target>(
         name
     };
 
+    // A wrapper names source items — the function it calls, and every record it
+    // constructs — and compiles only where all of them exist. So it inherits
+    // each one's condition: a `#[cfg]` the capture reader could not answer and
+    // rewrote back onto the item. Rust conjoins repeated `#[cfg]` attributes on
+    // one item, so carrying them side by side settles the wrapper's own
+    // condition without anything here reading what they say.
+    let mut conditions = TokenStream::new();
+    let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for instr in &function.instrs {
+        let named = match instr {
+            Instr::Construct { record, .. } => record.as_str(),
+            Instr::Call { function, .. } => function.as_str(),
+            Instr::Apply { .. } => continue,
+        };
+        // Planning names only items the model declares.
+        let Some(element) = flat.element(named) else {
+            continue;
+        };
+        let tokens = Writer.conditions(element);
+        if !tokens.is_empty() && conditioned.insert(tokens.to_string()) {
+            conditions.extend(tokens);
+        }
+    }
+
     let mut statements = Vec::new();
     for instr in &function.instrs {
         match instr {
@@ -221,6 +245,7 @@ fn wrapper<T: Target>(
         })
         .unwrap_or_default();
     quote! {
+        #conditions
         #[no_mangle]
         pub extern #abi fn #symbol(#(#params),*) #ret {
             #(#statements)*

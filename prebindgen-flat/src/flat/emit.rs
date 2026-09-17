@@ -52,7 +52,7 @@
 
 use proc_macro2::TokenStream;
 
-use super::{Alternative, EnumValue, Struct, TypeRef};
+use super::{Alternative, Element, EnumValue, Struct, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
@@ -107,6 +107,19 @@ pub trait RustEmitter {
     /// The item is private model output, not an adapter-visible source node.
     fn guard(&self, guard: &super::Guard) -> syn::ItemConst {
         guard.output.clone()
+    }
+
+    /// Copy an item's unevaluated `#[cfg]` conditions into the final output.
+    ///
+    /// The capture reader answers the conditions it has rules for and rewrites
+    /// the rest back onto the item; those are what comes back here, verbatim.
+    /// Re-apply them to every declaration generated for this item, so a
+    /// declaration exists exactly where the item it names does. Nothing — not
+    /// the model, not planning, not this call — asks what a condition means.
+    ///
+    /// Empty when the item kept none, which is the ordinary case.
+    fn conditions(&self, element: &Element) -> TokenStream {
+        element.conditions()
     }
 
     /// Copy an explicit enum discriminant into the final output.
