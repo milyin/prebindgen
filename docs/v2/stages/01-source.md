@@ -227,15 +227,16 @@ depends on which language and on whether the condition was written on an item or
 on a field.
 
 `cbindgen` guards a declaration only for a condition its `[defines]` table
-names. With no entry it warns on its own output and writes the declaration bare.
-For a *function* the result is loud: the header declares a prototype whose
+names, and with no entry it writes the declaration bare and says nothing: the
+warning it raises goes through `log`, and a build script driving its library API
+installs no logger. For a *function* the result is loud: the header declares a prototype whose
 symbol the library does not define, and the program fails to link. For a
 *member* it is not: the header declares a member the library's record does not
 have, so a caller allocates and fills a larger record than the wrapper reads,
 and nothing in the toolchain objects. That is the silent class of mismatch this
 chapter exists to prevent, so the C frontend emits a `cargo:warning` naming the
 member and the condition whenever it writes one — the `[defines]` entry is the
-fix, and the warning is the only place a build can hear that it is missing.
+fix, and that warning is the only output a build gets at all.
 
 Kotlin cannot express a condition at all. A function keeps its `external fun`,
 and a call to an absent symbol raises `UnsatisfiedLinkError`; a V2 JNI binding
