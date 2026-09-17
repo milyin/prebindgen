@@ -73,6 +73,20 @@ impl Element {
         }
     }
 
+    /// The `#[cfg]` attributes this item was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(match self {
+            Element::Function(f) => &f.origin.syntax.attrs,
+            Element::Type(t) => t.attrs(),
+            Element::Constant(c) => &c.origin.syntax.attrs,
+            // A guard is the pipeline's own item, not the source's, and it is
+            // emitted whatever this run retained.
+            Element::Guard(_) => &[],
+            Element::Unsupported(u) => item_attrs(&u.origin.syntax),
+        })
+    }
+
     /// The whole item as `syn` — **the escape**, at the item level. See
     /// [`Origin::as_syn`](super::Origin::as_syn).
     ///
@@ -127,6 +141,16 @@ impl Type {
             Type::Variant(v) => &v.origin.location,
             Type::Enum(e) => &e.origin.location,
             Type::Extern(e) => &e.origin.location,
+        }
+    }
+
+    /// The attributes the declaring item was captured with.
+    fn attrs(&self) -> &[syn::Attribute] {
+        match self {
+            Type::Struct(s) => &s.origin.syntax.attrs,
+            Type::Variant(v) => &v.origin.syntax.attrs,
+            Type::Enum(e) => &e.origin.syntax.attrs,
+            Type::Extern(e) => item_attrs(&e.origin.syntax),
         }
     }
 
@@ -561,6 +585,48 @@ pub struct Unsupported {
     pub error: Box<super::ItemError>,
     /// The item as written, so a diagnosis can quote the source.
     pub origin: Origin<syn::Item>,
+}
+
+/// The `#[cfg]` attributes an item was captured with, one inert token stream
+/// each.
+///
+/// The [capture reader](prebindgen::Source) resolves the conditions it has
+/// rules for — a feature, a `target_arch` comparison — and rewrites anything
+/// else back onto the item, so what arrives here is a condition no one
+/// downstream can answer either. The model carries it the way it carries a
+/// [`Guard`]: verbatim, uninterpreted, and reachable only through
+/// [`RustEmitter`](crate::RustEmitter), whose implementor re-applies it to the
+/// declarations it generates for this item. Nothing in the model reads it, and
+/// classification never consults it — an attribute is not a reason to refuse an
+/// item.
+///
+/// One entry per attribute rather than one blob per item, so a caller carrying
+/// conditions from several items can tell one condition from another. Rust
+/// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
+/// by side and never has to know what any of them says.
+fn conditions_from(attrs: &[syn::Attribute]) -> Vec<proc_macro2::TokenStream> {
+    use quote::ToTokens;
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("cfg"))
+        .map(|attr| attr.to_token_stream())
+        .collect()
+}
+
+/// The attributes of a whole item, whichever kind it is.
+///
+/// `syn::Item` has no common accessor for them, and the kinds not listed carry
+/// no `#[prebindgen]` element: the proc-macro refuses to mark them.
+fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
+    match item {
+        syn::Item::Const(i) => &i.attrs,
+        syn::Item::Enum(i) => &i.attrs,
+        syn::Item::Fn(i) => &i.attrs,
+        syn::Item::Struct(i) => &i.attrs,
+        syn::Item::Type(i) => &i.attrs,
+        syn::Item::Union(i) => &i.attrs,
+        _ => &[],
+    }
 }
 
 /// An item's `///` documentation, read off the attributes it was captured

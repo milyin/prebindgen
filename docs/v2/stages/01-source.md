@@ -187,39 +187,44 @@ Each condition on a captured item then resolves in one of three ways:
   or a custom `--cfg` flag. It is rewritten onto the item and the item is kept,
   because dropping it would be a decision the reader has no basis for.
 
-The third case needs following further, because the condition does not survive
-much longer. The source model records what an item *is* — a name, its fields,
-their types — and has no field for an attribute; the writers generate
-declarations from those facts, and neither one reads the attribute. So the
-condition is carried as far as the model and then goes no further, under either
-engine.
+The third case needs following further, because what becomes of the condition
+differs by engine. The source model carries it the way it carries a guard —
+verbatim, uninterpreted, reachable only through the emission capability — so
+planning never consults it, and an attribute is never a reason to refuse an
+item.
 
-That leaves the generated
-[wrapper](05-boundary.md#assemble-the-native-boundary) unconditional while the
-item it calls is not.
-If the condition is false where the source crate compiles, the binding calls a
-function that does not exist, and the binding crate fails to compile. The
-failure is loud rather than quiet — unlike the two mismatches below, it cannot
-produce a working binary that disagrees with its library.
+V2's writer re-applies it to the
+[wrapper](05-boundary.md#assemble-the-native-boundary) it generates. A wrapper
+names source items: the function it calls, and every record it constructs. It
+compiles only where all of them exist, so it carries the condition of each.
+Nothing in the writer reads what one says — Rust conjoins repeated `#[cfg]`
+attributes on one item, so carrying them side by side is the whole of it.
 
-This is a gap in the model rather than a decision. Before the model existed the
-generator copied captured items into its output as tokens, so a condition it did
-not understand travelled to the generated code untouched and remained the
-consumer's business; the reader that came later resolved what it could and
-deliberately preserved the rest, which only makes sense if something downstream
-still honors it. The model ended that, not by ruling the condition irrelevant
-but by having nowhere to put it. Nothing else in the chain drops it.
+V1's writer does not, and leaves the wrapper unconditional while the function it
+calls is not. Such a binding calls a function that does not exist wherever the
+condition is false, and the binding crate fails to compile.
 
-The shape of a fix is already in the model twice over. A guard is an item the
-model carries and the writers copy without interpreting, and an enum's
-discriminant is a token blob under the same contract — carried for emission,
-never read to decide anything. An item's condition wants that treatment and does
-not have it.
+What V2 buys is the Rust side, and it moves the remaining failure rather than
+removing it. The declaration the *other* language compiles against is not
+conditional, because no writer gates one. For C that is recoverable: `cbindgen`
+guards a prototype only for a condition named in its `[defines]` table and
+otherwise warns and writes the prototype bare, so the mismatch surfaces as an
+undefined symbol at link and adding the entry fixes it. For Kotlin nothing
+expresses the condition at all — the `external fun` is generated, and a call to
+it raises `UnsatisfiedLinkError`. So a V2 JNI binding can build and then break
+on one call, where a V1 one could not be built at all. That is the trade, and it
+is the reason to keep a difference expressible as a feature or one of the target
+conditions: the reader evaluates those, so the item is dropped or kept on both
+sides consistently and no declaration is left standing alone.
 
-[Issue #741](https://github.com/milyin/prebindgen/issues/741) tracks it. Until
-it is closed, expressing such a condition as a feature or one of the target
-conditions keeps it inside the mechanism: the reader can evaluate those, so the
-item is dropped or kept on both sides consistently.
+Two more limits, under both engines. A target's own type declaration — a
+`repr(C)` mirror, a Kotlin data class — names no source item and is emitted
+unconditionally, so a header can declare a type whose functions are not there.
+And a condition on a *field* is dropped: the mirror lists that field, and so
+does the source construction inside the wrapper, which then names a field the
+source struct may not have. That is this same gap one level down.
+[Issue #743](https://github.com/milyin/prebindgen/issues/743) covers all of it,
+V1 included.
 
 Concretely, for the two items above. The capture is written once, by whatever
 machine compiled the source crate, and holds every variant and every conditional

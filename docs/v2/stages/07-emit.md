@@ -35,6 +35,18 @@ wrapper's *parameters* are the exception, and deliberately so: they are named in
 the boundary description, because a target that requires an environment operand
 has to be able to say what that operand is called in the signature it dictated.
 
+It also states the wrapper's own condition. Some
+[source items](01-source.md#capture-source-items) arrive still carrying a
+`#[cfg]` the
+[capture reader could not answer](01-source.md#the-binding-crate-decides). A
+wrapper names the items it calls and constructs and compiles only where all of
+them exist, so it carries the condition of each. The writer never reads what one
+says: Rust conjoins repeated `#[cfg]` attributes on one item, so carrying them
+side by side is the whole of it. The condition holds on the Rust side only — the
+C prototype and the Kotlin `external fun` for the same function are generated
+whatever it says, which
+[the capture stage](01-source.md#the-binding-crate-decides) prices.
+
 **Operation expressions** supply the target-specific parts of the Rust body.
 Reading a C aggregate member renders as
 `stamp.secs` through an operation the registry library already provides, so the C

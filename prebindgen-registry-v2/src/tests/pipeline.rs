@@ -999,18 +999,17 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
     );
 }
 
-/// A condition the capture reader could not evaluate reaches the model and
-/// stops there: the wrapper it generates is unconditional.
+/// A condition the capture reader could not evaluate reaches the wrapper
+/// generated for the item that carries it.
 ///
 /// The reader rewrites such a condition back onto the item rather than guessing
 /// — `unix`, or a custom `--cfg` flag, is not something it has a rule for. The
-/// model then records what the item is and has no field for an attribute, so
-/// nothing downstream can honor the condition. This pins that behavior because
-/// `docs/v2/stages/01-source.md` describes it, and its consequence: a binding
-/// whose condition is false where the source crate compiles calls a function
-/// that is not there, and fails to compile.
+/// model then carries it uninterpreted, and the writer re-applies it, so the
+/// wrapper exists exactly where the function it calls does. Without that, a
+/// binding whose condition is false where the source crate compiles would call
+/// a function that is not there, and fail to compile.
 #[test]
-fn a_condition_the_reader_could_not_evaluate_does_not_reach_the_wrapper() {
+fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
     let location = prebindgen::SourceLocation {
         crate_name: Some("fixture".to_string()),
         ..Default::default()
@@ -1051,9 +1050,72 @@ fn a_condition_the_reader_could_not_evaluate_does_not_reach_the_wrapper() {
     let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
     assert_eq!(generation.report().counts().emitted, 2);
     let rust = generation.rust();
-    assert!(rust.contains("fn stamp_sum"), "{rust}");
     assert!(
-        !rust.contains("cfg"),
-        "the condition reaches neither the wrapper nor anything beside it:\n{rust}"
+        rust.contains("#[cfg(some_custom_flag)]"),
+        "the wrapper carries the condition of the function it calls:\n{rust}"
+    );
+    assert_eq!(
+        rust.matches("cfg").count(),
+        1,
+        "and nothing else in the file acquires one:\n{rust}"
+    );
+}
+
+/// The same, for a record the wrapper constructs rather than the function it
+/// calls: the wrapper names both, so it inherits from both, and one condition
+/// two of them carry is stated once.
+///
+/// The record carries a second condition the function does not, which is what
+/// separates per-condition dedup from comparing whole attribute sets. Restating
+/// a condition would compile — conjunction is idempotent — so what this holds to
+/// is the generated file being readable.
+#[test]
+fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            #[cfg(another_custom_flag)]
+            pub struct Stamp {
+                pub secs: i64,
+                pub nanos: i64,
+            }
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub fn stamp_sum(stamp: Stamp) -> i64 {
+                unimplemented!()
+            }
+        ),
+    ]
+    .into_iter()
+    .map(|item| (item, location.clone()))
+    .collect();
+    let flat = Flat::builder()
+        .items(items)
+        .build()
+        .expect("the fixture builds a model");
+
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+
+    let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
+    let rust = generation.rust();
+    assert_eq!(
+        rust.matches("#[cfg(some_custom_flag)]").count(),
+        1,
+        "the condition both items carry is stated once:\n{rust}"
+    );
+    assert_eq!(
+        rust.matches("#[cfg(another_custom_flag)]").count(),
+        1,
+        "and the one only the record carries reaches the wrapper too:\n{rust}"
     );
 }

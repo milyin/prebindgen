@@ -119,6 +119,39 @@ fn wrapper<T: Target>(
         name
     };
 
+    // A wrapper names source items — the function it calls, and every record it
+    // constructs — and compiles only where all of them exist. So it inherits
+    // each one's condition: a `#[cfg]` the capture reader could not answer and
+    // rewrote back onto the item. Rust conjoins repeated `#[cfg]` attributes on
+    // one item, so carrying them side by side settles the wrapper's own
+    // condition without anything here reading what they say. Two items carrying
+    // the same condition state it once, which conjunction makes cosmetic and
+    // review makes worth doing.
+    //
+    // The instructions are where a wrapper spells a source item *in this
+    // increment*: its signature carries target wire types only. A representation
+    // that put a source type in the signature — an opaque handle spelled
+    // `*mut source::Session` — would name one from somewhere this loop does not
+    // look.
+    let mut conditions = Vec::new();
+    let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for instr in &function.instrs {
+        let named = match instr {
+            Instr::Construct { record, .. } => record.as_str(),
+            Instr::Call { function, .. } => function.as_str(),
+            Instr::Apply { .. } => continue,
+        };
+        // Planning names only items the model declares.
+        let Some(element) = flat.element(named) else {
+            continue;
+        };
+        for condition in Writer.conditions(element) {
+            if conditioned.insert(condition.to_string()) {
+                conditions.push(condition);
+            }
+        }
+    }
+
     let mut statements = Vec::new();
     for instr in &function.instrs {
         match instr {
@@ -221,6 +254,7 @@ fn wrapper<T: Target>(
         })
         .unwrap_or_default();
     quote! {
+        #(#conditions)*
         #[no_mangle]
         pub extern #abi fn #symbol(#(#params),*) #ret {
             #(#statements)*

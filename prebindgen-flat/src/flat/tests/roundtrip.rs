@@ -625,3 +625,86 @@ fn a_spelling_qualifies_what_rusts_prelude_does_not_declare() {
         ]
     );
 }
+
+/// An item's unevaluated `#[cfg]` comes back through the emission capability,
+/// for every item kind that can carry one, and nothing else does.
+///
+/// The reader answers what it has rules for and rewrites the rest back onto the
+/// item; the model's job is to hand that on untouched. `#[doc]` and `#[repr]`
+/// share the same attribute list and are not conditions, so the filter is what
+/// this checks alongside the carry-through.
+#[test]
+fn an_unevaluated_condition_comes_back_through_the_emitter() {
+    let cases: Vec<syn::Item> = vec![
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub fn stamp_sum(stamp: Stamp) -> i64 {
+                unimplemented!()
+            }
+        ),
+        syn::parse_quote!(
+            /// A record.
+            #[cfg(some_custom_flag)]
+            #[repr(C)]
+            pub struct Stamp {
+                pub secs: i64,
+            }
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            #[repr(i32)]
+            pub enum Side {
+                Left,
+            }
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub type Handle = zenoh::Session;
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub const LIMIT: i64 = 7;
+        ),
+    ];
+    for item in cases {
+        let element = parse_one(item);
+        assert_eq!(
+            TestEmit
+                .conditions(&element)
+                .iter()
+                .map(tokens)
+                .collect::<Vec<_>>(),
+            vec!["# [cfg (some_custom_flag)]"],
+            "{:?}",
+            element.name(),
+        );
+    }
+
+    // One entry per attribute, so a caller collecting conditions from several
+    // items can tell one from another.
+    let both = parse_one(syn::parse_quote!(
+        #[cfg(alpha)]
+        #[cfg(beta)]
+        pub struct Stamp {
+            pub secs: i64,
+        }
+    ));
+    assert_eq!(
+        TestEmit
+            .conditions(&both)
+            .iter()
+            .map(tokens)
+            .collect::<Vec<_>>(),
+        vec!["# [cfg (alpha)]", "# [cfg (beta)]"],
+    );
+
+    // The ordinary case: no condition, nothing emitted.
+    let plain = parse_one(syn::parse_quote!(
+        /// A record.
+        #[repr(C)]
+        pub struct Stamp {
+            pub secs: i64,
+        }
+    ));
+    assert!(TestEmit.conditions(&plain).is_empty());
+}
