@@ -511,176 +511,189 @@
 <a href=#511 id=511 data-nosnippet>511</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::Field&gt;,
 <a href=#512 id=512 data-nosnippet>512</a>}
 <a href=#513 id=513 data-nosnippet>513</a>
-<a href=#514 id=514 data-nosnippet>514</a><span class="doccomment">/// Delimiters used by a Rust product constructor or pattern.
-<a href=#515 id=515 data-nosnippet>515</a>///
-<a href=#516 id=516 data-nosnippet>516</a>/// This is structure, not retained syntax: it is the exact Flat fact needed
-<a href=#517 id=517 data-nosnippet>517</a>/// to generate `S`, `S(...)`, or `S { ... }` without reopening a `syn` node.
-<a href=#518 id=518 data-nosnippet>518</a></span><span class="attr">#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-<a href=#519 id=519 data-nosnippet>519</a></span><span class="kw">pub enum </span>FieldShape {
-<a href=#520 id=520 data-nosnippet>520</a>    Unit,
-<a href=#521 id=521 data-nosnippet>521</a>    Tuple,
-<a href=#522 id=522 data-nosnippet>522</a>    Named,
-<a href=#523 id=523 data-nosnippet>523</a>}
-<a href=#524 id=524 data-nosnippet>524</a>
-<a href=#525 id=525 data-nosnippet>525</a><span class="kw">impl </span>FieldShape {
-<a href=#526 id=526 data-nosnippet>526</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>from_syn(fields: <span class="kw-2">&amp;</span>syn::Fields) -&gt; <span class="self">Self </span>{
-<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">match </span>fields {
-<a href=#528 id=528 data-nosnippet>528</a>            syn::Fields::Unit =&gt; <span class="self">Self</span>::Unit,
-<a href=#529 id=529 data-nosnippet>529</a>            syn::Fields::Unnamed(<span class="kw">_</span>) =&gt; <span class="self">Self</span>::Tuple,
-<a href=#530 id=530 data-nosnippet>530</a>            syn::Fields::Named(<span class="kw">_</span>) =&gt; <span class="self">Self</span>::Named,
-<a href=#531 id=531 data-nosnippet>531</a>        }
-<a href=#532 id=532 data-nosnippet>532</a>    }
-<a href=#533 id=533 data-nosnippet>533</a>}
-<a href=#534 id=534 data-nosnippet>534</a>
-<a href=#535 id=535 data-nosnippet>535</a><span class="doccomment">/// A `#[prebindgen]` constant.
-<a href=#536 id=536 data-nosnippet>536</a>///
-<a href=#537 id=537 data-nosnippet>537</a>/// Always named: an unnamed `const _` is a [`Guard`], not a constant with no
-<a href=#538 id=538 data-nosnippet>538</a>/// address.
-<a href=#539 id=539 data-nosnippet>539</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#540 id=540 data-nosnippet>540</a></span><span class="kw">pub struct </span>Constant {
-<a href=#541 id=541 data-nosnippet>541</a>    <span class="kw">pub </span>name: syn::Ident,
-<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">pub </span>ty: TypeRef,
-<a href=#543 id=543 data-nosnippet>543</a>    <span class="doccomment">/// The whole item — the initializer expression included, which is where a
-<a href=#544 id=544 data-nosnippet>544</a>    /// consumer that re-emits the value reads it from.
-<a href=#545 id=545 data-nosnippet>545</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::ItemConst&gt;,
+<a href=#514 id=514 data-nosnippet>514</a><span class="kw">impl </span>Field {
+<a href=#515 id=515 data-nosnippet>515</a>    <span class="doccomment">/// The `#[cfg]` attributes this field was captured with — see
+<a href=#516 id=516 data-nosnippet>516</a>    /// [`conditions_from`].
+<a href=#517 id=517 data-nosnippet>517</a>    ///
+<a href=#518 id=518 data-nosnippet>518</a>    /// A field's condition is the item's one level down, and it reaches
+<a href=#519 id=519 data-nosnippet>519</a>    /// generated Rust the same way: everything a writer produces *for this
+<a href=#520 id=520 data-nosnippet>520</a>    /// field* — a member of a mirrored record, the read of that member, the
+<a href=#521 id=521 data-nosnippet>521</a>    /// initializer that fills it — carries it, or none of them can.
+<a href=#522 id=522 data-nosnippet>522</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>conditions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;proc_macro2::TokenStream&gt; {
+<a href=#523 id=523 data-nosnippet>523</a>        conditions_from(<span class="kw-2">&amp;</span><span class="self">self</span>.origin.syntax.attrs)
+<a href=#524 id=524 data-nosnippet>524</a>    }
+<a href=#525 id=525 data-nosnippet>525</a>}
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a><span class="doccomment">/// Delimiters used by a Rust product constructor or pattern.
+<a href=#528 id=528 data-nosnippet>528</a>///
+<a href=#529 id=529 data-nosnippet>529</a>/// This is structure, not retained syntax: it is the exact Flat fact needed
+<a href=#530 id=530 data-nosnippet>530</a>/// to generate `S`, `S(...)`, or `S { ... }` without reopening a `syn` node.
+<a href=#531 id=531 data-nosnippet>531</a></span><span class="attr">#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+<a href=#532 id=532 data-nosnippet>532</a></span><span class="kw">pub enum </span>FieldShape {
+<a href=#533 id=533 data-nosnippet>533</a>    Unit,
+<a href=#534 id=534 data-nosnippet>534</a>    Tuple,
+<a href=#535 id=535 data-nosnippet>535</a>    Named,
+<a href=#536 id=536 data-nosnippet>536</a>}
+<a href=#537 id=537 data-nosnippet>537</a>
+<a href=#538 id=538 data-nosnippet>538</a><span class="kw">impl </span>FieldShape {
+<a href=#539 id=539 data-nosnippet>539</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>from_syn(fields: <span class="kw-2">&amp;</span>syn::Fields) -&gt; <span class="self">Self </span>{
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">match </span>fields {
+<a href=#541 id=541 data-nosnippet>541</a>            syn::Fields::Unit =&gt; <span class="self">Self</span>::Unit,
+<a href=#542 id=542 data-nosnippet>542</a>            syn::Fields::Unnamed(<span class="kw">_</span>) =&gt; <span class="self">Self</span>::Tuple,
+<a href=#543 id=543 data-nosnippet>543</a>            syn::Fields::Named(<span class="kw">_</span>) =&gt; <span class="self">Self</span>::Named,
+<a href=#544 id=544 data-nosnippet>544</a>        }
+<a href=#545 id=545 data-nosnippet>545</a>    }
 <a href=#546 id=546 data-nosnippet>546</a>}
 <a href=#547 id=547 data-nosnippet>547</a>
-<a href=#548 id=548 data-nosnippet>548</a><span class="doccomment">/// An **anonymous const**: `const _: T = ..`, whatever produced it.
+<a href=#548 id=548 data-nosnippet>548</a><span class="doccomment">/// A `#[prebindgen]` constant.
 <a href=#549 id=549 data-nosnippet>549</a>///
-<a href=#550 id=550 data-nosnippet>550</a>/// The definition is the shape, not the origin. A const with no name has no
-<a href=#551 id=551 data-nosnippet>551</a>/// address, so nothing can declare it, reference it, or emit it as an alias —
-<a href=#552 id=552 data-nosnippet>552</a>/// which is what puts it outside the flat API rather than in it, and that holds
-<a href=#553 id=553 data-nosnippet>553</a>/// however the item arrived: synthesized, hand-fed to [`FlatBuilder`](super::FlatBuilder), or written
-<a href=#554 id=554 data-nosnippet>554</a>/// as `#[prebindgen] const _: () = ..` in a source crate.
-<a href=#555 id=555 data-nosnippet>555</a>///
-<a href=#556 id=556 data-nosnippet>556</a>/// **Today's producer** is [`Source`](prebindgen::Source)'s cfg filter, which
-<a href=#557 id=557 data-nosnippet>557</a>/// synthesizes `const _: () = { konst::assertc_eq!(..) }` to assert that a source
-<a href=#558 id=558 data-nosnippet>558</a>/// crate's `FEATURES` match what the build script asked for. Nothing *marked*
-<a href=#559 id=559 data-nosnippet>559</a>/// that one — it is prebindgen's own item riding the same stream — but it is not
-<a href=#560 id=560 data-nosnippet>560</a>/// the only thing that can land here, and the model does not claim otherwise.
-<a href=#561 id=561 data-nosnippet>561</a>///
-<a href=#562 id=562 data-nosnippet>562</a>/// **Cardinality is zero or more.** `enable_feature_filtering(None)` produces
-<a href=#563 id=563 data-nosnippet>563</a>/// none, and each item iterator taken from a `Source` emits its own, so composing
-<a href=#564 id=564 data-nosnippet>564</a>/// two iterators from one crate yields two.
-<a href=#565 id=565 data-nosnippet>565</a>///
-<a href=#566 id=566 data-nosnippet>566</a>/// It carries no type, unlike a [`Constant`]. The item is emitted verbatim, so
-<a href=#567 id=567 data-nosnippet>567</a>/// what its types mean is the consumer crate's business; modelling them would let
-<a href=#568 id=568 data-nosnippet>568</a>/// a guard that names something undeclared refuse the whole element.
-<a href=#569 id=569 data-nosnippet>569</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#570 id=570 data-nosnippet>570</a></span><span class="kw">pub struct </span>Guard {
-<a href=#571 id=571 data-nosnippet>571</a>    <span class="doccomment">/// Kept for source location and diagnostics only.
-<a href=#572 id=572 data-nosnippet>572</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::ItemConst&gt;,
-<a href=#573 id=573 data-nosnippet>573</a>    <span class="doccomment">/// Final output item, private so adapters cannot inspect it as source.
-<a href=#574 id=574 data-nosnippet>574</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) output: syn::ItemConst,
-<a href=#575 id=575 data-nosnippet>575</a>}
-<a href=#576 id=576 data-nosnippet>576</a>
-<a href=#577 id=577 data-nosnippet>577</a><span class="doccomment">/// An item the language cannot express.
-<a href=#578 id=578 data-nosnippet>578</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#579 id=579 data-nosnippet>579</a></span><span class="kw">pub struct </span>Unsupported {
-<a href=#580 id=580 data-nosnippet>580</a>    <span class="doccomment">/// The item's identifier, or `None` for an item kind that has none.
-<a href=#581 id=581 data-nosnippet>581</a>    </span><span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;syn::Ident&gt;,
-<a href=#582 id=582 data-nosnippet>582</a>    <span class="doccomment">/// What could not be expressed, ready to be raised by whatever declares
-<a href=#583 id=583 data-nosnippet>583</a>    /// this item. Boxed: it is the size outlier among the elements, and this
-<a href=#584 id=584 data-nosnippet>584</a>    /// one is the rare variant.
-<a href=#585 id=585 data-nosnippet>585</a>    </span><span class="kw">pub </span>error: Box&lt;<span class="kw">super</span>::ItemError&gt;,
-<a href=#586 id=586 data-nosnippet>586</a>    <span class="doccomment">/// The item as written, so a diagnosis can quote the source.
-<a href=#587 id=587 data-nosnippet>587</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::Item&gt;,
+<a href=#550 id=550 data-nosnippet>550</a>/// Always named: an unnamed `const _` is a [`Guard`], not a constant with no
+<a href=#551 id=551 data-nosnippet>551</a>/// address.
+<a href=#552 id=552 data-nosnippet>552</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#553 id=553 data-nosnippet>553</a></span><span class="kw">pub struct </span>Constant {
+<a href=#554 id=554 data-nosnippet>554</a>    <span class="kw">pub </span>name: syn::Ident,
+<a href=#555 id=555 data-nosnippet>555</a>    <span class="kw">pub </span>ty: TypeRef,
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="doccomment">/// The whole item — the initializer expression included, which is where a
+<a href=#557 id=557 data-nosnippet>557</a>    /// consumer that re-emits the value reads it from.
+<a href=#558 id=558 data-nosnippet>558</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::ItemConst&gt;,
+<a href=#559 id=559 data-nosnippet>559</a>}
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a><span class="doccomment">/// An **anonymous const**: `const _: T = ..`, whatever produced it.
+<a href=#562 id=562 data-nosnippet>562</a>///
+<a href=#563 id=563 data-nosnippet>563</a>/// The definition is the shape, not the origin. A const with no name has no
+<a href=#564 id=564 data-nosnippet>564</a>/// address, so nothing can declare it, reference it, or emit it as an alias —
+<a href=#565 id=565 data-nosnippet>565</a>/// which is what puts it outside the flat API rather than in it, and that holds
+<a href=#566 id=566 data-nosnippet>566</a>/// however the item arrived: synthesized, hand-fed to [`FlatBuilder`](super::FlatBuilder), or written
+<a href=#567 id=567 data-nosnippet>567</a>/// as `#[prebindgen] const _: () = ..` in a source crate.
+<a href=#568 id=568 data-nosnippet>568</a>///
+<a href=#569 id=569 data-nosnippet>569</a>/// **Today's producer** is [`Source`](prebindgen::Source)'s cfg filter, which
+<a href=#570 id=570 data-nosnippet>570</a>/// synthesizes `const _: () = { konst::assertc_eq!(..) }` to assert that a source
+<a href=#571 id=571 data-nosnippet>571</a>/// crate's `FEATURES` match what the build script asked for. Nothing *marked*
+<a href=#572 id=572 data-nosnippet>572</a>/// that one — it is prebindgen's own item riding the same stream — but it is not
+<a href=#573 id=573 data-nosnippet>573</a>/// the only thing that can land here, and the model does not claim otherwise.
+<a href=#574 id=574 data-nosnippet>574</a>///
+<a href=#575 id=575 data-nosnippet>575</a>/// **Cardinality is zero or more.** `enable_feature_filtering(None)` produces
+<a href=#576 id=576 data-nosnippet>576</a>/// none, and each item iterator taken from a `Source` emits its own, so composing
+<a href=#577 id=577 data-nosnippet>577</a>/// two iterators from one crate yields two.
+<a href=#578 id=578 data-nosnippet>578</a>///
+<a href=#579 id=579 data-nosnippet>579</a>/// It carries no type, unlike a [`Constant`]. The item is emitted verbatim, so
+<a href=#580 id=580 data-nosnippet>580</a>/// what its types mean is the consumer crate's business; modelling them would let
+<a href=#581 id=581 data-nosnippet>581</a>/// a guard that names something undeclared refuse the whole element.
+<a href=#582 id=582 data-nosnippet>582</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#583 id=583 data-nosnippet>583</a></span><span class="kw">pub struct </span>Guard {
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="doccomment">/// Kept for source location and diagnostics only.
+<a href=#585 id=585 data-nosnippet>585</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::ItemConst&gt;,
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="doccomment">/// Final output item, private so adapters cannot inspect it as source.
+<a href=#587 id=587 data-nosnippet>587</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) output: syn::ItemConst,
 <a href=#588 id=588 data-nosnippet>588</a>}
 <a href=#589 id=589 data-nosnippet>589</a>
-<a href=#590 id=590 data-nosnippet>590</a><span class="doccomment">/// The `#[cfg]` attributes an item was captured with, one inert token stream
-<a href=#591 id=591 data-nosnippet>591</a>/// each.
-<a href=#592 id=592 data-nosnippet>592</a>///
-<a href=#593 id=593 data-nosnippet>593</a>/// The [capture reader](prebindgen::Source) resolves the conditions it has
-<a href=#594 id=594 data-nosnippet>594</a>/// rules for — a feature, a `target_arch` comparison — and rewrites anything
-<a href=#595 id=595 data-nosnippet>595</a>/// else back onto the item, so what arrives here is a condition no one
-<a href=#596 id=596 data-nosnippet>596</a>/// downstream can answer either. The model carries it the way it carries a
-<a href=#597 id=597 data-nosnippet>597</a>/// [`Guard`]: verbatim, uninterpreted, and reachable only through
-<a href=#598 id=598 data-nosnippet>598</a>/// [`RustEmitter`](crate::RustEmitter), whose implementor re-applies it to the
-<a href=#599 id=599 data-nosnippet>599</a>/// declarations it generates for this item. Nothing in the model reads it, and
-<a href=#600 id=600 data-nosnippet>600</a>/// classification never consults it — an attribute is not a reason to refuse an
-<a href=#601 id=601 data-nosnippet>601</a>/// item.
-<a href=#602 id=602 data-nosnippet>602</a>///
-<a href=#603 id=603 data-nosnippet>603</a>/// One entry per attribute rather than one blob per item, so a caller carrying
-<a href=#604 id=604 data-nosnippet>604</a>/// conditions from several items can tell one condition from another. Rust
-<a href=#605 id=605 data-nosnippet>605</a>/// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
-<a href=#606 id=606 data-nosnippet>606</a>/// by side and never has to know what any of them says.
-<a href=#607 id=607 data-nosnippet>607</a></span><span class="kw">fn </span>conditions_from(attrs: <span class="kw-2">&amp;</span>[syn::Attribute]) -&gt; Vec&lt;proc_macro2::TokenStream&gt; {
-<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">use </span>quote::ToTokens;
-<a href=#609 id=609 data-nosnippet>609</a>    attrs
-<a href=#610 id=610 data-nosnippet>610</a>        .iter()
-<a href=#611 id=611 data-nosnippet>611</a>        .filter(|attr| attr.path().is_ident(<span class="string">"cfg"</span>))
-<a href=#612 id=612 data-nosnippet>612</a>        .map(|attr| attr.to_token_stream())
-<a href=#613 id=613 data-nosnippet>613</a>        .collect()
-<a href=#614 id=614 data-nosnippet>614</a>}
-<a href=#615 id=615 data-nosnippet>615</a>
-<a href=#616 id=616 data-nosnippet>616</a><span class="doccomment">/// The attributes of a whole item, whichever kind it is.
-<a href=#617 id=617 data-nosnippet>617</a>///
-<a href=#618 id=618 data-nosnippet>618</a>/// `syn::Item` has no common accessor for them, and the kinds not listed carry
-<a href=#619 id=619 data-nosnippet>619</a>/// no `#[prebindgen]` element: the proc-macro refuses to mark them.
-<a href=#620 id=620 data-nosnippet>620</a></span><span class="kw">fn </span>item_attrs(item: <span class="kw-2">&amp;</span>syn::Item) -&gt; <span class="kw-2">&amp;</span>[syn::Attribute] {
-<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">match </span>item {
-<a href=#622 id=622 data-nosnippet>622</a>        syn::Item::Const(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
-<a href=#623 id=623 data-nosnippet>623</a>        syn::Item::Enum(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
-<a href=#624 id=624 data-nosnippet>624</a>        syn::Item::Fn(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
-<a href=#625 id=625 data-nosnippet>625</a>        syn::Item::Struct(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
-<a href=#626 id=626 data-nosnippet>626</a>        syn::Item::Type(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
-<a href=#627 id=627 data-nosnippet>627</a>        syn::Item::Union(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
-<a href=#628 id=628 data-nosnippet>628</a>        <span class="kw">_ </span>=&gt; <span class="kw-2">&amp;</span>[],
-<a href=#629 id=629 data-nosnippet>629</a>    }
-<a href=#630 id=630 data-nosnippet>630</a>}
-<a href=#631 id=631 data-nosnippet>631</a>
-<a href=#632 id=632 data-nosnippet>632</a><span class="doccomment">/// An item's `///` documentation, read off the attributes it was captured
-<a href=#633 id=633 data-nosnippet>633</a>/// with: `#[doc = " …"]` lines in order, one leading space stripped per line,
-<a href=#634 id=634 data-nosnippet>634</a>/// joined with `\n`; `None` when there are none. `*/` is defanged so the text
-<a href=#635 id=635 data-nosnippet>635</a>/// is safe inside a `/** … */` block, which is what every destination that
-<a href=#636 id=636 data-nosnippet>636</a>/// re-emits prose needs.
-<a href=#637 id=637 data-nosnippet>637</a>///
-<a href=#638 id=638 data-nosnippet>638</a>/// **Here rather than in an adapter.** A doc comment is something the *source*
-<a href=#639 id=639 data-nosnippet>639</a>/// said, so it is the model's to report — and reading it was the last common
-<a href=#640 id=640 data-nosnippet>640</a>/// reason an emitter reached for a captured item's node. Two adapters wanting
-<a href=#641 id=641 data-nosnippet>641</a>/// the same prose is one function, not a copy each.
-<a href=#642 id=642 data-nosnippet>642</a></span><span class="kw">fn </span>docs_from(attrs: <span class="kw-2">&amp;</span>[syn::Attribute]) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-<a href=#643 id=643 data-nosnippet>643</a>    <span class="kw">let </span><span class="kw-2">mut </span>lines: Vec&lt;String&gt; = Vec::new();
-<a href=#644 id=644 data-nosnippet>644</a>    <span class="kw">for </span>attr <span class="kw">in </span>attrs {
-<a href=#645 id=645 data-nosnippet>645</a>        <span class="kw">if </span>!attr.path().is_ident(<span class="string">"doc"</span>) {
-<a href=#646 id=646 data-nosnippet>646</a>            <span class="kw">continue</span>;
-<a href=#647 id=647 data-nosnippet>647</a>        }
-<a href=#648 id=648 data-nosnippet>648</a>        <span class="kw">let </span>syn::Meta::NameValue(nv) = <span class="kw-2">&amp;</span>attr.meta <span class="kw">else </span>{
-<a href=#649 id=649 data-nosnippet>649</a>            <span class="kw">continue</span>;
-<a href=#650 id=650 data-nosnippet>650</a>        };
-<a href=#651 id=651 data-nosnippet>651</a>        <span class="kw">let </span>syn::Expr::Lit(syn::ExprLit {
-<a href=#652 id=652 data-nosnippet>652</a>            lit: syn::Lit::Str(s),
-<a href=#653 id=653 data-nosnippet>653</a>            ..
-<a href=#654 id=654 data-nosnippet>654</a>        }) = <span class="kw-2">&amp;</span>nv.value
-<a href=#655 id=655 data-nosnippet>655</a>        <span class="kw">else </span>{
-<a href=#656 id=656 data-nosnippet>656</a>            <span class="kw">continue</span>;
-<a href=#657 id=657 data-nosnippet>657</a>        };
-<a href=#658 id=658 data-nosnippet>658</a>        <span class="kw">let </span>raw = s.value();
-<a href=#659 id=659 data-nosnippet>659</a>        <span class="kw">let </span>line = raw.strip_prefix(<span class="string">' '</span>).unwrap_or(<span class="kw-2">&amp;</span>raw);
-<a href=#660 id=660 data-nosnippet>660</a>        lines.push(line.replace(<span class="string">"*/"</span>, <span class="string">"*\u{200B}/"</span>));
-<a href=#661 id=661 data-nosnippet>661</a>    }
-<a href=#662 id=662 data-nosnippet>662</a>    (!lines.is_empty()).then(|| lines.join(<span class="string">"\n"</span>))
-<a href=#663 id=663 data-nosnippet>663</a>}
-<a href=#664 id=664 data-nosnippet>664</a>
-<a href=#665 id=665 data-nosnippet>665</a><span class="macro">macro_rules!</span> docs_accessor {
-<a href=#666 id=666 data-nosnippet>666</a>    ($(<span class="macro-nonterminal">$ty</span>:ident),+ $(,)<span class="question-mark">?</span>) =&gt; {$(
-<a href=#667 id=667 data-nosnippet>667</a>        <span class="kw">impl </span><span class="macro-nonterminal">$ty </span>{
-<a href=#668 id=668 data-nosnippet>668</a>            <span class="doccomment">/// This item's `///` documentation.
-<a href=#669 id=669 data-nosnippet>669</a>            </span><span class="kw">pub fn </span>docs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-<a href=#670 id=670 data-nosnippet>670</a>                docs_from(<span class="kw-2">&amp;</span><span class="self">self</span>.origin.syntax.attrs)
-<a href=#671 id=671 data-nosnippet>671</a>            }
-<a href=#672 id=672 data-nosnippet>672</a>        }
-<a href=#673 id=673 data-nosnippet>673</a>    )+};
-<a href=#674 id=674 data-nosnippet>674</a>}
-<a href=#675 id=675 data-nosnippet>675</a>
-<a href=#676 id=676 data-nosnippet>676</a><span class="macro">docs_accessor!</span>(
-<a href=#677 id=677 data-nosnippet>677</a>    Function,
-<a href=#678 id=678 data-nosnippet>678</a>    Struct,
-<a href=#679 id=679 data-nosnippet>679</a>    Enum,
-<a href=#680 id=680 data-nosnippet>680</a>    Variant,
-<a href=#681 id=681 data-nosnippet>681</a>    Constant,
-<a href=#682 id=682 data-nosnippet>682</a>    Field,
-<a href=#683 id=683 data-nosnippet>683</a>    Alternative,
-<a href=#684 id=684 data-nosnippet>684</a>    EnumValue
-<a href=#685 id=685 data-nosnippet>685</a>);
+<a href=#590 id=590 data-nosnippet>590</a><span class="doccomment">/// An item the language cannot express.
+<a href=#591 id=591 data-nosnippet>591</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#592 id=592 data-nosnippet>592</a></span><span class="kw">pub struct </span>Unsupported {
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="doccomment">/// The item's identifier, or `None` for an item kind that has none.
+<a href=#594 id=594 data-nosnippet>594</a>    </span><span class="kw">pub </span>name: <span class="prelude-ty">Option</span>&lt;syn::Ident&gt;,
+<a href=#595 id=595 data-nosnippet>595</a>    <span class="doccomment">/// What could not be expressed, ready to be raised by whatever declares
+<a href=#596 id=596 data-nosnippet>596</a>    /// this item. Boxed: it is the size outlier among the elements, and this
+<a href=#597 id=597 data-nosnippet>597</a>    /// one is the rare variant.
+<a href=#598 id=598 data-nosnippet>598</a>    </span><span class="kw">pub </span>error: Box&lt;<span class="kw">super</span>::ItemError&gt;,
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="doccomment">/// The item as written, so a diagnosis can quote the source.
+<a href=#600 id=600 data-nosnippet>600</a>    </span><span class="kw">pub </span>origin: Origin&lt;syn::Item&gt;,
+<a href=#601 id=601 data-nosnippet>601</a>}
+<a href=#602 id=602 data-nosnippet>602</a>
+<a href=#603 id=603 data-nosnippet>603</a><span class="doccomment">/// The `#[cfg]` attributes an item was captured with, one inert token stream
+<a href=#604 id=604 data-nosnippet>604</a>/// each.
+<a href=#605 id=605 data-nosnippet>605</a>///
+<a href=#606 id=606 data-nosnippet>606</a>/// The [capture reader](prebindgen::Source) resolves the conditions it has
+<a href=#607 id=607 data-nosnippet>607</a>/// rules for — a feature, a `target_arch` comparison — and rewrites anything
+<a href=#608 id=608 data-nosnippet>608</a>/// else back onto the item, so what arrives here is a condition no one
+<a href=#609 id=609 data-nosnippet>609</a>/// downstream can answer either. The model carries it the way it carries a
+<a href=#610 id=610 data-nosnippet>610</a>/// [`Guard`]: verbatim, uninterpreted, and reachable only through
+<a href=#611 id=611 data-nosnippet>611</a>/// [`RustEmitter`](crate::RustEmitter), whose implementor re-applies it to the
+<a href=#612 id=612 data-nosnippet>612</a>/// declarations it generates for this item. Nothing in the model reads it, and
+<a href=#613 id=613 data-nosnippet>613</a>/// classification never consults it — an attribute is not a reason to refuse an
+<a href=#614 id=614 data-nosnippet>614</a>/// item.
+<a href=#615 id=615 data-nosnippet>615</a>///
+<a href=#616 id=616 data-nosnippet>616</a>/// One entry per attribute rather than one blob per item, so a caller carrying
+<a href=#617 id=617 data-nosnippet>617</a>/// conditions from several items can tell one condition from another. Rust
+<a href=#618 id=618 data-nosnippet>618</a>/// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
+<a href=#619 id=619 data-nosnippet>619</a>/// by side and never has to know what any of them says.
+<a href=#620 id=620 data-nosnippet>620</a></span><span class="kw">fn </span>conditions_from(attrs: <span class="kw-2">&amp;</span>[syn::Attribute]) -&gt; Vec&lt;proc_macro2::TokenStream&gt; {
+<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">use </span>quote::ToTokens;
+<a href=#622 id=622 data-nosnippet>622</a>    attrs
+<a href=#623 id=623 data-nosnippet>623</a>        .iter()
+<a href=#624 id=624 data-nosnippet>624</a>        .filter(|attr| attr.path().is_ident(<span class="string">"cfg"</span>))
+<a href=#625 id=625 data-nosnippet>625</a>        .map(|attr| attr.to_token_stream())
+<a href=#626 id=626 data-nosnippet>626</a>        .collect()
+<a href=#627 id=627 data-nosnippet>627</a>}
+<a href=#628 id=628 data-nosnippet>628</a>
+<a href=#629 id=629 data-nosnippet>629</a><span class="doccomment">/// The attributes of a whole item, whichever kind it is.
+<a href=#630 id=630 data-nosnippet>630</a>///
+<a href=#631 id=631 data-nosnippet>631</a>/// `syn::Item` has no common accessor for them, and the kinds not listed carry
+<a href=#632 id=632 data-nosnippet>632</a>/// no `#[prebindgen]` element: the proc-macro refuses to mark them.
+<a href=#633 id=633 data-nosnippet>633</a></span><span class="kw">fn </span>item_attrs(item: <span class="kw-2">&amp;</span>syn::Item) -&gt; <span class="kw-2">&amp;</span>[syn::Attribute] {
+<a href=#634 id=634 data-nosnippet>634</a>    <span class="kw">match </span>item {
+<a href=#635 id=635 data-nosnippet>635</a>        syn::Item::Const(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
+<a href=#636 id=636 data-nosnippet>636</a>        syn::Item::Enum(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
+<a href=#637 id=637 data-nosnippet>637</a>        syn::Item::Fn(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
+<a href=#638 id=638 data-nosnippet>638</a>        syn::Item::Struct(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
+<a href=#639 id=639 data-nosnippet>639</a>        syn::Item::Type(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
+<a href=#640 id=640 data-nosnippet>640</a>        syn::Item::Union(i) =&gt; <span class="kw-2">&amp;</span>i.attrs,
+<a href=#641 id=641 data-nosnippet>641</a>        <span class="kw">_ </span>=&gt; <span class="kw-2">&amp;</span>[],
+<a href=#642 id=642 data-nosnippet>642</a>    }
+<a href=#643 id=643 data-nosnippet>643</a>}
+<a href=#644 id=644 data-nosnippet>644</a>
+<a href=#645 id=645 data-nosnippet>645</a><span class="doccomment">/// An item's `///` documentation, read off the attributes it was captured
+<a href=#646 id=646 data-nosnippet>646</a>/// with: `#[doc = " …"]` lines in order, one leading space stripped per line,
+<a href=#647 id=647 data-nosnippet>647</a>/// joined with `\n`; `None` when there are none. `*/` is defanged so the text
+<a href=#648 id=648 data-nosnippet>648</a>/// is safe inside a `/** … */` block, which is what every destination that
+<a href=#649 id=649 data-nosnippet>649</a>/// re-emits prose needs.
+<a href=#650 id=650 data-nosnippet>650</a>///
+<a href=#651 id=651 data-nosnippet>651</a>/// **Here rather than in an adapter.** A doc comment is something the *source*
+<a href=#652 id=652 data-nosnippet>652</a>/// said, so it is the model's to report — and reading it was the last common
+<a href=#653 id=653 data-nosnippet>653</a>/// reason an emitter reached for a captured item's node. Two adapters wanting
+<a href=#654 id=654 data-nosnippet>654</a>/// the same prose is one function, not a copy each.
+<a href=#655 id=655 data-nosnippet>655</a></span><span class="kw">fn </span>docs_from(attrs: <span class="kw-2">&amp;</span>[syn::Attribute]) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+<a href=#656 id=656 data-nosnippet>656</a>    <span class="kw">let </span><span class="kw-2">mut </span>lines: Vec&lt;String&gt; = Vec::new();
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="kw">for </span>attr <span class="kw">in </span>attrs {
+<a href=#658 id=658 data-nosnippet>658</a>        <span class="kw">if </span>!attr.path().is_ident(<span class="string">"doc"</span>) {
+<a href=#659 id=659 data-nosnippet>659</a>            <span class="kw">continue</span>;
+<a href=#660 id=660 data-nosnippet>660</a>        }
+<a href=#661 id=661 data-nosnippet>661</a>        <span class="kw">let </span>syn::Meta::NameValue(nv) = <span class="kw-2">&amp;</span>attr.meta <span class="kw">else </span>{
+<a href=#662 id=662 data-nosnippet>662</a>            <span class="kw">continue</span>;
+<a href=#663 id=663 data-nosnippet>663</a>        };
+<a href=#664 id=664 data-nosnippet>664</a>        <span class="kw">let </span>syn::Expr::Lit(syn::ExprLit {
+<a href=#665 id=665 data-nosnippet>665</a>            lit: syn::Lit::Str(s),
+<a href=#666 id=666 data-nosnippet>666</a>            ..
+<a href=#667 id=667 data-nosnippet>667</a>        }) = <span class="kw-2">&amp;</span>nv.value
+<a href=#668 id=668 data-nosnippet>668</a>        <span class="kw">else </span>{
+<a href=#669 id=669 data-nosnippet>669</a>            <span class="kw">continue</span>;
+<a href=#670 id=670 data-nosnippet>670</a>        };
+<a href=#671 id=671 data-nosnippet>671</a>        <span class="kw">let </span>raw = s.value();
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="kw">let </span>line = raw.strip_prefix(<span class="string">' '</span>).unwrap_or(<span class="kw-2">&amp;</span>raw);
+<a href=#673 id=673 data-nosnippet>673</a>        lines.push(line.replace(<span class="string">"*/"</span>, <span class="string">"*\u{200B}/"</span>));
+<a href=#674 id=674 data-nosnippet>674</a>    }
+<a href=#675 id=675 data-nosnippet>675</a>    (!lines.is_empty()).then(|| lines.join(<span class="string">"\n"</span>))
+<a href=#676 id=676 data-nosnippet>676</a>}
+<a href=#677 id=677 data-nosnippet>677</a>
+<a href=#678 id=678 data-nosnippet>678</a><span class="macro">macro_rules!</span> docs_accessor {
+<a href=#679 id=679 data-nosnippet>679</a>    ($(<span class="macro-nonterminal">$ty</span>:ident),+ $(,)<span class="question-mark">?</span>) =&gt; {$(
+<a href=#680 id=680 data-nosnippet>680</a>        <span class="kw">impl </span><span class="macro-nonterminal">$ty </span>{
+<a href=#681 id=681 data-nosnippet>681</a>            <span class="doccomment">/// This item's `///` documentation.
+<a href=#682 id=682 data-nosnippet>682</a>            </span><span class="kw">pub fn </span>docs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+<a href=#683 id=683 data-nosnippet>683</a>                docs_from(<span class="kw-2">&amp;</span><span class="self">self</span>.origin.syntax.attrs)
+<a href=#684 id=684 data-nosnippet>684</a>            }
+<a href=#685 id=685 data-nosnippet>685</a>        }
+<a href=#686 id=686 data-nosnippet>686</a>    )+};
+<a href=#687 id=687 data-nosnippet>687</a>}
+<a href=#688 id=688 data-nosnippet>688</a>
+<a href=#689 id=689 data-nosnippet>689</a><span class="macro">docs_accessor!</span>(
+<a href=#690 id=690 data-nosnippet>690</a>    Function,
+<a href=#691 id=691 data-nosnippet>691</a>    Struct,
+<a href=#692 id=692 data-nosnippet>692</a>    Enum,
+<a href=#693 id=693 data-nosnippet>693</a>    Variant,
+<a href=#694 id=694 data-nosnippet>694</a>    Constant,
+<a href=#695 id=695 data-nosnippet>695</a>    Field,
+<a href=#696 id=696 data-nosnippet>696</a>    Alternative,
+<a href=#697 id=697 data-nosnippet>697</a>    EnumValue
+<a href=#698 id=698 data-nosnippet>698</a>);
 </code></pre></div></section></main></body></html>
