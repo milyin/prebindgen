@@ -38,28 +38,32 @@ So the wrapper builds that `Stamp` out of what arrived, calls `stamp_sum`, and
 turns the returned `i64` into something it can send back. Under the
 configuration these chapters use, building it means reading two fields —
 members of the C struct, getters on the JVM object — and constructing
-`Stamp { secs, nanos }`. That is the selected route, not the only one: a target
-carrying `Stamp` as an opaque handle reads no fields at all. Each of those
+`Stamp { secs, nanos }`. That is the selected route, not the only one: a binding
+configured to carry `Stamp` whole, as an opaque handle, reads no fields at all. Each of those
 value-shaped problems is a **conversion**, and planning one is what this stage
 does. Ordering them around the source call is
 [the next stage](05-boundary.md#assemble-the-native-boundary); here each value
 is planned on its own.
 
 Three separate questions have to be answered for every conversion, and keeping
-them apart is what lets one algorithm serve both languages:
+them apart is what lets one algorithm serve both languages. Two of them are put
+to the **target**: the [language adapter](../README.md#the-components) for the
+binding being generated — `prebindgen-c` or `prebindgen-jni` — in the role it
+plays facing the engine, answering questions about its own language item by
+item. The third is the registry's alone.
 
 - **How is the Rust value built or read?** For `Stamp`, from its two fields — or,
   if the configuration said so, by calling `stamp_from_millis`. This answer is a
-  [**relation**](#what-a-relation-is). Relations are described in source terms only, and the registry
-  alone knows how to walk one; but *which* relation applies can still depend on
-  the target, because a target that carries `Stamp` as an opaque handle needs no
-  fields at all. So the target picks from the relations available, and must
-  honour a relation the configuration pinned or say why it cannot.
+  [**relation**](#what-a-relation-is). Relations are described in source terms
+  only, and the registry alone knows how to walk one; but *which* one applies
+  still depends on the target, because a target that carries `Stamp` whole needs
+  no fields at all. So the target picks from the relations offered to it, and
+  must honour one the configuration pinned or say why it cannot.
 - **What carries the value on the other side, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
   through JNI. This answer is a **representation**, and only the target can give
-  it.
+  it: nothing in the registry knows what a C struct or a JVM object is.
 - **How are the pieces put together?** Read each part, convert it, construct the
   Rust value, in that order, stopping if a step fails. This is the registry's
   job, and it is identical in both languages.

@@ -32,6 +32,8 @@ directly. Three components cooperate to generate the connecting code:
   answers to the registry. For C, it describes member reads from a struct. For
   JNI, it describes getter calls on a JVM object. The registry combines those
   operations; the adapter does not independently traverse the entire type tree.
+  Where a chapter is describing what the engine asks rather than who implements
+  the answer, it calls this component simply **the target**.
 
 Frontend and adapter are two roles in the same language-specific crate, not
 two packages you configure separately. The registry is shared by both targets.
