@@ -216,7 +216,8 @@ discriminant is a token blob under the same contract — carried for emission,
 never read to decide anything. An item's condition wants that treatment and does
 not have it.
 
-Until it does, expressing such a condition as a feature or one of the target
+[Issue #741](https://github.com/milyin/prebindgen/issues/741) tracks it. Until
+it is closed, expressing such a condition as a feature or one of the target
 conditions keeps it inside the mechanism: the reader can evaluate those, so the
 item is dropped or kept on both sides consistently.
 
