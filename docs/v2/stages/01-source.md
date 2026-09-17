@@ -207,6 +207,32 @@ Expressing such a condition as a feature, or as one of the target conditions,
 is what keeps it inside the mechanism: the reader can evaluate those, so the
 item is dropped or kept on both sides consistently.
 
+Concretely, for the two items above. The capture is written once, by whatever
+machine compiled the source crate, and holds every variant and every conditional
+field:
+
+```text
+capture   InsideFoo   cfg target_arch = "x86_64"    DouddleDee = 42, DouddleDum = 24
+          InsideFoo   cfg target_arch = "aarch64"   DouddleDee = 14, DouddleDum = 88
+          Foo         id, x86_64_field, aarch64_field, unstable_field, stable_field
+```
+
+What the *model* holds is one reading of that, chosen by the target the binding
+crate is building for:
+
+```text
+TARGET=x86_64-…    InsideFoo   one declaration, DouddleDee = 42, DouddleDum = 24
+                   Foo         id, x86_64_field, stable_field
+
+TARGET=aarch64-…   InsideFoo   one declaration, DouddleDee = 14, DouddleDum = 88
+                   Foo         id, aarch64_field, stable_field
+```
+
+One capture, two models, from the same files on the same host. That is the point
+of deferring the decision: nothing after this stage sees a conditional item or a
+second definition of a name. By the time a generator inspects `Foo` it has three
+fields, and which three was settled before it looked.
+
 Filtering is shared ground: it happens in the reader, before either engine is
 selected, so V2 gets an already-filtered stream and its cross-compilation
 behavior is V1's. This is the part of `cfg` handling that V2 inherits complete.
