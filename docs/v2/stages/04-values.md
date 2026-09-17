@@ -26,14 +26,24 @@ recipe, stored as structured data during the build. The plan does not call your
 Rust function during generation; it describes operations that generated code
 will execute later when a foreign caller uses the binding.
 
-Consider what has to happen for a foreign caller to call `stamp_sum`. The Rust
-function needs an owned `Stamp`. No foreign caller has one: a C
-caller has a struct of two integers, a Kotlin caller has a JVM object. So the
-generated [wrapper](05-boundary.md#assemble-the-native-boundary) has to obtain two field values from whatever the caller
-actually passed, build `Stamp { secs, nanos }` out of them, call the function,
-and turn the returned `i64` into something the caller can receive. Each of those
+A foreign caller does not call `stamp_sum`. It calls a generated entry point in
+its own language: a C function declared in a generated header, taking a
+`repr(C)` struct of two integers, or a Kotlin method taking a JVM object.
+Behind that entry point is the generated
+[wrapper](05-boundary.md#assemble-the-native-boundary), a Rust function whose
+ABI the foreign side can reach. It receives what the caller sent, and has to
+call `stamp_sum`, whose signature demands an owned `source::Stamp`.
+
+So the wrapper builds that `Stamp` out of what arrived, calls `stamp_sum`, and
+turns the returned `i64` into something it can send back. Under the
+configuration these chapters use, building it means reading two fields —
+members of the C struct, getters on the JVM object — and constructing
+`Stamp { secs, nanos }`. That is the selected route, not the only one: a target
+carrying `Stamp` as an opaque handle reads no fields at all. Each of those
 value-shaped problems is a **conversion**, and planning one is what this stage
-does.
+does. Ordering them around the source call is
+[the next stage](05-boundary.md#assemble-the-native-boundary); here each value
+is planned on its own.
 
 Three separate questions have to be answered for every conversion, and keeping
 them apart is what lets one algorithm serve both languages:
