@@ -927,3 +927,74 @@ fn a_native_parameter_must_carry_what_its_conversion_reads() {
     };
     assert!(message.contains("its conversion reads"), "{message}");
 }
+
+/// A guard the capture reader injected reaches the generated file, whatever
+/// else the run retained.
+///
+/// The one in production asserts that the source crate's features match the set
+/// the capture was filtered by. It belongs to no declaration, so nothing in
+/// retention decides its fate, and a run that emitted no wrapper at all must
+/// still carry it — otherwise a binding that skipped everything would also skip
+/// the check that its source crate is the one it was generated against.
+#[test]
+fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
+    let guarded = || {
+        let location = prebindgen::SourceLocation {
+            crate_name: Some("fixture".to_string()),
+            ..Default::default()
+        };
+        let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+            syn::parse_quote!(
+                const _: () = {
+                    konst::assertc_eq!(fixture::FEATURES, "fixture/unstable", "mismatch");
+                };
+            ),
+            syn::parse_quote!(
+                pub struct Stamp {
+                    pub secs: i64,
+                    pub nanos: i64,
+                }
+            ),
+            syn::parse_quote!(
+                pub fn stamp_sum(stamp: Stamp) -> i64 {
+                    unimplemented!()
+                }
+            ),
+        ]
+        .into_iter()
+        .map(|item| (item, location.clone()))
+        .collect();
+        Flat::builder()
+            .items(items)
+            .build()
+            .expect("the fixture builds a model")
+    };
+
+    // With something to emit.
+    let mut full = requests();
+    let record = full.policy(Policy::Record);
+    full.type_policies.insert("Stamp".to_string(), record);
+    let sum = full.policy(exported("stamp_sum", Routes::None));
+    full.output(ty("Stamp"), record);
+    full.output(function("stamp_sum"), sum);
+    let generation = generate(guarded(), &Mini, full, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 2);
+    assert!(
+        generation.rust().contains("konst::assertc_eq!"),
+        "the guard must reach the generated file:\n{}",
+        generation.rust()
+    );
+
+    // And with nothing to emit: the declaration is skipped, and the guard is
+    // still there.
+    let mut bare = requests();
+    let sum = bare.policy(exported("stamp_sum", Routes::None));
+    bare.output(function("stamp_sum"), sum);
+    let generation = generate(guarded(), &Mini, bare, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 0);
+    assert!(
+        generation.rust().contains("konst::assertc_eq!"),
+        "a run that emitted nothing still carries its guard:\n{}",
+        generation.rust()
+    );
+}
