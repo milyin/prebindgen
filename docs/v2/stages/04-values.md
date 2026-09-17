@@ -58,11 +58,13 @@ item. The third is the registry's alone.
   only, and the registry alone knows how to walk one; but *which* one applies
   still depends on the target, because a target that carries `Stamp` whole needs
   no fields at all. So the target picks one of the relations the registry offers
-  it, and cannot invent one of its own. Where the build script pinned a relation
-  for a type or a position, the target has to use that one; a target that cannot
-  work with it says so, and the affected output is skipped rather than generated
-  some other way. Nothing is pinnable yet: every relation the engine has today is
-  one it derived itself, so there is only ever one sensible candidate.
+  it, and cannot invent one of its own. The build script can also take the choice
+  away: a conversion rule recorded for a type, for one
+  [site](03-requests.md#a-values-position-in-an-exported-function) — a parameter
+  or result of an exported function — or for one part of a relation fixes which
+  relation is used there. A target that cannot work with the fixed relation
+  reports that, and the outputs needing it are skipped; it does not quietly
+  convert the value some other way.
 - **What carries the value on the other side, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
@@ -256,8 +258,8 @@ what makes a scalar a leaf. `Part` is the single edge, and that is why `Part`,
 not `Relation`, is what the recursion iterates.
 
 **A type has several outgoing relations, and they are distinct.** `Stamp` above
-offers two; a build that pinned `stamp_from_millis` would offer a third, landing
-on one `i64` instead of two. These are parallel hyperedges out of the same
+offers two; a build that declared `stamp_from_millis` as a constructor would
+offer a third, landing on one `i64` instead of two. These are parallel hyperedges out of the same
 type, so the source graph is a multigraph and its edges need labels. `RelationId` is that
 label, which is why it belongs in a conversion's identity: `Stamp` through its
 fields and `Stamp` through `stamp_from_millis` produce different code from the
@@ -386,8 +388,10 @@ All relation fields are private. Read-only accessors expose source types and arg
 **Implemented: `Atomic` and `Record`** — [the two relations above](#what-a-relation-is).
 The constructor and projector roles below are described, not built, so a target
 has no such candidate to select and fallible construction never reaches a
-boundary. The sketch that follows is the designed shape of the table, not the
-built one.
+boundary. Conversion rules are not built either: requests carry type and site
+policies, and a target chooses its relation from those, so nothing fixes a
+relation against the target's choice yet. The sketch that follows is the
+designed shape of the table, not the built one.
 
 ```rust
 pub enum Relation {
