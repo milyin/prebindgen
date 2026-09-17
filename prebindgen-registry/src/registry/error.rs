@@ -163,17 +163,19 @@ impl fmt::Display for ScanError {
                 )?;
                 for (kind, name, why) in entries {
                     match why {
-                        Some(why) => writeln!(f, "  - {kind} `{name}` — {why}")?,
+                        Some(why) => writeln!(f, "  - {kind} `{name}` — it {why}")?,
                         None => writeln!(f, "  - {kind} `{name}`")?,
                     }
                 }
                 // The generic hint is about the entries nothing else explains,
-                // so an error made only of explained ones does not offer it.
+                // so an error made only of explained ones does not offer it —
+                // it offers the way out instead, once rather than per entry.
                 match entries.iter().all(|(_, _, why)| why.is_some()) {
                     true => write!(
                         f,
                         "each of these is in the source crate as written; this build is what \
-                         left it out"
+                         left it out. {}",
+                        super::declare::DROPPED_ADVICE
                     ),
                     false => write!(
                         f,

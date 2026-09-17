@@ -159,7 +159,7 @@ use crate::prebindgen::Prebindgen;
 
 mod cell;
 pub(crate) use self::cell::TypeCell;
-mod declare;
+pub(crate) mod declare;
 mod error;
 mod model;
 mod order;

@@ -115,6 +115,13 @@ impl Registry {
 ///
 /// Nothing is dropped in the ordinary case: an evaluable condition was settled
 /// by the reader and never reached the model.
+/// What to do about an item this engine will not emit, said wherever one is
+/// reported. Once per message, never inside the reason a chain of removals
+/// repeats.
+pub(crate) const DROPPED_ADVICE: &str = "Select the v2 pipeline, or state the condition as a \
+                                         feature or a target condition the capture reader can \
+                                         answer.";
+
 /// Returns what went, each with the sentence a later error repeats: a
 /// declaration naming one of these is not the typo the ordinary message
 /// suggests.
@@ -145,20 +152,32 @@ fn drop_conditional_items(
         return dropped;
     }
     for removed in flat.without(&conditions.keys().cloned().collect()) {
+        // A clause with no subject and no advice, so that it reads after `it`
+        // and after `which` alike, and a chain does not repeat the way out at
+        // every link: "names `A`, which names `B`, which is captured under …".
+        //
+        // The cause's own clause rather than a pointer to it, because this is
+        // repeated into an error listing only what the binding declared — where
+        // the line explaining the cause is not present. Removals arrive in
+        // decision order, so the cause is always already here.
         let why = match &removed.because {
             None => format!(
-                "it is captured under {}, which this build cannot evaluate, and the v1 pipeline \
-                 cannot carry a condition into generated code. Select the v2 pipeline, or state \
-                 the condition as a feature or a target condition the capture reader can answer",
+                "is captured under {}, which this build cannot evaluate, and the v1 pipeline \
+                 cannot carry a condition into generated code",
                 conditions
                     .get(&removed.name)
                     .expect("every seed was read out of the model just above"),
             ),
-            Some(because) => format!("it names `{because}`, which was dropped for that reason"),
+            Some(because) => format!(
+                "names `{because}`, which {}",
+                dropped
+                    .get(because)
+                    .expect("a removal's cause was removed before it")
+            ),
         };
         println!(
-            "cargo:warning=prebindgen: `{}` is not emitted: {why}.",
-            removed.name
+            "cargo:warning=prebindgen: `{}` {why}, so it is not emitted. {}",
+            removed.name, DROPPED_ADVICE
         );
         dropped.insert(removed.name, why);
     }

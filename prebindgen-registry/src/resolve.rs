@@ -67,8 +67,14 @@ impl std::fmt::Display for ResolveError {
                         writeln!(f, "error: unresolved prebindgen {} type `{}`", dir, e.key)?;
                     }
                     if let Some(why) = e.dropped.as_ref() {
-                        writeln!(f, "  `{}` is not in the model: {why}", e.key)?;
+                        writeln!(f, "  `{}` is not in the model: it {why}", e.key)?;
                     }
+                }
+                // Once, after the list: several entries can be the same dropped
+                // type in two directions, and the way out is the same for all
+                // of them.
+                if entries.iter().any(|e| e.dropped.is_some()) {
+                    writeln!(f, "{}", crate::registry::declare::DROPPED_ADVICE)?;
                 }
                 Ok(())
             }

@@ -2332,6 +2332,45 @@ fn declaring_a_dropped_item_is_explained_rather_than_blamed_on_a_typo() {
     }
 }
 
+/// An item dropped because it names a dropped one says why that one went.
+///
+/// The error lists what the binding declared, and a binding declaring the
+/// function need not have declared the record its parameter is. Pointing at "that
+/// reason" would point at a line the reader does not have — the warning log is
+/// somewhere above, and the error is what stopped the build.
+#[test]
+fn a_derived_removal_carries_the_reason_rather_than_referring_to_it() {
+    let record: syn::ItemStruct = syn::parse_quote!(
+        #[cfg(some_custom_flag)]
+        pub struct Stamp {
+            pub secs: u64,
+        }
+    );
+    let reg: RegistryBuilder = crate::test_util::reg_from_items(vec![
+        (syn::Item::Struct(record), SourceLocation::default()),
+        fn_item("fn stamp_sum(stamp: Stamp) -> u64 { stamp.secs }"),
+    ])
+    .unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("stamp_sum").unwrap());
+    match ext.declare_into_any(reg).expect("declare").scanned() {
+        Err(error @ ScanError::DeclaredNotFound { .. }) => {
+            let message = error.to_string();
+            assert!(
+                message
+                    .contains("it names `Stamp`, which is captured under #[cfg(some_custom_flag)]"),
+                "the cause's own sentence, not a pointer to it:\n{message}"
+            );
+            assert!(
+                message.contains("Select the v2 pipeline"),
+                "including the way out:\n{message}"
+            );
+        }
+        Ok(_) => panic!("expected DeclaredNotFound, scan succeeded"),
+        Err(other) => panic!("expected DeclaredNotFound, got {other:?}"),
+    }
+}
+
 /// An item written under a condition this build cannot evaluate does not reach
 /// a v1 registry, and neither does anything that names it.
 ///
