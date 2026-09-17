@@ -998,3 +998,62 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
         generation.rust()
     );
 }
+
+/// A condition the capture reader could not evaluate reaches the model and
+/// stops there: the wrapper it generates is unconditional.
+///
+/// The reader rewrites such a condition back onto the item rather than guessing
+/// — `unix`, or a custom `--cfg` flag, is not something it has a rule for. The
+/// model then records what the item is and has no field for an attribute, so
+/// nothing downstream can honor the condition. This pins that behavior because
+/// `docs/v2/stages/01-source.md` describes it, and its consequence: a binding
+/// whose condition is false where the source crate compiles calls a function
+/// that is not there, and fails to compile.
+#[test]
+fn a_condition_the_reader_could_not_evaluate_does_not_reach_the_wrapper() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+        syn::parse_quote!(
+            pub struct Stamp {
+                pub secs: i64,
+                pub nanos: i64,
+            }
+        ),
+        syn::parse_quote!(
+            #[cfg(some_custom_flag)]
+            pub fn stamp_sum(stamp: Stamp) -> i64 {
+                unimplemented!()
+            }
+        ),
+    ]
+    .into_iter()
+    .map(|item| (item, location.clone()))
+    .collect();
+    let flat = Flat::builder()
+        .items(items)
+        .build()
+        .expect("the fixture builds a model");
+    // The model takes the item as it is: an attribute it cannot interpret is
+    // not a reason to refuse one.
+    assert_eq!(flat.unsupported().count(), 0);
+    assert!(flat.function("stamp_sum").is_some());
+
+    let mut requests = requests();
+    let record = requests.policy(Policy::Record);
+    requests.type_policies.insert("Stamp".to_string(), record);
+    let sum = requests.policy(exported("stamp_sum", Routes::None));
+    requests.output(ty("Stamp"), record);
+    requests.output(function("stamp_sum"), sum);
+
+    let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 2);
+    let rust = generation.rust();
+    assert!(rust.contains("fn stamp_sum"), "{rust}");
+    assert!(
+        !rust.contains("cfg"),
+        "the condition reaches neither the wrapper nor anything beside it:\n{rust}"
+    );
+}

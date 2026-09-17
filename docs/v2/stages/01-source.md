@@ -183,12 +183,29 @@ Each condition on a captured item then resolves in one of three ways:
   treats a feature it has never heard of as off.
 - **Known true** — the attribute is removed, having already been acted on, and
   the item stays. This is why generated Rust carries no `#[cfg]` of its own.
-- **Not evaluable** — a condition over something the reader knows nothing
-  about, such as a custom `--cfg` flag. The residual condition stays on the
-  item. Later stages build their declarations from model facts — a name, its
-  fields, their types — so such a condition does not reach the generated Rust
-  under either engine, and a binding that needs one is better served by making
-  the condition a feature.
+- **Not evaluable** — a condition the reader has no rule for, such as `unix`
+  or a custom `--cfg` flag. It is rewritten onto the item and the item is kept,
+  because dropping it would be a decision the reader has no basis for.
+
+The third case needs following further, because the condition does not survive
+much longer. The source model records what an item *is* — a name, its fields,
+their types — and has no field for an attribute; the writers generate
+declarations from those facts, and neither one reads the attribute. So the
+condition is carried as far as the model and then goes no further, under either
+engine.
+
+That leaves the generated
+[wrapper](05-boundary.md#assemble-the-native-boundary) unconditional while the
+item it calls is not.
+If the condition is false where the source crate compiles, the binding calls a
+function that does not exist, and the binding crate fails to compile. That is a
+loud failure rather than a quiet one — unlike the two mismatches below, it
+cannot produce a working binary that disagrees with its library — but it is
+still a condition the generator dropped rather than honored.
+
+Expressing such a condition as a feature, or as one of the target conditions,
+is what keeps it inside the mechanism: the reader can evaluate those, so the
+item is dropped or kept on both sides consistently.
 
 Filtering is shared ground: it happens in the reader, before either engine is
 selected, so V2 gets an already-filtered stream and its cross-compilation
