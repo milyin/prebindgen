@@ -187,39 +187,34 @@ Each condition on a captured item then resolves in one of three ways:
   or a custom `--cfg` flag. It is rewritten onto the item and the item is kept,
   because dropping it would be a decision the reader has no basis for.
 
-The third case needs following further, because the condition does not survive
-much longer. The source model records what an item *is* — a name, its fields,
-their types — and has no field for an attribute; the writers generate
-declarations from those facts, and neither one reads the attribute. So the
-condition is carried as far as the model and then goes no further, under either
-engine.
+The third case needs following further, because what becomes of the condition
+differs by engine. The source model carries it the way it carries a guard —
+verbatim, uninterpreted, reachable only through the emission capability — so
+planning never consults it, and an attribute is never a reason to refuse an
+item.
 
-That leaves the generated
-[wrapper](05-boundary.md#assemble-the-native-boundary) unconditional while the
-item it calls is not.
-If the condition is false where the source crate compiles, the binding calls a
-function that does not exist, and the binding crate fails to compile. The
-failure is loud rather than quiet — unlike the two mismatches below, it cannot
-produce a working binary that disagrees with its library.
+V2's writer re-applies it to the
+[wrapper](05-boundary.md#assemble-the-native-boundary) it generates. A wrapper
+names source items: the function it calls, and every record it constructs. It
+compiles only where all of them exist, so it carries the condition of each.
+Nothing in the writer reads what one says — Rust conjoins repeated `#[cfg]`
+attributes on one item, so carrying them side by side is the whole of it.
 
-This is a gap in the model rather than a decision. Before the model existed the
-generator copied captured items into its output as tokens, so a condition it did
-not understand travelled to the generated code untouched and remained the
-consumer's business; the reader that came later resolved what it could and
-deliberately preserved the rest, which only makes sense if something downstream
-still honors it. The model ended that, not by ruling the condition irrelevant
-but by having nowhere to put it. Nothing else in the chain drops it.
+V1's writer does not, and leaves the wrapper unconditional while the function it
+calls is not. If the condition is false where the source crate compiles, such a
+binding calls a function that does not exist, and the binding crate fails to
+compile. The failure is loud rather than quiet: unlike the two mismatches below,
+it cannot produce a working binary that disagrees with its library.
 
-The shape of a fix is already in the model twice over. A guard is an item the
-model carries and the writers copy without interpreting, and an enum's
-discriminant is a token blob under the same contract — carried for emission,
-never read to decide anything. An item's condition wants that treatment and does
-not have it.
-
-[Issue #741](https://github.com/milyin/prebindgen/issues/741) tracks it. Until
-it is closed, expressing such a condition as a feature or one of the target
-conditions keeps it inside the mechanism: the reader can evaluate those, so the
-item is dropped or kept on both sides consistently.
+Two limits remain under both engines. The target's own declarations — a
+`repr(C)` mirror, a Kotlin class — name no source item and are emitted
+unconditionally, so a header can declare a type whose functions are not there.
+And a condition on a *field* is dropped rather than carried, while the C
+aggregate mirroring that field is not.
+[Issue #741](https://github.com/milyin/prebindgen/issues/741) covers what is
+left, V1 included. Expressing a difference as a feature or one of the target
+conditions avoids all of it: the reader can evaluate those, so the item is
+dropped or kept on both sides consistently.
 
 Concretely, for the two items above. The capture is written once, by whatever
 machine compiled the source crate, and holds every variant and every conditional
