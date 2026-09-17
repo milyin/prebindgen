@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 
-use prebindgen_flat::{flat::Flat, RustEmitter};
+use prebindgen_flat::{flat::Flat, Conditioned, RustEmitter};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -145,7 +145,7 @@ fn wrapper<T: Target>(
         let Some(element) = flat.element(named) else {
             continue;
         };
-        for condition in Writer.conditions(element) {
+        for condition in Writer.conditions(Conditioned::Item(element)) {
             if conditioned.insert(condition.to_string()) {
                 conditions.push(condition);
             }
@@ -224,7 +224,7 @@ fn wrapper<T: Target>(
                     .iter()
                     .zip(parts)
                     .map(|(field, value)| {
-                        let conditions = Writer.field_conditions(field);
+                        let conditions = Writer.conditions(Conditioned::Field(field));
                         let bound = field.bind(&names[value]);
                         quote!(#(#conditions)* #bound)
                     })

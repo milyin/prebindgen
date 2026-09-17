@@ -67,6 +67,7 @@ pub(super) fn write(
                 native,
                 params,
                 ret,
+                conditions,
             }) => {
                 let signature = |mut function: KtFun| {
                     for (name, ty) in params {
@@ -89,12 +90,24 @@ pub(super) fn write(
                 };
                 let args: Vec<&str> = params.iter().map(|(name, _)| name.as_str()).collect();
                 let call = format!("{harness}.{native}({})", args.join(", "));
-                file(package, &mut files).decls.push(
-                    signature(KtFun::new(method))
-                        .vis(KtVis::Public)
-                        .expr_body(KtCode::new().line(call))
-                        .into(),
-                );
+                let mut public = signature(KtFun::new(method))
+                    .vis(KtVis::Public)
+                    .expr_body(KtCode::new().line(call));
+                // Kotlin has no conditional compilation, so a function whose
+                // source was written under a condition is declared here
+                // whatever that condition says, and the symbol behind it is
+                // there only where the condition held. Saying so is all this
+                // writer can do about it.
+                if !conditions.is_empty() {
+                    public = public.kdoc(format!(
+                        "Present only where {} holds in the source crate.\n\nKotlin cannot \
+                         state a condition, so this function is declared either way; calling \
+                         it against a library built without that condition raises \
+                         UnsatisfiedLinkError.",
+                        conditions.join(" and ")
+                    ));
+                }
+                file(package, &mut files).decls.push(public.into());
             }
             _ => {}
         }

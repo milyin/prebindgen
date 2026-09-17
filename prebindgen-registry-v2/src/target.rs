@@ -19,7 +19,7 @@
 
 use prebindgen_flat::{
     flat::{Function, Struct, TypeRef},
-    RustEmitter,
+    Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
 
@@ -687,16 +687,60 @@ impl<Policy> SurfaceRequest<'_, Policy> {
     /// registry puts the same conditions on every instruction that serves the
     /// field, so a member declared under them is read under them and the
     /// initializer that consumes the read is written under them too.
+    /// The `#[cfg]` conditions the captured item behind this request was
+    /// written under, spelled as the source wrote them — empty in the ordinary
+    /// case.
+    ///
+    /// Text rather than tokens, because the registry is what puts a condition
+    /// on the Rust it emits for this declaration. What is left for a target is
+    /// the declaration written in *its* language, which usually cannot state a
+    /// condition at all; saying so in that declaration's documentation is the
+    /// most such a target can do, and is better than saying nothing.
+    pub fn item_conditions(&self) -> Vec<String> {
+        let conditions = match self.item {
+            SourceItem::Record(record) => {
+                crate::emit::Writer.conditions(Conditioned::Struct(record))
+            }
+            SourceItem::Function(function) => {
+                crate::emit::Writer.conditions(Conditioned::Function(function))
+            }
+        };
+        conditions.iter().map(spell_condition).collect()
+    }
+
     pub fn field_conditions(&self) -> Vec<Vec<TokenStream>> {
         match self.item {
             SourceItem::Record(record) => record
                 .fields
                 .iter()
-                .map(|field| crate::emit::Writer.field_conditions(field))
+                .map(|field| crate::emit::Writer.conditions(Conditioned::Field(field)))
                 .collect(),
             SourceItem::Function(_) => Vec::new(),
         }
     }
+}
+
+/// One condition as the source wrote it.
+///
+/// Tokens print with a space between every pair, so `#[cfg(unix)]` comes back
+/// as `# [cfg (unix)]`. A space that separates two word characters is the only
+/// one that carried meaning, so every other one goes.
+fn spell_condition(condition: &TokenStream) -> String {
+    let spaced = condition.to_string();
+    let characters: Vec<char> = spaced.chars().collect();
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut out = String::with_capacity(spaced.len());
+    for (index, &character) in characters.iter().enumerate() {
+        if character == ' ' {
+            let before = index.checked_sub(1).map(|i| characters[i]);
+            let after = characters.get(index + 1).copied();
+            if !(before.is_some_and(word) && after.is_some_and(word)) {
+                continue;
+            }
+        }
+        out.push(character);
+    }
+    out
 }
 
 /// The source item behind a requested output.
