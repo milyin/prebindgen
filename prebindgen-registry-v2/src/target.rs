@@ -825,51 +825,40 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// A source function the binding asked to expose, as the registry hands it to
-/// the target that will shape the wrapper exported in its place.
+/// Which wrapper [`Target::boundary`] is being asked about.
 ///
-/// What a binding exports is always a wrapper: a Rust function the registry
-/// generates around the source function, which the target's calling interface
-/// can reach and which calls the source function once. Once every value of
-/// that call has a plan, the registry asks [`Target::boundary`] how the
-/// wrapper is reached and shaped — for the two targets today, its symbol,
-/// calling convention and native parameters — and what it does when a
-/// conversion fails, the answer being a [`BoundarySpec`]. This is the
-/// question's subject: the declaration that asked for the export, and the
-/// source function behind it.
-/// The planned values arrive beside it, as [`ResolvedValues`], and the target's
-/// own configuration for the function as the `policy` argument. Nothing about
-/// the wrapper's shape is decided before this call, and nothing in it is
-/// decided anywhere else.
+/// The registry builds one wrapper per exported function, and asks the target
+/// to shape each: symbol, calling convention, native parameters, failure
+/// routes. That question needs three inputs — what the wrapper is for, what
+/// values it converts, and how the binding configured it — and this is the
+/// first: the declaration that requested the export, and the source function
+/// the wrapper calls. The other two are the `values` ([`ResolvedValues`]) and
+/// `policy` arguments beside it; the answer is a [`BoundarySpec`].
 ///
-/// The name comes from the specification's *site*, a value's position in an
-/// exported function — parameter 0, the return — which is what the boundary
-/// places: each native parameter it declares serves one such position, by
-/// index into [`ResolvedValues::inputs`]. This describes the function those
-/// positions belong to.
+/// A target uses it to tell wrappers apart. The declaration says which
+/// export this is, for the names in its refusals and errors; the source
+/// function supplies the parameter names the native signature keeps; and a
+/// missing source function says this wrapper is a handle's release — it takes
+/// the handle back and drops it (see [`ReprSpec::release`]) — which the
+/// target shapes under the handle *type's* policy rather than a function's.
 ///
-/// Two kinds of wrapper reach here. An ordinary one calls a source function
-/// once, and `function` is that function. A handle's release calls nothing:
-/// it takes the handle's carrier and drops what it holds (see
-/// [`ReprSpec::release`]), and `function` is `None`. A target tells the two
-/// apart by that field, and answers the release under the handle *type's*
-/// policy, which is where the release's symbol or placement was recorded.
+/// Named after the specification's *site*, a value's position in an exported
+/// function: the boundary places each such position on a native parameter or
+/// the return, and this identifies the function the positions belong to.
 pub struct SiteDescriptor<'a> {
-    /// What the binding asked to export, with the name it asked for it under
-    /// ([`Declaration::placement`]) and the Rust item it comes from
-    /// ([`Declaration::rust_origin`]). The symbol the wrapper exports is not
-    /// read from here — the frontend settled it when it built the policy — but
-    /// the origin names the function in every refusal and error the target
-    /// raises. For a release, this is the handle type's own declaration.
+    /// The export this wrapper is for: its Rust origin
+    /// ([`Declaration::rust_origin`]) and the foreign name it was requested
+    /// under ([`Declaration::placement`]). For a release, the handle type's
+    /// own declaration. The exported symbol is not read from here; the
+    /// frontend settled it in the policy.
     pub declaration: &'a Declaration,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
-    /// What a target reads from it is the parameter list: a native parameter
-    /// keeps its source parameter's name, and a parameter the target adds — a
-    /// JNI environment, a receiver — is named around those so it shadows
-    /// none. The parameter *types* are not read here; each position's carrier
-    /// is the layout of its plan in [`ResolvedValues::inputs`], in the same
-    /// order as [`Function::params`].
+    /// The target reads its parameter *names*: a native parameter keeps its
+    /// source parameter's name, and one the target adds — a JNI environment,
+    /// a receiver — is named around those. The parameter *types* come from
+    /// the plans in [`ResolvedValues::inputs`], which are in
+    /// [`Function::params`] order.
     pub function: Option<&'a Function>,
 }
 
