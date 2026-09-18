@@ -825,8 +825,8 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// A source function the binding declared for export, as the registry hands it
-/// to the target that will shape the native function exported in its place.
+/// A source function the binding asked to expose, as the registry hands it to
+/// the target that will shape the wrapper exported in its place.
 ///
 /// What a binding exports is always a native function: an `extern` wrapper the
 /// registry generates, with the symbol C or the JVM links against, which calls
