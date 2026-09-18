@@ -23,11 +23,13 @@
 //!   **frontend** when it faces the binding's `build.rs`, and the target
 //!   adapter when it faces the registry.
 //! - The **registry** is this crate: it plans and asks; the target answers.
-//! - A **source function** is a Rust function in the source crate that the
-//!   binding declared for export. An **exported function**, or **wrapper**, is
-//!   the `extern` Rust function the registry generates around it, carrying the
-//!   symbol the foreign side links against and calling the source function
-//!   once. A binding exports only wrappers.
+//! - A **source function** is a Rust function in the source crate — the
+//!   `#[prebindgen]`-marked crate the captures come from — that the binding
+//!   asked to expose, with `fun!(ledger_open)` or the like. It is never
+//!   exported itself; it stays where it is and is called. An **exported
+//!   function**, or **wrapper**, is the `extern` Rust function the registry
+//!   generates around it, carrying the symbol the foreign side links against
+//!   and calling the source function once. A binding exports only wrappers.
 //! - **Native** is JNI's word, used in JNI's sense on both targets: the
 //!   compiled side that C or the JVM calls *into*, which is always the
 //!   generated Rust. A native function is the wrapper; a native parameter is

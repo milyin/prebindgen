@@ -32,7 +32,7 @@ pub enum JniPolicy {
     /// A JVM object whose properties are read, declared as this Kotlin class
     /// (fully qualified).
     DataClass { class: String },
-    /// A source function to export: as a native method on the harness object,
+    /// A source function to expose: as a native method on the harness object,
     /// and the Kotlin function that calls it.
     Function {
         /// The package the Kotlin function is declared in.
