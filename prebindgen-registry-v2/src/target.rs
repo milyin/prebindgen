@@ -828,13 +828,15 @@ impl<P> ResolvedValues<'_, P> {
 /// A source function the binding asked to expose, as the registry hands it to
 /// the target that will shape the wrapper exported in its place.
 ///
-/// What a binding exports is always a native function: an `extern` wrapper the
-/// registry generates, with the symbol C or the JVM links against, which calls
-/// the source function once. Once every value of that call has a plan, the
-/// registry asks [`Target::boundary`] what the wrapper looks like — its
-/// symbol, calling convention, native parameters and failure routes, the
-/// answer being a [`BoundarySpec`] — and this is the question's subject: the
-/// declaration that asked for the export, and the source function behind it.
+/// What a binding exports is always a wrapper: a Rust function the registry
+/// generates around the source function, which the target's calling interface
+/// can reach and which calls the source function once. Once every value of
+/// that call has a plan, the registry asks [`Target::boundary`] how the
+/// wrapper is reached and shaped — for the two targets today, its symbol,
+/// calling convention and native parameters — and what it does when a
+/// conversion fails, the answer being a [`BoundarySpec`]. This is the
+/// question's subject: the declaration that asked for the export, and the
+/// source function behind it.
 /// The planned values arrive beside it, as [`ResolvedValues`], and the target's
 /// own configuration for the function as the `policy` argument. Nothing about
 /// the wrapper's shape is decided before this call, and nothing in it is
