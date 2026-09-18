@@ -837,12 +837,13 @@ impl<P> ResolvedValues<'_, P> {
 /// is the [`ResolvedValues`] the wrapper converts, `policy` the binding's
 /// configuration for it.
 ///
-/// A target uses it to tell wrappers apart. The declaration says which
-/// export this is, for the names in its refusals and errors; the source
-/// function supplies the parameter names the native signature keeps; and a
-/// missing source function says this wrapper is a handle's release — it takes
-/// the handle back and drops it (see [`ReprSpec::release`]) — which the
-/// target shapes under the handle *type's* policy rather than a function's.
+/// What a target reads from the descriptor: the declaration, for the names in
+/// its refusals and errors; the source function's parameter list, for the
+/// names the native signature keeps; and whether a source function is there
+/// at all. A descriptor with none says the wrapper is a handle's release —
+/// it takes the handle back and drops it (see [`ReprSpec::release`]) — which
+/// the target shapes under the handle *type's* policy rather than a
+/// function's.
 ///
 /// Named after the specification's *site*, a value's position in an exported
 /// function: the boundary places each such position on a native parameter or
