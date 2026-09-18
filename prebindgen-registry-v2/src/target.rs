@@ -825,7 +825,7 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// The exported function a target is asked to give a native interface to.
+/// The exported function whose native interface a target is being asked for.
 ///
 /// Once every value of an exported function has a plan, the registry asks
 /// [`Target::boundary`] what the wrapper around them looks like — its symbol,
