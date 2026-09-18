@@ -27,9 +27,12 @@
 //!   `#[prebindgen]`-marked crate the captures come from — that the binding
 //!   asked to expose, with `fun!(ledger_open)` or the like. It is never
 //!   exported itself; it stays where it is and is called. An **exported
-//!   function**, or **wrapper**, is the `extern` Rust function the registry
-//!   generates around it, carrying the symbol the foreign side links against
-//!   and calling the source function once. A binding exports only wrappers.
+//!   function**, or **wrapper**, is the Rust function the registry generates
+//!   around it: one the target's calling interface can reach, which converts
+//!   what arrives, calls the source function once, and converts what it
+//!   returns. How it is reachable is the target's answer in [`AbiSpec`] — for
+//!   C and JNI today, an `extern` function under an exported symbol. A binding
+//!   exports only wrappers.
 //! - **Native** is JNI's word, used in JNI's sense on both targets: the
 //!   compiled side that C or the JVM calls *into*, which is always the
 //!   generated Rust. A native function is the wrapper; a native parameter is
@@ -519,8 +522,11 @@ pub struct NativeParam {
     pub mutable: bool,
 }
 
-/// The native interface of one exported function: the `extern` wrapper the
-/// registry generates around a source function, as C or the JVM sees it.
+/// The native interface of one exported function: how the wrapper the
+/// registry generates around a source function is reached from the target's
+/// side. For both targets today that is an `extern` function under a symbol
+/// the foreign side links against; a target reached another way would state
+/// that here.
 #[derive(Clone, Debug)]
 pub struct AbiSpec {
     /// The `extern` string: `"C"`, `"system"`.
