@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ArtifactKey","WriteError"],"fn":["write_rust"],"struct":["Assembly","AssemblyBuilder"],"trait":["RustArtifact"]};
