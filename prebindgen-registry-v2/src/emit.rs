@@ -264,6 +264,8 @@ fn wrapper<T: Target>(
     };
     let symbol = format_ident!("{}", function.abi.symbol);
     let abi = &function.abi.abi;
+    let attrs = &function.abi.attrs;
+    let unsafety = function.abi.unsafety.then(|| quote!(unsafe));
     let ret = function
         .abi
         .ret
@@ -276,7 +278,8 @@ fn wrapper<T: Target>(
     quote! {
         #(#conditions)*
         #[no_mangle]
-        pub extern #abi fn #symbol(#(#params),*) #ret {
+        #(#attrs)*
+        pub #unsafety extern #abi fn #symbol(#(#params),*) #ret {
             #(#statements)*
             #tail
         }

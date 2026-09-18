@@ -1085,6 +1085,23 @@ fn assemble<T: Target>(
             declaration.id, boundary.abi.symbol
         )));
     }
+    // The writer exports the wrapper under that symbol with `#[no_mangle]`; an
+    // attribute restating or contradicting the linkage is not a form the
+    // target may ask for, and rustc would only report the clash later.
+    for attr in &boundary.abi.attrs {
+        if attr.path().is_ident("no_mangle") || attr.path().is_ident("export_name") {
+            return Err(PlanningError::InvalidInput(format!(
+                "`{}` states `#[{}]` on its wrapper, whose linkage the writer owns: the \
+                 symbol is `{}`",
+                declaration.id,
+                attr.path()
+                    .require_ident()
+                    .map(|i| i.to_string())
+                    .unwrap_or_default(),
+                boundary.abi.symbol
+            )));
+        }
+    }
     let mut body = BodyBuilder::new();
     let mut params = Vec::new();
     let mut contexts: BTreeMap<String, ValueId> = BTreeMap::new();

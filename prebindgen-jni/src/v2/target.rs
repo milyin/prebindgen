@@ -415,6 +415,8 @@ impl Target for JniTarget {
                 symbol: symbol.clone(),
                 params,
                 ret: values.output.map(|value| value.repr.layout.wire().clone()),
+                attrs: Vec::new(),
+                unsafety: false,
             },
             output: match values.output {
                 Some(_) => OutputPlacement::Return,

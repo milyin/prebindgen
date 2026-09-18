@@ -273,6 +273,11 @@ this list says what the increment left open and why.
   operation in this increment produces an independent value and acquires nothing,
   which is why the omission is safe; the first borrowing or handle-bearing
   operation is what has to add them, and cannot be written without them.
+- **A wrapper's form** is the writer's, except what `AbiSpec` lets a target
+  state: the convention, the symbol, the parameters and return, attributes
+  beyond `#[no_mangle]`, and `unsafe`. A target reached other than by an
+  exported symbol — a registration table, an attribute macro — has no way to
+  say so yet, and no target has asked.
 - **Delivery** is a native return or nothing. Out-parameters, `Result` branches
   and declared sinks are `OutputPlacement` variants the increment does not have.
 - **A condition reaches the Rust side only.** V2 carries a `#[cfg]` the capture

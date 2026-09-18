@@ -97,6 +97,10 @@ enum Policy {
         /// Names for the native parameters, in order. Empty means `arg0`,
         /// `arg1`, … — the well-behaved case that hides a name collision.
         param_names: Vec<String>,
+        /// Attributes the wrapper carries and whether it is `unsafe`: the part
+        /// of its form a target may state.
+        attrs: Vec<syn::Attribute>,
+        unsafety: bool,
     },
     /// A boundary that passes its first parameter as a carrier its conversion
     /// does not read — an adapter defect the registry has to catch rather than
@@ -125,6 +129,8 @@ fn exported(symbol: &str, routes: Routes) -> Policy {
         symbol: symbol.to_string(),
         routes,
         param_names: Vec::new(),
+        attrs: Vec::new(),
+        unsafety: false,
     }
 }
 
@@ -251,6 +257,8 @@ impl Target for Mini {
                         mutable: false,
                     }],
                     ret: values.output.map(|value| value.repr.layout.wire().clone()),
+                    attrs: Vec::new(),
+                    unsafety: false,
                 },
                 output: OutputPlacement::Return,
                 failures: Vec::new(),
@@ -260,6 +268,8 @@ impl Target for Mini {
             symbol,
             routes,
             param_names,
+            attrs,
+            unsafety,
         } = policy
         else {
             return Err(PlanningError::InvalidInput(format!(
@@ -286,6 +296,8 @@ impl Target for Mini {
                     })
                     .collect(),
                 ret: values.output.map(|value| value.repr.layout.wire().clone()),
+                attrs: attrs.clone(),
+                unsafety: *unsafety,
             },
             output: match values.output {
                 Some(_) => OutputPlacement::Return,
@@ -704,6 +716,8 @@ fn a_temporary_never_takes_a_live_parameter_name() {
         routes: Routes::None,
         // The names a writer would otherwise allocate for itself.
         param_names: vec!["v0".to_string(), "v1".to_string()],
+        attrs: Vec::new(),
+        unsafety: false,
     });
     requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_pick"), pick);
@@ -867,6 +881,8 @@ fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
         symbol: "stamp_pick".to_string(),
         routes: Routes::None,
         param_names: vec!["r#v0".to_string(), "r#v1".to_string()],
+        attrs: Vec::new(),
+        unsafety: false,
     });
     requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_pick"), pick);
@@ -1261,4 +1277,46 @@ fn an_item_condition_reaches_the_declaration_a_target_contributes() {
         rust.contains("#[cfg(some_custom_flag)]\n#[repr(C)]"),
         "the mirror carries it:\n{rust}"
     );
+}
+
+/// The part of a wrapper's form a target may state — attributes beyond
+/// `#[no_mangle]`, and `unsafe` — is rendered as stated; the linkage is the
+/// writer's, and a target restating it is contradictory input.
+#[test]
+fn a_target_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
+    let form = |attrs: Vec<syn::Attribute>, unsafety: bool| {
+        let mut requests = requests();
+        let strukt = requests.policy(Policy::Struct);
+        requests.type_policies.insert("Stamp".to_string(), strukt);
+        let sum = requests.policy(Policy::Function {
+            symbol: "stamp_sum".to_string(),
+            routes: Routes::None,
+            param_names: Vec::new(),
+            attrs,
+            unsafety,
+        });
+        requests.output(ty("Stamp"), strukt);
+        requests.output(function("stamp_sum"), sum);
+        generate(model(), &Mini, requests, "fixture")
+    };
+
+    let generation = form(vec![syn::parse_quote!(#[allow(non_snake_case)])], true).expect("plans");
+    let rust = generation.rust();
+    assert!(
+        rust.contains(
+            "#[no_mangle]\n#[allow(non_snake_case)]\npub unsafe extern \"C\" fn stamp_sum("
+        ),
+        "{rust}"
+    );
+
+    for linkage in [
+        syn::parse_quote!(#[no_mangle]),
+        syn::parse_quote!(#[export_name = "other"]),
+    ] {
+        let error = form(vec![linkage], false).expect_err("the linkage is the writer's");
+        assert!(
+            error.to_string().contains("whose linkage the writer owns"),
+            "{error}"
+        );
+    }
 }

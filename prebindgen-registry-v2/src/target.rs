@@ -30,11 +30,10 @@
 //!   function**, or **wrapper**, is the Rust function the registry generates
 //!   around it: one the target's calling interface can reach, which converts
 //!   what arrives, calls the source function once, and converts what it
-//!   returns. Today the writer gives every wrapper one form — an `extern`
-//!   function under a `#[no_mangle]` symbol — and the target chooses only the
-//!   calling convention and the symbol, in [`AbiSpec`]; a target reached
-//!   another way needs the payload the specification sketches for `AbiSpec`
-//!   and the engine does not have. A binding exports only wrappers.
+//!   returns. The writer renders every wrapper as an `extern` function under a
+//!   `#[no_mangle]` symbol; what a target decides of its form is in
+//!   [`AbiSpec`] — the convention, the symbol, the signature, its attributes
+//!   and whether it is `unsafe`. A binding exports only wrappers.
 //! - **Native** is JNI's word, used in JNI's sense on both targets: the
 //!   compiled side that C or the JVM calls *into*, which is always the
 //!   generated Rust. A native function is the wrapper; a native parameter is
@@ -528,17 +527,20 @@ pub struct NativeParam {
 /// registry generates around a source function is reached from the target's
 /// side.
 ///
-/// The writer renders every wrapper in one form,
-/// `#[no_mangle] pub extern "<abi>" fn <symbol>(<params>) -> <ret>`, and this
-/// is the part of it the target decides: the calling convention string, the
-/// symbol, and the native parameters and return. The attributes, the
-/// visibility and the absence of `unsafe` are the writer's, and a target
-/// cannot change them. That fits C and JNI as v2 emits them; a target reached
-/// another way — through an attribute macro, a registration table, an
-/// `unsafe` signature, another linkage attribute — needs the payload
-/// `docs/v2` sketches for this type and the engine does not have (see the
-/// extensions page, *Wrapper form*). V1's JNI writer is the first known
-/// consumer: its wrapper is `#[allow(..)] pub unsafe extern "C"`.
+/// The writer renders every wrapper as
+/// `#[no_mangle] <attrs> pub <unsafe> extern "<abi>" fn <symbol>(<params>) -> <ret>`,
+/// and everything in angle brackets is the target's to decide here. The
+/// `#[no_mangle]`, the `pub` and the `fn` are the writer's: a wrapper is
+/// reached by its symbol, and a target that needed another linkage would need
+/// a variant of this type rather than an attribute that fights the one the
+/// writer adds — which the registry refuses (see [`AbiSpec::attrs`]).
+///
+/// This is the specification's `AbiSpec<Payload>` with the payload made
+/// concrete: the "target signature requirements" the chapter leaves open are
+/// the attributes and the safety of the signature, because those are what the
+/// writer has to render and can check, and what V1's JNI wrapper —
+/// `#[allow(..)] pub unsafe extern "C"` — needs beyond the convention and
+/// the symbol.
 #[derive(Clone, Debug)]
 pub struct AbiSpec {
     /// The `extern` string: `"C"`, `"system"`.
@@ -552,6 +554,21 @@ pub struct AbiSpec {
     pub params: Vec<NativeParam>,
     /// The native return type, absent when the wrapper returns nothing.
     pub ret: Option<WireType>,
+    /// Attributes the wrapper carries beyond `#[no_mangle]`, rendered after
+    /// it: a lint the generated signature would otherwise trip
+    /// (`#[allow(non_snake_case)]`), a target's own marker. Empty for both
+    /// targets today.
+    ///
+    /// Linkage is not the target's to restate: `#[no_mangle]` and
+    /// `#[export_name]` here are contradictory input and fail the build, since
+    /// the writer already exports the wrapper under [`AbiSpec::symbol`].
+    pub attrs: Vec<syn::Attribute>,
+    /// Whether the wrapper is an `unsafe fn`. `false` for both targets today:
+    /// the wrapper checks what it is handed, and a caller owes it nothing a
+    /// safe function cannot state. A convention that makes the caller
+    /// responsible for the pointers it passes says so here, and the foreign
+    /// declaration should say the same.
+    pub unsafety: bool,
 }
 
 /// Where a converted result goes.
