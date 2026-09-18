@@ -97,11 +97,10 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let counts = report.counts();
-    assert_eq!(
-        counts.emitted, 0,
-        "nothing here is a data class or a scalar"
-    );
-    assert_eq!(counts.skipped, 4);
+    // The handle class is emitted — an address in a `Long`, with its release;
+    // the members and the borrowed-handle function are not.
+    assert_eq!(counts.emitted, 1);
+    assert_eq!(counts.skipped, 3);
     assert_eq!(counts.ignored, 1);
 
     // Each skip says what the value waits on and where the walk stopped: a
@@ -263,15 +262,27 @@ fn the_ordinary_writers_run_under_v2() {
         "the file names the engine that produced it: {contents}"
     );
 
-    // Nothing here is lowered, so no Kotlin is written — and the root still
-    // exists, so a Gradle source set pointed at it resolves to an empty set
-    // rather than a missing directory.
+    // The one thing lowered here is the handle class, in its package, with
+    // the native method that frees one on the harness in the base package.
     let kotlin_root = dir.join("kotlin");
-    assert!(generated
-        .write_kotlin(&kotlin_root)
-        .expect("write_kotlin")
-        .is_empty());
-    assert!(kotlin_root.is_dir());
+    let written = generated.write_kotlin(&kotlin_root).expect("write_kotlin");
+    let kotlin: Vec<String> = written
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+    let kotlin = kotlin.join("\n");
+    assert!(
+        kotlin.contains("public class ZThing(ptr: Long) {"),
+        "the handle class:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("external fun freeZThing(ptr: Long)"),
+        "and its release on the harness:\n{kotlin}"
+    );
+    assert!(
+        contents.contains("Java_io_test_jni_JNINative_freeZThing"),
+        "with the wrapper the JVM binds it to:\n{contents}"
+    );
 
     let written = generated.write_report(&dir).expect("write_report");
     assert_eq!(written.len(), 2);

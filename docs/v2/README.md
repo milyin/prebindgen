@@ -38,10 +38,10 @@ contracts designed for those extensions are gathered on
 [the implementation page](implementation.md#what-it-does-not-settle) keeps the
 whole list. Tracked as [issue #720](https://github.com/milyin/prebindgen/issues/720).
 The engine switch and the unsupported-output reporting exist, and so does the
-first increment of the pipeline itself: the two element paths specified here —
-a function taking an owned struct, and that struct — are planned, assembled and
-emitted by `prebindgen-registry-v2`, for both targets, through the real
-frontends. A binding crate's `build.rs` is the same under either engine;
+first increment of the pipeline itself: the three element paths specified here
+— a function taking an owned struct, that struct, and a type alias declaring
+an opaque handle — are planned, assembled and emitted by
+`prebindgen-registry-v2`, for both targets, through the real frontends. A binding crate's `build.rs` is the same under either engine;
 `PREBINDGEN_PIPELINE=v2` makes `prebindgen-c` and `prebindgen-jni` hand their
 declarations to this engine instead of v1's, and every declaration the engine
 cannot lower yet comes back as a reported skip — the arrangement that lets a V1
@@ -223,6 +223,7 @@ paths are added.
 
 - [Function taking an owned struct][fn] — `stamp_sum(Stamp) -> i64`
 - [Struct with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
+- [Type alias declaring an opaque handle][typedef] — `type Ledger = crate::ledger::Ledger`
 
 An **element kind** is a kind of [source item](stages/01-source.md#capture-source-items) — a function, a struct, an enum —
 as this appendix organizes it. (Inside the pipeline the word is not used: the
@@ -231,8 +232,8 @@ what the binding asked to expose, identified by a `DeclarationId`, such as
 `fn:stamp_sum`. Current ids do not distinguish two foreign placements of the
 same source item.) Element kinds form a tree: a kind at the root, more specific
 variants below it, each becoming its own path when its behavior differs from its
-parent's. Two paths are specified today; the rest name the id they will use when
-they are written.
+parent's. Three paths are specified today; the rest name the id they will use
+when they are written.
 
 ```text
 fn                      specified   function taking an owned struct, returning a scalar
@@ -244,6 +245,7 @@ struct                  specified   struct with scalar fields
   struct_nested         deferred    struct with a struct field
   struct_option_field   deferred    struct with an optional field
   struct_vec_field      deferred    struct with a sequence field
+typedef                 specified   type alias declaring an opaque handle
 enum                    deferred    enum with payload variants
 const                   deferred    exported constant
 ```
@@ -301,3 +303,4 @@ compiler.
 
 [fn]: examples/fn/README.md
 [struct]: examples/struct/README.md
+[typedef]: examples/typedef/README.md

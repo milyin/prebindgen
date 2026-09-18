@@ -128,21 +128,29 @@ fn wrapper<T: Target>(
     // the same condition state it once, which conjunction makes cosmetic and
     // review makes worth doing.
     //
-    // The instructions are where a wrapper spells a source item *in this
-    // increment*: its signature carries target wire types only. A representation
-    // that put a source type in the signature — an opaque handle spelled
-    // `*mut source::Session` — would name one from somewhere this loop does not
-    // look.
+    // The instructions are where a wrapper spells a source item: its signature
+    // carries target wire types only, and the one operation that spells a
+    // source type — a handle taken back or released, cast to
+    // `*mut source::Ledger` — is a standard one the registry renders, so it is
+    // found here too.
     let mut conditions = Vec::new();
     let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
     for step in &function.instrs {
         let named = match &step.instr {
-            Instr::Construct { name, .. } => name.as_str(),
-            Instr::Call { function, .. } => function.as_str(),
-            Instr::Apply { .. } => continue,
+            Instr::Construct { name, .. } => name.clone(),
+            Instr::Call { function, .. } => function.clone(),
+            Instr::Apply { primitive, .. } => match &primitives[primitive.0].implementation {
+                Operation::Standard(
+                    StandardOp::FromRaw { source } | StandardOp::Release { source },
+                ) => match source.kind() {
+                    prebindgen_flat::flat::TypeKind::Named { id, .. } => id.name.clone(),
+                    _ => continue,
+                },
+                _ => continue,
+            },
         };
         // Planning names only items the model declares.
-        let Some(element) = flat.element(named) else {
+        let Some(element) = flat.element(named.as_str()) else {
             continue;
         };
         for condition in Writer.conditions(Conditioned::Item(element)) {
@@ -170,7 +178,7 @@ fn wrapper<T: Target>(
                     .iter()
                     .map(|operand| operand_name(&names, function, operand))
                     .collect();
-                let expression = operation(target, primitive, &operand_names);
+                let expression = operation(target, source_module, primitive, &operand_names);
                 let statement = match (&primitive.failure, result) {
                     (PrimitiveFailure::Infallible, Some(result)) => {
                         let name = local(&mut names, &mut taken, *result);
@@ -179,9 +187,10 @@ fn wrapper<T: Target>(
                     (PrimitiveFailure::Infallible, None) => quote!(#expression;),
                     (PrimitiveFailure::Fallible { category, .. }, Some(result)) => {
                         let name = local(&mut names, &mut taken, *result);
-                        let route = failure_arm(target, function, *category, &error_binding);
+                        let route =
+                            failure_arm(target, source_module, function, *category, &error_binding);
                         let ok = &ok_binding;
-                        let error = &error_binding;
+                        let error = error_pattern(function, *category, &error_binding);
                         quote! {
                             let #name = match #expression {
                                 Ok(#ok) => #ok,
@@ -190,8 +199,9 @@ fn wrapper<T: Target>(
                         }
                     }
                     (PrimitiveFailure::Fallible { category, .. }, None) => {
-                        let route = failure_arm(target, function, *category, &error_binding);
-                        let error = &error_binding;
+                        let route =
+                            failure_arm(target, source_module, function, *category, &error_binding);
+                        let error = error_pattern(function, *category, &error_binding);
                         quote! {
                             if let Err(#error) = #expression { #route }
                         }
@@ -290,9 +300,13 @@ fn wrapper<T: Target>(
 /// its own.
 fn operation<T: Target>(
     target: &T,
+    source_module: &syn::Path,
     primitive: &PrimitiveSpec<T::Payload>,
     operands: &[syn::Ident],
 ) -> TokenStream {
+    // The handle operations spell a source type, which is what makes them the
+    // registry's: an adapter has no way to, and no business doing it.
+    let source_type = |ty| Writer.emit_source_type(ty, &HashMap::new(), source_module);
     match &primitive.implementation {
         Operation::Standard(StandardOp::Identity) => {
             let value = &operands[0];
@@ -302,7 +316,47 @@ fn operation<T: Target>(
             let value = &operands[0];
             quote!(#value.#member)
         }
+        Operation::Standard(StandardOp::IntoRaw { carrier }) => {
+            let value = &operands[0];
+            quote!(Box::into_raw(Box::new(#value)) as #carrier)
+        }
+        Operation::Standard(StandardOp::FromRaw { source }) => {
+            let value = &operands[0];
+            let ty = source_type(source);
+            let message = format!("null `{}` handle", source.key());
+            quote! {
+                ::core::ptr::NonNull::new(#value as *mut #ty)
+                    .map(|handle| unsafe { *Box::from_raw(handle.as_ptr()) })
+                    .ok_or_else(|| String::from(#message))
+            }
+        }
+        Operation::Standard(StandardOp::Release { source }) => {
+            let value = &operands[0];
+            let ty = source_type(source);
+            quote! {
+                drop(::core::ptr::NonNull::new(#value as *mut #ty)
+                    .map(|handle| unsafe { Box::from_raw(handle.as_ptr()) }))
+            }
+        }
         Operation::Target(payload) => target.render_operation(payload, operands),
+    }
+}
+
+/// The pattern a failure arm binds the error with: the name when a reporter
+/// reads it, `_` when the route only terminates.
+fn error_pattern<P>(
+    function: &FunctionPlan<P>,
+    category: FailureCategory,
+    error: &syn::Ident,
+) -> TokenStream {
+    let reported = function
+        .failures
+        .iter()
+        .any(|route| route.category == category && route.report.is_some());
+    if reported {
+        quote!(#error)
+    } else {
+        quote!(_)
     }
 }
 
@@ -310,6 +364,7 @@ fn operation<T: Target>(
 /// operation for it, then terminate.
 fn failure_arm<T: Target>(
     target: &T,
+    source_module: &syn::Path,
     function: &FunctionPlan<T::Payload>,
     category: FailureCategory,
     error: &syn::Ident,
@@ -333,7 +388,7 @@ fn failure_arm<T: Target>(
                 }
             })
             .collect();
-        let expression = operation(target, report, &operands);
+        let expression = operation(target, source_module, report, &operands);
         let on_failure = terminal(&route.on_report_failure);
         match report.failure {
             PrimitiveFailure::Infallible => quote!(#expression;),

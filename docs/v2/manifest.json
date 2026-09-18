@@ -72,6 +72,12 @@
       "dir": "struct",
       "title": "Struct with scalar fields",
       "fixture": "Stamp"
+    },
+    {
+      "id": "typedef",
+      "dir": "typedef",
+      "title": "Type alias declaring an opaque handle",
+      "fixture": "Ledger"
     }
   ],
   "deferred_examples": [
@@ -209,6 +215,61 @@
     },
     {
       "example": "struct",
+      "stage": "08-emit",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "typedef",
+      "stage": "01-source",
+      "languages": []
+    },
+    {
+      "example": "typedef",
+      "stage": "02-flat",
+      "languages": []
+    },
+    {
+      "example": "typedef",
+      "stage": "03-requests",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "typedef",
+      "stage": "04-select",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "typedef",
+      "stage": "05-represent",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "typedef",
+      "stage": "06-boundary",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "typedef",
+      "stage": "07-retain",
+      "languages": []
+    },
+    {
+      "example": "typedef",
       "stage": "08-emit",
       "languages": [
         "c",

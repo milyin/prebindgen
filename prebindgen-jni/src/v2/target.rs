@@ -32,7 +32,15 @@ pub enum JniPolicy {
     /// A JVM object whose properties are read, declared as this Kotlin class
     /// (fully qualified).
     DataClass { class: String },
-    /// A source function to expose: as a native method on the harness object,
+    /// An opaque handle: the JVM holds the address as a `Long` inside this
+    /// Kotlin class (fully qualified), and frees it through the `native`
+    /// method on the harness, which the JVM looks up by `symbol`.
+    PtrClass {
+        class: String,
+        native: String,
+        symbol: String,
+    },
+    /// A source function to export: as a native method on the harness object,
     /// and the Kotlin function that calls it.
     Function {
         /// The package the Kotlin function is declared in.
@@ -58,6 +66,15 @@ pub enum JniPayload {
     Getter { name: String, descriptor: String },
     /// The error-reporting helper: throw what the JVM did not already throw.
     ReportError,
+    /// Throw a binding failure's message as an `IllegalStateException`.
+    ThrowMessage,
+    /// A Kotlin class wrapping a native address, and the native method on the
+    /// harness that frees one — a [`JniPayload::Method`] taking the handle.
+    Handle {
+        package: String,
+        class: String,
+        release: Box<JniPayload>,
+    },
     /// A Kotlin data class and its properties, `(name, Kotlin type)`.
     Class {
         package: String,
@@ -71,8 +88,8 @@ pub enum JniPayload {
         method: String,
         /// The native method's name on the harness.
         native: String,
-        params: Vec<(String, String)>,
-        ret: String,
+        params: Vec<(String, KotlinType)>,
+        ret: KotlinType,
         /// The conditions the source function was written under, as written.
         ///
         /// Kotlin has no conditional compilation, so the generated function
@@ -83,6 +100,35 @@ pub enum JniPayload {
     },
 }
 
+/// A Kotlin type as the public function spells it, and how a value of it
+/// reaches the native method.
+#[derive(Clone, Debug)]
+pub enum KotlinType {
+    /// Spelled the same on both sides and passed as it is: a scalar, or a data
+    /// class the native method reads through the JVM.
+    Value(String),
+    /// A handle class. The native method takes and returns the address as a
+    /// `Long`; the public function unwraps one and wraps the other.
+    Handle(String),
+}
+
+impl KotlinType {
+    /// What the public function declares.
+    pub fn public(&self) -> &str {
+        match self {
+            KotlinType::Value(kotlin) | KotlinType::Handle(kotlin) => kotlin,
+        }
+    }
+
+    /// What the native method declares.
+    pub fn native(&self) -> &str {
+        match self {
+            KotlinType::Value(kotlin) => kotlin,
+            KotlinType::Handle(_) => "Long",
+        }
+    }
+}
+
 /// The JNI target.
 ///
 /// It carries the Kotlin class declared for each Rust type, because a Kotlin
@@ -91,23 +137,30 @@ pub enum JniPayload {
 /// is written. Renaming a class in the declarations therefore moves it in the
 /// declaration and in every signature mentioning it.
 pub struct JniTarget {
-    /// Rust type key → fully qualified Kotlin class.
-    classes: std::collections::BTreeMap<String, String>,
+    /// Rust type key → fully qualified Kotlin class, and whether it is a
+    /// handle class rather than a data class.
+    classes: std::collections::BTreeMap<String, (String, bool)>,
 }
 
 impl JniTarget {
-    pub(crate) fn new(classes: std::collections::BTreeMap<String, String>) -> Self {
+    pub(crate) fn new(classes: std::collections::BTreeMap<String, (String, bool)>) -> Self {
         JniTarget { classes }
     }
 
     /// The Kotlin spelling of a value: the class its type was declared as, or
     /// the scalar's Kotlin type.
-    fn kotlin_type(&self, ty: &TypeRef) -> Option<String> {
+    fn kotlin_type(&self, ty: &TypeRef) -> Option<KotlinType> {
         match named(ty) {
-            Some(name) => self.classes.get(&name).cloned(),
+            Some(name) => {
+                let (class, handle) = self.classes.get(&name).cloned()?;
+                Some(match handle {
+                    true => KotlinType::Handle(class),
+                    false => KotlinType::Value(class),
+                })
+            }
             None => scalar_of(ty)
                 .and_then(jvm_scalar)
-                .map(|(_, kotlin, _)| kotlin.to_string()),
+                .map(|(_, kotlin, _)| KotlinType::Value(kotlin.to_string())),
         }
     }
 }
@@ -201,7 +254,7 @@ impl Target for JniTarget {
     fn select(&self, query: &SelectionQuery<'_, JniPolicy>) -> TargetSupport<RelationId> {
         let want_struct = match query.policy {
             JniPolicy::DataClass { .. } => true,
-            JniPolicy::Scalar | JniPolicy::Function { .. } => false,
+            JniPolicy::Scalar | JniPolicy::PtrClass { .. } | JniPolicy::Function { .. } => false,
             JniPolicy::Unimplemented { declarator } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.jni.{declarator}"),
@@ -233,10 +286,33 @@ impl Target for JniTarget {
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        _policy: &JniPolicy,
+        policy: &JniPolicy,
     ) -> TargetSupport<ReprSpec<JniPayload>> {
-        match shape.relation {
-            Relation::Atomic => {
+        match (shape.relation, policy) {
+            // The address of a boxed source value as a `jlong`: JNI's wire is
+            // 64 bits whatever the platform's pointer is. Both directions and
+            // the release are the registry's standard operations; the adapter
+            // states only the carrier.
+            (Relation::Atomic, JniPolicy::PtrClass { .. }) => {
+                let carrier = WireType::abi(syn::parse_quote!(jni::sys::jlong));
+                let ty = shape.crossing.ty.clone();
+                Ok(TargetAttempt::Ready(match shape.crossing.direction {
+                    Direction::IntoRust => ReprSpec {
+                        layout: Layout::Scalar(carrier.clone()),
+                        protocol: Protocol::terminal(PrimitiveSpec::from_raw(
+                            carrier.clone(),
+                            ty.clone(),
+                        )),
+                        release: Some(PrimitiveSpec::release(carrier, ty)),
+                    },
+                    Direction::OutOfRust => ReprSpec {
+                        layout: Layout::Scalar(carrier.clone()),
+                        protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
+                        release: None,
+                    },
+                }))
+            }
+            (Relation::Atomic, _) => {
                 let Some((carrier, _, _)) = scalar_of(&shape.crossing.ty).and_then(jvm_scalar)
                 else {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
@@ -251,9 +327,10 @@ impl Target for JniTarget {
                     protocol: Protocol::terminal(PrimitiveSpec::identity(OperationType::Carrier(
                         carrier,
                     ))),
+                    release: None,
                 }))
             }
-            Relation::Struct(strukt) => {
+            (Relation::Struct(strukt), _) => {
                 if shape.crossing.direction != Direction::IntoRust {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.jni.object_output",
@@ -341,6 +418,7 @@ impl Target for JniTarget {
                 Ok(TargetAttempt::Ready(ReprSpec {
                     layout: Layout::Scalar(object),
                     protocol: Protocol::Product { projections },
+                    release: None,
                 }))
             }
         }
@@ -352,12 +430,15 @@ impl Target for JniTarget {
         values: &ResolvedValues<'_, JniPayload>,
         policy: &JniPolicy,
     ) -> TargetSupport<BoundarySpec<JniPayload>> {
-        let symbol = match policy {
-            JniPolicy::Function { symbol, .. } => symbol,
+        // A handle's release is a site with no source function, placed where
+        // its declaration said.
+        let symbol = match (policy, site.function) {
+            (JniPolicy::Function { symbol, .. }, Some(_)) => symbol,
+            (JniPolicy::PtrClass { symbol, .. }, None) => symbol,
             // A class member reaches here when every value it takes has a
             // carrier; the member itself is still a declarator v2 does not
             // lower, and says so where the report can group it.
-            JniPolicy::Unimplemented { declarator } => {
+            (JniPolicy::Unimplemented { declarator }, _) => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.jni.{declarator}"),
                     format!(
@@ -367,48 +448,72 @@ impl Target for JniTarget {
                     ),
                 )));
             }
-            JniPolicy::Scalar | JniPolicy::DataClass { .. } => {
+            _ => {
                 return Err(PlanningError::InvalidInput(format!(
-                    "`{}` is exported under a policy that is not a function policy",
+                    "`{}` is exported under a policy that does not fit this site",
                     site.declaration.rust_origin
                 )));
             }
         };
         // The two parameters the JVM adds are named around the source's: a
         // source parameter called `env` keeps its name, and the environment
-        // steps aside.
+        // steps aside. A release calls nothing on the JVM, so the environment
+        // it is handed goes unused — and is named so.
         let mut params = vec![
             NativeParam {
-                name: free_name("env", site.function),
+                name: match site.function {
+                    Some(function) => free_name("env", function),
+                    None => format_ident!("_env"),
+                },
                 ty: WireType::abi(syn::parse_quote!(jni::JNIEnv<'_>)),
                 role: ParamRole::Context("jni.env".to_string()),
-                mutable: true,
+                mutable: site.function.is_some(),
             },
             // The native method is an instance method of the harness `object`,
             // so what the JVM passes here is the singleton, not a class.
             NativeParam {
-                name: free_name("_this", site.function),
+                name: match site.function {
+                    Some(function) => free_name("_this", function),
+                    None => format_ident!("_this"),
+                },
                 ty: WireType::abi(syn::parse_quote!(jni::objects::JObject<'_>)),
                 role: ParamRole::Unused,
                 mutable: false,
             },
         ];
-        // A native parameter keeps the source parameter's name, as v1's do.
+        // A native parameter keeps the source parameter's name, as v1's do. A
+        // release has no source parameter to take a name from, and takes v1's.
         params.extend(
             values
                 .inputs
                 .iter()
-                .zip(&site.function.params)
                 .enumerate()
-                .map(|(index, (value, param))| NativeParam {
-                    name: param.name.clone(),
+                .map(|(index, value)| NativeParam {
+                    name: match site.function {
+                        Some(function) => function.params[index].name.clone(),
+                        None => format_ident!("ptr"),
+                    },
                     ty: value.repr.layout.wire().clone(),
                     role: ParamRole::Input(index),
                     mutable: false,
                 }),
         );
+        let env = || {
+            OperandSpec::context(
+                "jni.env",
+                OperationType::Carrier(WireType::internal(syn::parse_quote!(jni::JNIEnv<'_>))),
+                Access::Exclusive,
+            )
+        };
         let jni_error =
             || OperationType::Carrier(WireType::internal(syn::parse_quote!(jni::errors::Error)));
+        // Zero is not a result: it is what a native method must return while an
+        // exception is pending, and Kotlin observes the exception. A wrapper
+        // that returns nothing terminates with nothing.
+        let terminate = || match values.output {
+            Some(_) => Terminal::Return(syn::parse_quote!(0)),
+            None => Terminal::Return(syn::parse_quote!(())),
+        };
         Ok(TargetAttempt::Ready(BoundarySpec {
             abi: AbiSpec {
                 abi: "system".to_string(),
@@ -422,34 +527,40 @@ impl Target for JniTarget {
                 Some(_) => OutputPlacement::Return,
                 None => OutputPlacement::Void,
             },
-            failures: vec![FailureRoute {
-                category: FailureCategory::Runtime,
-                report: Some(PrimitiveSpec {
-                    operands: vec![
-                        OperandSpec::context(
-                            "jni.env",
-                            OperationType::Carrier(WireType::internal(syn::parse_quote!(
-                                jni::JNIEnv<'_>
-                            ))),
-                            Access::Exclusive,
-                        ),
-                        OperandSpec::error(jni_error()),
-                    ],
-                    result: None,
-                    failure: PrimitiveFailure::fallible(jni_error(), FailureCategory::Runtime),
-                    dependencies: vec![Artifact::new(REPORT_ERROR, report_jni_error())],
-                    implementation: Operation::Target(JniPayload::ReportError),
-                }),
-                on_report_failure: Terminal::Abort,
-                // Zero is not a result: it is what a native method must return
-                // while an exception is pending, and Kotlin observes the
-                // exception. A wrapper that returns nothing terminates with
-                // nothing.
-                terminate: match values.output {
-                    Some(_) => Terminal::Return(syn::parse_quote!(0)),
-                    None => Terminal::Return(syn::parse_quote!(())),
+            failures: vec![
+                // A runtime failure: a JVM call that failed.
+                FailureRoute {
+                    category: FailureCategory::Runtime,
+                    report: Some(PrimitiveSpec {
+                        operands: vec![env(), OperandSpec::error(jni_error())],
+                        result: None,
+                        failure: PrimitiveFailure::fallible(jni_error(), FailureCategory::Runtime),
+                        dependencies: vec![Artifact::new(REPORT_ERROR, report_jni_error())],
+                        implementation: Operation::Target(JniPayload::ReportError),
+                    }),
+                    on_report_failure: Terminal::Abort,
+                    terminate: terminate(),
                 },
-            }],
+                // A binding failure: the caller broke the contract — a null
+                // handle — and the message says how.
+                FailureRoute {
+                    category: FailureCategory::Binding,
+                    report: Some(PrimitiveSpec {
+                        operands: vec![
+                            env(),
+                            OperandSpec::error(OperationType::Carrier(WireType::internal(
+                                syn::parse_quote!(String),
+                            ))),
+                        ],
+                        result: None,
+                        failure: PrimitiveFailure::fallible(jni_error(), FailureCategory::Runtime),
+                        dependencies: Vec::new(),
+                        implementation: Operation::Target(JniPayload::ThrowMessage),
+                    }),
+                    on_report_failure: Terminal::Abort,
+                    terminate: terminate(),
+                },
+            ],
         }))
     }
 
@@ -458,7 +569,38 @@ impl Target for JniTarget {
         request: &SurfaceRequest<'_, JniPolicy>,
         values: &ResolvedValues<'_, JniPayload>,
     ) -> TargetSupport<SurfaceSpec<JniPayload>> {
+        // A handle class is declared the same way whatever the item behind it:
+        // an alias, or a struct whose fields the JVM never sees.
+        if let JniPolicy::PtrClass { class, native, .. } = request.policy {
+            let (package, class) = match class.rsplit_once('.') {
+                Some((package, class)) => (package.to_string(), class.to_string()),
+                None => (String::new(), class.clone()),
+            };
+            return Ok(TargetAttempt::Ready(SurfaceSpec {
+                declaration: request.declaration.id.clone(),
+                requires: Vec::new(),
+                // What crosses is a `jlong`, and the release wrapper is Rust
+                // the registry renders: nothing to contribute.
+                rust: Vec::new(),
+                payload: Some(JniPayload::Handle {
+                    package: package.clone(),
+                    class: class.clone(),
+                    release: Box::new(JniPayload::Method {
+                        package,
+                        method: String::new(),
+                        native: native.clone(),
+                        params: vec![("ptr".to_string(), KotlinType::Handle(class))],
+                        ret: KotlinType::Value("Unit".to_string()),
+                        conditions: request.item_conditions(),
+                    }),
+                }),
+            }));
+        }
         match request.item {
+            SourceItem::Extern(opaque) => Err(PlanningError::InvalidInput(format!(
+                "`{}` is an opaque declaration under a policy that reads fields",
+                opaque.name
+            ))),
             SourceItem::Function(function) => {
                 let JniPolicy::Function {
                     package,
@@ -483,7 +625,7 @@ impl Target for JniTarget {
                     params.push((kotlin_ident(&param.name), kotlin));
                 }
                 let ret = match values.output {
-                    None => "Unit".to_string(),
+                    None => KotlinType::Value("Unit".to_string()),
                     Some(value) => match self.kotlin_type(&value.crossing.ty) {
                         Some(kotlin) => kotlin,
                         None => {
@@ -496,11 +638,12 @@ impl Target for JniTarget {
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     declaration: request.declaration.id.clone(),
-                    // A method taking a declared class is unusable unless the
-                    // class it names is emitted too.
+                    // A method taking or returning a declared class is
+                    // unusable unless the class it names is emitted too.
                     requires: values
                         .inputs
                         .iter()
+                        .chain(values.output.iter())
                         .filter_map(|value| named(&value.crossing.ty))
                         .map(|name| DeclarationId::new(DeclarationKind::Type, name))
                         .collect(),
@@ -602,7 +745,11 @@ impl Target for JniTarget {
                 let report = format_ident!("{REPORT_ERROR}");
                 quote!(#report(&mut #env, #error))
             }
-            JniPayload::Class { .. } | JniPayload::Method { .. } => {
+            JniPayload::ThrowMessage => {
+                let (env, error) = (&operands[0], &operands[1]);
+                quote!(#env.throw_new("java/lang/IllegalStateException", #error))
+            }
+            JniPayload::Class { .. } | JniPayload::Method { .. } | JniPayload::Handle { .. } => {
                 unreachable!("a Kotlin declaration is not an operation")
             }
         }

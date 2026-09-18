@@ -227,6 +227,7 @@ concrete contributions stay separate throughout planning and writing:
 | Target [representation](05-represent.md#represent-and-compose-values) | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
 | `PrimitiveSpec.implementation` | Common `StandardOp::ReadMember` plus member identity | `JniPayload::Getter` plus getter name and descriptor | Adapter selects operation; registry retains it. |
 | One primitive's rendered operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
+| A handle's operations | `Box::into_raw(Box::new(v3)) as *mut Ledger`; `NonNull::new(ledger as *mut source::Ledger)…` | The same, cast to and from `jlong` | Common Rust operation renderer: these spell a source type, which only the registry may. |
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
 | Source construction and call | `source::Stamp { ... }`, then `stamp_sum` | Same source instructions | Registry plans; common Rust writer renders. |
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
@@ -246,12 +247,15 @@ not need another handwritten struct converter or wrapper-assembly algorithm.
 
 The rendered output of each contribution above appears in the element paths: the
 [C wrapper and header][fn_emit_c], the [Kotlin object and JNI wrapper][fn_emit_jni],
-the [C aggregate][struct_emit_c] and the [Kotlin data class][struct_emit_jni].
+the [C aggregate][struct_emit_c], the [Kotlin data class][struct_emit_jni], and
+the handle's [incomplete C type and release][typedef_emit_c] and
+[Kotlin class and release][typedef_emit_jni].
 
 ## Elements at this stage
 
 - [Function taking an owned struct][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
 - [Struct with scalar fields][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
+- [Type alias declaring an opaque handle][typedef_emit] · [C][typedef_emit_c] · [Kotlin/JNI][typedef_emit_jni]
 
 [fn_emit]: ../examples/fn/08-emit.md
 [fn_emit_c]: ../examples/fn/08-emit.c.md
@@ -259,3 +263,6 @@ the [C aggregate][struct_emit_c] and the [Kotlin data class][struct_emit_jni].
 [struct_emit]: ../examples/struct/08-emit.md
 [struct_emit_c]: ../examples/struct/08-emit.c.md
 [struct_emit_jni]: ../examples/struct/08-emit.jni.md
+[typedef_emit]: ../examples/typedef/08-emit.md
+[typedef_emit_c]: ../examples/typedef/08-emit.c.md
+[typedef_emit_jni]: ../examples/typedef/08-emit.jni.md

@@ -66,11 +66,27 @@ impl CbindgenBuilder {
             );
         }
 
+        // Opaque handles: `<c_name> *` to a Rust-owned value, freed through
+        // the typed destructor the manglers name.
+        for key in sorted(self.opaque.keys()) {
+            let c_name = self.c_type_name(key);
+            let policy = requests.policy(CPolicy::OpaquePtr {
+                c_name: c_name.clone(),
+                release: self.destructor_symbol(key).to_string(),
+            });
+            requests
+                .type_policies
+                .insert(key.as_str().to_string(), policy);
+            requests.output(
+                Declaration::new(DeclarationKind::Type, key.as_str(), c_name, "opaque_ptr").local(),
+                policy,
+            );
+        }
+
         // Every other declarator is accounted for and refused by name. A
         // declared type need not be a captured item: `String` crosses as an
         // opaque handle in perftest-c and the source never exported it.
         for (keys, declarator) in [
-            (sorted(self.opaque.keys()), "opaque_ptr"),
             (sorted(self.value_opaque.keys()), "value_opaque"),
             (sorted(self.enums.keys()), "enum_type"),
             (sorted(self.tagged_unions.keys()), "tagged_union"),

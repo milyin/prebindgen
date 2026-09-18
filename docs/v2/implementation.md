@@ -95,9 +95,12 @@ The initial implementation should demonstrate the architecture with both existin
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
 5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
 
-Steps 2 and 3 are exactly the two element paths specified in this document: the
-[function path][fn] is the scalar function and its owned struct argument, and the
-[struct path][struct] is the named-field struct behind it.
+Steps 2 and 3 are exactly the first two element paths specified in this
+document: the [function path][fn] is the scalar function and its owned struct
+argument, and the [struct path][struct] is the named-field struct behind it.
+The [handle path][typedef] is the first piece of the resource-bearing work the
+list below defers, taken in its narrowest form: an owned handle, out and back,
+with its release.
 
 Do not implement every proposed enum variant before the scalar case runs. Constructor/projector conversions, `Result`, resource-bearing handles, sequences and callbacks can be added incrementally through the same descriptions and registry algorithms. Full inputs remain accepted throughout that work.
 
@@ -127,8 +130,8 @@ A capability involving JNI is complete only when the existing Kotlin covertest e
 ## The first increment, as built
 
 The planning half of steps 2 and 3 above is implemented in
-`prebindgen-registry-v2`, over the two element paths this document specifies:
-both are planned, assembled and emitted, for both targets. What step 2 also asks
+`prebindgen-registry-v2`, over the three element paths this document specifies:
+all are planned, assembled and emitted, for both targets. What step 2 also asks
 for — executing the binding through both language boundaries — is met on the C
 side and not on the JNI side, where the evidence is that the generated Rust
 compiles against the real `jni` crate and that the Kotlin says what this document
@@ -171,7 +174,8 @@ wrappers out of [the emit pages][fn_emit] themselves, item by item, so a chapter
 and the engine cannot drift apart quietly, and read the Kotlin in order and
 without duplicates. One test calls the generated C entry point, on a function
 whose result changes if the two fields arrive in the wrong order — addition
-would not notice. The existing examples are further evidence: unchanged, built
+would not notice. Another opens a handle, closes it and reads the total back,
+releases a second one unread, and releases a null. The existing examples are further evidence: unchanged, built
 with `PREBINDGEN_PIPELINE=v2`, every one of their declarations reaches the engine
 and comes back with an outcome — the data classes and functions within this
 increment emitted, everything else skipped under the capability it waits for.
@@ -181,7 +185,9 @@ They check conversion sharing and field overrides, temporary-name collisions,
 propagation from an unsupported field to its struct and callers, and public
 declaration dependencies. They also check that a function is skipped when an
 operation has no error route or needs a runtime context the boundary cannot
-supply. Contradictory configuration must instead produce a generation error.
+supply; that a handle is carried both ways and released under its type's
+identity, while a null one arriving where it is consumed needs a route; and
+that a handle nobody can release skips the type and what takes it. Contradictory configuration must instead produce a generation error.
 These tests establish planner behavior; C/JNI runtime tests are still needed to
 establish the behavior of the resulting foreign interface.
 
@@ -248,13 +254,27 @@ establish the behavior of the resulting foreign interface.
    registry binds the two at assembly. A conversion asking for a context its
    boundary does not supply is a reported skip, not a fragment reaching for a
    variable its caller happens to have.
+7. **Handles without a resource contract.** An opaque value crosses as an
+   address through three more standard operations — `IntoRaw`, `FromRaw`,
+   `Release` — which are the registry's because they spell a source type. The
+   adapter states the carrier the address is cast to and, on the into-Rust
+   representation, that a release exists; naming one is what tells the
+   registry the type is a handle, whether the item behind it is an alias or a
+   struct whose fields the target never reads. The registry then requires the
+   out-of-Rust direction too and plans the release as a wrapper under the
+   type's own identity, through `boundary` with no source function. A null
+   address taken back is a `Binding` failure carrying a `String`, routed like
+   any other; a null address released is a no-op. What keeps this sound
+   without `ResourceContract` is the shape of the three wrappers, stated in
+   [the handle's representation cell][typedef_represent]: nothing acquires a
+   resource that a later failing operation could leak.
 
 ### What it does not settle
 
 The contracts designed for these are on [the extensions page](extensions.md);
 this list says what the increment left open and why.
 
-- **The target interface's parameter types** are real for these two paths —
+- **The target interface's parameter types** are real for these three paths —
   `SelectionQuery`, `ResolvedShape`, `ChildValue` (the chapters' `ValueDescriptor`),
   `ResolvedValues`, `SiteDescriptor`, `SurfaceRequest` — and untested by a third
   target or a deferred capability.
@@ -269,10 +289,11 @@ this list says what the increment left open and why.
   the struct's fields and the atomic conversion.
 - **Optional values** and everything that goes with them — `Layout::Slots`,
   `SlotRole`, `GuardId`, `AbsenceEncoding` — are not implemented.
-- **Validity and resource contracts** are absent from `PrimitiveSpec`. Every
-  operation in this increment produces an independent value and acquires nothing,
-  which is why the omission is safe; the first borrowing or handle-bearing
-  operation is what has to add them, and cannot be written without them.
+- **Validity and resource contracts** are absent from `PrimitiveSpec`. The one
+  resource-bearing operation set — the owned handle — is safe without them by
+  construction, as [the extensions page](extensions.md#runtime-resources)
+  argues; a borrowed handle, an optional handle or a retained callback is what
+  has to add them, and cannot be written without them.
 - **A wrapper's form** is the writer's, except what `AbiSpec` lets a target
   state: the convention, the symbol, the parameters and return, attributes
   beyond `#[no_mangle]`, and `unsafe`. A target reached other than by an
@@ -328,5 +349,7 @@ Earlier feasibility work inspected registry relations and composition and Flat e
 Future resource, recursive and runtime capabilities require implementations and tests; until then, affected requests remain unsupported. Background: [#689](https://github.com/milyin/prebindgen/issues/689) / [#701](https://github.com/milyin/prebindgen/issues/701); earlier plans: [#713](https://github.com/milyin/prebindgen/issues/713) / [#717](https://github.com/milyin/prebindgen/issues/717).
 
 [fn]: examples/fn/README.md
+[typedef]: examples/typedef/README.md
+[typedef_represent]: examples/typedef/05-represent.md
 [fn_emit]: examples/fn/08-emit.md
 [struct]: examples/struct/README.md

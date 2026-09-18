@@ -6,15 +6,19 @@
 
 The appendix follows one small Rust library through the generator. This page
 defines that library so that every example starts from the same input. It has
-two items: a struct named `Stamp` and a function named `stamp_sum` that accepts
-the struct. `Stamp` has named fields the generator can inspect; a tuple struct
-would not, and the source model declares one as an opaque type instead.
+five items: a struct named `Stamp`, a function named `stamp_sum` that accepts
+the struct, a type alias named `Ledger`, and two functions, `ledger_open` and
+`ledger_close`, that hand a `Ledger` out and take one back. `Stamp` has named
+fields the generator can inspect; a tuple struct would not, and the source
+model declares one as an opaque type instead.
 
-The two items let us follow a dependency as well as an individual function.
+The items let us follow a dependency as well as an individual function.
 Before generated code can call `stamp_sum`, it must obtain both field values
 from the foreign caller and construct a Rust `Stamp`. The struct example
-explains that [conversion](stages/04-select.md#select-conversion-relations); the function example uses it. Future examples will
-extend this same library with the items they need.
+explains that [conversion](stages/04-select.md#select-conversion-relations); the function example uses it. The alias
+example needs a way out and a way back in, which the two `ledger_*` functions
+give it. Future examples will extend this same library with the items they
+need.
 
 ```rust
 pub struct Stamp {
@@ -25,31 +29,49 @@ pub struct Stamp {
 pub fn stamp_sum(stamp: Stamp) -> i64 {
     stamp.secs.wrapping_add(stamp.nanos)
 }
+
+pub type Ledger = crate::ledger::Ledger;
+
+pub fn ledger_open(stamp: Stamp) -> Ledger {
+    crate::ledger::Ledger { total: stamp_sum(stamp) }
+}
+
+pub fn ledger_close(ledger: Ledger) -> i64 {
+    ledger.total
+}
 ```
 
-The capture examples show both items with a `#[prebindgen]` annotation.
+The capture examples show these items with a `#[prebindgen]` annotation.
 The annotation makes their source available to the generator; the original
 crate still owns and compiles the implementation. The function consumes its
 `Stamp` argument and returns one signed 64-bit integer. `wrapping_add` gives
 the example defined behavior even if the addition overflows.
+`crate::ledger::Ledger` lives in a module of the crate that marks nothing —
+its field is private to the crate — and the alias is how it gets a name in the
+flat API without exposing that.
 
-The binding configuration asks for two public outputs: the type `Stamp` and the
-function `stamp_sum`. These explicit requests are called roots, because the
+The binding configuration asks for three public types and functions as roots:
+the type `Stamp`, the function `stamp_sum`, and the handle `Ledger` with the
+two functions over it. These explicit requests are called roots, because the
 generator starts with them and discovers the supporting conversions they need.
 
 For C, the configuration chooses a struct passed by value and explicitly names
 it `Stamp`. The generated Rust entry point reads that C-compatible struct's
 members and builds the source crate's Rust struct. These are separate types
-even though they have the same name and fields.
+even though they have the same name and fields. `Ledger` becomes an incomplete
+C type: a caller holds a `Ledger *` to a Rust-owned value and frees it with
+`ledger_drop`.
 
 For Kotlin/JNI, the configuration chooses a data class named `example.Stamp`.
 JNI, the Java Native Interface, is how JVM code calls the Rust library. The native
 entry point receives a JVM object and reads its `secs` and `nanos` properties
-through getter methods. Both targets then call the same Rust function.
+through getter methods. `Ledger` becomes a class holding the address as a
+`Long`, freed through a native method on the harness object. Both targets then
+call the same Rust functions.
 
-The example does not involve an opaque handle (a reference to a Rust-owned
-object), a borrow, a callback, or an extra constructor function. Those features
-need their own examples before the appendix can specify their behavior.
+The example does not involve a borrow, a callback, or an extra constructor
+function. Those features need their own examples before the appendix can
+specify their behavior.
 
 The emitted examples call the source module as `source::`. In a real binding,
 C uses a configured `.source_module(...)` path or the source crate name.
@@ -68,7 +90,7 @@ they do not execute a JVM call.
 The general chapters sometimes use other functions to explain a feature, such
 as returning a struct instead of an integer. Those sketches are separate from
 this fixed appendix input. Follow the links below for the complete paths of
-the two items defined here.
+the items defined here.
 
 The paths specified so far:
 
@@ -76,6 +98,9 @@ The paths specified so far:
   and its signed 64-bit result.
 - [Struct with scalar fields][struct] — `Stamp`, its two `i64` fields and their
   conversions.
+- [Type alias declaring an opaque handle][typedef] — `Ledger`, the address it
+  crosses as in each direction, and the release that frees one.
 
 [fn]: examples/fn/README.md
 [struct]: examples/struct/README.md
+[typedef]: examples/typedef/README.md

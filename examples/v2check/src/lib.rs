@@ -14,6 +14,14 @@
 // in every generated path, which is `build.rs`'s `source_module`.
 pub mod source;
 
+/// What `source::Ledger` is an alias of: a type the source crate never marks,
+/// which is the reason the alias exists.
+pub(crate) mod ledger {
+    pub struct Ledger {
+        pub total: i64,
+    }
+}
+
 // The two generated files, at the crate root so `source::` resolves from them.
 include!(env!("V2CHECK_C"));
 include!(env!("V2CHECK_JNI"));
@@ -45,6 +53,26 @@ mod tests {
             nanos: 34,
         };
         crate::stamp_show(stamp);
+    }
+
+    /// A handle handed out by one entry point is taken back by another, or
+    /// released; a null one releases nothing.
+    ///
+    /// `Ledger` here is the generated incomplete type: a C caller holds a
+    /// pointer to one and can do nothing else with it. Passing a null handle to
+    /// `ledger_close` aborts the process, which a test cannot observe and the
+    /// specification states instead.
+    #[test]
+    fn the_c_handle_round_trips_and_releases() {
+        let ledger = crate::ledger_open(crate::Stamp {
+            secs: 12,
+            nanos: 34,
+        });
+        assert!(!ledger.is_null());
+        assert_eq!(crate::ledger_close(ledger), 46);
+        let ledger = crate::ledger_open(crate::Stamp { secs: 1, nanos: 2 });
+        crate::ledger_drop(ledger);
+        crate::ledger_drop(std::ptr::null_mut());
     }
 
     /// A field written under a condition nothing could answer reaches every
@@ -117,8 +145,10 @@ mod tests {
             ("examples/struct/08-emit.c.md", &c),
             ("examples/fn/08-emit.c.md", &c),
             ("examples/fn/08-emit.jni.md", &jni),
+            ("examples/typedef/08-emit.c.md", &c),
+            ("examples/typedef/08-emit.jni.md", &jni),
         ] {
-            let expected = fence(page, "rust");
+            let expected = fences(page, "rust");
             let generated = items(generated);
             for item in items(&expected) {
                 assert!(
@@ -143,9 +173,10 @@ mod tests {
         for page in [
             "examples/struct/08-emit.jni.md",
             "examples/fn/08-emit.jni.md",
+            "examples/typedef/08-emit.jni.md",
         ] {
             let mut next = 0;
-            for line in fence(page, "kotlin").lines() {
+            for line in fences(page, "kotlin").lines() {
                 let line = line.trim();
                 if line.is_empty() {
                     continue;
@@ -165,6 +196,7 @@ mod tests {
         for once in [
             "package example",
             "public data class Stamp(val secs: Long, val nanos: Long)",
+            "public class Ledger(ptr: Long) {",
             "internal object JNINative {",
         ] {
             assert_eq!(
@@ -174,12 +206,16 @@ mod tests {
             );
         }
         // Every native method lives in that one object, and each has the
-        // function a caller uses.
+        // function a caller uses — which is where a handle becomes a class.
         for method in [
             "external fun stampSum(stamp: Stamp): Long",
             "external fun stampDelta(stamp: Stamp): Long",
             "public fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)",
             "public fun stampDelta(stamp: Stamp): Long = JNINative.stampDelta(stamp)",
+            "external fun freeLedger(ptr: Long)",
+            "external fun ledgerOpen(stamp: Stamp): Long",
+            "public fun ledgerOpen(stamp: Stamp): Ledger = Ledger(JNINative.ledgerOpen(stamp))",
+            "public fun ledgerClose(ledger: Ledger): Long = JNINative.ledgerClose(ledger.take())",
         ] {
             assert_eq!(
                 emitted.iter().filter(|line| **line == method).count(),
@@ -198,9 +234,10 @@ mod tests {
     /// property to promise.
     #[test]
     fn both_targets_report_every_declaration_as_emitted() {
-        // The struct, the three functions over it and `stamp_ratio`, plus
-        // `Sample` and `sample_total` for C.
-        for (target, emitted) in [("c", 7), ("jni", 5)] {
+        // The struct, the three functions over it and `stamp_ratio`, the
+        // handle and the two functions over it, plus `Sample` and
+        // `sample_total` for C.
+        for (target, emitted) in [("c", 10), ("jni", 8)] {
             let report = report(target);
             assert_eq!(
                 report.matches("\"outcome\": \"emitted\"").count(),
@@ -213,9 +250,10 @@ mod tests {
     /// Every declaration a target could not generate is reported as skipped,
     /// with the capability that would unblock it.
     ///
-    /// Each is declared deliberately: a struct whose field has no carrier, one
-    /// the model lowers to an opaque declaration, one with no fields at all,
-    /// and — for JNI only — `Sample`, whose field is written under a condition.
+    /// Each is declared deliberately: a struct whose field has no carrier, a
+    /// tuple struct — which the model declares opaque, so an aggregate finds no
+    /// fields to read it through — one with no fields at all, and — for JNI
+    /// only — `Sample`, whose field is written under a condition.
     /// An adapter that quietly emitted any of them would produce an empty
     /// `repr(C)` aggregate crossing an `extern "C"` boundary, a Kotlin data
     /// class with no properties, or a data class promising a property the
@@ -223,7 +261,7 @@ mod tests {
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, declaration, capability) in [
-            ("c", "type:Pair", "unsupported.type.not_a_struct"),
+            ("c", "type:Pair", "unsupported.c.no_relation"),
             ("c", "type:Marker", "unsupported.c.empty_aggregate"),
             ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
             ("jni", "type:Reading", "unsupported.jni.carrier"),
@@ -327,28 +365,34 @@ mod tests {
         .expect("the report")
     }
 
-    /// The first fenced block of `language` on a specification page.
-    fn fence(page: &str, language: &str) -> String {
+    /// Every fenced block of `language` on a specification page, concatenated.
+    fn fences(page: &str, language: &str) -> String {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../docs/v2")
             .join(page);
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         let opening = format!("```{language}");
-        let mut block = String::new();
+        let mut blocks = String::new();
         let mut inside = false;
         for line in text.lines() {
             if inside {
                 if line.trim_end() == "```" {
-                    return block;
+                    inside = false;
+                } else {
+                    blocks.push_str(line);
+                    blocks.push('\n');
                 }
-                block.push_str(line);
-                block.push('\n');
-            } else if line.trim_end() == opening && block.is_empty() {
+            } else if line.trim_end() == opening {
                 inside = true;
             }
         }
-        panic!("{} has no ```{language} block", path.display());
+        assert!(
+            !blocks.is_empty(),
+            "{} has no ```{language} block",
+            path.display()
+        );
+        blocks
     }
 
     /// The items of a Rust file, as normalized token text, with imports left

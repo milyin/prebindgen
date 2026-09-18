@@ -2,10 +2,17 @@
 //!
 //! The engine renders Rust only; what Kotlin a binding needs is the JNI
 //! adapter's to say, and it says it here from the payloads its declarations
-//! carried through planning — a `data class` per emitted struct, one `external
-//! fun` per emitted function on the harness object, and a public function
-//! calling each. Rendering goes through `kotlin-codegen`, as v1's does, so the
-//! output is validated Kotlin and lands in the same generator-owned tree.
+//! carried through planning — a `data class` per emitted struct, a handle
+//! class per emitted opaque type, one `external fun` per emitted function on
+//! the harness object, and a public function calling each. Rendering goes
+//! through `kotlin-codegen`, as v1's does, so the output is validated Kotlin
+//! and lands in the same generator-owned tree.
+//!
+//! A handle crosses the native boundary as a `Long`. The public function is
+//! where it becomes a class: an address handed out is wrapped, and one taken
+//! back is taken out of its wrapper, which forgets it — so the wrapper's
+//! `free()` afterwards releases nothing, and a second use raises the binding
+//! failure the native side reports for a null address.
 
 use std::{
     collections::BTreeMap,
@@ -18,7 +25,7 @@ use kotlin_codegen::{
 };
 use prebindgen_registry_v2::Generation;
 
-use super::target::JniPayload;
+use super::target::{JniPayload, KotlinType};
 use crate::jni::Declarations;
 
 /// Write one file per package under `kotlin_root`, and return the paths.
@@ -69,30 +76,20 @@ pub(super) fn write(
                 ret,
                 conditions,
             }) => {
-                let signature = |mut function: KtFun| {
-                    for (name, ty) in params {
-                        function = function.param(KtParam::new(name, KtType::cls(ty)));
-                    }
-                    function.returns(KtType::cls(ret))
-                };
-                // The native method, on the harness.
-                natives.push(
-                    signature(KtFun::new(native))
-                        .annotation("JvmSynthetic")
-                        .external()
-                        .into(),
-                );
+                natives.push(native_method(native, params, ret));
                 // The function a caller uses, delegating to it. The harness is
                 // named in full only from another package.
                 let harness = match *package == harness_package {
                     true => harness.as_str(),
                     false => harness_fqn.as_str(),
                 };
-                let args: Vec<&str> = params.iter().map(|(name, _)| name.as_str()).collect();
-                let call = format!("{harness}.{native}({})", args.join(", "));
-                let mut public = signature(KtFun::new(method))
-                    .vis(KtVis::Public)
-                    .expr_body(KtCode::new().line(call));
+                let mut public = KtFun::new(method).vis(KtVis::Public);
+                for (name, ty) in params {
+                    public = public.param(KtParam::new(name, KtType::cls(ty.public())));
+                }
+                public = public
+                    .returns(KtType::cls(ret.public()))
+                    .expr_body(KtCode::new().line(call(harness, native, params, ret, package)));
                 // Kotlin has no conditional compilation, so a function whose
                 // source was written under a condition is declared here
                 // whatever that condition says, and the symbol behind it is
@@ -120,6 +117,52 @@ pub(super) fn write(
                     ));
                 }
                 file(package, &mut files).decls.push(public.into());
+            }
+            Some(JniPayload::Handle {
+                package,
+                class,
+                release,
+            }) => {
+                let JniPayload::Method {
+                    native,
+                    params,
+                    ret,
+                    ..
+                } = &**release
+                else {
+                    unreachable!("a handle's release is a native method");
+                };
+                natives.push(native_method(native, params, ret));
+                let harness = match *package == harness_package {
+                    true => harness.as_str(),
+                    false => harness_fqn.as_str(),
+                };
+                // The address is private, and leaves the class exactly once:
+                // through `take()`, which the public functions call for a
+                // handle they consume and `free()` calls for one they do not.
+                // What is taken is forgotten, so a freed or consumed handle
+                // holds zero, and zero is what the native side refuses.
+                let declaration = KtClass::class_(class)
+                    .vis(KtVis::Public)
+                    .ctor_param(KtCtorParam::new("ptr", KtType::cls("Long")))
+                    .member(KtDecl::Raw {
+                        name: "ptr".to_string(),
+                        code: KtCode::new().line("private var ptr: Long = ptr"),
+                    })
+                    .member(KtDecl::Raw {
+                        name: "take".to_string(),
+                        code: KtCode::new().lines(
+                            "internal fun take(): Long {\n    val taken = ptr\n    ptr = 0L\n    \
+                             return taken\n}",
+                        ),
+                    })
+                    .member(
+                        KtFun::new("free")
+                            .vis(KtVis::Public)
+                            .returns(KtType::cls("Unit"))
+                            .expr_body(KtCode::new().line(format!("{harness}.{native}(take())"))),
+                    );
+                file(package, &mut files).decls.push(declaration.into());
             }
             _ => {}
         }
@@ -150,6 +193,50 @@ pub(super) fn write(
         return Ok(Vec::new());
     }
     write_files(&files, kotlin_root)
+}
+
+/// The native method on the harness: every parameter and the result as the
+/// JVM passes them, a handle as its `Long`.
+fn native_method(native: &str, params: &[(String, KotlinType)], ret: &KotlinType) -> KtDecl {
+    let mut function = KtFun::new(native);
+    for (name, ty) in params {
+        function = function.param(KtParam::new(name, KtType::cls(ty.native())));
+    }
+    function
+        .returns(KtType::cls(ret.native()))
+        .annotation("JvmSynthetic")
+        .external()
+        .into()
+}
+
+/// The call a public function makes: a handle argument is taken out of its
+/// class, and a handle result is wrapped in one — named in full only from
+/// another package.
+fn call(
+    harness: &str,
+    native: &str,
+    params: &[(String, KotlinType)],
+    ret: &KotlinType,
+    package: &str,
+) -> String {
+    let args: Vec<String> = params
+        .iter()
+        .map(|(name, ty)| match ty {
+            KotlinType::Value(_) => name.clone(),
+            KotlinType::Handle(_) => format!("{name}.take()"),
+        })
+        .collect();
+    let call = format!("{harness}.{native}({})", args.join(", "));
+    match ret {
+        KotlinType::Value(_) => call,
+        KotlinType::Handle(class) => {
+            let class = match class.rsplit_once('.') {
+                Some((declared_in, short)) if declared_in == package => short,
+                _ => class.as_str(),
+            };
+            format!("{class}({call})")
+        }
+    }
 }
 
 /// A data class property: `val name: Type`.

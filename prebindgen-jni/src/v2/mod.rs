@@ -39,8 +39,11 @@ impl Declarations {
             .unwrap_or_else(|| syn::parse_quote!(crate));
         let classes = self
             .types
-            .keys()
-            .filter_map(|key| Some((key.as_str().to_string(), self.kotlin_fqn(key)?)))
+            .iter()
+            .filter_map(|(key, config)| {
+                let handle = matches!(config.kind, crate::jni::DeclaredKind::Ptr(_));
+                Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
+            })
             .collect();
         let requests = self.requests(&flat, source_module);
         generate(flat, &JniTarget::new(classes), requests, declaring_crate)
@@ -94,6 +97,17 @@ impl Declarations {
                 crate::jni::DeclaredKind::Data => JniPolicy::DataClass {
                     class: placement.clone(),
                 },
+                // The release is a native method on the harness like any
+                // other, named after the class: `freeLedger`.
+                crate::jni::DeclaredKind::Ptr(_) => {
+                    let short = placement.rsplit('.').next().unwrap_or_default();
+                    let native = self.mangle_jni_method(&format!("free{short}"));
+                    JniPolicy::PtrClass {
+                        class: placement.clone(),
+                        symbol: self.native_method_symbol(&native),
+                        native,
+                    }
+                }
                 _ => JniPolicy::Unimplemented { declarator },
             });
             requests

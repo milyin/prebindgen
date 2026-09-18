@@ -89,6 +89,15 @@ A complete binding function coordinates value plans: convert inputs, call the
 source once, convert its result and handle failures. Future resource-bearing
 conversions will also require cleanup on every relevant exit path.
 
+One exported function has no source function behind it: the release of an
+opaque handle. Its `SiteDescriptor` names the handle type's declaration and no
+callee, its one native parameter carries what the handle's consuming
+conversion reads, and its body applies the release operation that conversion's
+[representation](05-represent.md#represent-and-compose-values) declared, then delivers nothing. The target answers `boundary`
+for it under the type's [policy](03-requests.md#what-policy-means) — a symbol for C, a native method for Kotlin —
+and the registry assembles and checks it exactly as it does a call, minus the
+call. [The handle path][typedef_boundary] shows one.
+
 **Delivery** specifies where converted values go. A conversion producing a struct can be reused whether the enclosing function returns that struct, writes it through output parameters, or passes it to a declared callback. The conversion itself need not contain a second version for each destination.
 
 ```rust
@@ -176,6 +185,7 @@ C and JNI retain configured calling conventions. Unsupported result destinations
 ## Elements at this stage
 
 - [Function taking an owned struct][fn_boundary] · [C][fn_boundary_c] · [Kotlin/JNI][fn_boundary_jni]
+- [Type alias declaring an opaque handle][typedef_boundary] · [C][typedef_boundary_c] · [Kotlin/JNI][typedef_boundary_jni]
 
 The struct path has no cell here: [its conversion][struct_represent] is reached
 through the function that uses it.
@@ -184,3 +194,6 @@ through the function that uses it.
 [fn_boundary_c]: ../examples/fn/06-boundary.c.md
 [fn_boundary_jni]: ../examples/fn/06-boundary.jni.md
 [struct_represent]: ../examples/struct/05-represent.md
+[typedef_boundary]: ../examples/typedef/06-boundary.md
+[typedef_boundary_c]: ../examples/typedef/06-boundary.c.md
+[typedef_boundary_jni]: ../examples/typedef/06-boundary.jni.md

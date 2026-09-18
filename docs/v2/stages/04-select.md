@@ -4,8 +4,9 @@
 
 # Select conversion relations
 
-Status: implemented for what the two element paths need, which is a value
-carried whole or a struct read through its fields. The constructor and projector
+Status: implemented for what the three element paths need, which is a value
+carried whole — a scalar, or an opaque handle — or a struct read through its
+fields. The constructor and projector
 relations, and the rules that would pin one, are
 [described but not built](../extensions.md#constructor-and-projector-relations).
 
@@ -453,6 +454,7 @@ and the conversion rules that would pin one, and a target's
 
 - [Function taking an owned struct][fn_select] · [C][fn_select_c] · [Kotlin/JNI][fn_select_jni]
 - [Struct with scalar fields][struct_select] · [C][struct_select_c] · [Kotlin/JNI][struct_select_jni]
+- [Type alias declaring an opaque handle][typedef_select] · [C][typedef_select_c] · [Kotlin/JNI][typedef_select_jni]
 
 [fn_select]: ../examples/fn/04-select.md
 [fn_select_c]: ../examples/fn/04-select.c.md
@@ -460,3 +462,6 @@ and the conversion rules that would pin one, and a target's
 [struct_select]: ../examples/struct/04-select.md
 [struct_select_c]: ../examples/struct/04-select.c.md
 [struct_select_jni]: ../examples/struct/04-select.jni.md
+[typedef_select]: ../examples/typedef/04-select.md
+[typedef_select_c]: ../examples/typedef/04-select.c.md
+[typedef_select_jni]: ../examples/typedef/04-select.jni.md

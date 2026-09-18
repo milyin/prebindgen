@@ -12,11 +12,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Layout,
-    NativeParam, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
-    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, ResolvedShape,
-    ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest,
-    SurfaceSpec, Target, TargetAttempt, TargetSupport, Unsupported, WireType,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
+    FailureCategory, FailureRoute, Layout, NativeParam, OperandSpec, Operation, OperationType,
+    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
+    RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor,
+    SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport,
+    Terminal, Unsupported, WireType,
 };
 use quote::{format_ident, quote};
 
@@ -28,11 +29,14 @@ pub enum CPolicy {
     Scalar,
     /// A `repr(C)` aggregate passed by value, under this C name.
     DataStruct { c_name: String },
+    /// An opaque handle: C holds a `<c_name> *` to a Rust-owned value and
+    /// frees it through the `release` symbol.
+    OpaquePtr { c_name: String, release: String },
     /// A source function to expose: the wrapper around it carries this symbol.
     Function { symbol: String },
-    /// A declaration v1 lowers and v2 does not yet: an opaque handle, an enum,
-    /// a value-opaque type, a tagged union. Carries the declarator's name so
-    /// the refusal says which capability is missing.
+    /// A declaration v1 lowers and v2 does not yet: an enum, a value-opaque
+    /// type, a tagged union. Carries the declarator's name so the refusal says
+    /// which capability is missing.
     Unimplemented { declarator: &'static str },
 }
 
@@ -84,7 +88,7 @@ impl Target for CTarget {
         // refused here, before anything under it is planned.
         let want_struct = match query.policy {
             CPolicy::DataStruct { .. } => true,
-            CPolicy::Scalar | CPolicy::Function { .. } => false,
+            CPolicy::Scalar | CPolicy::OpaquePtr { .. } | CPolicy::Function { .. } => false,
             CPolicy::Unimplemented { declarator } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
@@ -118,8 +122,32 @@ impl Target for CTarget {
         children: &[ChildValue<'_>],
         policy: &CPolicy,
     ) -> TargetSupport<ReprSpec<CPayload>> {
-        match shape.relation {
-            Relation::Atomic => {
+        match (shape.relation, policy) {
+            // The address of a boxed source value, cast to a pointer to the
+            // incomplete C type this adapter declares. Both directions and the
+            // release are the registry's standard operations; the adapter
+            // states only the carrier.
+            (Relation::Atomic, CPolicy::OpaquePtr { c_name, .. }) => {
+                let ident = format_ident!("{c_name}");
+                let carrier = WireType::abi(syn::parse_quote!(*mut #ident));
+                let ty = shape.crossing.ty.clone();
+                Ok(TargetAttempt::Ready(match shape.crossing.direction {
+                    Direction::IntoRust => ReprSpec {
+                        layout: Layout::Scalar(carrier.clone()),
+                        protocol: Protocol::terminal(PrimitiveSpec::from_raw(
+                            carrier.clone(),
+                            ty.clone(),
+                        )),
+                        release: Some(PrimitiveSpec::release(carrier, ty)),
+                    },
+                    Direction::OutOfRust => ReprSpec {
+                        layout: Layout::Scalar(carrier.clone()),
+                        protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
+                        release: None,
+                    },
+                }))
+            }
+            (Relation::Atomic, _) => {
                 let Some(carrier) = scalar_of(&shape.crossing.ty).and_then(c_scalar) else {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.c.carrier",
@@ -134,9 +162,10 @@ impl Target for CTarget {
                     protocol: Protocol::terminal(PrimitiveSpec::identity(OperationType::Carrier(
                         carrier,
                     ))),
+                    release: None,
                 }))
             }
-            Relation::Struct(strukt) => {
+            (Relation::Struct(strukt), _) => {
                 let CPolicy::DataStruct { c_name } = policy else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is planned through its fields under a policy that carries it whole",
@@ -197,6 +226,7 @@ impl Target for CTarget {
                         members,
                     },
                     protocol: Protocol::Product { projections },
+                    release: None,
                 }))
             }
         }
@@ -208,9 +238,12 @@ impl Target for CTarget {
         values: &ResolvedValues<'_, CPayload>,
         policy: &CPolicy,
     ) -> TargetSupport<BoundarySpec<CPayload>> {
-        let symbol = match policy {
-            CPolicy::Function { symbol } => symbol,
-            CPolicy::Unimplemented { declarator } => {
+        // A handle's release is a site with no source function, exported under
+        // the destructor symbol its declaration named.
+        let symbol = match (policy, site.function) {
+            (CPolicy::Function { symbol }, Some(_)) => symbol,
+            (CPolicy::OpaquePtr { release, .. }, None) => release,
+            (CPolicy::Unimplemented { declarator }, _) => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
                     format!(
@@ -220,22 +253,25 @@ impl Target for CTarget {
                     ),
                 )));
             }
-            CPolicy::Scalar | CPolicy::DataStruct { .. } => {
+            _ => {
                 return Err(PlanningError::InvalidInput(format!(
-                    "`{}` is exported under a policy that is not a function policy",
+                    "`{}` is exported under a policy that does not fit this site",
                     site.declaration.rust_origin
                 )));
             }
         };
         // A C parameter keeps the source parameter's name: that is what the
-        // header shows, and what v1 shows.
+        // header shows, and what v1 shows. A release has no source parameter
+        // to take a name from, and takes v1's.
         let params = values
             .inputs
             .iter()
-            .zip(&site.function.params)
             .enumerate()
-            .map(|(index, (value, param))| NativeParam {
-                name: param.name.clone(),
+            .map(|(index, value)| NativeParam {
+                name: match site.function {
+                    Some(function) => function.params[index].name.clone(),
+                    None => format_ident!("this_"),
+                },
                 ty: value.repr.layout.wire().clone(),
                 role: ParamRole::Input(index),
                 mutable: false,
@@ -254,10 +290,17 @@ impl Target for CTarget {
                 Some(_) => OutputPlacement::Return,
                 None => OutputPlacement::Void,
             },
-            // Nothing here can fail: a member read is infallible and a scalar
-            // crosses unchanged. A fallible conversion would need a route, and
-            // the function would be skipped until this list has one.
-            failures: Vec::new(),
+            // A member read is infallible and a scalar crosses unchanged; the
+            // one thing that can fail is a handle arriving null, and C has no
+            // exception to raise. The process stops, as it does under v1's
+            // `.panic()`. A runtime failure has no route, and a function that
+            // could raise one is skipped until it does.
+            failures: vec![FailureRoute {
+                category: FailureCategory::Binding,
+                report: None,
+                on_report_failure: Terminal::Abort,
+                terminate: Terminal::Abort,
+            }],
         }))
     }
 
@@ -266,14 +309,43 @@ impl Target for CTarget {
         request: &SurfaceRequest<'_, CPolicy>,
         values: &ResolvedValues<'_, CPayload>,
     ) -> TargetSupport<SurfaceSpec<CPayload>> {
+        // An opaque handle is declared the same way whatever the item behind
+        // it: an alias, or a struct whose fields C never sees.
+        if let CPolicy::OpaquePtr { c_name, .. } = request.policy {
+            let ident = format_ident!("{c_name}");
+            return Ok(TargetAttempt::Ready(SurfaceSpec {
+                declaration: request.declaration.id.clone(),
+                requires: Vec::new(),
+                // A struct whose only member is a zero-length array is what
+                // `cbindgen` renders as an incomplete type: a C caller can
+                // hold a pointer to one and nothing else. The same declaration
+                // v1 emits, case lint included.
+                rust: vec![Artifact::new(
+                    c_name.clone(),
+                    quote! {
+                        #[repr(C)]
+                        #[allow(non_camel_case_types)]
+                        pub struct #ident {
+                            _private: [u8; 0],
+                        }
+                    },
+                )],
+                payload: None,
+            }));
+        }
         match request.item {
+            SourceItem::Extern(opaque) => Err(PlanningError::InvalidInput(format!(
+                "`{}` is an opaque declaration under a policy that reads fields",
+                opaque.name
+            ))),
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
                 declaration: request.declaration.id.clone(),
-                // A wrapper taking an aggregate is unusable unless the public
-                // type it names is emitted too.
+                // A wrapper taking or returning a declared type is unusable
+                // unless the public type it names is emitted too.
                 requires: values
                     .inputs
                     .iter()
+                    .chain(values.output.iter())
                     .filter_map(|value| named(&value.crossing.ty))
                     .map(|name| DeclarationId::new(DeclarationKind::Type, name))
                     .collect(),
