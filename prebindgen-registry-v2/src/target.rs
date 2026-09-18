@@ -825,16 +825,17 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// Which wrapper [`Target::boundary`] is being asked about.
+/// The first argument of [`Target::boundary`]: which wrapper the call is about.
 ///
-/// The registry builds one wrapper per exported function, and asks the target
-/// to shape each: symbol, calling convention, native parameters, failure
-/// routes. That question needs three inputs — which source function the
-/// wrapper exports, what values it converts, and how the binding configured
-/// it — and this is the first: the declaration that requested the export, and
-/// the source function the wrapper calls. The other two are the `values`
-/// ([`ResolvedValues`]) and `policy` arguments beside it; the answer is a
-/// [`BoundarySpec`].
+/// For every wrapper it builds, the registry calls
+/// `target.boundary(&site, &values, &policy)` once, and the target returns
+/// the wrapper's shape — symbol, calling convention, native parameters,
+/// failure routes — as a [`BoundarySpec`], wrapped in [`TargetSupport`]: a
+/// spec, a reason the target cannot shape this one, or an error. `site` is
+/// this type and says which source function the wrapper exports: the
+/// declaration that requested the export, and the function itself. `values`
+/// is the [`ResolvedValues`] the wrapper converts, `policy` the binding's
+/// configuration for it.
 ///
 /// A target uses it to tell wrappers apart. The declaration says which
 /// export this is, for the names in its refusals and errors; the source
