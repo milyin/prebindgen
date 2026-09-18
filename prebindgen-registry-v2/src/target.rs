@@ -829,11 +829,12 @@ impl<P> ResolvedValues<'_, P> {
 ///
 /// The registry builds one wrapper per exported function, and asks the target
 /// to shape each: symbol, calling convention, native parameters, failure
-/// routes. That question needs three inputs — what the wrapper is for, what
-/// values it converts, and how the binding configured it — and this is the
-/// first: the declaration that requested the export, and the source function
-/// the wrapper calls. The other two are the `values` ([`ResolvedValues`]) and
-/// `policy` arguments beside it; the answer is a [`BoundarySpec`].
+/// routes. That question needs three inputs — which source function the
+/// wrapper exports, what values it converts, and how the binding configured
+/// it — and this is the first: the declaration that requested the export, and
+/// the source function the wrapper calls. The other two are the `values`
+/// ([`ResolvedValues`]) and `policy` arguments beside it; the answer is a
+/// [`BoundarySpec`].
 ///
 /// A target uses it to tell wrappers apart. The declaration says which
 /// export this is, for the names in its refusals and errors; the source
