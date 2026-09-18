@@ -30,9 +30,11 @@
 //!   function**, or **wrapper**, is the Rust function the registry generates
 //!   around it: one the target's calling interface can reach, which converts
 //!   what arrives, calls the source function once, and converts what it
-//!   returns. How it is reachable is the target's answer in [`AbiSpec`] — for
-//!   C and JNI today, an `extern` function under an exported symbol. A binding
-//!   exports only wrappers.
+//!   returns. Today the writer gives every wrapper one form — an `extern`
+//!   function under a `#[no_mangle]` symbol — and the target chooses only the
+//!   calling convention and the symbol, in [`AbiSpec`]; a target reached
+//!   another way needs the payload the specification sketches for `AbiSpec`
+//!   and the engine does not have. A binding exports only wrappers.
 //! - **Native** is JNI's word, used in JNI's sense on both targets: the
 //!   compiled side that C or the JVM calls *into*, which is always the
 //!   generated Rust. A native function is the wrapper; a native parameter is
@@ -524,9 +526,19 @@ pub struct NativeParam {
 
 /// The native interface of one exported function: how the wrapper the
 /// registry generates around a source function is reached from the target's
-/// side. For both targets today that is an `extern` function under a symbol
-/// the foreign side links against; a target reached another way would state
-/// that here.
+/// side.
+///
+/// The writer renders every wrapper in one form,
+/// `#[no_mangle] pub extern "<abi>" fn <symbol>(<params>) -> <ret>`, and this
+/// is the part of it the target decides: the calling convention string, the
+/// symbol, and the native parameters and return. The attributes, the
+/// visibility and the absence of `unsafe` are the writer's, and a target
+/// cannot change them. That fits C and JNI as v2 emits them; a target reached
+/// another way — through an attribute macro, a registration table, an
+/// `unsafe` signature, another linkage attribute — needs the payload
+/// `docs/v2` sketches for this type and the engine does not have (see the
+/// extensions page, *Wrapper form*). V1's JNI writer is the first known
+/// consumer: its wrapper is `#[allow(..)] pub unsafe extern "C"`.
 #[derive(Clone, Debug)]
 pub struct AbiSpec {
     /// The `extern` string: `"C"`, `"system"`.
