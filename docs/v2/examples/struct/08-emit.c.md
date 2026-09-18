@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/08-emit.md) · [Common cell][struct_emit] · [Element path][struct]
 Owner: the common Rust writer, then `cbindgen`
 
-# Record with scalar fields — Emit bindings — C
+# Struct with scalar fields — Emit bindings — C
 
 ## Input
 

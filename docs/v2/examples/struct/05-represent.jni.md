@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/05-represent.md) · [Common cell][struct_represent] · [Element path][struct]
 Owner: the registry; the JNI adapter describes the object [carrier](../../stages/05-represent.md#describing-target-values-and-operations) and its getters
 
-# Record with scalar fields — Represent and compose values — Kotlin/JNI
+# Struct with scalar fields — Represent and compose values — Kotlin/JNI
 
 ## Input
 

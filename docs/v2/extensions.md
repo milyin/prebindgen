@@ -5,7 +5,7 @@
 # Extension contracts
 
 Nothing on this page is built. The stage chapters describe what the engine does
-to the two element paths, a function taking an owned record and that record;
+to the two element paths, a function taking an owned struct and that struct;
 this page holds the contracts designed for what it does not do yet, gathered
 here so that a chapter reads as an account of the pipeline rather than as an
 account interleaved with its own future. Each section names the stage it
@@ -29,13 +29,13 @@ Extends [building the source model](stages/02-flat.md); used by
 
 The planned view-based API lets the registry read source through the same
 [views everything else uses](stages/02-flat.md#lookup-and-navigation) —
-`FunctionView::parameters`, `TypeView::as_record`, `RecordView::fields` — with no
+`FunctionView::parameters`, `TypeView::as_record`, `StructView::fields` — with no
 private channel of its own. Current V2 uses borrowed Flat records instead; the
 view names on this page describe the intended API, not callable APIs today.
 
 `ParameterView` and `FieldView` provide their exact `TypeView`s. Flat creates the
-views and keeps their constructors and storage indices private. A record view
-exposes structural fields only when Flat models them. Reaching a record through
+views and keeps their constructors and storage indices private. A struct view
+exposes structural fields only when Flat models them. Reaching a struct through
 `&Stamp` requires an explicit `referent()` step; that inspection does not itself
 implement a borrow conversion. Details of
 [storage and model checks](stages/02-flat.md#private-storage-and-model-consistency)
@@ -53,7 +53,7 @@ a [relation](stages/04-select.md#what-a-relation-is). No element path
 demonstrates a helper-based relation yet.
 
 The engine has two relations: the
-atomic one and a record's fields. Two more are designed, both with a source
+atomic one and a struct's fields. Two more are designed, both with a source
 function as the means of getting between the type and its parts. Under a
 **constructor**, `Stamp` is related to `(millis: i64)` by `stamp_from_millis`;
 under a **projector**, it is related to `StampParts` by an accessor
@@ -65,12 +65,12 @@ to extract another value. Those are binding roles, so relation construction
 belongs in the common registry library; Flat supplies the checked source facts
 used to validate them. The proposed API combines the planned Flat views with
 checked constructors for the three roles — and this proposed private
-`RecordRelation` replaces the public-field structure the chapter shows; it is
+`StructRelation` replaces the public-field structure the chapter shows; it is
 not a second implemented definition:
 
 ```rust
-impl RecordRelation {
-    pub fn new(record: RecordView) -> Self;
+impl StructRelation {
+    pub fn new(view: StructView) -> Self;
 }
 impl ConstructorRelation {
     pub fn new(function: FunctionView) -> Result<Self, RelationError>;
@@ -79,8 +79,8 @@ impl ProjectionRelation {
     pub fn new(function: FunctionView) -> Result<Self, RelationError>;
 }
 
-pub struct RecordRelation {
-    record: RecordView, // Derive subject and fields from the checked record.
+pub struct StructRelation {
+    view: StructView,   // Derive subject and fields from the checked struct view.
 }
 pub struct ConstructorRelation {
     function: FunctionView,      // Derive arguments from its signature.
@@ -103,9 +103,9 @@ subject and access requirements come from its input. Callers cannot pair an
 arbitrary subject with an unrelated operation. For
 `stamp_from_millis(i64) -> Stamp`, the constructor has one `i64` argument and
 produces `Stamp`, regardless of `Stamp`'s fields. For a helper
-`stamp_parts(&Stamp) -> StampParts`, where `StampParts` is a named record with
+`stamp_parts(&Stamp) -> StampParts`, where `StampParts` is a named struct with
 `secs: i64` and `nanos: i64` fields, projection requires a shared borrow and
-produces that record.
+produces that struct.
 
 `RelationError` reports a source function incompatible with the requested role.
 Validation establishes the role's internal consistency, not that every target
@@ -115,7 +115,7 @@ does not satisfy `&Stamp` without a supported temporary-and-borrow step. Default
 fallible construction interprets `Result::Ok` as the value and `Err` as failure;
 a different treatment requires an explicit conversion role.
 
-A record relation is implicit — the registry registers it for any record the
+A struct relation is implicit — the registry registers it for any struct the
 source model describes. A constructor or projector relation is explicit: it
 names a function, so a frontend declaration has to say which. That declaration,
 and the rule that pins the relation at a position, is the **conversion rule**
@@ -123,7 +123,7 @@ the chapter's `select` reads and that no build script can write yet:
 
 ```rust
 pub enum Relation {
-    Record(RecordRelation),
+    Struct(StructRelation),
     Construct(ConstructorRelation),
     Project(ProjectionRelation),
     // Later: checked atomic, optional, sequence, variant, Rust-to-Rust
@@ -247,7 +247,7 @@ operation cannot be written without this.
 `ResourceContract` describes obligations introduced or discharged by an
 operation, such as releasing a retained handle. It is separate from validity: a
 value can have a long enough lifetime and still leak if nobody releases it. The
-initial scalar/owned-record implementation relies on ordinary Rust destruction
+initial scalar/owned-struct implementation relies on ordinary Rust destruction
 for its owned locals and performs no additional handle acquisition requiring
 explicit cleanup.
 
@@ -316,7 +316,7 @@ enum Protocol {
 
 A **slot** is one value in a multi-value representation — for a `Stamp` passed
 to JNI as two separate arguments rather than an object, the layout is two slots,
-and a function taking two such records has four native arguments in all.
+and a function taking two such structs has four native arguments in all.
 `SlotRole` states a slot's meaning, independent of its generated name. `GuardId`
 refers to an activation condition on a slot — "always," "presence is true," or
 "variant tag selects this arm" — and is unrelated to the guard items of
@@ -330,12 +330,12 @@ A layout stays nested for as long as nesting is meaningful: an aggregate whose
 member is itself an aggregate is described that way, and only a place that
 requires a flat list of values — a native signature, where each slot becomes one
 ABI argument — flattens it, at that point, in that use. Keeping the nesting
-until then is what lets the same record representation be an argument in one
+until then is what lets the same struct representation be an argument in one
 function and a member of another.
 
 `ProductOps` in the design describes both member reads and a target
 construction operation over converted children. The implemented form has no
-target-construction operation, which is why a record leaving Rust is a reported
+target-construction operation, which is why a struct leaving Rust is a reported
 skip. A future C output could use a struct literal, while a future
 separate-arguments JNI form would map children to argument slots. For
 sequences, variants and callbacks, adapters supply runtime operations; the
@@ -344,7 +344,7 @@ registry supplies loops, branches and child calls.
 ## Optional values
 
 Extends [target representations](stages/05-represent.md#target-representations).
-Demonstrated, when built, by the record with an optional field.
+Demonstrated, when built, by the struct with an optional field.
 
 Nothing carries an optional value yet: `Layout::Slots`, `SlotRole`, `GuardId`
 and the encodings below are names. This section says what the slot has to hold.

@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/02-flat.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: Flat · Previous: [Capture source items][fn_source] · Next: [Record binding requests][fn_requests]
 
-# Function taking an owned record — Build and inspect the source model
+# Function taking an owned struct — Build and inspect the source model
 
 ## Input
 
@@ -43,7 +43,7 @@ that navigation as follows (with uninteresting branches abbreviated):
 ```rust
 let function = model.function("stamp_sum").unwrap();
 let TypeKind::Named { id, .. } = function.params[0].ty.kind() else { … };
-let Type::Struct(stamp) = model.resolve(id).unwrap() else { … };  // the record element
+let Type::Struct(stamp) = model.resolve(id).unwrap() else { … };  // the struct element
 assert!(matches!(function.ret.kind(), TypeKind::Scalar(ScalarKind::I64)));
 ```
 

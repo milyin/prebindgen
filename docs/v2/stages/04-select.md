@@ -5,11 +5,11 @@
 # Select conversion relations
 
 Status: implemented for what the two element paths need, which is a value
-carried whole or a record read through its fields. The constructor and projector
+carried whole or a struct read through its fields. The constructor and projector
 relations, and the rules that would pin one, are
 [described but not built](../extensions.md#constructor-and-projector-relations).
 
-The examples in this chapter use one small source crate — a record and a function
+The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
 
 ```rust
@@ -69,7 +69,7 @@ answering for its own language item by item. The third is the registry's alone.
   the configuration. Declared as a C struct or a Kotlin data class, `Stamp` is
   built from its fields. Declared as an opaque handle, it is carried whole and
   its fields are never read. So the registry lists what the source model offers
-  for the type — the fields, if the type is a record, and the whole value in any
+  for the type — the fields, if the type is a struct, and the whole value in any
   case — and the target names the one its configuration calls for. When the
   configuration calls for something V2 has no lowering for, such as one of the C
   declarators it does not implement yet, the target answers that instead of
@@ -102,7 +102,7 @@ plan(type, direction, position):
                                                       # meeting this mark again is a cycle
 
     parts    = the source model's parts of that relation
-                   # where that choice leads: the fields of a record, the
+                   # where that choice leads: the fields of a struct, the
                    # arguments of a constructor; nowhere at all for a scalar
     children = [ plan(part.type, direction, that part's position)
                  for part in parts ]
@@ -149,7 +149,7 @@ structs. The plan that results is still shared by identity, so two positions
 that resolve to the same key get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no
-work of their own. A record with a record field simply makes `plan` call itself
+work of their own. A struct with a struct field simply makes `plan` call itself
 again, and neither adapter learns anything about the nesting — which is the
 point. Planning `stamp_sum` selects this:
 
@@ -266,18 +266,18 @@ pub enum Relation {
     /// The whole value converted by one target operation: no parts, no
     /// recursion. An `i64`.
     Atomic,
-    /// The record's fields. `Stamp` is `secs` and `nanos`.
-    Record(RecordRelation),
+    /// The struct's fields. `Stamp` is `secs` and `nanos`.
+    Struct(StructRelation),
 }
 
-pub struct RecordRelation {
-    /// The record's declared name, which is how the writer finds its shape
+pub struct StructRelation {
+    /// The struct's declared name, which is how the writer finds its shape
     /// again when it renders a construction.
-    pub record: String,
+    pub name: String,
     pub parts: Vec<Part>,
 }
 
-/// One field of a record relation, or one argument of a constructor relation.
+/// One field of a struct relation, or one argument of a constructor relation.
 pub struct Part {
     pub name: Option<String>,  // `secs`; `None` for a positional field
     pub index: usize,
@@ -305,14 +305,14 @@ Flat stores no links between types — its references are names, resolved on
 lookup — so the graph is not a structure the model holds. The registry builds a
 type's outgoing edges on demand and keeps them for the run. `Run::candidates`
 registers them the first time a type is planned (the atomic relation for every
-type; the record one when the model resolves the name to a struct) and hands the
+type; the struct one when the model resolves the name to a struct) and hands the
 target the list as `(RelationId, Relation)` pairs. Registering once per type
 rather than once per visit is what makes the label stable: a fresh id on every
 visit would make every parallel edge unique, and nothing would ever share a
 node.
 
-The user does not register a relation for each scalar or field-based record.
-A **record relation** is implicit: for any record the source model describes,
+The user does not register a relation for each scalar or field-based struct.
+A **struct relation** is implicit: for any struct the source model describes,
 the registry registers the relation built from its fields, so `Stamp.fields`
 exists without anyone asking for it. A **scalar** has no parts at all — an
 `i64` is not built from anything — so its relation is the atomic one, the
@@ -331,7 +331,7 @@ is what travels, because the id is what the cache key compares.
 
 So `select` chooses from the edges leaving that type: the implicit relation,
 plus any explicit ones registered for it. Selection precedes child traversal,
-which is what lets an atomic opaque representation leave a record's private
+which is what lets an atomic opaque representation leave a struct's private
 fields uninspected. Child types retain wrappers, references and lifetimes;
 cloning needs an explicit operation.
 
@@ -411,7 +411,7 @@ Walking whatever it picked remains the registry's work.
 
 These views are read-only. The adapter can inspect direct child descriptors but
 cannot invoke the registry's recursive compiler or modify the registry's plan
-tables. Relations and representations that recur — a record read through its
+tables. Relations and representations that recur — a struct read through its
 members, a scalar carried unchanged — should be available to an adapter as
 ready-made descriptions it names rather than builds, so that a new target's
 first version is a handful of choices rather than a library. A target that
@@ -420,14 +420,14 @@ needs a conversion the selected relation's children do not give it has
 
 ## Responsibility boundary with Flat
 
-The relation vocabulary consumes what Flat knows about a function and a record.
+The relation vocabulary consumes what Flat knows about a function and a struct.
 The registry assigns conversion roles and validates them against a requested
 direction and exact type.
 
 | Flat provides | Registry adds |
 | --- | --- |
 | Function parameters and complete return type | Whether the function constructs a value or projects one from an input. |
-| Record shape and typed fields | Recursive field conversions and value construction/decomposition. |
+| Struct shape and typed fields | Recursive field conversions and value construction/decomposition. |
 | `Result` child types | Whether a selected constructor treats `Ok` as construction success and routes `Err` as failure. |
 | Exact reference/wrapper structure and source access facts | Temporary lifetimes, borrow use and ownership in the generated conversion. |
 | Stable snapshot association and normalized type keys | Conversion-cache identity including direction, selected relation and target policy. |
@@ -440,7 +440,7 @@ method; `ConstructorRelation::new(function)` belongs to the registry library.
 
 ## What is not settled here
 
-The atomic and record relations are implemented, and
+The atomic and struct relations are implemented, and
 [the first increment](../implementation.md#the-first-increment-as-built)
 records what building them settled. Everything else this chapter names — the
 [source views](../extensions.md#source-views) the registry would read through,
@@ -451,8 +451,8 @@ and the conversion rules that would pin one, and a target's
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_select] · [C][fn_select_c] · [Kotlin/JNI][fn_select_jni]
-- [Record with scalar fields][struct_select] · [C][struct_select_c] · [Kotlin/JNI][struct_select_jni]
+- [Function taking an owned struct][fn_select] · [C][fn_select_c] · [Kotlin/JNI][fn_select_jni]
+- [Struct with scalar fields][struct_select] · [C][struct_select_c] · [Kotlin/JNI][struct_select_jni]
 
 [fn_select]: ../examples/fn/04-select.md
 [fn_select_c]: ../examples/fn/04-select.c.md

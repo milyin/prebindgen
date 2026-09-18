@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/03-requests.md) · [Common cell][fn_requests] · [Element path][fn]
 Owner: the C frontend
 
-# Function taking an owned record — Record binding requests — C
+# Function taking an owned struct — Record binding requests — C
 
 ## Input
 
@@ -15,7 +15,7 @@ Cbindgen::builder()
     .declare(
         decls!()
             .data_type(
-                data_type!(Stamp).base_name("Stamp"),   // see the record path
+                data_type!(Stamp).base_name("Stamp"),   // see the struct path
             )
             .fun(fun!(stamp_sum)),
     )
@@ -54,7 +54,7 @@ policy (C function):
 - C is opt-in: a function nobody declares produces no request and has no
   [outcome](../../stages/07-retain.md#retain-supported-output). An
   *unselected* outcome is planned, not implemented.
-- Without the `Stamp` declaration, the frontend records no record [policy](../../stages/03-requests.md#what-policy-means).
+- Without the `Stamp` declaration, the frontend records no struct [policy](../../stages/03-requests.md#what-policy-means).
   Value planning then tries the default scalar policy and skips the function
   with `unsupported.c.carrier`. [Retention][fn_retain] preserves that skip;
   it does not first discover the missing [conversion](../../stages/04-select.md#select-conversion-relations).

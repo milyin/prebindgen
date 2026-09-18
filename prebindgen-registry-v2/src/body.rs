@@ -2,8 +2,8 @@
 //!
 //! The chapters leave this vocabulary named but undefined (`ConversionBodyId`,
 //! `FunctionBodyId`); this is the concrete form the first increment settles on.
-//! Three instructions cover the scalar and owned-record paths: apply a target
-//! operation, construct a source record, call the source function. Every value
+//! Three instructions cover the scalar and owned-struct paths: apply a target
+//! operation, construct a source struct, call the source function. Every value
 //! is a [`ValueId`] — an identity, not a name. Names are allocated once, by the
 //! writer, from definition order, which is why two operations rendered into one
 //! wrapper cannot collide.
@@ -33,11 +33,11 @@ pub enum Instr {
         operands: Vec<Operand>,
         result: Option<ValueId>,
     },
-    /// Build a source record from already-converted parts, in field order.
+    /// Build a source struct from already-converted parts, in field order.
     Construct {
-        /// The record's declared name; the writer takes its field shape from
-        /// the model, so a tuple record is constructed as one.
-        record: String,
+        /// The struct's declared name; the writer takes its field shape from
+        /// the model, so a tuple struct is constructed as one.
+        name: String,
         parts: Vec<ValueId>,
         result: ValueId,
     },
@@ -180,7 +180,7 @@ impl NodeBody {
                     }
                 }
                 Instr::Construct {
-                    record,
+                    name,
                     parts,
                     result,
                 } => {
@@ -188,7 +188,7 @@ impl NodeBody {
                     let fresh = out.fresh();
                     map.insert(*result, fresh);
                     Instr::Construct {
-                        record: record.clone(),
+                        name: name.clone(),
                         parts,
                         result: fresh,
                     }

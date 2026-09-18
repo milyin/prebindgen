@@ -7,7 +7,7 @@
 Status: implemented. Delivery is a native return or nothing: out-parameters,
 `Result` branches and declared sinks are variants the engine does not have yet.
 
-The examples in this chapter use one small source crate — a record and a function
+The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
 
 ```rust
@@ -41,7 +41,7 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ```
 
 Both entry points eventually call the same source function. Their input
-conversions use the same record-construction algorithm but different reads:
+conversions use the same struct-construction algorithm but different reads:
 C member access in one case, JNI getter calls in the other.
 
 The C function uses the C calling convention and receives a C-compatible struct.
@@ -80,7 +80,7 @@ skipped, with the reason recorded in its [outcome](07-retain.md#retain-supported
 the one the configuration asked for, because a caller compiled against the header
 or the Kotlin declaration would then be calling something else.
 
-Only exported callables reach this stage. A record has conversions but no
+Only exported callables reach this stage. A struct has conversions but no
 boundary of its own; it crosses inside the functions that use it.
 
 ## Assembling an exported function
@@ -89,7 +89,7 @@ A complete binding function coordinates value plans: convert inputs, call the
 source once, convert its result and handle failures. Future resource-bearing
 conversions will also require cleanup on every relevant exit path.
 
-**Delivery** specifies where converted values go. A conversion producing a record can be reused whether the enclosing function returns that record, writes it through output parameters, or passes it to a declared callback. The conversion itself need not contain a second version for each destination.
+**Delivery** specifies where converted values go. A conversion producing a struct can be reused whether the enclosing function returns that struct, writes it through output parameters, or passes it to a declared callback. The conversion itself need not contain a second version for each destination.
 
 ```rust
 struct BoundarySpec<Payload> {
@@ -175,9 +175,9 @@ C and JNI retain configured calling conventions. Unsupported result destinations
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_boundary] · [C][fn_boundary_c] · [Kotlin/JNI][fn_boundary_jni]
+- [Function taking an owned struct][fn_boundary] · [C][fn_boundary_c] · [Kotlin/JNI][fn_boundary_jni]
 
-The record path has no cell here: [its conversion][struct_represent] is reached
+The struct path has no cell here: [its conversion][struct_represent] is reached
 through the function that uses it.
 
 [fn_boundary]: ../examples/fn/06-boundary.md

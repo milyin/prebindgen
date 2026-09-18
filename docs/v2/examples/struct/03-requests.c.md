@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/03-requests.md) · [Common cell][struct_requests] · [Element path][struct]
 Owner: the C frontend
 
-# Record with scalar fields — Record binding requests — C
+# Struct with scalar fields — Record binding requests — C
 
 ## Input
 
@@ -30,7 +30,7 @@ default snake-case name. The following summarizes the intended representation;
 the planner obtains the member types from Flat in the next stage.
 
 ```text
-policy (C record):
+policy (C struct):
     representation: data_struct
     c_name:         "Stamp"                       // this example's name; the default base is `stamp`
     members:        secs: int64_t, nanos: int64_t // declaration order
@@ -49,7 +49,7 @@ policy (C record):
 - The C name is the frontend's, not the source's: a type's default base is the
   snake_case of its short name, so `Stamp` would reach C as `stamp` — which is
   why this declaration names it, and why the two names stay two things. The
-  aggregate's member identities are likewise distinct from the record's source
+  aggregate's member identities are likewise distinct from the struct's source
   field identities, even when both spell `secs`.
 
 [struct]: README.md

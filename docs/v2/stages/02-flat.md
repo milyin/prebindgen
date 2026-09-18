@@ -9,7 +9,7 @@ library, which both engines use to inspect [source items](01-source.md#capture-s
 [What V2 changes](#what-v2-changes) describes a planned API based on owned views;
 those views are not implemented yet. Current V2 uses the existing borrowed API.
 
-The examples in this chapter use one small source crate — a record and a function
+The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
 
 ```rust
@@ -194,7 +194,7 @@ the grammar cannot represent, Flat reports the enclosing item as unsupported.
 The language adapters therefore do not each need a Rust syntax parser.
 
 `Named` is the variant that holds a name — `Stamp`, plus any generic arguments
-written with it. The record it names is a separate element, and getting from one
+written with it. The struct it names is a separate element, and getting from one
 to the other is the lookup this chapter described earlier. Walking from the
 function to its parameter's fields is therefore four steps:
 
@@ -313,7 +313,7 @@ declaration is then the caller's job: take the name out of the reference, call
 `Flat::resolve`, keep the model in hand for the next hop.
 
 The proposed API replaces those borrows with **views**: `FunctionView`, `TypeView`,
-`RecordView`, `FieldView` — read-only handles that carry the model they came from
+`StructView`, `FieldView` — read-only handles that carry the model they came from
 rather than borrowing it. Three things follow.
 
 1. Navigation composes. `parameters().next().ty().as_record()` works because each
@@ -330,7 +330,7 @@ across every item kind, and the index behind a view stays private to Flat.
 
 ### Building and retaining a model
 
-A **snapshot** is one completed, immutable set of source records and lookup
+A **snapshot** is one completed, immutable set of source structs and lookup
 indices. A **local helper** is a Rust function whose signature the binding
 frontend declares instead of obtaining it from annotated-source captures. The
 frontend supplies that signature and its source module so Flat can describe the
@@ -404,20 +404,20 @@ pub struct TypeView {
     reading: Rc<TypeRef>, // Checked in this model; retained with its source context.
 }
 
-pub struct RecordView {
+pub struct StructView {
     ty: TypeView, // Exact type use, including applicable lifetime arguments.
-    index: RecordIndex, // Private, derived from that type's declaration in its model.
+    index: StructIndex, // Private, derived from that type's declaration in its model.
 }
 
 pub struct FieldView {
-    record: RecordView,
-    index: usize, // Private position validated against that record.
+    view: StructView,
+    index: usize, // Private position validated against that struct.
 }
 ```
 
-`ModelData` is Flat's immutable storage; `FunctionIndex` and `RecordIndex` are
-internal table positions. The shared storage identifies the snapshot. Flat derives a record index from
-the retained type in that snapshot when creating the record view.
+`ModelData` is Flat's immutable storage; `FunctionIndex` and `StructIndex` are
+internal table positions. The shared storage identifies the snapshot. Flat derives a struct index from
+the retained type in that snapshot when creating the struct view.
 
 Views can be cloned but do not expose constructors accepting indices, source
 records or model/type pairs. Accessors derive children from the retained parent.
@@ -520,7 +520,7 @@ A parameter index is not a globally unique source identifier.
 Constants and enum inspection should follow these conventions as their views
 are added, which needs no large shared trait: a generic item view
 supports enumeration and classification, while a function still exposes parameters,
-a record exposes fields, and an enum exposes variants.
+a struct exposes fields, and an enum exposes variants.
 
 ### Type readings and type views
 
@@ -545,7 +545,7 @@ impl TypeView {
     pub fn location(&self) -> &SourceLocation;
 
     pub fn declaration(&self) -> Option<TypeDeclView>;
-    pub fn as_record(&self) -> Option<RecordView>;
+    pub fn as_record(&self) -> Option<StructView>;
     pub fn referent(&self) -> Option<TypeView>;
     pub fn optional_inner(&self) -> Option<TypeView>;
     pub fn result_parts(&self) -> Option<(TypeView, TypeView)>;
@@ -557,7 +557,7 @@ impl TypeDeclView {
     pub fn ty(&self) -> TypeView;
 }
 
-impl RecordView {
+impl StructView {
     pub fn ty(&self) -> TypeView;
     pub fn shape(&self) -> FieldShape;
     pub fn fields(&self) -> impl Iterator<Item = FieldView>;
@@ -578,7 +578,7 @@ and internal indexing; planning APIs accept views instead of user-supplied keys.
 
 `declaration()` follows an exact named type to its declaration. It does not
 silently peel `Box`, `Cow`, references or optional values. `as_record()` returns
-a record only when the exact type is a structurally available record.
+a struct only when the exact type is a structurally available struct.
 `referent()` explicitly follows `&T` or `&mut T`; the original view retains the
 reference and its mutability. Equivalent explicit accessors are needed for the
 other supported type forms.
@@ -630,9 +630,9 @@ prove that the generated temporary or source borrow has the required lifetime.
 More complex constructors must check that all operand views share a snapshot.
 
 Inspection must preserve opaque declarations as opaque. Current Flat lowers
-tuple structs to `Extern` records — its record kind for a declaration whose
+tuple structs to `Extern` — its kind for a declaration whose
 fields it does not model — and does not lower those fields.
-Returning a `RecordView` for them would therefore need an additional source-model
+Returning a `StructView` for them would therefore need an additional source-model
 extension. The first views expose existing facts. Later structural extensions
 may represent additional fields, but must not make previously accepted opaque
 items fail because an unused field is outside the structural grammar.
@@ -645,14 +645,14 @@ or diagnosed before the registry claims support for construction or projection.
 
 ### A useful consumer without a registry
 
-A source-inspection tool can list the fields of a function's record parameter:
+A source-inspection tool can list the fields of a function's struct parameter:
 
 ```rust
 let function = model.function("normalize").ok_or("missing normalize")?;
 for parameter in function.parameters() {
     let ty = parameter.ty();
-    if let Some(record) = ty.as_record() {
-        for field in record.fields() {
+    if let Some(view) = ty.as_struct() {
+        for field in view.fields() {
             // Display source facts; this does not select a binding representation.
             println!("{}: {}", field.index(), field.ty().type_ref());
         }
@@ -662,7 +662,7 @@ for parameter in function.parameters() {
 
 For `normalize(stamp: Stamp)`, this reaches the `Stamp` fields. For a parameter
 of type `&Stamp`, the consumer explicitly calls `referent()` before asking for a
-record. A documentation tool might display that distinction, while the registry
+struct. A documentation tool might display that distinction, while the registry
 uses it when checking borrowing requirements.
 
 This path is the first acceptance example for the API. It should work with only
@@ -670,8 +670,8 @@ This path is the first acceptance example for the API. It should work with only
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_flat]
-- [Record with scalar fields][struct_flat]
+- [Function taking an owned struct][fn_flat]
+- [Struct with scalar fields][struct_flat]
 
 [fn_flat]: ../examples/fn/02-flat.md
 [struct_flat]: ../examples/struct/02-flat.md

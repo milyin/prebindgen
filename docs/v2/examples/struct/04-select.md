@@ -3,13 +3,13 @@
 [Stage chapter](../../stages/04-select.md) · [Element path][struct] · [Source crate](../../source.md)
 Owner: the registry, on the target adapter's selections · Previous: [Record binding requests][struct_requests] · Next: [Represent and compose values][struct_represent]
 
-# Record with scalar fields — Select conversion relations
+# Struct with scalar fields — Select conversion relations
 
 ## Input
 
 ```text
 Crossing { source: Stamp, direction: IntoRust }
-policy:   this target's record policy
+policy:   this target's struct policy
 offered:  [ Stamp.fields, atomic ]      // registered by the registry from Flat
 ```
 
@@ -22,16 +22,16 @@ Stamp, IntoRust
   +-- part 1  nanos: i64, IntoRust  ->  atomic
 ```
 
-The registry registers the record's two [relations](../../stages/04-select.md#what-a-relation-is)
+The registry registers the struct's two [relations](../../stages/04-select.md#what-a-relation-is)
 the first time `Stamp` is planned: the atomic one every type has, and
 `Stamp.fields`, built from the fields Flat reports. It offers both to the
 target with the [crossing](../../stages/03-requests.md#finding-an-existing-conversion-plan) and the [policy](../../stages/03-requests.md#what-policy-means),
-and the target names one. Under the record policies these pages use — a C
+and the target names one. Under the struct policies these pages use — a C
 `data_struct`, a Kotlin data class — the answer is `Stamp.fields`, and only
 then does the registry read the relation's parts and plan each: an `i64` has
 the atomic relation and nothing under it, so the tree ends there.
 
-Selection is the whole of this stage for a record. No
+Selection is the whole of this stage for a struct. No
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
 has been named and no read described; what is settled is that the
 [conversion](../../stages/04-select.md#select-conversion-relations) will be
@@ -46,12 +46,12 @@ pages show each target's reason for that answer.
   private and unsupported fields uninspected.
 - Parts come from the selected relation, so a constructor relation, when it
   exists, would give one `millis` argument instead of two fields. The current
-  engine offers atomic and record relations only.
+  engine offers atomic and struct relations only.
 - Part order is declaration order, and the next stage's reads are paired with
   parts in that order.
 - An unsupported part makes this conversion unsupported, which propagates to
-  [everything requiring the record][struct_retain] rather than producing a
-  record missing a field.
+  [everything requiring the struct][struct_retain] rather than producing a
+  struct missing a field.
 
 ## Language variants
 

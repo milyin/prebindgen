@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/05-represent.md) · [Common cell][fn_represent] · [Element path][fn]
 Owner: the registry, on the C adapter's [representation](../../stages/05-represent.md#represent-and-compose-values)
 
-# Function taking an owned record — Represent and compose values — C
+# Function taking an owned struct — Represent and compose values — C
 
 ## Input
 
@@ -29,11 +29,11 @@ node(output) representation: Scalar(c_i64)
 `Aggregate` means the native input is one struct containing the two members.
 `Scalar(c_i64)` means the output uses one signed 64-bit value. The names here
 summarize the plan rather than declare Rust types. `Independent` describes the
-fact that copied integers and the reconstructed record do not borrow the input;
+fact that copied integers and the reconstructed struct do not borrow the input;
 the full validity-contract API is future work.
 
-The registry combines the two field reads with Rust record construction.
-[The record's C page][struct_represent_c] explains those reads individually.
+The registry combines the two field reads with Rust struct construction.
+[The struct's C page][struct_represent_c] explains those reads individually.
 
 ## Checks
 

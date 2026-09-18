@@ -3,11 +3,11 @@
 [Stage chapter](../../stages/08-emit.md) · [Element path][struct] · [Source crate](../../source.md)
 Owner: the common Rust writer, then `cbindgen` or the Kotlin writer · Previous: [Retain supported output][struct_retain]
 
-# Record with scalar fields — Emit bindings
+# Struct with scalar fields — Emit bindings
 
 ## Input
 
-The frozen public declaration for this record:
+The frozen public declaration for this struct:
 
 ```text
 SurfaceSpec { declaration: "type:Stamp",
@@ -21,7 +21,7 @@ The generated declaration gives foreign callers a way to hold the two values.
 It does not itself contain the Rust
 [conversion](../../stages/04-select.md#select-conversion-relations). That work is
 inlined into the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
-of [the function that uses the record][fn_emit]. This distinction explains why
+of [the function that uses the struct][fn_emit]. This distinction explains why
 C needs a generated Rust ABI struct while Kotlin needs a JVM class:
 
 | Contribution | C | Kotlin/JNI |
@@ -36,7 +36,7 @@ Rendered: [C][struct_emit_c], [Kotlin/JNI][struct_emit_jni].
 
 - Both fields are emitted, in declaration order, with types matching the chosen
   [representation](../../stages/05-represent.md#represent-and-compose-values).
-- The member and property names match [the record's operations][struct_represent]:
+- The member and property names match [the struct's operations][struct_represent]:
   the adapter derives both declarations and reads from the same source fields.
 - A declaration is emitted only if it was retained; the writer adds nothing.
 

@@ -4,7 +4,7 @@
 
 # The vocabulary
 
-Start with a small Rust library. It exposes a record with two integer fields
+Start with a small Rust library. It exposes a struct with two integer fields
 and a function that adds them. The annotation tells prebindgen which items it
 may inspect when generating bindings:
 
@@ -115,7 +115,7 @@ See [A value's position in an exported function](stages/03-requests.md#a-values-
 ### Part
 
 A position inside a source value, such as the `secs` field of `Stamp`. Planning
-the record means planning each of its parts and then combining the results.
+the struct means planning each of its parts and then combining the results.
 When constructor relations are implemented, a constructor's arguments can
 serve as parts instead of fields. A part is therefore not necessarily a field
 in the wider design: it is one step from a value to a value it is made of,
@@ -139,15 +139,15 @@ See [Select conversion relations](stages/04-select.md#select-conversion-relation
 
 The exact source type paired with its direction of travel. The argument makes
 the crossing `Stamp` into Rust; the result makes the crossing `i64` out of
-Rust. Direction matters: constructing a Rust record is not the same operation
-as taking a returned record apart. The crossing identifies the problem, but
+Rust. Direction matters: constructing a Rust struct is not the same operation
+as taking a returned struct apart. The crossing identifies the problem, but
 the selected relation, policy and child plans are also needed to identify a
 reusable solution. See [Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
 
 ### Relation
 
 A link from one Rust type to the other Rust values it is constructed from or
-read into. `Stamp` has a record relation to its two fields: obtain two `i64`
+read into. `Stamp` has a struct relation to its two fields: obtain two `i64`
 values and construct `Stamp { secs, nanos }`. It links the type to both of them
 at once, so a relation is a bundle of edges rather than a single edge, and the
 edge to one of those values is a part. A scalar uses an atomic relation, the
@@ -168,7 +168,7 @@ See [What a relation is](stages/04-select.md#what-a-relation-is).
 The target adapter's description of the foreign-side values and the operations
 that access them. C uses a `repr(C)` struct whose members can be read directly.
 JNI uses a JVM object whose properties are read by getter calls. Both can serve
-the same source-side record relation, but need different access operations.
+the same source-side struct relation, but need different access operations.
 The adapter describes those operations; the registry combines them with the
 children's conversions. See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
 
@@ -195,7 +195,7 @@ See [Represent and compose values](stages/05-represent.md#represent-and-compose-
 
 A completed conversion plan stored for reuse. Its identity includes the
 crossing, selected relation, policy identity and child-plan identities. Those
-details explain why “same Rust type” is not enough for sharing: two records
+details explain why “same Rust type” is not enough for sharing: two structs
 whose fields need different conversions need different plans too. In the
 example, both `i64` fields can reuse one input node, applied once per field.
 

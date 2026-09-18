@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/05-represent.md) · [Common cell][struct_represent] · [Element path][struct]
 Owner: the registry; the C adapter describes the aggregate and its member reads
 
-# Record with scalar fields — Represent and compose values — C
+# Struct with scalar fields — Represent and compose values — C
 
 ## Input
 
@@ -57,7 +57,7 @@ stamp.secs
 
 ## Checks
 
-- The whole record [conversion](../../stages/04-select.md#select-conversion-relations) is infallible: reading a member cannot fail, and
+- The whole struct [conversion](../../stages/04-select.md#select-conversion-relations) is infallible: reading a member cannot fail, and
   the copied integer is independent of the aggregate afterwards.
 - `implementation` stores the operation and the member identity, not the string
   `stamp.secs`. The caller's value comes from the application, and the name from

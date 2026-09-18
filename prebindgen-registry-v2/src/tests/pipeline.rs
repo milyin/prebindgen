@@ -21,7 +21,7 @@ use crate::{
     },
 };
 
-/// Two records and three functions, one of which has a field nothing can carry.
+/// Two structs and three functions, one of which has a field nothing can carry.
 fn model() -> Flat {
     let location = prebindgen::SourceLocation {
         crate_name: Some("fixture".to_string()),
@@ -79,18 +79,18 @@ fn model() -> Flat {
 #[derive(Clone, Debug, PartialEq)]
 enum Policy {
     Scalar,
-    /// A record read through its members.
-    Record,
+    /// A struct read through its members.
+    Struct,
     /// The same, with member reads that can fail — which is what makes a
     /// boundary's failure routes observable.
-    FallibleRecord,
-    /// A record that converts, and whose public declaration this target
+    FallibleStruct,
+    /// A struct that converts, and whose public declaration this target
     /// refuses — which is what drives the retention loop rather than value
     /// planning.
-    RecordWithoutSurface,
-    /// A record whose public declaration requires another declaration's, so a
+    StructWithoutSurface,
+    /// A struct whose public declaration requires another declaration's, so a
     /// refusal has to travel two edges.
-    RecordRequiring(String),
+    StructRequiring(String),
     Function {
         symbol: String,
         routes: Routes,
@@ -102,10 +102,10 @@ enum Policy {
     /// does not read — an adapter defect the registry has to catch rather than
     /// emit.
     FunctionWithWrongInput,
-    /// A record whose public declaration is Rust the target contributes: a
-    /// mirror of the source record, one member per field. Only this policy
+    /// A struct whose public declaration is Rust the target contributes: a
+    /// mirror of the source struct, one member per field. Only this policy
     /// produces an artifact, so every other test's generated file is unchanged.
-    RecordWithMirror,
+    StructWithMirror,
 }
 
 /// What a boundary does about failures.
@@ -141,17 +141,17 @@ impl Target for Mini {
     type Payload = Payload;
 
     fn select(&self, query: &SelectionQuery<'_, Policy>) -> TargetSupport<RelationId> {
-        let want_record = matches!(
+        let want_struct = matches!(
             query.policy,
-            Policy::Record
-                | Policy::FallibleRecord
-                | Policy::RecordWithoutSurface
-                | Policy::RecordRequiring(_)
-                | Policy::RecordWithMirror
+            Policy::Struct
+                | Policy::FallibleStruct
+                | Policy::StructWithoutSurface
+                | Policy::StructRequiring(_)
+                | Policy::StructWithMirror
         );
         for (id, relation) in query.candidates {
-            match (relation, want_record) {
-                (Relation::Record(_), true) => return Ok(TargetAttempt::Ready(*id)),
+            match (relation, want_struct) {
+                (Relation::Struct(_), true) => return Ok(TargetAttempt::Ready(*id)),
                 (Relation::Atomic, false) => return Ok(TargetAttempt::Ready(*id)),
                 _ => {}
             }
@@ -186,11 +186,11 @@ impl Target for Mini {
                     ))),
                 }))
             }
-            Relation::Record(record) => {
-                let ident = quote::format_ident!("{}", record.record);
+            Relation::Struct(strukt) => {
+                let ident = quote::format_ident!("{}", strukt.name);
                 let aggregate = WireType::abi(syn::parse_quote!(#ident));
-                let item = shape.record.expect("a record relation carries its record");
-                let fallible = matches!(policy, Policy::FallibleRecord);
+                let item = shape.strukt.expect("a struct relation carries its strukt");
+                let fallible = matches!(policy, Policy::FallibleStruct);
                 let projections = item
                     .fields
                     .iter()
@@ -342,25 +342,25 @@ impl Target for Mini {
             .collect();
         if matches!(
             (request.policy, request.item),
-            (Policy::RecordWithoutSurface, SourceItem::Record(_))
+            (Policy::StructWithoutSurface, SourceItem::Struct(_))
         ) {
             return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                "unsupported.mini.no_public_record",
-                "this record converts, and has no public declaration here",
+                "unsupported.mini.no_public_struct",
+                "this struct converts, and has no public declaration here",
             )));
         }
-        // The mirror is what a real C target contributes: a record of its own,
+        // The mirror is what a real C target contributes: a struct of its own,
         // one member per source field, each under that field's condition.
         let rust = match (request.policy, request.item) {
-            (Policy::RecordWithMirror, SourceItem::Record(record)) => {
-                let ident = &record.name;
+            (Policy::StructWithMirror, SourceItem::Struct(strukt)) => {
+                let ident = &strukt.name;
                 let conditions = request.field_conditions();
-                let members = record.fields.iter().zip(&conditions).map(|(field, under)| {
+                let members = strukt.fields.iter().zip(&conditions).map(|(field, under)| {
                     let name = field.name.as_ref().expect("the fixture names its fields");
                     quote::quote!(#(#under)* pub #name: i64)
                 });
                 vec![crate::target::Artifact::new(
-                    record.name.to_string(),
+                    strukt.name.to_string(),
                     quote::quote!(#[repr(C)] pub struct #ident { #(#members),* }),
                 )]
             }
@@ -370,13 +370,13 @@ impl Target for Mini {
             declaration: request.declaration.id.clone(),
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
-                (Policy::RecordRequiring(other), SourceItem::Record(_)) => {
+                (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
                     vec![crate::decl::DeclarationId::new(
                         DeclarationKind::Type,
                         other,
                     )]
                 }
-                (_, SourceItem::Record(_)) => Vec::new(),
+                (_, SourceItem::Struct(_)) => Vec::new(),
             },
             rust,
             payload: None,
@@ -406,7 +406,7 @@ fn requests() -> BindingRequests<Policy> {
 }
 
 fn ty(origin: &str) -> Declaration {
-    Declaration::new(DeclarationKind::Type, origin, origin, "record")
+    Declaration::new(DeclarationKind::Type, origin, origin, "strukt")
 }
 
 fn function(origin: &str) -> Declaration {
@@ -423,23 +423,23 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .outcome
 }
 
-/// Two exported functions taking the same record the same way share its
+/// Two exported functions taking the same struct the same way share its
 /// conversion — and its two field conversions, and the result conversion.
 #[test]
 fn one_conversion_serves_every_value_that_crosses_the_same_way() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
     let max = requests.policy(exported("stamp_max", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
     requests.output(function("stamp_max"), max);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
     assert_eq!(generation.report().counts().emitted, 3);
     // `Stamp` into Rust, `i64` into Rust, `i64` out of Rust. Twice over, and
-    // once for the record's own request, is still three.
+    // once for the struct's own request, is still three.
     assert_eq!(generation.values().len(), 3);
     assert_eq!(generation.functions().len(), 2);
 }
@@ -450,9 +450,9 @@ fn one_conversion_serves_every_value_that_crosses_the_same_way() {
 #[test]
 fn a_site_override_does_not_share_the_default_conversion() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    let fallible = requests.policy(Policy::FallibleRecord);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    let fallible = requests.policy(Policy::FallibleStruct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
     let max = requests.policy(exported("stamp_max", Routes::Reported));
     requests.site_policies.insert(
@@ -462,7 +462,7 @@ fn a_site_override_does_not_share_the_default_conversion() {
         ),
         fallible,
     );
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
     requests.output(function("stamp_max"), max);
 
@@ -481,18 +481,18 @@ fn a_site_override_does_not_share_the_default_conversion() {
     assert!(generation.rust().contains("report(error)"));
 }
 
-/// One unsupported field takes down its record and everything requiring it, and
+/// One unsupported field takes down its struct and everything requiring it, and
 /// leaves everything else alone.
 #[test]
-fn an_unsupported_field_skips_its_record_and_its_callers() {
+fn an_unsupported_field_skips_its_struct_and_its_callers() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
-    requests.type_policies.insert("Label".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
+    requests.type_policies.insert("Label".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
     let len = requests.policy(exported("label_len", Routes::None));
-    requests.output(ty("Stamp"), record);
-    requests.output(ty("Label"), record);
+    requests.output(ty("Stamp"), strukt);
+    requests.output(ty("Label"), strukt);
     requests.output(function("stamp_sum"), sum);
     requests.output(function("label_len"), len);
 
@@ -505,10 +505,10 @@ fn an_unsupported_field_skips_its_record_and_its_callers() {
         outcome(&generation, "fn:stamp_sum"),
         Outcome::Emitted
     ));
-    let Outcome::Skipped(record) = outcome(&generation, "type:Label") else {
+    let Outcome::Skipped(strukt) = outcome(&generation, "type:Label") else {
         panic!("`Label` has a field nothing can carry");
     };
-    assert_eq!(record.capability.as_str(), "unsupported.mini.carrier");
+    assert_eq!(strukt.capability.as_str(), "unsupported.mini.carrier");
     let Outcome::Skipped(caller) = outcome(&generation, "fn:label_len") else {
         panic!("a function taking `Label` cannot be generated either");
     };
@@ -525,8 +525,8 @@ fn an_unsupported_field_skips_its_record_and_its_callers() {
 #[test]
 fn a_function_needing_an_undeclared_public_type_is_skipped() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
     requests.output(function("stamp_sum"), sum);
 
@@ -546,10 +546,10 @@ fn a_function_needing_an_undeclared_public_type_is_skipped() {
 #[test]
 fn a_declared_failure_with_no_route_skips_the_function() {
     let mut requests = requests();
-    let record = requests.policy(Policy::FallibleRecord);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::FallibleStruct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -560,7 +560,7 @@ fn a_declared_failure_with_no_route_skips_the_function() {
         skip.capability.as_str(),
         "unsupported.boundary.unrouted_failure"
     );
-    // The record itself is unaffected: its conversion is fine, and it is the
+    // The struct itself is unaffected: its conversion is fine, and it is the
     // boundary that could not be assembled.
     assert!(matches!(
         outcome(&generation, "type:Stamp"),
@@ -573,11 +573,11 @@ fn a_declared_failure_with_no_route_skips_the_function() {
 #[test]
 fn a_value_policy_on_an_exported_function_is_an_error() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
-    requests.output(ty("Stamp"), record);
-    // A record policy where a function policy belongs.
-    requests.output(function("stamp_sum"), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
+    requests.output(ty("Stamp"), strukt);
+    // A struct policy where a function policy belongs.
+    requests.output(function("stamp_sum"), strukt);
 
     let error = generate(model(), &Mini, requests, "fixture").expect_err("refuses");
     assert!(matches!(
@@ -603,9 +603,9 @@ fn a_declaration_naming_nothing_is_an_error() {
 #[test]
 fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
-    requests.output(ty("Stamp"), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
+    requests.output(ty("Stamp"), strukt);
     requests.ignored.push(function("stamp_max"));
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -623,10 +623,10 @@ fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
 fn a_run_over_unchanged_input_produces_the_same_output() {
     let run = || {
         let mut requests = requests();
-        let record = requests.policy(Policy::Record);
-        requests.type_policies.insert("Stamp".to_string(), record);
+        let strukt = requests.policy(Policy::Struct);
+        requests.type_policies.insert("Stamp".to_string(), strukt);
         let sum = requests.policy(exported("stamp_sum", Routes::None));
-        requests.output(ty("Stamp"), record);
+        requests.output(ty("Stamp"), strukt);
         requests.output(function("stamp_sum"), sum);
         let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
         (generation.report().to_json(), generation.rust().to_string())
@@ -634,42 +634,42 @@ fn a_run_over_unchanged_input_produces_the_same_output() {
     assert_eq!(run(), run());
 }
 
-/// A conversion recorded for a *field* makes its record a different
+/// A conversion recorded for a *field* makes its struct a different
 /// conversion, whichever order the two uses are planned in.
 ///
 /// The cache is consulted after the children are planned for exactly this
-/// reason: keyed on the record's own policy alone, the second use would inherit
+/// reason: keyed on the struct's own policy alone, the second use would inherit
 /// the first one's conversion and its support outcome, in whichever direction
 /// the two happened to be requested.
 #[test]
-fn a_field_override_is_part_of_its_record_conversion() {
+fn a_field_override_is_part_of_its_struct_conversion() {
     let plan = |defaults_first: bool| {
         let mut requests = requests();
-        let record = requests.policy(Policy::Record);
-        requests.type_policies.insert("Stamp".to_string(), record);
+        let strukt = requests.policy(Policy::Struct);
+        requests.type_policies.insert("Stamp".to_string(), strukt);
         let sum = requests.policy(exported("stamp_sum", Routes::None));
         let max = requests.policy(exported("stamp_max", Routes::None));
-        // A record policy on a scalar field: the target offers no record
+        // A struct policy on a scalar field: the target offers no struct
         // relation for an `i64`, so this child cannot be selected at all.
         requests.site_policies.insert(
             (
                 crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
                 "param 0.field secs".to_string(),
             ),
-            record,
+            strukt,
         );
         // Order matters twice over: which function is planned first, and
-        // whether the record's own request primed the conversion before either
+        // whether the struct's own request primed the conversion before either
         // of them. The refusal-first case must not be primed, or it would not
         // test what happens when a refusal is met before any success.
         if defaults_first {
-            requests.output(ty("Stamp"), record);
+            requests.output(ty("Stamp"), strukt);
             requests.output(function("stamp_sum"), sum);
             requests.output(function("stamp_max"), max);
         } else {
             requests.output(function("stamp_max"), max);
             requests.output(function("stamp_sum"), sum);
-            requests.output(ty("Stamp"), record);
+            requests.output(ty("Stamp"), strukt);
         }
         generate(model(), &Mini, requests, "fixture").expect("plans")
     };
@@ -697,15 +697,15 @@ fn a_field_override_is_part_of_its_record_conversion() {
 #[test]
 fn a_temporary_never_takes_a_live_parameter_name() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let pick = requests.policy(Policy::Function {
         symbol: "stamp_pick".to_string(),
         routes: Routes::None,
         // The names a writer would otherwise allocate for itself.
         param_names: vec!["v0".to_string(), "v1".to_string()],
     });
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_pick"), pick);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -734,10 +734,10 @@ fn a_temporary_never_takes_a_live_parameter_name() {
 #[test]
 fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
     let mut requests = requests();
-    let record = requests.policy(Policy::FallibleRecord);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::FallibleStruct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::ReporterNeedsContext));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -754,11 +754,11 @@ fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
 #[test]
 fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
-    requests.type_policies.insert("Label".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
+    requests.type_policies.insert("Label".to_string(), strukt);
     let len = requests.policy(exported("label_len", Routes::None));
-    requests.output(ty("Label"), record);
+    requests.output(ty("Label"), strukt);
     requests.output(function("label_len"), len);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -769,26 +769,26 @@ fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
         caller.dependency_path,
         vec!["fn:label_len", "param 0", "field text"]
     );
-    // The record reached the same cause by its own path.
-    let Outcome::Skipped(record) = outcome(&generation, "type:Label") else {
-        panic!("the record cannot be represented either");
+    // The struct reached the same cause by its own path.
+    let Outcome::Skipped(strukt) = outcome(&generation, "type:Label") else {
+        panic!("the struct cannot be represented either");
     };
-    assert_eq!(record.dependency_path, vec!["type:Label", "field text"]);
+    assert_eq!(strukt.dependency_path, vec!["type:Label", "field text"]);
 }
 
 /// A public declaration the target refuses skips every declaration requiring
 /// it, even though every conversion involved was planned successfully.
 ///
-/// This is the retention loop rather than value planning: the record's
+/// This is the retention loop rather than value planning: the struct's
 /// conversion is fine, and it is the public `Stamp` that does not exist.
 #[test]
 fn a_refused_public_declaration_skips_what_requires_it() {
     let mut requests = requests();
-    let record = requests.policy(Policy::RecordWithoutSurface);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::StructWithoutSurface);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
     let len = requests.policy(exported("label_len", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
     // Unrelated, and skipped for a cause of its own.
     requests
@@ -797,12 +797,12 @@ fn a_refused_public_declaration_skips_what_requires_it() {
     requests.output(function("label_len"), len);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
-    let Outcome::Skipped(record) = outcome(&generation, "type:Stamp") else {
-        panic!("this target declares no public record");
+    let Outcome::Skipped(strukt) = outcome(&generation, "type:Stamp") else {
+        panic!("this target declares no public struct");
     };
     assert_eq!(
-        record.capability.as_str(),
-        "unsupported.mini.no_public_record"
+        strukt.capability.as_str(),
+        "unsupported.mini.no_public_struct"
     );
     let Outcome::Skipped(caller) = outcome(&generation, "fn:stamp_sum") else {
         panic!("a wrapper taking a type that is not declared is unusable");
@@ -810,7 +810,7 @@ fn a_refused_public_declaration_skips_what_requires_it() {
     // The same cause, reached through this function's own requirement.
     assert_eq!(
         caller.capability.as_str(),
-        "unsupported.mini.no_public_record"
+        "unsupported.mini.no_public_struct"
     );
     assert_eq!(caller.dependency_path.first().unwrap(), "fn:stamp_sum");
     assert!(caller
@@ -820,15 +820,15 @@ fn a_refused_public_declaration_skips_what_requires_it() {
     assert!(generation.rust().is_empty());
 }
 
-/// Two supported but different child conversions make two record conversions.
+/// Two supported but different child conversions make two struct conversions.
 ///
 /// Nothing is refused here, so this says the children belong to a conversion's
 /// identity on their own rather than only when one of them fails.
 #[test]
-fn two_supported_children_make_two_record_conversions() {
+fn two_supported_children_make_two_struct_conversions() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     // A second entry with the same settings is still a second entry: sharing a
     // conversion means sharing the policy, not writing an equal-looking one.
     let other_scalar = requests.policy(Policy::Scalar);
@@ -841,7 +841,7 @@ fn two_supported_children_make_two_record_conversions() {
         ),
         other_scalar,
     );
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
     requests.output(function("stamp_max"), max);
 
@@ -861,14 +861,14 @@ fn two_supported_children_make_two_record_conversions() {
 #[test]
 fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let pick = requests.policy(Policy::Function {
         symbol: "stamp_pick".to_string(),
         routes: Routes::None,
         param_names: vec!["r#v0".to_string(), "r#v1".to_string()],
     });
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_pick"), pick);
 
     let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
@@ -890,15 +890,15 @@ fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
 /// A refusal travels every dependency edge, not just the first.
 ///
 /// The chain is declared so that propagation needs more than one pass: the
-/// function is decided before the record it requires, and that record before
+/// function is decided before the struct it requires, and that struct before
 /// the one *it* requires.
 #[test]
 fn a_refusal_travels_a_chain_of_public_requirements() {
     let mut requests = requests();
     // Every conversion here succeeds: what fails is a public declaration, two
     // edges away from the function that needs it.
-    let requiring = requests.policy(Policy::RecordRequiring("Point".to_string()));
-    let refused = requests.policy(Policy::RecordWithoutSurface);
+    let requiring = requests.policy(Policy::StructRequiring("Point".to_string()));
+    let refused = requests.policy(Policy::StructWithoutSurface);
     requests
         .type_policies
         .insert("Stamp".to_string(), requiring);
@@ -915,7 +915,7 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
         };
         assert_eq!(
             skip.capability.as_str(),
-            "unsupported.mini.no_public_record",
+            "unsupported.mini.no_public_struct",
             "{declaration} carries the one cause"
         );
         assert_eq!(skip.dependency_path.first().unwrap(), declaration);
@@ -937,10 +937,10 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
 #[test]
 fn a_native_parameter_must_carry_what_its_conversion_reads() {
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let wrong = requests.policy(Policy::FunctionWithWrongInput);
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), wrong);
 
     let error = generate(model(), &Mini, requests, "fixture").expect_err("refuses");
@@ -994,10 +994,10 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
 
     // With something to emit.
     let mut full = requests();
-    let record = full.policy(Policy::Record);
-    full.type_policies.insert("Stamp".to_string(), record);
+    let strukt = full.policy(Policy::Struct);
+    full.type_policies.insert("Stamp".to_string(), strukt);
     let sum = full.policy(exported("stamp_sum", Routes::None));
-    full.output(ty("Stamp"), record);
+    full.output(ty("Stamp"), strukt);
     full.output(function("stamp_sum"), sum);
     let generation = generate(guarded(), &Mini, full, "fixture").expect("plans");
     assert_eq!(generation.report().counts().emitted, 2);
@@ -1063,10 +1063,10 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
     assert!(flat.function("stamp_sum").is_some());
 
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
@@ -1083,11 +1083,11 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
     );
 }
 
-/// The same, for a record the wrapper constructs rather than the function it
+/// The same, for a struct the wrapper constructs rather than the function it
 /// calls: the wrapper names both, so it inherits from both, and one condition
 /// two of them carry is stated once.
 ///
-/// The record carries a second condition the function does not, which is what
+/// The struct carries a second condition the function does not, which is what
 /// separates per-condition dedup from comparing whole attribute sets. Restating
 /// a condition would compile — conjunction is idempotent — so what this holds to
 /// is the generated file being readable.
@@ -1122,10 +1122,10 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
         .expect("the fixture builds a model");
 
     let mut requests = requests();
-    let record = requests.policy(Policy::Record);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::Struct);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
@@ -1138,7 +1138,7 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
     assert_eq!(
         rust.matches("#[cfg(another_custom_flag)]").count(),
         1,
-        "and the one only the record carries reaches the wrapper too:\n{rust}"
+        "and the one only the struct carries reaches the wrapper too:\n{rust}"
     );
 }
 
@@ -1179,10 +1179,10 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
         .expect("the fixture builds a model");
 
     let mut requests = requests();
-    let record = requests.policy(Policy::RecordWithMirror);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::StructWithMirror);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
@@ -1210,7 +1210,7 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
 /// An item's condition reaches the Rust a target contributes for its public
 /// declaration of that item, not only the wrapper.
 ///
-/// A mirror emitted where the record it mirrors is absent is a type the foreign
+/// A mirror emitted where the struct it mirrors is absent is a type the foreign
 /// API declares and the build does not have.
 #[test]
 fn an_item_condition_reaches_the_declaration_a_target_contributes() {
@@ -1242,16 +1242,16 @@ fn an_item_condition_reaches_the_declaration_a_target_contributes() {
         .expect("the fixture builds a model");
 
     let mut requests = requests();
-    let record = requests.policy(Policy::RecordWithMirror);
-    requests.type_policies.insert("Stamp".to_string(), record);
+    let strukt = requests.policy(Policy::StructWithMirror);
+    requests.type_policies.insert("Stamp".to_string(), strukt);
     let sum = requests.policy(exported("stamp_sum", Routes::None));
-    requests.output(ty("Stamp"), record);
+    requests.output(ty("Stamp"), strukt);
     requests.output(function("stamp_sum"), sum);
 
     let generation = generate(flat, &Mini, requests, "fixture").expect("plans");
     let rust = generation.rust();
     // Once on the mirror, once on the wrapper. The fields carry none of their
-    // own: the condition is the record's.
+    // own: the condition is the struct's.
     assert_eq!(
         rust.matches("#[cfg(some_custom_flag)]").count(),
         2,

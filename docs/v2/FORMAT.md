@@ -18,7 +18,7 @@ page for each language.
 
 [manifest.json](manifest.json) lists those stages, examples and combinations.
 It records which combinations make sense, not which features are implemented.
-For example, the record has no native-function-boundary cell because the record
+For example, the struct has no native-function-boundary cell because the struct
 does not itself export a callable function. There is no placeholder page for
 that combination. An unsupported feature, in contrast, is explained on an
 existing page rather than represented by a missing file.
@@ -80,7 +80,7 @@ the validator's current element-index check must be extended before an example
 id containing underscores can be added. The existing examples use `fn` and
 `struct`.
 
-An element id names a structural kind — function, record, enum, constant, and
+An element id names a structural kind — function, struct, enum, constant, and
 the variants of those — never the names the source crate happens to use. `Stamp`
 and `stamp_sum` appear in prose and code, never in an id, so a path stays
 recognizable when the declarations it works from change.
@@ -88,7 +88,7 @@ recognizable when the declarations it works from change.
 Definitions live in one block at the foot of the page:
 
 ```markdown
-Planned as the record input described in [the record's C representation][struct_represent_c].
+Planned as the struct input described in [the struct's C representation][struct_represent_c].
 
 [struct_represent_c]: ../struct/05-represent.c.md
 ```
@@ -186,7 +186,7 @@ its coverage check weakened.
 A path is finished when its cells say what actually happens, not when they name
 the feature. For a sequence field, that means the item type, element order,
 length handling, ownership, allocation and failure behavior, and the dependency
-on the enclosing record — at each stage that decides one of them. Reusing the
+on the enclosing struct — at each stage that decides one of them. Reusing the
 word "sequence" without those decisions is not a specified path.
 
 The validator checks page identities, required sections, link ids and their

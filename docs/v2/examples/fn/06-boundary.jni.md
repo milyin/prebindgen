@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
 Owner: the registry, on the JNI adapter's `BoundarySpec`
 
-# Function taking an owned record — Assemble the native boundary — Kotlin/JNI
+# Function taking an owned struct — Assemble the native boundary — Kotlin/JNI
 
 ## Input
 

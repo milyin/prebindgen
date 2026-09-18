@@ -79,10 +79,10 @@ impl Target for CTarget {
     type Payload = CPayload;
 
     fn select(&self, query: &SelectionQuery<'_, CPolicy>) -> TargetSupport<RelationId> {
-        // An aggregate carries its members, so it wants the record's fields; a
+        // An aggregate carries its members, so it wants the struct's fields; a
         // scalar is carried whole. A declarator v2 has no lowering for is
         // refused here, before anything under it is planned.
-        let want_record = match query.policy {
+        let want_struct = match query.policy {
             CPolicy::DataStruct { .. } => true,
             CPolicy::Scalar | CPolicy::Function { .. } => false,
             CPolicy::Unimplemented { declarator } => {
@@ -97,8 +97,8 @@ impl Target for CTarget {
             }
         };
         for (id, relation) in query.candidates {
-            match (relation, want_record) {
-                (Relation::Record(_), true) => return Ok(TargetAttempt::Ready(*id)),
+            match (relation, want_struct) {
+                (Relation::Struct(_), true) => return Ok(TargetAttempt::Ready(*id)),
                 (Relation::Atomic, false) => return Ok(TargetAttempt::Ready(*id)),
                 _ => {}
             }
@@ -136,16 +136,16 @@ impl Target for CTarget {
                     ))),
                 }))
             }
-            Relation::Record(record) => {
+            Relation::Struct(strukt) => {
                 let CPolicy::DataStruct { c_name } = policy else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is planned through its fields under a policy that carries it whole",
-                        record.record
+                        strukt.name
                     )));
                 };
-                let Some(item) = shape.record else {
+                let Some(item) = shape.strukt else {
                     return Err(PlanningError::InternalInvariant(
-                        "a record relation without its record".to_string(),
+                        "a struct relation without its strukt".to_string(),
                     ));
                 };
                 if item.fields.is_empty() {
@@ -278,14 +278,14 @@ impl Target for CTarget {
                 rust: Vec::new(),
                 payload: None,
             })),
-            SourceItem::Record(record) => {
+            SourceItem::Struct(strukt) => {
                 let CPolicy::DataStruct { c_name } = request.policy else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is exposed as a data type under a policy that is not one",
-                        record.name
+                        strukt.name
                     )));
                 };
-                if record.fields.is_empty() {
+                if strukt.fields.is_empty() {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.c.empty_aggregate",
                         format!(
@@ -300,7 +300,7 @@ impl Target for CTarget {
                 // member the header always declares.
                 let conditions = request.field_conditions();
                 let mut fields = Vec::new();
-                for (index, field) in record.fields.iter().enumerate() {
+                for (index, field) in strukt.fields.iter().enumerate() {
                     let Some(ty) = scalar_of(&field.ty).and_then(c_scalar) else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.c.carrier",
@@ -324,7 +324,7 @@ impl Target for CTarget {
                     // API installs no logger. The header then declares a member
                     // the library may not have, which no compiler or linker
                     // catches — the caller and the library simply disagree
-                    // about the record's size. This line is the only output
+                    // about the struct's size. This line is the only output
                     // such a build produces, so it names the fix; it cannot
                     // tell whether the fix is already in place, since reading
                     // the consumer's cbindgen configuration would cost a

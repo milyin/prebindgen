@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/05-represent.md) · [Common cell][fn_represent] · [Element path][fn]
 Owner: the registry, on the JNI adapter's [representation](../../stages/05-represent.md#represent-and-compose-values)
 
-# Function taking an owned record — Represent and compose values — Kotlin/JNI
+# Function taking an owned struct — Represent and compose values — Kotlin/JNI
 
 ## Input
 
@@ -33,7 +33,7 @@ Rust `Stamp`. `Runtime` classifies failures from JNI so the next stage can route
 them. `Independent` describes the resulting copied value; it is not a claim
 that the full planned validity-contract API is already implemented.
 
-[The record's JNI page][struct_represent_jni] describes the getter operations.
+[The struct's JNI page][struct_represent_jni] describes the getter operations.
 
 ## Checks
 
@@ -41,7 +41,7 @@ that the full planned validity-contract API is already implemented.
   It records that; it decides nothing, so [the boundary][fn_boundary_jni] must
   route the `Runtime` category.
 - If the first getter fails, the second getter does not run. If either getter
-  fails, the record is not constructed and the source function is not called.
+  fails, the struct is not constructed and the source function is not called.
 - `Independent` holds because both integers are copied out of the object;
   nothing in the converted value stays tied to the reference frame.
 

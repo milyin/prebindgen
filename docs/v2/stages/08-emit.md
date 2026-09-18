@@ -9,7 +9,7 @@ real C and JNI frontends. `examples/v2check` compiles the generated Rust and
 compares it with the examples in these pages; it also checks the Kotlin text.
 That test does not yet load the library in a JVM or execute the Kotlin API.
 
-The examples in this chapter use one small source crate — a record and a function
+The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
 
 ```rust
@@ -59,7 +59,7 @@ call succeeded. The expression does not decide how the exported function
 reports an error. The common writer adds that control flow from the boundary
 plan, including the `match` and early return shown below.
 
-A target's own Rust — the `repr(C)` record below — is conditioned the same way,
+A target's own Rust — the `repr(C)` struct below — is conditioned the same way,
 by the registry rather than by the target: the declaration carries the condition
 of the item it was requested for, and each mirrored member carries the condition
 of the field it mirrors. A target that declares members per field asks the
@@ -148,7 +148,7 @@ On the Kotlin side, the public API is one function per exported function,
 `stampSum(stamp: Stamp): Long`, delegating to the native method the JVM binds
 the wrapper to. The native method lives on one harness object, `JNINative`,
 whichever package the function is declared in — the `Java_…` symbol names that
-object, so the two have to agree — and because the record crosses as an object,
+object, so the two have to agree — and because the struct crosses as an object,
 it takes the data class itself. A future separate-arguments representation
 would give the native method two `Long` arguments and make the public Kotlin
 wrapper read them from `Stamp`. That representation is not implemented in this
@@ -232,7 +232,7 @@ concrete contributions stay separate throughout planning and writing:
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
 | Public foreign source | Header derived from Rust | Kotlin classes and native declaration | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
 
-For the input record, the registry asks the selected [relation](04-select.md#what-a-relation-is) for its fields,
+For the input struct, the registry asks the selected [relation](04-select.md#what-a-relation-is) for its fields,
 resolves the child [conversions](04-select.md#select-conversion-relations), and asks the target for a representation using
 those child descriptions. The target returns the member/getter mappings and
 primitive specifications. The registry registers their definitions, creates
@@ -242,7 +242,7 @@ the result. Writers then render that result without discovering new conversions.
 Adding a third supported field makes the registry visit another source child
 and apply the same composition algorithm. The target describes one more member
 or getter through its existing local representation interface. The target does
-not need another handwritten record converter or wrapper-assembly algorithm.
+not need another handwritten struct converter or wrapper-assembly algorithm.
 
 The rendered output of each contribution above appears in the element paths: the
 [C wrapper and header][fn_emit_c], the [Kotlin object and JNI wrapper][fn_emit_jni],
@@ -250,8 +250,8 @@ the [C aggregate][struct_emit_c] and the [Kotlin data class][struct_emit_jni].
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
-- [Record with scalar fields][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
+- [Function taking an owned struct][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
+- [Struct with scalar fields][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
 
 [fn_emit]: ../examples/fn/08-emit.md
 [fn_emit_c]: ../examples/fn/08-emit.c.md

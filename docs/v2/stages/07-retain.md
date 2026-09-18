@@ -8,7 +8,7 @@ Status: implemented. Outcomes, causes and the frozen result are what this stage
 produces; `Unselected` and the pruning of unreachable [conversions](04-select.md#select-conversion-relations)
 are not there yet.
 
-The examples in this chapter use one small source crate — a record and a function
+The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
 
 ```rust
@@ -32,13 +32,13 @@ takes it to be usable at all. A Kotlin method needs the class it is declared on,
 and if the configuration promised that class implements an interface, it needs
 the members of that interface too.
 
-So a missing capability propagates. Suppose one field of the record had a type no
-[representation](05-represent.md#represent-and-compose-values) covers yet. Its conversion is unsupported; the record's conversion
-is therefore unsupported; the public record cannot be emitted; and the function
+So a missing capability propagates. Suppose one field of the struct had a type no
+[representation](05-represent.md#represent-and-compose-values) covers yet. Its conversion is unsupported; the struct's conversion
+is therefore unsupported; the public struct cannot be emitted; and the function
 that takes it is skipped as well. Current reports copy the underlying reason
 and preserve each dependent's path to it. An unrelated function in
 the same package is still generated. Nothing is emitted in a reduced form. A
-record is never emitted with a field left out, because a foreign type missing a
+struct is never emitted with a field left out, because a foreign type missing a
 field is a different type, not a partial one.
 
 An opaque-handle representation would have a different contract: the Rust value
@@ -162,10 +162,10 @@ struct SurfaceSpec<Payload> {
 
 `Requirement` is a typed reference to a dependency that must succeed. It is the resolved obligation derived from an output request's semantic promises or actual usage. `members` describes association; a member that is essential to a promised interface must also be a requirement.
 
-The full design requires the following dependency behavior. Record/caller
+The full design requires the following dependency behavior. Struct/caller
 propagation is implemented; interface and method promises extend that rule:
 
-- An unsupported field skips the entire record and callers that require that record representation.
+- An unsupported field skips the entire struct and callers that require that struct representation.
 - An unsupported optional method can be omitted independently; an interface-required method can prevent its owner from being emitted.
 - An unsupported owner representation prevents methods requiring that owner.
 - Unrelated free functions in a package can still be generated.
@@ -276,8 +276,8 @@ retention decisions described here.
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_retain]
-- [Record with scalar fields][struct_retain]
+- [Function taking an owned struct][fn_retain]
+- [Struct with scalar fields][struct_retain]
 
 [fn_retain]: ../examples/fn/07-retain.md
 [struct_retain]: ../examples/struct/07-retain.md

@@ -8,7 +8,7 @@ The stage chapters explain the architecture, including contracts for features
 that are not implemented. This page separates that design from the evidence we
 have today and explains what an implementation must demonstrate next.
 
-The current increment generates scalar and owned-record input bindings through
+The current increment generates scalar and owned-struct input bindings through
 the real C and JNI frontends. The C entry point is executed in tests; generated
 JNI Rust is compiled and Kotlin text is checked, but that fixture does not yet
 execute a JVM call. Owned source-model views, optional [conversions](stages/04-select.md#select-conversion-relations), resource
@@ -24,7 +24,7 @@ standalone crate or an immediate breaking rewrite of V1 consumers.
 
 1. Add builder-to-snapshot ownership, helper registration checks and direct
    function lookup/enumeration. Preserve unsupported items and locations.
-2. Add parameter/result `TypeView`s, exact record navigation and field views.
+2. Add parameter/result `TypeView`s, exact struct navigation and field views.
    Implement the independent inspection example using existing captured inputs.
 3. Add snapshot checks and checked type composition. Have V2 registry requests
    retain views, and derive cache keys privately from those views.
@@ -34,7 +34,7 @@ standalone crate or an immediate breaking rewrite of V1 consumers.
 
 Required validation for implementation:
 
-- A standalone Flat consumer navigates function → parameter → record → field
+- A standalone Flat consumer navigates function → parameter → struct → field
   without depending on the registry.
 - Lookup and enumeration agree; views remain usable after the original `Flat`
   value is dropped, and cloned views refer to the same snapshot.
@@ -60,7 +60,7 @@ Keep v1 and v2 as parallel engines behind the existing frontend. Independent v2 
 Engine selection and separate output paths began in
 [#721](https://github.com/milyin/prebindgen/pull/721) and
 [#722](https://github.com/milyin/prebindgen/pull/722). V2 now also plans and emits
-the scalar/record subset described under [the built increment](#the-first-increment-as-built).
+the scalar/struct subset described under [the built increment](#the-first-increment-as-built).
 Requests outside that subset remain visible as reported skips. Those skips are
 scaffolding for the transition, not the specified answer to an unsupported
 request: closing the coverage gap includes turning them back into build
@@ -91,13 +91,13 @@ The initial implementation should demonstrate the architecture with both existin
 
 1. Construct `BindingRequests` from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
-3. Add named-field records with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/05-represent.md#represent-and-compose-values) using the same source [relation](stages/04-select.md#what-a-relation-is) algorithm.
+3. Add named-field structs with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/05-represent.md#represent-and-compose-values) using the same source [relation](stages/04-select.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
 5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
 
 Steps 2 and 3 are exactly the two element paths specified in this document: the
-[function path][fn] is the scalar function and its owned record argument, and the
-[record path][struct] is the named-field record behind it.
+[function path][fn] is the scalar function and its owned struct argument, and the
+[struct path][struct] is the named-field struct behind it.
 
 Do not implement every proposed enum variant before the scalar case runs. Constructor/projector conversions, `Result`, resource-bearing handles, sequences and callbacks can be added incrementally through the same descriptions and registry algorithms. Full inputs remain accepted throughout that work.
 
@@ -105,7 +105,7 @@ Do not implement every proposed enum variant before the scalar case runs. Constr
 
 The cases below come from the repository's coverage tests and performance
 examples. In `perftest-flat` and `perftest-kotlin`, `large_flat_input_sum` and
-`large_object_input_sum` both take a Rust record by borrow. Their JNI
+`large_object_input_sum` both take a Rust struct by borrow. Their JNI
 configurations differ: one flattens the fields into native arguments, while the
 other passes a whole JVM object. That combination tests both representation
 choice and the temporary lifetime needed for a borrow.
@@ -116,7 +116,7 @@ choice and the temporary lifetime needed for a borrow.
 | Two functions using the same `Stamp` representation | Share the conversion while retaining different parameter names and diagnostic paths. |
 | A whole opaque representation of a type with unsupported private fields | Do not traverse the unused fields. |
 | Accessor/value-form helper returning a compound value | Call it once, keep its exact result type, and let the registry process its selected children. |
-| Existing `large_flat_input_sum(&ObjectBoundary64)` | Support requires an owned temporary and call-scoped borrow, beyond owned record conversion. Preserve the signature; skip with a borrow reason until implemented. |
+| Existing `large_flat_input_sum(&ObjectBoundary64)` | Support requires an owned temporary and call-scoped borrow, beyond owned struct conversion. Preserve the signature; skip with a borrow reason until implemented. |
 | The existing JVM-object-input sibling of that function | Its independently selected representation may have a different support [outcome](stages/07-retain.md#retain-supported-output). |
 | Source `Result` with configured handler/builder | Preserve both branches and existing delivery conventions; skip if a required handler or destination is unimplemented. |
 | Nested optional values | Preserve distinct states and never decode inactive payloads. |
@@ -178,7 +178,7 @@ increment emitted, everything else skipped under the capability it waits for.
 
 The engine's unit tests use a small test adapter to isolate the planner's rules.
 They check conversion sharing and field overrides, temporary-name collisions,
-propagation from an unsupported field to its record and callers, and public
+propagation from an unsupported field to its struct and callers, and public
 declaration dependencies. They also check that a function is skipped when an
 operation has no error route or needs a runtime context the boundary cannot
 supply. Contradictory configuration must instead produce a generation error.
@@ -190,7 +190,7 @@ establish the behavior of the resulting foreign interface.
 1. **The instruction set.** Current conversion bodies are `NodeBody` values;
    function bodies are stored in `FunctionPlan::instrs`. Both use three kinds
    of instruction over value identities: apply a registered operation, construct
-   a source record, and call the source function. These implement the body roles
+   a source struct, and call the source function. These implement the body roles
    described with the rest of the
    [conversion plans](stages/05-represent.md#the-conversion-plans-the-registry-builds).
    A conversion's body is a template whose
@@ -259,14 +259,14 @@ this list says what the increment left open and why.
   `ResolvedValues`, `SiteDescriptor`, `SurfaceRequest` — and untested by a third
   target or a deferred capability.
 - **The composition protocols.** `Protocol::Product { projections }` reads
-  one projection per part, in the into-Rust direction only. Record output needs
+  one projection per part, in the into-Rust direction only. Struct output needs
   a construction operation that is not implemented: C reaches the registry's
-  `unsupported.record.out_of_rust` skip, while JNI refuses earlier with
+  `unsupported.struct.out_of_rust` skip, while JNI refuses earlier with
   `unsupported.jni.object_output`. `ProductOps`, `SequenceOps`, `ChoiceOps`,
   `CallableOps` and multi-slot child flattening describe the wider design.
 - **Fallible construction meeting the boundary** is untouched, because
   constructor and projector relations are not implemented: the only relations are
-  the record's fields and the atomic conversion.
+  the struct's fields and the atomic conversion.
 - **Optional values** and everything that goes with them — `Layout::Slots`,
   `SlotRole`, `GuardId`, `AbsenceEncoding` — are not implemented.
 - **Validity and resource contracts** are absent from `PrimitiveSpec`. Every
@@ -282,7 +282,7 @@ this list says what the increment left open and why.
   gates the declaration the *other* language compiles against: the C prototype
   and the Kotlin `external fun` are emitted whatever the condition says, so a
   JNI binding can build and fail on the one call, and a C header can declare a
-  member the library's record does not have — silently, unless `cbindgen` is
+  member the library's struct does not have — silently, unless `cbindgen` is
   given a `[defines]` entry for the condition. What is done about it instead is
   a `cargo:warning` from the C frontend and the condition named in the Kotlin
   function's documentation.
@@ -306,7 +306,7 @@ this list says what the increment left open and why.
 
 Acceptance criteria:
 
-- [x] The design's boundaries are exercised by scalar and record bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
+- [x] The design's boundaries are exercised by scalar and struct bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
 - [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. `CPolicy` and `JniPolicy` represent implemented choices and include an `Unimplemented` case naming other declarators; their corresponding targets interpret them.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.

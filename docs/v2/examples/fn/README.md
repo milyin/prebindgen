@@ -2,7 +2,7 @@
 
 [Project contents](../../README.md) · [Source crate](../../source.md)
 
-# Function taking an owned record
+# Function taking an owned struct
 
 ```rust
 pub fn stamp_sum(stamp: Stamp) -> i64 {
@@ -22,7 +22,7 @@ generated code must read its fields and reconstruct the source Rust struct.
 Both targets then call `stamp_sum` exactly once and return the integer.
 
 Read the numbered pages in order to see each intermediate result. The
-[record walkthrough][struct] explains the reusable `Stamp`
+[struct walkthrough][struct] explains the reusable `Stamp`
 [conversion](../../stages/04-select.md#select-conversion-relations) in more detail.
 This function walkthrough explains how that conversion fits into an exported
 call: selecting the function, assigning native arguments and results, and

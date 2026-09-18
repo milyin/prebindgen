@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/08-emit.md) · [Common cell][fn_emit] · [Element path][fn]
 Owner: the common Rust writer and the JNI adapter's Kotlin writer
 
-# Function taking an owned record — Emit bindings — Kotlin/JNI
+# Function taking an owned struct — Emit bindings — Kotlin/JNI
 
 ## Input
 
@@ -107,7 +107,7 @@ placeholder zero on the error path is not a successful result visible to Kotlin.
   rather than a returned zero.
 - The adapter supplies the getter expressions, reporting-call expression and
   reporting helper. The registry supplies each `match`, the check for reporting
-  failure, the terminal return, record construction and the source function call.
+  failure, the terminal return, struct construction and the source function call.
 - Source `i64` and `jlong` are the same Rust value here, so the scalar
   [conversions](../../stages/04-select.md#select-conversion-relations) render nothing. A child type needing real work would insert its
   own conversion between a getter and the construction.

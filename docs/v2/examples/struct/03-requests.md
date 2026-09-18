@@ -3,11 +3,11 @@
 [Stage chapter](../../stages/03-requests.md) · [Element path][struct] · [Source crate](../../source.md)
 Owner: the language frontend · Previous: [Build and inspect the source model][struct_flat] · Next: [Select conversion relations][struct_select]
 
-# Record with scalar fields — Record binding requests
+# Struct with scalar fields — Record binding requests
 
 ## Input
 
-The element Flat built for this record:
+The element Flat built for this struct:
 
 ```text
 Element::Type(Type::Struct(Struct {
@@ -25,7 +25,7 @@ and a build script asking for it to be exposed: [C][struct_requests_c],
 
 The type request asks for a public foreign [representation](../../stages/05-represent.md#represent-and-compose-values) of `Stamp`; it is
 independent of the request for `stamp_sum`. This sketch also shows the fields
-that the registry will use when it discovers the record [relation](../../stages/04-select.md#what-a-relation-is) during value
+that the registry will use when it discovers the struct [relation](../../stages/04-select.md#what-a-relation-is) during value
 planning. All structures in the block are design notation, not exact current
 request fields. Current `OutputRequest` contains a `Declaration` and `PolicyId`.
 The frontend also records a type [policy](../../stages/03-requests.md#what-policy-means) for `Stamp`, which is how a later
@@ -35,10 +35,10 @@ function parameter finds this representation without repeating the configuration
 OutputRequest {
     id:     DeclarationId("type:Stamp"),
     source: SourceItemId(crate::source::Stamp),
-    policy: PolicyId(this target's record policy),
+    policy: PolicyId(this target's struct policy),
 }
 
-relation: Stamp.fields = Relation::Record(over the Stamp record element)
+relation: Stamp.fields = Relation::Struct(over the Stamp struct element)
 
 parts:
     PartId { owner: Stamp.fields, arm: None, position: Field("secs")  }
@@ -49,7 +49,7 @@ conversion_rules.parts: {}    // none recorded for this path
 
 ## Checks
 
-- A record request is a root: it stands whether or not any exported function
+- A struct request is a root: it stands whether or not any exported function
   mentions the type, and survives a function that is skipped.
 - A [relation](../../stages/04-select.md#what-a-relation-is) describes how Rust
   constructs or reads the value; a

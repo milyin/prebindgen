@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/03-requests.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the language frontend · Previous: [Build and inspect the source model][fn_flat] · Next: [Select conversion relations][fn_select]
 
-# Function taking an owned record — Record binding requests
+# Function taking an owned struct — Record binding requests
 
 ## Input
 
@@ -43,11 +43,11 @@ sites:
     SiteId { owner: <that DeclarationId>, path: Return }     // the i64
 
 site_policies: {}             // no position-specific overrides
-type_policies: { Stamp -> <the record's policy> }
+type_policies: { Stamp -> <the struct's policy> }
 ```
 
-The record's [representation](../../stages/05-represent.md#represent-and-compose-values) is not decided here: it comes from
-[the record's request][struct_requests] and applies wherever a `Stamp` is
+The struct's [representation](../../stages/05-represent.md#represent-and-compose-values) is not decided here: it comes from
+[the struct's request][struct_requests] and applies wherever a `Stamp` is
 converted.
 
 ## Checks

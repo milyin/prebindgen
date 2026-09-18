@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/03-requests.md) · [Common cell][struct_requests] · [Element path][struct]
 Owner: the JNI frontend
 
-# Record with scalar fields — Record binding requests — Kotlin/JNI
+# Struct with scalar fields — Record binding requests — Kotlin/JNI
 
 ## Input
 
@@ -43,7 +43,7 @@ derived during planning:
 
 - A separate-arguments [representation](../../stages/05-represent.md#represent-and-compose-values) would pass the two fields individually
   and need no getter calls. The design describes that alternative, but this
-  V2 record path does not implement it.
+  V2 struct path does not implement it.
 - The adapter derives public property names and native getter calls from the
   same Flat fields. The class name comes from the recorded
   [policy](../../stages/03-requests.md#what-policy-means). Tests check that

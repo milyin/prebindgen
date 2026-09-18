@@ -193,12 +193,12 @@ mod tests {
     ///
     /// The counts differ over `Sample`, which both targets declare and only C
     /// emits: Kotlin cannot write a condition, so the JNI target refuses the
-    /// record rather than promise a property the library reads only sometimes.
+    /// struct rather than promise a property the library reads only sometimes.
     /// A conditional *function* is emitted by both, because a function has no
     /// property to promise.
     #[test]
     fn both_targets_report_every_declaration_as_emitted() {
-        // The record, the three functions over it and `stamp_ratio`, plus
+        // The struct, the three functions over it and `stamp_ratio`, plus
         // `Sample` and `sample_total` for C.
         for (target, emitted) in [("c", 7), ("jni", 5)] {
             let report = report(target);
@@ -213,7 +213,7 @@ mod tests {
     /// Every declaration a target could not generate is reported as skipped,
     /// with the capability that would unblock it.
     ///
-    /// Each is declared deliberately: a record whose field has no carrier, one
+    /// Each is declared deliberately: a struct whose field has no carrier, one
     /// the model lowers to an opaque declaration, one with no fields at all,
     /// and — for JNI only — `Sample`, whose field is written under a condition.
     /// An adapter that quietly emitted any of them would produce an empty
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, declaration, capability) in [
-            ("c", "type:Pair", "unsupported.type.not_a_record"),
+            ("c", "type:Pair", "unsupported.type.not_a_struct"),
             ("c", "type:Marker", "unsupported.c.empty_aggregate"),
             ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
             ("jni", "type:Reading", "unsupported.jni.carrier"),
@@ -259,7 +259,7 @@ mod tests {
             let generated = std::fs::read_to_string(file).expect("the generated file");
             assert!(
                 !generated.contains("Marker"),
-                "{file} mentions a record neither target can carry:\n{generated}"
+                "{file} mentions a struct neither target can carry:\n{generated}"
             );
         }
     }
