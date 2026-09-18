@@ -346,8 +346,8 @@ pub enum Operation<P> {
 /// One typed operation supplied by a target.
 ///
 /// It describes an operation, not a use of one: it names no variable and
-/// belongs to no exported function, so the same description is applied wherever
-/// the operation is needed.
+/// belongs to no wrapper, so the same description is applied wherever the
+/// operation is needed.
 #[derive(Clone, Debug)]
 pub struct PrimitiveSpec<P> {
     pub operands: Vec<OperandSpec>,
@@ -494,15 +494,20 @@ pub struct NativeParam {
     pub mutable: bool,
 }
 
-/// The native interface of one exported function.
+/// The native interface of one exported function: the `extern` wrapper the
+/// registry generates around a source function, as C or the JVM sees it.
 #[derive(Clone, Debug)]
 pub struct AbiSpec {
     /// The `extern` string: `"C"`, `"system"`.
     pub abi: String,
-    /// The exported symbol.
+    /// The symbol the wrapper is exported under, which the foreign side links
+    /// against. Not the source function's name: the frontend's naming settled
+    /// it.
     pub symbol: String,
+    /// The wrapper's parameters, in native order — the ones serving a source
+    /// parameter and the ones the calling convention adds.
     pub params: Vec<NativeParam>,
-    /// The native return type, absent for a function returning nothing.
+    /// The native return type, absent when the wrapper returns nothing.
     pub ret: Option<WireType>,
 }
 
@@ -537,14 +542,17 @@ pub struct FailureRoute<P> {
     pub terminate: Terminal,
 }
 
-/// A target's answer for one exported function's native interface.
+/// A target's answer to [`Target::boundary`]: the native interface of the
+/// wrapper that will export one source function, and what the wrapper does
+/// when a conversion inside it fails.
 #[derive(Clone, Debug)]
 pub struct BoundarySpec<P> {
     pub abi: AbiSpec,
+    /// Where the converted result of the source call goes.
     pub output: OutputPlacement,
     /// One route per failure category the conversions can raise. A category
-    /// with no route makes the function unsupported; its ABI is never quietly
-    /// changed to fit.
+    /// with no route makes the export unsupported — the declaration is skipped
+    /// — rather than the ABI being quietly changed to fit.
     pub failures: Vec<FailureRoute<P>>,
 }
 
@@ -643,10 +651,20 @@ pub struct ChildValue<'a> {
     pub layout: &'a Layout,
 }
 
-/// The conversions of one exported function, as the boundary and the public
-/// declaration see them.
+/// The planned conversions of one source function's parameters and result,
+/// as the boundary and the public declaration see them.
+///
+/// A wrapper is these conversions around one call: each input is converted
+/// from what the native parameter carries, the source function is called,
+/// and its result is converted for delivery. What the target reads here is
+/// each plan's carrier — the layout a native parameter or return must match —
+/// and the failure categories the boundary has to route.
 pub struct ResolvedValues<'a, P> {
+    /// One plan per source parameter, in [`Function::params`] order, each
+    /// crossing into Rust.
     pub inputs: Vec<&'a crate::plan::ValuePlan<P>>,
+    /// The plan for the source function's result, crossing out of Rust, or
+    /// `None` when it returns nothing.
     pub output: Option<&'a crate::plan::ValuePlan<P>>,
 }
 
@@ -767,7 +785,8 @@ pub trait Target {
         policy: &Self::Policy,
     ) -> TargetSupport<ReprSpec<Self::Payload>>;
 
-    /// Describe this exported function's native interface and failure routes.
+    /// Describe the wrapper that will export this source function: its native
+    /// interface, and its routes for the failures its conversions can raise.
     fn boundary(
         &self,
         site: &SiteDescriptor<'_>,
