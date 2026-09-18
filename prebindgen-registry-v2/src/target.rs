@@ -825,12 +825,46 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// What `boundary` is given: the exported call and its source signature.
+/// The exported function a target is asked to give a native interface to.
+///
+/// Once every value of an exported function has a plan, the registry asks
+/// [`Target::boundary`] what the wrapper around them looks like — its symbol,
+/// calling convention, native parameters and failure routes, the answer being
+/// a [`BoundarySpec`] — and this is the question's subject: which declaration
+/// is being exported, and which source function the wrapper calls. The planned
+/// values themselves arrive beside it, as [`ResolvedValues`], and the target's
+/// own configuration for the function as the `policy` argument; nothing about
+/// the native interface is decided before this call, and nothing in it is
+/// decided anywhere else.
+///
+/// The name comes from the specification's *site*, a value's position in an
+/// exported function — parameter 0, the return — which is what the boundary
+/// places: each native parameter it declares serves one such position, by
+/// index into [`ResolvedValues::inputs`]. This describes the function those
+/// positions belong to.
+///
+/// Two kinds of wrapper reach here. An ordinary one calls a source function
+/// once, and `function` is that function. A handle's release calls nothing:
+/// it takes the handle's carrier and drops what it holds (see
+/// [`ReprSpec::release`]), and `function` is `None`. A target tells the two
+/// apart by that field, and answers the release under the handle *type's*
+/// policy, which is where the release's symbol or placement was recorded.
 pub struct SiteDescriptor<'a> {
+    /// What the binding asked to export, with the name it asked for it under
+    /// ([`Declaration::placement`]) and the Rust item it comes from
+    /// ([`Declaration::rust_origin`]). The symbol the wrapper exports is not
+    /// read from here — the frontend settled it when it built the policy — but
+    /// the origin names the function in every refusal and error the target
+    /// raises. For a release, this is the handle type's own declaration.
     pub declaration: &'a Declaration,
-    /// The source function the wrapper calls once — or nothing, for a handle's
-    /// release, which takes the handle's carrier, drops what it holds, and
-    /// calls no source function. `declaration` is then the handle type's own.
+    /// The source function the wrapper calls once, or `None` for a release.
+    ///
+    /// What a target reads from it is the parameter list: a native parameter
+    /// keeps its source parameter's name, and a parameter the target adds — a
+    /// JNI environment, a receiver — is named around those so it shadows
+    /// none. The parameter *types* are not read here; each position's carrier
+    /// is the layout of its plan in [`ResolvedValues::inputs`], in the same
+    /// order as [`Function::params`].
     pub function: Option<&'a Function>,
 }
 
