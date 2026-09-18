@@ -825,17 +825,19 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// A function the binding exports, as the registry describes it to the target
-/// when asking for its native interface.
+/// A source function the binding declared for export, as the registry hands it
+/// to the target that will shape the native function exported in its place.
 ///
-/// Once every value of an exported function has a plan, the registry asks
-/// [`Target::boundary`] what the wrapper around them looks like — its symbol,
-/// calling convention, native parameters and failure routes, the answer being
-/// a [`BoundarySpec`] — and this is the question's subject: which declaration
-/// is being exported, and which source function the wrapper calls. The planned
-/// values themselves arrive beside it, as [`ResolvedValues`], and the target's
-/// own configuration for the function as the `policy` argument; nothing about
-/// the native interface is decided before this call, and nothing in it is
+/// What a binding exports is always a native function: an `extern` wrapper the
+/// registry generates, with the symbol C or the JVM links against, which calls
+/// the source function once. Once every value of that call has a plan, the
+/// registry asks [`Target::boundary`] what the wrapper looks like — its
+/// symbol, calling convention, native parameters and failure routes, the
+/// answer being a [`BoundarySpec`] — and this is the question's subject: the
+/// declaration that asked for the export, and the source function behind it.
+/// The planned values arrive beside it, as [`ResolvedValues`], and the target's
+/// own configuration for the function as the `policy` argument. Nothing about
+/// the wrapper's shape is decided before this call, and nothing in it is
 /// decided anywhere else.
 ///
 /// The name comes from the specification's *site*, a value's position in an
