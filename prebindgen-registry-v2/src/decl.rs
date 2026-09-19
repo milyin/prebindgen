@@ -8,12 +8,34 @@
 
 use serde::Serialize;
 
-/// The kind of thing a binding declared.
+/// What a [`Declaration`] declares: a function, a type, a constant, a callback
+/// or a conversion.
 ///
-/// Not the declarator: `opaque_ptr`, `data_struct` and `ptr_class` are all
-/// [`DeclarationKind::Type`], and which declarator produced one is the adapter's
-/// [`Declaration::representation`]. This is the axis a report groups and
-/// sorts by, and the axis an id is unique within.
+/// This is the coarse, language-neutral category — the five things any binding
+/// can be made of. It is deliberately coarser than an adapter's own vocabulary:
+/// `prebindgen-c` declares a type with `opaque_ptr` or `data_struct`, and
+/// `prebindgen-jni` with `ptr_class` or `data_class`, but all four produce a
+/// `Type`. The word the adapter used is kept separately in
+/// [`Declaration::representation`] and printed back verbatim.
+///
+/// Three things depend on the category:
+///
+/// * **What the engine plans.** [`generate`](crate::generate) dispatches on it,
+///   one lowering per kind: a `Function` is planned as an exported wrapper, a
+///   `Type` as a record.
+/// * **Identity.** A [`DeclarationId`] is `<kind>:<rust origin>`, and the kind
+///   is what keeps the origins' several naming spaces apart: an origin may be a
+///   captured item's name, a type key, a callback's signature or a name the
+///   binding coined, so `type:Foo` and `conversion:Foo` are two declarations
+///   about one Rust type. [`SurfaceSpec::requires`](crate::SurfaceSpec) says
+///   by id which of them a wrapper needs emitted.
+/// * **Report layout.** [`Report`](crate::Report) groups and sorts by it, so a
+///   report reads types first, then conversions, callbacks, constants and
+///   functions.
+///
+/// It says what the *target* language gets, not what the captured Rust source
+/// held — a Kotlin constant may be backed by a captured Rust function. That
+/// second question is [`Declaration::source`] / [`SourceKind`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeclarationKind {
