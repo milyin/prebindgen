@@ -276,6 +276,38 @@ arrange runtime cleanup. A dependency on an external runtime crate belongs in
 the target's build requirements; a generated helper wrapping that runtime call
 is an artifact.
 
+## Wrapper form
+
+Extends [the boundary](stages/06-boundary.md#assembling-an-exported-function).
+Needed by a target whose wrappers are not reached as `extern` functions under
+exported symbols, or not in the form the writer gives them.
+
+The common Rust writer renders every
+[wrapper](stages/06-boundary.md#assemble-the-native-boundary) in one form:
+
+```rust
+#[no_mangle]
+pub extern "<abi>" fn <symbol>(<params>) -> <ret> { … }
+```
+
+Of that, `AbiSpec` lets the target decide the calling convention string, the
+symbol, and the native parameters and return. The attributes, the visibility
+and the absence of `unsafe` are fixed, which the two targets built so far
+accept. The chapter sketches `AbiSpec<Payload>` — "calling convention, symbol
+and target signature requirements" — and the payload is what would carry the
+rest: attributes the wrapper needs, an `unsafe` the target's convention
+demands, a linkage other than `#[no_mangle]`, or a registration the target
+performs instead of exporting a symbol. The writer would render what the
+payload states around the body it already renders, and the registry would
+check it as it checks the rest of the boundary — a symbol that is not a Rust
+identifier is refused today, and a payload would be refused on the same terms.
+
+The first known consumer is V1's JNI writer, whose wrapper is
+`#[no_mangle] #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn`: an `unsafe` signature and lint attributes the V2
+form cannot state. Neither is required for the V2 JNI target as built, which
+is why the payload waits.
+
 ## Multi-value layouts
 
 Extends [target representations](stages/05-represent.md#target-representations).

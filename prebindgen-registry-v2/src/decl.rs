@@ -17,11 +17,11 @@ use serde::Serialize;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeclarationKind {
-    /// A `#[prebindgen]` function the binding exports.
+    /// A `#[prebindgen]` function the binding exports a native wrapper for.
     Function,
     /// A `#[prebindgen]` type the binding gives a foreign representation.
     Type,
-    /// A `#[prebindgen]` constant the binding exports.
+    /// A `#[prebindgen]` constant the binding exposes as a foreign constant.
     Const,
     /// A callback signature the binding exports as a foreign callable.
     Callback,
@@ -76,11 +76,14 @@ pub struct Declaration {
     pub id: DeclarationId,
     /// Which kind of declaration it is.
     pub kind: DeclarationKind,
-    /// What the Rust source calls it (`Calculator`, `calculator_new`), or the
-    /// signature for a callback that has no name of its own.
+    /// The source item's name, as the Rust source spells it (`Calculator`,
+    /// `calculator_new`), or the signature for a callback that has no name of
+    /// its own.
     pub rust_origin: String,
-    /// Where it is meant to land in the target language, spelled the way that
-    /// language spells it: `calculator_t`, `io.zenoh.jni.Session`.
+    /// Where the export lands in the target language, spelled the way that
+    /// language spells it: `calculator_t`, `io.zenoh.jni.Session`. For a
+    /// function, this names what the foreign side calls; the source function
+    /// keeps its own name and is only ever called by the wrapper.
     pub placement: String,
     /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …).
     /// The adapter's word, printed back verbatim.

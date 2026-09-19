@@ -28,7 +28,7 @@ pub enum CPolicy {
     Scalar,
     /// A `repr(C)` aggregate passed by value, under this C name.
     DataStruct { c_name: String },
-    /// An exported function, under this symbol.
+    /// A source function to expose: the wrapper around it carries this symbol.
     Function { symbol: String },
     /// A declaration v1 lowers and v2 does not yet: an opaque handle, an enum,
     /// a value-opaque type, a tagged union. Carries the declarator's name so

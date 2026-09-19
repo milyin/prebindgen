@@ -12,6 +12,36 @@
 //! generated text except [`Target::render_operation`]'s single expression and
 //! the [`Artifact`]s it contributes whole.
 //!
+//! # The words the doc comments use
+//!
+//! - The **binding** is the crate a user builds and ships — `zenoh-flat-c`,
+//!   `zenoh-flat-jni` — whose `build.rs` declares what to expose. It is the
+//!   consumer of everything here.
+//! - The **target** is a language together with the calling interface it
+//!   reaches Rust through — C, or Kotlin through JNI — and, in code, the
+//!   adapter implementing [`Target`] for it. The same crate is the
+//!   **frontend** when it faces the binding's `build.rs`, and the target
+//!   adapter when it faces the registry.
+//! - The **registry** is this crate: it plans and asks; the target answers.
+//! - A **source function** is a Rust function in the source crate — the
+//!   `#[prebindgen]`-marked crate the captures come from — that the binding
+//!   asked to expose, with `fun!(ledger_open)` or the like. It is never
+//!   exported itself; it stays where it is and is called. An **exported
+//!   function**, or **wrapper**, is the Rust function the registry generates
+//!   around it: one the target's calling interface can reach, which converts
+//!   what arrives, calls the source function once, and converts what it
+//!   returns. Today the writer gives every wrapper one form — an `extern`
+//!   function under a `#[no_mangle]` symbol — and the target chooses only the
+//!   calling convention and the symbol, in [`AbiSpec`]; a target reached
+//!   another way needs the payload the specification sketches for `AbiSpec`
+//!   and the engine does not have. A binding exports only wrappers.
+//! - **Native** is JNI's word, used in JNI's sense on both targets: the
+//!   compiled side that C or the JVM calls *into*, which is always the
+//!   generated Rust. A native function is the wrapper; a native parameter is
+//!   one of its parameters, spelled as a `jlong` or a `*mut ledger_t`. It never
+//!   means "written in the target language" — the Kotlin function that calls a
+//!   native method is the **foreign** or **public** one.
+//!
 //! This is the first increment (docs/v2). What it carries is the scalar and
 //! owned-struct case; the fields the chapters describe for resources, validity
 //! and sequences arrive with the capabilities that need them, and
@@ -346,8 +376,8 @@ pub enum Operation<P> {
 /// One typed operation supplied by a target.
 ///
 /// It describes an operation, not a use of one: it names no variable and
-/// belongs to no exported function, so the same description is applied wherever
-/// the operation is needed.
+/// belongs to no wrapper, so the same description is applied wherever the
+/// operation is needed.
 #[derive(Clone, Debug)]
 pub struct PrimitiveSpec<P> {
     pub operands: Vec<OperandSpec>,
@@ -494,15 +524,33 @@ pub struct NativeParam {
     pub mutable: bool,
 }
 
-/// The native interface of one exported function.
+/// The native interface of one exported function: how the wrapper the
+/// registry generates around a source function is reached from the target's
+/// side.
+///
+/// The writer renders every wrapper in one form,
+/// `#[no_mangle] pub extern "<abi>" fn <symbol>(<params>) -> <ret>`, and this
+/// is the part of it the target decides: the calling convention string, the
+/// symbol, and the native parameters and return. The attributes, the
+/// visibility and the absence of `unsafe` are the writer's, and a target
+/// cannot change them. That fits C and JNI as v2 emits them; a target reached
+/// another way — through an attribute macro, a registration table, an
+/// `unsafe` signature, another linkage attribute — needs the payload
+/// `docs/v2` sketches for this type and the engine does not have (see the
+/// extensions page, *Wrapper form*). V1's JNI writer is the first known
+/// consumer: its wrapper is `#[allow(..)] pub unsafe extern "C"`.
 #[derive(Clone, Debug)]
 pub struct AbiSpec {
     /// The `extern` string: `"C"`, `"system"`.
     pub abi: String,
-    /// The exported symbol.
+    /// The symbol the wrapper is exported under, which the foreign side links
+    /// against. Not the source function's name: the frontend's naming settled
+    /// it.
     pub symbol: String,
+    /// The wrapper's parameters, in native order — the ones serving a source
+    /// parameter and the ones the calling convention adds.
     pub params: Vec<NativeParam>,
-    /// The native return type, absent for a function returning nothing.
+    /// The native return type, absent when the wrapper returns nothing.
     pub ret: Option<WireType>,
 }
 
@@ -537,14 +585,17 @@ pub struct FailureRoute<P> {
     pub terminate: Terminal,
 }
 
-/// A target's answer for one exported function's native interface.
+/// A target's answer to [`Target::boundary`]: the native interface of the
+/// wrapper that will export one source function, and what the wrapper does
+/// when a conversion inside it fails.
 #[derive(Clone, Debug)]
 pub struct BoundarySpec<P> {
     pub abi: AbiSpec,
+    /// Where the converted result of the source call goes.
     pub output: OutputPlacement,
     /// One route per failure category the conversions can raise. A category
-    /// with no route makes the function unsupported; its ABI is never quietly
-    /// changed to fit.
+    /// with no route makes the export unsupported — the declaration is skipped
+    /// — rather than the ABI being quietly changed to fit.
     pub failures: Vec<FailureRoute<P>>,
 }
 
@@ -643,10 +694,20 @@ pub struct ChildValue<'a> {
     pub layout: &'a Layout,
 }
 
-/// The conversions of one exported function, as the boundary and the public
-/// declaration see them.
+/// The planned conversions of one source function's parameters and result,
+/// as the boundary and the public declaration see them.
+///
+/// A wrapper is these conversions around one call: each input is converted
+/// from what the native parameter carries, the source function is called,
+/// and its result is converted for delivery. What the target reads here is
+/// each plan's carrier — the layout a native parameter or return must match —
+/// and the failure categories the boundary has to route.
 pub struct ResolvedValues<'a, P> {
+    /// One plan per source parameter, in [`Function::params`] order, each
+    /// crossing into Rust.
     pub inputs: Vec<&'a crate::plan::ValuePlan<P>>,
+    /// The plan for the source function's result, crossing out of Rust, or
+    /// `None` when it returns nothing.
     pub output: Option<&'a crate::plan::ValuePlan<P>>,
 }
 
@@ -767,7 +828,8 @@ pub trait Target {
         policy: &Self::Policy,
     ) -> TargetSupport<ReprSpec<Self::Payload>>;
 
-    /// Describe this exported function's native interface and failure routes.
+    /// Describe the wrapper that will export this source function: its native
+    /// interface, and its routes for the failures its conversions can raise.
     fn boundary(
         &self,
         site: &SiteDescriptor<'_>,

@@ -56,9 +56,9 @@ pub struct BindingRequests<Policy> {
     pub default_policy: PolicyId,
     /// Per-source-type defaults: `Stamp` crosses this way wherever it appears.
     pub type_policies: BTreeMap<String, PolicyId>,
-    /// Per-site overrides: this parameter of this exported function crosses
-    /// differently. Keyed by declaration and the site's path, `param 0` or
-    /// `return`.
+    /// Per-site overrides: this parameter, or the result, of this declared
+    /// source function crosses differently from the type's default. Keyed by
+    /// declaration and the site's path, `param 0` or `return`.
     pub site_policies: BTreeMap<(DeclarationId, String), PolicyId>,
     /// Declarations the user asked to leave alone.
     pub ignored: Vec<Declaration>,
@@ -123,9 +123,14 @@ pub struct ValuePlan<P> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
-/// A complete native wrapper.
+/// A complete native wrapper: the exported function, as planned.
+///
+/// One per declaration that exports a source function, plus one per handle
+/// type for its release. The common Rust writer renders it as the
+/// `#[no_mangle] extern` function a foreign caller links against.
 #[derive(Debug)]
 pub struct FunctionPlan<P> {
+    /// The declaration this wrapper exports.
     pub declaration: DeclarationId,
     pub abi: AbiSpec,
     pub output: OutputPlacement,
@@ -937,8 +942,9 @@ struct Emitted<P> {
     surface: SurfaceSpec<P>,
 }
 
-/// Plan one exported function: its input conversions, its call, its result and
-/// the native interface around them.
+/// Plan the wrapper that exports one source function: the conversions of its
+/// parameters, the call, the conversion of its result, and the native
+/// interface around them.
 fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
