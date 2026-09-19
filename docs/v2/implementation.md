@@ -254,7 +254,17 @@ establish the behavior of the resulting foreign interface.
    registry binds the two at assembly. A conversion asking for a context its
    boundary does not supply is a reported skip, not a fragment reaching for a
    variable its caller happens to have.
-7. **Handles without a resource contract.** An opaque value crosses as an
+7. **A consumed handle needs an exchange, not a lock.** Every use of a handle
+   on the specified path consumes it, so the Kotlin class hands its address
+   out through one `AtomicLong.getAndSet`: of two racing consumers exactly one
+   gets the address, the other gets the zero the Rust side refuses, and the
+   exchange carries its own happens-before edge and cannot tear. V1 locks
+   instead — a sorted pass over every handle a wrapper touches — because v1
+   *borrows*, holding an address across the native call, and a lock is what
+   keeps it valid for that span. Whoever specifies a borrowed handle needs
+   v1's shape; porting it for a consume-only handle would be answering a
+   question this path does not ask.
+8. **Handles without a resource contract.** An opaque value crosses as an
    address through three more standard operations — `IntoRaw`, `FromRaw`,
    `Release` — which are the registry's because they spell a source type. The
    adapter states the carrier the address is cast to and, on the into-Rust
@@ -295,16 +305,6 @@ this list says what the increment left open and why.
   [the extensions page](extensions.md#runtime-resources) argues; a borrowed
   handle, an optional handle or a retained callback is what has to add them,
   and cannot be written without them.
-- **A generated handle class is single-threaded.** The Rust side is sound
-  whatever a caller does — a null or zeroed address is refused — but the
-  Kotlin class holding it is not safe to share between threads: its address
-  field is a plain `var`, neither `@Volatile` nor locked, so two consumers can
-  read it before either zeroes it, and a handle handed between threads has no
-  happens-before edge and no guarantee of an untorn 64-bit read. Either ends
-  in `Box::from_raw` twice, or on half an address. V1 emits a `@Volatile`
-  field on a shared `NativeHandle` base and locks every handle a wrapper
-  touches, sorted; v2 emits neither, and the writer is where that has to be
-  fixed — nothing in the boundary changes.
 - **A wrapper's form** is the writer's, except what `AbiSpec` lets a target
   state: the convention, the symbol, the parameters and return, attributes
   beyond `#[no_mangle]`, and `unsafe`. A target reached other than by an

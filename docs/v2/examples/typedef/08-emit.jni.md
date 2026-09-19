@@ -24,7 +24,9 @@ same file as [the other functions][fn_emit_jni]. The class holds the address
 and gives it up exactly once: through `take()`, which the public functions
 call for a handle they consume and `free()` calls for one they do not. What is
 taken is forgotten, so a freed or consumed handle holds zero, and zero is what
-the native side refuses.
+the native side refuses. The exchange is atomic, so that holds between threads
+too: of two racing consumers exactly one gets the address, and the other gets
+the zero the native side refuses.
 
 The constructor is `internal`, because minting a `Ledger` from an arbitrary
 `Long` would reach `Box::from_raw` on it: the generated functions share a
@@ -35,14 +37,12 @@ with a private constructor and a companion factory.
 ```kotlin
 package example
 
-public class Ledger internal constructor(ptr: Long) {
-    private var ptr: Long = ptr
+import java.util.concurrent.atomic.AtomicLong
 
-    internal fun take(): Long {
-        val taken = ptr
-        ptr = 0L
-        return taken
-    }
+public class Ledger internal constructor(ptr: Long) {
+    private val ptr: AtomicLong = AtomicLong(ptr)
+
+    internal fun take(): Long = ptr.getAndSet(0L)
 
     public fun free() = JNINative.freeLedger(take())
 }
@@ -163,12 +163,14 @@ configures no loader and does not execute the call in a JVM.
   the value out of its box, and the owned local is dropped on the way out. The
   caller sees an exception from a call whose handle is gone — which is what
   `take()` already told it, having zeroed the address before the call.
-- `take()` is not synchronized and `ptr` is a plain `var`: two threads
-  consuming one `Ledger` can both read the address before either zeroes it,
-  and a handle handed between threads is read with no happens-before edge and
-  no guarantee of an untorn 64-bit value. Either ends in `Box::from_raw` twice
-  or on half an address, so a generated handle is safe for one thread only.
-  V1's output is `@Volatile` and locked; the v2 writer emits neither.
+- Two threads racing to consume or free one `Ledger` cannot both reach its
+  address: `getAndSet` is one atomic exchange, so the loser reads zero and is
+  refused. It carries its own happens-before edge and cannot tear, which a
+  plain `var` would do neither of. A lock is what v1 emits instead, and for a
+  different shape: v1 *borrows* a handle, holding its address across the
+  native call, so the address has to stay valid for that span. Every use on
+  this path consumes instead, which is why an exchange is enough — and why a
+  borrowed handle (`&Ledger`), when it is specified, will need more.
 
 [typedef]: README.md
 [typedef_emit]: 08-emit.md

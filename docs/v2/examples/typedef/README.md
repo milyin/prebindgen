@@ -44,14 +44,14 @@ an `Option`; and a struct declared under a handle
 [policy](../../stages/03-requests.md#what-policy-means), which crosses the same
 way with its fields never read.
 
-Concurrency is not covered either, and the omission has teeth: the closed-handle
-race the shipping JNI adapter guards against in Kotlin is that adapter's runtime
-convention rather than part of the boundary, so nothing here specifies it — and
-the Kotlin class the v2 writer emits (see step 8 below) is therefore safe for
-one thread only. Two threads closing or consuming one handle can both reach the
-address, which the Rust side then frees twice. What this path specifies is the
-boundary, which is sound either way: what it does not specify is a Kotlin class
-that may be shared.
+Concurrency belongs to whatever holds the handle on the foreign side, not to
+the boundary, which is sound however the address arrives. It is worth saying
+what the Kotlin writer does with that freedom: every use on this path consumes
+the handle, so its class hands the address out through one atomic exchange, and
+two threads racing to consume or free one cannot both reach it. The sorted
+locking the shipping JNI adapter does in Kotlin answers a shape this path
+excludes — a borrowed handle, whose address has to stay valid across the native
+call.
 
 1. [Capture source items][typedef_source]
 2. [Build and inspect the source model][typedef_flat]

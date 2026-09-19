@@ -143,6 +143,13 @@ pub(super) fn write(
                 // What is taken is forgotten, so a freed or consumed handle
                 // holds zero, and zero is what the native side refuses.
                 //
+                // `getAndSet` is what makes that true between threads as well:
+                // every use of a handle on this path consumes it, so two
+                // racing consumers are one exchange — exactly one gets the
+                // address and the other gets zero. A lock is what v1 needs
+                // instead, because v1 *borrows*: it holds the address across
+                // the native call, and a borrowed handle is not this path.
+                //
                 // Minting one from an arbitrary `Long` is not a thing a caller
                 // may do — `Ledger(0xdeadbeef).free()` would reach
                 // `Box::from_raw` on it — so the constructor is `internal`:
@@ -156,21 +163,16 @@ pub(super) fn write(
                     .ctor_vis(KtVis::Internal)
                     .ctor_param(KtCtorParam::new("ptr", KtType::cls("Long")))
                     .member(
-                        KtProperty::var("ptr")
-                            .ty(KtType::cls("Long"))
-                            .initializer("ptr")
+                        KtProperty::val("ptr")
+                            .ty(KtType::cls("java.util.concurrent.atomic.AtomicLong"))
+                            .initializer("AtomicLong(ptr)")
                             .vis(KtVis::Private),
                     )
                     .member(
                         KtFun::new("take")
                             .vis(KtVis::Internal)
                             .returns(KtType::cls("Long"))
-                            .body(
-                                KtCode::new()
-                                    .line("val taken = ptr")
-                                    .line("ptr = 0L")
-                                    .line("return taken"),
-                            ),
+                            .expr_body(KtCode::new().line("ptr.getAndSet(0L)")),
                     )
                     .member(
                         KtFun::new("free")
