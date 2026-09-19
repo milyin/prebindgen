@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][typedef_boundary] · [Element path][typedef]
 Owner: the registry, on the JNI adapter's `BoundarySpec`
 
-# Type alias declaring an opaque handle — Assemble the native boundary — Kotlin/JNI
+# Type alias declaring an opaque handle — Assemble the wrapper boundary — Kotlin/JNI
 
 ## Input
 
@@ -21,7 +21,7 @@ policy (JNI handle): native example.JNINative.freeLedger, extern "system"
 BoundarySpec {
     abi:      extern "system", symbol "Java_example_JNINative_freeLedger",
               synthetic operands: JNIEnv (unused here), receiver JObject (unused),
-    inputs:   [ InputPlacement { native arg ptr (jlong) -> node(taken) } ],
+    inputs:   [ InputPlacement { wrapper arg ptr (jlong) -> node(taken) } ],
     output:   OutputPlacement::Void,
     failures: { Binding: throw IllegalStateException(message), then return ();
                          if throwing fails -> abort
@@ -49,7 +49,7 @@ env.throw_new("java/lang/IllegalStateException", error)
 ```
 
 The environment is still a parameter — the JVM passes it whether or not the
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) wants
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) wants
 it — but nothing in a release uses it, and the adapter names it `_env` so the
 generated code says so rather than warning.
 

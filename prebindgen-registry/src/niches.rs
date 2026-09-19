@@ -19,7 +19,7 @@
 //! real `Box::into_raw` results are never `0`, so the converter declares
 //! the single niche `{0}`. `Option<T>` then automatically reuses the same
 //! integer wire with `0` meaning `None`, matching the C-pointer-with-null
-//! ABI most native bindings already use.
+//! ABI most hand-written bindings already use.
 //!
 //! ## Aligned pointer tags
 //!

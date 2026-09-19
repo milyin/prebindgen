@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "05-represent"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Element path][fn] · [Source crate](../../source.md)
-Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][fn_select] · Next: [Assemble the native boundary][fn_boundary]
+Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][fn_select] · Next: [Assemble the wrapper boundary][fn_boundary]
 
 # Function taking an owned struct — Represent and compose values
 

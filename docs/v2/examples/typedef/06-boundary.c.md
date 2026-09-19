@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][typedef_boundary] · [Element path][typedef]
 Owner: the registry, on the C adapter's `BoundarySpec`
 
-# Type alias declaring an opaque handle — Assemble the native boundary — C
+# Type alias declaring an opaque handle — Assemble the wrapper boundary — C
 
 ## Input
 
@@ -19,7 +19,7 @@ policy (C handle): release symbol "ledger_drop", extern "C"
 ```text
 BoundarySpec {
     abi:      extern "C", symbol "ledger_drop",
-    inputs:   [ InputPlacement { native arg this_ (*mut Ledger) -> node(taken) } ],
+    inputs:   [ InputPlacement { wrapper arg this_ (*mut Ledger) -> node(taken) } ],
     output:   OutputPlacement::Void,
     failures: { Binding: no report, abort },
 }

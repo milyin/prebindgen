@@ -1,6 +1,6 @@
 <!-- spec: {"kind": "stage", "stage": "05-represent"} -->
 
-[Project contents](../README.md) · Previous: [Select conversion relations](04-select.md) · Next: [Assemble the native boundary](06-boundary.md)
+[Project contents](../README.md) · Previous: [Select conversion relations](04-select.md) · Next: [Assemble the wrapper boundary](06-boundary.md)
 
 # Represent and compose values
 
@@ -96,7 +96,7 @@ of the values used on the target side and the operations that access them.
 
 The **public surface** is the API foreign users see: C types and functions or
 Kotlin classes and methods. The **wire representation** is the set of values
-passed through the native calling interface, or **ABI** (application binary
+passed through the foreign calling interface, or **ABI** (application binary
 interface). A Kotlin `Stamp` object can have two integer arguments as its wire
 representation. A **carrier** is a value holding conversion data, either on
 that boundary or temporarily inside generated Rust code.
@@ -176,7 +176,7 @@ registry itself renders — the identity conversion, an aggregate member read �
 the adapter's own `Payload`. Reading a C aggregate member is the first, which is
 why the C adapter ships no renderer at all and its payload type has no values.
 `Payload` is rendering data whose type and interpretation are defined by the
-language implementation, such as a JVM property descriptor or a native
+language implementation, such as a JVM property descriptor or a target
 operation description. The adapter supplies payload values; the registry stores
 those values in the plans and retains the required values in the completed
 `Generation`. Language-provided rendering code reads the retained payloads.
@@ -224,7 +224,7 @@ of the same value.
 `WireType` describes one carrier type on the target-facing side of a
 conversion: a JNI integer, an object reference, the JNI environment, or a
 Rust-only intermediate that never leaves the
-[wrapper](06-boundary.md#assemble-the-native-boundary). Not every carrier is an
+[wrapper](06-boundary.md#assemble-the-wrapper-boundary). Not every carrier is an
 ABI type, so the descriptor states whether this one may appear in an extern
 signature. An environment wrapper used inside generated Rust need not itself be
 an ABI argument type. `Access` describes the operation's use of its operand and
@@ -415,7 +415,7 @@ carrier, which is why a scalar child renders nothing between a member read and
 the construction that uses it.
 
 An operation that needs a runtime scope names it, and the boundary says which
-native parameter supplies it; nothing in a rendered fragment can reach for a
+wrapper parameter supplies it; nothing in a rendered fragment can reach for a
 variable its caller happens to have.
 
 For the struct, composition is: apply each projection to the carrier, in part

@@ -46,7 +46,7 @@ struct.
 Both field positions resolve to the same cached `i64` input
 [node](../../stages/05-represent.md#represent-and-compose-values) under this
 [policy](../../stages/03-requests.md#what-policy-means); the
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) applies
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) applies
 that plan once per field. Each carrier already has the required Rust `i64`
 value, so the child [conversion](../../stages/04-select.md#select-conversion-relations)
 is **identity**: it passes the value through without generating another

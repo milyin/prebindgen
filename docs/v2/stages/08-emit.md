@@ -26,10 +26,10 @@ unsupported requests or invent another [representation](05-represent.md#represen
 already made, which keeps the C/JNI declarations consistent with their Rust
 implementations. Three contributions combine to produce the files:
 
-**Native Rust** is generated for both targets by the same component, the common
+**Generated Rust** is produced for both targets by the same component, the common
 Rust writer, which belongs to the registry. It walks the frozen instructions and
 renders them: the locals, their order, the branches on failure, the construction
-of the source value, the call, the return. It also allocates the [wrapper](06-boundary.md#assemble-the-native-boundary)'s temporaries — `v0`, `v1`, … — from the plan, so
+of the source value, the call, the return. It also allocates the [wrapper](06-boundary.md#assemble-the-wrapper-boundary)'s temporaries — `v0`, `v1`, … — from the plan, so
 two operations rendered into the same wrapper cannot collide over a name. The
 wrapper's *parameters* are the exception, and deliberately so: they are named in
 the boundary description, because a target that requires an environment operand
@@ -71,7 +71,7 @@ a Kotlin class, a C prototype — and writing it belongs to the adapter for that
 language: nothing else knows what such a thing should look like. The JNI adapter therefore renders the data
 class, the `external fun` on its harness object and the Kotlin function that
 calls it, from retained public descriptions. The adapter derives public
-properties and native getter names from the same source fields and uses the
+properties and JNI getter names from the same source fields and uses the
 configured class name consistently. Tests check the agreement between those outputs.
 
 C is the exception, and for a practical reason rather than an architectural one:
@@ -145,15 +145,15 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64 {
 ```
 
 On the Kotlin side, the public API is one function per exported function,
-`stampSum(stamp: Stamp): Long`, delegating to the native method the JVM binds
-the wrapper to. The native method lives on one harness object, `JNINative`,
+`stampSum(stamp: Stamp): Long`, delegating to the `external` method the JVM
+binds the wrapper to. That method lives on one harness object, `JNINative`,
 whichever package the function is declared in — the `Java_…` symbol names that
 object, so the two have to agree — and because the struct crosses as an object,
 it takes the data class itself. A future separate-arguments representation
-would give the native method two `Long` arguments and make the public Kotlin
+would give the `external` method two `Long` arguments and make the public Kotlin
 wrapper read them from `Stamp`. That representation is not implemented in this
 V2 increment. It illustrates why a public wrapper may eventually do more than
-delegate when the native signature differs from the API Kotlin callers use.
+delegate when the wrapper signature differs from the API Kotlin callers use.
 
 ## What lands on disk
 
@@ -211,7 +211,7 @@ operations, which produces one expression per operation and nothing around it.
 
 The public declarations follow the same division: the JNI adapter renders them
 from retained descriptions derived from the same source fields and naming
-configuration as its native operations. C declarations are expressed as
+configuration as its JNI operations. C declarations are expressed as
 generated Rust and left to `cbindgen`.
 
 ## From description to generated code
@@ -231,7 +231,7 @@ concrete contributions stay separate throughout planning and writing:
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
 | Source construction and call | `source::Stamp { ... }`, then `stamp_sum` | Same source instructions | Registry plans; common Rust writer renders. |
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
-| Public foreign source | Header derived from Rust | Kotlin classes and native declaration | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
+| Public foreign source | Header derived from Rust | Kotlin classes and `external` declarations | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
 
 For the input struct, the registry asks the selected [relation](04-select.md#what-a-relation-is) for its fields,
 resolves the child [conversions](04-select.md#select-conversion-relations), and asks the target for a representation using

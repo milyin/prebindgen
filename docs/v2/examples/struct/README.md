@@ -15,8 +15,8 @@ This walkthrough follows the type that the function example accepts: a struct
 whose fields Flat can inspect. `Stamp` has two signed 64-bit fields; a foreign
 caller needs its own way to hold those values.
 C uses a generated C-compatible struct passed by value. Kotlin uses a generated
-data class whose JVM getters the native
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) can call.
+data class whose JVM getters the
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) can call.
 
 The key question is how either foreign [representation](../../stages/05-represent.md#represent-and-compose-values) becomes the original Rust
 `Stamp`. For each field, the target describes a read operation, and the registry
@@ -26,8 +26,8 @@ operations; the contracts planned for more complex values are collected on
 [the extensions page](../../extensions.md).
 
 Follow the pages below from capture to the emitted type. There is no separate
-native-boundary page for a struct: a type is not a callable entry point. The
-struct crosses the native boundary as an argument of
+wrapper-boundary page for a struct: a type is not a callable entry point. The
+struct crosses the wrapper boundary as an argument of
 [the function that takes it][fn].
 
 Deliberately not covered: a field whose type is itself a struct, an optional

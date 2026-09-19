@@ -13,11 +13,11 @@ use crate::{
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
-        AbiSpec, Access, BoundarySpec, ChildValue, FailureCategory, Layout, NativeParam,
-        OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
-        PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, ResolvedShape,
-        ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest,
-        SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
+        AbiSpec, Access, BoundarySpec, ChildValue, FailureCategory, Layout, OperandSpec, Operation,
+        OperationType, OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec,
+        Protocol, Relation, RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery,
+        SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
+        TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
     },
 };
 
@@ -114,7 +114,7 @@ enum Policy {
     Function {
         symbol: String,
         routes: Routes,
-        /// Names for the native parameters, in order. Empty means `arg0`,
+        /// Names for the wrapper parameters, in order. Empty means `arg0`,
         /// `arg1`, … — the well-behaved case that hides a name collision.
         param_names: Vec<String>,
         /// Attributes the wrapper carries and whether it is `unsafe`: the part
@@ -293,7 +293,7 @@ impl Target for Mini {
                 abi: AbiSpec {
                     abi: "C".to_string(),
                     symbol: "wrong".to_string(),
-                    params: vec![NativeParam {
+                    params: vec![WrapperParam {
                         name: quote::format_ident!("arg0"),
                         // The conversion reads a `Stamp` aggregate.
                         ty: WireType::abi(syn::parse_quote!(i64)),
@@ -344,7 +344,7 @@ impl Target for Mini {
                     .inputs
                     .iter()
                     .enumerate()
-                    .map(|(index, value)| NativeParam {
+                    .map(|(index, value)| WrapperParam {
                         name: match param_names.get(index) {
                             Some(name) => quote::format_ident!("{name}"),
                             None => quote::format_ident!("arg{index}"),
@@ -1033,7 +1033,7 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
 /// and fails the build rather than emitting a wrapper that reads the wrong
 /// thing.
 #[test]
-fn a_native_parameter_must_carry_what_its_conversion_reads() {
+fn a_wrapper_parameter_must_carry_what_its_conversion_reads() {
     let mut requests = requests();
     let strukt = requests.policy(Policy::Struct);
     requests.type_policies.insert("Stamp".to_string(), strukt);

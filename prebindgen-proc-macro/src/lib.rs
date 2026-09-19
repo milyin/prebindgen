@@ -12,7 +12,8 @@
 //! - **`inline`** *(off by default)* — inject `#[inline]` onto every function
 //!   marked with `#[prebindgen]` (types/consts are unaffected).
 //!
-//!   prebindgen wrappers are usually thin shims that forward to a native API. A
+//!   prebindgen wrappers are usually thin shims that forward to the source
+//!   crate's API. A
 //!   non-generic `pub fn` in one crate is **not** inlined into a Rust caller in
 //!   another crate unless the function is `#[inline]` *or* the final binary is
 //!   built with link-time optimization. Without inlining, every wrapper call

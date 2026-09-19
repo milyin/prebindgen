@@ -1,4 +1,4 @@
-//! Native micro-benchmark of the `perftest-flat` functions (no FFI).
+//! In-process micro-benchmark of the `perftest-flat` functions (no FFI).
 //!
 //! Mirrors `perftest-c/c/perftest.c` (generated C ABI) and
 //! `perftest-kotlin/.../Bench.kt` (generated JNI) — compare the numbers to see the

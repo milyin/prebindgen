@@ -17,7 +17,7 @@ use serde::Serialize;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeclarationKind {
-    /// A `#[prebindgen]` function the binding exports a native wrapper for.
+    /// A `#[prebindgen]` function the binding exports a wrapper for.
     Function,
     /// A `#[prebindgen]` type the binding gives a foreign representation.
     Type,

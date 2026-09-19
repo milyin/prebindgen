@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "typedef", "stage": "07-retain"} -->
 
 [Stage chapter](../../stages/07-retain.md) · [Element path][typedef] · [Source crate](../../source.md)
-Owner: the registry · Previous: [Assemble the native boundary][typedef_boundary] · Next: [Emit bindings][typedef_emit]
+Owner: the registry · Previous: [Assemble the wrapper boundary][typedef_boundary] · Next: [Emit bindings][typedef_emit]
 
 # Type alias declaring an opaque handle — Retain supported output
 
@@ -57,7 +57,7 @@ types as well as from parameters.
 - A handle is a root and is retained on its own, release included, whether or
   not a function returns or takes one — a caller holding a handle from an
   earlier build still needs to free it.
-- The release [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
+- The release [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)
   is never listed as a declaration of its own. It is retained with the type and
   counted in its outcome, so a report of "one type emitted" means the
   destructor exists.

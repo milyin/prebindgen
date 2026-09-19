@@ -48,7 +48,7 @@ copy. `ReadMember` is a common operation rendered by the engine, so the C adapte
 does not need to supply Rust text for it. The aggregate declaration is retained
 through the public type's description, not as a dependency on this read.
 
-Applied to the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)'s
+Applied to the [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s
 input named `stamp`, the member-read operation renders:
 
 ```rust

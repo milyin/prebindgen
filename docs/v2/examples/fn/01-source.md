@@ -18,7 +18,7 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
 
 The annotation makes the function's signature available to a later binding
 build. The original implementation remains in the source crate; the generated
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) will call it rather than copy its calculation. The following is a
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) will call it rather than copy its calculation. The following is a
 readable illustration of the JSON record written as one line in `OUT_DIR`:
 
 ```json
@@ -38,7 +38,7 @@ fields or chosen a C/JNI [representation](../../stages/05-represent.md#represent
 
 ## Checks
 
-- The body is replaced by a placeholder: the generated [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) calls
+- The body is replaced by a placeholder: the generated [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) calls
   `stamp_sum`, so only the signature has to travel.
 - `content` is text. `Stamp` here is a name in a string, matched to
   [the struct's own capture][struct_source] only by the next stage.

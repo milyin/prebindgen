@@ -26,7 +26,7 @@ node(output) representation: Scalar(c_i64)
              contract:       produces the carrier, validity Independent, failures {}
 ```
 
-`Aggregate` means the native input is one struct containing the two members.
+`Aggregate` means the [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s input is one struct containing the two members.
 `Scalar(c_i64)` means the output uses one signed 64-bit value. The names here
 summarize the plan rather than declare Rust types. `Independent` describes the
 fact that copied integers and the reconstructed struct do not borrow the input;

@@ -42,7 +42,7 @@ policy (C function):
     symbol:     "stamp_sum"      // a function keeps its Rust name; no hook renamed it
     convention: extern "C"
     input:      by value at its ABI position
-    output:     native return
+    output:     the wrapper's return
     failures:   none declared
 ```
 

@@ -51,7 +51,7 @@ PrimitiveSpec {
 
 The environment operand allows JNI calls and is used exclusively; the object
 operand is borrowed for the getter. `Runtime` identifies the error category
-that the enclosing [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) must handle. In the implementation the environment
+that the enclosing [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) must handle. In the implementation the environment
 has the named role `Context("jni.env")`, which the boundary binds to `env`.
 
 Applied to `env` and the input object `stamp`, the getter description renders
@@ -67,12 +67,12 @@ env.call_method(&stamp, "getSecs", "()J", &[])
 
 - The expression evaluates to `Result<jlong, jni::errors::Error>` and stops
   there: no `let`, no `match` on that result, no return. Those belong to the
-  [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) the registry composes.
+  [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) the registry composes.
 - The environment is an operand, so no rendered fragment can depend on a
   variable named `env` in its caller.
 - Getter names and descriptors are derived from Flat's fields during planning.
   The adapter also derives [the emitted class][struct_emit_jni] from those
-  fields, keeping public properties and native accesses consistent.
+  fields, keeping public properties and JNI accesses consistent.
 - Both results are independent copies: neither integer remains tied to the
   object's reference frame. There is no explicit validity-contract field today.
 

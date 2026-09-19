@@ -81,7 +81,7 @@ int64_t stamp_sum(struct Stamp stamp);
 ```
 
 and the Kotlin/JNI output is a Kotlin class and function, backed by a different
-generated Rust function that the JVM calls through a native method on the
+generated Rust function that the JVM calls through an `external` method on the
 binding's harness object:
 
 ```kotlin
@@ -97,7 +97,8 @@ The example explicitly chooses `Stamp` as the C type name; the C frontend's
 default type base name would be `stamp`. The function keeps `stamp_sum`.
 For Kotlin, the configuration also chooses a package, and the frontend derives
 the camel-case function name `stampSum`. `JNINative` is the generated object
-that declares native methods: `external` tells the JVM that Rust supplies the
+that holds the `external` declarations: `external` tells the JVM that Rust
+supplies the
 implementation. The public Kotlin function delegates to that method.
 
 Neither generated Rust function is written by hand, and neither is a
@@ -118,13 +119,13 @@ the flat namespace of items a binding sees, which is why the model built from on
 is called Flat.) Beside it stands one **binding crate per target language**: a
 `cdylib` or `staticlib` whose build script configures the generator, whose
 `lib.rs` includes the Rust that generator produced, and which is the thing you
-ship — a native library plus a C header, or a native library plus Kotlin sources
-in a JAR.
+ship — a compiled library plus a C header, or a compiled library plus Kotlin
+sources in a JAR.
 
 Separating the crates lets the source library remain useful to ordinary Rust
 callers while each binding crate chooses its own exported interface and library
-format. `cdylib` produces a native dynamic library; `staticlib` produces a native
-static library. Rust does allow an implementation crate to define foreign entry
+format. `cdylib` produces a dynamic library; `staticlib` produces a static
+library. Rust does allow an implementation crate to define foreign entry
 points itself, but keeping the generated entry points in binding crates avoids
 making that implementation responsible for every target language.
 
@@ -139,18 +140,18 @@ build-dependency only:
   name refers to, what fields a struct has.
 - **`prebindgen-registry-v2`** is the engine this document specifies. It plans
   every [conversion](stages/04-select.md#select-conversion-relations) a requested binding needs, resolves what depends on what,
-  renders the Rust [wrappers](stages/06-boundary.md#assemble-the-native-boundary), and reports what it could not generate. It shares
+  renders the Rust [wrappers](stages/06-boundary.md#assemble-the-wrapper-boundary), and reports what it could not generate. It shares
   the capture and model crates with the V1 engine and depends on nothing else of
   it, so "V2 never falls back to V1 for an item" is a property of the dependency
   graph rather than a promise.
 - **`prebindgen-c`** and **`prebindgen-jni`** are the **language adapters**, one
-  crate per **target** — a language together with its native calling interface,
+  crate per **target** — a language together with its foreign calling interface,
   C or Kotlin through JNI. Each adapter answers to two callers, which is why the
   chapters address it under two names. Facing you, it is the **frontend**: the
   builder your build script configures with what to expose and how it should look
   in that language. Facing the engine, it is the **target adapter**: the
   implementation the engine queries while planning — what carries a `Stamp`, how
-  a member of it is read, what this exported function's native signature is. One
+  a member of it is read, what this exported function's wrapper signature is. One
   crate, two directions; the first records decisions, the second is made to spell
   them out item by item. Producing the target language's own declarations is part
   of the same job — the JNI adapter emits the Kotlin, since only it knows what a
@@ -169,7 +170,7 @@ ships inside a binding.
 
 The crate boundaries separate build-time tools from runtime support. For example,
 the source crate needs annotation support but does not need the JNI generator.
-A shipped native library needs the runtime helpers its generated code calls,
+A shipped binding library needs the runtime helpers its generated code calls,
 but does not need the parser and formatter used to generate that code. A C-only
 binding can also avoid depending on the Kotlin adapter.
 
@@ -180,9 +181,9 @@ captured Rust source + declared local helper signatures
   -> Flat builds the checked source model
   -> language frontend records binding requests from Flat views and user choices
   -> registry plans value conversions using Flat facts and target descriptions
-  -> registry assembles the native boundary of each exported function
+  -> registry assembles the wrapper boundary of each exported function
   -> registry retains complete supported plans and reports skipped requests
-       -> common Rust writer -> native Rust -> cbindgen -> C headers
+       -> common Rust writer -> generated Rust -> cbindgen -> C headers
        -> JNI's Kotlin writer -> Kotlin declarations
 ```
 
@@ -196,7 +197,7 @@ those words once; read it first.
 3. [Record binding requests](stages/03-requests.md)
 4. [Select conversion relations](stages/04-select.md)
 5. [Represent and compose values](stages/05-represent.md)
-6. [Assemble the native boundary](stages/06-boundary.md)
+6. [Assemble the wrapper boundary](stages/06-boundary.md)
 7. [Retain supported output](stages/07-retain.md)
 8. [Emit bindings](stages/08-emit.md)
 
@@ -263,7 +264,7 @@ cell links back to its chapter, and both use these ids.
 [The format contract](FORMAT.md) states the grammar and the rules a new path has
 to satisfy.
 
-Only applicable combinations exist. The struct path has no native-boundary cell,
+Only applicable combinations exist. The struct path has no wrapper-boundary cell,
 because a struct exports no function of its own; its conversion is reached
 through the function that uses it. A missing cell claims nothing about support —
 whether something is supported is stated in the contract of a cell that does exist.

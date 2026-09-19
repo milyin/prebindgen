@@ -48,7 +48,7 @@ match direction {
 their operand types, results and failures fixed: an adapter cannot describe the
 same operation with a different failure, so a C route that aborts and a JNI
 route that throws agree on what they are handed. Applied to the
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)'s value
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s value
 `v3` and its parameters `ledger` and `this_`, the three render:
 
 ```rust

@@ -20,7 +20,7 @@ SurfaceSpec { declaration: "type:Stamp",
 The generated declaration gives foreign callers a way to hold the two values.
 It does not itself contain the Rust
 [conversion](../../stages/04-select.md#select-conversion-relations). That work is
-inlined into the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
+inlined into the [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)
 of [the function that uses the struct][fn_emit]. This distinction explains why
 C needs a generated Rust ABI struct while Kotlin needs a JVM class:
 

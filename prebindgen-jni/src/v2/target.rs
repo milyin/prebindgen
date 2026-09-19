@@ -15,11 +15,11 @@
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
-    FailureCategory, FailureRoute, Layout, NativeParam, OperandSpec, Operation, OperationType,
-    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
-    RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor,
-    SourceItem, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType,
+    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
+    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId,
+    ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
+    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
+    WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -68,7 +68,7 @@ pub enum JniPayload {
     ReportError,
     /// Throw a binding failure's message as an `IllegalStateException`.
     ThrowMessage,
-    /// A Kotlin class wrapping a native address, and the native method on the
+    /// A Kotlin class wrapping a Rust address, and the native method on the
     /// harness that frees one — a [`JniPayload::Method`] taking the handle.
     Handle {
         package: String,
@@ -460,7 +460,7 @@ impl Target for JniTarget {
         // steps aside. A release calls nothing on the JVM, so the environment
         // it is handed goes unused — and is named so.
         let mut params = vec![
-            NativeParam {
+            WrapperParam {
                 name: match site.function {
                     Some(function) => free_name("env", function),
                     None => format_ident!("_env"),
@@ -471,7 +471,7 @@ impl Target for JniTarget {
             },
             // The native method is an instance method of the harness `object`,
             // so what the JVM passes here is the singleton, not a class.
-            NativeParam {
+            WrapperParam {
                 name: match site.function {
                     Some(function) => free_name("_this", function),
                     None => format_ident!("_this"),
@@ -481,14 +481,14 @@ impl Target for JniTarget {
                 mutable: false,
             },
         ];
-        // A native parameter keeps the source parameter's name, as v1's do. A
+        // A wrapper parameter keeps the source parameter's name, as v1's do. A
         // release has no source parameter to take a name from, and takes v1's.
         params.extend(
             values
                 .inputs
                 .iter()
                 .enumerate()
-                .map(|(index, value)| NativeParam {
+                .map(|(index, value)| WrapperParam {
                     name: match site.function {
                         Some(function) => function.params[index].name.clone(),
                         None => format_ident!("ptr"),

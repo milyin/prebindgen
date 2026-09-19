@@ -31,7 +31,7 @@ A foreign caller does not call `stamp_sum`. It calls a generated entry point in
 its own language: a C function declared in a generated header, taking a
 `repr(C)` struct of two integers, or a Kotlin method taking a JVM object.
 Behind that entry point is the generated
-[wrapper](06-boundary.md#assemble-the-native-boundary), a Rust function whose
+[wrapper](06-boundary.md#assemble-the-wrapper-boundary), a Rust function whose
 ABI the foreign side can reach. It receives what the caller sent, and has to
 call `stamp_sum`, whose signature demands an owned `source::Stamp`.
 
@@ -43,7 +43,7 @@ members of the C struct, getters on the JVM object — and constructing
 configured to carry `Stamp` whole, as an opaque handle, reads no fields at all.
 Each of those value-shaped problems is a **conversion**, and planning one is
 the work of this chapter and the next. Ordering the plans around the source
-call is [the boundary's](06-boundary.md#assemble-the-native-boundary); here each
+call is [the boundary's](06-boundary.md#assemble-the-wrapper-boundary); here each
 value is planned on its own.
 
 ## Three questions, two chapters
@@ -384,7 +384,7 @@ a ready description, a specific unsupported reason, or a fatal planning error
 [outcomes](07-retain.md#retain-supported-output)). Two of the answers are
 specified in later chapters, because they are about later stages:
 [`BoundarySpec`](06-boundary.md#assembling-an-exported-function) describes
-where native arguments and results go, and
+where wrapper arguments and results go, and
 [`SurfaceSpec`](07-retain.md#dependencies-of-public-declarations) describes a
 public foreign declaration and what it requires.
 
@@ -394,7 +394,7 @@ The method inputs and results serve different stages:
 | --- | --- | --- | --- |
 | `select` | Exact source type/direction, local source facts and applicable conversion rules and policy | The relation chosen for *this* value, and nothing else | Inspect that relation's parts and recursively resolve their conversions. |
 | `represent` | `ResolvedShape`: source operation with model-derived child types; `ValueDescriptor`s: completed child layouts and contracts | Representation layout and target operations | Compose the complete value conversion. |
-| `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete native wrapper. |
+| `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete wrapper. |
 | `surface` | `SurfaceRequest`: requested name, placement, policy and promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |
 
 A selection speaks for one value. It cannot declare a choice for a child,

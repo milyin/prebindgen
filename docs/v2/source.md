@@ -63,11 +63,11 @@ C type: a caller holds a `Ledger *` to a Rust-owned value and frees it with
 `ledger_drop`.
 
 For Kotlin/JNI, the configuration chooses a data class named `example.Stamp`.
-JNI, the Java Native Interface, is how JVM code calls the Rust library. The native
-entry point receives a JVM object and reads its `secs` and `nanos` properties
-through getter methods. `Ledger` becomes a class holding the address as a
-`Long`, freed through a native method on the harness object. Both targets then
-call the same Rust functions.
+JNI, the Java Native Interface, is how JVM code calls the Rust library. The
+generated entry point receives a JVM object and reads its `secs` and `nanos`
+properties through getter methods. `Ledger` becomes a class holding the address
+as a `Long`, freed through an `external` method on the harness object. Both
+targets then call the same Rust functions.
 
 The example does not involve a borrow, a callback, or an extra constructor
 function. Those features need their own examples before the appendix can
@@ -78,7 +78,7 @@ C uses a configured `.source_module(...)` path or the source crate name.
 The current JNI V2 route uses the first source module's crate name, falling back
 to `crate` when unavailable; it has no corresponding module-override setting.
 C and JNI produce separate target modules from the same Rust items.
-The Kotlin consumer is responsible for loading the native library.
+The Kotlin consumer is responsible for loading the dynamic library.
 
 `examples/v2check` provides a runnable generation fixture based on this source,
 with additional cases for rejection and field-order checks. It parses its source

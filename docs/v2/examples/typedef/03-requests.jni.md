@@ -34,11 +34,11 @@ policy (JNI handle):
     null handle:    throw IllegalStateException, then return a default
 ```
 
-`ptr_class!` declares a Kotlin class that holds a native address, as
-`data_class!` declares one whose properties are read. The native method that
-frees an address lives on `JNINative`, the generated object every native
+`ptr_class!` declares a Kotlin class that holds a Rust address, as
+`data_class!` declares one whose properties are read. The `external` method that
+frees an address lives on `JNINative`, the generated object every `external`
 method lands on, and is named after the class through the method-name hook —
-so it has one namespace with every other native method, and its symbol is
+so it has one namespace with every other `external` method, and its symbol is
 built the way theirs are.
 
 ## Checks
@@ -50,7 +50,7 @@ built the way theirs are.
   JNI calls, which carry the `jni` crate's error.
 - What Kotlin does with the `Long` — the class around it, the `take()` that
   empties it, the lock that makes closing race-free in the shipping adapter's
-  v1 output — is the Kotlin writer's, and none of it changes the native
+  v1 output — is the Kotlin writer's, and none of it changes the [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)
   boundary recorded here.
 
 [typedef]: README.md
