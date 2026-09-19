@@ -291,9 +291,20 @@ this list says what the increment left open and why.
   `SlotRole`, `GuardId`, `AbsenceEncoding` — are not implemented.
 - **Validity and resource contracts** are absent from `PrimitiveSpec`. The one
   resource-bearing operation set — the owned handle — is safe without them by
-  construction, as [the extensions page](extensions.md#runtime-resources)
-  argues; a borrowed handle, an optional handle or a retained callback is what
-  has to add them, and cannot be written without them.
+  construction on the Rust side, as
+  [the extensions page](extensions.md#runtime-resources) argues; a borrowed
+  handle, an optional handle or a retained callback is what has to add them,
+  and cannot be written without them.
+- **A generated handle class is single-threaded.** The Rust side is sound
+  whatever a caller does — a null or zeroed address is refused — but the
+  Kotlin class holding it is not safe to share between threads: its address
+  field is a plain `var`, neither `@Volatile` nor locked, so two consumers can
+  read it before either zeroes it, and a handle handed between threads has no
+  happens-before edge and no guarantee of an untorn 64-bit read. Either ends
+  in `Box::from_raw` twice, or on half an address. V1 emits a `@Volatile`
+  field on a shared `NativeHandle` base and locks every handle a wrapper
+  touches, sorted; v2 emits neither, and the writer is where that has to be
+  fixed — nothing in the boundary changes.
 - **A wrapper's form** is the writer's, except what `AbiSpec` lets a target
   state: the convention, the symbol, the parameters and return, attributes
   beyond `#[no_mangle]`, and `unsafe`. A target reached other than by an

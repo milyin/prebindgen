@@ -196,7 +196,7 @@ mod tests {
         for once in [
             "package example",
             "public data class Stamp(val secs: Long, val nanos: Long)",
-            "public class Ledger(ptr: Long) {",
+            "public class Ledger internal constructor(ptr: Long) {",
             "internal object JNINative {",
         ] {
             assert_eq!(

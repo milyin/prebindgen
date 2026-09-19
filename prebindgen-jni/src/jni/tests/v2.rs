@@ -272,7 +272,7 @@ fn the_ordinary_writers_run_under_v2() {
         .collect();
     let kotlin = kotlin.join("\n");
     assert!(
-        kotlin.contains("public class ZThing(ptr: Long) {"),
+        kotlin.contains("public class ZThing internal constructor(ptr: Long) {"),
         "the handle class:\n{kotlin}"
     );
     assert!(

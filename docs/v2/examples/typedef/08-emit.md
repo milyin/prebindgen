@@ -29,7 +29,7 @@ wrapper that touches the handle:
 | Contribution | C | Kotlin/JNI |
 | --- | --- | --- |
 | Rust declaration | `#[repr(C)] pub struct Ledger { _private: [u8; 0] }` | none; the value is a `jlong` |
-| Foreign declaration | header `typedef struct Ledger Ledger;` | `class Ledger(ptr: Long)` with `take()` and `free()` |
+| Foreign declaration | header `typedef struct Ledger Ledger;` | `class Ledger internal constructor(ptr: Long)` with `take()` and `free()` |
 | Release | `void ledger_drop(Ledger *this_)` | `JNINative.freeLedger(ptr: Long)`, called by `free()` |
 | Handing out, in `ledger_open` | `Box::into_raw(Box::new(v3)) as *mut Ledger` | the same, cast to `jlong`; Kotlin wraps the `Long` in a `Ledger` |
 | Taking back, in `ledger_close` | `NonNull::new(ledger as *mut source::Ledger)…` then abort on `Err` | the same, then throw on `Err`; Kotlin passes `ledger.take()` |

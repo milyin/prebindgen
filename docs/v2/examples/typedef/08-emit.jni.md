@@ -26,10 +26,16 @@ call for a handle they consume and `free()` calls for one they do not. What is
 taken is forgotten, so a freed or consumed handle holds zero, and zero is what
 the native side refuses.
 
+The constructor is `internal`, because minting a `Ledger` from an arbitrary
+`Long` would reach `Box::from_raw` on it: the generated functions share a
+module with the class, and nothing outside that module does. It stops Kotlin
+and not Java — an internal constructor is a public JVM one — which v1 closes
+with a private constructor and a companion factory.
+
 ```kotlin
 package example
 
-public class Ledger(ptr: Long) {
+public class Ledger internal constructor(ptr: Long) {
     private var ptr: Long = ptr
 
     internal fun take(): Long {
@@ -152,9 +158,17 @@ configures no loader and does not execute the call in a JVM.
 - If a property read in `ledgerOpen` fails, no `Ledger` is allocated; the JVM
   sees the exception and no handle leaks. If `ledgerClose` is handed zero, the
   binding route throws and the source function never runs.
-- `take()` is not synchronized: two threads consuming one `Ledger` at once
-  can both read the address before either zeroes it. The shipping adapter's
-  v1 output locks around this; the v2 writer does not yet.
+- The other direction is destructive, and deliberately so: a wrapper that takes
+  a handle back and then fails converting a later parameter has already moved
+  the value out of its box, and the owned local is dropped on the way out. The
+  caller sees an exception from a call whose handle is gone — which is what
+  `take()` already told it, having zeroed the address before the call.
+- `take()` is not synchronized and `ptr` is a plain `var`: two threads
+  consuming one `Ledger` can both read the address before either zeroes it,
+  and a handle handed between threads is read with no happens-before edge and
+  no guarantee of an untorn 64-bit value. Either ends in `Box::from_raw` twice
+  or on half an address, so a generated handle is safe for one thread only.
+  V1's output is `@Volatile` and locked; the v2 writer emits neither.
 
 [typedef]: README.md
 [typedef_emit]: 08-emit.md

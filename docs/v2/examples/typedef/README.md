@@ -42,9 +42,16 @@ Deliberately not covered: a handle passed by reference (`&Ledger`), which
 borrows what the foreign side keeps rather than consuming it; a handle inside
 an `Option`; and a struct declared under a handle
 [policy](../../stages/03-requests.md#what-policy-means), which crosses the same
-way with its fields never read. The closed-handle race the shipping JNI adapter
-guards against in Kotlin is that adapter's runtime convention, not part of the
-boundary.
+way with its fields never read.
+
+Concurrency is not covered either, and the omission has teeth: the closed-handle
+race the shipping JNI adapter guards against in Kotlin is that adapter's runtime
+convention rather than part of the boundary, so nothing here specifies it — and
+the Kotlin class the v2 writer emits (see step 8 below) is therefore safe for
+one thread only. Two threads closing or consuming one handle can both reach the
+address, which the Rust side then frees twice. What this path specifies is the
+boundary, which is sound either way: what it does not specify is a Kotlin class
+that may be shared.
 
 1. [Capture source items][typedef_source]
 2. [Build and inspect the source model][typedef_flat]

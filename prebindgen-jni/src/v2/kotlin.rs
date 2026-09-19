@@ -20,8 +20,8 @@ use std::{
 };
 
 use kotlin_codegen::{
-    write_files, KtClass, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtParam, KtType, KtVis,
-    WriteKotlinError,
+    write_files, KtClass, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtParam, KtProperty, KtType,
+    KtVis, WriteKotlinError,
 };
 use prebindgen_registry_v2::Generation;
 
@@ -142,20 +142,36 @@ pub(super) fn write(
                 // handle they consume and `free()` calls for one they do not.
                 // What is taken is forgotten, so a freed or consumed handle
                 // holds zero, and zero is what the native side refuses.
+                //
+                // Minting one from an arbitrary `Long` is not a thing a caller
+                // may do — `Ledger(0xdeadbeef).free()` would reach
+                // `Box::from_raw` on it — so the constructor is `internal`:
+                // the generated functions share a module with the class, and
+                // nothing outside it does. It stops Kotlin, not Java, since an
+                // internal constructor is a public JVM one; v1 closes that too,
+                // with a private constructor and a companion factory, and doing
+                // the same here waits for a caller that needs it.
                 let declaration = KtClass::class_(class)
                     .vis(KtVis::Public)
+                    .ctor_vis(KtVis::Internal)
                     .ctor_param(KtCtorParam::new("ptr", KtType::cls("Long")))
-                    .member(KtDecl::Raw {
-                        name: "ptr".to_string(),
-                        code: KtCode::new().line("private var ptr: Long = ptr"),
-                    })
-                    .member(KtDecl::Raw {
-                        name: "take".to_string(),
-                        code: KtCode::new().lines(
-                            "internal fun take(): Long {\n    val taken = ptr\n    ptr = 0L\n    \
-                             return taken\n}",
-                        ),
-                    })
+                    .member(
+                        KtProperty::var("ptr")
+                            .ty(KtType::cls("Long"))
+                            .initializer("ptr")
+                            .vis(KtVis::Private),
+                    )
+                    .member(
+                        KtFun::new("take")
+                            .vis(KtVis::Internal)
+                            .returns(KtType::cls("Long"))
+                            .body(
+                                KtCode::new()
+                                    .line("val taken = ptr")
+                                    .line("ptr = 0L")
+                                    .line("return taken"),
+                            ),
+                    )
                     .member(
                         KtFun::new("free")
                             .vis(KtVis::Public)
