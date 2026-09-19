@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="prebindgen-proc-macro"><title>prebindgen_proc_macro - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="prebindgen_proc_macro" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate prebindgen_proc_macro</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../prebindgen_proc_macro/index.html">prebindgen_<wbr>proc_<wbr>macro</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#prebindgen-proc-macro" title="prebindgen-proc-macro">prebindgen-proc-macro</a></li><li><a href="#crate-features" title="Crate features">Crate features</a></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#attributes" title="Attribute Macros">Attribute Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>prebindgen_<wbr>proc_<wbr>macro</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/prebindgen_proc_macro/lib.rs.html#1-462">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="prebindgen-proc-macro"><a class="doc-anchor" href="#prebindgen-proc-macro">§</a>prebindgen-proc-macro</h2>
+<p>Procedural macros for the prebindgen system.</p>
+<p>This crate provides the procedural macros used by the prebindgen system:</p>
+<ul>
+<li><code>#[prebindgen]</code> or <code>#[prebindgen("group")]</code> - Attribute macro for marking FFI definitions</li>
+<li><code>prebindgen_out_dir!()</code> - Macro that returns the prebindgen output directory path</li>
+<li><code>features!()</code> - Macro that returns the list of features enabled for the crate</li>
+</ul>
+<h2 id="crate-features"><a class="doc-anchor" href="#crate-features">§</a>Crate features</h2>
+<ul>
+<li>
+<p><strong><code>inline</code></strong> <em>(off by default)</em> — inject <code>#[inline]</code> onto every function
+marked with <code>#[prebindgen]</code> (types/consts are unaffected).</p>
+<p>prebindgen wrappers are usually thin shims that forward to a native API. A
+non-generic <code>pub fn</code> in one crate is <strong>not</strong> inlined into a Rust caller in
+another crate unless the function is <code>#[inline]</code> <em>or</em> the final binary is
+built with link-time optimization. Without inlining, every wrapper call
+costs an extra cross-crate call (measurable on hot paths — e.g. a per-message
+publish loop).</p>
+<p>Two ways to make the wrappers zero-cost:</p>
+<ol>
+<li>Build the final artifact with <strong>LTO</strong> (<code>[profile.release] lto = "fat"</code>,
+<code>codegen-units = 1</code>). Cross-crate inlining then happens automatically and
+this feature is redundant. This is the recommended setup for an FFI
+<code>cdylib</code>/<code>staticlib</code> and matches how upstream zenoh builds its release
+profile.</li>
+<li>Enable <strong><code>inline</code></strong> when you cannot rely on LTO — e.g. the wrapper crate is
+consumed as a normal Rust dependency by crates that build <em>without</em> LTO.</li>
+</ol>
+<p>It is opt-in because prebindgen can also wrap non-trivial functions where
+forcing <code>#[inline]</code> would only bloat the consumer; enable it only for genuine
+thin-wrapper libraries. The feature affects <strong>only</strong> the Rust function emitted
+into the wrapper crate — the recorded definition used for binding generation
+(and the resulting C ABI) is unchanged.</p>
+</li>
+</ul>
+<p>See also: <a href="https://docs.rs/prebindgen"><code>prebindgen</code></a> for the main processing library.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.features.html" title="macro prebindgen_proc_macro::features">features</a></dt><dd>Proc macro that returns the enabled features, joined by commas, as a string literal.</dd><dt><a class="macro" href="macro.manifest_dir.html" title="macro prebindgen_proc_macro::manifest_dir">manifest_<wbr>dir</a></dt><dd>Proc macro that returns the <strong>source crate’s</strong> manifest directory as a string
+literal (its <code>CARGO_MANIFEST_DIR</code> at compile time).</dd><dt><a class="macro" href="macro.prebindgen_out_dir.html" title="macro prebindgen_proc_macro::prebindgen_out_dir">prebindgen_<wbr>out_<wbr>dir</a></dt><dd>Proc macro that returns the prebindgen output directory path as a string literal.</dd></dl><h2 id="attributes" class="section-header">Attribute Macros<a href="#attributes" class="anchor">§</a></h2><dl class="item-table"><dt><a class="attr" href="attr.prebindgen.html" title="attr prebindgen_proc_macro::prebindgen">prebindgen</a></dt><dd>Attribute macro that exports FFI definitions for use in language-specific binding crates.</dd></dl></section></div></main></body></html>
