@@ -1,7 +1,7 @@
 //! Planning: requests in, retained plans out.
 //!
 //! One recursive walk plans the value conversions, one
-//! pass per requested output assembles the native wrappers, and one fixpoint
+//! pass per requested output assembles the wrappers, and one fixpoint
 //! decides what survives. The registry owns all three; the target answers the
 //! local questions in [`crate::target`].
 
@@ -123,7 +123,7 @@ pub struct ValuePlan<P> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
-/// A complete native wrapper: the exported function, as planned.
+/// A complete wrapper: the exported function, as planned.
 ///
 /// One per declaration that exports a source function, plus one per handle
 /// type for its release. The common Rust writer renders it as the
@@ -135,8 +135,8 @@ pub struct FunctionPlan<P> {
     pub abi: AbiSpec,
     pub output: OutputPlacement,
     pub failures: Vec<FailureRoute<P>>,
-    /// Native parameters, paired with the value identity that names each.
-    pub params: Vec<(ValueId, crate::target::NativeParam)>,
+    /// Wrapper parameters, paired with the value identity that names each.
+    pub params: Vec<(ValueId, crate::target::WrapperParam)>,
     pub instrs: Vec<crate::body::Step>,
     /// The value delivered through [`Self::output`].
     pub result: Option<ValueId>,
@@ -943,7 +943,7 @@ struct Emitted<P> {
 }
 
 /// Plan the wrapper that exports one source function: the conversions of its
-/// parameters, the call, the conversion of its result, and the native
+/// parameters, the call, the conversion of its result, and the wrapper's
 /// interface around them.
 fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
@@ -1075,7 +1075,7 @@ enum Body<'a, P> {
     Release(Box<PrimitiveSpec<P>>),
 }
 
-/// Put one wrapper together: native parameters in, conversions, one call — or,
+/// Put one wrapper together: wrapper parameters in, conversions, one call — or,
 /// for a release, one drop — the result out.
 fn assemble<T: Target>(
     run: &mut Run<'_, T>,
@@ -1126,7 +1126,7 @@ fn assemble<T: Target>(
         // parameter, whatever the adapter would like to pass through it.
         if !param.ty.abi {
             return Err(PlanningError::InternalInvariant(format!(
-                "`{}` takes `{}` natively, which is not an ABI carrier",
+                "`{}` takes `{}` at its boundary, which is not an ABI carrier",
                 declaration.id,
                 spell(&param.ty.ty)
             )));
@@ -1140,7 +1140,7 @@ fn assemble<T: Target>(
     if let Some(ret) = &boundary.abi.ret {
         if !ret.abi {
             return Err(PlanningError::InternalInvariant(format!(
-                "`{}` returns `{}` natively, which is not an ABI carrier",
+                "`{}` returns `{}` at its boundary, which is not an ABI carrier",
                 declaration.id,
                 spell(&ret.ty)
             )));
@@ -1149,7 +1149,7 @@ fn assemble<T: Target>(
         match produced {
             Some(produced) if !same_type(&ret.ty, &produced) => {
                 return Err(PlanningError::InternalInvariant(format!(
-                    "`{}` returns `{}` natively, and its result conversion produces a `{}`",
+                    "`{}` returns `{}` at its boundary, and its result conversion produces a `{}`",
                     declaration.id,
                     spell(&ret.ty),
                     spell(&produced)
@@ -1157,7 +1157,7 @@ fn assemble<T: Target>(
             }
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
-                    "`{}` returns `{}` natively and has no result conversion to fill it",
+                    "`{}` returns `{}` at its boundary and has no result conversion to fill it",
                     declaration.id,
                     spell(&ret.ty)
                 )))
@@ -1172,11 +1172,11 @@ fn assemble<T: Target>(
             .iter()
             .find(|(_, param)| matches!(param.role, ParamRole::Input(i) if i == index))
             .map(|(id, param)| (*id, param.ty.clone()));
-        let (carrier, native) = match carrier {
+        let (carrier, wrapper_param) = match carrier {
             Some(carrier) => carrier,
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
-                    "`{}` declares no native parameter for source parameter {index}",
+                    "`{}` declares no wrapper parameter for source parameter {index}",
                     declaration.id
                 )))
             }
@@ -1184,11 +1184,11 @@ fn assemble<T: Target>(
         // The conversion reads the carrier this parameter passes, so the two
         // are the same type or the wrapper reads something else entirely.
         let expected = run.nodes[node.0].repr.layout.wire();
-        if !same_type(&native.ty, &expected.ty) {
+        if !same_type(&wrapper_param.ty, &expected.ty) {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` passes parameter {index} as `{}`, and its conversion reads a `{}`",
                 declaration.id,
-                spell(&native.ty),
+                spell(&wrapper_param.ty),
                 spell(&expected.ty)
             )));
         }

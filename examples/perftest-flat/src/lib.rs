@@ -16,7 +16,7 @@
 //! The functions operate on an opaque [`Storage`] handle (a `storage_t *` in C, a
 //! `Storage` class in Kotlin) that owns the payload, so the matching Rust, C, and
 //! Kotlin micro-benchmarks (`examples/perftest.rs`, `perftest-c/c/perftest.c`, and
-//! `perftest-kotlin/.../Bench.kt`) measure the cost of the same operations natively
+//! `perftest-kotlin/.../Bench.kt`) measure the cost of the same operations in Rust
 //! vs across the generated C ABI / JNI boundary — and exercise an opaque handle
 //! crossing alongside the value struct.
 //!

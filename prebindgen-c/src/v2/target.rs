@@ -13,11 +13,11 @@
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
-    FailureCategory, FailureRoute, Layout, NativeParam, OperandSpec, Operation, OperationType,
-    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
-    RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor,
-    SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport,
-    Terminal, Unsupported, WireType,
+    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
+    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId,
+    ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
+    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
+    Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -267,7 +267,7 @@ impl Target for CTarget {
             .inputs
             .iter()
             .enumerate()
-            .map(|(index, value)| NativeParam {
+            .map(|(index, value)| WrapperParam {
                 name: match site.function {
                     Some(function) => function.params[index].name.clone(),
                     None => format_ident!("this_"),

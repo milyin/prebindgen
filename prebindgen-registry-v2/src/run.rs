@@ -65,7 +65,7 @@ impl<P> Generation<P> {
         &self.values
     }
 
-    /// The retained native wrappers.
+    /// The retained wrappers.
     pub fn functions(&self) -> &[crate::plan::FunctionPlan<P>] {
         &self.functions
     }

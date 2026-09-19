@@ -22,7 +22,7 @@
  *   <op> <variant> <ns_per_op> <mops>
  *   END_PERFTEST
  * `N` is overridable via the `PERFTEST_N` env var (default 5_000_000). Compare against the
- * Rust runner (native) and the Kotlin runner (JNI) for the same operations.
+ * Rust runner (in-process) and the Kotlin runner (JNI) for the same operations.
  */
 #include <assert.h>
 #include <stdint.h>

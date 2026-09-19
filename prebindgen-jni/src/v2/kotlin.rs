@@ -8,11 +8,11 @@
 //! through `kotlin-codegen`, as v1's does, so the output is validated Kotlin
 //! and lands in the same generator-owned tree.
 //!
-//! A handle crosses the native boundary as a `Long`. The public function is
+//! A handle crosses the wrapper boundary as a `Long`. The public function is
 //! where it becomes a class: an address handed out is wrapped, and one taken
 //! back is taken out of its wrapper, which forgets it — so the wrapper's
 //! `free()` afterwards releases nothing, and a second use raises the binding
-//! failure the native side reports for a null address.
+//! failure the Rust side reports for a null address.
 
 use std::{
     collections::BTreeMap,
@@ -141,14 +141,14 @@ pub(super) fn write(
                 // through `take()`, which the public functions call for a
                 // handle they consume and `free()` calls for one they do not.
                 // What is taken is forgotten, so a freed or consumed handle
-                // holds zero, and zero is what the native side refuses.
+                // holds zero, and zero is what the Rust side refuses.
                 //
                 // `getAndSet` is what makes that true between threads as well:
                 // every use of a handle on this path consumes it, so two
                 // racing consumers are one exchange — exactly one gets the
                 // address and the other gets zero. A lock is what v1 needs
                 // instead, because v1 *borrows*: it holds the address across
-                // the native call, and a borrowed handle is not this path.
+                // the call into Rust, and a borrowed handle is not this path.
                 //
                 // Minting one from an arbitrary `Long` is not a thing a caller
                 // may do — `Ledger(0xdeadbeef).free()` would reach

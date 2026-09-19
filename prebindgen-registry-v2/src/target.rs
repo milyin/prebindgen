@@ -34,12 +34,12 @@
 //!   `#[no_mangle]` symbol; what a target decides of its form is in
 //!   [`AbiSpec`] — the convention, the symbol, the signature, its attributes
 //!   and whether it is `unsafe`. A binding exports only wrappers.
-//! - **Native** is JNI's word, used in JNI's sense on both targets: the
-//!   compiled side that C or the JVM calls *into*, which is always the
-//!   generated Rust. A native function is the wrapper; a native parameter is
-//!   one of its parameters, spelled as a `jlong` or a `*mut ledger_t`. It never
-//!   means "written in the target language" — the Kotlin function that calls a
-//!   native method is the **foreign** or **public** one.
+//! - The **wrapper boundary** is the form the wrapper is called through: its
+//!   calling convention, symbol, parameters and return. A **wrapper
+//!   parameter** is one of those parameters, spelled as a `jlong` or a
+//!   `*mut ledger_t`. Everything on the other side of that boundary — the
+//!   Kotlin function that calls the wrapper, the C prototype a caller
+//!   compiles against — is the **foreign** or **public** side.
 //!
 //! This is the first increment (docs/v2). What it carries is the scalar, the
 //! owned struct and the owned opaque handle; the fields the chapters describe
@@ -538,7 +538,7 @@ pub enum Layout {
 }
 
 impl Layout {
-    /// The carrier a native signature would name for this layout.
+    /// The carrier a wrapper signature would name for this layout.
     pub fn wire(&self) -> &WireType {
         match self {
             Layout::Scalar(wire) => wire,
@@ -585,7 +585,7 @@ pub struct ReprSpec<P> {
 // The boundary
 // ---------------------------------------------------------------------------
 
-/// What a native parameter is for.
+/// What a wrapper parameter is for.
 #[derive(Clone, Debug)]
 pub enum ParamRole {
     /// Feeds the conversion of this source parameter.
@@ -597,7 +597,7 @@ pub enum ParamRole {
 }
 
 #[derive(Clone, Debug)]
-pub struct NativeParam {
+pub struct WrapperParam {
     pub name: syn::Ident,
     pub ty: WireType,
     pub role: ParamRole,
@@ -605,7 +605,7 @@ pub struct NativeParam {
     pub mutable: bool,
 }
 
-/// The native interface of one exported function: how the wrapper the
+/// The boundary of one exported function: how the wrapper the
 /// registry generates around a source function is reached from the target's
 /// side.
 ///
@@ -631,10 +631,10 @@ pub struct AbiSpec {
     /// against. Not the source function's name: the frontend's naming settled
     /// it.
     pub symbol: String,
-    /// The wrapper's parameters, in native order — the ones serving a source
+    /// The wrapper's parameters, in boundary order — the ones serving a source
     /// parameter and the ones the calling convention adds.
-    pub params: Vec<NativeParam>,
-    /// The native return type, absent when the wrapper returns nothing.
+    pub params: Vec<WrapperParam>,
+    /// The wrapper's return type, absent when it returns nothing.
     pub ret: Option<WireType>,
     /// Attributes the wrapper carries beyond `#[no_mangle]`, rendered after
     /// it: a lint the generated signature would otherwise trip
@@ -658,11 +658,11 @@ pub struct AbiSpec {
 pub enum OutputPlacement {
     /// This path delivers no value.
     Void,
-    /// Through the native return.
+    /// Through the wrapper's return.
     Return,
 }
 
-/// How a failure route ends the native call.
+/// How a failure route ends the wrapper's call.
 #[derive(Clone, Debug)]
 pub enum Terminal {
     /// Return this expression to the caller.
@@ -684,7 +684,7 @@ pub struct FailureRoute<P> {
     pub terminate: Terminal,
 }
 
-/// A target's answer to [`Target::boundary`]: the native interface of the
+/// A target's answer to [`Target::boundary`]: the boundary of the
 /// wrapper that will export one source function, and what the wrapper does
 /// when a conversion inside it fails.
 #[derive(Clone, Debug)]
@@ -797,9 +797,9 @@ pub struct ChildValue<'a> {
 /// as the boundary and the public declaration see them.
 ///
 /// A wrapper is these conversions around one call: each input is converted
-/// from what the native parameter carries, the source function is called,
+/// from what the wrapper parameter carries, the source function is called,
 /// and its result is converted for delivery. What the target reads here is
-/// each plan's carrier — the layout a native parameter or return must match —
+/// each plan's carrier — the layout a wrapper parameter or return must match —
 /// and the failure categories the boundary has to route.
 pub struct ResolvedValues<'a, P> {
     /// One plan per source parameter, in [`Function::params`] order, each
@@ -829,7 +829,7 @@ impl<P> ResolvedValues<'_, P> {
 ///
 /// For every wrapper it builds, the registry calls
 /// `target.boundary(&site, &values, &policy)` once, and the target returns
-/// the wrapper's shape — symbol, calling convention, native parameters,
+/// the wrapper's shape — symbol, calling convention, parameters,
 /// failure routes — as a [`BoundarySpec`], wrapped in [`TargetSupport`]: a
 /// spec, a reason the target cannot shape this one, or an error. `site` is
 /// this type and says which source function the wrapper exports: the
@@ -839,14 +839,14 @@ impl<P> ResolvedValues<'_, P> {
 ///
 /// What a target reads from the descriptor: the declaration, for the names in
 /// its refusals and errors; the source function's parameter list, for the
-/// names the native signature keeps; and whether a source function is there
+/// names the wrapper signature keeps; and whether a source function is there
 /// at all. A descriptor with none says the wrapper is a handle's release —
 /// it takes the handle back and drops it (see [`ReprSpec::release`]) — which
 /// the target shapes under the handle *type's* policy rather than a
 /// function's.
 ///
 /// Named after the specification's *site*, a value's position in an exported
-/// function: the boundary places each such position on a native parameter or
+/// function: the boundary places each such position on a wrapper parameter or
 /// the return, and this identifies the function the positions belong to.
 pub struct SiteDescriptor<'a> {
     /// The export this wrapper is for: its Rust origin
@@ -857,7 +857,7 @@ pub struct SiteDescriptor<'a> {
     pub declaration: &'a Declaration,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
-    /// The target reads its parameter *names*: a native parameter keeps its
+    /// The target reads its parameter *names*: a wrapper parameter keeps its
     /// source parameter's name, and one the target adds — a JNI environment,
     /// a receiver — is named around those. The parameter *types* come from
     /// the plans in [`ResolvedValues::inputs`], which are in
@@ -1022,7 +1022,7 @@ pub trait Target {
         policy: &Self::Policy,
     ) -> TargetSupport<ReprSpec<Self::Payload>>;
 
-    /// Describe the wrapper that will export this source function: its native
+    /// Describe the wrapper that will export this source function: its
     /// interface, and its routes for the failures its conversions can raise.
     fn boundary(
         &self,

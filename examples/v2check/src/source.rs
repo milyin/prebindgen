@@ -46,7 +46,7 @@ pub fn marker_value(marker: Marker) -> i64 {
     7
 }
 
-/// A function that delivers nothing, so a wrapper with no native return — and,
+/// A function that delivers nothing, so a wrapper with no return — and,
 /// through JNI, a failure route that must terminate without a value — is
 /// compiled rather than described.
 pub fn stamp_show(stamp: Stamp) {
