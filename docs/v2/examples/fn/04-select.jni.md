@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/04-select.md) · [Common cell][fn_select] · [Element path][fn]
 Owner: the registry, on the JNI adapter's selections
 
-# Function taking an owned record — Select conversion relations — Kotlin/JNI
+# Function taking an owned struct — Select conversion relations — Kotlin/JNI
 
 ## Input
 
@@ -25,7 +25,7 @@ Param(0)  Stamp, IntoRust   -> Stamp.fields
 Return    i64,   OutOfRust  -> atomic
 ```
 
-The JNI adapter selects `Stamp.fields` because the record is declared as a
+The JNI adapter selects `Stamp.fields` because the struct is declared as a
 data class: a Kotlin `Stamp` object exposes its fields as properties, and the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
 Rust `Stamp` is made of reading each of them. The same policy family has a
@@ -44,7 +44,7 @@ one JNI scalar type, which needs no parts.
 - The `DataClass` policy commits the adapter to a property read per part in the
   next stage, and property reads are JNI calls that can fail — a consequence
   chosen here and paid for [there][fn_represent_jni].
-- The selection for `Stamp` is the same one [the record's JNI page][struct_select_jni]
+- The selection for `Stamp` is the same one [the struct's JNI page][struct_select_jni]
   shows; this function's parameter reuses it.
 
 [fn]: README.md

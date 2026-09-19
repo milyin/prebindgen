@@ -3,11 +3,11 @@
 [Stage chapter](../../stages/02-flat.md) · [Element path][struct] · [Source crate](../../source.md)
 Owner: Flat · Previous: [Capture source items][struct_source] · Next: [Record binding requests][struct_requests]
 
-# Record with scalar fields — Build and inspect the source model
+# Struct with scalar fields — Build and inspect the source model
 
 ## Input
 
-From capture, the line this record produced, parsed back into the item it holds:
+From capture, the line this struct produced, parsed back into the item it holds:
 
 ```json
 { "kind": "struct", "name": "Stamp",
@@ -43,8 +43,8 @@ requires structural [conversion](../../stages/04-select.md#select-conversion-rel
 
 - Field order and names are the declaration's; `i64` is the exact type as
   written; no view says how a field crosses a boundary.
-- A field is addressed within its containing record. A `secs` at index 0 of
-  another record is a different position, even though its name and index match.
+- A field is addressed within its containing struct. A `secs` at index 0 of
+  another struct is a different position, even though its name and index match.
 - A type whose fields Flat declines to model becomes an `Extern` — a name with
   nothing behind it — rather than a `Struct` reporting no fields. A unit struct
   is what does produce an empty field list: `pub struct Pair(pub i64, pub i64)`

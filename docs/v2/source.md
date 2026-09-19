@@ -7,11 +7,12 @@
 The appendix follows one small Rust library through the generator. This page
 defines that library so that every example starts from the same input. It has
 two items: a struct named `Stamp` and a function named `stamp_sum` that accepts
-the struct. Here, **record** means a struct whose fields the generator can inspect.
+the struct. `Stamp` has named fields the generator can inspect; a tuple struct
+would not, and the source model declares one as an opaque type instead.
 
 The two items let us follow a dependency as well as an individual function.
 Before generated code can call `stamp_sum`, it must obtain both field values
-from the foreign caller and construct a Rust `Stamp`. The record example
+from the foreign caller and construct a Rust `Stamp`. The struct example
 explains that [conversion](stages/04-select.md#select-conversion-relations); the function example uses it. Future examples will
 extend this same library with the items they need.
 
@@ -65,15 +66,15 @@ that stage separately. Its JNI checks compile Rust and inspect Kotlin text;
 they do not execute a JVM call.
 
 The general chapters sometimes use other functions to explain a feature, such
-as returning a record instead of an integer. Those sketches are separate from
+as returning a struct instead of an integer. Those sketches are separate from
 this fixed appendix input. Follow the links below for the complete paths of
 the two items defined here.
 
 The paths specified so far:
 
-- [Function taking an owned record][fn] — `stamp_sum`, its owned record parameter
+- [Function taking an owned struct][fn] — `stamp_sum`, its owned struct parameter
   and its signed 64-bit result.
-- [Record with scalar fields][struct] — `Stamp`, its two `i64` fields and their
+- [Struct with scalar fields][struct] — `Stamp`, its two `i64` fields and their
   conversions.
 
 [fn]: examples/fn/README.md

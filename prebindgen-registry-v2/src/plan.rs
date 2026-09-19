@@ -21,8 +21,8 @@ use crate::{
     target::{
         AbiSpec, ChildValue, Crossing, Direction, FailureCategory, FailureRoute, Layout,
         OperandRole, OutputPlacement, ParamRole, Part, PlanningError, PrimitiveFailure,
-        PrimitiveId, PrimitiveSpec, Protocol, RecordRelation, Relation, RelationId, ResolvedShape,
-        ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, SurfaceRequest, SurfaceSpec,
+        PrimitiveId, PrimitiveSpec, Protocol, Relation, RelationId, ResolvedShape, ResolvedValues,
+        SelectionQuery, SiteDescriptor, SourceItem, StructRelation, SurfaceRequest, SurfaceSpec,
         Target, TargetAttempt, Unsupported,
     },
 };
@@ -152,7 +152,7 @@ struct ResolvingKey {
 /// What makes two conversions the same conversion.
 ///
 /// The children are part of it. A choice recorded for a field is looked up at
-/// that field's position, so two records with the same policy whose fields were
+/// that field's position, so two structs with the same policy whose fields were
 /// configured differently resolve to different children — and must not share a
 /// node, or the second use would silently inherit the first one's conversion.
 #[derive(PartialEq, Eq, Hash)]
@@ -250,7 +250,7 @@ impl<'a, T: Target> Run<'a, T> {
     }
 
     /// The relations available for this type: today the implicit one, which is
-    /// the record's fields for a record and the atomic conversion for anything
+    /// the struct's fields for a struct and the atomic conversion for anything
     /// carried whole.
     fn candidates(&mut self, ty: &TypeRef) -> Result<Vec<(RelationId, Relation)>, Unsupported> {
         if let Some(offered) = self.offered.get(&ty.key()) {
@@ -259,9 +259,9 @@ impl<'a, T: Target> Run<'a, T> {
         let mut relations = vec![Relation::Atomic];
         if let TypeKind::Named { id, .. } = ty.kind() {
             match self.flat.resolve(id) {
-                Some(Type::Struct(record)) => relations.push(Relation::Record(RecordRelation {
-                    record: record.name.to_string(),
-                    parts: record
+                Some(Type::Struct(strukt)) => relations.push(Relation::Struct(StructRelation {
+                    name: strukt.name.to_string(),
+                    parts: strukt
                         .fields
                         .iter()
                         .map(|field| Part {
@@ -389,7 +389,7 @@ impl<'a, T: Target> Run<'a, T> {
             match self.plan_value(child, &child_position)? {
                 Planned::Ready(id) => children.push(id),
                 // One unsupported part makes the whole conversion unsupported.
-                // Nothing partial is recorded: a record missing a field is a
+                // Nothing partial is recorded: a struct missing a field is a
                 // different type, not a reduced one.
                 Planned::Unsupported(refusal) => return Ok(Planned::Unsupported(refusal)),
             }
@@ -406,14 +406,14 @@ impl<'a, T: Target> Run<'a, T> {
             return Ok(Planned::Ready(*id));
         }
 
-        let record = match relation {
-            Relation::Record(record) => self.flat.struct_type(record.record.as_str()),
+        let strukt = match relation {
+            Relation::Struct(strukt) => self.flat.struct_type(strukt.name.as_str()),
             Relation::Atomic => None,
         };
         let shape = ResolvedShape {
             crossing,
             relation,
-            record,
+            strukt,
         };
         let child_values: Vec<ChildValue<'_>> = parts
             .iter()
@@ -462,8 +462,8 @@ impl<'a, T: Target> Run<'a, T> {
                         )));
                     }
                 }
-                let record = match relation {
-                    Relation::Record(record) => record.record.clone(),
+                let strukt = match relation {
+                    Relation::Struct(strukt) => strukt.name.clone(),
                     Relation::Atomic => {
                         return Err(PlanningError::InternalInvariant(
                             "a product representation needs a relation with parts".to_string(),
@@ -526,7 +526,7 @@ impl<'a, T: Target> Run<'a, T> {
                 }
                 let result = body.fresh();
                 body.push(Instr::Construct {
-                    record,
+                    name: strukt,
                     parts: converted,
                     result,
                 });
@@ -535,7 +535,7 @@ impl<'a, T: Target> Run<'a, T> {
             (Protocol::Product { .. }, Direction::OutOfRust) => {
                 return Ok(Planned::refused(
                     Unsupported::new(
-                        "unsupported.record.out_of_rust",
+                        "unsupported.struct.out_of_rust",
                         format!(
                             "`{}` leaves Rust as a composed value; v2 has no target \
                              construction operation yet",
@@ -747,7 +747,7 @@ pub fn generate<T: Target>(
                 plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
             DeclarationKind::Type => {
-                plan_record(&mut run, declaration, policy).map_err(EngineError::Planning)?
+                plan_struct(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
@@ -876,7 +876,7 @@ pub fn generate<T: Target>(
     };
     for surface in &surfaces {
         // Rust a target contributes for its own public declaration of a
-        // captured item — the `repr(C)` mirror of a record — exists only where
+        // captured item — the `repr(C)` mirror of a struct — exists only where
         // that item does, by the rule a wrapper follows. A declaration the
         // binding defines itself has no captured item and no condition.
         let conditions = requests
@@ -1278,20 +1278,20 @@ fn assemble<T: Target>(
     }))
 }
 
-/// Plan one exported record: the conversion everything taking it needs, and the
+/// Plan one exported struct: the conversion everything taking it needs, and the
 /// public declaration itself.
-fn plan_record<T: Target>(
+fn plan_struct<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
-    let record: &Struct = match flat.struct_type(declaration.rust_origin.as_str()) {
-        Some(record) => record,
+    let strukt: &Struct = match flat.struct_type(declaration.rust_origin.as_str()) {
+        Some(strukt) => strukt,
         None => {
             return Ok(Err(Refusal::at(
                 Unsupported::new(
-                    "unsupported.type.not_a_record",
+                    "unsupported.type.not_a_struct",
                     format!(
                         "`{}` is exposed as a data type, and the model gives it no fields to \
                          cross through — a tuple struct or an opaque declaration is carried \
@@ -1306,7 +1306,7 @@ fn plan_record<T: Target>(
     let root = crate::target::Position::root(declaration.id.clone());
     let node = match run.plan_value(
         Crossing {
-            ty: record.type_ref().clone(),
+            ty: strukt.type_ref().clone(),
             direction: Direction::IntoRust,
         },
         &root,
@@ -1323,7 +1323,7 @@ fn plan_record<T: Target>(
         &SurfaceRequest {
             declaration,
             policy,
-            item: SourceItem::Record(record),
+            item: SourceItem::Struct(strukt),
         },
         &values,
     )? {

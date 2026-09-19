@@ -63,8 +63,8 @@ class SpecStructure(unittest.TestCase):
         self.rejects("not a declared link id")
 
     def test_inline_link_into_examples(self):
-        self.edit("stages/07-retain.md", "[Record with scalar fields][struct_retain]",
-                  "[Record with scalar fields](../examples/struct/07-retain.md)")
+        self.edit("stages/07-retain.md", "[Struct with scalar fields][struct_retain]",
+                  "[Struct with scalar fields](../examples/struct/07-retain.md)")
         self.edit("stages/07-retain.md",
                   "[struct_retain]: ../examples/struct/07-retain.md", "")
         self.rejects("must use a reference-style link id")
@@ -98,15 +98,15 @@ class SpecStructure(unittest.TestCase):
 
     def test_stage_index_out_of_order(self):
         self.edit("stages/07-retain.md",
-                  "- [Function taking an owned record][fn_retain]\n"
-                  "- [Record with scalar fields][struct_retain]",
-                  "- [Record with scalar fields][struct_retain]\n"
-                  "- [Function taking an owned record][fn_retain]")
+                  "- [Function taking an owned struct][fn_retain]\n"
+                  "- [Struct with scalar fields][struct_retain]",
+                  "- [Struct with scalar fields][struct_retain]\n"
+                  "- [Function taking an owned struct][fn_retain]")
         self.rejects("Elements at this stage")
 
     def test_stage_index_incomplete(self):
         self.edit("stages/07-retain.md",
-                  "- [Record with scalar fields][struct_retain]\n", "")
+                  "- [Struct with scalar fields][struct_retain]\n", "")
         self.edit("stages/07-retain.md",
                   "[struct_retain]: ../examples/struct/07-retain.md", "")
         self.rejects("Elements at this stage")
@@ -213,16 +213,16 @@ class SpecStructure(unittest.TestCase):
         # reference-style link to somewhere else.
         self.edit("examples/struct/08-emit.md",
                   "into the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)\n"
-                  "of [the function that uses the record][fn_emit].",
-                  "into the [wrapper][fn_emit] of the function that uses the record.")
+                  "of [the function that uses the struct][fn_emit].",
+                  "into the [wrapper][fn_emit] of the function that uses the struct.")
         self.rejects("first mention of 'wrapper'")
 
     def test_vocabulary_quoted_title_in_a_reference_link_is_not_a_mention(self):
         # A quoted title placed before the page's linked prose mention of
         # "conversion" must not count as the first mention.
         self.edit("examples/fn/06-boundary.c.md",
-                  "# Function taking an owned record — Assemble the native boundary — C\n",
-                  "# Function taking an owned record — Assemble the native boundary — C\n\n"
+                  "# Function taking an owned struct — Assemble the native boundary — C\n",
+                  "# Function taking an owned struct — Assemble the native boundary — C\n\n"
                   "See [Represent and compose values][fn_represent_c] first.\n")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
         # And the same words outside a title-quoting link are a first mention.

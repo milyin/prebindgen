@@ -10,7 +10,7 @@ the request identities and [conversion](04-select.md#select-conversion-relations
 sketches: in particular, owned Flat views and placement-specific declaration ids
 are not implemented. Each frontend defines its own policy type.
 
-The examples in this chapter use one small source crate — a record and a function
+The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
 
 ```rust
@@ -103,7 +103,7 @@ record its spelling. A function declaration must name a captured function, and
 one that does not is an error when the requests meet the model; a class
 declaration need not name a captured type at all — a target may represent
 `String` without the source exporting one — so `data_class!(Absent)` is a
-reported skip (`unsupported.type.not_a_record`) rather than an error.
+reported skip (`unsupported.type.not_a_struct`) rather than an error.
 
 The adapter also chooses how native failures reach the caller. For example,
 reading a JVM property can fail before the Rust function runs. The adapter
@@ -161,7 +161,7 @@ contracts; capabilities not yet implemented are extension points, not features.
 
 The registry receives the [source model](02-flat.md) and requests to expose particular types, functions, and constants. For each request, it builds a **plan**: structured data describing the required conversions, calls and their execution order. The common Rust writer renders the native wrappers and supporting Rust types. The C build then uses `cbindgen` to derive C headers from that Rust output; the JNI implementation renders Kotlin declarations from the completed plans. Planning happens in the generator; the generated operations execute later when the bindings are used.
 
-Take the record above and a second function over it — one that also
+Take the struct above and a second function over it — one that also
 *returns* a `Stamp`, so that both directions are visible at once:
 
 ```rust
@@ -178,7 +178,7 @@ Generating a binding for it requires several decisions and operations:
 
 A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those [representations](05-represent.md#represent-and-compose-values) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
 
-**The registry owns that common work.** When a record gains another nested record field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of record traversal or wrapper assembly.
+**The registry owns that common work.** When a struct gains another nested struct field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of struct traversal or wrapper assembly.
 
 A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](08-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
 
@@ -228,7 +228,7 @@ The implementation divides the registry's data between two structures:
 - **The generation operation**, `generate(flat, target, requests, crate)`, is a
   free function that starts a fresh run. `target` implements the adapter
   interface; `requests` contains the frontend's choices. Current V2 selects
-  atomic conversions or record-field construction. Constructors, accessors
+  atomic conversions or struct-field construction. Constructors, accessors
   and other helper [relations](04-select.md#what-a-relation-is) described by the design are future extensions.
 - **The run**, private `Run` state in `plan.rs`, keeps requests, offered
   relations, conversion plans, the cache and cycle-detection marks. `generate`
@@ -253,13 +253,13 @@ An illustrative portion of JNI policy could be:
 
 ```rust
 // Illustrative choices, not a replacement for the existing builder/macro API.
-enum JniRecordInput {
+enum JniStructInput {
     SeparateArguments, // Kotlin supplies the fields as individual JNI arguments.
     ObjectProperties,  // JNI receives an object and reads its properties.
 }
 
 struct JniValuePolicy {
-    record_input: JniRecordInput, // How this record reaches the native wrapper.
+    record_input: JniStructInput, // How this struct reaches the native wrapper.
 }
 ```
 
@@ -269,13 +269,13 @@ read:
 
 ```rust
 // Illustrative choices, again not a replacement for the existing builder API.
-enum CRecordShape {
+enum CStructShape {
     Aggregate,   // A repr(C) struct, passed and returned by value.
     OpaquePtr,   // A pointer to a Rust-owned value, with a typed drop.
 }
 
 struct CValuePolicy {
-    shape: CRecordShape, // How this record crosses the C boundary.
+    shape: CStructShape, // How this struct crosses the C boundary.
     c_name: String,      // Its name in the generated header.
 }
 ```
@@ -434,7 +434,7 @@ struct SiteId {
 
 A **part** is a field or argument converted within that relation. `Stamp.fields` (a descriptive label, not Rust syntax) has two parts; the constructor relation has one, `millis`. `PartId` identifies which part a conversion rule applies to.
 
-For an enum such as `enum Event { At(Stamp), Count(u32) }`, the variant is also needed to identify a part, because its parts are not all converted together the way a record's are: one arm's parts are live at a time, and the others are not reached at all. An **arm** is one alternative, and `ArmId` identifies it: here, `At` or `Count`. Each variant has a field at position 0, but those fields belong to different arms. A declared choice between constructors can also use arm IDs. Ordinary struct fields and a single constructor have no alternatives, so their arm is `None`.
+For an enum such as `enum Event { At(Stamp), Count(u32) }`, the variant is also needed to identify a part, because its parts are not all converted together the way a struct's are: one arm's parts are live at a time, and the others are not reached at all. An **arm** is one alternative, and `ArmId` identifies it: here, `At` or `Count`. Each variant has a field at position 0, but those fields belong to different arms. A declared choice between constructors can also use arm IDs. Ordinary struct fields and a single constructor have no alternatives, so their arm is `None`.
 
 ```rust
 struct PartId {
@@ -488,10 +488,10 @@ The existing structural reading `TypeRef` has no `Eq`/`Hash`; its `key()` return
 `policy` identifies the choices for the whole value. `children` identifies the
 conversions selected for its fields or other parts. Both affect reuse. If two
 functions accept `Stamp` but one applies a different conversion to `secs`, their
-record conversions must differ too. Omitting the child identities from the
+struct conversions must differ too. Omitting the child identities from the
 cache key would incorrectly reuse the first function's field behavior.
 
-For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override changes the policy; a rule on one of their `secs` fields changes that child, and therefore the record's conversion; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
+For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override changes the policy; a rule on one of their `secs` fields changes that child, and therefore the struct's conversion; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
 
 Model membership follows the [snapshot contract](02-flat.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. Registry operations that accept a view check it against their own model before planning, rather than relying on the caller to check first. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 
@@ -499,8 +499,8 @@ Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_requests] · [C][fn_requests_c] · [Kotlin/JNI][fn_requests_jni]
-- [Record with scalar fields][struct_requests] · [C][struct_requests_c] · [Kotlin/JNI][struct_requests_jni]
+- [Function taking an owned struct][fn_requests] · [C][fn_requests_c] · [Kotlin/JNI][fn_requests_jni]
+- [Struct with scalar fields][struct_requests] · [C][struct_requests_c] · [Kotlin/JNI][struct_requests_jni]
 
 [fn_requests]: ../examples/fn/03-requests.md
 [fn_requests_c]: ../examples/fn/03-requests.c.md

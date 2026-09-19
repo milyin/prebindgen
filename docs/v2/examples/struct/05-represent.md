@@ -3,17 +3,17 @@
 [Stage chapter](../../stages/05-represent.md) · [Element path][struct] · [Source crate](../../source.md)
 Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][struct_select] · Next: [Retain supported output][struct_retain]
 
-# Record with scalar fields — Represent and compose values
+# Struct with scalar fields — Represent and compose values
 
 ## Input
 
-The [selection][struct_select] for the record, with its leaves already planned:
+The [selection][struct_select] for the struct, with its leaves already planned:
 
 ```text
 Stamp, IntoRust, relation Stamp.fields
   +-- secs  -> node(i64, IntoRust)     // finished: identity conversion
   +-- nanos -> node(i64, IntoRust)     // the same node
-policy:   this target's record policy
+policy:   this target's struct policy
 ```
 
 ## Result
@@ -32,7 +32,7 @@ node(Stamp, IntoRust) {
 }
 ```
 
-With both children finished, the registry asks the target for the record's
+With both children finished, the registry asks the target for the struct's
 [representation](../../stages/05-represent.md#represent-and-compose-values):
 which [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
 holds a `Stamp` on its side — a C member value or a JVM object here — and one
@@ -41,7 +41,7 @@ part that reads a field out of it. The [C][struct_represent_c] and
 [Kotlin/JNI][struct_represent_jni] pages show those reads. The registry then
 composes the body: each read is applied to the carrier, its result is passed
 through the child's template, and the converted parts construct the source
-record.
+struct.
 
 Both field positions resolve to the same cached `i64` input
 [node](../../stages/05-represent.md#represent-and-compose-values) under this
@@ -63,8 +63,8 @@ input; the full validity-contract structure remains a proposed extension.
   before the construction: no `Stamp` is built from a partial set of fields.
 - The node is recorded only once its children exist, so its identity — type,
   direction, relation, policy, children — is complete when it is cached and
-  another record with the same identity shares it.
-- This is the record entering Rust. Leaving Rust needs a construction
+  another struct with the same identity shares it.
+- This is the struct entering Rust. Leaving Rust needs a construction
   operation on the target side that `Product` does not have yet, and is a
   reported skip.
 

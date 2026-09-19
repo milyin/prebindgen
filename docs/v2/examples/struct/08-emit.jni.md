@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/08-emit.md) · [Common cell][struct_emit] · [Element path][struct]
 Owner: the JNI adapter's Kotlin writer
 
-# Record with scalar fields — Emit bindings — Kotlin/JNI
+# Struct with scalar fields — Emit bindings — Kotlin/JNI
 
 ## Input
 
@@ -35,7 +35,7 @@ used by the C target is absent.
 ## Checks
 
 - The Kotlin compiler supplies the JVM getters `getSecs(): long` and
-  `getNanos(): long` — the methods [the record's operations][struct_represent_jni]
+  `getNanos(): long` — the methods [the struct's operations][struct_represent_jni]
   call — so the class and the generated native code fit together by
   construction.
 - A class-name override is used consistently in the emitted class and the Kotlin

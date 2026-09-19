@@ -4,8 +4,8 @@
 //! [`Target::boundary`], [`Target::surface`] — plus one rendering call,
 //! [`Target::render_operation`]. Each planning answer is local: it describes
 //! *this* value, *this* call, *this* declaration. The recursion that visits a
-//! record's fields, the locals, the branches and the wrapper around them all
-//! belong to the registry, which is why a nested record costs an adapter
+//! struct's fields, the locals, the branches and the wrapper around them all
+//! belong to the registry, which is why a nested struct costs an adapter
 //! nothing.
 //!
 //! Everything here is a **description**. Nothing an adapter returns is
@@ -13,7 +13,7 @@
 //! the [`Artifact`]s it contributes whole.
 //!
 //! This is the first increment (docs/v2). What it carries is the scalar and
-//! owned-record case; the fields the chapters describe for resources, validity
+//! owned-struct case; the fields the chapters describe for resources, validity
 //! and sequences arrive with the capabilities that need them, and
 //! `docs/v2/implementation.md` lists exactly what is absent.
 
@@ -113,7 +113,7 @@ impl std::error::Error for PlanningError {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RelationId(pub(crate) usize);
 
-/// One field of a record relation, or one argument of a constructor relation.
+/// One field of a struct relation, or one argument of a constructor relation.
 #[derive(Clone, Debug)]
 pub struct Part {
     /// The field's name, absent for a positional field.
@@ -125,7 +125,7 @@ pub struct Part {
     /// The `#[cfg]` conditions the source field was written under, which the
     /// capture reader could not answer — empty in the ordinary case.
     ///
-    /// A target re-declaring this part as a member of its own record puts them
+    /// A target re-declaring this part as a member of its own struct puts them
     /// on that member. It must not read them: the registry puts the same
     /// conditions on every instruction that serves this part, so a member
     /// declared under them is read under them.
@@ -142,18 +142,18 @@ impl Part {
     }
 }
 
-/// A record read through, or built from, its fields.
+/// A struct read through, or built from, its fields.
 #[derive(Clone, Debug)]
-pub struct RecordRelation {
-    /// The record's declared name, which is how the writer finds its shape
+pub struct StructRelation {
+    /// The struct's declared name, which is how the writer finds its shape
     /// again when it renders a construction.
-    pub record: String,
+    pub name: String,
     pub parts: Vec<Part>,
 }
 
 /// How the registry constructs or reads a Rust value.
 ///
-/// The first increment has the two the scalar and record paths need. A
+/// The first increment has the two the scalar and struct paths need. A
 /// constructor or projector relation is the same shape with different parts,
 /// which is why adding one changes nothing below this type.
 #[derive(Clone, Debug)]
@@ -161,15 +161,15 @@ pub enum Relation {
     /// The whole value converted by one target operation: no parts, no
     /// recursion.
     Atomic,
-    /// The record's fields.
-    Record(RecordRelation),
+    /// The struct's fields.
+    Struct(StructRelation),
 }
 
 impl Relation {
     pub fn parts(&self) -> &[Part] {
         match self {
             Relation::Atomic => &[],
-            Relation::Record(record) => &record.parts,
+            Relation::Struct(strukt) => &strukt.parts,
         }
     }
 
@@ -177,7 +177,7 @@ impl Relation {
     pub fn label(&self) -> String {
         match self {
             Relation::Atomic => "atomic".to_string(),
-            Relation::Record(record) => format!("{}.fields", record.record),
+            Relation::Struct(strukt) => format!("{}.fields", strukt.name),
         }
     }
 }
@@ -632,9 +632,9 @@ pub struct SelectionQuery<'a, Policy> {
 pub struct ResolvedShape<'a> {
     pub crossing: &'a Crossing,
     pub relation: &'a Relation,
-    /// The record behind a record relation, for a target that renders its own
+    /// The struct behind a struct relation, for a target that renders its own
     /// declaration of it.
-    pub record: Option<&'a Struct>,
+    pub strukt: Option<&'a Struct>,
 }
 
 /// One already-planned child, as its parent's representation sees it.
@@ -690,8 +690,8 @@ impl<Policy> SurfaceRequest<'_, Policy> {
     /// most such a target can do, and is better than saying nothing.
     pub fn item_conditions(&self) -> Vec<String> {
         let conditions = match self.item {
-            SourceItem::Record(record) => {
-                crate::emit::Writer.conditions(Conditioned::Struct(record))
+            SourceItem::Struct(strukt) => {
+                crate::emit::Writer.conditions(Conditioned::Struct(strukt))
             }
             SourceItem::Function(function) => {
                 crate::emit::Writer.conditions(Conditioned::Function(function))
@@ -703,9 +703,9 @@ impl<Policy> SurfaceRequest<'_, Policy> {
             .collect()
     }
 
-    /// The `#[cfg]` conditions of each field of the record behind this request,
+    /// The `#[cfg]` conditions of each field of the struct behind this request,
     /// in field order — empty entries for the ordinary unconditional field, and
-    /// an empty list for a request that is not a record.
+    /// an empty list for a request that is not a struct.
     ///
     /// A target declaring a member per field puts its entry on that member. The
     /// registry puts the same conditions on every instruction that serves the
@@ -716,7 +716,7 @@ impl<Policy> SurfaceRequest<'_, Policy> {
     /// the Rust a target contributes.
     pub fn field_conditions(&self) -> Vec<Vec<TokenStream>> {
         match self.item {
-            SourceItem::Record(record) => record
+            SourceItem::Struct(strukt) => strukt
                 .fields
                 .iter()
                 .map(|field| crate::emit::Writer.conditions(Conditioned::Field(field)))
@@ -730,7 +730,7 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
     Function(&'a Function),
-    Record(&'a Struct),
+    Struct(&'a Struct),
 }
 
 // ---------------------------------------------------------------------------
@@ -741,7 +741,7 @@ pub enum SourceItem<'a> {
 ///
 /// Every method answers a local question about one value, one call or one
 /// declaration. None of them walks a type, allocates a name, or decides control
-/// flow: those are the registry's, which is why a second field, a nested record
+/// flow: those are the registry's, which is why a second field, a nested struct
 /// or a third target costs an adapter nothing new.
 pub trait Target {
     /// The choices the frontend recorded, in whatever shape this language's

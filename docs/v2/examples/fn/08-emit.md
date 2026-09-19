@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/08-emit.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the common Rust writer, plus each target's writer · Previous: [Retain supported output][fn_retain]
 
-# Function taking an owned record — Emit bindings
+# Function taking an owned struct — Emit bindings
 
 ## Input
 
@@ -34,12 +34,12 @@ each instruction has one owner:
 | read the first member | common operation for C; adapter expression for JNI | `stamp.secs` | `env.call_method(&stamp, "getSecs", "()J", &[])…` |
 | bind it to a local | registry | `let v0 = …;` | `let v0 = match … { … };` |
 | read the second member | common operation for C; adapter expression for JNI | `stamp.nanos` | `env.call_method(&stamp, "getNanos", "()J", &[])…` |
-| construct the record | registry | `source::Stamp { secs: v0, nanos: v1 }` | same |
+| construct the struct | registry | `source::Stamp { secs: v0, nanos: v1 }` | same |
 | call the source once | registry | `source::stamp_sum(v2)` | same |
 | deliver the result | common writer, following the boundary plan | `v3` returned | `v3` returned as `jlong` |
 
 Read the table from top to bottom as one call. The input arrives in the target's
-form, two integers are obtained, the source record is built, and the source
+form, two integers are obtained, the source struct is built, and the source
 function supplies the final integer. JNI additionally branches after each
 fallible getter; the language-specific page shows those branches in full.
 

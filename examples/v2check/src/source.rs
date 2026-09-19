@@ -12,7 +12,7 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
     stamp.secs.wrapping_add(stamp.nanos)
 }
 
-/// A record with a positional field, and one with a scalar neither adapter
+/// A struct with a positional field, and one with a scalar neither adapter
 /// carries: both are here so that a target refusing them is visible in the
 /// report rather than only in a comment.
 pub struct Pair(pub i64, pub i64);
@@ -21,7 +21,7 @@ pub struct Reading {
     pub level: i32,
 }
 
-/// A record with no fields at all. The model keeps it as a record, so it
+/// A struct with no fields at all. The model keeps it as a struct, so it
 /// reaches both adapters — and neither an empty `repr(C)` aggregate nor a
 /// Kotlin data class with no properties is a thing that exists.
 pub struct Marker;
@@ -46,7 +46,7 @@ pub fn stamp_delta(stamp: Stamp) -> i64 {
     stamp.secs.wrapping_sub(stamp.nanos)
 }
 
-/// A record with a field written under a condition nothing in this build can
+/// A struct with a field written under a condition nothing in this build can
 /// answer, and a function taking it.
 ///
 /// `v2check_conditional_field` is never set, so `extra` is absent here — and

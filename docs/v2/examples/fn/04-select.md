@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/04-select.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the registry, on the target adapter's selections · Previous: [Record binding requests][fn_requests] · Next: [Represent and compose values][fn_represent]
 
-# Function taking an owned record — Select conversion relations
+# Function taking an owned struct — Select conversion relations
 
 ## Input
 
@@ -37,10 +37,10 @@ Nothing in the tree says how a `Stamp` arrives or how a field is read. It says
 that `Stamp` will be built from two fields — so the next stage has to describe a
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations) with two members and a read for each — and that an `i64` is a leaf, so
 the next stage converts it whole. The [C][fn_select_c] and
-[Kotlin/JNI][fn_select_jni] pages show why each target chose the record
+[Kotlin/JNI][fn_select_jni] pages show why each target chose the struct
 relation here, and what it would choose instead.
 
-The `Stamp` subtree is the record's own selection,
+The `Stamp` subtree is the struct's own selection,
 [made on its own path][struct_select]; this function refers to it, as does
 anything else taking an owned `Stamp` under the same policy.
 
@@ -48,7 +48,7 @@ anything else taking an owned `Stamp` under the same policy.
 
 - Selection happens before any part is inspected: the target chooses
   `Stamp.fields` from the type and the policy, and only then does the registry
-  read the record's fields. A target that chose `atomic` would leave them
+  read the struct's fields. A target that chose `atomic` would leave them
   unread.
 - A scalar offers one relation. The target does not get to invent a second;
   `select` must return one of the ids it was offered.
@@ -56,7 +56,7 @@ anything else taking an owned `Stamp` under the same policy.
   yet — the `Stamp` conversion is unsupported, and so is this function, with
   that cause. Nothing partial is recorded.
 - `Stamp` does not contain itself, so no position in the tree meets a
-  conversion that is still open; a self-referential record would be refused
+  conversion that is still open; a self-referential struct would be refused
   here with `unsupported.conversion.recursive`.
 
 ## Language variants

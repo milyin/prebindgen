@@ -199,7 +199,7 @@ impl Target for JniTarget {
     type Payload = JniPayload;
 
     fn select(&self, query: &SelectionQuery<'_, JniPolicy>) -> TargetSupport<RelationId> {
-        let want_record = match query.policy {
+        let want_struct = match query.policy {
             JniPolicy::DataClass { .. } => true,
             JniPolicy::Scalar | JniPolicy::Function { .. } => false,
             JniPolicy::Unimplemented { declarator } => {
@@ -214,8 +214,8 @@ impl Target for JniTarget {
             }
         };
         for (id, relation) in query.candidates {
-            match (relation, want_record) {
-                (Relation::Record(_), true) => return Ok(TargetAttempt::Ready(*id)),
+            match (relation, want_struct) {
+                (Relation::Struct(_), true) => return Ok(TargetAttempt::Ready(*id)),
                 (Relation::Atomic, false) => return Ok(TargetAttempt::Ready(*id)),
                 _ => {}
             }
@@ -253,19 +253,19 @@ impl Target for JniTarget {
                     ))),
                 }))
             }
-            Relation::Record(record) => {
+            Relation::Struct(strukt) => {
                 if shape.crossing.direction != Direction::IntoRust {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.jni.object_output",
                         format!(
                             "`{}` leaving Rust as a JVM object is not implemented",
-                            record.record
+                            strukt.name
                         ),
                     )));
                 }
-                let Some(item) = shape.record else {
+                let Some(item) = shape.strukt else {
                     return Err(PlanningError::InternalInvariant(
-                        "a record relation without its record".to_string(),
+                        "a struct relation without its strukt".to_string(),
                     ));
                 };
                 if item.fields.is_empty() {
@@ -277,7 +277,7 @@ impl Target for JniTarget {
                         format!(
                             "`{}` has no fields, and a Kotlin data class needs at least one \
                              property",
-                            record.record
+                            strukt.name
                         ),
                     )));
                 }
@@ -515,26 +515,26 @@ impl Target for JniTarget {
                     }),
                 }))
             }
-            SourceItem::Record(record) => {
+            SourceItem::Struct(strukt) => {
                 let JniPolicy::DataClass { class } = request.policy else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is exposed as a data class under a policy that is not one",
-                        record.name
+                        strukt.name
                     )));
                 };
-                if record.fields.is_empty() {
+                if strukt.fields.is_empty() {
                     return Ok(TargetAttempt::Unsupported(Unsupported::new(
                         "unsupported.jni.empty_class",
                         format!(
                             "`{}` has no fields, and a Kotlin data class needs at least one \
                              property",
-                            record.name
+                            strukt.name
                         ),
                     )));
                 }
                 let conditions = request.field_conditions();
                 let mut properties = Vec::new();
-                for (index, field) in record.fields.iter().enumerate() {
+                for (index, field) in strukt.fields.iter().enumerate() {
                     let Some(name) = field.name.as_ref() else {
                         return Ok(TargetAttempt::Unsupported(Unsupported::new(
                             "unsupported.jni.positional_field",

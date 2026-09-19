@@ -48,7 +48,7 @@ record, so the file format is called JSONL (JSON Lines).
 The record identifies the item and preserves its Rust text, conditional-build
 information and source location. It does not yet contain a resolved field list
 or a link from a parameter to its type declaration. The [function][fn_source]
-and [record][struct_source] pages show the shape of these records; the saved
+and [struct][struct_source] pages show the shape of these records; the saved
 token text need not preserve the original whitespace.
 
 The attribute goes on a function, a struct, an enum, a union, a type alias or a
@@ -196,7 +196,7 @@ item.
 V2 re-applies it to everything it generates from the item it was written on.
 The [wrapper](06-boundary.md#assemble-the-native-boundary) carries the
 conditions of the source items it names — the function it calls, and every
-record it constructs — because it compiles only where all of them exist. The
+struct it constructs — because it compiles only where all of them exist. The
 Rust a target contributes for its own public declaration of that item, such as
 the `repr(C)` record a C caller fills in, carries them too. Nothing in the
 writer reads what one says: Rust conjoins repeated `#[cfg]` attributes on an
@@ -234,15 +234,15 @@ names, and with no entry it writes the declaration bare and says nothing: the
 warning it raises goes through `log`, and a build script driving its library API
 installs no logger. For a *function* the result is loud: the header declares a prototype whose
 symbol the library does not define, and the program fails to link. For a
-*member* it is not: the header declares a member the library's record does not
-have, so a caller allocates and fills a larger record than the wrapper reads,
+*member* it is not: the header declares a member the library's struct does not
+have, so a caller allocates and fills a larger struct than the wrapper reads,
 and nothing in the toolchain objects. That is the silent class of mismatch this
 chapter exists to prevent, so the C frontend emits a `cargo:warning` naming the
 member and the condition whenever it writes one — the `[defines]` entry is the
 fix, and that warning is the only output a build gets at all.
 
 Kotlin cannot express a condition at all, so what it does about one depends on
-what would otherwise be promised. A record with a conditional *field* is refused
+what would otherwise be promised. A struct with a conditional *field* is refused
 (`unsupported.jni.conditional_field`): a data class would give every caller a
 property to fill in that the library reads only sometimes, and a reported skip
 says that better than a wrong class. A conditional *function* is declared, and
@@ -400,8 +400,8 @@ be diagnosed in context.
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_source]
-- [Record with scalar fields][struct_source]
+- [Function taking an owned struct][fn_source]
+- [Struct with scalar fields][struct_source]
 
 [fn_source]: ../examples/fn/01-source.md
 [struct_source]: ../examples/struct/01-source.md

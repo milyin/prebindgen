@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/04-select.md) · [Common cell][struct_select] · [Element path][struct]
 Owner: the registry; the JNI adapter selects from the offered [relations](../../stages/04-select.md#what-a-relation-is)
 
-# Record with scalar fields — Select conversion relations — Kotlin/JNI
+# Struct with scalar fields — Select conversion relations — Kotlin/JNI
 
 ## Input
 
@@ -27,7 +27,7 @@ nanos: i64, IntoRust   policy: jlong carrier   offered: [ atomic ]   -> atomic
 ```
 
 A `DataClass` [policy](../../stages/03-requests.md#what-policy-means) says the Kotlin side holds `Stamp` as a data class whose
-properties mirror the fields, so the JNI adapter answers with the record
+properties mirror the fields, so the JNI adapter answers with the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
 Rust `Stamp` is made of reading one property per field. The answer follows from
@@ -36,7 +36,7 @@ has not yet derived a getter name or a descriptor; those belong to the
 [representation](../../stages/05-represent.md#represent-and-compose-values), and the representation is asked for only after the parts are
 planned.
 
-A pointer-class policy — the record kept in Rust and handed to Kotlin as an
+A pointer-class policy — the struct kept in Rust and handed to Kotlin as an
 opaque `jlong` handle — would make the same adapter answer `atomic`, and no
 property would ever be read.
 

@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
 Owner: the registry, on the C adapter's `BoundarySpec`
 
-# Function taking an owned record — Assemble the native boundary — C
+# Function taking an owned struct — Assemble the native boundary — C
 
 ## Input
 

@@ -4,8 +4,8 @@
 
 # Represent and compose values
 
-Status: implemented for a value carried whole and for a record read through its
-fields on the way into Rust. A record leaving Rust, multi-value layouts,
+Status: implemented for a value carried whole and for a struct read through its
+fields on the way into Rust. A struct leaving Rust, multi-value layouts,
 optional values, and the validity and resource contracts are
 [described but not built](../extensions.md).
 
@@ -82,7 +82,7 @@ relation, same policy, so the same plan. The two `i64` nodes do not merge,
 because direction is part of a node's identity — reading an integer out of a
 foreign argument and handing one back are different operations.
 
-The registry walks the record and combines its child plans. The target answers
+The registry walks the struct and combines its child plans. The target answers
 local representation questions, such as how to read one member. This division
 lets supported nested combinations reuse the traversal algorithm. It does not
 make a new kind of value automatically supported: an optional field still needs
@@ -169,7 +169,7 @@ that single operation. The common writer supplies the surrounding `let`, branche
 on success or failure, and follows the function's error route. For C, reading
 the same field is simply `stamp.secs`, which cannot report an error and needs
 no JNI environment. The registry combines either kind of read with the same
-source-record construction algorithm.
+source-struct construction algorithm.
 
 `implementation` is `Operation<Payload>`: either a **standard** operation the
 registry itself renders — the identity conversion, an aggregate member read — or
@@ -294,7 +294,7 @@ verify that responsibility, including error paths; metadata cannot prove that
 arbitrary renderer code obeys its description.
 
 The [C member reads][struct_represent_c] and [JNI property getters][struct_represent_jni]
-of the record path are worked examples of these specifications, down to the
+of the struct path are worked examples of these specifications, down to the
 fragment each one renders.
 
 ## Target representations
@@ -326,9 +326,9 @@ enum Protocol {
 ```
 
 Two layouts and two protocols, one direction: convert the whole value, or
-project one part per part of the selected relation, reading a record on the way
-into Rust. `Product` has no target-construction operation yet, so a record
-leaving Rust is a reported skip — C reports `unsupported.record.out_of_rust`
+project one part per part of the selected relation, reading a struct on the way
+into Rust. `Product` has no target-construction operation yet, so a struct
+leaving Rust is a reported skip — C reports `unsupported.struct.out_of_rust`
 from the registry; JNI refuses earlier with `unsupported.jni.object_output`. A
 future C output could use a struct literal, while a future separate-arguments
 JNI form would map children to argument slots. The implemented JVM-object input
@@ -381,8 +381,8 @@ enum Instr {
     // Apply a registered operation to values this body already has, binding
     // its result when it produces one.
     Apply { primitive: PrimitiveId, operands: Vec<Operand>, result: Option<ValueId> },
-    // Build a source record from converted parts, in field order.
-    Construct { record: String, parts: Vec<ValueId>, result: ValueId },
+    // Build a source struct from converted parts, in field order.
+    Construct { name: String, parts: Vec<ValueId>, result: ValueId },
     // Call the source function, once.
     Call { function: String, args: Vec<ValueId>, result: Option<ValueId> },
 }
@@ -405,9 +405,9 @@ An operation that needs a runtime scope names it, and the boundary says which
 native parameter supplies it; nothing in a rendered fragment can reach for a
 variable its caller happens to have.
 
-For the record, composition is: apply each projection to the carrier, in part
+For the struct, composition is: apply each projection to the carrier, in part
 order; use each child's template on what the projection produced; construct the
-source record from the results. The registry generates all child calls and
+source struct from the results. The registry generates all child calls and
 source traversal. Access follows the exact source type and operation, and for
 the owned values this increment produces, ordinary Rust temporaries rely on Rust
 destruction at scope exit. A borrowed input such as `&Stamp`, and any value that
@@ -417,7 +417,7 @@ the registry can schedule the temporary, the cleanup and their order.
 
 ## What is not settled here
 
-The scalar and owned-record cases are implemented, and
+The scalar and owned-struct cases are implemented, and
 [the first increment](../implementation.md#the-first-increment-as-built) records
 what building them settled — the instruction set, the standard-operation
 variant — and what it left open. The largest open items belong to this chapter,
@@ -432,8 +432,8 @@ resource-bearing value.
 
 ## Elements at this stage
 
-- [Function taking an owned record][fn_represent] · [C][fn_represent_c] · [Kotlin/JNI][fn_represent_jni]
-- [Record with scalar fields][struct_represent] · [C][struct_represent_c] · [Kotlin/JNI][struct_represent_jni]
+- [Function taking an owned struct][fn_represent] · [C][fn_represent_c] · [Kotlin/JNI][fn_represent_jni]
+- [Struct with scalar fields][struct_represent] · [C][struct_represent_c] · [Kotlin/JNI][struct_represent_jni]
 
 [fn_represent]: ../examples/fn/05-represent.md
 [fn_represent_c]: ../examples/fn/05-represent.c.md

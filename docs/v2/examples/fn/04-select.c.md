@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/04-select.md) · [Common cell][fn_select] · [Element path][fn]
 Owner: the registry, on the C adapter's selections
 
-# Function taking an owned record — Select conversion relations — C
+# Function taking an owned struct — Select conversion relations — C
 
 ## Input
 
@@ -25,7 +25,7 @@ Param(0)  Stamp, IntoRust   -> Stamp.fields
 Return    i64,   OutOfRust  -> atomic
 ```
 
-The C adapter selects `Stamp.fields` because the record is declared as a
+The C adapter selects `Stamp.fields` because the struct is declared as a
 `data_struct`: a C struct passed by value is made of its members, so the
 [conversion](../../stages/04-select.md#select-conversion-relations) has to be
 made of the field conversions. Had the build script declared `Stamp` as an
@@ -40,14 +40,14 @@ scalar [carrier](../../stages/05-represent.md#describing-target-values-and-opera
 
 ## Checks
 
-- The answer is one of the offered ids. `Stamp.fields` is the record relation
+- The answer is one of the offered ids. `Stamp.fields` is the struct relation
   the registry registered from Flat's field list; the adapter did not construct
   it.
 - The `data_struct` policy commits the adapter to a member per part in the next
   stage. A policy V2 cannot lower yet — one of the C declarators it does not
   implement — is answered as unsupported here, and the function is
   [skipped with that cause][fn_retain] rather than planned around.
-- The selection for `Stamp` is the same one [the record's C page][struct_select_c]
+- The selection for `Stamp` is the same one [the struct's C page][struct_select_c]
   shows; this function does not choose differently for its own parameter.
 
 [fn]: README.md

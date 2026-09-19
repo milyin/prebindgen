@@ -7,7 +7,7 @@
 //! one expression per operation of its own ([`Target::render_operation`]) and
 //! whole [`Artifact`]s; it contributes no control flow.
 //!
-//! Source types and record shapes are generated through Flat's emission
+//! Source types and struct shapes are generated through Flat's emission
 //! capability, never from retained syntax and never spelled by an adapter.
 
 use std::collections::HashMap;
@@ -119,7 +119,7 @@ fn wrapper<T: Target>(
         name
     };
 
-    // A wrapper names source items — the function it calls, and every record it
+    // A wrapper names source items — the function it calls, and every struct it
     // constructs — and compiles only where all of them exist. So it inherits
     // each one's condition: a `#[cfg]` the capture reader could not answer and
     // rewrote back onto the item. Rust conjoins repeated `#[cfg]` attributes on
@@ -137,7 +137,7 @@ fn wrapper<T: Target>(
     let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
     for step in &function.instrs {
         let named = match &step.instr {
-            Instr::Construct { record, .. } => record.as_str(),
+            Instr::Construct { name, .. } => name.as_str(),
             Instr::Call { function, .. } => function.as_str(),
             Instr::Apply { .. } => continue,
         };
@@ -200,13 +200,13 @@ fn wrapper<T: Target>(
                 statements.push(quote!(#(#guarded)* #statement));
             }
             Instr::Construct {
-                record,
+                name,
                 parts,
                 result,
             } => {
                 let item = flat
-                    .struct_type(record.as_str())
-                    .expect("a construction names a record the model declares");
+                    .struct_type(name.as_str())
+                    .expect("a construction names a struct the model declares");
                 let ident = &item.name;
                 let head = quote!(#source_module::#ident);
                 // An initializer carries its own field's condition: the value

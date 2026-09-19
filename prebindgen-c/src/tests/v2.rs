@@ -134,7 +134,7 @@ fn a_missing_capability_is_reported_per_element() {
     assert_eq!(groups["unsupported.c.opaque_ptr"].len(), 2);
     // An enum has no fields to walk, so the registry refuses it before the
     // target is asked; the entry's representation still says `enum_type`.
-    assert_eq!(groups["unsupported.type.not_a_record"].len(), 1);
+    assert_eq!(groups["unsupported.type.not_a_struct"].len(), 1);
     assert_eq!(groups["unsupported.callback.not_implemented"].len(), 1);
 }
 
@@ -206,7 +206,7 @@ fn a_data_struct_and_a_function_over_it_are_emitted() {
         "{rust}"
     );
     assert!(compact.contains("fixture::stamp_sum(v2)"), "{rust}");
-    // A record leaving Rust needs a construction the target does not supply
+    // A struct leaving Rust needs a construction the target does not supply
     // yet, so the function returning one is a reported skip, not a wrapper.
     assert!(!rust.contains("z_stamp_new"), "{rust}");
     let _ = std::fs::remove_dir_all(&dir);

@@ -39,7 +39,7 @@ contracts designed for those extensions are gathered on
 whole list. Tracked as [issue #720](https://github.com/milyin/prebindgen/issues/720).
 The engine switch and the unsupported-output reporting exist, and so does the
 first increment of the pipeline itself: the two element paths specified here —
-a function taking an owned record, and that record — are planned, assembled and
+a function taking an owned struct, and that struct — are planned, assembled and
 emitted by `prebindgen-registry-v2`, for both targets, through the real
 frontends. A binding crate's `build.rs` is the same under either engine;
 `PREBINDGEN_PIPELINE=v2` makes `prebindgen-c` and `prebindgen-jni` hand their
@@ -136,7 +136,7 @@ build-dependency only:
 - **`prebindgen-flat`** builds the queryable source model over those captured
   items:
   which functions exist, what a parameter's type is, which declaration a type
-  name refers to, what fields a record has.
+  name refers to, what fields a struct has.
 - **`prebindgen-registry-v2`** is the engine this document specifies. It plans
   every [conversion](stages/04-select.md#select-conversion-relations) a requested binding needs, resolves what depends on what,
   renders the Rust [wrappers](stages/06-boundary.md#assemble-the-native-boundary), and reports what it could not generate. It shares
@@ -221,10 +221,10 @@ described in the source-model chapter are a future extension.
 All the paths are specified against [one source crate](source.md), which grows as
 paths are added.
 
-- [Function taking an owned record][fn] — `stamp_sum(Stamp) -> i64`
-- [Record with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
+- [Function taking an owned struct][fn] — `stamp_sum(Stamp) -> i64`
+- [Struct with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
 
-An **element kind** is a kind of [source item](stages/01-source.md#capture-source-items) — a function, a record, an enum —
+An **element kind** is a kind of [source item](stages/01-source.md#capture-source-items) — a function, a struct, an enum —
 as this appendix organizes it. (Inside the pipeline the word is not used: the
 chapters say *source item* for what the model captured and *declaration* for
 what the binding asked to expose, identified by a `DeclarationId`, such as
@@ -235,15 +235,15 @@ parent's. Two paths are specified today; the rest name the id they will use when
 they are written.
 
 ```text
-fn                      specified   function taking an owned record, returning a scalar
+fn                      specified   function taking an owned struct, returning a scalar
   fn_fallible           deferred    function returning Result
   fn_callback           deferred    function taking a callback
   fn_borrowed_param     deferred    function taking a borrowed parameter
   fn_complex_return     deferred    function returning a non-scalar value
-struct                  specified   record with scalar fields
-  struct_nested         deferred    record with a record field
-  struct_option_field   deferred    record with an optional field
-  struct_vec_field      deferred    record with a sequence field
+struct                  specified   struct with scalar fields
+  struct_nested         deferred    struct with a struct field
+  struct_option_field   deferred    struct with an optional field
+  struct_vec_field      deferred    struct with a sequence field
 enum                    deferred    enum with payload variants
 const                   deferred    exported constant
 ```
@@ -261,8 +261,8 @@ cell links back to its chapter, and both use these ids.
 [The format contract](FORMAT.md) states the grammar and the rules a new path has
 to satisfy.
 
-Only applicable combinations exist. The record path has no native-boundary cell,
-because a record exports no function of its own; its conversion is reached
+Only applicable combinations exist. The struct path has no native-boundary cell,
+because a struct exports no function of its own; its conversion is reached
 through the function that uses it. A missing cell claims nothing about support —
 whether something is supported is stated in the contract of a cell that does exist.
 

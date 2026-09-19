@@ -64,13 +64,13 @@
     {
       "id": "fn",
       "dir": "fn",
-      "title": "Function taking an owned record",
+      "title": "Function taking an owned struct",
       "fixture": "stamp_sum"
     },
     {
       "id": "struct",
       "dir": "struct",
-      "title": "Record with scalar fields",
+      "title": "Struct with scalar fields",
       "fixture": "Stamp"
     }
   ],
@@ -93,15 +93,15 @@
     },
     {
       "id": "struct_nested",
-      "title": "Record with a record field"
+      "title": "Struct with a struct field"
     },
     {
       "id": "struct_option_field",
-      "title": "Record with an optional field"
+      "title": "Struct with an optional field"
     },
     {
       "id": "struct_vec_field",
-      "title": "Record with a sequence field"
+      "title": "Struct with a sequence field"
     },
     {
       "id": "enum",

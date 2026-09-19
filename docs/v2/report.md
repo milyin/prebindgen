@@ -38,7 +38,7 @@ not satisfy a request. A skip includes a stable
 [capability](stages/07-retain.md#retain-supported-output) code, a readable
 explanation and a path to the problem. That path can identify the function
 [site](stages/03-requests.md#a-values-position-in-an-exported-function), such
-as parameter 0, or the record field where planning stopped.
+as parameter 0, or the struct field where planning stopped.
 
 Here is the complete JNI report from `examples/v2check`. That test fixture
 extends the guide's `Stamp` example with deliberately unsupported cases:

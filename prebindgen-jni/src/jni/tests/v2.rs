@@ -188,7 +188,7 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
     );
     assert!(
         !rust.contains("stampNew"),
-        "a record leaving Rust is a skip: {rust}"
+        "a struct leaving Rust is a skip: {rust}"
     );
 
     let written = generated
@@ -344,7 +344,7 @@ fn a_function_backed_constant_resolves_against_the_function() {
     assert_eq!(constant.declaration.source, SourceKind::Function);
 }
 
-/// The `Stamp` fixture the edge-case tests below build on: a record of two
+/// The `Stamp` fixture the edge-case tests below build on: a struct of two
 /// `i64`s, a function taking it, and whatever `extra` items a test adds.
 fn stamp_items(extra: &[&str]) -> Vec<(syn::Item, SourceLocation)> {
     let loc = myflat_loc();

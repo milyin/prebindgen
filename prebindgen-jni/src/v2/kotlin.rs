@@ -2,7 +2,7 @@
 //!
 //! The engine renders Rust only; what Kotlin a binding needs is the JNI
 //! adapter's to say, and it says it here from the payloads its declarations
-//! carried through planning — a `data class` per emitted record, one `external
+//! carried through planning — a `data class` per emitted struct, one `external
 //! fun` per emitted function on the harness object, and a public function
 //! calling each. Rendering goes through `kotlin-codegen`, as v1's does, so the
 //! output is validated Kotlin and lands in the same generator-owned tree.

@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/01-source.md) · [Element path][struct] · [Source crate](../../source.md)
 Owner: the `#[prebindgen]` proc macro · Next: [Build and inspect the source model][struct_flat]
 
-# Record with scalar fields — Capture source items
+# Struct with scalar fields — Capture source items
 
 ## Input
 

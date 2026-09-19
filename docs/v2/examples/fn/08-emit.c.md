@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/08-emit.md) · [Common cell][fn_emit] · [Element path][fn]
 Owner: the common Rust writer, then `cbindgen`
 
-# Function taking an owned record — Emit bindings — C
+# Function taking an owned struct — Emit bindings — C
 
 ## Input
 

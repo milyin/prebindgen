@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/07-retain.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the registry · Previous: [Assemble the native boundary][fn_boundary] · Next: [Emit bindings][fn_emit]
 
-# Function taking an owned record — Retain supported output
+# Function taking an owned struct — Retain supported output
 
 ## Input
 
@@ -43,17 +43,17 @@ native symbol. Both symbols are shown here to connect the retained request to
 its eventual entry point.
 
 If a field [conversion](../../stages/04-select.md#select-conversion-relations) were unsupported, the same reason would propagate to
-both the record and its caller. The cause numbers below are explanatory labels;
+both the struct and its caller. The cause numbers below are explanatory labels;
 current reports copy the reason and dependency path rather than use a cause-id table:
 
 ```text
-outcome(record)             = Skipped { causes: [cause#1] }
+outcome(struct)             = Skipped { causes: [cause#1] }
 outcome(exported stamp_sum) = Skipped { causes: [cause#1] }   // same cause, own path
 ```
 
 ## Checks
 
-- Requirements are transitive: this function needs the record's [conversion](../../stages/04-select.md#select-conversion-relations) and
+- Requirements are transitive: this function needs the struct's [conversion](../../stages/04-select.md#select-conversion-relations) and
   its public [representation](../../stages/05-represent.md#represent-and-compose-values), [retained on its own path][struct_retain], so either being unsupported skips
   it too, carrying the same cause rather than a new one.
 - Nothing partial is retained: no

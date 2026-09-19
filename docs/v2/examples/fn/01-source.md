@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/01-source.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the `#[prebindgen]` proc macro · Next: [Build and inspect the source model][fn_flat]
 
-# Function taking an owned record — Capture source items
+# Function taking an owned struct — Capture source items
 
 ## Input
 
@@ -41,7 +41,7 @@ fields or chosen a C/JNI [representation](../../stages/05-represent.md#represent
 - The body is replaced by a placeholder: the generated [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) calls
   `stamp_sum`, so only the signature has to travel.
 - `content` is text. `Stamp` here is a name in a string, matched to
-  [the record's own capture][struct_source] only by the next stage.
+  [the struct's own capture][struct_source] only by the next stage.
 - No `cfg` guarded this item, so the field is absent.
 - The entry exists whether or not any binding exposes the function.
 

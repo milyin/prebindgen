@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/05-represent.md) · [Element path][fn] · [Source crate](../../source.md)
 Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][fn_select] · Next: [Assemble the native boundary][fn_boundary]
 
-# Function taking an owned record — Represent and compose values
+# Function taking an owned struct — Represent and compose values
 
 ## Input
 
@@ -60,7 +60,7 @@ while the two fields share one plan because everything in theirs agrees. The
 selection tree had two `i64` leaves under `Stamp`; the cache, consulted once
 each leaf is complete, made them one node.
 
-The input node is the record's own conversion,
+The input node is the struct's own conversion,
 [planned on its own path][struct_represent]; this function refers to it, and so
 does anything else taking an owned `Stamp` under the same
 [policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are

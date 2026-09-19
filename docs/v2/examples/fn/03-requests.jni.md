@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/03-requests.md) · [Common cell][fn_requests] · [Element path][fn]
 Owner: the JNI frontend
 
-# Function taking an owned record — Record binding requests — Kotlin/JNI
+# Function taking an owned struct — Record binding requests — Kotlin/JNI
 
 ## Input
 
@@ -14,7 +14,7 @@ JniGen::builder()
     .set_package_prefix("example")
     .package(
         package!()
-            .class(data_class!(Stamp))   // see the record path
+            .class(data_class!(Stamp))   // see the struct path
             .fun(prebindgen_registry::fun!(stamp_sum)),
     )
     .build_with(prebindgen_jni::pipeline::Pipeline::V2)

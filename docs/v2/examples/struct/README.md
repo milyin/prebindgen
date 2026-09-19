@@ -2,7 +2,7 @@
 
 [Project contents](../../README.md) · [Source crate](../../source.md)
 
-# Record with scalar fields
+# Struct with scalar fields
 
 ```rust
 pub struct Stamp {
@@ -11,9 +11,9 @@ pub struct Stamp {
 }
 ```
 
-This walkthrough follows the type that the function example accepts. A
-**record** here is a struct whose fields Flat can inspect. `Stamp` has two
-signed 64-bit fields; a foreign caller needs its own way to hold those values.
+This walkthrough follows the type that the function example accepts: a struct
+whose fields Flat can inspect. `Stamp` has two signed 64-bit fields; a foreign
+caller needs its own way to hold those values.
 C uses a generated C-compatible struct passed by value. Kotlin uses a generated
 data class whose JVM getters the native
 [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) can call.
@@ -26,11 +26,11 @@ operations; the contracts planned for more complex values are collected on
 [the extensions page](../../extensions.md).
 
 Follow the pages below from capture to the emitted type. There is no separate
-native-boundary page for a record: a type is not a callable entry point. The
-record crosses the native boundary as an argument of
+native-boundary page for a struct: a type is not a callable entry point. The
+struct crosses the native boundary as an argument of
 [the function that takes it][fn].
 
-Deliberately not covered: a field whose type is itself a record, an optional
+Deliberately not covered: a field whose type is itself a struct, an optional
 field and a sequence field (`struct_nested`, `struct_option_field`,
 `struct_vec_field`), each of which changes what a child conversion is allowed to
 produce and would get its own cells.
