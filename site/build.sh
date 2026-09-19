@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# Builds the docs site into $1: rustdoc for the 8 published crates plus the
+# Builds the docs site into $1: rustdoc for the workspace crates plus the
 # static home page. Output uses only relative links, so this same tree works
 # whether it's deployed at the site root or nested under pr-preview/pr-<N>/.
 set -euo pipefail
 
 out="${1:?usage: build.sh <out-dir>}"
 
-# Same crate list as the `package` job in .github/workflows/rust.yml —
-# published crates only, no examples/*.
+# The `package` job in .github/workflows/rust.yml plus prebindgen-registry-v2:
+# that crate is `publish = false`, so it gets no docs.rs page, and this site is
+# the only place its rustdoc is readable. No examples/*.
 crates=(
   prebindgen
   prebindgen-flat
   prebindgen-registry
+  prebindgen-registry-v2
   prebindgen-c
   prebindgen-jni
   prebindgen-proc-macro
