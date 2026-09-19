@@ -52,7 +52,7 @@
 
 use proc_macro2::TokenStream;
 
-use super::{Alternative, Element, EnumValue, Field, Function, Struct, Type, TypeRef};
+use super::{Alternative, Element, EnumValue, Extern, Field, Function, Struct, Type, TypeRef};
 
 /// Rendering operations supplied by a pipeline-owned callback key.
 ///
@@ -98,6 +98,7 @@ pub enum Conditioned<'a> {
     Function(&'a Function),
     Type(&'a Type),
     Struct(&'a Struct),
+    Extern(&'a Extern),
     Field(&'a Field),
 }
 
@@ -108,6 +109,7 @@ impl Conditioned<'_> {
             Conditioned::Function(function) => function.conditions(),
             Conditioned::Type(ty) => ty.conditions(),
             Conditioned::Struct(record) => record.conditions(),
+            Conditioned::Extern(opaque) => opaque.conditions(),
             Conditioned::Field(field) => field.conditions(),
         }
     }

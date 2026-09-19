@@ -12,6 +12,21 @@ pub fn stamp_sum(stamp: Stamp) -> i64 {
     stamp.secs.wrapping_add(stamp.nanos)
 }
 
+/// A tally of stamps, reached through a handle. The type behind the alias is
+/// crate-private and unmarked, so a binding can hold one and call what takes
+/// it, and nothing else.
+pub type Ledger = crate::ledger::Ledger;
+
+pub fn ledger_open(stamp: Stamp) -> Ledger {
+    crate::ledger::Ledger {
+        total: stamp_sum(stamp),
+    }
+}
+
+pub fn ledger_close(ledger: Ledger) -> i64 {
+    ledger.total
+}
+
 /// A struct with a positional field, and one with a scalar neither adapter
 /// carries: both are here so that a target refusing them is visible in the
 /// report rather than only in a comment.

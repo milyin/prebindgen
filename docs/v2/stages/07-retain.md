@@ -83,7 +83,7 @@ have to read a report to learn that a function it declared does not exist.
 that gap lasts the engine accepts a request it cannot generate, records it as a
 skipped declaration with its reason, and generates the rest. That is what lets
 an existing V1 configuration be pointed at V2 without being rewritten first, and
-what lets the two element paths here be built before the rest of the surface
+what lets the three element paths here be built before the rest of the surface
 exists. It is a migration device with an end: as coverage completes, each
 remaining skip becomes a build failure, and nothing in a consumer's build should
 be arranged to depend on skipping. Invalid configuration and generator defects
@@ -166,6 +166,7 @@ The full design requires the following dependency behavior. Struct/caller
 propagation is implemented; interface and method promises extend that rule:
 
 - An unsupported field skips the entire struct and callers that require that struct representation.
+- An opaque handle is retained with its release or not at all, and a function returning one requires its public declaration as a function taking one does: a caller cannot hold what the header never names, nor free it through a method that was not emitted. [The handle path][typedef_retain] shows both.
 - An unsupported optional method can be omitted independently; an interface-required method can prevent its owner from being emitted.
 - An unsupported owner representation prevents methods requiring that owner.
 - Unrelated free functions in a package can still be generated.
@@ -278,6 +279,8 @@ retention decisions described here.
 
 - [Function taking an owned struct][fn_retain]
 - [Struct with scalar fields][struct_retain]
+- [Type alias declaring an opaque handle][typedef_retain]
 
 [fn_retain]: ../examples/fn/07-retain.md
 [struct_retain]: ../examples/struct/07-retain.md
+[typedef_retain]: ../examples/typedef/07-retain.md

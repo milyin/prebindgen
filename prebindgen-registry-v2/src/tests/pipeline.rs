@@ -21,7 +21,8 @@ use crate::{
     },
 };
 
-/// Two structs and three functions, one of which has a field nothing can carry.
+/// Two structs and three functions, one of which has a field nothing can carry;
+/// an opaque type, and the two functions that hand one out and take it back.
 fn model() -> Flat {
     let location = prebindgen::SourceLocation {
         crate_name: Some("fixture".to_string()),
@@ -65,6 +66,19 @@ fn model() -> Flat {
                 unimplemented!()
             }
         ),
+        syn::parse_quote!(
+            pub type Token = external::Token;
+        ),
+        syn::parse_quote!(
+            pub fn token_new() -> Token {
+                unimplemented!()
+            }
+        ),
+        syn::parse_quote!(
+            pub fn token_use(token: Token) -> i64 {
+                unimplemented!()
+            }
+        ),
     ]
     .into_iter()
     .map(|item| (item, location.clone()))
@@ -91,6 +105,12 @@ enum Policy {
     /// A struct whose public declaration requires another declaration's, so a
     /// refusal has to travel two edges.
     StructRequiring(String),
+    /// An opaque type carried whole as an address, released through
+    /// `<name>_free`.
+    Handle,
+    /// The same, for a target with no way to place a release — which is what
+    /// makes the type, and everything taking it, unsupported.
+    HandleWithoutRelease,
     Function {
         symbol: String,
         routes: Routes,
@@ -117,7 +137,8 @@ enum Policy {
 enum Routes {
     /// None declared, which skips any function whose conversions can fail.
     None,
-    /// One route, reporting through an operation that needs no context.
+    /// One route per category a conversion here can raise, each reporting
+    /// through an operation that needs no context.
     Reported,
     /// One route whose reporting operation needs a runtime context the
     /// boundary does not supply.
@@ -138,6 +159,8 @@ fn exported(symbol: &str, routes: Routes) -> Policy {
 enum Payload {
     ReadFallibly,
     Report,
+    /// The binding-failure reporter, which is handed a `String`.
+    ReportMessage,
 }
 
 struct Mini;
@@ -175,6 +198,25 @@ impl Target for Mini {
         policy: &Policy,
     ) -> TargetSupport<ReprSpec<Payload>> {
         match shape.relation {
+            Relation::Atomic if matches!(policy, Policy::Handle | Policy::HandleWithoutRelease) => {
+                let carrier = WireType::abi(syn::parse_quote!(*mut Raw));
+                let ty = shape.crossing.ty.clone();
+                Ok(TargetAttempt::Ready(match shape.crossing.direction {
+                    crate::target::Direction::IntoRust => ReprSpec {
+                        layout: Layout::Scalar(carrier.clone()),
+                        protocol: Protocol::terminal(PrimitiveSpec::from_raw(
+                            carrier.clone(),
+                            ty.clone(),
+                        )),
+                        release: Some(PrimitiveSpec::release(carrier, ty)),
+                    },
+                    crate::target::Direction::OutOfRust => ReprSpec {
+                        layout: Layout::Scalar(carrier.clone()),
+                        protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
+                        release: None,
+                    },
+                }))
+            }
             Relation::Atomic => {
                 if !matches!(shape.crossing.ty.kind(), TypeKind::Scalar(ScalarKind::I64)) {
                     // The one capability this target is missing, and the reason
@@ -190,6 +232,7 @@ impl Target for Mini {
                     protocol: Protocol::terminal(PrimitiveSpec::identity(OperationType::Carrier(
                         carrier,
                     ))),
+                    release: None,
                 }))
             }
             Relation::Struct(strukt) => {
@@ -233,6 +276,7 @@ impl Target for Mini {
                         members: item.fields.iter().map(|field| field.member()).collect(),
                     },
                     protocol: Protocol::Product { projections },
+                    release: None,
                 }))
             }
         }
@@ -264,13 +308,28 @@ impl Target for Mini {
                 failures: Vec::new(),
             }));
         }
+        // A release site carries the handle type's own policy: its symbol is
+        // derived, and a null address is not a failure it can raise.
+        let release = match (site.function, policy) {
+            (None, Policy::Handle) => Some(exported(
+                &format!("{}_free", site.declaration.rust_origin),
+                Routes::None,
+            )),
+            (None, Policy::HandleWithoutRelease) => {
+                return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                    "unsupported.mini.no_release",
+                    "this target has nowhere to place a release",
+                )))
+            }
+            _ => None,
+        };
         let Policy::Function {
             symbol,
             routes,
             param_names,
             attrs,
             unsafety,
-        } = policy
+        } = release.as_ref().unwrap_or(policy)
         else {
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` is exported under a value policy",
@@ -306,32 +365,49 @@ impl Target for Mini {
             failures: if *routes == Routes::None {
                 Vec::new()
             } else {
-                vec![crate::target::FailureRoute {
-                    category: FailureCategory::Runtime,
-                    report: Some(PrimitiveSpec {
-                        operands: {
-                            let mut operands = vec![OperandSpec::error(OperationType::Carrier(
-                                WireType::internal(syn::parse_quote!(Error)),
-                            ))];
-                            if *routes == Routes::ReporterNeedsContext {
-                                operands.push(OperandSpec::context(
-                                    "mini.log",
-                                    OperationType::Carrier(WireType::internal(syn::parse_quote!(
-                                        Log
-                                    ))),
-                                    Access::Exclusive,
-                                ));
-                            }
-                            operands
-                        },
-                        result: None,
-                        failure: PrimitiveFailure::Infallible,
-                        dependencies: Vec::new(),
-                        implementation: Operation::Target(Payload::Report),
-                    }),
-                    on_report_failure: Terminal::Abort,
-                    terminate: Terminal::Return(syn::parse_quote!(0)),
-                }]
+                vec![
+                    crate::target::FailureRoute {
+                        category: FailureCategory::Binding,
+                        report: Some(PrimitiveSpec {
+                            operands: vec![OperandSpec::error(OperationType::Carrier(
+                                WireType::internal(syn::parse_quote!(String)),
+                            ))],
+                            result: None,
+                            failure: PrimitiveFailure::Infallible,
+                            dependencies: Vec::new(),
+                            implementation: Operation::Target(Payload::ReportMessage),
+                        }),
+                        on_report_failure: Terminal::Abort,
+                        terminate: Terminal::Return(syn::parse_quote!(0)),
+                    },
+                    crate::target::FailureRoute {
+                        category: FailureCategory::Runtime,
+                        report: Some(PrimitiveSpec {
+                            operands: {
+                                let mut operands =
+                                    vec![OperandSpec::error(OperationType::Carrier(
+                                        WireType::internal(syn::parse_quote!(Error)),
+                                    ))];
+                                if *routes == Routes::ReporterNeedsContext {
+                                    operands.push(OperandSpec::context(
+                                        "mini.log",
+                                        OperationType::Carrier(WireType::internal(
+                                            syn::parse_quote!(Log),
+                                        )),
+                                        Access::Exclusive,
+                                    ));
+                                }
+                                operands
+                            },
+                            result: None,
+                            failure: PrimitiveFailure::Infallible,
+                            dependencies: Vec::new(),
+                            implementation: Operation::Target(Payload::Report),
+                        }),
+                        on_report_failure: Terminal::Abort,
+                        terminate: Terminal::Return(syn::parse_quote!(0)),
+                    },
+                ]
             },
         }))
     }
@@ -388,7 +464,7 @@ impl Target for Mini {
                         other,
                     )]
                 }
-                (_, SourceItem::Struct(_)) => Vec::new(),
+                (_, SourceItem::Struct(_) | SourceItem::Extern(_)) => Vec::new(),
             },
             rust,
             payload: None,
@@ -408,6 +484,10 @@ impl Target for Mini {
             Payload::Report => {
                 let error = &operands[0];
                 quote::quote!(report(#error))
+            }
+            Payload::ReportMessage => {
+                let error = &operands[0];
+                quote::quote!(report_message(#error))
             }
         }
     }
@@ -488,7 +568,9 @@ fn a_site_override_does_not_share_the_default_conversion() {
         .iter()
         .find(|plan| plan.abi.symbol == "stamp_max")
         .expect("stamp_max is emitted");
-    assert_eq!(fallible.failures.len(), 1);
+    // Both routes the boundary declared travel with the plan, whether or not a
+    // conversion here raises their category.
+    assert_eq!(fallible.failures.len(), 2);
     assert!(generation.rust().contains("read(arg0)"));
     assert!(generation.rust().contains("report(error)"));
 }
@@ -1319,4 +1401,108 @@ fn a_target_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
             "{error}"
         );
     }
+}
+
+/// An opaque type is carried as an address both ways, and gets a release of its
+/// own; the two functions that hand a token out and take one back share those
+/// conversions with the type's own request.
+#[test]
+fn a_handle_is_carried_both_ways_and_released() {
+    let mut requests = requests();
+    let handle = requests.policy(Policy::Handle);
+    requests.type_policies.insert("Token".to_string(), handle);
+    let new = requests.policy(exported("token_new", Routes::None));
+    let use_ = requests.policy(exported("token_use", Routes::Reported));
+    requests.output(ty("Token"), handle);
+    requests.output(function("token_new"), new);
+    requests.output(function("token_use"), use_);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    assert_eq!(generation.report().counts().emitted, 3);
+    // `Token` out of Rust, `Token` into Rust, `i64` out of Rust — and the type's
+    // own request planned nothing the functions did not.
+    assert_eq!(generation.values().len(), 3);
+    // Two exported functions, plus the release under the type's own identity.
+    let symbols: Vec<&str> = generation
+        .functions()
+        .iter()
+        .map(|plan| plan.abi.symbol.as_str())
+        .collect();
+    assert_eq!(symbols, ["Token_free", "token_new", "token_use"]);
+    let release = &generation.functions()[0];
+    assert_eq!(release.declaration.as_str(), "type:Token");
+    assert!(release.result.is_none(), "a release delivers nothing");
+
+    let rust = generation.rust();
+    assert!(
+        rust.contains("Box::into_raw(Box::new(v0)) as *mut Raw"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("NonNull::new(arg0 as *mut source::Token)"),
+        "{rust}"
+    );
+    assert!(rust.contains("report_message(error)"), "{rust}");
+    // Taking a handle back moves the value out of its box; releasing one drops
+    // the box without converting, and takes no route: null is not a failure
+    // there.
+    assert!(
+        rust.contains("unsafe { *Box::from_raw(handle.as_ptr()) }"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("unsafe { Box::from_raw(handle.as_ptr()) }"),
+        "{rust}"
+    );
+    assert!(release.failures.is_empty());
+}
+
+/// A null address arriving where a handle is consumed is a binding failure, and
+/// the boundary has to say where it goes like any other.
+#[test]
+fn a_consumed_handle_needs_a_binding_route() {
+    let mut requests = requests();
+    let handle = requests.policy(Policy::Handle);
+    requests.type_policies.insert("Token".to_string(), handle);
+    let use_ = requests.policy(exported("token_use", Routes::None));
+    requests.output(ty("Token"), handle);
+    requests.output(function("token_use"), use_);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "fn:token_use") else {
+        panic!("a null handle can arrive and nothing routes it");
+    };
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.boundary.unrouted_failure"
+    );
+    assert!(skip.explanation.contains("binding"), "{}", skip.explanation);
+    assert!(matches!(
+        outcome(&generation, "type:Token"),
+        Outcome::Emitted
+    ));
+}
+
+/// A handle nobody can free is not a handle: the type is skipped where the
+/// release could not be placed, and the function taking it with it.
+#[test]
+fn a_handle_without_a_release_skips_the_type_and_what_takes_it() {
+    let mut requests = requests();
+    let handle = requests.policy(Policy::HandleWithoutRelease);
+    requests.type_policies.insert("Token".to_string(), handle);
+    let use_ = requests.policy(exported("token_use", Routes::Reported));
+    requests.output(ty("Token"), handle);
+    requests.output(function("token_use"), use_);
+
+    let generation = generate(model(), &Mini, requests, "fixture").expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "type:Token") else {
+        panic!("its release has nowhere to go");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
+    let Outcome::Skipped(skip) = outcome(&generation, "fn:token_use") else {
+        panic!("it takes a type that was not declared");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
+    assert_eq!(skip.dependency_path, ["fn:token_use", "type:Token"]);
+    assert!(generation.rust().is_empty());
 }

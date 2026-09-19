@@ -5,8 +5,8 @@
 # Extension contracts
 
 Nothing on this page is built. The stage chapters describe what the engine does
-to the two element paths, a function taking an owned struct and that struct;
-this page holds the contracts designed for what it does not do yet, gathered
+to the three element paths — a function taking an owned struct, that struct,
+and a type alias declaring an opaque handle; this page holds the contracts designed for what it does not do yet, gathered
 here so that a chapter reads as an account of the pipeline rather than as an
 account interleaved with its own future. Each section names the stage it
 extends and the element path that will demonstrate it, and
@@ -237,12 +237,21 @@ returns owes nothing to the object it came from —
 ## Runtime resources
 
 Extends [the operation contract](stages/05-represent.md#failure-of-an-operation).
-Needed by any handle-bearing path.
+Needed by a borrowed handle, an optional handle, and a retained callback.
 
 A described operation carries its failure and its generated dependencies, and
-nothing about resources. Every operation the engine plans acquires nothing,
-which is why the omission is safe today and why the first handle-bearing
-operation cannot be written without this.
+nothing about resources. The one resource the engine hands across a boundary
+today — [an owned opaque handle][typedef_represent] — is safe without a
+contract because its obligations are discharged by construction: handing out
+is the last operation of a wrapper that returns the
+[carrier](stages/05-represent.md#describing-target-values-and-operations),
+taking back moves
+the value into an ordinary owned local that Rust drops on every path, and
+releasing is a wrapper of its own that converts nothing. Every other operation
+acquires nothing. The first operation that breaks that shape — a borrowed
+handle whose referent must stay alive across the source call, a handle inside
+an optional, a callback that retains a JVM reference — cannot be written
+without this.
 
 `ResourceContract` describes obligations introduced or discharged by an
 operation, such as releasing a retained handle. It is separate from validity: a
@@ -265,9 +274,9 @@ them:
 The adapter supplies runtime acquire/release operations. The registry tracks
 those effects and schedules calls on success and failure paths. A primitive may
 clean up a temporary allocation entirely inside its own implementation, provided
-no ownership obligation escapes either execution path. Handles, callbacks and
-escaping allocations remain unsupported until their effects can be represented
-and validated — that is, until the table above can be filled in for them and
+no ownership obligation escapes either execution path. Borrowed handles,
+callbacks and escaping allocations remain unsupported until their effects can
+be represented and validated — that is, until the table above can be filled in for them and
 the registry can check what it says.
 
 By comparison, `dependencies` concerns the generated program: it retains helper
@@ -461,3 +470,5 @@ borrow; the conversion contract must preserve the temporary's validity through
 its uses. As handles and callbacks are added, the registry will schedule
 resource scopes and cleanup on success and failure paths; adapters provide the
 actual retain, free and runtime operations.
+
+[typedef_represent]: examples/typedef/05-represent.md

@@ -99,8 +99,10 @@ fn every_declared_element_is_accounted_for() {
     );
 
     let counts = report.counts();
-    assert_eq!(counts.emitted, 0, "nothing here is a data struct or scalar");
-    assert_eq!(counts.skipped, 4);
+    // The handle — a struct carried whole under `opaque_ptr`, its fields never
+    // read — and the function returning it.
+    assert_eq!(counts.emitted, 2);
+    assert_eq!(counts.skipped, 2);
     assert_eq!(counts.ignored, 1, "an ignore is a decision, not a gap");
 }
 
@@ -112,30 +114,32 @@ fn a_missing_capability_is_reported_per_element() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let report = generated.report().expect("v2 produces a report");
 
-    let function = report
-        .declarations
-        .iter()
-        .find(|entry| entry.declaration.id.as_str() == "fn:calculator_new")
-        .expect("the declared function is in the report");
-    let skip = function
-        .outcome
-        .skip()
-        .expect("an opaque return is not lowered");
-    assert_eq!(
-        skip.capability.as_str(),
-        "unsupported.c.opaque_ptr",
-        "a stable code, one per declarator, so the report can be diffed"
-    );
-    assert_eq!(skip.path(), "fn:calculator_new -> return");
-
     // Grouped by cause, so one missing capability is stated once with the list
-    // of roots it took down: the handle, and the function returning it.
+    // of roots it took down. An enum has no fields to walk, so the registry
+    // refuses it before the target is asked; the entry's representation still
+    // says `enum_type`.
     let groups = report.skips_by_capability();
-    assert_eq!(groups["unsupported.c.opaque_ptr"].len(), 2);
-    // An enum has no fields to walk, so the registry refuses it before the
-    // target is asked; the entry's representation still says `enum_type`.
-    assert_eq!(groups["unsupported.type.not_a_struct"].len(), 1);
+    assert_eq!(groups["unsupported.type.enum"].len(), 1);
     assert_eq!(groups["unsupported.callback.not_implemented"].len(), 1);
+
+    // The handle is emitted under the manglers' names — the incomplete type,
+    // its destructor, and the function returning one — with the struct's
+    // fields left unread.
+    let dir = unique_test_dir("cbindgen_v2_handle");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    for expected in [
+        "pub struct calculator_t {",
+        "pub extern \"C\" fn calculator_drop(this_: *mut calculator_t)",
+        "pub extern \"C\" fn z_calculator_new() -> *mut calculator_t",
+        "Box::into_raw(Box::new(v0)) as *mut calculator_t",
+    ] {
+        assert!(rust.contains(expected), "missing `{expected}`:\n{rust}");
+    }
+    assert!(!rust.contains("value"), "the field is never read:\n{rust}");
 }
 
 /// The implemented subset, through the ordinary frontend: a by-value data
@@ -269,7 +273,7 @@ fn the_report_is_written_as_json_and_markdown() {
     let json = std::fs::read_to_string(&written[0]).unwrap();
     assert!(json.contains("\"schema_version\": 2"), "{json}");
     assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
-    assert!(json.contains("unsupported.c.opaque_ptr"), "{json}");
+    assert!(json.contains("unsupported.type.enum"), "{json}");
     let markdown = std::fs::read_to_string(&written[1]).unwrap();
     assert!(markdown.contains("## Skipped, by cause"), "{markdown}");
     let _ = std::fs::remove_dir_all(&dir);

@@ -28,8 +28,9 @@ fn main() {
     println!("cargo:rerun-if-changed={}", source.display());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
 
-    // The C binding: `Stamp` as a by-value aggregate, the functions as entry
-    // points. Both keep the source name, because nothing renamed them.
+    // The C binding: `Stamp` as a by-value aggregate, `Ledger` as an opaque
+    // pointer freed by `ledger_drop`, the functions as entry points. All keep
+    // the source name, because nothing renamed them.
     //
     // `Pair` has positional fields, `Marker` none at all, and `Reading` a scalar
     // neither adapter carries: all three are declared so that a target refusing
@@ -38,8 +39,11 @@ fn main() {
         .items(items(&source))
         .source_module(syn::parse_quote!(source))
         // The specification keeps the source name; the frontend's default is
-        // the C-style `snake_case`, and a real binding usually adds `_t`.
+        // the C-style `snake_case`, and a real binding usually adds `_t`. The
+        // destructor keeps the default's case, since `Ledger_drop` is nobody's
+        // C.
         .mangle_rust_type(|name| name.to_string())
+        .mangle_destructor(|base| format!("{}_drop", base.to_lowercase()))
         .declare(
             prebindgen_c::decls!()
                 .data_type(prebindgen_c::data_type!(Stamp))
@@ -51,13 +55,17 @@ fn main() {
                 .fun(prebindgen_c::fun!(marker_value))
                 .data_type(prebindgen_c::data_type!(Sample))
                 .fun(prebindgen_c::fun!(sample_total))
-                .fun(prebindgen_c::fun!(stamp_ratio)),
+                .fun(prebindgen_c::fun!(stamp_ratio))
+                .ptr_type(prebindgen_c::ptr_type!(Ledger))
+                .fun(prebindgen_c::fun!(ledger_open))
+                .fun(prebindgen_c::fun!(ledger_close)),
         )
         .build_with(Pipeline::V2)
         .expect("the C binding plans");
 
     // The JNI binding: `Stamp` as an `example.Stamp` object whose properties are
-    // read, the functions as `example.stampSum` and friends over the harness.
+    // read, `Ledger` as an `example.Ledger` wrapping the address a `Long`
+    // carries, the functions as `example.stampSum` and friends over the harness.
     let jni = prebindgen_jni::JniGen::builder()
         .items(items(&source))
         .set_package_prefix("example")
@@ -72,7 +80,10 @@ fn main() {
                 .fun(prebindgen_registry::fun!(marker_value))
                 .class(prebindgen_jni::data_class!(Sample))
                 .fun(prebindgen_registry::fun!(sample_total))
-                .fun(prebindgen_registry::fun!(stamp_ratio)),
+                .fun(prebindgen_registry::fun!(stamp_ratio))
+                .class(prebindgen_jni::ptr_class!(Ledger))
+                .fun(prebindgen_registry::fun!(ledger_open))
+                .fun(prebindgen_registry::fun!(ledger_close)),
         )
         .build_with(Pipeline::V2)
         .expect("the JNI binding plans");

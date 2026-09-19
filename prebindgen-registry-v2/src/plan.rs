@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use prebindgen_flat::{
-    flat::{Flat, Function, Struct, Type, TypeKind, TypeRef},
+    flat::{Flat, Function, Type, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 
@@ -752,7 +752,7 @@ pub fn generate<T: Target>(
                 plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
             DeclarationKind::Type => {
-                plan_struct(&mut run, declaration, policy).map_err(EngineError::Planning)?
+                plan_type(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
@@ -1010,7 +1010,7 @@ fn plan_function<T: Target>(
     };
     let site = SiteDescriptor {
         declaration,
-        function,
+        function: Some(function),
     };
     let boundary = match run.target.boundary(&site, &values, policy)? {
         TargetAttempt::Ready(boundary) => boundary,
@@ -1049,7 +1049,14 @@ fn plan_function<T: Target>(
     };
     drop(values);
 
-    let plan = match assemble(run, declaration, function, &inputs, output, boundary)? {
+    let plan = match assemble(
+        run,
+        declaration,
+        Body::Call(function),
+        &inputs,
+        output,
+        boundary,
+    )? {
         Ok(plan) => plan,
         Err(unsupported) => return Ok(Err(unsupported)),
     };
@@ -1059,12 +1066,21 @@ fn plan_function<T: Target>(
     }))
 }
 
-/// Put one wrapper together: native parameters in, conversions, one call, the
-/// result out.
+/// What a wrapper does with its converted inputs.
+enum Body<'a, P> {
+    /// Call the source function once with them.
+    Call(&'a Function),
+    /// Apply this operation to the one carrier and produce nothing: a handle's
+    /// release, which is a wrapper with no source function behind it.
+    Release(Box<PrimitiveSpec<P>>),
+}
+
+/// Put one wrapper together: native parameters in, conversions, one call — or,
+/// for a release, one drop — the result out.
 fn assemble<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
-    function: &Function,
+    action: Body<'_, T::Payload>,
     inputs: &[NodeId],
     output: Option<NodeId>,
     boundary: crate::target::BoundarySpec<T::Payload>,
@@ -1176,23 +1192,37 @@ fn assemble<T: Target>(
                 spell(&expected.ty)
             )));
         }
-        let node_body = run.nodes[node.0].body.clone();
-        arguments.push(node_body.inline(carrier, &mut body));
+        match &action {
+            Body::Call(_) => {
+                let node_body = run.nodes[node.0].body.clone();
+                arguments.push(node_body.inline(carrier, &mut body));
+            }
+            // A release takes the carrier as the conversion would, and drops
+            // what it holds instead of converting it.
+            Body::Release(release) => {
+                check_operation(release, expected, expected)?;
+                run.apply(&mut body, (**release).clone(), &[carrier])?;
+            }
+        }
     }
 
-    let call = output.map(|_| body.fresh());
-    body.push(Instr::Call {
-        function: function.name.to_string(),
-        args: arguments,
-        result: call,
-    });
-
-    let result = match (output, call) {
-        (Some(node), Some(call)) => {
-            let node_body = run.nodes[node.0].body.clone();
-            Some(node_body.inline(call, &mut body))
+    let result = match &action {
+        Body::Call(function) => {
+            let call = output.map(|_| body.fresh());
+            body.push(Instr::Call {
+                function: function.name.to_string(),
+                args: arguments,
+                result: call,
+            });
+            match (output, call) {
+                (Some(node), Some(call)) => {
+                    let node_body = run.nodes[node.0].body.clone();
+                    Some(node_body.inline(call, &mut body))
+                }
+                _ => None,
+            }
         }
-        _ => None,
+        Body::Release(_) => None,
     };
     let result = match boundary.output {
         OutputPlacement::Return => result,
@@ -1301,35 +1331,74 @@ fn assemble<T: Target>(
     }))
 }
 
-/// Plan one exported struct: the conversion everything taking it needs, and the
-/// public declaration itself.
-fn plan_struct<T: Target>(
+/// Plan one exported type: the conversion everything taking it needs, the
+/// public declaration itself — and, for a type the foreign side holds an
+/// obligation for, the conversion handing one out and the release freeing it.
+///
+/// Whether a type is a handle is the target's answer, not the item's kind: a
+/// struct under an opaque policy is carried whole as an address, exactly as a
+/// declared alias is, and an alias a target carries by value would be no
+/// handle. What says "handle" is the into-Rust representation naming a
+/// release; the registry then requires the out-of-Rust direction too — a
+/// handle is a promise that what a function returns can be given back — and
+/// plans the release as a wrapper under the type's own identity.
+fn plan_type<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
-    let strukt: &Struct = match flat.struct_type(declaration.rust_origin.as_str()) {
-        Some(strukt) => strukt,
-        None => {
-            return Ok(Err(Refusal::at(
-                Unsupported::new(
-                    "unsupported.type.not_a_struct",
-                    format!(
-                        "`{}` is exposed as a data type, and the model gives it no fields to \
-                         cross through — a tuple struct or an opaque declaration is carried \
-                         whole, which v2 has no representation for yet",
-                        declaration.rust_origin
-                    ),
-                ),
-                &crate::target::Position::root(declaration.id.clone()),
-            )))
-        }
-    };
     let root = crate::target::Position::root(declaration.id.clone());
-    let node = match run.plan_value(
+    // A declared type need not be a captured item — a target may represent
+    // `String` without the source exporting one — so this lookup, unlike a
+    // function's, can find nothing.
+    let (ty, item): (TypeRef, SourceItem<'_>) =
+        match flat.declared_type(declaration.rust_origin.as_str()) {
+            Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
+            Some(Type::Extern(opaque)) => {
+                // A declaration answers what reading names it; an extern keeps
+                // none, so the model is asked to read its own name.
+                let name = &opaque.name;
+                match flat.classify(&syn::parse_quote!(#name)) {
+                    Ok(ty) => (ty, SourceItem::Extern(opaque)),
+                    Err(error) => {
+                        return Err(PlanningError::InternalInvariant(format!(
+                            "`{name}` is declared and does not classify as a reference to \
+                             itself: {error}"
+                        )))
+                    }
+                }
+            }
+            None => {
+                return Ok(Err(Refusal::at(
+                    Unsupported::new(
+                        "unsupported.type.undeclared",
+                        format!(
+                            "`{}` is exposed as a type the source did not capture; v2 \
+                             represents captured types only",
+                            declaration.rust_origin
+                        ),
+                    ),
+                    &root,
+                )))
+            }
+            Some(Type::Enum(_) | Type::Variant(_)) => {
+                return Ok(Err(Refusal::at(
+                    Unsupported::new(
+                        "unsupported.type.enum",
+                        format!(
+                            "`{}` is an enum, which v2 has no representation for yet",
+                            declaration.rust_origin
+                        ),
+                    ),
+                    &root,
+                )))
+            }
+        };
+
+    let taken = match run.plan_value(
         Crossing {
-            ty: strukt.type_ref().clone(),
+            ty: ty.clone(),
             direction: Direction::IntoRust,
         },
         &root,
@@ -1338,15 +1407,76 @@ fn plan_struct<T: Target>(
         Planned::Unsupported(refusal) => return Ok(Err(refusal)),
     };
 
+    let mut given = None;
+    let mut release_plan = None;
+    if let Some(release) = run.nodes[taken.0].repr.release.clone() {
+        given = match run.plan_value(
+            Crossing {
+                ty,
+                direction: Direction::OutOfRust,
+            },
+            &root.child("out_of_rust"),
+        )? {
+            Planned::Ready(id) => Some(id),
+            Planned::Unsupported(refusal) => return Ok(Err(refusal)),
+        };
+        // The release is a wrapper of its own, over the same carrier the
+        // consuming conversion reads. Its boundary is the target's answer for
+        // a site with no source function.
+        let values = ResolvedValues {
+            inputs: vec![&run.nodes[taken.0]],
+            output: None,
+        };
+        let site = SiteDescriptor {
+            declaration,
+            function: None,
+        };
+        let boundary = match run.target.boundary(&site, &values, policy)? {
+            TargetAttempt::Ready(boundary) => boundary,
+            TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
+        };
+        drop(values);
+        if let Some(category) = release.failure_category() {
+            if !boundary
+                .failures
+                .iter()
+                .any(|route| route.category == category)
+            {
+                return Ok(Err(Refusal::at(
+                    Unsupported::new(
+                        "unsupported.boundary.unrouted_failure",
+                        format!(
+                            "releasing a handle can fail with a {} error and this boundary \
+                             declares no route for it",
+                            category.as_str()
+                        ),
+                    ),
+                    &root,
+                )));
+            }
+        }
+        release_plan = match assemble(
+            run,
+            declaration,
+            Body::Release(Box::new(release)),
+            &[taken],
+            None,
+            boundary,
+        )? {
+            Ok(plan) => Some(plan),
+            Err(refusal) => return Ok(Err(refusal)),
+        };
+    }
+
     let values = ResolvedValues {
-        inputs: vec![&run.nodes[node.0]],
-        output: None,
+        inputs: vec![&run.nodes[taken.0]],
+        output: given.map(|id| &run.nodes[id.0]),
     };
     let surface = match run.target.surface(
         &SurfaceRequest {
             declaration,
             policy,
-            item: SourceItem::Struct(strukt),
+            item,
         },
         &values,
     )? {
@@ -1355,7 +1485,7 @@ fn plan_struct<T: Target>(
     };
     drop(values);
     Ok(Ok(Emitted {
-        function: None,
+        function: release_plan,
         surface,
     }))
 }

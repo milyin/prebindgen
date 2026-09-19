@@ -501,6 +501,7 @@ Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies
 
 - [Function taking an owned struct][fn_requests] · [C][fn_requests_c] · [Kotlin/JNI][fn_requests_jni]
 - [Struct with scalar fields][struct_requests] · [C][struct_requests_c] · [Kotlin/JNI][struct_requests_jni]
+- [Type alias declaring an opaque handle][typedef_requests] · [C][typedef_requests_c] · [Kotlin/JNI][typedef_requests_jni]
 
 [fn_requests]: ../examples/fn/03-requests.md
 [fn_requests_c]: ../examples/fn/03-requests.c.md
@@ -508,3 +509,6 @@ Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies
 [struct_requests]: ../examples/struct/03-requests.md
 [struct_requests_c]: ../examples/struct/03-requests.c.md
 [struct_requests_jni]: ../examples/struct/03-requests.jni.md
+[typedef_requests]: ../examples/typedef/03-requests.md
+[typedef_requests_c]: ../examples/typedef/03-requests.c.md
+[typedef_requests_jni]: ../examples/typedef/03-requests.jni.md

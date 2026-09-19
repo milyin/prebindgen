@@ -533,6 +533,14 @@ impl Struct {
     }
 }
 
+impl Extern {
+    /// The `#[cfg]` attributes the declaring item was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(item_attrs(&self.origin.syntax))
+    }
+}
+
 impl Field {
     /// The `#[cfg]` attributes this field was captured with — see
     /// [`conditions_from`].

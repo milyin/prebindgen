@@ -317,6 +317,7 @@ enum Layout {
 struct ReprSpec<Payload> {
     layout: Layout,      // Values that carry this representation.
     protocol: Protocol,  // Operations used to access/construct those values.
+    release: Option<PrimitiveSpec>, // How the foreign side gives a value back unconverted, if it owes one.
 }
 
 enum Protocol {
@@ -334,6 +335,18 @@ future C output could use a struct literal, while a future separate-arguments
 JNI form would map children to argument slots. The implemented JVM-object input
 uses getter operations. These are different target operations around the same
 registry algorithm for converting the selected parts.
+
+`release` is what makes a representation a handle. A value the foreign side
+holds by address is one it owes back, and the release is the operation that
+takes it back without converting it: the typed destructor a C caller or a
+Kotlin `free()` calls. A representation the foreign side holds by value names
+none. Stated on the into-Rust representation, whose carrier it takes, it is
+planned as a wrapper of its own at [the boundary](06-boundary.md#assembling-an-exported-function),
+and its presence is what makes the registry require the out-of-Rust direction
+too. The three operations a handle is made of — `IntoRaw`, `FromRaw`, `Release`
+— are standard ones, because each spells a source type; the target states the
+carrier the address is cast to, and [the handle path][typedef_represent] shows
+both targets doing exactly that.
 
 A carrier being expressible as a Rust type does not make it safe in an extern
 signature; the `abi` flag states whether the adapter permits that use. The C
@@ -434,6 +447,7 @@ resource-bearing value.
 
 - [Function taking an owned struct][fn_represent] · [C][fn_represent_c] · [Kotlin/JNI][fn_represent_jni]
 - [Struct with scalar fields][struct_represent] · [C][struct_represent_c] · [Kotlin/JNI][struct_represent_jni]
+- [Type alias declaring an opaque handle][typedef_represent] · [C][typedef_represent_c] · [Kotlin/JNI][typedef_represent_jni]
 
 [fn_represent]: ../examples/fn/05-represent.md
 [fn_represent_c]: ../examples/fn/05-represent.c.md
@@ -441,3 +455,6 @@ resource-bearing value.
 [struct_represent]: ../examples/struct/05-represent.md
 [struct_represent_c]: ../examples/struct/05-represent.c.md
 [struct_represent_jni]: ../examples/struct/05-represent.jni.md
+[typedef_represent]: ../examples/typedef/05-represent.md
+[typedef_represent_c]: ../examples/typedef/05-represent.c.md
+[typedef_represent_jni]: ../examples/typedef/05-represent.jni.md

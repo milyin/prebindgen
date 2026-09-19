@@ -672,6 +672,8 @@ This path is the first acceptance example for the API. It should work with only
 
 - [Function taking an owned struct][fn_flat]
 - [Struct with scalar fields][struct_flat]
+- [Type alias declaring an opaque handle][typedef_flat]
 
 [fn_flat]: ../examples/fn/02-flat.md
 [struct_flat]: ../examples/struct/02-flat.md
+[typedef_flat]: ../examples/typedef/02-flat.md

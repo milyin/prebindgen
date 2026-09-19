@@ -41,13 +41,13 @@
 //!   means "written in the target language" — the Kotlin function that calls a
 //!   native method is the **foreign** or **public** one.
 //!
-//! This is the first increment (docs/v2). What it carries is the scalar and
-//! owned-struct case; the fields the chapters describe for resources, validity
-//! and sequences arrive with the capabilities that need them, and
-//! `docs/v2/implementation.md` lists exactly what is absent.
+//! This is the first increment (docs/v2). What it carries is the scalar, the
+//! owned struct and the owned opaque handle; the fields the chapters describe
+//! for resources, validity and sequences arrive with the capabilities that need
+//! them, and `docs/v2/implementation.md` lists exactly what is absent.
 
 use prebindgen_flat::{
-    flat::{Function, Struct, TypeRef},
+    flat::{Extern, Function, Struct, TypeRef},
     Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
@@ -351,6 +351,12 @@ impl PrimitiveFailure {
 
 /// An operation the registry itself knows how to render, so a target that
 /// needs one ships no renderer for it.
+///
+/// The three handle operations are here because they are Rust, not C or JNI:
+/// moving a source value onto the heap and back is the same for every target,
+/// and it is the one place a conversion has to spell a *source* type — which
+/// only the registry may do. What differs per target is the carrier the
+/// address is cast to, and that the target states.
 #[derive(Clone, Debug)]
 pub enum StandardOp {
     /// The result *is* the operand: the carrier and the source value are one
@@ -358,6 +364,17 @@ pub enum StandardOp {
     Identity,
     /// Read a member of an aggregate carrier: `arg0.secs`.
     ReadMember { member: syn::Member },
+    /// Hand an owned source value to the foreign side as an address:
+    /// `Box::into_raw(Box::new(v)) as <carrier>`. The foreign side owns the
+    /// allocation from here on.
+    IntoRaw { carrier: Box<syn::Type> },
+    /// Take back what [`StandardOp::IntoRaw`] handed out:
+    /// `*Box::from_raw(v as *mut <source>)`. A null address is a binding
+    /// failure carrying a `String`; the handle is consumed either way.
+    FromRaw { source: Box<TypeRef> },
+    /// Drop what [`StandardOp::IntoRaw`] handed out without converting it. A
+    /// null address releases nothing, as `free(NULL)` does. Produces no value.
+    Release { source: Box<TypeRef> },
 }
 
 /// What actually performs an operation.
@@ -399,6 +416,62 @@ impl<P> PrimitiveSpec<P> {
             failure: PrimitiveFailure::Infallible,
             dependencies: Vec::new(),
             implementation: Operation::Standard(StandardOp::Identity),
+        }
+    }
+
+    /// Hand an owned `source` value out as `carrier` — see
+    /// [`StandardOp::IntoRaw`]. Infallible.
+    pub fn into_raw(source: TypeRef, carrier: WireType) -> Self {
+        PrimitiveSpec {
+            operands: vec![OperandSpec::value(
+                OperationType::Source(source),
+                Access::Owned,
+            )],
+            result: Some(OperationType::Carrier(carrier.clone())),
+            failure: PrimitiveFailure::Infallible,
+            dependencies: Vec::new(),
+            implementation: Operation::Standard(StandardOp::IntoRaw {
+                carrier: Box::new(carrier.ty),
+            }),
+        }
+    }
+
+    /// Take an owned `source` value back from `carrier` — see
+    /// [`StandardOp::FromRaw`]. Fails with a `String` in the binding category
+    /// when the address is null, so a boundary passing handles needs a route
+    /// for that category.
+    pub fn from_raw(carrier: WireType, source: TypeRef) -> Self {
+        PrimitiveSpec {
+            operands: vec![OperandSpec::value(
+                OperationType::Carrier(carrier),
+                Access::Owned,
+            )],
+            result: Some(OperationType::Source(source.clone())),
+            failure: PrimitiveFailure::fallible(
+                OperationType::Carrier(WireType::internal(syn::parse_quote!(String))),
+                FailureCategory::Binding,
+            ),
+            dependencies: Vec::new(),
+            implementation: Operation::Standard(StandardOp::FromRaw {
+                source: Box::new(source),
+            }),
+        }
+    }
+
+    /// Drop a `source` value held behind `carrier` — see
+    /// [`StandardOp::Release`]. Infallible, produces nothing.
+    pub fn release(carrier: WireType, source: TypeRef) -> Self {
+        PrimitiveSpec {
+            operands: vec![OperandSpec::value(
+                OperationType::Carrier(carrier),
+                Access::Owned,
+            )],
+            result: None,
+            failure: PrimitiveFailure::Infallible,
+            dependencies: Vec::new(),
+            implementation: Operation::Standard(StandardOp::Release {
+                source: Box::new(source),
+            }),
         }
     }
 
@@ -497,6 +570,15 @@ impl<P> Protocol<P> {
 pub struct ReprSpec<P> {
     pub layout: Layout,
     pub protocol: Protocol<P>,
+    /// How the foreign side gives a value in this representation back without
+    /// converting it — the typed drop of a handle. Stated on the into-Rust
+    /// representation, whose carrier it takes; `None` for a representation the
+    /// foreign side holds by value and owes nothing for.
+    ///
+    /// The registry plans one exported release per declared type that has one,
+    /// through [`Target::boundary`] with no source function, so a caller that
+    /// never passes the handle back still has a way to free it.
+    pub release: Option<PrimitiveSpec<P>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -743,10 +825,44 @@ impl<P> ResolvedValues<'_, P> {
     }
 }
 
-/// What `boundary` is given: the exported call and its source signature.
+/// The first argument of [`Target::boundary`]: which wrapper the call is about.
+///
+/// For every wrapper it builds, the registry calls
+/// `target.boundary(&site, &values, &policy)` once, and the target returns
+/// the wrapper's shape — symbol, calling convention, native parameters,
+/// failure routes — as a [`BoundarySpec`], wrapped in [`TargetSupport`]: a
+/// spec, a reason the target cannot shape this one, or an error. `site` is
+/// this type and says which source function the wrapper exports: the
+/// declaration that requested the export, and the function itself. `values`
+/// is the [`ResolvedValues`] the wrapper converts, `policy` the binding's
+/// configuration for it.
+///
+/// What a target reads from the descriptor: the declaration, for the names in
+/// its refusals and errors; the source function's parameter list, for the
+/// names the native signature keeps; and whether a source function is there
+/// at all. A descriptor with none says the wrapper is a handle's release —
+/// it takes the handle back and drops it (see [`ReprSpec::release`]) — which
+/// the target shapes under the handle *type's* policy rather than a
+/// function's.
+///
+/// Named after the specification's *site*, a value's position in an exported
+/// function: the boundary places each such position on a native parameter or
+/// the return, and this identifies the function the positions belong to.
 pub struct SiteDescriptor<'a> {
+    /// The export this wrapper is for: its Rust origin
+    /// ([`Declaration::rust_origin`]) and the foreign name it was requested
+    /// under ([`Declaration::placement`]). For a release, the handle type's
+    /// own declaration. The exported symbol is not read from here; the
+    /// frontend settled it in the policy.
     pub declaration: &'a Declaration,
-    pub function: &'a Function,
+    /// The source function the wrapper calls once, or `None` for a release.
+    ///
+    /// The target reads its parameter *names*: a native parameter keeps its
+    /// source parameter's name, and one the target adds — a JNI environment,
+    /// a receiver — is named around those. The parameter *types* come from
+    /// the plans in [`ResolvedValues::inputs`], which are in
+    /// [`Function::params`] order.
+    pub function: Option<&'a Function>,
 }
 
 /// What `surface` is given: the requested public declaration.
@@ -774,6 +890,9 @@ impl<Policy> SurfaceRequest<'_, Policy> {
             SourceItem::Function(function) => {
                 crate::emit::Writer.conditions(Conditioned::Function(function))
             }
+            SourceItem::Extern(opaque) => {
+                crate::emit::Writer.conditions(Conditioned::Extern(opaque))
+            }
         };
         conditions
             .iter()
@@ -799,16 +918,74 @@ impl<Policy> SurfaceRequest<'_, Policy> {
                 .iter()
                 .map(|field| crate::emit::Writer.conditions(Conditioned::Field(field)))
                 .collect(),
-            SourceItem::Function(_) => Vec::new(),
+            SourceItem::Function(_) | SourceItem::Extern(_) => Vec::new(),
         }
     }
 }
 
-/// The source item behind a requested output.
+/// The captured item a public declaration is made from, as the source model
+/// describes it.
+///
+/// A binding asks for an output by name — a [`Declaration`] such as
+/// `type:Ledger` — and the registry resolves that name in the source model
+/// before it plans anything. This is what it found: the model's own element,
+/// borrowed from the [`Flat`] the run was planned over. A target receives it
+/// as [`SurfaceRequest::item`] when it answers [`Target::surface`].
+///
+/// It is a view over the model and carries nothing of its own. What it adds
+/// is shape: [`Element`] has variants no declaration can resolve to (a guard,
+/// an unsupported item) and nests the type kinds one level down, so a target
+/// matching on it would carry unreachable arms and a second match. This lists
+/// exactly the kinds a resolved declaration can be — a constant and the enums
+/// will add variants — so an adapter's `match` is exhaustive over real cases
+/// and the compiler says when a kind is added.
+///
+/// The variant is a fact about the source, not about the representation: a
+/// struct declared to C as an opaque pointer still arrives as
+/// [`SourceItem::Struct`], and how the target carries it is in
+/// [`SurfaceRequest::policy`]. Read the policy first. A declaration the
+/// binding defines itself ([`SourceKind::BindingLocal`]) names no captured
+/// item and is refused before `surface` is asked, so nothing here is ever
+/// absent.
+///
+/// [`Flat`]: prebindgen_flat::flat::Flat
+/// [`Element`]: prebindgen_flat::flat::Element
+/// [`SourceKind::BindingLocal`]: crate::decl::SourceKind::BindingLocal
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
+    /// A captured free function, the item behind a `fn:` declaration.
+    ///
+    /// The target reads its signature — [`Function::params`] and
+    /// [`Function::ret`] — to spell the foreign declaration, and pairs each
+    /// parameter with the already-planned conversion the registry hands over
+    /// in [`ResolvedValues::inputs`], in the same order. The call itself is
+    /// not the target's business: the registry places it when it assembles
+    /// the wrapper, from the [`SiteDescriptor`] it asked [`Target::boundary`]
+    /// about.
     Function(&'a Function),
+    /// A captured struct with fields the model can inspect, the usual item
+    /// behind a `type:` declaration.
+    ///
+    /// A target declaring one — a `repr(C)` mirror, a Kotlin `data class` —
+    /// re-declares its fields: [`Struct::fields`], with the `#[cfg]`
+    /// condition of each in [`SurfaceRequest::field_conditions`]. A struct
+    /// under a policy that carries it whole crosses as a handle instead, and
+    /// its fields go unread; the target learns that from the policy, not from
+    /// this variant. A tuple struct is not this variant at all: its fields
+    /// are not modelled, and the model declares it as [`SourceItem::Extern`].
     Struct(&'a Struct),
+    /// A captured declaration with nothing behind it — a marked type alias
+    /// such as `pub type Ledger = crate::ledger::Ledger;`, or a tuple struct —
+    /// which the source model calls an extern.
+    ///
+    /// It has no parts to convert through, so a value of it crosses whole: as
+    /// an opaque handle, under a policy that names a carrier for the address
+    /// and a release for it (see [`ReprSpec::release`]). [`Extern::target`]
+    /// says what the alias pointed at, as text, for a target that wants to
+    /// recognise one; the model does not classify it. A target with no handle
+    /// representation refuses this variant, and a data policy on it finds no
+    /// struct relation to select at all.
+    Extern(&'a Extern),
 }
 
 // ---------------------------------------------------------------------------
