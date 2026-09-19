@@ -207,7 +207,7 @@ not an exported function's parameter list. `ScopeRequirement` describes a
 required runtime scope and the context operand through which the operation
 accesses it, such as the JNI environment and its active local-reference frame.
 During composition, the registry resolves that requirement to a concrete scope
-in the [wrapper](stages/06-boundary.md#assemble-the-native-boundary). The
+in the [wrapper](stages/06-boundary.md#assemble-the-wrapper-boundary). The
 checked specification constructor validates operand indices and result counts.
 The registry rejects a use if the required scope is unavailable or a result
 would escape its dependencies. `Independent` does not imply that a value is
@@ -325,7 +325,7 @@ enum Protocol {
 
 A **slot** is one value in a multi-value representation — for a `Stamp` passed
 to JNI as two separate arguments rather than an object, the layout is two slots,
-and a function taking two such structs has four native arguments in all.
+and a function taking two such structs has four wrapper arguments in all.
 `SlotRole` states a slot's meaning, independent of its generated name. `GuardId`
 refers to an activation condition on a slot — "always," "presence is true," or
 "variant tag selects this arm" — and is unrelated to the guard items of
@@ -337,7 +337,7 @@ separate.
 
 A layout stays nested for as long as nesting is meaningful: an aggregate whose
 member is itself an aggregate is described that way, and only a place that
-requires a flat list of values — a native signature, where each slot becomes one
+requires a flat list of values — a wrapper signature, where each slot becomes one
 ABI argument — flattens it, at that point, in that use. Keeping the nesting
 until then is what lets the same struct representation be an argument in one
 function and a member of another.

@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "typedef", "stage": "05-represent"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Element path][typedef] · [Source crate](../../source.md)
-Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][typedef_select] · Next: [Assemble the native boundary][typedef_boundary]
+Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][typedef_select] · Next: [Assemble the wrapper boundary][typedef_boundary]
 
 # Type alias declaring an opaque handle — Represent and compose values
 
@@ -60,7 +60,7 @@ each name theirs.
 A `Release` produces no value, so it is never part of a [conversion](../../stages/04-select.md#select-conversion-relations) body. It is
 stated on the into-Rust representation — the one whose carrier it takes — and
 the registry plans it as a
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) of its own
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) of its own
 at [the next stage][typedef_boundary]. Naming a release is also what tells the
 registry the type is a handle: a representation the foreign side owes nothing
 for names none.

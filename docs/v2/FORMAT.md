@@ -18,7 +18,7 @@ page for each language.
 
 [manifest.json](manifest.json) lists those stages, examples and combinations.
 It records which combinations make sense, not which features are implemented.
-For example, the struct has no native-function-boundary cell because the struct
+For example, the struct has no wrapper-boundary cell because the struct
 does not itself export a callable function. There is no placeholder page for
 that combination. An unsupported feature, in contrast, is explained on an
 existing page rather than represented by a missing file.

@@ -25,7 +25,7 @@ current V2, the common writer renders Rust before `generate` returns, and
 
 ## Result
 
-One native Rust function per target, and the foreign declaration that calls it:
+One generated Rust function per target, and the foreign declaration that calls it:
 [C][fn_emit_c], [Kotlin/JNI][fn_emit_jni]. Both bodies have the same shape, and
 each instruction has one owner:
 
@@ -45,7 +45,7 @@ fallible getter; the language-specific page shows those branches in full.
 
 ## Checks
 
-- Temporaries are allocated from the plan, so two operations in one [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
+- Temporaries are allocated from the plan, so two operations in one [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)
   cannot collide over a name; the parameters are named by the boundary, since a
   target that requires an environment operand has to name it.
 - The source function appears exactly once in the generated body.

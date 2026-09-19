@@ -49,7 +49,7 @@ typedef struct Stamp {
   different module: one is the ABI type a C caller fills in, the other the Rust
   value the source function takes.
 - `repr(C)` is required: without it the layout the header promises is not the
-  layout the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)
+  layout the [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)
   reads, [as the function path shows][fn_emit_c].
 - The binding explicitly chooses `Stamp`. The default type base is `stamp`,
   and a naming hook could choose another convention such as `stamp_t`.

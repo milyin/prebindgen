@@ -2,9 +2,9 @@
 
 [Project contents](../README.md) · Previous: [Represent and compose values](05-represent.md) · Next: [Retain supported output](07-retain.md)
 
-# Assemble the native boundary
+# Assemble the wrapper boundary
 
-Status: implemented. Delivery is a native return or nothing: out-parameters,
+Status: implemented. Delivery is a wrapper return or nothing: out-parameters,
 `Result` branches and declared sinks are variants the engine does not have yet.
 
 The examples in this chapter use one small source crate — a struct and a function
@@ -20,11 +20,11 @@ pub fn stamp_sum(stamp: Stamp) -> i64;
 
 A value [conversion](04-select.md#select-conversion-relations) answers a local question, such as how to construct a Rust
 `Stamp` from a JVM object. A callable binding needs more: an exported symbol,
-a calling convention, native parameters, a return value and error handling.
-Together these form the **native boundary**, the interface the foreign runtime
-actually calls. This stage combines the value conversions into a plan for that
-complete function, called a **wrapper** because it surrounds the source call
-with conversion and error-handling code.
+a calling convention, parameters, a return value and error handling. This stage
+combines the value conversions into a plan for that complete function, called a
+**wrapper** because it surrounds the source call with conversion and
+error-handling code. Its exported signature and calling convention — what the
+foreign runtime actually calls — are the **wrapper boundary**.
 
 For this example, the two targets end up with these signatures:
 
@@ -47,19 +47,19 @@ C member access in one case, JNI getter calls in the other.
 The C function uses the C calling convention and receives a C-compatible struct.
 The JNI function uses the platform's JNI calling convention, spelled `system`
 in Rust. Its exported `Java_...` name identifies the package, `JNINative`
-object and native method. The JVM supplies `env`, the interface used to call
-back into the JVM, and `_this`, the receiver of this instance native method.
+object and `external` method. The JVM supplies `env`, the interface used to call
+back into the JVM, and `_this`, the receiver of that instance method.
 The `stamp` parameter is the actual user argument. These extra parameters have
 no counterparts in `source::stamp_sum`.
 
 The target adapter describes that signature. The registry connects its
-parameters to the conversion plans. Native parameter names come from the
+parameters to the conversion plans. Wrapper parameter names come from the
 boundary description; the common writer chooses names for internal temporaries.
 
-Three things are decided here. **Where inputs come from**: which native argument
+Three things are decided here. **Where inputs come from**: which wrapper argument
 feeds which input conversion, including arguments the target added for its own
 reasons. **Where the result goes** — the *delivery* — which here is
-the native return, but could be a caller-provided out-parameter, or a callback
+the wrapper return, but could be a caller-provided out-parameter, or a callback
 the configuration named; the same conversion is reused whichever destination
 applies, so a conversion never has one version per destination. **What happens on
 failure**: every failure a conversion declared needs a terminal action here, and
@@ -68,8 +68,8 @@ is not the same event as a JNI call failing mid-conversion.
 
 For example, `getSecs()` can fail before the source function runs. The V2 JNI
 adapter reports that failure to the JVM and returns a placeholder zero from the
-native method. With an exception pending, the Kotlin caller observes the
-exception, not a successful result of zero. If reporting itself fails, the
+wrapper. With an exception pending, the Kotlin caller observes the exception,
+not a successful result of zero. If reporting itself fails, the
 generated code aborts. The adapter supplies the reporting operation, and the
 registry plans the branch and terminal action around it. V1's handler-based
 convention is a separate implementation and should not be confused with this
@@ -91,10 +91,10 @@ conversions will also require cleanup on every relevant exit path.
 
 One exported function has no source function behind it: the release of an
 opaque handle. Its `SiteDescriptor` names the handle type's declaration and no
-callee, its one native parameter carries what the handle's consuming
+callee, its one wrapper parameter carries what the handle's consuming
 conversion reads, and its body applies the release operation that conversion's
 [representation](05-represent.md#represent-and-compose-values) declared, then delivers nothing. The target answers `boundary`
-for it under the type's [policy](03-requests.md#what-policy-means) — a symbol for C, a native method for Kotlin —
+for it under the type's [policy](03-requests.md#what-policy-means) — a symbol for C, an `external` method for Kotlin —
 and the registry assembles and checks it exactly as it does a call, minus the
 call. [The handle path][typedef_boundary] shows one.
 
@@ -103,14 +103,14 @@ call. [The handle path][typedef_boundary] shows one.
 ```rust
 struct BoundarySpec<Payload> {
     abi: AbiSpec<Payload>,        // Calling convention, symbol and target signature requirements.
-    inputs: Vec<InputPlacement>, // How native arguments feed logical input conversions.
+    inputs: Vec<InputPlacement>, // How wrapper arguments feed logical input conversions.
     output: OutputPlacement,     // Destinations for encoded success/error values.
     failures: FailureRoutes<Payload>, // Terminal actions for each category of failure.
 }
 
 enum OutputPlacement {
     Void, // This path delivers no value.
-    Return(ValueMapping), // Deliver converted values through the native return.
+    Return(ValueMapping), // Deliver converted values through the wrapper return.
     OutParameters(Vec<ValueMapping>), // Write converted values to caller-provided locations.
     Branches {
         ok: Box<OutputPlacement>, // Delivery for a source Result::Ok value.
@@ -126,25 +126,25 @@ struct FunctionPlan<Payload> {
     source: CalleeId,          // Source function, local helper or modeled constant getter.
     inputs: Vec<NodeId>,      // Input conversions in source parameter order.
     output: FunctionOutput,   // No result, one conversion, or success/error conversions.
-    boundary: BoundarySpec<Payload>, // Validated native signature and delivery decisions.
+    boundary: BoundarySpec<Payload>, // Validated wrapper signature and delivery decisions.
     body: FunctionBodyId,     // Registry-owned instructions for the whole wrapper.
     artifacts: Vec<ArtifactId>, // Derived generated prerequisites for the wrapper.
 }
 ```
 
 All field shapes in this block are design sketches, not exact current API
-definitions. Current `BoundarySpec` uses a non-generic `AbiSpec`, whose native
+definitions. Current `BoundarySpec` uses a non-generic `AbiSpec`, whose wrapper
 parameters carry their placement roles, plus output and failure routes. Current
 `FunctionPlan` stores those decisions with a flat instruction list. Names such
 as `CalleeId`, `FunctionBodyId`, `SinkId` and `ValueMapping` below belong to the
 design vocabulary. Current V2 supports `Void` and a
-native return; it does not yet support the `OutParameters`, `Branches` or
+wrapper return; it does not yet support the `OutParameters`, `Branches` or
 `Invoke` cases shown here. A **sink** is a configured recipient of a result,
-such as a callback, rather than a native return slot. These distinctions matter
+such as a callback, rather than a wrapper return slot. These distinctions matter
 when extending the engine: converting a value and choosing its recipient are
 separate decisions.
 
-`AbiSpec` describes the native interface, including target calling conventions and explicit environment operands such as a JNI environment. It also carries the part of the wrapper's *form* a target may state. The common Rust writer renders every wrapper as `#[no_mangle] <attrs> pub <unsafe> extern "<abi>" fn <symbol>(<params>) -> <ret>`, and what is in angle brackets is the target's: the calling convention, the symbol, the parameters and return, attributes beyond `#[no_mangle]` (a lint the generated signature would trip), and whether the signature is `unsafe`. The linkage is not: the writer exports the wrapper under the symbol, and a target restating it with `#[no_mangle]` or `#[export_name]` is contradictory input that fails generation. Both targets built so far state no attribute and no `unsafe`; V1's JNI wrapper, `#[allow(..)] pub unsafe extern "C"`, is the shape that needed the fields. This is the sketch's `AbiSpec<Payload>` with the payload made concrete, because the writer has to render it and the registry has to check it. Each native parameter carries its role: it feeds one source parameter's conversion, it supplies a named runtime context that operations ask for, or the convention requires it and nothing uses it. That is what `InputPlacement` is as implemented, and it is also how an operation's `Context("jni.env")` operand finds the parameter that satisfies it — a conversion needing a context its boundary does not supply is skipped, with the reason. `ValueMapping` maps converted values/slots to a return, output location, or invocation argument. These are transport descriptions; they do not repeat source decomposition.
+`AbiSpec` describes the wrapper boundary, including target calling conventions and explicit environment operands such as a JNI environment. It also carries the part of the wrapper's *form* a target may state. The common Rust writer renders every wrapper as `#[no_mangle] <attrs> pub <unsafe> extern "<abi>" fn <symbol>(<params>) -> <ret>`, and what is in angle brackets is the target's: the calling convention, the symbol, the parameters and return, attributes beyond `#[no_mangle]` (a lint the generated signature would trip), and whether the signature is `unsafe`. The linkage is not: the writer exports the wrapper under the symbol, and a target restating it with `#[no_mangle]` or `#[export_name]` is contradictory input that fails generation. Both targets built so far state no attribute and no `unsafe`; V1's JNI wrapper, `#[allow(..)] pub unsafe extern "C"`, is the shape that needed the fields. This is the sketch's `AbiSpec<Payload>` with the payload made concrete, because the writer has to render it and the registry has to check it. Each wrapper parameter carries its role: it feeds one source parameter's conversion, it supplies a named runtime context that operations ask for, or the convention requires it and nothing uses it. That is what `InputPlacement` is as implemented, and it is also how an operation's `Context("jni.env")` operand finds the parameter that satisfies it — a conversion needing a context its boundary does not supply is skipped, with the reason. `ValueMapping` maps converted values/slots to a return, output location, or invocation argument. These are transport descriptions; they do not repeat source decomposition.
 
 `SinkId` identifies a declared destination and signature, not the runtime callback pointer itself. `CalleeId` identifies the source operation being wrapped. `FunctionOutput` identifies the conversions for the wrapped source operation's result. `FunctionBodyId` refers to the complete structured wrapper instructions assembled by the registry.
 
@@ -176,7 +176,7 @@ validate and convert inputs
  -> finish resource scopes
 ```
 
-The target declares extra native parameters required by its convention, such
+The target declares extra wrapper parameters required by its convention, such
 as the JNI environment. The registry binds and validates those parameters
 against the operations that need them. A unit result requires no payload.
 

@@ -174,7 +174,7 @@ what generation does.
 The report is not a manifest of what should exist. The binding configuration
 expresses that intent; the report records what happened on this run. It is not
 a complete inventory of the captured source either: an item never requested
-has no entry today. Generated helper functions and native symbol identities
+has no entry today. Generated helper functions and exported symbol identities
 are not separate entries in the current schema.
 
 Finally, *emitted* is not a guarantee that the binding compiles or behaves

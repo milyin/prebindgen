@@ -24,9 +24,9 @@ same file as [the other functions][fn_emit_jni]. The class holds the address
 and gives it up exactly once: through `take()`, which the public functions
 call for a handle they consume and `free()` calls for one they do not. What is
 taken is forgotten, so a freed or consumed handle holds zero, and zero is what
-the native side refuses. The exchange is atomic, so that holds between threads
+the Rust side refuses. The exchange is atomic, so that holds between threads
 too: of two racing consumers exactly one gets the address, and the other gets
-the zero the native side refuses.
+the zero the Rust side refuses.
 
 The constructor is `internal`, because minting a `Ledger` from an arbitrary
 `Long` would reach `Box::from_raw` on it: the generated functions share a
@@ -63,9 +63,9 @@ internal object JNINative {
 }
 ```
 
-The native methods carry the address as a `Long`; the public functions are
+The `external` methods carry the address as a `Long`; the public functions are
 where it becomes a `Ledger`. The release
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary), and the
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary), and the
 two wrappers the handle's
 [conversions](../../stages/04-select.md#select-conversion-relations) render
 into (`kotlin.rs`):
@@ -146,7 +146,7 @@ pub extern "system" fn Java_example_JNINative_ledgerClose(
 ```
 
 `ledgerClose(ledgerOpen(Stamp(12, 34)))` is intended to return `46L` once the
-native library is loaded; `ledgerOpen(stamp).free()` releases without reading;
+dynamic library is loaded; `ledgerOpen(stamp).free()` releases without reading;
 `ledgerClose` on a closed or freed `Ledger` throws `IllegalStateException`;
 `free()` twice releases once. As with the struct's function, this fixture
 configures no loader and does not execute the call in a JVM.
@@ -168,7 +168,7 @@ configures no loader and does not execute the call in a JVM.
   refused. It carries its own happens-before edge and cannot tear, which a
   plain `var` would do neither of. A lock is what v1 emits instead, and for a
   different shape: v1 *borrows* a handle, holding its address across the
-  native call, so the address has to stay valid for that span. Every use on
+  call into Rust, so the address has to stay valid for that span. Every use on
   this path consumes instead, which is why an exchange is enough — and why a
   borrowed handle (`&Ledger`), when it is specified, will need more.
 

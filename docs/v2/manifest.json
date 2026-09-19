@@ -44,7 +44,7 @@
     {
       "id": "06-boundary",
       "slug": "boundary",
-      "title": "Assemble the native boundary",
+      "title": "Assemble the wrapper boundary",
       "language_dependent": true
     },
     {
@@ -354,7 +354,7 @@
     {
       "term": "wrapper",
       "match": "wrappers?",
-      "defined": "stages/06-boundary.md#assemble-the-native-boundary"
+      "defined": "stages/06-boundary.md#assemble-the-wrapper-boundary"
     },
     {
       "term": "outcome",

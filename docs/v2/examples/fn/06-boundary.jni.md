@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
 Owner: the registry, on the JNI adapter's `BoundarySpec`
 
-# Function taking an owned struct — Assemble the native boundary — Kotlin/JNI
+# Function taking an owned struct — Assemble the wrapper boundary — Kotlin/JNI
 
 ## Input
 
@@ -22,7 +22,7 @@ policy (JNI function): example.JNINative.stampSum, extern "system",
 BoundarySpec {
     abi:      extern "system", symbol "Java_example_JNINative_stampSum",
               synthetic operands: JNIEnv (exclusive), receiver JObject (unused),
-    inputs:   [ InputPlacement { native arg `stamp` (JObject) -> node(input) } ],
+    inputs:   [ InputPlacement { wrapper arg `stamp` (JObject) -> node(input) } ],
     output:   OutputPlacement::Return(node(output) -> jlong),
     failures: { Runtime: report through report_jni_error, then return 0;
                          if reporting fails -> abort },
@@ -30,8 +30,8 @@ BoundarySpec {
 ```
 
 JNI supplies two arguments in addition to the user's `stamp`: `env` permits
-calls into the JVM, and `_this` is the `JNINative` singleton receiving the native
-method call. The [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) needs `env` for property reads and error reporting;
+calls into the JVM, and `_this` is the `JNINative` singleton receiving the
+`external` method call. The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) needs `env` for property reads and error reporting;
 it does not otherwise use `_this`. `jlong` is JNI's signed 64-bit integer type.
 
 These roles determine the signature that [emission][fn_emit_jni] renders:
@@ -62,7 +62,7 @@ pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
 The helper first checks whether the JVM already has a pending exception. If so,
 it preserves it. Otherwise it throws `RuntimeException` with the JNI error's
 message. Its `Result<()>` tells the generated
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) whether
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) whether
 reporting succeeded. The `?` returns from this helper if `exception_check`
 fails, not from the wrapper. The wrapper checks the helper's result and aborts
 if reporting failed.

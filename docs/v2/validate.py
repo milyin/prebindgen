@@ -390,6 +390,24 @@ def check_vocabulary(pages, manifest, root):
                      f"link to {defined}")
 
 
+# "native" names no element: it says only "not the source side", leaving the
+# wrapper, its boundary, the generated Rust and the shipped library
+# indistinguishable. Each of those has a name. JNI's own title keeps the word.
+BANNED = re.compile(r"\bnative\b", re.I)
+PROPER_NAME = re.compile(r"Java Native Interface")
+
+
+def check_banned_words(page):
+    """Prose says which element it means; code and JNI's proper name are exempt."""
+    text = PROPER_NAME.sub(blank, prose(page.text))
+    found = BANNED.search(text)
+    if found:
+        line = text.count("\n", 0, found.start()) + 1
+        fail(f"{page.relative}:{line}: '{found.group(0)}' names no element — "
+             f"say which one (wrapper, wrapper boundary, generated Rust, "
+             f"dynamic library, `external` method)")
+
+
 def resolves(page, target, root):
     """A link target on `page`, as a root-relative path with its anchor."""
     target = re.sub(r"\s+", "", target)
@@ -492,6 +510,7 @@ def validate(root):
     for page in pages.values():
         check_identity(page, identity)
         check_definitions(page, ids, root)
+        check_banned_words(page)
         links = list(check_inline_links(page, root))
         check_anchors(page, pages, root, links)
         if page.kind() in ("cell", "variant"):

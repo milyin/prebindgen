@@ -3,7 +3,7 @@
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
 Owner: the registry, on the C adapter's `BoundarySpec`
 
-# Function taking an owned struct — Assemble the native boundary — C
+# Function taking an owned struct — Assemble the wrapper boundary — C
 
 ## Input
 
@@ -12,7 +12,7 @@ node(input)  : produces an owned source Stamp, failures {}
 node(output) : produces c_i64, failures {}
 
 policy (C function): symbol "stamp_sum", extern "C",
-                     input by value, output through the native return
+                     input by value, output through the wrapper's return
 ```
 
 ## Result
@@ -20,13 +20,13 @@ policy (C function): symbol "stamp_sum", extern "C",
 ```text
 BoundarySpec {
     abi:      extern "C", symbol "stamp_sum",
-    inputs:   [ InputPlacement { native arg 0 (Stamp, by value) -> node(input) } ],
+    inputs:   [ InputPlacement { wrapper arg 0 (Stamp, by value) -> node(input) } ],
     output:   OutputPlacement::Return(node(output) -> int64_t),
     failures: {},
 }
 ```
 
-`native arg 0` is the first C argument. The [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) uses it to construct the
+`wrapper arg 0` is the first C argument. The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) uses it to construct the
 source `Stamp`, then returns the source function's integer result directly.
 The empty failure set means these [conversions](../../stages/04-select.md#select-conversion-relations) need no error branch. An
 **out-parameter**, by contrast, would be caller-provided storage that the wrapper
@@ -46,7 +46,7 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
   [policy](../../stages/03-requests.md#what-policy-means),
   [as the request cell shows][fn_requests_c].
 - An out-parameter form would require an additional delivery implementation;
-  the current V2 increment supports only a native return or no value.
+  the current V2 increment supports only a wrapper return or no value.
 - No route is declared because both
   [nodes](../../stages/05-represent.md#represent-and-compose-values) are infallible,
   [as planned][fn_represent_c]. A later change that makes an input

@@ -29,8 +29,8 @@ the address is spelled as — `Ledger *` in C, a `Long` on the JVM — in where 
 null handle's failure goes, and in what the foreign declaration looks like.
 
 Unlike a struct, a handle exports a function of its own: its **release**. So
-this path has a native-boundary page, for a
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) that calls
+this path has a [wrapper-boundary](../../stages/06-boundary.md#assemble-the-wrapper-boundary)
+page, for a wrapper that calls
 no source function. The two functions that hand a `Ledger` out and take one
 back — `ledger_open` and `ledger_close` — are declared in
 [the source crate](../../source.md) for this path and reach its conversions.
@@ -50,15 +50,15 @@ what the Kotlin writer does with that freedom: every use on this path consumes
 the handle, so its class hands the address out through one atomic exchange, and
 two threads racing to consume or free one cannot both reach it. The sorted
 locking the shipping JNI adapter does in Kotlin answers a shape this path
-excludes — a borrowed handle, whose address has to stay valid across the native
-call.
+excludes — a borrowed handle, whose address has to stay valid across the call
+into Rust.
 
 1. [Capture source items][typedef_source]
 2. [Build and inspect the source model][typedef_flat]
 3. [Record binding requests][typedef_requests] · [C][typedef_requests_c] · [Kotlin/JNI][typedef_requests_jni]
 4. [Select conversion relations][typedef_select] · [C][typedef_select_c] · [Kotlin/JNI][typedef_select_jni]
 5. [Represent and compose values][typedef_represent] · [C][typedef_represent_c] · [Kotlin/JNI][typedef_represent_jni]
-6. [Assemble the native boundary][typedef_boundary] · [C][typedef_boundary_c] · [Kotlin/JNI][typedef_boundary_jni]
+6. [Assemble the wrapper boundary][typedef_boundary] · [C][typedef_boundary_c] · [Kotlin/JNI][typedef_boundary_jni]
 7. [Retain supported output][typedef_retain]
 8. [Emit bindings][typedef_emit] · [C][typedef_emit_c] · [Kotlin/JNI][typedef_emit_jni]
 

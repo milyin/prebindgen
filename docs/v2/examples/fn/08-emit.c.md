@@ -46,7 +46,7 @@ The header `cbindgen` derives from it, after the aggregate's `typedef`:
 int64_t stamp_sum(struct Stamp stamp);
 ```
 
-A C caller includes the generated header and links the native library. This
+A C caller includes the generated header and links the binding library. This
 small program checks a successful call by returning zero only when the sum is 46:
 
 ```c
@@ -65,7 +65,7 @@ test.
 
 ## Checks
 
-- The [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) and the function it wraps are both `stamp_sum`, and never collide:
+- The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) and the function it wraps are both `stamp_sum`, and never collide:
   the source one is only ever reached through its module path.
 - The parameter keeps the source parameter's name, `stamp`, as the boundary
   stated it; the locals are the writer's, numbered so that none can shadow it.

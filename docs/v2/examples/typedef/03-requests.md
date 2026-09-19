@@ -33,8 +33,9 @@ The request is a root, as a struct's is. Its
 struct's does not: the
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
 the address crosses as, and where the **release** — the exported function that
-frees a handle the caller does not give back — lands: a symbol for C, a native
-method on the harness for Kotlin. Both are the frontend's choices, and the
+frees a handle the caller does not give back — lands: a symbol for C, an
+`external` method on the harness for Kotlin. Both are the frontend's choices,
+and the
 release is not optional. A handle without one is a leak the foreign side cannot
 avoid.
 

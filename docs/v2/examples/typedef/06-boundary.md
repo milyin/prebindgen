@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "typedef", "stage": "06-boundary"} -->
 
 [Stage chapter](../../stages/06-boundary.md) · [Element path][typedef] · [Source crate](../../source.md)
-Owner: the registry, on the target's native interface · Previous: [Represent and compose values][typedef_represent] · Next: [Retain supported output][typedef_retain]
+Owner: the registry, on the target's boundary description · Previous: [Represent and compose values][typedef_represent] · Next: [Retain supported output][typedef_retain]
 
-# Type alias declaring an opaque handle — Assemble the native boundary
+# Type alias declaring an opaque handle — Assemble the wrapper boundary
 
 ## Input
 
@@ -28,19 +28,19 @@ FunctionPlan {
     inputs:      [ node(taken) ],
     output:      none,
     boundary:    BoundarySpec { … },                    // per target, below
-    body:        apply the release to the native parameter
+    body:        apply the release to the wrapper parameter
                  -> deliver nothing
 }
 ```
 
 The registry assembles the release
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) with the
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) with the
 code that assembles an exported function, with one difference: there is no
 call, so the input is applied to the release operation instead of being
 converted and passed on. The boundary is the target's answer to a
 `SiteDescriptor` whose source function is absent, under the *type's*
 [policy](../../stages/03-requests.md#what-policy-means), and the registry
-checks it as it checks any other: the native parameter must carry what the
+checks it as it checks any other: the wrapper parameter must carry what the
 release reads, and any failure the release could raise must have a route.
 
 The [conversions](../../stages/04-select.md#select-conversion-relations) of

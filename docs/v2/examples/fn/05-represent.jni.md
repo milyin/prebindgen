@@ -27,7 +27,7 @@ node(output) representation: Scalar(jlong)
              contract:       produces the carrier, validity Independent, failures {}
 ```
 
-The native input is an object reference. A getter call obtains each long
+The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s input is an object reference. A getter call obtains each long
 property, and the registry uses the resulting integers to construct an owned
 Rust `Stamp`. `Runtime` classifies failures from JNI so the next stage can route
 them. `Independent` describes the resulting copied value; it is not a claim

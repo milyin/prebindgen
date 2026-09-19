@@ -109,7 +109,8 @@ Do not implement every proposed enum variant before the scalar case runs. Constr
 The cases below come from the repository's coverage tests and performance
 examples. In `perftest-flat` and `perftest-kotlin`, `large_flat_input_sum` and
 `large_object_input_sum` both take a Rust struct by borrow. Their JNI
-configurations differ: one flattens the fields into native arguments, while the
+configurations differ: one flattens the fields into separate
+[wrapper](stages/06-boundary.md#assemble-the-wrapper-boundary) arguments, while the
 other passes a whole JVM object. That combination tests both representation
 choice and the temporary lifetime needed for a borrow.
 
@@ -125,7 +126,7 @@ choice and the temporary lifetime needed for a borrow.
 | Nested optional values | Preserve distinct states and never decode inactive payloads. |
 | Unsupported required field or promised interface member | Propagate to the complete dependent public contract, while retaining unrelated output. |
 
-A capability involving JNI is complete only when the existing Kotlin covertest exercises both its generated native boundary and Kotlin API. Unit tests for planning are useful, but they do not establish runtime ownership, JNI, or foreign-interface correctness.
+A capability involving JNI is complete only when the existing Kotlin covertest exercises both its generated wrapper boundary and Kotlin API. Unit tests for planning are useful, but they do not establish runtime ownership, JNI, or foreign-interface correctness.
 
 ## The first increment, as built
 
@@ -145,7 +146,7 @@ in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 - `target.rs` defines the questions adapters answer and the descriptions they return.
 - `plan.rs` selects and combines conversions, caches reusable plans, assembles
-  [wrappers](stages/06-boundary.md#assemble-the-native-boundary) and checks public dependencies.
+  [wrappers](stages/06-boundary.md#assemble-the-wrapper-boundary) and checks public dependencies.
 - `body.rs` defines the instructions stored in those plans; `emit.rs` writes
   the corresponding Rust code.
 - `run.rs` holds the completed `Generation`; `decl.rs`, `outcome.rs` and
@@ -229,8 +230,8 @@ establish the behavior of the resulting foreign interface.
 
    These descriptions are checked where they meet the values in hand, which is
    the registry and nowhere else. What is checked today, and nothing beyond it:
-   a carrier that may not cross the ABI cannot be a native parameter or return;
-   a native parameter must carry what its conversion reads, and a native return
+   a carrier that may not cross the ABI cannot be a wrapper parameter or return;
+   a wrapper parameter must carry what its conversion reads, and a wrapper return
    what the result conversion produces; where an operation states an operand or
    result *carrier*, it must be the carrier it is applied to and produces; a
    member read must name a member the representation declared; no projection may
@@ -242,7 +243,7 @@ establish the behavior of the resulting foreign interface.
    assertion comparing the source crate's features against the set the capture
    was filtered by. Flat retains it as a guard, and the V2 writer emits every
    guard the model holds, ahead of the supporting items and
-   [wrappers](stages/06-boundary.md#assemble-the-native-boundary) it planned.
+   [wrappers](stages/06-boundary.md#assemble-the-wrapper-boundary) it planned.
    Guards belong to no declaration, so retention does not decide their fate: a
    run that emits nothing still carries them, which is the case where losing the
    check would matter most. `v2check` feeds parsed items directly and has no
@@ -250,8 +251,8 @@ establish the behavior of the resulting foreign interface.
    existing example with `PREBINDGEN_PIPELINE=v2` shows it in the generated file.
 6. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
    role: an operation declares `Context("jni.env")` where it needs the
-   environment, the boundary names the native parameter that supplies it, and the
-   registry binds the two at assembly. A conversion asking for a context its
+   environment, the boundary names the wrapper parameter that supplies it, and
+   the registry binds the two at assembly. A conversion asking for a context its
    boundary does not supply is a reported skip, not a fragment reaching for a
    variable its caller happens to have.
 7. **A consumed handle needs an exchange, not a lock.** Every use of a handle
@@ -260,7 +261,7 @@ establish the behavior of the resulting foreign interface.
    gets the address, the other gets the zero the Rust side refuses, and the
    exchange carries its own happens-before edge and cannot tear. V1 locks
    instead — a sorted pass over every handle a wrapper touches — because v1
-   *borrows*, holding an address across the native call, and a lock is what
+   *borrows*, holding an address across the call into Rust, and a lock is what
    keeps it valid for that span. Whoever specifies a borrowed handle needs
    v1's shape; porting it for a consume-only handle would be answering a
    question this path does not ask.
@@ -310,7 +311,7 @@ this list says what the increment left open and why.
   beyond `#[no_mangle]`, and `unsafe`. A target reached other than by an
   exported symbol — a registration table, an attribute macro — has no way to
   say so yet, and no target has asked.
-- **Delivery** is a native return or nothing. Out-parameters, `Result` branches
+- **Delivery** is a wrapper return or nothing. Out-parameters, `Result` branches
   and declared sinks are `OutputPlacement` variants the increment does not have.
 - **A condition reaches the Rust side only.** V2 carries a `#[cfg]` the capture
   reader could not answer onto everything it generates in Rust for the item that

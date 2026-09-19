@@ -20,7 +20,7 @@ FunctionPlan(release of Ledger) frozen, with
 In the generated C Rust module (`c.rs`), the declaration among the
 [artifacts](../../stages/05-represent.md#individual-target-operations) and
 the release among the
-[wrappers](../../stages/06-boundary.md#assemble-the-native-boundary):
+[wrappers](../../stages/06-boundary.md#assemble-the-wrapper-boundary):
 
 ```rust
 #[repr(C)]

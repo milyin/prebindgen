@@ -26,7 +26,7 @@ directly. Three components cooperate to generate the connecting code:
   use it to say which items to expose and what the foreign API should look like.
 - The [registry](README.md#the-components), `prebindgen-registry-v2`, is the
   shared planner. It determines how values must be converted, assembles the
-  native functions and renders their Rust code. It also records which requests
+  wrappers and renders their Rust code. It also records which requests
   it could not satisfy.
 - The [target adapter](README.md#the-components) supplies language-specific
   answers to the registry. For C, it describes member reads from a struct. For
@@ -96,7 +96,7 @@ look equal. See [What policy means](stages/03-requests.md#what-policy-means).
 ### Root
 
 A declaration considered as a starting point for planning. Asking for
-`stamp_sum` starts work on its input, result and native entry point; those
+`stamp_sum` starts work on its input, result and exported entry point; those
 pieces are dependencies of that root. Explicitly asking for `Stamp` makes the
 type a root too. It can therefore remain in the output even if a function that
 uses it is skipped for an unrelated reason.
@@ -174,11 +174,11 @@ children's conversions. See [Represent and compose values](stages/05-represent.m
 
 ### Carrier
 
-A value carrying data during conversion: a native argument, native return or
+A value carrying data during conversion: a wrapper argument, wrapper return or
 intermediate value in generated Rust. In the JNI example, the object reference
 is one carrier and an integer returned by a getter is another. Its `WireType`
-describes the Rust type used to hold it and whether it is safe at the native
-calling boundary. An internal temporary need not itself be legal as an
+describes the Rust type used to hold it and whether it is safe at the wrapper
+boundary. An internal temporary need not itself be legal as an
 exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
 
 ### Primitive
@@ -219,13 +219,13 @@ See [Individual target operations](stages/05-represent.md#individual-target-oper
 
 ### Wrapper
 
-The generated native function around one source call. It receives the foreign
+The generated Rust function around one source call. It receives the foreign
 arguments, runs the input conversions, calls `stamp_sum`, then converts and
 delivers the result. It also handles conversion failures according to the
 target's convention. C calls an `extern "C"` function; the JVM reaches an
-`extern "system"` JNI entry point through a native method. This wrapper is
-distinct from the Kotlin convenience function that calls that native method.
-See [Assemble the native boundary](stages/06-boundary.md#assemble-the-native-boundary).
+`extern "system"` JNI entry point through an `external` method. This wrapper is
+distinct from the Kotlin convenience function that calls that `external` method.
+See [Assemble the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-boundary).
 
 ### Outcome
 

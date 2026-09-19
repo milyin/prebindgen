@@ -215,7 +215,7 @@ approximated, because the missing piece would otherwise be dropped silently.
 Lifetimes are not in that list: they are spelling, and the model keeps them.
 Raw pointers are not in the grammar at all, and that absence is a statement about
 the whole project: a source crate is idiomatic Rust, and pointers belong to the
-stage that builds a native boundary out of it.
+stage that builds a [wrapper boundary](06-boundary.md#assemble-the-wrapper-boundary) out of it.
 
 The grammar also keeps distinctions a destination language may well erase.
 `String` and `str` are different kinds; so are `Vec<T>` and `[T]`; `Box<T>` and

@@ -1,9 +1,9 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "06-boundary"} -->
 
 [Stage chapter](../../stages/06-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
-Owner: the registry, on the target's native interface · Previous: [Represent and compose values][fn_represent] · Next: [Retain supported output][fn_retain]
+Owner: the registry, on the target's boundary description · Previous: [Represent and compose values][fn_represent] · Next: [Retain supported output][fn_retain]
 
-# Function taking an owned struct — Assemble the native boundary
+# Function taking an owned struct — Assemble the wrapper boundary
 
 ## Input
 

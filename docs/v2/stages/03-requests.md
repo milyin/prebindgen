@@ -72,7 +72,7 @@ before `.declare(...)`, since names are derived when the set is applied.
 Through Kotlin it is the same two items with different answers — `Stamp` becomes
 a class in a package, and the function a top-level function of that package,
 reached through the Java Native Interface (JNI), the mechanism by which JVM code
-calls native functions:
+calls into a compiled library:
 
 ```rust
 // build.rs of the JNI binding crate
@@ -95,7 +95,7 @@ subpackage for its public items without moving the harness. `data_class!(Stamp)`
 asks for a data class; `.fun(...)` places a top-level function in that package. The
 frontend derives names unless configuration overrides them. A name given there
 names the Kotlin declaration a caller uses; the
-native method behind it, and so the `Java_…` symbol, is named from the Rust
+`external` method behind it, and so the `Java_…` symbol, is named from the Rust
 identifier through the method-name hook — the harness object has one namespace,
 and two packages may each export a `value`. The macros take a type as written
 rather than a string — `data_class!(Stamp)`, not `data_class!("Stamp")` — and
@@ -105,11 +105,11 @@ declaration need not name a captured type at all — a target may represent
 `String` without the source exporting one — so `data_class!(Absent)` is a
 reported skip (`unsupported.type.not_a_struct`) rather than an error.
 
-The adapter also chooses how native failures reach the caller. For example,
+The adapter also chooses how conversion failures reach the caller. For example,
 reading a JVM property can fail before the Rust function runs. The adapter
 supplies a reporting convention, rather than a per-function setting. The
-[native-boundary stage](06-boundary.md) uses that convention when planning the
-[wrapper](06-boundary.md#assemble-the-native-boundary)'s error path.
+[wrapper-boundary stage](06-boundary.md) uses that convention when planning the
+[wrapper](06-boundary.md#assemble-the-wrapper-boundary)'s error path.
 
 Each such call records a choice. Together they are the **binding
 configuration**, and `.build()` is where the frontend turns it into
@@ -159,7 +159,7 @@ contracts; capabilities not yet implemented are extension points, not features.
 
 ## What the registry does
 
-The registry receives the [source model](02-flat.md) and requests to expose particular types, functions, and constants. For each request, it builds a **plan**: structured data describing the required conversions, calls and their execution order. The common Rust writer renders the native wrappers and supporting Rust types. The C build then uses `cbindgen` to derive C headers from that Rust output; the JNI implementation renders Kotlin declarations from the completed plans. Planning happens in the generator; the generated operations execute later when the bindings are used.
+The registry receives the [source model](02-flat.md) and requests to expose particular types, functions, and constants. For each request, it builds a **plan**: structured data describing the required conversions, calls and their execution order. The common Rust writer renders the wrappers and supporting Rust types. The C build then uses `cbindgen` to derive C headers from that Rust output; the JNI implementation renders Kotlin declarations from the completed plans. Planning happens in the generator; the generated operations execute later when the bindings are used.
 
 Take the struct above and a second function over it — one that also
 *returns* a `Stamp`, so that both directions are visible at once:
@@ -176,11 +176,11 @@ Generating a binding for it requires several decisions and operations:
 4. Read and convert the returned fields.
 5. Return the result through the chosen foreign interface.
 
-A C binding might represent `Stamp` as a C struct. A JNI binding might accept two native integer arguments produced by a Kotlin wrapper, or receive a JVM object whose properties must be read. Those [representations](05-represent.md#represent-and-compose-values) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
+A C binding might represent `Stamp` as a C struct. A JNI binding might accept two integer arguments produced by the public Kotlin function, or receive a JVM object whose properties must be read. Those [representations](05-represent.md#represent-and-compose-values) need different target operations. The source-side work of discovering two fields, converting them, constructing `Stamp`, invoking the source function, and processing its result is common.
 
 **The registry owns that common work.** When a struct gains another nested struct field, the shared recursive registry algorithm should process it using the representations supplied by the target. Each language should not need another implementation of struct traversal or wrapper assembly.
 
-A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](08-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits native Rust wrappers and supporting Rust types for both targets.
+A language implementation also owns its **foreign writer**: the component that renders the target language's own declarations from the completed plans. JNI's writes Kotlin. C's is the exception — [emission](08-emit.md) explains why it delegates to `cbindgen` instead. The registry library provides the **common Rust writer**, which emits the Rust wrappers and supporting Rust types for both targets.
 
 The source crate and Flat have finished their work by the time requests exist.
 These are the roles that act from here on — roles, not crates: the frontend and
@@ -211,8 +211,8 @@ common Rust writer belongs to the engine.
 </tr>
 <tr>
 <td>Common Rust writer</td>
-<td>Render the registry's completed native conversion and function plans.</td>
-<td colspan="2">Emit Rust locals, field accesses, source calls, branches and the extern wrapper from the common plans, using the chosen native calling convention and target operations.</td>
+<td>Render the registry's completed conversion and function plans.</td>
+<td colspan="2">Emit Rust locals, field accesses, source calls, branches and the extern wrapper from the common plans, using the chosen calling convention and target operations.</td>
 </tr>
 <tr>
 <td>Foreign writer</td>
@@ -259,7 +259,7 @@ enum JniStructInput {
 }
 
 struct JniValuePolicy {
-    record_input: JniStructInput, // How this struct reaches the native wrapper.
+    record_input: JniStructInput, // How this struct reaches the wrapper.
 }
 ```
 
@@ -293,7 +293,7 @@ Three concepts stay separate throughout the design:
 | --- | --- | --- |
 | Relation | How can the Rust value be constructed or read? | Construct/read its `secs` and `nanos` fields. |
 | Target representation | What values carry it, and how are those values accessed? | One C struct, two JNI integer arguments, or a JVM object. |
-| Boundary delivery | Where do the converted values go at an exported call? | Native return, caller-provided output parameters, or a declared result callback. |
+| Boundary delivery | Where do the converted values go at an exported call? | The wrapper's return, caller-provided output parameters, or a declared result callback. |
 
 Policy guides the selection of these descriptions. The registry turns the descriptions into an executable plan.
 

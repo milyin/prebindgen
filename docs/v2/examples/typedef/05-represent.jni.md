@@ -27,7 +27,7 @@ node(Ledger, OutOfRust)  ReprSpec { layout: Scalar(jlong),
 ```
 
 Applied to the
-[wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)'s value
+[wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s value
 `v3` and its parameters `ledger` and `ptr`, they render:
 
 ```rust

@@ -212,7 +212,7 @@ class SpecStructure(unittest.TestCase):
         # Copilot's mutation on #736: the term's only mention wrapped in a
         # reference-style link to somewhere else.
         self.edit("examples/struct/08-emit.md",
-                  "into the [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary)\n"
+                  "into the [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)\n"
                   "of [the function that uses the struct][fn_emit].",
                   "into the [wrapper][fn_emit] of the function that uses the struct.")
         self.rejects("first mention of 'wrapper'")
@@ -221,8 +221,8 @@ class SpecStructure(unittest.TestCase):
         # A quoted title placed before the page's linked prose mention of
         # "conversion" must not count as the first mention.
         self.edit("examples/fn/06-boundary.c.md",
-                  "# Function taking an owned struct — Assemble the native boundary — C\n",
-                  "# Function taking an owned struct — Assemble the native boundary — C\n\n"
+                  "# Function taking an owned struct — Assemble the wrapper boundary — C\n",
+                  "# Function taking an owned struct — Assemble the wrapper boundary — C\n\n"
                   "See [Represent and compose values][fn_represent_c] first.\n")
         self.assertTrue(validate.validate(self.root).startswith("Valid:"))
         # And the same words outside a title-quoting link are a first mention.
@@ -339,6 +339,15 @@ class SpecStructure(unittest.TestCase):
     def test_vocabulary_definition_missing(self):
         self.edit("stages/07-retain.md", "exactly one **outcome**", "exactly one outcome")
         self.rejects("does not define 'outcome' in bold")
+
+    def test_banned_word_in_prose(self):
+        self.edit("stages/08-emit.md", "the common\nRust writer", "the native\nRust writer")
+        self.rejects("names no element")
+
+    def test_banned_word_in_code_and_proper_name_is_allowed(self):
+        self.edit("source.md", "the Java Native Interface",
+                  "the Java Native Interface, reached through `jni_native_init`")
+        self.assertTrue(validate.validate(self.root).startswith("Valid:"))
 
     def test_language_dependent_stage_needs_every_language(self):
         path = self.root / "manifest.json"

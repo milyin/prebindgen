@@ -19,8 +19,8 @@ FunctionPlan(exported stamp_sum) frozen, with
 ## Result
 
 The public function sits beside [the data class][struct_emit_jni]. It delegates
-to `JNINative`, the generated object that groups native method declarations.
-`external` means the implementation is in the native library. `internal`
+to `JNINative`, the generated object that groups `external` declarations.
+`external` means the implementation is in the dynamic library. `internal`
 keeps the object out of the public Kotlin API; `@JvmSynthetic` additionally
 hides the method from ordinary Java source calls.
 
@@ -35,7 +35,7 @@ internal object JNINative {
 }
 ```
 
-The native [wrapper](../../stages/06-boundary.md#assemble-the-native-boundary) the JVM binds that method to (`kotlin.rs`), after the
+The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) the JVM binds that method to (`kotlin.rs`), after the
 reporting helper the adapter contributes once per file:
 
 ```rust
@@ -85,19 +85,20 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ```
 
 The successful call is intended to make `stampSum(Stamp(12, 34))` return `46L`.
-The consumer must first load the native library; this fixture configures no
+The consumer must first load the dynamic library; this fixture configures no
 loader. The generated Rust compiles and the Kotlin text is checked by
 `v2check`, but that fixture does not yet execute this call in a JVM.
 
-The native body reads `secs`, then `nanos`. Each `match` either obtains an
+The wrapper body reads `secs`, then `nanos`. Each `match` either obtains an
 integer or reports the failure and returns. Only two successful reads reach
 construction of `source::Stamp` and the call to `source::stamp_sum`. The
 placeholder zero on the error path is not a successful result visible to Kotlin.
 
 ## Checks
 
-- The symbol names the native method on `example.JNINative`. A public function
-  rename and a native method rename are separate choices; changing only the
+- The symbol names the `external` method on `example.JNINative`. A public
+  function rename and an `external` method rename are separate choices; changing
+  only the
   public name need not change this symbol.
 - The `jni` crate's types are spelled in full, because the wrapper lands in a
   file the binding crate `include!`s and must not depend on that crate's

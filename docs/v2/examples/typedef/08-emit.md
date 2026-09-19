@@ -18,7 +18,7 @@ FunctionPlan { declaration: public Ledger, boundary: <the release symbol and car
 with the two [conversion](../../stages/04-select.md#select-conversion-relations)
 [nodes](../../stages/05-represent.md#represent-and-compose-values), whose
 standard operations the writer renders inside the
-[wrappers](../../stages/06-boundary.md#assemble-the-native-boundary) of
+[wrappers](../../stages/06-boundary.md#assemble-the-wrapper-boundary) of
 `ledger_open` and `ledger_close`.
 
 ## Result
