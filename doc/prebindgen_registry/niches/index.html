@@ -16,7 +16,7 @@ raw <code>Box::into_raw</code> pointer carried over the wire as an integer handl
 real <code>Box::into_raw</code> results are never <code>0</code>, so the converter declares
 the single niche <code>{0}</code>. <code>Option&lt;T&gt;</code> then automatically reuses the same
 integer wire with <code>0</code> meaning <code>None</code>, matching the C-pointer-with-null
-ABI most native bindings already use.</p>
+ABI most hand-written bindings already use.</p>
 <h3 id="aligned-pointer-tags"><a class="doc-anchor" href="#aligned-pointer-tags">§</a>Aligned pointer tags</h3>
 <p>Alignment can leave more invalid integer encodings than the null pointer.
 If generated Rust proves <code>align_of::&lt;T&gt;() &gt;= 2</code>, every live
