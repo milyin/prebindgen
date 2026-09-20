@@ -81,7 +81,7 @@ fn every_declared_element_is_accounted_for() {
             .declarations
             .iter()
             .find(|entry| entry.declaration.id().to_string() == id)
-            .map(|entry| entry.declaration.placement().clone())
+            .map(|entry| entry.declaration.placement().to_string())
             .unwrap_or_default()
     };
     assert_eq!(placement("type:ZThing"), "io.test.jni.thing.ZThing");
@@ -222,7 +222,7 @@ fn class_members_are_elements_of_their_own() {
             .declarations
             .iter()
             .find(|entry| entry.declaration.id().to_string() == id)
-            .map(|entry| entry.declaration.representation().clone())
+            .map(|entry| entry.declaration.representation().to_string())
             .unwrap_or_default()
     };
     assert_eq!(representation("type:ZThing"), "ptr_class");

@@ -6,7 +6,7 @@
 //! declaration is what the report accounts for; the request carries the target's
 //! configuration for it.
 
-use prebindgen_flat::flat::{Element, Flat};
+use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
 
 /// What a [`Declaration`] declares: a function, a type, a constant, a callback
@@ -116,6 +116,50 @@ impl Serialize for DeclarationId {
     }
 }
 
+/// What a declaration is named after, and which namespace that name lives in.
+///
+/// A name alone does not say: `Sample` may be a captured type, a type key the
+/// binding coined for something the source never exported, or the name of a
+/// Kotlin constant built from an expression. The variant says which, so a
+/// declaration's [`SourceKind`] follows from how it was declared rather than
+/// being stated again beside it.
+#[derive(Clone, Debug)]
+pub enum Origin {
+    /// A captured `#[prebindgen]` function.
+    Function(syn::Ident),
+    /// A captured `#[prebindgen]` constant.
+    Const(syn::Ident),
+    /// A captured `#[prebindgen]` type.
+    Type(TypeKey),
+    /// A type the binding gives a representation although the source never
+    /// exported it — `String` crossing as an opaque handle.
+    LocalType(TypeKey),
+    /// A name only the binding knows: a callback's signature, or a constant the
+    /// binding computes rather than reads.
+    Local(String),
+}
+
+impl Origin {
+    /// What this origin must name in the captured source.
+    pub fn source_kind(&self) -> SourceKind {
+        match self {
+            Origin::Function(_) => SourceKind::Function,
+            Origin::Const(_) => SourceKind::Const,
+            Origin::Type(_) => SourceKind::Type,
+            Origin::LocalType(_) | Origin::Local(_) => SourceKind::BindingLocal,
+        }
+    }
+
+    /// The name it goes by — what an id carries and a report prints.
+    pub fn name(&self) -> String {
+        match self {
+            Origin::Function(ident) | Origin::Const(ident) => ident.to_string(),
+            Origin::Type(key) | Origin::LocalType(key) => key.as_str().to_string(),
+            Origin::Local(name) => name.clone(),
+        }
+    }
+}
+
 /// One declaration, as the report accounts for it.
 ///
 /// Built by the adapter with [`Self::new`] and read back through the accessors.
@@ -206,39 +250,19 @@ impl SourceKind {
 }
 
 impl Declaration {
-    /// Declare `rust_origin` as a `kind` the target places at `placement`.
+    /// Declare `origin` as a `kind` the target places at `placement`.
     pub fn new(
         kind: DeclarationKind,
-        rust_origin: impl Into<String>,
+        origin: Origin,
         placement: impl Into<String>,
         representation: impl Into<String>,
     ) -> Self {
         Declaration {
-            id: DeclarationId::new(kind, rust_origin.into()),
+            id: DeclarationId::new(kind, origin.name()),
             placement: placement.into(),
             representation: representation.into(),
-            // The usual case: the declaration is named after the item it is built
-            // from. `sourced_as` states the exceptions.
-            source: match kind {
-                DeclarationKind::Function => SourceKind::Function,
-                DeclarationKind::Type => SourceKind::Type,
-                DeclarationKind::Const => SourceKind::Const,
-                DeclarationKind::Callback | DeclarationKind::Conversion => SourceKind::BindingLocal,
-            },
+            source: origin.source_kind(),
         }
-    }
-
-    /// The same, for something the binding defines itself rather than something
-    /// it selects out of the captured source — see [`SourceKind::BindingLocal`].
-    pub fn local(self) -> Self {
-        self.sourced_as(SourceKind::BindingLocal)
-    }
-
-    /// The same, for a declaration whose target kind and source kind differ — see
-    /// [`Self::source`].
-    pub fn sourced_as(mut self, source: SourceKind) -> Self {
-        self.source = source;
-        self
     }
 
     /// Stable identity — see [`DeclarationId`].
@@ -273,9 +297,9 @@ impl Declaration {
     ///
     /// Not the same question as [`Self::kind`], which says what the *target*
     /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
-    /// [`DeclarationKind::Const`] backed by a captured **function**. Stated by
-    /// the adapter, because only the adapter knows which of its own
-    /// declaration forms produced this one.
+    /// [`DeclarationKind::Const`] whose origin is [`Origin::Function`]. It
+    /// comes from that origin rather than being stated beside it, so the two
+    /// cannot disagree.
     pub fn source(&self) -> SourceKind {
         self.source
     }

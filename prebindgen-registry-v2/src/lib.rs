@@ -52,7 +52,7 @@ pub mod target;
 mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
-pub use decl::{Declaration, DeclarationId, DeclarationKind, SourceKind};
+pub use decl::{Declaration, DeclarationId, DeclarationKind, Origin, SourceKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{
     generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, PolicyId, ValuePlan,

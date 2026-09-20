@@ -9,7 +9,7 @@
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind};
 
 use crate::{
-    decl::{Declaration, DeclarationKind},
+    decl::{Declaration, DeclarationKind, Origin},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
@@ -498,11 +498,18 @@ fn requests() -> BindingRequests<Policy> {
 }
 
 fn ty(origin: &str) -> Declaration {
-    Declaration::new(DeclarationKind::Type, origin, origin, "strukt")
+    let key = prebindgen_flat::TypeKey::parse(origin).expect("a test names a type");
+    Declaration::new(DeclarationKind::Type, Origin::Type(key), origin, "strukt")
 }
 
 fn function(origin: &str) -> Declaration {
-    Declaration::new(DeclarationKind::Function, origin, origin, "function")
+    let ident = syn::parse_str(origin).expect("a test names an ident");
+    Declaration::new(
+        DeclarationKind::Function,
+        Origin::Function(ident),
+        origin,
+        "function",
+    )
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
