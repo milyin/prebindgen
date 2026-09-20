@@ -114,17 +114,18 @@ pub struct Declaration {
     ///
     /// Not the same question as [`Self::kind`], which says what the *target*
     /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
-    /// [`DeclarationKind::Const`] backed by a captured **function**. Stated by the
-    /// adapter, because only the adapter knows which declarator produced the
-    /// declaration.
+    /// [`DeclarationKind::Const`] backed by a captured **function**. Stated by
+    /// the adapter, because only the adapter knows which of its own
+    /// declaration forms produced this one.
     pub source: SourceKind,
 }
 
 /// What a declaration's Rust origin must name in the captured source.
 ///
-/// Captured items live in one flat namespace, but the namespace holds three
-/// kinds and a declaration means one of them: `.fun(fun!(x))` naming a captured
-/// `const x` is a mistake, not a shape v2 has yet to implement.
+/// Captured items live in one flat namespace holding functions, types and
+/// constants, and a declaration means one of the three. Naming the wrong one —
+/// `.fun(fun!(x))` where the source captured `const x` — is an error in the
+/// binding, and the engine fails the run over it instead of reporting a skip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
