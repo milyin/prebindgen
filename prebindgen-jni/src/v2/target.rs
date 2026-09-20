@@ -444,14 +444,14 @@ impl Target for JniTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 JNI target does \
                          not lower yet",
-                        site.declaration.rust_origin
+                        site.declaration.rust_origin()
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.rust_origin
+                    site.declaration.rust_origin()
                 )));
             }
         };
@@ -577,7 +577,7 @@ impl Target for JniTarget {
                 None => (String::new(), class.clone()),
             };
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id.clone(),
+                declaration: request.declaration.id().clone(),
                 requires: Vec::new(),
                 // What crosses is a `jlong`, and the release wrapper is Rust
                 // the registry renders: nothing to contribute.
@@ -637,7 +637,7 @@ impl Target for JniTarget {
                     },
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id.clone(),
+                    declaration: request.declaration.id().clone(),
                     // A method taking or returning a declared class is
                     // unusable unless the class it names is emitted too.
                     requires: values
@@ -712,7 +712,7 @@ impl Target for JniTarget {
                     None => (String::new(), class.clone()),
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id.clone(),
+                    declaration: request.declaration.id().clone(),
                     requires: Vec::new(),
                     rust: Vec::new(),
                     payload: Some(JniPayload::Class {

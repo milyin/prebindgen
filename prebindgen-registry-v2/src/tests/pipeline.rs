@@ -312,7 +312,7 @@ impl Target for Mini {
         // derived, and a null address is not a failure it can raise.
         let release = match (site.function, policy) {
             (None, Policy::Handle) => Some(exported(
-                &format!("{}_free", site.declaration.rust_origin),
+                &format!("{}_free", site.declaration.rust_origin()),
                 Routes::None,
             )),
             (None, Policy::HandleWithoutRelease) => {
@@ -333,7 +333,7 @@ impl Target for Mini {
         else {
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` is exported under a value policy",
-                site.declaration.rust_origin
+                site.declaration.rust_origin()
             )));
         };
         Ok(TargetAttempt::Ready(BoundarySpec {
@@ -455,7 +455,7 @@ impl Target for Mini {
             _ => Vec::new(),
         };
         Ok(TargetAttempt::Ready(SurfaceSpec {
-            declaration: request.declaration.id.clone(),
+            declaration: request.declaration.id().clone(),
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
                 (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
@@ -510,7 +510,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .report()
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id.as_str() == id)
+        .find(|entry| entry.declaration.id().to_string() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }
@@ -1430,7 +1430,7 @@ fn a_handle_is_carried_both_ways_and_released() {
         .collect();
     assert_eq!(symbols, ["Token_free", "token_new", "token_use"]);
     let release = &generation.functions()[0];
-    assert_eq!(release.declaration.as_str(), "type:Token");
+    assert_eq!(release.declaration.to_string(), "type:Token");
     assert!(release.result.is_none(), "a release delivers nothing");
 
     let rust = generation.rust();

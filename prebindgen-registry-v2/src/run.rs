@@ -150,8 +150,8 @@ pub(crate) fn check_declarations(
     let missing: Vec<_> = declared
         .iter()
         .filter(|declaration| {
-            let origin = declaration.rust_origin.as_str();
-            match declaration.source {
+            let origin = declaration.rust_origin();
+            match declaration.source() {
                 SourceKind::Function => flat.function(origin).is_none(),
                 SourceKind::Type => flat.declared_type(origin).is_none(),
                 SourceKind::Const => flat.constant(origin).is_none(),
@@ -160,9 +160,9 @@ pub(crate) fn check_declarations(
         })
         .map(|declaration| {
             (
-                declaration.id.clone(),
-                declaration.source,
-                declaration.rust_origin.clone(),
+                declaration.id().clone(),
+                declaration.source(),
+                declaration.rust_origin().to_string(),
             )
         })
         .collect();
@@ -175,8 +175,8 @@ pub(crate) fn check_declarations(
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|declaration| !seen.insert(&declaration.id))
-        .map(|declaration| declaration.id.clone())
+        .filter(|declaration| !seen.insert(declaration.id()))
+        .map(|declaration| declaration.id().clone())
         .collect();
     repeated.sort();
     repeated.dedup();

@@ -249,14 +249,14 @@ impl Target for CTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 C target does not \
                          lower yet",
-                        site.declaration.rust_origin
+                        site.declaration.rust_origin()
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.rust_origin
+                    site.declaration.rust_origin()
                 )));
             }
         };
@@ -314,7 +314,7 @@ impl Target for CTarget {
         if let CPolicy::OpaquePtr { c_name, .. } = request.policy {
             let ident = format_ident!("{c_name}");
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id.clone(),
+                declaration: request.declaration.id().clone(),
                 requires: Vec::new(),
                 // A struct whose only member is a zero-length array is what
                 // `cbindgen` renders as an incomplete type: a C caller can
@@ -339,7 +339,7 @@ impl Target for CTarget {
                 opaque.name
             ))),
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id.clone(),
+                declaration: request.declaration.id().clone(),
                 // A wrapper taking or returning a declared type is unusable
                 // unless the public type it names is emitted too.
                 requires: values
@@ -419,7 +419,7 @@ impl Target for CTarget {
                     fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id.clone(),
+                    declaration: request.declaration.id().clone(),
                     requires: Vec::new(),
                     // `repr(C)` is required: without it the layout the header
                     // promises is not the layout the wrapper reads. The C name

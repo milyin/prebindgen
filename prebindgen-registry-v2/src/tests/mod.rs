@@ -140,10 +140,10 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     assert_eq!(report.source_identity.declaring_crate, "fixture-crate");
 
     // Types sort before functions, and the ignore is an outcome like any other.
-    let ids: Vec<&str> = report
+    let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id.as_str())
+        .map(|entry| entry.declaration.id().to_string())
         .collect();
     assert_eq!(ids, ["type:Handle", "fn:handle_new", "fn:handle_value"]);
     assert_eq!(report.declarations[2].outcome, Outcome::Ignored);
@@ -246,4 +246,22 @@ fn skips_are_grouped_by_capability_code() {
     // asked about.
     assert_eq!(groups["unsupported.nothing.carrier"].len(), 3);
     assert_eq!(groups.len(), 1);
+}
+
+/// The report's declaration columns are a published schema, and the id's parts
+/// are stored rather than formatted into one string: `kind` and `rust_origin`
+/// stay separate columns beside the id a reader sorts and greps by.
+#[test]
+fn a_declaration_serializes_its_identity_as_three_columns() {
+    let declaration = Declaration::new(
+        DeclarationKind::Const,
+        "z_thing_describe",
+        "example.DESCRIBE",
+        "constant_fun",
+    )
+    .sourced_as(SourceKind::Function);
+    assert_eq!(
+        serde_json::to_string(&declaration).expect("a declaration is plain data"),
+        r#"{"id":"const:z_thing_describe","kind":"const","rust_origin":"z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","source":"function"}"#
+    );
 }

@@ -71,10 +71,10 @@ fn every_declared_element_is_accounted_for() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let report = generated.report().expect("v2 produces a report");
 
-    let ids: Vec<&str> = report
+    let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id.as_str())
+        .map(|entry| entry.declaration.id().to_string())
         .collect();
     assert_eq!(
         ids,
@@ -91,7 +91,7 @@ fn every_declared_element_is_accounted_for() {
     let placements: Vec<&str> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.placement.as_str())
+        .map(|entry| entry.declaration.placement().as_str())
         .collect();
     assert!(
         placements.contains(&"calculator_t") && placements.contains(&"z_calculator_new"),
@@ -224,10 +224,10 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id.as_str() == "fn:calculator_internal")
+        .find(|entry| entry.declaration.id().to_string() == "fn:calculator_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
-    assert_eq!(ignored.declaration.kind, DeclarationKind::Function);
+    assert_eq!(ignored.declaration.kind(), DeclarationKind::Function);
 }
 
 /// A declared function the source never captured is a build error under v2 as
