@@ -47,7 +47,7 @@
 //! them, and `docs/v2/implementation.md` lists exactly what is absent.
 
 use prebindgen_flat::{
-    flat::{Extern, Function, Struct, TypeRef},
+    flat::{Extern, Function, Struct, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
@@ -702,12 +702,56 @@ pub struct BoundarySpec<P> {
 // Public declarations
 // ---------------------------------------------------------------------------
 
+/// A public type another declaration depends on.
+///
+/// A wrapper taking an aggregate is unusable unless the type it names is
+/// emitted too. A target states that with the type, not with the id of the
+/// declaration representing it: at [`Target::surface`] it holds the model's
+/// answer about a value, not the binding's declaration of a type, and the
+/// engine is the side that knows which declaration covers which type.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Requirement {
+    type_name: String,
+}
+
+impl Requirement {
+    /// What `ty` requires, if it names a type at all — `None` for a scalar or
+    /// anything else with no declared type of its own.
+    pub fn of(ty: &TypeRef) -> Option<Self> {
+        match ty.kind() {
+            TypeKind::Named { id, .. } => Some(Requirement {
+                type_name: id.name.clone(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// The same for a type the target knows by name without holding a
+    /// reference to it.
+    pub fn type_named(name: impl Into<String>) -> Self {
+        Requirement {
+            type_name: name.into(),
+        }
+    }
+
+    /// The type's name, as the model spells it.
+    pub fn type_name(&self) -> &str {
+        &self.type_name
+    }
+}
+
+impl std::fmt::Display for Requirement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "type `{}`", self.type_name)
+    }
+}
+
 /// A target's description of one public declaration and what it requires.
 #[derive(Clone, Debug)]
 pub struct SurfaceSpec<P> {
     pub declaration: DeclarationId,
-    /// Other requested declarations that must be emitted for this one to be.
-    pub requires: Vec<DeclarationId>,
+    /// Types that must be declared and emitted for this declaration to be.
+    pub requires: Vec<Requirement>,
     /// Rust this declaration contributes: the `repr(C)` aggregate a C caller
     /// fills in, for instance. A target whose public declaration is not Rust
     /// contributes none.

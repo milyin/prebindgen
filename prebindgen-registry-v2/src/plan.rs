@@ -789,6 +789,17 @@ pub fn generate<T: Target>(
         }
     }
 
+    // Which declaration represents which type. A target names a requirement by
+    // type, because that is what the model told it about a value; matching the
+    // type to the declaration covering it is the engine's side of that.
+    let declared_types: BTreeMap<&str, &DeclarationId> = requests
+        .outputs
+        .iter()
+        .map(|output| &output.declaration)
+        .filter(|declaration| declaration.kind() == DeclarationKind::Type)
+        .map(|declaration| (declaration.rust_origin(), declaration.id()))
+        .collect();
+
     // A public declaration can require another one. Propagate until a pass
     // changes nothing: one missing capability, several skipped outputs, each
     // keeping its own path to the cause.
@@ -799,12 +810,15 @@ pub fn generate<T: Target>(
                 continue;
             }
             for required in &surface.requires {
-                let cause = match outcomes.get(required) {
+                let declared = declared_types
+                    .get(required.type_name())
+                    .and_then(|id| outcomes.get(*id));
+                let cause = match declared {
                     Some(Outcome::Skipped(skip)) => skip.clone(),
                     Some(_) => continue,
                     None => Skip::direct(
                         "unsupported.requirement.unrequested",
-                        format!("requires `{required}`, which this binding does not declare"),
+                        format!("requires {required}, which this binding declares no type for"),
                         required.to_string(),
                     ),
                 };

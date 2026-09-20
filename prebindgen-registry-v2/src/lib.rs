@@ -63,7 +63,8 @@ pub use target::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Direction, FailureCategory,
     FailureRoute, Layout, OperandRole, OperandSpec, Operation, OperationType, OutputPlacement,
     ParamRole, Part, PlanningError, Position, PrimitiveFailure, PrimitiveId, PrimitiveSpec,
-    Protocol, Relation, RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery,
-    SiteDescriptor, SourceItem, StandardOp, StructRelation, SurfaceRequest, SurfaceSpec, Target,
-    TargetAttempt, TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
+    Protocol, Relation, RelationId, ReprSpec, Requirement, ResolvedShape, ResolvedValues,
+    SelectionQuery, SiteDescriptor, SourceItem, StandardOp, StructRelation, SurfaceRequest,
+    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
+    WrapperParam,
 };

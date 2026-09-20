@@ -86,7 +86,12 @@ pub struct DeclarationId {
 
 impl DeclarationId {
     /// The id of `origin` declared as `kind`.
-    pub fn new(kind: DeclarationKind, origin: impl AsRef<str>) -> Self {
+    ///
+    /// Crate-internal: an id is what a [`Declaration`] already has, and the
+    /// engine hands it out. Nothing outside builds one from a name — a target
+    /// naming another declaration names the type it needs, with a
+    /// [`Requirement`](crate::Requirement).
+    pub(crate) fn new(kind: DeclarationKind, origin: impl AsRef<str>) -> Self {
         DeclarationId {
             kind,
             origin: origin.as_ref().to_string(),

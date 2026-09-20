@@ -12,12 +12,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
-    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId,
-    ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
-    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, FailureCategory, FailureRoute,
+    Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
+    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement,
+    ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp,
+    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
+    WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -71,13 +71,6 @@ fn scalar_of(ty: &TypeRef) -> Option<ScalarKind> {
 }
 
 /// The declared name of a nominal type.
-fn named(ty: &TypeRef) -> Option<String> {
-    match ty.kind() {
-        TypeKind::Named { id, .. } => Some(id.name.clone()),
-        _ => None,
-    }
-}
-
 impl Target for CTarget {
     type Policy = CPolicy;
     type Payload = CPayload;
@@ -346,8 +339,7 @@ impl Target for CTarget {
                     .inputs
                     .iter()
                     .chain(values.output.iter())
-                    .filter_map(|value| named(&value.crossing.ty))
-                    .map(|name| DeclarationId::new(DeclarationKind::Type, name))
+                    .filter_map(|value| Requirement::of(&value.crossing.ty))
                     .collect(),
                 rust: Vec::new(),
                 payload: None,

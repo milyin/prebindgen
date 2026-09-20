@@ -14,12 +14,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
-    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId,
-    ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
-    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-    WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, FailureCategory, FailureRoute,
+    Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
+    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement,
+    ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, SurfaceRequest,
+    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
+    WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -644,8 +644,7 @@ impl Target for JniTarget {
                         .inputs
                         .iter()
                         .chain(values.output.iter())
-                        .filter_map(|value| named(&value.crossing.ty))
-                        .map(|name| DeclarationId::new(DeclarationKind::Type, name))
+                        .filter_map(|value| Requirement::of(&value.crossing.ty))
                         .collect(),
                     // What crosses is a JVM object: the Rust side holds a
                     // reference to it and declares no type of its own.

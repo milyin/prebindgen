@@ -145,11 +145,12 @@ contradictory configuration, panics and I/O failures are not ordinary skips.
 
 ### Dependencies of public declarations
 
-A function also needs the public type used by its parameters. Current
-`SurfaceSpec.requires` lists required `DeclarationId`s. A required declaration
-that was never requested produces `unsupported.requirement.unrequested`.
-The design sketch below extends these requirements to interface promises and
-member associations; those richer fields are not implemented yet.
+A function also needs the public type used by its parameters.
+`SurfaceSpec.requires` lists `Requirement`s, each naming a type: the target
+states what a value crosses as, and the engine matches that type to the
+declaration representing it. A requirement no declaration covers produces
+`unsupported.requirement.unrequested`. The design sketch below extends these
+requirements to interface promises and member associations.
 
 ```rust
 struct SurfaceSpec<Payload> {

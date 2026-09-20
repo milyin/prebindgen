@@ -420,13 +420,7 @@ impl Target for Mini {
         let requires = values
             .inputs
             .iter()
-            .filter_map(|value| match value.crossing.ty.kind() {
-                TypeKind::Named { id, .. } => Some(crate::decl::DeclarationId::new(
-                    DeclarationKind::Type,
-                    id.name.clone(),
-                )),
-                _ => None,
-            })
+            .filter_map(|value| crate::target::Requirement::of(&value.crossing.ty))
             .collect();
         if matches!(
             (request.policy, request.item),
@@ -459,10 +453,7 @@ impl Target for Mini {
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
                 (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
-                    vec![crate::decl::DeclarationId::new(
-                        DeclarationKind::Type,
-                        other,
-                    )]
+                    vec![crate::target::Requirement::type_named(other)]
                 }
                 (_, SourceItem::Struct(_) | SourceItem::Extern(_)) => Vec::new(),
             },
