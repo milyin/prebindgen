@@ -729,35 +729,41 @@ pub fn generate<T: Target>(
     for output in &requests.outputs {
         let declaration = &output.declaration;
         let policy = requests.get(output.policy);
-        let planned = match declaration.kind() {
-            // A function the binding defines itself has no captured item to
-            // plan from: its signature is the binding's, and reading one is a
-            // capability this engine does not have yet.
-            DeclarationKind::Function
-                if declaration.source() == crate::decl::SourceKind::BindingLocal =>
-            {
-                Err(Refusal::at(
-                    Unsupported::new(
-                        "unsupported.fn.binding_local",
-                        format!(
-                            "`{}` is defined by the binding, not captured from the source; v2 \
-                             plans captured functions only",
-                            declaration.rust_origin()
-                        ),
-                    ),
-                    &crate::target::Position::root(declaration.id().clone()),
-                ))
-            }
-            DeclarationKind::Function => {
-                plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?
-            }
-            DeclarationKind::Type => {
+        // What is planned follows from the origin — the captured item there
+        // is to plan from. The kind says which surface the binding asked for,
+        // and only picks between planners where two surfaces are built the
+        // same way: a Kotlin `val` read through a nullary function is planned
+        // as that function, and the target renders the constant.
+        let planned = match (declaration.kind(), declaration.source()) {
+            (DeclarationKind::Type, _) => {
                 plan_type(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
+            (
+                DeclarationKind::Function | DeclarationKind::Const,
+                crate::decl::SourceKind::Function,
+            ) => plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?,
+            // A declaration the binding defines itself names no captured item,
+            // so there is nothing to plan from: its signature or its value is
+            // the binding's own, and reading one is a capability this engine
+            // does not have.
+            (
+                kind @ (DeclarationKind::Function | DeclarationKind::Const),
+                crate::decl::SourceKind::BindingLocal,
+            ) => Err(Refusal::at(
+                Unsupported::new(
+                    format!("unsupported.{}.binding_local", kind.as_str()),
+                    format!(
+                        "`{}` is defined by the binding, not captured from the source, so there \
+                         is no captured item to plan from",
+                        declaration.rust_origin()
+                    ),
+                ),
+                &crate::target::Position::root(declaration.id().clone()),
+            )),
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            kind => Err(Refusal::at(
+            (kind, _) => Err(Refusal::at(
                 Unsupported::new(
                     format!("unsupported.{}.not_implemented", kind.as_str()),
                     format!("the v2 engine has no {} lowering yet", kind.as_str()),

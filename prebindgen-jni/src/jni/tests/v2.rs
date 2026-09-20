@@ -353,6 +353,13 @@ fn a_function_backed_constant_resolves_against_the_function() {
     assert_eq!(constant.declaration.kind(), DeclarationKind::Const);
     // The target gets a `val`; the source must hold a function.
     assert_eq!(constant.declaration.source(), SourceKind::Function);
+    // And it is planned from that function: what stops this one is the value
+    // its parameter crosses as, reported against the parameter, rather than
+    // the engine turning away everything declared as a constant.
+    let Outcome::Skipped(skip) = &constant.outcome else {
+        panic!("the backing function takes a handle the JNI target has no carrier for");
+    };
+    assert_eq!(skip.dependency_path, ["const:z_thing_describe", "param 0"]);
 }
 
 /// The `Stamp` fixture the edge-case tests below build on: a struct of two

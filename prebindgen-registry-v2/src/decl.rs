@@ -19,18 +19,18 @@ use serde::Serialize;
 /// `Type`. The word the adapter used is kept separately in
 /// [`Declaration::representation`] and printed back verbatim.
 ///
-/// Three things depend on the category:
+/// It is bookkeeping, not a plan: what a declaration is planned from comes from
+/// its [`Origin`] — the captured item there is to work with — and the kind only
+/// picks between planners where one captured item backs two surfaces, as a
+/// Kotlin `val` read through a nullary function is planned as that function.
+/// Two things depend on the category:
 ///
-/// * **What the engine plans.** [`generate`](crate::generate) dispatches on it,
-///   one lowering per kind: a `Function` is planned as an exported wrapper, a
-///   `Type` as a record.
 /// * **Identity.** A [`DeclarationId`] pairs the kind with the origin, and the
 ///   kind is what keeps the origins' several naming spaces apart: an origin may
 ///   be a captured item's name, a type key, a callback's signature or a name
 ///   the binding coined, so `type:Foo` and `conversion:Foo` are two
-///   declarations about one Rust type.
-///   [`SurfaceSpec::requires`](crate::SurfaceSpec) says by id which of them a
-///   wrapper needs emitted.
+///   declarations about one Rust type, and the engine can tell which of them a
+///   report entry or an outcome belongs to.
 /// * **Report layout.** [`Report`](crate::Report) groups and sorts by it, so a
 ///   report reads types first, then conversions, callbacks, constants and
 ///   functions.
