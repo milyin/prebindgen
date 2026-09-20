@@ -19,18 +19,18 @@
 <a href=#19 id=19 data-nosnippet>19</a>/// `Type`. The word the adapter used is kept separately in
 <a href=#20 id=20 data-nosnippet>20</a>/// [`Declaration::representation`] and printed back verbatim.
 <a href=#21 id=21 data-nosnippet>21</a>///
-<a href=#22 id=22 data-nosnippet>22</a>/// Three things depend on the category:
-<a href=#23 id=23 data-nosnippet>23</a>///
-<a href=#24 id=24 data-nosnippet>24</a>/// * **What the engine plans.** [`generate`](crate::generate) dispatches on it,
-<a href=#25 id=25 data-nosnippet>25</a>///   one lowering per kind: a `Function` is planned as an exported wrapper, a
-<a href=#26 id=26 data-nosnippet>26</a>///   `Type` as a record.
-<a href=#27 id=27 data-nosnippet>27</a>/// * **Identity.** A [`DeclarationId`] pairs the kind with the origin, and the
-<a href=#28 id=28 data-nosnippet>28</a>///   kind is what keeps the origins' several naming spaces apart: an origin may
-<a href=#29 id=29 data-nosnippet>29</a>///   be a captured item's name, a type key, a callback's signature or a name
-<a href=#30 id=30 data-nosnippet>30</a>///   the binding coined, so `type:Foo` and `conversion:Foo` are two
-<a href=#31 id=31 data-nosnippet>31</a>///   declarations about one Rust type.
-<a href=#32 id=32 data-nosnippet>32</a>///   [`SurfaceSpec::requires`](crate::SurfaceSpec) says by id which of them a
-<a href=#33 id=33 data-nosnippet>33</a>///   wrapper needs emitted.
+<a href=#22 id=22 data-nosnippet>22</a>/// It is bookkeeping, not a plan: what a declaration is planned from comes from
+<a href=#23 id=23 data-nosnippet>23</a>/// its [`Origin`] — the captured item there is to work with — and the kind only
+<a href=#24 id=24 data-nosnippet>24</a>/// picks between planners where one captured item backs two surfaces, as a
+<a href=#25 id=25 data-nosnippet>25</a>/// Kotlin `val` read through a nullary function is planned as that function.
+<a href=#26 id=26 data-nosnippet>26</a>/// Two things depend on the category:
+<a href=#27 id=27 data-nosnippet>27</a>///
+<a href=#28 id=28 data-nosnippet>28</a>/// * **Identity.** A [`DeclarationId`] pairs the kind with the origin, and the
+<a href=#29 id=29 data-nosnippet>29</a>///   kind is what keeps the origins' several naming spaces apart: an origin may
+<a href=#30 id=30 data-nosnippet>30</a>///   be a captured item's name, a type key, a callback's signature or a name
+<a href=#31 id=31 data-nosnippet>31</a>///   the binding coined, so `type:Foo` and `conversion:Foo` are two
+<a href=#32 id=32 data-nosnippet>32</a>///   declarations about one Rust type, and the engine can tell which of them a
+<a href=#33 id=33 data-nosnippet>33</a>///   report entry or an outcome belongs to.
 <a href=#34 id=34 data-nosnippet>34</a>/// * **Report layout.** [`Report`](crate::Report) groups and sorts by it, so a
 <a href=#35 id=35 data-nosnippet>35</a>///   report reads types first, then conversions, callbacks, constants and
 <a href=#36 id=36 data-nosnippet>36</a>///   functions.
