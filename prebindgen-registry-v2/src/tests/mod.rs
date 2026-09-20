@@ -198,7 +198,7 @@ fn one_id_may_name_only_one_declaration() {
 }
 
 /// A declaration names one of the three captured kinds, and naming the wrong
-/// one is a mistake rather than a shape v2 has yet to implement.
+/// one fails the run instead of being reported as a skipped capability.
 #[test]
 fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as

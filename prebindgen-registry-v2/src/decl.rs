@@ -6,6 +6,7 @@
 //! declaration is what the report accounts for; the request carries the target's
 //! configuration for it.
 
+use prebindgen_flat::flat::{Element, Flat};
 use serde::Serialize;
 
 /// What a [`Declaration`] declares: a function, a type, a constant, a callback
@@ -168,6 +169,31 @@ pub enum SourceKind {
 }
 
 impl SourceKind {
+    /// The captured element an origin of this kind names, if the model holds it.
+    ///
+    /// The namespace is flat, so the name alone finds any element; the kind is
+    /// what says whether the element found is the one the declaration meant.
+    /// [`Self::BindingLocal`] names no captured item and so finds none — which
+    /// is not the same as a missing one, and [`Self::missing_from`] is the
+    /// question to ask about presence.
+    pub(crate) fn element<'f>(self, flat: &'f Flat, name: &str) -> Option<&'f Element> {
+        let element = flat.element(name)?;
+        matches!(
+            (self, element),
+            (SourceKind::Function, Element::Function(_))
+                | (SourceKind::Type, Element::Type(_))
+                | (SourceKind::Const, Element::Constant(_))
+        )
+        .then_some(element)
+    }
+
+    /// Whether the model lacks what an origin of this kind must name.
+    ///
+    /// False for a binding-local origin, which requires nothing of the model.
+    pub(crate) fn missing_from(self, flat: &Flat, name: &str) -> bool {
+        self != SourceKind::BindingLocal && self.element(flat, name).is_none()
+    }
+
     /// The word a refusal uses for this kind.
     pub(crate) fn describe(self) -> &'static str {
         match self {

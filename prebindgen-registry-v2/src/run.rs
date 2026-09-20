@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use prebindgen_flat::flat::Flat;
 
-use crate::{decl::SourceKind, outcome::EngineError, report::Report};
+use crate::{outcome::EngineError, report::Report};
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
@@ -150,13 +150,9 @@ pub(crate) fn check_declarations(
     let missing: Vec<_> = declared
         .iter()
         .filter(|declaration| {
-            let origin = declaration.rust_origin();
-            match declaration.source() {
-                SourceKind::Function => flat.function(origin).is_none(),
-                SourceKind::Type => flat.declared_type(origin).is_none(),
-                SourceKind::Const => flat.constant(origin).is_none(),
-                SourceKind::BindingLocal => false,
-            }
+            declaration
+                .source()
+                .missing_from(flat, declaration.rust_origin())
         })
         .map(|declaration| {
             (
