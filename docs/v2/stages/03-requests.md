@@ -315,21 +315,34 @@ The binding's choices guide the selection of these descriptions. The registry tu
 
 ### The registry API called by the frontend
 
-The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and a way of converting for a particular type, parameter, result or child value; the rules live in the frontend, and the registry meets them one value at a time as the conversion key the target returns. `BindingRequests` collects the output requests and the information needed to report ignored entries. As a design sketch — the built structure has no `conversion_rules` table, because those are the target's, and no `unsupported` list, since a frontend states what it cannot lower as a request it will then refuse:
+The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and a way of converting for a particular type, parameter, result or child value. The two live in different places, which is the whole of this chapter's boundary:
 
 ```rust
+// What the frontend hands the registry.
 struct BindingRequests {
-    outputs: Vec<OutputRequest>,    // Explicit output requests; defined below.
-    conversion_rules: ConversionRules, // Source-operation selections — in the frontend, not here.
-    unsupported: Vec<UnsupportedRequest>, // Requests the frontend cannot yet fully translate.
+    outputs: Vec<OutputRequest>,  // Explicit output requests; defined below.
     ignored: Vec<DeclarationId>,  // Explicit user opt-outs retained for reporting.
+}
+
+// What the frontend keeps and answers the registry's questions from —
+// `CbindgenBuilder` and the `CTarget` it builds, schematically.
+struct FrontendStorage {
+    conversion_rules: ConversionRules,     // Per-type, per-position and default choices.
+    declared: Map<DeclarationId, CChoice>, // What each requested output is.
+    // …plus the naming hooks, which are closures and go nowhere.
 }
 ```
 
-The structure is not generic. C and JNI use the same request type, and differ
-only in the `Target` they pass beside it. The implementation also records a
-target label and a source-module path, and stores ignored entries as
-`Declaration`s. This sketch explains the responsibilities;
+The registry meets a conversion rule one value at a time, as the conversion key
+the target returns from `select`; it never sees the table. A setting the
+frontend cannot lower needs no list of its own either — it becomes an ordinary
+output request that the target then refuses by name, so the report accounts for
+it like anything else.
+
+Neither structure is generic. C and JNI use the same `BindingRequests`, and
+differ only in the `Target` they pass beside it. The implementation also
+records a target label and a source-module path, and stores ignored entries as
+`Declaration`s. These sketches explain the responsibilities;
 `prebindgen-registry-v2/src/plan.rs` defines the exact current fields.
 
 The registry plans `outputs`, reports `ignored` entries, and asks the adapter for every choice that applies to them.
@@ -378,7 +391,8 @@ run over unchanged input emits the same file. Stating them together is what
 keeps them in step: a declaration cannot be planned without the target knowing
 what it is, and asking for an output the target recorded nothing about is
 invalid input rather than a silent default. A declarator the target has no
-lowering for — an opaque handle, an enum, a callback — still becomes a request,
+lowering for — an enum, a tagged union, a callback signature — still becomes a
+request,
 recorded as the declarator it came from, so the target refuses it by name, and
 the skip carries the capability it waits for.
 
