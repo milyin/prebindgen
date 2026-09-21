@@ -91,7 +91,7 @@ fn every_declared_element_is_accounted_for() {
     let placements: Vec<&str> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.placement().as_str())
+        .map(|entry| entry.declaration.placement())
         .collect();
     assert!(
         placements.contains(&"calculator_t") && placements.contains(&"z_calculator_new"),
