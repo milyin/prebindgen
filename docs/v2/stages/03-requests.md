@@ -450,10 +450,14 @@ outputs: Vec<DeclarationId>, // Each requested output, by identity, in the order
 A requested output is that identity and nothing else. What the declaration *is*
 — its symbol, its placement, the declarator it came from — the target looks up
 under it when the registry asks for a boundary, a public declaration or a
-report line. What a public declaration promises, such as implementing an
-interface or preserving an ownership convention, the target states with that
-declaration in `SurfaceSpec.requires`; required helpers do not automatically
-become public exports.
+report line. What it *depends on* is the target's answer too, at
+[`surface`](04-select.md#how-the-registry-asks-a-target-for-decisions):
+`SurfaceSpec.requires` names the public types a declaration is unusable
+without — a wrapper taking an aggregate needs the type declared as well — and
+[retention](07-retain.md#retain-supported-output) resolves each name to the
+declaration covering it. Requiring a type does not export it: a type nothing
+requested is not emitted because something needed it, and whatever needed it is
+skipped instead.
 
 A `DeclarationId` is a `Declaration`: one value that is its own identity and
 says both which of the kinds the target gets and which captured item, if any,
