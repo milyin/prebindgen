@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DeclarationKind","Origin","SourceKind"],"struct":["Declaration","DeclarationId"]};
