@@ -157,8 +157,13 @@ pub(crate) fn render_struct_output_body(
 
     syn::parse_quote!({
         #preludes
+        // Resolved through the runtime, never by name via `call_static_method`:
+        // struct encoders run on natively-attached callback threads, where a
+        // by-name FindClass cannot see application classes on Android.
+        let __cls = ::prebindgen_jni_runtime::find_class(env, #java_class_name)
+            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env.call_static_method(
-            #java_class_name,
+            &__cls,
             "fromParts",
             #factory_sig_lit,
             &[#(#args),*],

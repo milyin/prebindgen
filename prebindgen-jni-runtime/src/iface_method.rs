@@ -51,8 +51,9 @@ impl CachedIfaceMethod {
         if let Some(r) = self.cell.get() {
             return Ok(r);
         }
-        let class = env
-            .find_class(class_fqn)
+        // Not `env.find_class`: the first call may be on a natively-attached
+        // thread, where FindClass cannot see application classes on Android.
+        let class = crate::find_class(env, class_fqn)
             .map_err(|e| format!("find callback interface {class_fqn}: {e}"))?;
         let id = env
             .get_method_id(&class, method, descr)

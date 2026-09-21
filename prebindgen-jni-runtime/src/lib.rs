@@ -7,6 +7,7 @@
 
 mod box_helpers;
 mod byte_array_helpers;
+mod class_lookup;
 mod iface_method;
 mod jni_binding_error;
 mod string_helpers;
@@ -15,6 +16,7 @@ pub use box_helpers::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
 };
 pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};
+pub use class_lookup::{find_class, init_class_loader};
 pub use iface_method::CachedIfaceMethod;
 pub use jni_binding_error::JniBindingError;
 pub use string_helpers::{decode_string, encode_string, null_string};
