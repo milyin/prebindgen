@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["BindingRequests","FunctionPlan","NodeId","ValuePlan"]};
+window.SIDEBAR_ITEMS = {"enum":["Request"],"fn":["generate"],"struct":["BindingRequests","FunctionPlan","NodeId","ValuePlan"]};
