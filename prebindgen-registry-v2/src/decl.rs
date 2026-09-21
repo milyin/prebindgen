@@ -3,9 +3,9 @@
 //! A frontend turns its own declaration storage into these — one [`Declaration`]
 //! per thing the user asked for, inside the
 //! [`BindingRequests`](crate::BindingRequests) it hands the engine. The
-//! declaration is what the report accounts for; the request carries the
-//! target's configuration for it, and that policy is also where the foreign
-//! name and the declarator word the report prints come from.
+//! declaration is what the report accounts for, and what the target looks its
+//! own configuration up by — the request carries none: the foreign name and
+//! the declarator word the report prints come from that lookup.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
