@@ -91,8 +91,9 @@ impl DeclarationKind {
 /// must not silently retire a test's requirement. `<kind>:<name>` —
 /// `type:Stamp`, `fn:stamp_sum` — is how it prints and how the report writes
 /// it, and that spelling is a rendering: nothing reads an origin back out of
-/// it.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// it. Origins order the way they print — by kind, then by name — so a report
+/// sorted by origin reads as its ids read.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Origin {
     /// A captured `#[prebindgen]` function, exported as a foreign function.
     Function(syn::Ident),
@@ -207,6 +208,38 @@ impl Origin {
                 name.clone()
             }
         }
+    }
+}
+
+impl Ord for Origin {
+    /// By kind, then by name — the printed order. A captured and a
+    /// binding-local origin of one kind and name print alike and are still
+    /// distinct, so the variant breaks that tie last, and `Ord` agrees with
+    /// `Eq`.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        fn variant(origin: &Origin) -> u8 {
+            match origin {
+                Origin::Function(_) => 0,
+                Origin::LocalFunction(_) => 1,
+                Origin::Const(_) => 2,
+                Origin::ConstFromFunction(_) => 3,
+                Origin::LocalConst(_) => 4,
+                Origin::Type(_) => 5,
+                Origin::LocalType(_) => 6,
+                Origin::Callback(_) => 7,
+                Origin::Conversion(_) => 8,
+            }
+        }
+        self.kind()
+            .cmp(&other.kind())
+            .then_with(|| self.name().cmp(&other.name()))
+            .then_with(|| variant(self).cmp(&variant(other)))
+    }
+}
+
+impl PartialOrd for Origin {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
