@@ -965,7 +965,7 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 /// The captured item a public declaration is made from, as the source model
 /// describes it.
 ///
-/// A binding asks for an output by name — an [`Declaration`] such as
+/// A binding asks for an output by name — a [`Declaration`] such as
 /// `type:Ledger` — and the registry resolves that name in the source model
 /// before it plans anything. This is what it found: the model's own element,
 /// borrowed from the [`Flat`] the run was planned over. A target receives it
@@ -1097,8 +1097,8 @@ pub trait Target {
 pub struct Described {
     /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
     /// — the adapter's own word, printed back verbatim. Finer than the prefix
-    /// an [`Declaration`] prints with: `opaque_ptr` and
-    /// `data_struct` are both a `type`.
+    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
+    /// a `type`.
     pub representation: String,
     /// Where it lands in the target language, spelled the way that language
     /// spells it: `calculator_t`, `io.zenoh.jni.Session`.

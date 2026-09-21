@@ -893,8 +893,8 @@ pub fn generate<T: Target>(
                 .unwrap_or(Outcome::Emitted),
         })
         // An ignore is a decision the binding made about a captured item, so
-        // it has no policy and lands nowhere; the kind column already says
-        // whether a function, a type or a constant was left alone.
+        // it has no policy and lands nowhere; the id's prefix (`fn:`, `type:`,
+        // `const:`) already says what was left alone.
         .chain(requests.ignored.iter().map(|declaration| Entry {
             declaration: declaration.clone(),
             described: crate::target::Described::new("ignore", ""),
