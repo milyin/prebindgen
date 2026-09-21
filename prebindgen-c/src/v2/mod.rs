@@ -15,7 +15,7 @@
 mod target;
 
 use prebindgen_registry_v2::{
-    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation, Origin,
+    generate, BindingRequests, Declaration, EngineError, Generation, Origin,
 };
 pub use target::{CPayload, CPolicy, CTarget};
 
@@ -60,12 +60,7 @@ impl CbindgenBuilder {
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
             requests.output(
-                Declaration::new(
-                    DeclarationKind::Type,
-                    Origin::LocalType(key.clone()),
-                    c_name,
-                    "data_struct",
-                ),
+                Declaration::new(Origin::LocalType(key.clone()), c_name, "data_struct"),
                 policy,
             );
         }
@@ -82,12 +77,7 @@ impl CbindgenBuilder {
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
             requests.output(
-                Declaration::new(
-                    DeclarationKind::Type,
-                    Origin::LocalType(key.clone()),
-                    c_name,
-                    "opaque_ptr",
-                ),
+                Declaration::new(Origin::LocalType(key.clone()), c_name, "opaque_ptr"),
                 policy,
             );
         }
@@ -107,7 +97,6 @@ impl CbindgenBuilder {
                     .insert(key.as_str().to_string(), policy);
                 requests.output(
                     Declaration::new(
-                        DeclarationKind::Type,
                         Origin::LocalType(key.clone()),
                         self.c_type_name(key),
                         declarator,
@@ -125,8 +114,7 @@ impl CbindgenBuilder {
         for key in sorted(self.callbacks.keys()) {
             requests.output(
                 Declaration::new(
-                    DeclarationKind::Callback,
-                    Origin::Local(describe_callback(key)),
+                    Origin::Callback(describe_callback(key)),
                     self.callback_c_name(key),
                     "callback",
                 ),
@@ -142,8 +130,7 @@ impl CbindgenBuilder {
         for decl in &self.convert_decls {
             requests.output(
                 Declaration::new(
-                    DeclarationKind::Conversion,
-                    Origin::LocalType(decl.key().clone()),
+                    Origin::Conversion(decl.key().clone()),
                     self.c_type_name(decl.key()),
                     "convert",
                 ),
@@ -158,12 +145,7 @@ impl CbindgenBuilder {
                 symbol: symbol.clone(),
             });
             requests.output(
-                Declaration::new(
-                    DeclarationKind::Function,
-                    Origin::Function(ident.clone()),
-                    symbol,
-                    "function",
-                ),
+                Declaration::new(Origin::Function(ident.clone()), symbol, "function"),
                 policy,
             );
         }
@@ -171,15 +153,13 @@ impl CbindgenBuilder {
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_functions) {
             requests.ignored.push(Declaration::new(
-                DeclarationKind::Function,
-                Origin::Local(ident.to_string()),
+                Origin::LocalFunction(ident.to_string()),
                 String::new(),
                 "ignore_function",
             ));
         }
         for key in sorted(&self.ignored_types) {
             requests.ignored.push(Declaration::new(
-                DeclarationKind::Type,
                 Origin::LocalType(key.clone()),
                 String::new(),
                 "ignore_type",

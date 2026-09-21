@@ -5,7 +5,7 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::{Declaration, DeclarationKind, Origin},
+    decl::{Declaration, Origin},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -118,14 +118,19 @@ fn sources() -> FlatBuilder {
     prebindgen_flat::Flat::builder().items(items)
 }
 
-fn declaration(kind: DeclarationKind, origin: Origin) -> Declaration {
+fn declaration(origin: Origin) -> Declaration {
     let name = origin.name();
-    Declaration::new(kind, origin, format!("c_{name}"), "declared")
+    Declaration::new(origin, format!("c_{name}"), "declared")
 }
 
 /// A captured function's origin, by name.
 fn captured_fn(name: &str) -> Origin {
     Origin::Function(syn::parse_str(name).expect("a test names an ident"))
+}
+
+/// A Kotlin `val` read through that captured function.
+fn constant_fn(name: &str) -> Origin {
+    Origin::ConstFromFunction(syn::parse_str(name).expect("a test names an ident"))
 }
 
 /// A type the binding represents, whether or not the source captured it.
@@ -137,13 +142,12 @@ fn local_type(name: &str) -> Origin {
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
         declared: vec![
-            declaration(DeclarationKind::Function, captured_fn("handle_new")),
-            declaration(DeclarationKind::Type, local_type("Handle")),
+            declaration(captured_fn("handle_new")),
+            declaration(local_type("Handle")),
         ],
-        ignored: vec![declaration(
-            DeclarationKind::Function,
-            Origin::Local("handle_value".to_string()),
-        )],
+        ignored: vec![declaration(Origin::LocalFunction(
+            "handle_value".to_string(),
+        ))],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
@@ -166,10 +170,7 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
 #[test]
 fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
-        declared: vec![declaration(
-            DeclarationKind::Function,
-            captured_fn("handle_neu"),
-        )],
+        declared: vec![declaration(captured_fn("handle_neu"))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a typo is refused");
@@ -182,10 +183,7 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![declaration(
-            DeclarationKind::Callback,
-            Origin::Local("impl Fn(i64)".to_string()),
-        )],
+        declared: vec![declaration(Origin::Callback("impl Fn(i64)".to_string()))],
         ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -196,8 +194,8 @@ fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
 fn one_id_may_name_only_one_declaration() {
     let stated = Stated {
         declared: vec![
-            declaration(DeclarationKind::Function, captured_fn("handle_new")),
-            declaration(DeclarationKind::Function, captured_fn("handle_new")),
+            declaration(captured_fn("handle_new")),
+            declaration(captured_fn("handle_new")),
         ],
         ignored: Vec::new(),
     };
@@ -209,8 +207,8 @@ fn one_id_may_name_only_one_declaration() {
     // captured function may back both a callable and a `val`.
     let stated = Stated {
         declared: vec![
-            declaration(DeclarationKind::Function, captured_fn("handle_new")),
-            declaration(DeclarationKind::Const, captured_fn("handle_new")),
+            declaration(captured_fn("handle_new")),
+            declaration(constant_fn("handle_new")),
         ],
         ignored: Vec::new(),
     };
@@ -224,10 +222,9 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as
     // wrong as declaring a name nothing captured.
     let stated = Stated {
-        declared: vec![declaration(
-            DeclarationKind::Const,
-            Origin::Const(syn::parse_str("handle_new").expect("an ident")),
-        )],
+        declared: vec![declaration(Origin::Const(
+            syn::parse_str("handle_new").expect("an ident"),
+        ))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
@@ -240,12 +237,9 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     );
 
     // And a constant-shaped output backed by a captured function resolves,
-    // because the declaration says which kind to look for.
+    // because the origin says which kind to look for.
     let stated = Stated {
-        declared: vec![declaration(
-            DeclarationKind::Const,
-            captured_fn("handle_new"),
-        )],
+        declared: vec![declaration(constant_fn("handle_new"))],
         ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("a function-backed constant");
@@ -258,9 +252,9 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
 fn skips_are_grouped_by_capability_code() {
     let stated = Stated {
         declared: vec![
-            declaration(DeclarationKind::Function, captured_fn("handle_new")),
-            declaration(DeclarationKind::Function, captured_fn("handle_value")),
-            declaration(DeclarationKind::Type, local_type("Handle")),
+            declaration(captured_fn("handle_new")),
+            declaration(captured_fn("handle_value")),
+            declaration(local_type("Handle")),
         ],
         ignored: Vec::new(),
     };
@@ -278,8 +272,7 @@ fn skips_are_grouped_by_capability_code() {
 #[test]
 fn a_declaration_serializes_its_identity_as_three_columns() {
     let declaration = Declaration::new(
-        DeclarationKind::Const,
-        captured_fn("z_thing_describe"),
+        constant_fn("z_thing_describe"),
         "example.DESCRIBE",
         "constant_fun",
     );
