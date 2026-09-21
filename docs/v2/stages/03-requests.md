@@ -442,25 +442,26 @@ function or a reusable conversion.
 To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conversion, the call to `normalize` itself and an output conversion. The request to expose `normalize` is the starting point, called a **root**. The conversions required to implement that request are its **dependencies**. A request to expose a public type is also a root, even if no function uses that type.
 
 ```rust
-struct OutputRequest {
-    id: DeclarationId,    // This declaration, e.g. normalize at one Kotlin placement.
-    source: SourceItemId, // The Rust function/type/constant or registered local helper.
-    requirements: Vec<SemanticRequirement>, // Promises that must hold for this output.
-}
+outputs: Vec<DeclarationId>, // Each requested output, by identity, in the order recorded.
 ```
 
-There is no configuration field. What this declaration is — its symbol, its
-placement, the declarator it came from — the target looks up under `id` when
-the registry asks it for a boundary, a public declaration or a report line.
+A requested output is that identity and nothing else. What the declaration *is*
+— its symbol, its placement, the declarator it came from — the target looks up
+under it when the registry asks for a boundary, a public declaration or a
+report line. What a public declaration promises, such as implementing an
+interface or preserving an ownership convention, the target states with that
+declaration in `SurfaceSpec.requires`; required helpers do not automatically
+become public exports.
 
-With nothing but identity left to carry, the implementation has no such struct:
-`BindingRequests::outputs` is a `Vec<Declaration>`. The sketch keeps one
-because `requirements` is a field the design still wants; the day it arrives,
-the struct comes back around it.
-
-`DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `Declaration` is the kind and the Rust name, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
-
-The implemented request carries a `Declaration` in place of those two ids: one value that is its own identity and says both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
+A `DeclarationId` is a `Declaration`: one value that is its own identity and
+says both which of the kinds the target gets and which captured item, if any,
+the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a
+Kotlin `val` read through a nullary function, `LocalType(key)` for a type the
+target represents although the source never exported it, and so on for the nine
+ways a binding can name something. `generate` matches on it, so each planner is
+reached by the variants it can plan and is handed the captured item they name.
+One source item has one declaration, so a request that names the same
+declaration twice is refused.
 
 ### A value's position in an exported function
 
