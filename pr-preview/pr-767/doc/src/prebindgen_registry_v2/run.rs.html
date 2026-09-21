@@ -145,7 +145,7 @@
 <a href=#145 id=145 data-nosnippet>145</a>/// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
 <a href=#146 id=146 data-nosnippet>146</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>check_declarations(
 <a href=#147 id=147 data-nosnippet>147</a>    exposed: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>Declaration],
-<a href=#148 id=148 data-nosnippet>148</a>    ignored: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>Declaration],
+<a href=#148 id=148 data-nosnippet>148</a>    ignored: <span class="kw-2">&amp;</span>[Declaration],
 <a href=#149 id=149 data-nosnippet>149</a>    flat: <span class="kw-2">&amp;</span>Flat,
 <a href=#150 id=150 data-nosnippet>150</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), EngineError&gt; {
 <a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">let </span>missing: Vec&lt;<span class="kw">_</span>&gt; = exposed
@@ -162,15 +162,16 @@
 <a href=#162 id=162 data-nosnippet>162</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>seen = std::collections::HashSet::new();
 <a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span><span class="kw-2">mut </span>repeated: Vec&lt;<span class="kw">_</span>&gt; = exposed
 <a href=#164 id=164 data-nosnippet>164</a>        .iter()
-<a href=#165 id=165 data-nosnippet>165</a>        .chain(ignored)
-<a href=#166 id=166 data-nosnippet>166</a>        .filter(|declaration| !seen.insert(<span class="kw-2">**</span>declaration))
-<a href=#167 id=167 data-nosnippet>167</a>        .map(|declaration| (<span class="kw-2">*</span>declaration).clone())
-<a href=#168 id=168 data-nosnippet>168</a>        .collect();
-<a href=#169 id=169 data-nosnippet>169</a>    repeated.sort();
-<a href=#170 id=170 data-nosnippet>170</a>    repeated.dedup();
-<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">if </span>!repeated.is_empty() {
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(EngineError::DuplicateDeclaration { entries: repeated });
-<a href=#173 id=173 data-nosnippet>173</a>    }
-<a href=#174 id=174 data-nosnippet>174</a>    <span class="prelude-val">Ok</span>(())
-<a href=#175 id=175 data-nosnippet>175</a>}
+<a href=#165 id=165 data-nosnippet>165</a>        .copied()
+<a href=#166 id=166 data-nosnippet>166</a>        .chain(ignored)
+<a href=#167 id=167 data-nosnippet>167</a>        .filter(|declaration| !seen.insert(<span class="kw-2">*</span>declaration))
+<a href=#168 id=168 data-nosnippet>168</a>        .cloned()
+<a href=#169 id=169 data-nosnippet>169</a>        .collect();
+<a href=#170 id=170 data-nosnippet>170</a>    repeated.sort();
+<a href=#171 id=171 data-nosnippet>171</a>    repeated.dedup();
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">if </span>!repeated.is_empty() {
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(EngineError::DuplicateDeclaration { entries: repeated });
+<a href=#174 id=174 data-nosnippet>174</a>    }
+<a href=#175 id=175 data-nosnippet>175</a>    <span class="prelude-val">Ok</span>(())
+<a href=#176 id=176 data-nosnippet>176</a>}
 </code></pre></div></section></main></body></html>
