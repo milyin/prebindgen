@@ -9,7 +9,7 @@
 
 use serde::Serialize;
 
-use crate::decl::{DeclarationId, SourceKind};
+use crate::decl::{DeclarationId, Origin};
 
 /// A stable code naming *what* is not implemented, dotted from general to
 /// specific: `unsupported.string`, `unsupported.handle.borrowed_input`.
@@ -105,7 +105,7 @@ pub enum EngineError {
     /// or a source-crate rename, and never a capability question. All of them
     /// are collected before failing.
     DeclaredNotFound {
-        entries: Vec<(DeclarationId, SourceKind, String)>,
+        entries: Vec<(DeclarationId, Origin)>,
     },
     /// Two declarations answering to one id. An id identifies a declaration,
     /// and a report that gave one id to two entries could not account for
@@ -129,8 +129,13 @@ impl std::fmt::Display for EngineError {
                     "v2: {} declared item(s) match no captured `#[prebindgen]` item:",
                     entries.len()
                 )?;
-                for (id, source, origin) in entries {
-                    writeln!(f, "  {id} — no captured {} `{origin}`", source.describe())?;
+                for (id, origin) in entries {
+                    writeln!(
+                        f,
+                        "  {id} — no captured {} `{}`",
+                        origin.describe_captured(),
+                        origin.name()
+                    )?;
                 }
                 write!(
                     f,

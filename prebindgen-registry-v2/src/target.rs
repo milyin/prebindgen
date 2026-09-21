@@ -988,13 +988,13 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 /// struct declared to C as an opaque pointer still arrives as
 /// [`SourceItem::Struct`], and how the target carries it is in
 /// [`SurfaceRequest::policy`]. Read the policy first. A declaration the
-/// binding defines itself ([`SourceKind::BindingLocal`]) names no captured
+/// binding defines itself ([`Origin::is_binding_local`]) names no captured
 /// item and is refused before `surface` is asked, so nothing here is ever
 /// absent.
 ///
 /// [`Flat`]: prebindgen_flat::flat::Flat
 /// [`Element`]: prebindgen_flat::flat::Element
-/// [`SourceKind::BindingLocal`]: crate::decl::SourceKind::BindingLocal
+/// [`Origin::is_binding_local`]: crate::decl::Origin::is_binding_local
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
     /// A captured free function, the item behind a `fn:` declaration.

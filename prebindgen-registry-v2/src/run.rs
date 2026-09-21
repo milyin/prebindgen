@@ -149,18 +149,8 @@ pub(crate) fn check_declarations(
 ) -> Result<(), EngineError> {
     let missing: Vec<_> = declared
         .iter()
-        .filter(|declaration| {
-            declaration
-                .source()
-                .missing_from(flat, declaration.rust_origin())
-        })
-        .map(|declaration| {
-            (
-                declaration.id().clone(),
-                declaration.source(),
-                declaration.rust_origin().to_string(),
-            )
-        })
+        .filter(|declaration| declaration.origin().missing_from(flat))
+        .map(|declaration| (declaration.id().clone(), declaration.origin().clone()))
         .collect();
     if !missing.is_empty() {
         return Err(EngineError::DeclaredNotFound { entries: missing });

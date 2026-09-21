@@ -278,6 +278,6 @@ fn a_declaration_serializes_its_identity_as_three_columns() {
     );
     assert_eq!(
         serde_json::to_string(&declaration).expect("a declaration is plain data"),
-        r#"{"id":"const:z_thing_describe","kind":"const","rust_origin":"z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","source":"function"}"#
+        r#"{"id":"const:z_thing_describe","kind":"const","rust_origin":"z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun"}"#
     );
 }
