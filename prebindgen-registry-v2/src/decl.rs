@@ -121,46 +121,91 @@ impl Serialize for DeclarationId {
     }
 }
 
-/// What a declaration is named after, and which namespace that name lives in.
+/// What a declaration is named after, and what the engine plans it from.
 ///
-/// A name alone does not say: `Sample` may be a captured type, a type key the
+/// A name alone says neither: `Sample` may be a captured type, a type key the
 /// binding coined for something the source never exported, or the name of a
-/// Kotlin constant built from an expression. The variant says which, so a
-/// declaration's [`SourceKind`] follows from how it was declared rather than
-/// being stated again beside it.
-#[derive(Clone, Debug)]
+/// Kotlin constant built from an expression. The variant says which, and it
+/// says it once — a declaration's [`DeclarationKind`] and its [`SourceKind`]
+/// both follow from the variant instead of being stated beside it, so the three
+/// cannot disagree and a pair that means nothing (a callback backed by a
+/// captured constant, a function the binding both defines and selects out of
+/// the source) cannot be written down.
+///
+/// [`generate`](crate::generate) routes on this: each planner is reached by its
+/// own variants and is handed the captured item they name, rather than a kind
+/// to decode and a name to look up.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Origin {
-    /// A captured `#[prebindgen]` function.
+    /// A captured `#[prebindgen]` function, exported as a foreign function.
     Function(syn::Ident),
-    /// A captured `#[prebindgen]` constant.
+    /// A foreign function the binding defines itself — `fun!(crate::x).sig(..)`
+    /// in the JNI frontend. Nothing in the captured source names it.
+    LocalFunction(String),
+    /// A captured `#[prebindgen]` constant, exposed as a foreign constant.
     Const(syn::Ident),
-    /// A captured `#[prebindgen]` type.
+    /// A foreign constant read by calling a captured nullary function —
+    /// `constant!(X).fun(fun!(f))`. The target renders a constant; the engine
+    /// plans the function behind it.
+    ConstFromFunction(syn::Ident),
+    /// A foreign constant the binding computes rather than reads —
+    /// `constant!(X).expr(..)`. No captured item holds its value.
+    LocalConst(String),
+    /// A captured `#[prebindgen]` type, given a foreign representation.
     Type(TypeKey),
     /// A type the binding gives a representation although the source never
     /// exported it — `String` crossing as an opaque handle.
     LocalType(TypeKey),
-    /// A name only the binding knows: a callback's signature, or a constant the
-    /// binding computes rather than reads.
-    Local(String),
+    /// A callback signature the binding exports as a foreign callable. No
+    /// captured item names one, so the signature is the name it goes by.
+    Callback(String),
+    /// A declared conversion between a Rust type and its wire form, defined by
+    /// the binding.
+    Conversion(TypeKey),
 }
 
 impl Origin {
+    /// What the target gets — see [`DeclarationKind`].
+    pub fn kind(&self) -> DeclarationKind {
+        match self {
+            Origin::Function(_) | Origin::LocalFunction(_) => DeclarationKind::Function,
+            Origin::Const(_) | Origin::ConstFromFunction(_) | Origin::LocalConst(_) => {
+                DeclarationKind::Const
+            }
+            Origin::Type(_) | Origin::LocalType(_) => DeclarationKind::Type,
+            Origin::Callback(_) => DeclarationKind::Callback,
+            Origin::Conversion(_) => DeclarationKind::Conversion,
+        }
+    }
+
     /// What this origin must name in the captured source.
     pub fn source_kind(&self) -> SourceKind {
         match self {
-            Origin::Function(_) => SourceKind::Function,
+            // A constant read through a function is looked up among the
+            // functions, which is what separates it from `Const`.
+            Origin::Function(_) | Origin::ConstFromFunction(_) => SourceKind::Function,
             Origin::Const(_) => SourceKind::Const,
             Origin::Type(_) => SourceKind::Type,
-            Origin::LocalType(_) | Origin::Local(_) => SourceKind::BindingLocal,
+            Origin::LocalFunction(_)
+            | Origin::LocalConst(_)
+            | Origin::LocalType(_)
+            | Origin::Callback(_)
+            | Origin::Conversion(_) => SourceKind::BindingLocal,
         }
     }
 
     /// The name it goes by — what an id carries and a report prints.
     pub fn name(&self) -> String {
         match self {
-            Origin::Function(ident) | Origin::Const(ident) => ident.to_string(),
-            Origin::Type(key) | Origin::LocalType(key) => key.as_str().to_string(),
-            Origin::Local(name) => name.clone(),
+            Origin::Function(ident) | Origin::Const(ident) | Origin::ConstFromFunction(ident) => {
+                ident.to_string()
+            }
+            Origin::Type(key) | Origin::LocalType(key) | Origin::Conversion(key) => {
+                key.as_str().to_string()
+            }
+            Origin::LocalFunction(name) | Origin::LocalConst(name) | Origin::Callback(name) => {
+                name.clone()
+            }
         }
     }
 }
@@ -168,15 +213,17 @@ impl Origin {
 /// One declaration, as the report accounts for it.
 ///
 /// Built by the adapter with [`Self::new`] and read back through the accessors.
-/// Its kind and origin live in the [`DeclarationId`], which the run is keyed
-/// by, so they are fixed once declared and read out of the id rather than
-/// stored beside it.
+/// It holds two things about what was declared, for two jobs: the
+/// [`DeclarationId`] the run is keyed by, and the [`Origin`] the engine plans
+/// from. Everything else about the declaration's identity — its kind, its
+/// source kind, the name it goes by — is read back out of those, so nothing is
+/// stated twice and nothing can disagree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Declaration {
     id: DeclarationId,
+    origin: Origin,
     placement: String,
     representation: String,
-    source: SourceKind,
 }
 
 impl Serialize for Declaration {
@@ -191,7 +238,7 @@ impl Serialize for Declaration {
         entry.serialize_field("rust_origin", self.id.origin())?;
         entry.serialize_field("placement", &self.placement)?;
         entry.serialize_field("representation", &self.representation)?;
-        entry.serialize_field("source", &self.source)?;
+        entry.serialize_field("source", &self.source())?;
         entry.end()
     }
 }
@@ -255,19 +302,24 @@ impl SourceKind {
 }
 
 impl Declaration {
-    /// Declare `origin` as a `kind` the target places at `placement`.
+    /// Declare `origin`, which the target places at `placement`.
     pub fn new(
-        kind: DeclarationKind,
         origin: Origin,
         placement: impl Into<String>,
         representation: impl Into<String>,
     ) -> Self {
         Declaration {
-            id: DeclarationId::new(kind, origin.name()),
+            id: DeclarationId::new(origin.kind(), origin.name()),
+            origin,
             placement: placement.into(),
             representation: representation.into(),
-            source: origin.source_kind(),
         }
+    }
+
+    /// What this declaration is made of, and what the engine plans it from —
+    /// see [`Origin`].
+    pub fn origin(&self) -> &Origin {
+        &self.origin
     }
 
     /// Stable identity — see [`DeclarationId`].
@@ -302,10 +354,10 @@ impl Declaration {
     ///
     /// Not the same question as [`Self::kind`], which says what the *target*
     /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
-    /// [`DeclarationKind::Const`] whose origin is [`Origin::Function`]. It
-    /// comes from that origin rather than being stated beside it, so the two
-    /// cannot disagree.
+    /// [`DeclarationKind::Const`] whose origin is
+    /// [`Origin::ConstFromFunction`]. It comes from that origin rather than
+    /// being stated beside it, so the two cannot disagree.
     pub fn source(&self) -> SourceKind {
-        self.source
+        self.origin.source_kind()
     }
 }
