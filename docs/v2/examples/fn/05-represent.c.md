@@ -7,11 +7,14 @@ Owner: the registry, on the C adapter's [representation](../../stages/05-represe
 
 ## Input
 
-The two selected [conversions](../../stages/04-select.md#select-conversion-relations), with the C [policy](../../stages/03-requests.md#what-policy-means) recorded for them:
+The two selected [conversions](../../stages/04-select.md#select-conversion-relations), each with the
+[conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
+`select` returned for it — which for this adapter is the C
+[policy](../../stages/03-requests.md#what-policy-means) itself:
 
 ```text
-Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   policy: data_struct, by value
-i64,   OutOfRust, atomic                                               policy: scalar carrier
+Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   conversion: data_struct, by value
+i64,   OutOfRust, atomic                                               conversion: scalar carrier
 ```
 
 ## Result

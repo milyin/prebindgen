@@ -9,14 +9,17 @@ Owner: the registry; the JNI adapter selects from the offered [relations](../../
 
 ```text
 Crossing { source: Stamp, direction: IntoRust }
-policy:   DataClass { class: "example.Stamp" }
+position: wherever this Stamp sits
 offered:  [ Stamp.fields, atomic ]
+
+held by the JniTarget, not passed in:
+policy:   DataClass { class: "example.Stamp" }
 ```
 
 ## Result
 
 ```text
-Stamp.fields
+Stamp.fields, conversion JniPolicy::DataClass { class: "example.Stamp" }
 ```
 
 and, for each part the registry then plans:

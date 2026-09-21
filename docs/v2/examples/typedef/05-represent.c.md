@@ -8,8 +8,8 @@ Owner: the registry; the C adapter states the [carrier](../../stages/05-represen
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    relation: atomic   policy: opaque_ptr Ledger
-Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   policy: opaque_ptr Ledger
+Crossing { source: Ledger, direction: IntoRust }    relation: atomic   conversion: opaque_ptr Ledger
+Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   conversion: opaque_ptr Ledger
 ```
 
 ## Result

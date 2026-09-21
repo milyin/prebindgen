@@ -10,7 +10,7 @@ Owner: the registry; the JNI adapter describes the object [carrier](../../stages
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-policy:   DataClass { class: "example.Stamp" }
+conversion: DataClass { class: "example.Stamp" }
 derived getter operations: "getSecs" / "getNanos", descriptor "()J"
 ```
 

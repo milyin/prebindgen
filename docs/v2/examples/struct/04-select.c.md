@@ -9,14 +9,17 @@ Owner: the registry; the C adapter selects from the offered [relations](../../st
 
 ```text
 Crossing { source: Stamp, direction: IntoRust }
-policy:   data_struct named Stamp, passed by value
+position: wherever this Stamp sits
 offered:  [ Stamp.fields, atomic ]
+
+held by the CTarget, not passed in:
+policy:   data_struct named Stamp, passed by value
 ```
 
 ## Result
 
 ```text
-Stamp.fields
+Stamp.fields, conversion CPolicy::DataStruct { c_name: "Stamp" }
 ```
 
 and, for each part the registry then plans:

@@ -8,8 +8,8 @@ Owner: the registry; the JNI adapter states the [carrier](../../stages/05-repres
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    relation: atomic   policy: ptr_class example.Ledger
-Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   policy: ptr_class example.Ledger
+Crossing { source: Ledger, direction: IntoRust }    relation: atomic   conversion: ptr_class example.Ledger
+Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   conversion: ptr_class example.Ledger
 ```
 
 ## Result

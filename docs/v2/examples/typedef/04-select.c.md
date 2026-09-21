@@ -8,15 +8,18 @@ Owner: the registry; the C adapter selects from the offered [relations](../../st
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    policy: opaque_ptr Ledger
-Crossing { source: Ledger, direction: OutOfRust }   policy: opaque_ptr Ledger
+Crossing { source: Ledger, direction: IntoRust }
+Crossing { source: Ledger, direction: OutOfRust }
 offered:  [ atomic ]
+
+held by the CTarget, not passed in:
+policy:   opaque_ptr Ledger
 ```
 
 ## Result
 
 ```text
-atomic
+atomic, conversion CPolicy::OpaquePtr { c_name: "Ledger", release: "ledger_drop" }
 ```
 
 for both. An `opaque_ptr` is a pointer to a value C never looks into, so the C

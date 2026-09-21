@@ -8,15 +8,18 @@ Owner: the registry; the JNI adapter selects from the offered [relations](../../
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    policy: ptr_class example.Ledger
-Crossing { source: Ledger, direction: OutOfRust }   policy: ptr_class example.Ledger
+Crossing { source: Ledger, direction: IntoRust }
+Crossing { source: Ledger, direction: OutOfRust }
 offered:  [ atomic ]
+
+held by the JniTarget, not passed in:
+policy:   ptr_class example.Ledger
 ```
 
 ## Result
 
 ```text
-atomic
+atomic, conversion JniPolicy::PtrClass { class: "example.Ledger", .. }
 ```
 
 for both. A `ptr_class` holds an address, not properties, so the JNI adapter

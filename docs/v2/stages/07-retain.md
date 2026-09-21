@@ -222,7 +222,8 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> frontend selects v1 or v2
  -> v2 frontend creates BindingRequests and its target internally, and calls generate
  -> registry validates/imports source references and requests
- -> for each requested value: select its source relation
+ -> for each requested value: target selects its source relation and names
+    the conversion its own settings make
  -> registry resolves the selected source operation's children
  -> target describes the requested value's representation
  -> registry composes value instructions and contracts
