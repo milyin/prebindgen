@@ -2,8 +2,8 @@
 <p>A frontend turns its own declaration storage into these — one <a href="enum.Declaration.html" title="enum prebindgen_registry_v2::decl::Declaration"><code>Declaration</code></a>
 per thing the user asked for, inside the
 <a href="../plan/struct.BindingRequests.html" title="struct prebindgen_registry_v2::plan::BindingRequests"><code>BindingRequests</code></a> it hands the engine. The
-declaration is what the report accounts for; the request carries the
-target’s configuration for it, and that policy is also where the foreign
-name and the declarator word the report prints come from.</p>
+declaration is what the report accounts for, and what the target looks its
+own configuration up by — the request carries none: the foreign name and
+the declarator word the report prints come from that lookup.</p>
 </div></details><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Declaration.html" title="enum prebindgen_registry_v2::decl::Declaration">Declaration</a></dt><dd>One thing a binding asked for: what the target gets, named by what the
 Rust source calls it, and what the engine plans it from.</dd></dl></section></div></main></body></html>
