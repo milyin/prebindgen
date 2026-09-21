@@ -202,7 +202,7 @@ common Rust writer belongs to the engine.
 <tbody>
 <tr>
 <td>Language frontend</td>
-<td>Provide the public language-specific Rust API; pass the registry the list of outputs to plan, and keep the recorded choices, answering the registry's questions about them as its target.</td>
+<td>Provide the public language-specific Rust API; pass the registry what to expose and what to leave alone, and keep the recorded choices, answering the registry's questions about them as its target.</td>
 <td>Expose <code>Stamp</code> as a C data struct and <code>normalize</code> as a C function.</td>
 <td>Expose <code>Stamp</code> as a Kotlin data class in a specified package and place <code>normalize</code> in the requested API.</td>
 </tr>
@@ -325,8 +325,7 @@ The registry separates what should be generated from how values should be conver
 struct BindingRequests {
     declaring_crate: String,      // The crate generating, for the report.
     source_module: Path,          // How generated Rust reaches the source items.
-    outputs: Vec<DeclarationId>,  // Explicit output requests; defined below.
-    ignored: Vec<DeclarationId>,  // Captured items the user opted out of, for the report.
+    requests: Vec<Request>,       // Expose this, or leave that alone; defined below.
 }
 
 // What the frontend keeps and answers the registry's questions from —
@@ -350,7 +349,7 @@ report's name for the language comes from, as `Target::NAME`, since an adapter
 knows what it is. These sketches explain the responsibilities;
 `prebindgen-registry-v2/src/plan.rs` defines the exact current fields.
 
-The registry plans `outputs`, reports `ignored` entries, and asks the adapter for every choice that applies to them.
+The registry plans what is to be exposed, reports what is left alone, and asks the adapter for every choice that applies.
 
 Suppose the user configures the JNI frontend to accept `Stamp` as two integer arguments by default, then overrides the `Stamp` parameter of function `f` to accept a JVM object. The JNI target resolves that override when the registry asks it to select a relation for `f`'s parameter 0, and returns a different conversion key than it does for function `g`, which has no override. A choice recorded for a particular field or constructor argument is applied the same way, where that child is converted, following the frontend API's documented override rules.
 
@@ -444,8 +443,19 @@ function or a reusable conversion.
 To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conversion, the call to `normalize` itself and an output conversion. The request to expose `normalize` is the starting point, called a **root**. The conversions required to implement that request are its **dependencies**. A request to expose a public type is also a root, even if no function uses that type.
 
 ```rust
-outputs: Vec<DeclarationId>, // Each requested output, by identity, in the order recorded.
+enum Request {
+    Expose(DeclarationId), // Plan this and generate it.
+    Ignore(DeclarationId), // Plan nothing; the report carries it as a decision.
+}
 ```
+
+One list rather than two, because the report has one row per declaration and
+both dispositions produce one. An id that appeared under both would be two
+rows for one declaration, so saying both about one declaration is refused
+where the duplicate check already runs. Existence is a separate question, and
+it is asked only of what is to be exposed: an ignore means "if this is here,
+leave it alone", which a binding may reasonably say about an item its source
+crate compiles out under a feature.
 
 A requested output is that identity and nothing else. What the declaration *is*
 — its symbol, its placement, the declarator it came from — the target looks up

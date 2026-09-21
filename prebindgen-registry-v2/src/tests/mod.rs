@@ -81,9 +81,11 @@ fn plan(
 ) -> Result<Generation<()>, EngineError> {
     let mut requests = BindingRequests::new(crate_name, syn::parse_quote!(fixture));
     for declaration in &stated.declared {
-        requests.output(declaration.clone());
+        requests.expose(declaration.clone());
     }
-    requests.ignored = stated.ignored.clone();
+    for declaration in &stated.ignored {
+        requests.ignore(declaration.clone());
+    }
     generate(sources.build()?, &Nothing, requests)
 }
 
@@ -202,6 +204,37 @@ fn one_id_may_name_only_one_declaration() {
         ignored: Vec::new(),
     };
     plan(&stated, sources(), "fixture-crate").expect("two kinds, two ids");
+}
+
+/// Exposing a declaration and ignoring it says two things about one id, and
+/// the report has one row per id — so it is refused rather than printed twice.
+///
+/// One list of requests is what makes this reachable: the duplicate check sees
+/// both dispositions, so the contradiction is caught wherever it was written.
+#[test]
+fn one_declaration_may_not_be_both_exposed_and_ignored() {
+    let stated = Stated {
+        declared: vec![captured_fn("handle_new")],
+        ignored: vec![captured_fn("handle_new")],
+    };
+    let error = plan(&stated, sources(), "fixture-crate").expect_err("a contradiction is refused");
+    assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
+    assert!(error.to_string().contains("fn:handle_new"), "{error}");
+}
+
+/// An ignore does not have to name something the model holds.
+///
+/// It says "if this is here, leave it alone". A binding may ignore an item its
+/// source crate compiles out under a feature, and that is not a typo the way a
+/// declaration naming nothing is — so existence is asked of the exposed only.
+#[test]
+fn an_ignore_names_an_item_the_model_need_not_hold() {
+    let stated = Stated {
+        declared: Vec::new(),
+        ignored: vec![captured_fn("handle_absent")],
+    };
+    let generation = plan(&stated, sources(), "fixture-crate").expect("an ignore is tolerant");
+    assert_eq!(generation.report().counts().ignored, 1);
 }
 
 /// A declaration names one of the three captured kinds, and naming the wrong

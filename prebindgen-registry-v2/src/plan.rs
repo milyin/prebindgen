@@ -38,18 +38,39 @@ use crate::{
 ///
 /// Users never write this; a frontend builds it from its own recorded calls,
 /// which is what lets two languages share everything after this point.
+/// One thing the binding said about one declaration.
+///
+/// Both dispositions name a declaration, and the report accounts for both, so
+/// they are one list rather than two: an id can then appear once, which is
+/// what the report's "one id, one row" rests on. Declaring something and
+/// ignoring it is a contradiction the engine catches for that reason, rather
+/// than emitting two rows for it.
+#[derive(Clone, Debug)]
+pub enum Request {
+    /// Expose this declaration. The target is asked what it is, and the
+    /// registry plans it.
+    Expose(Declaration),
+    /// Leave this one alone. Nothing is planned and nothing is generated; the
+    /// report carries it so that a decision and a gap read differently.
+    Ignore(Declaration),
+}
+
+impl Request {
+    /// The declaration either disposition is about.
+    pub fn declaration(&self) -> &Declaration {
+        match self {
+            Request::Expose(declaration) | Request::Ignore(declaration) => declaration,
+        }
+    }
+}
+
 pub struct BindingRequests {
     /// The crate whose build script is generating, for the report.
     pub declaring_crate: String,
     /// The module generated code reaches the source items through.
     pub source_module: syn::Path,
-    /// What to expose, in the order the frontend recorded it. Each is also
-    /// what the target looks its own configuration for that output up by.
-    pub outputs: Vec<Declaration>,
-    /// Captured items the user asked to leave alone. They are not planned and
-    /// nothing is generated for them; the report accounts for them so that a
-    /// gap and a decision read differently.
-    pub ignored: Vec<Declaration>,
+    /// What the binding said, in the order it said it.
+    pub requests: Vec<Request>,
 }
 
 impl BindingRequests {
@@ -57,15 +78,36 @@ impl BindingRequests {
         BindingRequests {
             declaring_crate: declaring_crate.into(),
             source_module,
-            outputs: Vec::new(),
-            ignored: Vec::new(),
+            requests: Vec::new(),
         }
     }
 
     /// Ask for one declaration to be exposed.
-    pub fn output(&mut self, declaration: Declaration) -> &mut Self {
-        self.outputs.push(declaration);
+    pub fn expose(&mut self, declaration: Declaration) -> &mut Self {
+        self.requests.push(Request::Expose(declaration));
         self
+    }
+
+    /// Ask for one declaration to be left alone.
+    pub fn ignore(&mut self, declaration: Declaration) -> &mut Self {
+        self.requests.push(Request::Ignore(declaration));
+        self
+    }
+
+    /// The declarations to plan, and the ones only the report hears about.
+    ///
+    /// Split once, here, so that nothing downstream can plan an ignore by
+    /// forgetting to filter for it.
+    fn split(&self) -> (Vec<&Declaration>, Vec<&Declaration>) {
+        let mut exposed = Vec::new();
+        let mut ignored = Vec::new();
+        for request in &self.requests {
+            match request {
+                Request::Expose(declaration) => exposed.push(declaration),
+                Request::Ignore(declaration) => ignored.push(declaration),
+            }
+        }
+        (exposed, ignored)
     }
 }
 
@@ -657,14 +699,20 @@ pub fn generate<T: Target>(
     target: &T,
     requests: BindingRequests,
 ) -> Result<Generation<T::Payload>, EngineError> {
-    check_declarations(&requests.outputs, &flat)?;
+    let (exposed, ignored) = requests.split();
+    // Duplicates are checked over both dispositions, so declaring a thing and
+    // ignoring it is caught here rather than printed as two rows for one id.
+    // Existence is asked of the exposed only: an ignore says "if this is here,
+    // leave it alone", and a binding may reasonably ignore an item its source
+    // crate compiles out under a feature.
+    check_declarations(&exposed, &ignored, &flat)?;
 
     let mut run = Run::new(&flat, target);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
     let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
     let mut outcomes: BTreeMap<Declaration, Outcome> = BTreeMap::new();
 
-    for declaration in &requests.outputs {
+    for &declaration in &exposed {
         let root = crate::target::Position::root(declaration.clone());
         // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it. Each
@@ -760,11 +808,10 @@ pub fn generate<T: Target>(
     // Which declaration represents which type. A target names a requirement by
     // type, because that is what the model told it about a value; matching the
     // type to the declaration covering it is the engine's side of that.
-    let declared_types: BTreeMap<String, &Declaration> = requests
-        .outputs
+    let declared_types: BTreeMap<String, &Declaration> = exposed
         .iter()
         .filter(|declaration| declaration.is_type())
-        .map(|declaration| (declaration.name(), declaration))
+        .map(|declaration| (declaration.name(), *declaration))
         .collect();
 
     // A public declaration can require another one. Propagate until a pass
@@ -814,14 +861,13 @@ pub fn generate<T: Target>(
     functions.retain(|function| emitted(&function.declaration));
     surfaces.retain(|surface| emitted(&surface.declaration));
 
-    let mut entries: Vec<Entry> = requests
-        .outputs
+    let mut entries: Vec<Entry> = exposed
         .iter()
         .map(|declaration| Entry {
-            declaration: declaration.clone(),
+            declaration: (*declaration).clone(),
             described: target.describe(declaration),
             outcome: outcomes
-                .get(declaration)
+                .get(*declaration)
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
@@ -829,8 +875,8 @@ pub fn generate<T: Target>(
         // is not an output, so the target is never asked to describe it, and
         // it lands nowhere. The id's prefix (`fn:`, `type:`, `const:`) already
         // says what was left alone.
-        .chain(requests.ignored.iter().map(|declaration| Entry {
-            declaration: declaration.clone(),
+        .chain(ignored.iter().map(|declaration| Entry {
+            declaration: (*declaration).clone(),
             described: crate::target::Described::new("ignore", ""),
             outcome: Outcome::Ignored,
         }))

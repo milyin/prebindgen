@@ -79,7 +79,7 @@ impl Declarations {
         let mut requests = BindingRequests::new(declaring_crate, source_module);
         let mut declare = |declaration: Declaration, choice: JniChoice| {
             target.declare(declaration.clone(), choice);
-            requests.output(declaration);
+            requests.expose(declaration);
         };
 
         // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
@@ -231,13 +231,13 @@ impl Declarations {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_fns) {
-            requests.ignored.push(Declaration::Function(ident.clone()));
+            requests.ignore(Declaration::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_class_types) {
-            requests.ignored.push(Declaration::Type(key.clone()));
+            requests.ignore(Declaration::Type(key.clone()));
         }
         for ident in sorted(&self.ignored_const_idents) {
-            requests.ignored.push(Declaration::Const(ident.clone()));
+            requests.ignore(Declaration::Const(ident.clone()));
         }
         (target, requests)
     }

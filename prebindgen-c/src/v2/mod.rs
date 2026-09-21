@@ -59,7 +59,7 @@ impl CbindgenBuilder {
         let mut requests = BindingRequests::new(declaring_crate, source_module);
         let mut declare = |declaration: Declaration, choice: CChoice| {
             target.declare(declaration.clone(), choice);
-            requests.output(declaration);
+            requests.expose(declaration);
         };
 
         // By-value data structs: the one type representation v2 lowers. The
@@ -143,10 +143,10 @@ impl CbindgenBuilder {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_functions) {
-            requests.ignored.push(Declaration::Function(ident.clone()));
+            requests.ignore(Declaration::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignored.push(Declaration::Type(key.clone()));
+            requests.ignore(Declaration::Type(key.clone()));
         }
         (target, requests)
     }

@@ -658,9 +658,11 @@ impl Binding {
         } = self;
         let mut requests = BindingRequests::new("fixture", syn::parse_quote!(source));
         for declaration in outputs {
-            requests.output(declaration);
+            requests.expose(declaration);
         }
-        requests.ignored = ignored;
+        for declaration in ignored {
+            requests.ignore(declaration);
+        }
         generate(flat, &target, requests)
     }
 }
