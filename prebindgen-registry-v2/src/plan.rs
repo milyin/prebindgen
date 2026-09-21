@@ -30,15 +30,18 @@ use crate::{
 /// One entry of a [`BindingRequests`] work list: something the binding said
 /// about one item.
 ///
-/// Both dispositions are about a captured item, and the report accounts for
-/// both, so they are one list rather than two: an id can then appear once,
-/// which is what the report's "one id, one row" rests on. Exposing something
-/// and ignoring it is a contradiction the engine catches for that reason,
-/// rather than emitting two rows for it.
+/// The two dispositions accept different things. An expose takes any
+/// [`Declaration`] — a captured item, or one the binding defines itself. An
+/// ignore takes only a [`CapturedName`]: nothing binding-local is in the
+/// source to leave alone. The report accounts for both, so they are one list
+/// rather than two: an id can then appear once, which is what the report's
+/// "one id, one row" rests on. Exposing something and ignoring it is a
+/// contradiction the engine catches for that reason, rather than emitting two
+/// rows for it.
 #[derive(Clone, Debug)]
 pub enum Request {
-    /// Expose this declaration. The target is asked what it is, and the
-    /// registry plans it.
+    /// Expose this declaration, captured or binding-local. The target is
+    /// asked what it is, and the registry plans it.
     Expose(Declaration),
     /// Leave this captured item alone. Nothing is planned and nothing is
     /// generated; the report carries it so that a decision and a gap read
