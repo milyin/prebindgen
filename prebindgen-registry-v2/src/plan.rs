@@ -915,11 +915,7 @@ pub fn generate<T: Target>(
             .iter()
             .map(|output| &output.declaration)
             .find(|declaration| declaration.id() == &surface.declaration)
-            .and_then(|declaration| {
-                declaration
-                    .source()
-                    .element(&flat, declaration.rust_origin())
-            })
+            .and_then(|declaration| declaration.origin().captured(&flat))
             .map(|element| crate::emit::Writer.conditions(Conditioned::Item(element)))
             .unwrap_or_default();
         for artifact in &surface.rust {

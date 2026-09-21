@@ -5,7 +5,7 @@
 //! explicitly, so a test never depends on the runner's `PREBINDGEN_PIPELINE`.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{DeclarationKind, Outcome, SourceKind};
+use prebindgen_registry_v2::{DeclarationKind, Origin, Outcome};
 
 use super::*;
 
@@ -352,7 +352,10 @@ fn a_function_backed_constant_resolves_against_the_function() {
     assert_eq!(constant.declaration.rust_origin(), "z_thing_describe");
     assert_eq!(constant.declaration.kind(), DeclarationKind::Const);
     // The target gets a `val`; the source must hold a function.
-    assert_eq!(constant.declaration.source(), SourceKind::Function);
+    assert!(matches!(
+        constant.declaration.origin(),
+        Origin::ConstFromFunction(ident) if ident == "z_thing_describe"
+    ));
     // And it is planned from that function: what stops this one is the value
     // its parameter crosses as, reported against the parameter, rather than
     // the engine turning away everything declared as a constant.

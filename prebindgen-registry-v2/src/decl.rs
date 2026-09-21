@@ -37,7 +37,7 @@ use serde::Serialize;
 ///
 /// It says what the *target* language gets, not what the captured Rust source
 /// held — a Kotlin constant may be backed by a captured Rust function. That
-/// second question is [`Declaration::source`] / [`SourceKind`].
+/// second question is the [`Origin`] variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeclarationKind {
@@ -126,11 +126,12 @@ impl Serialize for DeclarationId {
 /// A name alone says neither: `Sample` may be a captured type, a type key the
 /// binding coined for something the source never exported, or the name of a
 /// Kotlin constant built from an expression. The variant says which, and it
-/// says it once — a declaration's [`DeclarationKind`] and its [`SourceKind`]
-/// both follow from the variant instead of being stated beside it, so the three
-/// cannot disagree and a pair that means nothing (a callback backed by a
-/// captured constant, a function the binding both defines and selects out of
-/// the source) cannot be written down.
+/// says it once — a declaration's [`DeclarationKind`] and what its name must
+/// find in the captured source both follow from the
+/// variant instead of being stated beside it, so they cannot disagree and a
+/// pair that means nothing (a callback backed by a captured constant, a
+/// function the binding both defines and selects out of the source) cannot be
+/// written down.
 ///
 /// [`generate`](crate::generate) routes on this: each planner is reached by its
 /// own variants and is handed the captured item they name, rather than a kind
@@ -178,19 +179,62 @@ impl Origin {
         }
     }
 
-    /// What this origin must name in the captured source.
-    pub fn source_kind(&self) -> SourceKind {
-        match self {
-            // A constant read through a function is looked up among the
-            // functions, which is what separates it from `Const`.
-            Origin::Function(_) | Origin::ConstFromFunction(_) => SourceKind::Function,
-            Origin::Const(_) => SourceKind::Const,
-            Origin::Type(_) => SourceKind::Type,
+    /// The captured element this origin names, if the model holds it.
+    ///
+    /// Captured items live in one flat namespace holding functions, types and
+    /// constants, so the name alone finds any element; the variant is what says
+    /// whether the element found is the one the declaration meant. A constant
+    /// read through a function is looked up among the functions, which is what
+    /// separates [`Self::ConstFromFunction`] from [`Self::Const`]. A
+    /// binding-local origin names no captured item and so finds none — which
+    /// is not the same as a missing one, and [`Self::missing_from`] is the
+    /// question to ask about presence.
+    pub(crate) fn captured<'f>(&self, flat: &'f Flat) -> Option<&'f Element> {
+        let element = flat.element(&self.name())?;
+        matches!(
+            (self, element),
+            (
+                Origin::Function(_) | Origin::ConstFromFunction(_),
+                Element::Function(_)
+            ) | (Origin::Type(_), Element::Type(_))
+                | (Origin::Const(_), Element::Constant(_))
+        )
+        .then_some(element)
+    }
+
+    /// Whether the binding defines this itself: a callback signature, a
+    /// binding-local conversion helper, a function or constant of its own, or a
+    /// type the target represents although the source never exported it
+    /// (`String` as an opaque handle). Such an origin requires nothing of the
+    /// model.
+    pub fn is_binding_local(&self) -> bool {
+        matches!(
+            self,
             Origin::LocalFunction(_)
-            | Origin::LocalConst(_)
-            | Origin::LocalType(_)
-            | Origin::Callback(_)
-            | Origin::Conversion(_) => SourceKind::BindingLocal,
+                | Origin::LocalConst(_)
+                | Origin::LocalType(_)
+                | Origin::Callback(_)
+                | Origin::Conversion(_)
+        )
+    }
+
+    /// Whether the model lacks what this origin must name.
+    ///
+    /// Naming the wrong kind — `.fun(fun!(x))` where the source captured
+    /// `const x` — counts as missing: it is an error in the binding, and the
+    /// engine fails the run over it instead of reporting a skip. False for a
+    /// binding-local origin.
+    pub(crate) fn missing_from(&self, flat: &Flat) -> bool {
+        !self.is_binding_local() && self.captured(flat).is_none()
+    }
+
+    /// The word a refusal uses for what this origin must name.
+    pub(crate) fn describe_captured(&self) -> &'static str {
+        match self {
+            Origin::Function(_) | Origin::ConstFromFunction(_) => "function",
+            Origin::Const(_) => "constant",
+            Origin::Type(_) => "type",
+            _ => "binding-local item",
         }
     }
 
@@ -232,72 +276,13 @@ impl Serialize for Declaration {
     /// should not have to split the id to get at the last two.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut entry = serializer.serialize_struct("Declaration", 6)?;
+        let mut entry = serializer.serialize_struct("Declaration", 5)?;
         entry.serialize_field("id", &self.id)?;
         entry.serialize_field("kind", &self.id.kind())?;
         entry.serialize_field("rust_origin", self.id.origin())?;
         entry.serialize_field("placement", &self.placement)?;
         entry.serialize_field("representation", &self.representation)?;
-        entry.serialize_field("source", &self.source())?;
         entry.end()
-    }
-}
-
-/// What a declaration's Rust origin must name in the captured source.
-///
-/// Captured items live in one flat namespace holding functions, types and
-/// constants, and a declaration means one of the three. Naming the wrong one —
-/// `.fun(fun!(x))` where the source captured `const x` — is an error in the
-/// binding, and the engine fails the run over it instead of reporting a skip.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SourceKind {
-    /// A captured `#[prebindgen]` function.
-    Function,
-    /// A captured `#[prebindgen]` type.
-    Type,
-    /// A captured `#[prebindgen]` constant.
-    Const,
-    /// Nothing: the binding defines this itself. A callback signature, a
-    /// binding-local conversion helper, or a type the target represents
-    /// although the source never exported it (`String` as an opaque handle).
-    BindingLocal,
-}
-
-impl SourceKind {
-    /// The captured element an origin of this kind names, if the model holds it.
-    ///
-    /// The namespace is flat, so the name alone finds any element; the kind is
-    /// what says whether the element found is the one the declaration meant.
-    /// [`Self::BindingLocal`] names no captured item and so finds none — which
-    /// is not the same as a missing one, and [`Self::missing_from`] is the
-    /// question to ask about presence.
-    pub(crate) fn element<'f>(self, flat: &'f Flat, name: &str) -> Option<&'f Element> {
-        let element = flat.element(name)?;
-        matches!(
-            (self, element),
-            (SourceKind::Function, Element::Function(_))
-                | (SourceKind::Type, Element::Type(_))
-                | (SourceKind::Const, Element::Constant(_))
-        )
-        .then_some(element)
-    }
-
-    /// Whether the model lacks what an origin of this kind must name.
-    ///
-    /// False for a binding-local origin, which requires nothing of the model.
-    pub(crate) fn missing_from(self, flat: &Flat, name: &str) -> bool {
-        self != SourceKind::BindingLocal && self.element(flat, name).is_none()
-    }
-
-    /// The word a refusal uses for this kind.
-    pub(crate) fn describe(self) -> &'static str {
-        match self {
-            SourceKind::Function => "function",
-            SourceKind::Type => "type",
-            SourceKind::Const => "constant",
-            SourceKind::BindingLocal => "binding-local item",
-        }
     }
 }
 
@@ -348,16 +333,5 @@ impl Declaration {
     /// the adapter's own word, printed back verbatim.
     pub fn representation(&self) -> &str {
         &self.representation
-    }
-
-    /// What [`Self::rust_origin`] must name in the captured source.
-    ///
-    /// Not the same question as [`Self::kind`], which says what the *target*
-    /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
-    /// [`DeclarationKind::Const`] whose origin is
-    /// [`Origin::ConstFromFunction`]. It comes from that origin rather than
-    /// being stated beside it, so the two cannot disagree.
-    pub fn source(&self) -> SourceKind {
-        self.origin.source_kind()
     }
 }
