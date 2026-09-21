@@ -53,7 +53,7 @@ use prebindgen_flat::{
 use proc_macro2::TokenStream;
 
 use crate::{
-    decl::{Declaration, DeclarationId},
+    decl::{Declaration, Origin},
     outcome::Capability,
 };
 
@@ -749,7 +749,7 @@ impl std::fmt::Display for Requirement {
 /// A target's description of one public declaration and what it requires.
 #[derive(Clone, Debug)]
 pub struct SurfaceSpec<P> {
-    pub declaration: DeclarationId,
+    pub declaration: Origin,
     /// Types that must be declared and emitted for this declaration to be.
     pub requires: Vec<Requirement>,
     /// Rust this declaration contributes: the `repr(C)` aggregate a C caller
@@ -768,13 +768,13 @@ pub struct SurfaceSpec<P> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position {
     /// The requested output this conversion is reached from.
-    pub declaration: DeclarationId,
+    pub declaration: Origin,
     /// Root to here: `param 0`, then `field secs`.
     pub path: Vec<String>,
 }
 
 impl Position {
-    pub fn root(declaration: DeclarationId) -> Self {
+    pub fn root(declaration: Origin) -> Self {
         Position {
             declaration,
             path: Vec::new(),

@@ -335,7 +335,7 @@ this list says what the increment left open and why.
   those a retained output reaches. Nodes are referenced by nothing after
   inlining, so this costs memory and no correctness; pruning them needs the
   reachability the retention loop does not yet track.
-- **`DeclarationId` is `<kind>:<origin>`**, so exposing one Rust function at two
+- **A declaration's identity is its `Origin`** (printed `<kind>:<name>`), so exposing one Rust function at two
   foreign placements — which [the request chapter](stages/03-requests.md) uses to
   explain output identity — cannot be expressed yet. The `Unselected` outcome is
   likewise absent from the report.

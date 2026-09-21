@@ -75,10 +75,11 @@ One requested public item: for example, expose `Stamp` as a C struct or
 the generator supports it. [The report](report.md) later accounts for each
 declaration; a source item that nobody requested currently has no entry.
 
-The current `DeclarationId` combines the kind and Rust origin, giving ids such
-as `type:Stamp` and `fn:stamp_sum`. Renaming the foreign function does not change
-that id. Exposing the same source function at multiple placements in one run
-would need a richer identity; current V2 rejects duplicate declaration ids.
+The current engine identifies a declaration by its `Origin` — the kind and the
+Rust name in one value, printed as `type:Stamp` or `fn:stamp_sum`. Renaming the
+foreign function does not change it. Exposing the same source function at
+multiple placements in one run would need a richer identity; current V2 rejects
+two declarations of one origin.
 See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
 ### Policy

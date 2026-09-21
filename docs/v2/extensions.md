@@ -405,7 +405,7 @@ Extends [how the registry asks a target for decisions](stages/04-select.md#how-t
 
 Source-conversion dependencies come from the selected relation's children, and
 target operations list generated helpers. Current public dependencies are
-`DeclarationId`s in `SurfaceSpec.requires`. The more general design will need an
+`Requirement`s in `SurfaceSpec.requires`, each resolved to a declared `Origin`. The more general design will need an
 explicit request mechanism if a target requires additional conversions beyond
 those; that mechanism is not implemented. Rendering must not discover new
 conversions.

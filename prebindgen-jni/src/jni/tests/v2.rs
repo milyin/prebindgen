@@ -63,7 +63,7 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id().to_string())
+        .map(|entry| entry.declaration.origin().to_string())
         .collect();
     assert_eq!(
         ids,
@@ -80,7 +80,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.id().to_string() == id)
+            .find(|entry| entry.declaration.origin().to_string() == id)
             .map(|entry| entry.declaration.placement().to_string())
             .unwrap_or_default()
     };
@@ -109,7 +109,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.id().to_string() == id)
+            .find(|entry| entry.declaration.origin().to_string() == id)
             .and_then(|entry| entry.outcome.skip())
             .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
             .expect("skipped")
@@ -221,7 +221,7 @@ fn class_members_are_elements_of_their_own() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.id().to_string() == id)
+            .find(|entry| entry.declaration.origin().to_string() == id)
             .map(|entry| entry.declaration.representation().to_string())
             .unwrap_or_default()
     };
@@ -239,7 +239,7 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id().to_string() == "fn:z_thing_internal")
+        .find(|entry| entry.declaration.origin().to_string() == "fn:z_thing_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
 }
@@ -321,7 +321,7 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id().to_string())
+        .map(|entry| entry.declaration.origin().to_string())
         .collect();
     assert_eq!(ids, ["type:ZThing", "fn:local_size", "fn:local_tag"]);
 }
@@ -389,7 +389,7 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
         .expect("v2 produces a report")
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id().to_string() == id)
+        .find(|entry| entry.declaration.origin().to_string() == id)
         .and_then(|entry| entry.outcome.skip())
         .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))

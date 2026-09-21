@@ -577,7 +577,7 @@ impl Target for JniTarget {
                 None => (String::new(), class.clone()),
             };
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id().clone(),
+                declaration: request.declaration.origin().clone(),
                 requires: Vec::new(),
                 // What crosses is a `jlong`, and the release wrapper is Rust
                 // the registry renders: nothing to contribute.
@@ -637,7 +637,7 @@ impl Target for JniTarget {
                     },
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id().clone(),
+                    declaration: request.declaration.origin().clone(),
                     // A method taking or returning a declared class is
                     // unusable unless the class it names is emitted too.
                     requires: values
@@ -711,7 +711,7 @@ impl Target for JniTarget {
                     None => (String::new(), class.clone()),
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id().clone(),
+                    declaration: request.declaration.origin().clone(),
                     requires: Vec::new(),
                     rust: Vec::new(),
                     payload: Some(JniPayload::Class {

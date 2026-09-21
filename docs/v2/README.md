@@ -229,7 +229,7 @@ paths are added.
 An **element kind** is a kind of [source item](stages/01-source.md#capture-source-items) — a function, a struct, an enum —
 as this appendix organizes it. (Inside the pipeline the word is not used: the
 chapters say *source item* for what the model captured and *declaration* for
-what the binding asked to expose, identified by a `DeclarationId`, such as
+what the binding asked to expose, identified by its `Origin`, printed as
 `fn:stamp_sum`. Current ids do not distinguish two foreign placements of the
 same source item.) Element kinds form a tree: a kind at the root, more specific
 variants below it, each becoming its own path when its behavior differs from its

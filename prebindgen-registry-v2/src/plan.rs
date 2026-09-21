@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::{Declaration, DeclarationId, DeclarationKind, Origin},
+    decl::{Declaration, DeclarationKind, Origin},
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -59,7 +59,7 @@ pub struct BindingRequests<Policy> {
     /// Per-site overrides: this parameter, or the result, of this declared
     /// source function crosses differently from the type's default. Keyed by
     /// declaration and the site's path, `param 0` or `return`.
-    pub site_policies: BTreeMap<(DeclarationId, String), PolicyId>,
+    pub site_policies: BTreeMap<(Origin, String), PolicyId>,
     /// Declarations the user asked to leave alone.
     pub ignored: Vec<Declaration>,
 }
@@ -131,7 +131,7 @@ pub struct NodeId(pub(crate) usize);
 #[derive(Debug)]
 pub struct FunctionPlan<P> {
     /// The declaration this wrapper exports.
-    pub declaration: DeclarationId,
+    pub declaration: Origin,
     pub abi: AbiSpec,
     pub output: OutputPlacement,
     pub failures: Vec<FailureRoute<P>>,
@@ -724,12 +724,12 @@ pub fn generate<T: Target>(
     let mut run = Run::new(&flat, target, &requests);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
     let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
-    let mut outcomes: BTreeMap<DeclarationId, Outcome> = BTreeMap::new();
+    let mut outcomes: BTreeMap<Origin, Outcome> = BTreeMap::new();
 
     for output in &requests.outputs {
         let declaration = &output.declaration;
         let policy = requests.get(output.policy);
-        let root = crate::target::Position::root(declaration.id().clone());
+        let root = crate::target::Position::root(declaration.origin().clone());
         // What is planned follows from the origin, which says both what the
         // target asked for and what the captured source holds for it. Each
         // planner is reached by its own variants and is given the captured item
@@ -783,14 +783,14 @@ pub fn generate<T: Target>(
                     functions.push(function);
                 }
                 surfaces.push(surface);
-                outcomes.insert(declaration.id().clone(), Outcome::Emitted);
+                outcomes.insert(declaration.origin().clone(), Outcome::Emitted);
             }
             Err(refusal) => {
                 // The path is where the walk actually stopped — the exported
                 // function, the parameter, the field — so the report says what
                 // to look at rather than only which declaration vanished.
                 outcomes.insert(
-                    declaration.id().clone(),
+                    declaration.origin().clone(),
                     Outcome::Skipped(Skip {
                         capability: refusal.reason.capability,
                         explanation: refusal.reason.explanation,
@@ -804,12 +804,12 @@ pub fn generate<T: Target>(
     // Which declaration represents which type. A target names a requirement by
     // type, because that is what the model told it about a value; matching the
     // type to the declaration covering it is the engine's side of that.
-    let declared_types: BTreeMap<&str, &DeclarationId> = requests
+    let declared_types: BTreeMap<String, &Origin> = requests
         .outputs
         .iter()
         .map(|output| &output.declaration)
         .filter(|declaration| declaration.kind() == DeclarationKind::Type)
-        .map(|declaration| (declaration.rust_origin(), declaration.id()))
+        .map(|declaration| (declaration.rust_origin(), declaration.origin()))
         .collect();
 
     // A public declaration can require another one. Propagate until a pass
@@ -854,7 +854,7 @@ pub fn generate<T: Target>(
     }
 
     // Only what a retained output needs is published.
-    let emitted = |id: &DeclarationId| matches!(outcomes.get(id), Some(Outcome::Emitted));
+    let emitted = |origin: &Origin| matches!(outcomes.get(origin), Some(Outcome::Emitted));
     functions.retain(|function| emitted(&function.declaration));
     surfaces.retain(|surface| emitted(&surface.declaration));
 
@@ -864,7 +864,7 @@ pub fn generate<T: Target>(
         .map(|output| Entry {
             declaration: output.declaration.clone(),
             outcome: outcomes
-                .get(output.declaration.id())
+                .get(output.declaration.origin())
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
@@ -914,7 +914,7 @@ pub fn generate<T: Target>(
             .outputs
             .iter()
             .map(|output| &output.declaration)
-            .find(|declaration| declaration.id() == &surface.declaration)
+            .find(|declaration| declaration.origin() == &surface.declaration)
             .and_then(|declaration| declaration.origin().captured(&flat))
             .map(|element| crate::emit::Writer.conditions(Conditioned::Item(element)))
             .unwrap_or_default();
@@ -976,7 +976,7 @@ fn plan_function<T: Target>(
     function: &Function,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
-    let root = crate::target::Position::root(declaration.id().clone());
+    let root = crate::target::Position::root(declaration.origin().clone());
 
     // The wrapper is a safe function, and the writer renders a plain call.
     // Wrapping an `unsafe fn` would need the wrapper to state the caller's
@@ -1111,7 +1111,7 @@ fn assemble<T: Target>(
     let refuse = |reason: Unsupported| {
         Ok(Err(Refusal::at(
             reason,
-            &crate::target::Position::root(declaration.id().clone()),
+            &crate::target::Position::root(declaration.origin().clone()),
         )))
     };
     // A symbol reaches generated Rust as a function name, so a policy that
@@ -1120,7 +1120,7 @@ fn assemble<T: Target>(
     if syn::parse_str::<syn::Ident>(&boundary.abi.symbol).is_err() {
         return Err(PlanningError::InvalidInput(format!(
             "`{}` exports the symbol `{}`, which is not a Rust identifier",
-            declaration.id(),
+            declaration.origin(),
             boundary.abi.symbol
         )));
     }
@@ -1132,7 +1132,7 @@ fn assemble<T: Target>(
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` states `#[{}]` on its wrapper, whose linkage the writer owns: the \
                  symbol is `{}`",
-                declaration.id(),
+                declaration.origin(),
                 attr.path()
                     .require_ident()
                     .map(|i| i.to_string())
@@ -1150,7 +1150,7 @@ fn assemble<T: Target>(
         if !param.ty.abi {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` takes `{}` at its boundary, which is not an ABI carrier",
-                declaration.id(),
+                declaration.origin(),
                 spell(&param.ty.ty)
             )));
         }
@@ -1164,7 +1164,7 @@ fn assemble<T: Target>(
         if !ret.abi {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` returns `{}` at its boundary, which is not an ABI carrier",
-                declaration.id(),
+                declaration.origin(),
                 spell(&ret.ty)
             )));
         }
@@ -1173,7 +1173,7 @@ fn assemble<T: Target>(
             Some(produced) if !same_type(&ret.ty, &produced) => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` returns `{}` at its boundary, and its result conversion produces a `{}`",
-                    declaration.id(),
+                    declaration.origin(),
                     spell(&ret.ty),
                     spell(&produced)
                 )))
@@ -1181,7 +1181,7 @@ fn assemble<T: Target>(
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` returns `{}` at its boundary and has no result conversion to fill it",
-                    declaration.id(),
+                    declaration.origin(),
                     spell(&ret.ty)
                 )))
             }
@@ -1200,7 +1200,7 @@ fn assemble<T: Target>(
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` declares no wrapper parameter for source parameter {index}",
-                    declaration.id()
+                    declaration.origin()
                 )))
             }
         };
@@ -1210,7 +1210,7 @@ fn assemble<T: Target>(
         if !same_type(&wrapper_param.ty, &expected.ty) {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` passes parameter {index} as `{}`, and its conversion reads a `{}`",
-                declaration.id(),
+                declaration.origin(),
                 spell(&wrapper_param.ty),
                 spell(&expected.ty)
             )));
@@ -1282,7 +1282,7 @@ fn assemble<T: Target>(
                         "the {} failure route of `{}` reports through an operation that reads a \
                          value",
                         route.category.as_str(),
-                        declaration.id()
+                        declaration.origin()
                     )))
                 }
             }
@@ -1323,7 +1323,7 @@ fn assemble<T: Target>(
                         "the {} failure route of `{}` reports a `{}` where the operation raises \
                          a `{}`",
                         category.as_str(),
-                        declaration.id(),
+                        declaration.origin(),
                         spell(&reported.ty),
                         spell(&raised.ty)
                     )));
@@ -1344,7 +1344,7 @@ fn assemble<T: Target>(
     }
 
     Ok(Ok(FunctionPlan {
-        declaration: declaration.id().clone(),
+        declaration: declaration.origin().clone(),
         abi: boundary.abi,
         output: boundary.output,
         failures: boundary.failures,
@@ -1371,11 +1371,11 @@ fn plan_type<T: Target>(
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
-    let root = crate::target::Position::root(declaration.id().clone());
+    let root = crate::target::Position::root(declaration.origin().clone());
     // A declared type need not be a captured item — a target may represent
     // `String` without the source exporting one — so this lookup, unlike a
     // function's, can find nothing.
-    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(declaration.rust_origin())
+    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(&declaration.rust_origin())
     {
         Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
         Some(Type::Extern(opaque)) => {
