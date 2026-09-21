@@ -417,6 +417,8 @@ struct OutputRequest {
 
 `DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `DeclarationId` is the kind and the Rust origin, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
+The implemented request carries a `Declaration` in place of those two ids, and the declaration names an `Origin`: one value saying both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
+
 ### A value's position in an exported function
 
 The registry needs to locate the parameter affected by a per-function override. A **site** is such a position: for example, parameter 0 of the requested `normalize` binding. `SiteId` identifies that position so the registry can apply its override and report problems there.

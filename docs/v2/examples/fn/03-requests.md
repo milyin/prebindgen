@@ -28,7 +28,8 @@ The request associates the source function with a public declaration and the
 adapter's function settings. This sketch names the two positions whose values
 need [conversion](../../stages/04-select.md#select-conversion-relations): the first parameter and the return value.
 The block uses design notation, not exact current fields. Current
-`OutputRequest` contains a `Declaration` and a `PolicyId`; the engine uses
+`OutputRequest` contains a `Declaration` — which names its origin, here
+`Origin::Function(stamp_sum)` — and a `PolicyId`; the engine uses
 `Position { declaration, path }` rather than the proposed `SiteId` below.
 
 ```text

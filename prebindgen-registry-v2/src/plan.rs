@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::{Declaration, DeclarationId, DeclarationKind},
+    decl::{Declaration, DeclarationId, DeclarationKind, Origin},
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -729,47 +729,53 @@ pub fn generate<T: Target>(
     for output in &requests.outputs {
         let declaration = &output.declaration;
         let policy = requests.get(output.policy);
-        // What is planned follows from the origin — the captured item there
-        // is to plan from. The kind says which surface the binding asked for,
-        // and only picks between planners where two surfaces are built the
-        // same way: a Kotlin `val` read through a nullary function is planned
-        // as that function, and the target renders the constant.
-        let planned = match (declaration.kind(), declaration.source()) {
-            (DeclarationKind::Type, _) => {
+        let root = crate::target::Position::root(declaration.id().clone());
+        // What is planned follows from the origin, which says both what the
+        // target asked for and what the captured source holds for it. Each
+        // planner is reached by its own variants and is given the captured item
+        // they name; nothing below reads a field back to work out what it was
+        // asked for.
+        let planned = match declaration.origin() {
+            Origin::Type(_) | Origin::LocalType(_) => {
                 plan_type(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
-            (
-                DeclarationKind::Function | DeclarationKind::Const,
-                crate::decl::SourceKind::Function,
-            ) => plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?,
+            // Two surfaces built the same way: a Kotlin `val` read through a
+            // nullary function is planned as that function, and the target
+            // renders the constant.
+            Origin::Function(ident) | Origin::ConstFromFunction(ident) => {
+                let function = flat
+                    .function(&ident.to_string())
+                    .expect("declarations are checked against the model before planning");
+                plan_function(&mut run, declaration, function, policy)
+                    .map_err(EngineError::Planning)?
+            }
             // A declaration the binding defines itself names no captured item,
             // so there is nothing to plan from: its signature or its value is
             // the binding's own, and reading one is a capability this engine
             // does not have.
-            (
-                kind @ (DeclarationKind::Function | DeclarationKind::Const),
-                crate::decl::SourceKind::BindingLocal,
-            ) => Err(Refusal::at(
+            Origin::LocalFunction(name) | Origin::LocalConst(name) => Err(Refusal::at(
                 Unsupported::new(
-                    format!("unsupported.{}.binding_local", kind.as_str()),
+                    format!("unsupported.{}.binding_local", declaration.kind().as_str()),
                     format!(
-                        "`{}` is defined by the binding, not captured from the source, so there \
-                         is no captured item to plan from",
-                        declaration.rust_origin()
+                        "`{name}` is defined by the binding, not captured from the source, so \
+                         there is no captured item to plan from"
                     ),
                 ),
-                &crate::target::Position::root(declaration.id().clone()),
+                &root,
             )),
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            (kind, _) => Err(Refusal::at(
-                Unsupported::new(
-                    format!("unsupported.{}.not_implemented", kind.as_str()),
-                    format!("the v2 engine has no {} lowering yet", kind.as_str()),
-                ),
-                &crate::target::Position::root(declaration.id().clone()),
-            )),
+            Origin::Const(_) | Origin::Callback(_) | Origin::Conversion(_) => {
+                let kind = declaration.kind().as_str();
+                Err(Refusal::at(
+                    Unsupported::new(
+                        format!("unsupported.{kind}.not_implemented"),
+                        format!("the v2 engine has no {kind} lowering yet"),
+                    ),
+                    &root,
+                ))
+            }
         };
         match planned {
             Ok(Emitted { function, surface }) => {
@@ -971,12 +977,9 @@ struct Emitted<P> {
 fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
+    function: &Function,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
-    let flat = run.flat;
-    let function: &Function = flat
-        .function(declaration.rust_origin())
-        .expect("declarations are checked against the model before planning");
     let root = crate::target::Position::root(declaration.id().clone());
 
     // The wrapper is a safe function, and the writer renders a plain call.
