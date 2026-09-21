@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::{DeclarationKind, Origin},
+    decl::Origin,
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -756,7 +756,7 @@ pub fn generate<T: Target>(
             // does not have.
             Origin::LocalFunction(name) | Origin::LocalConst(name) => Err(Refusal::at(
                 Unsupported::new(
-                    format!("unsupported.{}.binding_local", declaration.kind().as_str()),
+                    format!("unsupported.{}.binding_local", declaration.kind()),
                     format!(
                         "`{name}` is defined by the binding, not captured from the source, so \
                          there is no captured item to plan from"
@@ -768,7 +768,7 @@ pub fn generate<T: Target>(
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
             Origin::Const(_) | Origin::Callback(_) | Origin::Conversion(_) => {
-                let kind = declaration.kind().as_str();
+                let kind = declaration.kind();
                 Err(Refusal::at(
                     Unsupported::new(
                         format!("unsupported.{kind}.not_implemented"),
@@ -809,7 +809,7 @@ pub fn generate<T: Target>(
         .outputs
         .iter()
         .map(|output| &output.declaration)
-        .filter(|declaration| declaration.kind() == DeclarationKind::Type)
+        .filter(|declaration| declaration.is_type())
         .map(|declaration| (declaration.name(), declaration))
         .collect();
 

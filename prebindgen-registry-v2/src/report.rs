@@ -15,7 +15,7 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    decl::{DeclarationKind, Origin},
+    decl::Origin,
     outcome::{EngineError, Outcome},
     target::Described,
 };
@@ -36,8 +36,8 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// Which kind of declaration it is.
-    pub fn kind(&self) -> DeclarationKind {
+    /// Which kind of declaration it is — see [`Origin::kind`].
+    pub fn kind(&self) -> &'static str {
         self.origin.kind()
     }
 
@@ -61,7 +61,7 @@ impl Serialize for Entry {
         #[derive(Serialize)]
         struct Columns<'a> {
             id: &'a Origin,
-            kind: DeclarationKind,
+            kind: &'static str,
             rust_origin: String,
             placement: &'a str,
             representation: &'a str,
@@ -270,21 +270,8 @@ pub struct Counts {
     pub ignored: usize,
 }
 
-/// Sort key: kind first (so a report reads types, then functions), then id.
+/// Sort key: the origin's own order — kind first, so a report reads types,
+/// then functions — then name.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
-    entries.sort_by(|a, b| {
-        kind_order(a.kind())
-            .cmp(&kind_order(b.kind()))
-            .then_with(|| a.origin.cmp(&b.origin))
-    });
-}
-
-fn kind_order(kind: DeclarationKind) -> u8 {
-    match kind {
-        DeclarationKind::Type => 0,
-        DeclarationKind::Conversion => 1,
-        DeclarationKind::Callback => 2,
-        DeclarationKind::Const => 3,
-        DeclarationKind::Function => 4,
-    }
+    entries.sort_by(|a, b| a.origin.cmp(&b.origin));
 }

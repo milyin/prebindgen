@@ -10,75 +10,16 @@
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
 
-/// What an [`Origin`] declares: a function, a type, a constant, a callback or
-/// a conversion.
-///
-/// This is the coarse, language-neutral category — the five things any binding
-/// can be made of. It is deliberately coarser than an adapter's own vocabulary:
-/// `prebindgen-c` declares a type with `opaque_ptr` or `data_struct`, and
-/// `prebindgen-jni` with `ptr_class` or `data_class`, but all four produce a
-/// `Type`. The word the adapter used is what its
-/// [`Target::describe`](crate::target::Target::describe) prints back for the
-/// declaration's policy.
-///
-/// It is bookkeeping, not a plan: what a declaration is planned from is the
-/// [`Origin`] itself — the captured item there is to work with — and the kind only
-/// picks between planners where one captured item backs two surfaces, as a
-/// Kotlin `val` read through a nullary function is planned as that function.
-/// Two things depend on the category:
-///
-/// * **Identity.** An [`Origin`] prints as `<kind>:<name>`, and the kind is
-///   what keeps the origins' several naming spaces apart: an origin may be a
-///   captured item's name, a type key, a callback's signature or a name the
-///   binding coined, so `type:Foo` and `conversion:Foo` are two declarations
-///   about one Rust type, and a reader of the report can tell which of them an
-///   entry belongs to.
-/// * **Report layout.** [`Report`](crate::Report) groups and sorts by it, so a
-///   report reads types first, then conversions, callbacks, constants and
-///   functions.
-///
-/// It says what the *target* language gets, not what the captured Rust source
-/// held — a Kotlin constant may be backed by a captured Rust function. That
-/// second question is the [`Origin`] variant.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DeclarationKind {
-    /// A `#[prebindgen]` function the binding exports a wrapper for.
-    Function,
-    /// A `#[prebindgen]` type the binding gives a foreign representation.
-    Type,
-    /// A `#[prebindgen]` constant the binding exposes as a foreign constant.
-    Const,
-    /// A callback signature the binding exports as a foreign callable.
-    Callback,
-    /// A declared conversion between a Rust type and its wire form.
-    Conversion,
-}
-
-impl DeclarationKind {
-    /// The prefix an [`Origin`] prints with, and the report label.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            DeclarationKind::Function => "fn",
-            DeclarationKind::Type => "type",
-            DeclarationKind::Const => "const",
-            DeclarationKind::Callback => "callback",
-            DeclarationKind::Conversion => "conversion",
-        }
-    }
-}
-
 /// What a declaration is named after, and what the engine plans it from.
 ///
 /// A name alone says neither: `Sample` may be a captured type, a type key the
 /// binding coined for something the source never exported, or the name of a
 /// Kotlin constant built from an expression. The variant says which, and it
-/// says it once — a declaration's [`DeclarationKind`] and what its name must
-/// find in the captured source both follow from the
-/// variant instead of being stated beside it, so they cannot disagree and a
-/// pair that means nothing (a callback backed by a captured constant, a
-/// function the binding both defines and selects out of the source) cannot be
-/// written down.
+/// says it once — what the target gets ([`Self::kind`]) and what the name must
+/// find in the captured source both follow from the variant instead of being
+/// stated beside it, so they cannot disagree and a pair that means nothing (a
+/// callback backed by a captured constant, a function the binding both defines
+/// and selects out of the source) cannot be written down.
 ///
 /// [`generate`](crate::generate) routes on this: each planner is reached by its
 /// own variants and is handed the captured item they name, rather than a kind
@@ -93,8 +34,8 @@ impl DeclarationKind {
 /// must not silently retire a test's requirement. `<kind>:<name>` —
 /// `type:Stamp`, `fn:stamp_sum` — is how it prints and how the report writes
 /// it, and that spelling is a rendering: nothing reads an origin back out of
-/// it. Origins order the way they print — by kind, then by name — so a report
-/// sorted by origin reads as its ids read.
+/// it. Origins order by kind — types first, then conversions, callbacks,
+/// constants and functions, which is how a report reads — and then by name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Origin {
     /// A captured `#[prebindgen]` function, exported as a foreign function.
@@ -125,17 +66,34 @@ pub enum Origin {
 }
 
 impl Origin {
-    /// What the target gets — see [`DeclarationKind`].
-    pub fn kind(&self) -> DeclarationKind {
+    /// What the target gets: `fn`, `type`, `const`, `callback` or
+    /// `conversion` — the prefix the origin prints with, the report's `kind`
+    /// column, and the middle of an `unsupported.<kind>.…` code.
+    ///
+    /// The coarse, language-neutral category — the five things any binding can
+    /// be made of. Deliberately coarser than an adapter's own vocabulary:
+    /// `prebindgen-c` declares a type with `opaque_ptr` or `data_struct`, and
+    /// `prebindgen-jni` with `ptr_class` or `data_class`, but all four are a
+    /// `type`; the adapter's word is what [`Target::describe`] prints back.
+    /// And it says what the *target* gets, not what the captured Rust source
+    /// held: a Kotlin constant read through a captured function is a `const`.
+    /// It is what keeps the origins' several naming spaces apart — `type:Foo`
+    /// and `conversion:Foo` are two declarations about one Rust type.
+    ///
+    /// [`Target::describe`]: crate::target::Target::describe
+    pub fn kind(&self) -> &'static str {
         match self {
-            Origin::Function(_) | Origin::LocalFunction(_) => DeclarationKind::Function,
-            Origin::Const(_) | Origin::ConstFromFunction(_) | Origin::LocalConst(_) => {
-                DeclarationKind::Const
-            }
-            Origin::Type(_) | Origin::LocalType(_) => DeclarationKind::Type,
-            Origin::Callback(_) => DeclarationKind::Callback,
-            Origin::Conversion(_) => DeclarationKind::Conversion,
+            Origin::Function(_) | Origin::LocalFunction(_) => "fn",
+            Origin::Const(_) | Origin::ConstFromFunction(_) | Origin::LocalConst(_) => "const",
+            Origin::Type(_) | Origin::LocalType(_) => "type",
+            Origin::Callback(_) => "callback",
+            Origin::Conversion(_) => "conversion",
         }
+    }
+
+    /// Whether this declares a type — captured or the binding's own.
+    pub fn is_type(&self) -> bool {
+        matches!(self, Origin::Type(_) | Origin::LocalType(_))
     }
 
     /// The captured element this origin names, if the model holds it.
@@ -214,28 +172,29 @@ impl Origin {
 }
 
 impl Ord for Origin {
-    /// By kind, then by name — the printed order. A captured and a
-    /// binding-local origin of one kind and name print alike and are still
-    /// distinct, so the variant breaks that tie last, and `Ord` agrees with
-    /// `Eq`.
+    /// By kind in report order, then by name. A captured and a binding-local
+    /// origin of one kind and name print alike and are still distinct, so the
+    /// variant breaks that tie last, and `Ord` agrees with `Eq`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        fn variant(origin: &Origin) -> u8 {
+        // Kind first, variant second: the variants of one kind are adjacent.
+        fn rank(origin: &Origin) -> (u8, u8) {
             match origin {
-                Origin::Function(_) => 0,
-                Origin::LocalFunction(_) => 1,
-                Origin::Const(_) => 2,
-                Origin::ConstFromFunction(_) => 3,
-                Origin::LocalConst(_) => 4,
-                Origin::Type(_) => 5,
-                Origin::LocalType(_) => 6,
-                Origin::Callback(_) => 7,
-                Origin::Conversion(_) => 8,
+                Origin::Type(_) => (0, 0),
+                Origin::LocalType(_) => (0, 1),
+                Origin::Conversion(_) => (1, 0),
+                Origin::Callback(_) => (2, 0),
+                Origin::Const(_) => (3, 0),
+                Origin::ConstFromFunction(_) => (3, 1),
+                Origin::LocalConst(_) => (3, 2),
+                Origin::Function(_) => (4, 0),
+                Origin::LocalFunction(_) => (4, 1),
             }
         }
-        self.kind()
-            .cmp(&other.kind())
+        let (kind, variant) = rank(self);
+        let (other_kind, other_variant) = rank(other);
+        kind.cmp(&other_kind)
             .then_with(|| self.name().cmp(&other.name()))
-            .then_with(|| variant(self).cmp(&variant(other)))
+            .then_with(|| variant.cmp(&other_variant))
     }
 }
 
@@ -247,7 +206,7 @@ impl PartialOrd for Origin {
 
 impl std::fmt::Display for Origin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.kind().as_str(), self.name())
+        write!(f, "{}:{}", self.kind(), self.name())
     }
 }
 
