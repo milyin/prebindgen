@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["BindingRequests","FunctionPlan","NodeId","OutputRequest","PolicyId","ValuePlan"]};
