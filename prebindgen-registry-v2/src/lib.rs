@@ -54,7 +54,7 @@ mod tests;
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::Declaration;
 pub use outcome::{Capability, EngineError, Outcome, Skip};
-pub use plan::{generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, ValuePlan};
+pub use plan::{generate, BindingRequests, FunctionPlan, NodeId, ValuePlan};
 pub use report::{Counts, Report, SCHEMA_VERSION};
 pub use run::{Generation, PIPELINE};
 pub use target::{

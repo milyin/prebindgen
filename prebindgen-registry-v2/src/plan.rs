@@ -27,14 +27,6 @@ use crate::{
     },
 };
 
-/// One requested output.
-#[derive(Clone, Debug)]
-pub struct OutputRequest {
-    /// What was declared, and the run's key for it — which is also what the
-    /// target looks its own configuration for this output up by.
-    pub declaration: Declaration,
-}
-
 /// What a frontend hands the engine: what to expose, and what to leave alone.
 ///
 /// Nothing about *how* anything crosses is here. A binding's choices — which
@@ -51,7 +43,9 @@ pub struct BindingRequests {
     pub target: &'static str,
     /// The module generated code reaches the source items through.
     pub source_module: syn::Path,
-    pub outputs: Vec<OutputRequest>,
+    /// What to expose, in the order the frontend recorded it. Each is also
+    /// what the target looks its own configuration for that output up by.
+    pub outputs: Vec<Declaration>,
     /// Declarations the user asked to leave alone.
     pub ignored: Vec<Declaration>,
 }
@@ -68,7 +62,7 @@ impl BindingRequests {
 
     /// Ask for one declaration to be exposed.
     pub fn output(&mut self, declaration: Declaration) -> &mut Self {
-        self.outputs.push(OutputRequest { declaration });
+        self.outputs.push(declaration);
         self
     }
 }
@@ -662,20 +656,14 @@ pub fn generate<T: Target>(
     requests: BindingRequests,
     declaring_crate: impl Into<String>,
 ) -> Result<Generation<T::Payload>, EngineError> {
-    let declared: Vec<Declaration> = requests
-        .outputs
-        .iter()
-        .map(|output| output.declaration.clone())
-        .collect();
-    check_declarations(&declared, &flat)?;
+    check_declarations(&requests.outputs, &flat)?;
 
     let mut run = Run::new(&flat, target);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
     let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
     let mut outcomes: BTreeMap<Declaration, Outcome> = BTreeMap::new();
 
-    for output in &requests.outputs {
-        let declaration = &output.declaration;
+    for declaration in &requests.outputs {
         let root = crate::target::Position::root(declaration.clone());
         // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it. Each
@@ -774,7 +762,6 @@ pub fn generate<T: Target>(
     let declared_types: BTreeMap<String, &Declaration> = requests
         .outputs
         .iter()
-        .map(|output| &output.declaration)
         .filter(|declaration| declaration.is_type())
         .map(|declaration| (declaration.name(), declaration))
         .collect();
@@ -829,11 +816,11 @@ pub fn generate<T: Target>(
     let mut entries: Vec<Entry> = requests
         .outputs
         .iter()
-        .map(|output| Entry {
-            declaration: output.declaration.clone(),
-            described: target.describe(&output.declaration),
+        .map(|declaration| Entry {
+            declaration: declaration.clone(),
+            described: target.describe(declaration),
             outcome: outcomes
-                .get(&output.declaration)
+                .get(declaration)
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })

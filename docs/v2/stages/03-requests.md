@@ -202,7 +202,7 @@ common Rust writer belongs to the engine.
 <tbody>
 <tr>
 <td>Language frontend</td>
-<td>Provide the public language-specific Rust API and pass the recorded choices to the registry as binding requests.</td>
+<td>Provide the public language-specific Rust API; pass the registry the list of outputs to plan, and keep the recorded choices, answering the registry's questions about them as its target.</td>
 <td>Expose <code>Stamp</code> as a C data struct and <code>normalize</code> as a C function.</td>
 <td>Expose <code>Stamp</code> as a Kotlin data class in a specified package and place <code>normalize</code> in the requested API.</td>
 </tr>
@@ -234,8 +234,10 @@ common Rust writer belongs to the engine.
 The implementation divides the registry's data between two structures:
 
 - **The generation operation**, `generate(flat, target, requests, crate)`, is a
-  free function that starts a fresh run. `target` implements the adapter
-  interface; `requests` contains the frontend's choices. Current V2 selects
+  free function that starts a fresh run. `requests` is the work list — what to
+  expose and what to leave alone; `target` implements the adapter interface and
+  holds the frontend's choices, which is where every question about them goes.
+  Current V2 selects
   atomic conversions or struct-field construction. Constructors, accessors
   and other helper [relations](04-select.md#what-a-relation-is) described by the design are future extensions.
 - **The run**, private `Run` state in `plan.rs`, keeps requests, offered
@@ -351,7 +353,7 @@ Suppose the user configures the JNI frontend to accept `Stamp` as two integer ar
 
 Identical type, construction and representation choices produce an equal key and can share a converter; the object override produces a different key and needs a different converter.
 
-`UnsupportedRequest` retains request identity, location and reason when a frontend cannot honor a setting. The registry reports and propagates that failure.
+A setting the frontend cannot honor needs no record of its own: the declaration it applies to is requested like any other, and the target refuses it by name when the registry asks. Identity, location and reason then reach the report through the ordinary [skip](07-retain.md#retain-supported-output), and propagate as one.
 
 The engine's one entry point (signature only):
 
@@ -450,6 +452,11 @@ struct OutputRequest {
 There is no configuration field. What this declaration is — its symbol, its
 placement, the declarator it came from — the target looks up under `id` when
 the registry asks it for a boundary, a public declaration or a report line.
+
+With nothing but identity left to carry, the implementation has no such struct:
+`BindingRequests::outputs` is a `Vec<Declaration>`. The sketch keeps one
+because `requirements` is a field the design still wants; the day it arrives,
+the struct comes back around it.
 
 `DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `Declaration` is the kind and the Rust name, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
