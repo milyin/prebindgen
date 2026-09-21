@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["body","decl","outcome","plan","report","run","target"]};
