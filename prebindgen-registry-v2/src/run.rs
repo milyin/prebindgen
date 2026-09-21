@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use prebindgen_flat::flat::Flat;
 
-use crate::{decl::Origin, outcome::EngineError, report::Report};
+use crate::{decl::Declaration, outcome::EngineError, report::Report};
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
@@ -138,15 +138,15 @@ impl<P> Generation<P> {
 /// A declaration is a statement of intent, so a declared item the source never
 /// captured is an error and not a capability question — the same rule v1 holds.
 ///
-/// Each declaration says which of the three captured kinds its origin must name —
+/// Each declaration says which of the three captured kinds its name must find —
 /// which is not always its own kind, since a Kotlin `val` may be backed by a
 /// nullary function. Looking a function up among the constants reported a typo
 /// that was not there; looking it up in the whole namespace let a
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
-pub(crate) fn check_declarations(declared: &[Origin], flat: &Flat) -> Result<(), EngineError> {
+pub(crate) fn check_declarations(declared: &[Declaration], flat: &Flat) -> Result<(), EngineError> {
     let missing: Vec<_> = declared
         .iter()
-        .filter(|origin| origin.missing_from(flat))
+        .filter(|declaration| declaration.missing_from(flat))
         .cloned()
         .collect();
     if !missing.is_empty() {
@@ -158,7 +158,7 @@ pub(crate) fn check_declarations(declared: &[Origin], flat: &Flat) -> Result<(),
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|origin| !seen.insert(*origin))
+        .filter(|declaration| !seen.insert(*declaration))
         .cloned()
         .collect();
     repeated.sort();

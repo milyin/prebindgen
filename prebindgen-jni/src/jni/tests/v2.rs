@@ -5,7 +5,7 @@
 //! explicitly, so a test never depends on the runner's `PREBINDGEN_PIPELINE`.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{Origin, Outcome};
+use prebindgen_registry_v2::{Declaration, Outcome};
 
 use super::*;
 
@@ -63,7 +63,7 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.origin.to_string())
+        .map(|entry| entry.declaration.to_string())
         .collect();
     assert_eq!(
         ids,
@@ -80,7 +80,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.origin.to_string() == id)
+            .find(|entry| entry.declaration.to_string() == id)
             .map(|entry| entry.placement().to_string())
             .unwrap_or_default()
     };
@@ -109,7 +109,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.origin.to_string() == id)
+            .find(|entry| entry.declaration.to_string() == id)
             .and_then(|entry| entry.outcome.skip())
             .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
             .expect("skipped")
@@ -221,7 +221,7 @@ fn class_members_are_elements_of_their_own() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.origin.to_string() == id)
+            .find(|entry| entry.declaration.to_string() == id)
             .map(|entry| entry.representation().to_string())
             .unwrap_or_default()
     };
@@ -239,7 +239,7 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.origin.to_string() == "fn:z_thing_internal")
+        .find(|entry| entry.declaration.to_string() == "fn:z_thing_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
 }
@@ -321,7 +321,7 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.origin.to_string())
+        .map(|entry| entry.declaration.to_string())
         .collect();
     assert_eq!(ids, ["fn:local_size", "fn:local_tag", "type:ZThing"]);
 }
@@ -349,11 +349,11 @@ fn a_function_backed_constant_resolves_against_the_function() {
         .iter()
         .find(|entry| entry.representation() == "constant_fun")
         .expect("the constant is accounted for");
-    assert_eq!(constant.origin.to_string(), "const:z_thing_describe");
+    assert_eq!(constant.declaration.to_string(), "const:z_thing_describe");
     // The target gets a `val`; the source must hold a function.
     assert!(matches!(
-        &constant.origin,
-        Origin::ConstFromFunction(ident) if ident == "z_thing_describe"
+        &constant.declaration,
+        Declaration::ConstFromFunction(ident) if ident == "z_thing_describe"
     ));
     // And it is planned from that function: what stops this one is the value
     // its parameter crosses as, reported against the parameter, rather than
@@ -388,7 +388,7 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
         .expect("v2 produces a report")
         .declarations
         .iter()
-        .find(|entry| entry.origin.to_string() == id)
+        .find(|entry| entry.declaration.to_string() == id)
         .and_then(|entry| entry.outcome.skip())
         .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))

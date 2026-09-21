@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::Origin,
+    decl::Declaration,
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -35,7 +35,7 @@ pub struct PolicyId(pub usize);
 #[derive(Clone, Debug)]
 pub struct OutputRequest {
     /// What was declared, and the run's key for it.
-    pub declaration: Origin,
+    pub declaration: Declaration,
     /// The target's configuration for this output.
     pub policy: PolicyId,
 }
@@ -60,9 +60,9 @@ pub struct BindingRequests<Policy> {
     /// Per-site overrides: this parameter, or the result, of this declared
     /// source function crosses differently from the type's default. Keyed by
     /// declaration and the site's path, `param 0` or `return`.
-    pub site_policies: BTreeMap<(Origin, String), PolicyId>,
+    pub site_policies: BTreeMap<(Declaration, String), PolicyId>,
     /// Declarations the user asked to leave alone.
-    pub ignored: Vec<Origin>,
+    pub ignored: Vec<Declaration>,
 }
 
 impl<Policy> BindingRequests<Policy> {
@@ -92,7 +92,7 @@ impl<Policy> BindingRequests<Policy> {
     }
 
     /// Ask for one declaration to be exposed.
-    pub fn output(&mut self, declaration: Origin, policy: PolicyId) -> &mut Self {
+    pub fn output(&mut self, declaration: Declaration, policy: PolicyId) -> &mut Self {
         self.outputs.push(OutputRequest {
             declaration,
             policy,
@@ -132,7 +132,7 @@ pub struct NodeId(pub(crate) usize);
 #[derive(Debug)]
 pub struct FunctionPlan<P> {
     /// The declaration this wrapper exports.
-    pub declaration: Origin,
+    pub declaration: Declaration,
     pub abi: AbiSpec,
     pub output: OutputPlacement,
     pub failures: Vec<FailureRoute<P>>,
@@ -715,7 +715,7 @@ pub fn generate<T: Target>(
     requests: BindingRequests<T::Policy>,
     declaring_crate: impl Into<String>,
 ) -> Result<Generation<T::Payload>, EngineError> {
-    let declared: Vec<Origin> = requests
+    let declared: Vec<Declaration> = requests
         .outputs
         .iter()
         .map(|output| output.declaration.clone())
@@ -725,25 +725,25 @@ pub fn generate<T: Target>(
     let mut run = Run::new(&flat, target, &requests);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
     let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
-    let mut outcomes: BTreeMap<Origin, Outcome> = BTreeMap::new();
+    let mut outcomes: BTreeMap<Declaration, Outcome> = BTreeMap::new();
 
     for output in &requests.outputs {
         let declaration = &output.declaration;
         let policy = requests.get(output.policy);
         let root = crate::target::Position::root(declaration.clone());
-        // What is planned follows from the origin, which says both what the
+        // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it. Each
         // planner is reached by its own variants and is given the captured item
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Origin::Type(_) | Origin::LocalType(_) => {
+            Declaration::Type(_) | Declaration::LocalType(_) => {
                 plan_type(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
             // Two surfaces built the same way: a Kotlin `val` read through a
             // nullary function is planned as that function, and the target
             // renders the constant.
-            Origin::Function(ident) | Origin::ConstFromFunction(ident) => {
+            Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
@@ -754,7 +754,7 @@ pub fn generate<T: Target>(
             // so there is nothing to plan from: its signature or its value is
             // the binding's own, and reading one is a capability this engine
             // does not have.
-            Origin::LocalFunction(name) => Err(Refusal::at(
+            Declaration::LocalFunction(name) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.fn.binding_local",
                     format!(
@@ -764,7 +764,7 @@ pub fn generate<T: Target>(
                 ),
                 &root,
             )),
-            Origin::LocalConst(name) => Err(Refusal::at(
+            Declaration::LocalConst(name) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.binding_local",
                     format!(
@@ -777,21 +777,21 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            Origin::Const(_) => Err(Refusal::at(
+            Declaration::Const(_) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.not_implemented",
                     "the v2 engine has no const lowering yet",
                 ),
                 &root,
             )),
-            Origin::Callback(_) => Err(Refusal::at(
+            Declaration::Callback(_) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.callback.not_implemented",
                     "the v2 engine has no callback lowering yet",
                 ),
                 &root,
             )),
-            Origin::Conversion(_) => Err(Refusal::at(
+            Declaration::Conversion(_) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.conversion.not_implemented",
                     "the v2 engine has no conversion lowering yet",
@@ -826,7 +826,7 @@ pub fn generate<T: Target>(
     // Which declaration represents which type. A target names a requirement by
     // type, because that is what the model told it about a value; matching the
     // type to the declaration covering it is the engine's side of that.
-    let declared_types: BTreeMap<String, &Origin> = requests
+    let declared_types: BTreeMap<String, &Declaration> = requests
         .outputs
         .iter()
         .map(|output| &output.declaration)
@@ -876,7 +876,8 @@ pub fn generate<T: Target>(
     }
 
     // Only what a retained output needs is published.
-    let emitted = |origin: &Origin| matches!(outcomes.get(origin), Some(Outcome::Emitted));
+    let emitted =
+        |declaration: &Declaration| matches!(outcomes.get(declaration), Some(Outcome::Emitted));
     functions.retain(|function| emitted(&function.declaration));
     surfaces.retain(|surface| emitted(&surface.declaration));
 
@@ -884,7 +885,7 @@ pub fn generate<T: Target>(
         .outputs
         .iter()
         .map(|output| Entry {
-            origin: output.declaration.clone(),
+            declaration: output.declaration.clone(),
             described: target.describe(requests.get(output.policy)),
             outcome: outcomes
                 .get(&output.declaration)
@@ -894,8 +895,8 @@ pub fn generate<T: Target>(
         // An ignore is a decision the binding made about a captured item, so
         // it has no policy and lands nowhere; the kind column already says
         // whether a function, a type or a constant was left alone.
-        .chain(requests.ignored.iter().map(|origin| Entry {
-            origin: origin.clone(),
+        .chain(requests.ignored.iter().map(|declaration| Entry {
+            declaration: declaration.clone(),
             described: crate::target::Described::new("ignore", ""),
             outcome: Outcome::Ignored,
         }))
@@ -996,7 +997,7 @@ struct Emitted<P> {
 /// interface around them.
 fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
-    declaration: &Origin,
+    declaration: &Declaration,
     function: &Function,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
@@ -1125,7 +1126,7 @@ enum Body<'a, P> {
 /// for a release, one drop — the result out.
 fn assemble<T: Target>(
     run: &mut Run<'_, T>,
-    declaration: &Origin,
+    declaration: &Declaration,
     action: Body<'_, T::Payload>,
     inputs: &[NodeId],
     output: Option<NodeId>,
@@ -1390,7 +1391,7 @@ fn assemble<T: Target>(
 /// plans the release as a wrapper under the type's own identity.
 fn plan_type<T: Target>(
     run: &mut Run<'_, T>,
-    declaration: &Origin,
+    declaration: &Declaration,
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;

@@ -9,7 +9,7 @@
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind};
 
 use crate::{
-    decl::Origin,
+    decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
@@ -499,12 +499,12 @@ fn requests() -> BindingRequests<Policy> {
     BindingRequests::new("mini", syn::parse_quote!(source), Policy::Scalar)
 }
 
-fn ty(origin: &str) -> Origin {
-    Origin::Type(prebindgen_flat::TypeKey::parse(origin).expect("a test names a type"))
+fn ty(name: &str) -> Declaration {
+    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
-fn function(origin: &str) -> Origin {
-    Origin::Function(syn::parse_str(origin).expect("a test names an ident"))
+fn function(name: &str) -> Declaration {
+    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
@@ -512,7 +512,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .report()
         .declarations
         .iter()
-        .find(|entry| entry.origin.to_string() == id)
+        .find(|entry| entry.declaration.to_string() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }
@@ -551,7 +551,7 @@ fn a_site_override_does_not_share_the_default_conversion() {
     let max = requests.policy(exported("stamp_max", Routes::Reported));
     requests.site_policies.insert(
         (
-            Origin::Function(syn::parse_quote!(stamp_max)),
+            Declaration::Function(syn::parse_quote!(stamp_max)),
             "param 0".to_string(),
         ),
         fallible,
@@ -749,7 +749,7 @@ fn a_field_override_is_part_of_its_struct_conversion() {
         // relation for an `i64`, so this child cannot be selected at all.
         requests.site_policies.insert(
             (
-                Origin::Function(syn::parse_quote!(stamp_max)),
+                Declaration::Function(syn::parse_quote!(stamp_max)),
                 "param 0.field secs".to_string(),
             ),
             strukt,
@@ -934,7 +934,7 @@ fn two_supported_children_make_two_struct_conversions() {
     let max = requests.policy(exported("stamp_max", Routes::None));
     requests.site_policies.insert(
         (
-            Origin::Function(syn::parse_quote!(stamp_max)),
+            Declaration::Function(syn::parse_quote!(stamp_max)),
             "param 0.field secs".to_string(),
         ),
         other_scalar,

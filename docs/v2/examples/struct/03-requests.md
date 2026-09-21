@@ -27,8 +27,8 @@ The type request asks for a public foreign [representation](../../stages/05-repr
 independent of the request for `stamp_sum`. This sketch also shows the fields
 that the registry will use when it discovers the struct [relation](../../stages/04-select.md#what-a-relation-is) during value
 planning. All structures in the block are design notation, not exact current
-request fields. Current `OutputRequest` contains a `Declaration` — which names
-its origin, here `Origin::Type(Stamp)` — and a `PolicyId`.
+request fields. Current `OutputRequest` contains a `Declaration` — here
+`Declaration::Type(Stamp)` — and a `PolicyId`.
 The frontend also records a type [policy](../../stages/03-requests.md#what-policy-means) for `Stamp`, which is how a later
 function parameter finds this representation without repeating the configuration.
 

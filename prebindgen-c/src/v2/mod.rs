@@ -15,7 +15,7 @@
 
 mod target;
 
-use prebindgen_registry_v2::{generate, BindingRequests, EngineError, Generation, Origin};
+use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
 pub use target::{CPayload, CPolicy, CTarget};
 
 use crate::CbindgenBuilder;
@@ -58,7 +58,7 @@ impl CbindgenBuilder {
             requests
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
-            requests.output(Origin::LocalType(key.clone()), policy);
+            requests.output(Declaration::LocalType(key.clone()), policy);
         }
 
         // Opaque handles: `<c_name> *` to a Rust-owned value, freed through
@@ -72,7 +72,7 @@ impl CbindgenBuilder {
             requests
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
-            requests.output(Origin::LocalType(key.clone()), policy);
+            requests.output(Declaration::LocalType(key.clone()), policy);
         }
 
         // Every other declarator is accounted for and refused by name. A
@@ -91,7 +91,7 @@ impl CbindgenBuilder {
                 requests
                     .type_policies
                     .insert(key.as_str().to_string(), policy);
-                requests.output(Origin::LocalType(key.clone()), policy);
+                requests.output(Declaration::LocalType(key.clone()), policy);
             }
         }
 
@@ -102,7 +102,7 @@ impl CbindgenBuilder {
                 declarator: "callback",
                 c_name: self.callback_c_name(key),
             });
-            requests.output(Origin::Callback(describe_callback(key)), policy);
+            requests.output(Declaration::Callback(describe_callback(key)), policy);
         }
 
         // Declared conversions: the wire mapping for one Rust type, defined by
@@ -112,7 +112,7 @@ impl CbindgenBuilder {
                 declarator: "convert",
                 c_name: self.c_type_name(decl.key()),
             });
-            requests.output(Origin::Conversion(decl.key().clone()), policy);
+            requests.output(Declaration::Conversion(decl.key().clone()), policy);
         }
 
         // Exported functions — the one kind that must name a captured item.
@@ -121,17 +121,17 @@ impl CbindgenBuilder {
             let policy = requests.policy(CPolicy::Function {
                 symbol: symbol.clone(),
             });
-            requests.output(Origin::Function(ident.clone()), policy);
+            requests.output(Declaration::Function(ident.clone()), policy);
         }
 
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_functions) {
             requests
                 .ignored
-                .push(Origin::LocalFunction(ident.to_string()));
+                .push(Declaration::LocalFunction(ident.to_string()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignored.push(Origin::LocalType(key.clone()));
+            requests.ignored.push(Declaration::LocalType(key.clone()));
         }
         requests
     }

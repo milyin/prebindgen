@@ -52,7 +52,7 @@ use prebindgen_flat::{
 };
 use proc_macro2::TokenStream;
 
-use crate::{decl::Origin, outcome::Capability};
+use crate::{decl::Declaration, outcome::Capability};
 
 /// Which way a value crosses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -746,7 +746,7 @@ impl std::fmt::Display for Requirement {
 /// A target's description of one public declaration and what it requires.
 #[derive(Clone, Debug)]
 pub struct SurfaceSpec<P> {
-    pub declaration: Origin,
+    pub declaration: Declaration,
     /// Types that must be declared and emitted for this declaration to be.
     pub requires: Vec<Requirement>,
     /// Rust this declaration contributes: the `repr(C)` aggregate a C caller
@@ -765,13 +765,13 @@ pub struct SurfaceSpec<P> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position {
     /// The requested output this conversion is reached from.
-    pub declaration: Origin,
+    pub declaration: Declaration,
     /// Root to here: `param 0`, then `field secs`.
     pub path: Vec<String>,
 }
 
 impl Position {
-    pub fn root(declaration: Origin) -> Self {
+    pub fn root(declaration: Declaration) -> Self {
         Position {
             declaration,
             path: Vec::new(),
@@ -893,7 +893,7 @@ pub struct SiteDescriptor<'a> {
     /// The export this wrapper is for. For a release, the handle type's own
     /// declaration. The exported symbol is not read from here; the frontend
     /// settled it in the policy.
-    pub declaration: &'a Origin,
+    pub declaration: &'a Declaration,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
     /// The target reads its parameter *names*: a wrapper parameter keeps its
@@ -906,7 +906,7 @@ pub struct SiteDescriptor<'a> {
 
 /// What `surface` is given: the requested public declaration.
 pub struct SurfaceRequest<'a, Policy> {
-    pub declaration: &'a Origin,
+    pub declaration: &'a Declaration,
     pub policy: &'a Policy,
     pub item: SourceItem<'a>,
 }
@@ -965,7 +965,7 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 /// The captured item a public declaration is made from, as the source model
 /// describes it.
 ///
-/// A binding asks for an output by name — an [`Origin`] such as
+/// A binding asks for an output by name — an [`Declaration`] such as
 /// `type:Ledger` — and the registry resolves that name in the source model
 /// before it plans anything. This is what it found: the model's own element,
 /// borrowed from the [`Flat`] the run was planned over. A target receives it
@@ -983,13 +983,13 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 /// struct declared to C as an opaque pointer still arrives as
 /// [`SourceItem::Struct`], and how the target carries it is in
 /// [`SurfaceRequest::policy`]. Read the policy first. A declaration the
-/// binding defines itself ([`Origin::is_binding_local`]) names no captured
+/// binding defines itself ([`Declaration::is_binding_local`]) names no captured
 /// item and is refused before `surface` is asked, so nothing here is ever
 /// absent.
 ///
 /// [`Flat`]: prebindgen_flat::flat::Flat
 /// [`Element`]: prebindgen_flat::flat::Element
-/// [`Origin::is_binding_local`]: crate::decl::Origin::is_binding_local
+/// [`Declaration::is_binding_local`]: crate::decl::Declaration::is_binding_local
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
     /// A captured free function, the item behind a `fn:` declaration.
@@ -1097,7 +1097,7 @@ pub trait Target {
 pub struct Described {
     /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
     /// — the adapter's own word, printed back verbatim. Finer than the prefix
-    /// an [`Origin`] prints with: `opaque_ptr` and
+    /// an [`Declaration`] prints with: `opaque_ptr` and
     /// `data_struct` are both a `type`.
     pub representation: String,
     /// Where it lands in the target language, spelled the way that language

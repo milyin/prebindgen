@@ -5,7 +5,7 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::Origin,
+    decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -68,8 +68,8 @@ impl Target for Nothing {
 
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
-    declared: Vec<Origin>,
-    ignored: Vec<Origin>,
+    declared: Vec<Declaration>,
+    ignored: Vec<Declaration>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -123,25 +123,25 @@ fn sources() -> FlatBuilder {
 }
 
 /// A captured function's origin, by name.
-fn captured_fn(name: &str) -> Origin {
-    Origin::Function(syn::parse_str(name).expect("a test names an ident"))
+fn captured_fn(name: &str) -> Declaration {
+    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
 /// A Kotlin `val` read through that captured function.
-fn constant_fn(name: &str) -> Origin {
-    Origin::ConstFromFunction(syn::parse_str(name).expect("a test names an ident"))
+fn constant_fn(name: &str) -> Declaration {
+    Declaration::ConstFromFunction(syn::parse_str(name).expect("a test names an ident"))
 }
 
 /// A type the binding represents, whether or not the source captured it.
-fn local_type(name: &str) -> Origin {
-    Origin::LocalType(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+fn local_type(name: &str) -> Declaration {
+    Declaration::LocalType(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
 #[test]
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_new")), (local_type("Handle"))],
-        ignored: vec![(Origin::LocalFunction("handle_value".to_string()))],
+        ignored: vec![(Declaration::LocalFunction("handle_value".to_string()))],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
@@ -155,7 +155,7 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.origin.to_string())
+        .map(|entry| entry.declaration.to_string())
         .collect();
     assert_eq!(ids, ["fn:handle_new", "fn:handle_value", "type:Handle"]);
     assert_eq!(report.declarations[1].outcome, Outcome::Ignored);
@@ -177,7 +177,7 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![(Origin::Callback("impl Fn(i64)".to_string()))],
+        declared: vec![(Declaration::Callback("impl Fn(i64)".to_string()))],
         ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -210,7 +210,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as
     // wrong as declaring a name nothing captured.
     let stated = Stated {
-        declared: vec![(Origin::Const(syn::parse_str("handle_new").expect("an ident")))],
+        declared: vec![(Declaration::Const(syn::parse_str("handle_new").expect("an ident")))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
@@ -258,7 +258,7 @@ fn skips_are_grouped_by_capability_code() {
 #[test]
 fn an_entry_serializes_flat() {
     let entry = crate::report::Entry {
-        origin: constant_fn("z_thing_describe"),
+        declaration: constant_fn("z_thing_describe"),
         described: Described::new("constant_fun", "example.DESCRIBE"),
         outcome: Outcome::Emitted,
     };

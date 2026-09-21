@@ -15,7 +15,7 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    decl::Origin,
+    decl::Declaration,
     outcome::{EngineError, Outcome},
     target::Described,
 };
@@ -28,7 +28,7 @@ pub const SCHEMA_VERSION: u32 = 3;
 #[derive(Clone, Debug)]
 pub struct Entry {
     /// What was declared, and the run's key for it.
-    pub origin: Origin,
+    pub declaration: Declaration,
     /// What the target says it is on the foreign side — the adapter's
     /// declarator word and the placement.
     pub described: Described,
@@ -48,19 +48,19 @@ impl Entry {
 }
 
 impl Serialize for Entry {
-    /// Flat: the `id` is the origin as it prints, and the outcome's own fields
+    /// Flat: the `id` is the declaration as it prints, and the outcome's own fields
     /// follow at the same level.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         struct Columns<'a> {
-            id: &'a Origin,
+            id: &'a Declaration,
             placement: &'a str,
             representation: &'a str,
             #[serde(flatten)]
             outcome: &'a Outcome,
         }
         Columns {
-            id: &self.origin,
+            id: &self.declaration,
             placement: self.placement(),
             representation: self.representation(),
             outcome: &self.outcome,
@@ -186,7 +186,7 @@ impl Report {
                     .skip()
                     .map(|skip| skip.path())
                     .unwrap_or_default();
-                let _ = writeln!(out, "- `{}` ({})", entry.origin, path);
+                let _ = writeln!(out, "- `{}` ({})", entry.declaration, path);
             }
             let _ = writeln!(out);
         }
@@ -206,7 +206,7 @@ impl Report {
             let _ = writeln!(
                 out,
                 "| `{}` | {} | `{}` | {} |",
-                entry.origin,
+                entry.declaration,
                 entry.representation(),
                 entry.placement(),
                 outcome
@@ -236,7 +236,7 @@ impl Report {
         for (capability, entries) in self.skips_by_capability() {
             let roots = entries
                 .iter()
-                .map(|entry| entry.origin.to_string())
+                .map(|entry| entry.declaration.to_string())
                 .collect::<Vec<_>>();
             let shown = roots.len().min(5);
             let more = match roots.len() - shown {
@@ -261,5 +261,5 @@ pub struct Counts {
 
 /// Sort key: the id, as it prints.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
-    entries.sort_by(|a, b| a.origin.cmp(&b.origin));
+    entries.sort_by(|a, b| a.declaration.cmp(&b.declaration));
 }
