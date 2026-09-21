@@ -52,7 +52,7 @@ pub mod target;
 mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
-pub use decl::{Declaration, DeclarationId, DeclarationKind, SourceKind};
+pub use decl::{Declaration, DeclarationId, DeclarationKind, Origin, SourceKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{
     generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, PolicyId, ValuePlan,
@@ -63,7 +63,8 @@ pub use target::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Direction, FailureCategory,
     FailureRoute, Layout, OperandRole, OperandSpec, Operation, OperationType, OutputPlacement,
     ParamRole, Part, PlanningError, Position, PrimitiveFailure, PrimitiveId, PrimitiveSpec,
-    Protocol, Relation, RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery,
-    SiteDescriptor, SourceItem, StandardOp, StructRelation, SurfaceRequest, SurfaceSpec, Target,
-    TargetAttempt, TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
+    Protocol, Relation, RelationId, ReprSpec, Requirement, ResolvedShape, ResolvedValues,
+    SelectionQuery, SiteDescriptor, SourceItem, StandardOp, StructRelation, SurfaceRequest,
+    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
+    WrapperParam,
 };

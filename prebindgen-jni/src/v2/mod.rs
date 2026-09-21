@@ -16,7 +16,7 @@ mod kotlin;
 mod target;
 
 use prebindgen_registry_v2::{
-    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation, SourceKind,
+    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation, Origin,
 };
 pub use target::{JniPayload, JniPolicy, JniTarget};
 
@@ -76,12 +76,9 @@ impl Declarations {
         // bound and nowhere else: a second entry for the helper itself would
         // give one id to two declarations.
         let is_local = |ident: &syn::Ident| self.local_fns.iter().any(|(local, ..)| local == ident);
-        let stated = |declaration: Declaration, ident: &syn::Ident| {
-            if is_local(ident) {
-                declaration.local()
-            } else {
-                declaration
-            }
+        let origin = |ident: &syn::Ident| match is_local(ident) {
+            true => Origin::Local(ident.to_string()),
+            false => Origin::Function(ident.clone()),
         };
 
         // Declared classes. A data class is the one representation v2 lowers;
@@ -116,11 +113,10 @@ impl Declarations {
             requests.output(
                 Declaration::new(
                     DeclarationKind::Type,
-                    key.as_str(),
+                    Origin::LocalType(key.clone()),
                     placement.clone(),
                     declarator,
-                )
-                .local(),
+                ),
                 policy,
             );
 
@@ -131,14 +127,11 @@ impl Declarations {
                 let declarator = member_representation(member);
                 let policy = requests.policy(JniPolicy::Unimplemented { declarator });
                 requests.output(
-                    stated(
-                        Declaration::new(
-                            DeclarationKind::Function,
-                            member.rust_ident.to_string(),
-                            format!("{placement}.{}", self.effective_method_name(key, member)),
-                            declarator,
-                        ),
-                        &member.rust_ident,
+                    Declaration::new(
+                        DeclarationKind::Function,
+                        origin(&member.rust_ident),
+                        format!("{placement}.{}", self.effective_method_name(key, member)),
+                        declarator,
                     ),
                     policy,
                 );
@@ -173,14 +166,11 @@ impl Declarations {
                         },
                     });
                 requests.output(
-                    stated(
-                        Declaration::new(
-                            DeclarationKind::Function,
-                            entry.rust_ident.to_string(),
-                            placed(entry),
-                            "fun",
-                        ),
-                        &entry.rust_ident,
+                    Declaration::new(
+                        DeclarationKind::Function,
+                        origin(&entry.rust_ident),
+                        placed(entry),
+                        "fun",
                     ),
                     policy,
                 );
@@ -193,7 +183,7 @@ impl Declarations {
                 requests.output(
                     Declaration::new(
                         DeclarationKind::Const,
-                        entry.rust_ident.to_string(),
+                        Origin::Const(entry.rust_ident.clone()),
                         placed(entry),
                         "constant",
                     ),
@@ -204,16 +194,12 @@ impl Declarations {
             // captured **function**, so its target kind and its source kind
             // differ — and a binding-local one names no captured item at all.
             for entry in &config.constant_functions {
-                let declaration = Declaration::new(
-                    DeclarationKind::Const,
-                    entry.rust_ident.to_string(),
-                    placed(entry),
-                    "constant_fun",
-                );
                 requests.output(
-                    stated(
-                        declaration.sourced_as(SourceKind::Function),
-                        &entry.rust_ident,
+                    Declaration::new(
+                        DeclarationKind::Const,
+                        origin(&entry.rust_ident),
+                        placed(entry),
+                        "constant_fun",
                     ),
                     unimplemented,
                 );
@@ -223,11 +209,10 @@ impl Declarations {
                 requests.output(
                     Declaration::new(
                         DeclarationKind::Const,
-                        decl.kotlin_name.clone(),
+                        Origin::Local(decl.kotlin_name.clone()),
                         format!("{package}.{}", decl.kotlin_name),
                         "constant_expr",
-                    )
-                    .local(),
+                    ),
                     unimplemented,
                 );
             }
@@ -247,43 +232,38 @@ impl Declarations {
             requests.output(
                 Declaration::new(
                     DeclarationKind::Conversion,
-                    decl.key().as_str(),
+                    Origin::LocalType(decl.key().clone()),
                     self.kotlin_fqn(decl.key()).unwrap_or_default(),
                     "convert",
-                )
-                .local(),
+                ),
                 unimplemented,
             );
         }
 
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_fns) {
-            requests.ignored.push(
-                Declaration::new(
-                    DeclarationKind::Function,
-                    ident.to_string(),
-                    String::new(),
-                    "ignore",
-                )
-                .local(),
-            );
+            requests.ignored.push(Declaration::new(
+                DeclarationKind::Function,
+                Origin::Local(ident.to_string()),
+                String::new(),
+                "ignore",
+            ));
         }
         for key in sorted(&self.ignored_class_types) {
-            requests.ignored.push(
-                Declaration::new(DeclarationKind::Type, key.as_str(), String::new(), "ignore")
-                    .local(),
-            );
+            requests.ignored.push(Declaration::new(
+                DeclarationKind::Type,
+                Origin::LocalType(key.clone()),
+                String::new(),
+                "ignore",
+            ));
         }
         for ident in sorted(&self.ignored_const_idents) {
-            requests.ignored.push(
-                Declaration::new(
-                    DeclarationKind::Const,
-                    ident.to_string(),
-                    String::new(),
-                    "ignore_const",
-                )
-                .local(),
-            );
+            requests.ignored.push(Declaration::new(
+                DeclarationKind::Const,
+                Origin::Local(ident.to_string()),
+                String::new(),
+                "ignore_const",
+            ));
         }
         requests
     }

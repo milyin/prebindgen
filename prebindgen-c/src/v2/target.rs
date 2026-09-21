@@ -12,12 +12,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
-    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId,
-    ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
-    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, FailureCategory, FailureRoute,
+    Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
+    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement,
+    ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp,
+    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
+    WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -71,13 +71,6 @@ fn scalar_of(ty: &TypeRef) -> Option<ScalarKind> {
 }
 
 /// The declared name of a nominal type.
-fn named(ty: &TypeRef) -> Option<String> {
-    match ty.kind() {
-        TypeKind::Named { id, .. } => Some(id.name.clone()),
-        _ => None,
-    }
-}
-
 impl Target for CTarget {
     type Policy = CPolicy;
     type Payload = CPayload;
@@ -249,14 +242,14 @@ impl Target for CTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 C target does not \
                          lower yet",
-                        site.declaration.rust_origin
+                        site.declaration.rust_origin()
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.rust_origin
+                    site.declaration.rust_origin()
                 )));
             }
         };
@@ -314,7 +307,7 @@ impl Target for CTarget {
         if let CPolicy::OpaquePtr { c_name, .. } = request.policy {
             let ident = format_ident!("{c_name}");
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id.clone(),
+                declaration: request.declaration.id().clone(),
                 requires: Vec::new(),
                 // A struct whose only member is a zero-length array is what
                 // `cbindgen` renders as an incomplete type: a C caller can
@@ -339,15 +332,14 @@ impl Target for CTarget {
                 opaque.name
             ))),
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id.clone(),
+                declaration: request.declaration.id().clone(),
                 // A wrapper taking or returning a declared type is unusable
                 // unless the public type it names is emitted too.
                 requires: values
                     .inputs
                     .iter()
                     .chain(values.output.iter())
-                    .filter_map(|value| named(&value.crossing.ty))
-                    .map(|name| DeclarationId::new(DeclarationKind::Type, name))
+                    .filter_map(|value| Requirement::of(&value.crossing.ty))
                     .collect(),
                 rust: Vec::new(),
                 payload: None,
@@ -419,7 +411,7 @@ impl Target for CTarget {
                     fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id.clone(),
+                    declaration: request.declaration.id().clone(),
                     requires: Vec::new(),
                     // `repr(C)` is required: without it the layout the header
                     // promises is not the layout the wrapper reads. The C name

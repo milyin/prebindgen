@@ -149,7 +149,7 @@ impl Report {
                     .skip()
                     .map(|skip| skip.path())
                     .unwrap_or_default();
-                let _ = writeln!(out, "- `{}` ({})", entry.declaration.id, path);
+                let _ = writeln!(out, "- `{}` ({})", entry.declaration.id(), path);
             }
             let _ = writeln!(out);
         }
@@ -169,9 +169,9 @@ impl Report {
             let _ = writeln!(
                 out,
                 "| `{}` | {} | `{}` | {} |",
-                entry.declaration.id,
-                entry.declaration.representation,
-                entry.declaration.placement,
+                entry.declaration.id(),
+                entry.declaration.representation(),
+                entry.declaration.placement(),
                 outcome
             );
         }
@@ -199,7 +199,7 @@ impl Report {
         for (capability, entries) in self.skips_by_capability() {
             let roots = entries
                 .iter()
-                .map(|entry| entry.declaration.id.as_str())
+                .map(|entry| entry.declaration.id().to_string())
                 .collect::<Vec<_>>();
             let shown = roots.len().min(5);
             let more = match roots.len() - shown {
@@ -225,9 +225,9 @@ pub struct Counts {
 /// Sort key: kind first (so a report reads types, then functions), then id.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
     entries.sort_by(|a, b| {
-        kind_order(a.declaration.kind)
-            .cmp(&kind_order(b.declaration.kind))
-            .then_with(|| a.declaration.id.cmp(&b.declaration.id))
+        kind_order(a.declaration.kind())
+            .cmp(&kind_order(b.declaration.kind()))
+            .then_with(|| a.declaration.id().cmp(b.declaration.id()))
     });
 }
 

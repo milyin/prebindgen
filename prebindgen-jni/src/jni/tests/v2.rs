@@ -60,10 +60,10 @@ fn every_declared_element_is_accounted_for() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let report = generated.report().expect("v2 produces a report");
 
-    let ids: Vec<&str> = report
+    let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id.as_str())
+        .map(|entry| entry.declaration.id().to_string())
         .collect();
     assert_eq!(
         ids,
@@ -80,8 +80,8 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.id.as_str() == id)
-            .map(|entry| entry.declaration.placement.clone())
+            .find(|entry| entry.declaration.id().to_string() == id)
+            .map(|entry| entry.declaration.placement().to_string())
             .unwrap_or_default()
     };
     assert_eq!(placement("type:ZThing"), "io.test.jni.thing.ZThing");
@@ -109,7 +109,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.id.as_str() == id)
+            .find(|entry| entry.declaration.id().to_string() == id)
             .and_then(|entry| entry.outcome.skip())
             .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
             .expect("skipped")
@@ -221,8 +221,8 @@ fn class_members_are_elements_of_their_own() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.id.as_str() == id)
-            .map(|entry| entry.declaration.representation.clone())
+            .find(|entry| entry.declaration.id().to_string() == id)
+            .map(|entry| entry.declaration.representation().to_string())
             .unwrap_or_default()
     };
     assert_eq!(representation("type:ZThing"), "ptr_class");
@@ -239,7 +239,7 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id.as_str() == "fn:z_thing_internal")
+        .find(|entry| entry.declaration.id().to_string() == "fn:z_thing_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
 }
@@ -318,10 +318,10 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
 
     // Once each: a helper is stated where it is bound, and a second entry for
     // the helper itself would give one id to two declarations.
-    let ids: Vec<&str> = report
+    let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id.as_str())
+        .map(|entry| entry.declaration.id().to_string())
         .collect();
     assert_eq!(ids, ["type:ZThing", "fn:local_size", "fn:local_tag"]);
 }
@@ -347,12 +347,19 @@ fn a_function_backed_constant_resolves_against_the_function() {
     let constant = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.representation == "constant_fun")
+        .find(|entry| entry.declaration.representation() == "constant_fun")
         .expect("the constant is accounted for");
-    assert_eq!(constant.declaration.rust_origin, "z_thing_describe");
-    assert_eq!(constant.declaration.kind, DeclarationKind::Const);
+    assert_eq!(constant.declaration.rust_origin(), "z_thing_describe");
+    assert_eq!(constant.declaration.kind(), DeclarationKind::Const);
     // The target gets a `val`; the source must hold a function.
-    assert_eq!(constant.declaration.source, SourceKind::Function);
+    assert_eq!(constant.declaration.source(), SourceKind::Function);
+    // And it is planned from that function: what stops this one is the value
+    // its parameter crosses as, reported against the parameter, rather than
+    // the engine turning away everything declared as a constant.
+    let Outcome::Skipped(skip) = &constant.outcome else {
+        panic!("the backing function takes a handle the JNI target has no carrier for");
+    };
+    assert_eq!(skip.dependency_path, ["const:z_thing_describe", "param 0"]);
 }
 
 /// The `Stamp` fixture the edge-case tests below build on: a struct of two
@@ -379,7 +386,7 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
         .expect("v2 produces a report")
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id.as_str() == id)
+        .find(|entry| entry.declaration.id().to_string() == id)
         .and_then(|entry| entry.outcome.skip())
         .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use prebindgen_flat::flat::Flat;
 
-use crate::{decl::SourceKind, outcome::EngineError, report::Report};
+use crate::{outcome::EngineError, report::Report};
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
@@ -150,19 +150,15 @@ pub(crate) fn check_declarations(
     let missing: Vec<_> = declared
         .iter()
         .filter(|declaration| {
-            let origin = declaration.rust_origin.as_str();
-            match declaration.source {
-                SourceKind::Function => flat.function(origin).is_none(),
-                SourceKind::Type => flat.declared_type(origin).is_none(),
-                SourceKind::Const => flat.constant(origin).is_none(),
-                SourceKind::BindingLocal => false,
-            }
+            declaration
+                .source()
+                .missing_from(flat, declaration.rust_origin())
         })
         .map(|declaration| {
             (
-                declaration.id.clone(),
-                declaration.source,
-                declaration.rust_origin.clone(),
+                declaration.id().clone(),
+                declaration.source(),
+                declaration.rust_origin().to_string(),
             )
         })
         .collect();
@@ -175,8 +171,8 @@ pub(crate) fn check_declarations(
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|declaration| !seen.insert(&declaration.id))
-        .map(|declaration| declaration.id.clone())
+        .filter(|declaration| !seen.insert(declaration.id()))
+        .map(|declaration| declaration.id().clone())
         .collect();
     repeated.sort();
     repeated.dedup();

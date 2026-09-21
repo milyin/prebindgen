@@ -729,40 +729,46 @@ pub fn generate<T: Target>(
     for output in &requests.outputs {
         let declaration = &output.declaration;
         let policy = requests.get(output.policy);
-        let planned = match declaration.kind {
-            // A function the binding defines itself has no captured item to
-            // plan from: its signature is the binding's, and reading one is a
-            // capability this engine does not have yet.
-            DeclarationKind::Function
-                if declaration.source == crate::decl::SourceKind::BindingLocal =>
-            {
-                Err(Refusal::at(
-                    Unsupported::new(
-                        "unsupported.fn.binding_local",
-                        format!(
-                            "`{}` is defined by the binding, not captured from the source; v2 \
-                             plans captured functions only",
-                            declaration.rust_origin
-                        ),
-                    ),
-                    &crate::target::Position::root(declaration.id.clone()),
-                ))
-            }
-            DeclarationKind::Function => {
-                plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?
-            }
-            DeclarationKind::Type => {
+        // What is planned follows from the origin — the captured item there
+        // is to plan from. The kind says which surface the binding asked for,
+        // and only picks between planners where two surfaces are built the
+        // same way: a Kotlin `val` read through a nullary function is planned
+        // as that function, and the target renders the constant.
+        let planned = match (declaration.kind(), declaration.source()) {
+            (DeclarationKind::Type, _) => {
                 plan_type(&mut run, declaration, policy).map_err(EngineError::Planning)?
             }
+            (
+                DeclarationKind::Function | DeclarationKind::Const,
+                crate::decl::SourceKind::Function,
+            ) => plan_function(&mut run, declaration, policy).map_err(EngineError::Planning)?,
+            // A declaration the binding defines itself names no captured item,
+            // so there is nothing to plan from: its signature or its value is
+            // the binding's own, and reading one is a capability this engine
+            // does not have.
+            (
+                kind @ (DeclarationKind::Function | DeclarationKind::Const),
+                crate::decl::SourceKind::BindingLocal,
+            ) => Err(Refusal::at(
+                Unsupported::new(
+                    format!("unsupported.{}.binding_local", kind.as_str()),
+                    format!(
+                        "`{}` is defined by the binding, not captured from the source, so there \
+                         is no captured item to plan from",
+                        declaration.rust_origin()
+                    ),
+                ),
+                &crate::target::Position::root(declaration.id().clone()),
+            )),
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            kind => Err(Refusal::at(
+            (kind, _) => Err(Refusal::at(
                 Unsupported::new(
                     format!("unsupported.{}.not_implemented", kind.as_str()),
                     format!("the v2 engine has no {} lowering yet", kind.as_str()),
                 ),
-                &crate::target::Position::root(declaration.id.clone()),
+                &crate::target::Position::root(declaration.id().clone()),
             )),
         };
         match planned {
@@ -771,14 +777,14 @@ pub fn generate<T: Target>(
                     functions.push(function);
                 }
                 surfaces.push(surface);
-                outcomes.insert(declaration.id.clone(), Outcome::Emitted);
+                outcomes.insert(declaration.id().clone(), Outcome::Emitted);
             }
             Err(refusal) => {
                 // The path is where the walk actually stopped — the exported
                 // function, the parameter, the field — so the report says what
                 // to look at rather than only which declaration vanished.
                 outcomes.insert(
-                    declaration.id.clone(),
+                    declaration.id().clone(),
                     Outcome::Skipped(Skip {
                         capability: refusal.reason.capability,
                         explanation: refusal.reason.explanation,
@@ -788,6 +794,17 @@ pub fn generate<T: Target>(
             }
         }
     }
+
+    // Which declaration represents which type. A target names a requirement by
+    // type, because that is what the model told it about a value; matching the
+    // type to the declaration covering it is the engine's side of that.
+    let declared_types: BTreeMap<&str, &DeclarationId> = requests
+        .outputs
+        .iter()
+        .map(|output| &output.declaration)
+        .filter(|declaration| declaration.kind() == DeclarationKind::Type)
+        .map(|declaration| (declaration.rust_origin(), declaration.id()))
+        .collect();
 
     // A public declaration can require another one. Propagate until a pass
     // changes nothing: one missing capability, several skipped outputs, each
@@ -799,12 +816,15 @@ pub fn generate<T: Target>(
                 continue;
             }
             for required in &surface.requires {
-                let cause = match outcomes.get(required) {
+                let declared = declared_types
+                    .get(required.type_name())
+                    .and_then(|id| outcomes.get(*id));
+                let cause = match declared {
                     Some(Outcome::Skipped(skip)) => skip.clone(),
                     Some(_) => continue,
                     None => Skip::direct(
                         "unsupported.requirement.unrequested",
-                        format!("requires `{required}`, which this binding does not declare"),
+                        format!("requires {required}, which this binding declares no type for"),
                         required.to_string(),
                     ),
                 };
@@ -838,7 +858,7 @@ pub fn generate<T: Target>(
         .map(|output| Entry {
             declaration: output.declaration.clone(),
             outcome: outcomes
-                .get(&output.declaration.id)
+                .get(output.declaration.id())
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
@@ -888,9 +908,12 @@ pub fn generate<T: Target>(
             .outputs
             .iter()
             .map(|output| &output.declaration)
-            .find(|declaration| declaration.id == surface.declaration)
-            .filter(|declaration| declaration.source != crate::decl::SourceKind::BindingLocal)
-            .and_then(|declaration| flat.element(declaration.rust_origin.as_str()))
+            .find(|declaration| declaration.id() == &surface.declaration)
+            .and_then(|declaration| {
+                declaration
+                    .source()
+                    .element(&flat, declaration.rust_origin())
+            })
             .map(|element| crate::emit::Writer.conditions(Conditioned::Item(element)))
             .unwrap_or_default();
         for artifact in &surface.rust {
@@ -952,9 +975,9 @@ fn plan_function<T: Target>(
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
     let function: &Function = flat
-        .function(declaration.rust_origin.as_str())
+        .function(declaration.rust_origin())
         .expect("declarations are checked against the model before planning");
-    let root = crate::target::Position::root(declaration.id.clone());
+    let root = crate::target::Position::root(declaration.id().clone());
 
     // The wrapper is a safe function, and the writer renders a plain call.
     // Wrapping an `unsafe fn` would need the wrapper to state the caller's
@@ -1089,7 +1112,7 @@ fn assemble<T: Target>(
     let refuse = |reason: Unsupported| {
         Ok(Err(Refusal::at(
             reason,
-            &crate::target::Position::root(declaration.id.clone()),
+            &crate::target::Position::root(declaration.id().clone()),
         )))
     };
     // A symbol reaches generated Rust as a function name, so a policy that
@@ -1098,7 +1121,8 @@ fn assemble<T: Target>(
     if syn::parse_str::<syn::Ident>(&boundary.abi.symbol).is_err() {
         return Err(PlanningError::InvalidInput(format!(
             "`{}` exports the symbol `{}`, which is not a Rust identifier",
-            declaration.id, boundary.abi.symbol
+            declaration.id(),
+            boundary.abi.symbol
         )));
     }
     // The writer exports the wrapper under that symbol with `#[no_mangle]`; an
@@ -1109,7 +1133,7 @@ fn assemble<T: Target>(
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` states `#[{}]` on its wrapper, whose linkage the writer owns: the \
                  symbol is `{}`",
-                declaration.id,
+                declaration.id(),
                 attr.path()
                     .require_ident()
                     .map(|i| i.to_string())
@@ -1127,7 +1151,7 @@ fn assemble<T: Target>(
         if !param.ty.abi {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` takes `{}` at its boundary, which is not an ABI carrier",
-                declaration.id,
+                declaration.id(),
                 spell(&param.ty.ty)
             )));
         }
@@ -1141,7 +1165,7 @@ fn assemble<T: Target>(
         if !ret.abi {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` returns `{}` at its boundary, which is not an ABI carrier",
-                declaration.id,
+                declaration.id(),
                 spell(&ret.ty)
             )));
         }
@@ -1150,7 +1174,7 @@ fn assemble<T: Target>(
             Some(produced) if !same_type(&ret.ty, &produced) => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` returns `{}` at its boundary, and its result conversion produces a `{}`",
-                    declaration.id,
+                    declaration.id(),
                     spell(&ret.ty),
                     spell(&produced)
                 )))
@@ -1158,7 +1182,7 @@ fn assemble<T: Target>(
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` returns `{}` at its boundary and has no result conversion to fill it",
-                    declaration.id,
+                    declaration.id(),
                     spell(&ret.ty)
                 )))
             }
@@ -1177,7 +1201,7 @@ fn assemble<T: Target>(
             None => {
                 return Err(PlanningError::InternalInvariant(format!(
                     "`{}` declares no wrapper parameter for source parameter {index}",
-                    declaration.id
+                    declaration.id()
                 )))
             }
         };
@@ -1187,7 +1211,7 @@ fn assemble<T: Target>(
         if !same_type(&wrapper_param.ty, &expected.ty) {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` passes parameter {index} as `{}`, and its conversion reads a `{}`",
-                declaration.id,
+                declaration.id(),
                 spell(&wrapper_param.ty),
                 spell(&expected.ty)
             )));
@@ -1259,7 +1283,7 @@ fn assemble<T: Target>(
                         "the {} failure route of `{}` reports through an operation that reads a \
                          value",
                         route.category.as_str(),
-                        declaration.id
+                        declaration.id()
                     )))
                 }
             }
@@ -1300,7 +1324,7 @@ fn assemble<T: Target>(
                         "the {} failure route of `{}` reports a `{}` where the operation raises \
                          a `{}`",
                         category.as_str(),
-                        declaration.id,
+                        declaration.id(),
                         spell(&reported.ty),
                         spell(&raised.ty)
                     )));
@@ -1321,7 +1345,7 @@ fn assemble<T: Target>(
     }
 
     Ok(Ok(FunctionPlan {
-        declaration: declaration.id.clone(),
+        declaration: declaration.id().clone(),
         abi: boundary.abi,
         output: boundary.output,
         failures: boundary.failures,
@@ -1348,53 +1372,53 @@ fn plan_type<T: Target>(
     policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
-    let root = crate::target::Position::root(declaration.id.clone());
+    let root = crate::target::Position::root(declaration.id().clone());
     // A declared type need not be a captured item — a target may represent
     // `String` without the source exporting one — so this lookup, unlike a
     // function's, can find nothing.
-    let (ty, item): (TypeRef, SourceItem<'_>) =
-        match flat.declared_type(declaration.rust_origin.as_str()) {
-            Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
-            Some(Type::Extern(opaque)) => {
-                // A declaration answers what reading names it; an extern keeps
-                // none, so the model is asked to read its own name.
-                let name = &opaque.name;
-                match flat.classify(&syn::parse_quote!(#name)) {
-                    Ok(ty) => (ty, SourceItem::Extern(opaque)),
-                    Err(error) => {
-                        return Err(PlanningError::InternalInvariant(format!(
-                            "`{name}` is declared and does not classify as a reference to \
+    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(declaration.rust_origin())
+    {
+        Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
+        Some(Type::Extern(opaque)) => {
+            // A declaration answers what reading names it; an extern keeps
+            // none, so the model is asked to read its own name.
+            let name = &opaque.name;
+            match flat.classify(&syn::parse_quote!(#name)) {
+                Ok(ty) => (ty, SourceItem::Extern(opaque)),
+                Err(error) => {
+                    return Err(PlanningError::InternalInvariant(format!(
+                        "`{name}` is declared and does not classify as a reference to \
                              itself: {error}"
-                        )))
-                    }
+                    )))
                 }
             }
-            None => {
-                return Ok(Err(Refusal::at(
-                    Unsupported::new(
-                        "unsupported.type.undeclared",
-                        format!(
-                            "`{}` is exposed as a type the source did not capture; v2 \
+        }
+        None => {
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.type.undeclared",
+                    format!(
+                        "`{}` is exposed as a type the source did not capture; v2 \
                              represents captured types only",
-                            declaration.rust_origin
-                        ),
+                        declaration.rust_origin()
                     ),
-                    &root,
-                )))
-            }
-            Some(Type::Enum(_) | Type::Variant(_)) => {
-                return Ok(Err(Refusal::at(
-                    Unsupported::new(
-                        "unsupported.type.enum",
-                        format!(
-                            "`{}` is an enum, which v2 has no representation for yet",
-                            declaration.rust_origin
-                        ),
+                ),
+                &root,
+            )))
+        }
+        Some(Type::Enum(_) | Type::Variant(_)) => {
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.type.enum",
+                    format!(
+                        "`{}` is an enum, which v2 has no representation for yet",
+                        declaration.rust_origin()
                     ),
-                    &root,
-                )))
-            }
-        };
+                ),
+                &root,
+            )))
+        }
+    };
 
     let taken = match run.plan_value(
         Crossing {

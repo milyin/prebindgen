@@ -6,6 +6,7 @@
 //! declaration is what the report accounts for; the request carries the target's
 //! configuration for it.
 
+use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
 
 /// What a [`Declaration`] declares: a function, a type, a constant, a callback
@@ -18,17 +19,18 @@ use serde::Serialize;
 /// `Type`. The word the adapter used is kept separately in
 /// [`Declaration::representation`] and printed back verbatim.
 ///
-/// Three things depend on the category:
+/// It is bookkeeping, not a plan: what a declaration is planned from comes from
+/// its [`Origin`] — the captured item there is to work with — and the kind only
+/// picks between planners where one captured item backs two surfaces, as a
+/// Kotlin `val` read through a nullary function is planned as that function.
+/// Two things depend on the category:
 ///
-/// * **What the engine plans.** [`generate`](crate::generate) dispatches on it,
-///   one lowering per kind: a `Function` is planned as an exported wrapper, a
-///   `Type` as a record.
-/// * **Identity.** A [`DeclarationId`] is `<kind>:<rust origin>`, and the kind
-///   is what keeps the origins' several naming spaces apart: an origin may be a
-///   captured item's name, a type key, a callback's signature or a name the
-///   binding coined, so `type:Foo` and `conversion:Foo` are two declarations
-///   about one Rust type. [`SurfaceSpec::requires`](crate::SurfaceSpec) says
-///   by id which of them a wrapper needs emitted.
+/// * **Identity.** A [`DeclarationId`] pairs the kind with the origin, and the
+///   kind is what keeps the origins' several naming spaces apart: an origin may
+///   be a captured item's name, a type key, a callback's signature or a name
+///   the binding coined, so `type:Foo` and `conversion:Foo` are two
+///   declarations about one Rust type, and the engine can tell which of them a
+///   report entry or an outcome belongs to.
 /// * **Report layout.** [`Report`](crate::Report) groups and sorts by it, so a
 ///   report reads types first, then conversions, callbacks, constants and
 ///   functions.
@@ -64,60 +66,134 @@ impl DeclarationKind {
     }
 }
 
-/// A declaration's stable identity: `<kind>:<rust origin>`.
+/// A declaration's stable identity: its [`DeclarationKind`] and the name its
+/// Rust origin goes by.
 ///
 /// Stable across runs and across pipelines, so a report, a build script and a
 /// capability-selected test section can all name the same declaration. Derived from
 /// what the *source* calls the thing, not from what the target does — a rename
 /// on the foreign side must not silently retire a test's requirement.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(transparent)]
-pub struct DeclarationId(String);
+///
+/// The two parts are stored, readable ([`Self::kind`], [`Self::origin`]) and
+/// fixed at construction. `<kind>:<origin>` — `type:Stamp`, `fn:stamp_sum` —
+/// is how an id prints and how the report writes it, and that spelling is a
+/// rendering: nothing reads an id back out of it.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DeclarationId {
+    kind: DeclarationKind,
+    origin: String,
+}
 
 impl DeclarationId {
     /// The id of `origin` declared as `kind`.
-    pub fn new(kind: DeclarationKind, origin: impl AsRef<str>) -> Self {
-        DeclarationId(format!("{}:{}", kind.as_str(), origin.as_ref()))
+    ///
+    /// Crate-internal: an id is what a [`Declaration`] already has, and the
+    /// engine hands it out. Nothing outside builds one from a name — a target
+    /// naming another declaration names the type it needs, with a
+    /// [`Requirement`](crate::Requirement).
+    pub(crate) fn new(kind: DeclarationKind, origin: impl AsRef<str>) -> Self {
+        DeclarationId {
+            kind,
+            origin: origin.as_ref().to_string(),
+        }
     }
 
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// Which kind of declaration this names.
+    pub fn kind(&self) -> DeclarationKind {
+        self.kind
+    }
+
+    /// What the Rust source calls it — see [`Declaration::rust_origin`].
+    pub fn origin(&self) -> &str {
+        &self.origin
     }
 }
 
 impl std::fmt::Display for DeclarationId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        write!(f, "{}:{}", self.kind.as_str(), self.origin)
+    }
+}
+
+impl Serialize for DeclarationId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+/// What a declaration is named after, and which namespace that name lives in.
+///
+/// A name alone does not say: `Sample` may be a captured type, a type key the
+/// binding coined for something the source never exported, or the name of a
+/// Kotlin constant built from an expression. The variant says which, so a
+/// declaration's [`SourceKind`] follows from how it was declared rather than
+/// being stated again beside it.
+#[derive(Clone, Debug)]
+pub enum Origin {
+    /// A captured `#[prebindgen]` function.
+    Function(syn::Ident),
+    /// A captured `#[prebindgen]` constant.
+    Const(syn::Ident),
+    /// A captured `#[prebindgen]` type.
+    Type(TypeKey),
+    /// A type the binding gives a representation although the source never
+    /// exported it — `String` crossing as an opaque handle.
+    LocalType(TypeKey),
+    /// A name only the binding knows: a callback's signature, or a constant the
+    /// binding computes rather than reads.
+    Local(String),
+}
+
+impl Origin {
+    /// What this origin must name in the captured source.
+    pub fn source_kind(&self) -> SourceKind {
+        match self {
+            Origin::Function(_) => SourceKind::Function,
+            Origin::Const(_) => SourceKind::Const,
+            Origin::Type(_) => SourceKind::Type,
+            Origin::LocalType(_) | Origin::Local(_) => SourceKind::BindingLocal,
+        }
+    }
+
+    /// The name it goes by — what an id carries and a report prints.
+    pub fn name(&self) -> String {
+        match self {
+            Origin::Function(ident) | Origin::Const(ident) => ident.to_string(),
+            Origin::Type(key) | Origin::LocalType(key) => key.as_str().to_string(),
+            Origin::Local(name) => name.clone(),
+        }
     }
 }
 
 /// One declaration, as the report accounts for it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+///
+/// Built by the adapter with [`Self::new`] and read back through the accessors.
+/// Its kind and origin live in the [`DeclarationId`], which the run is keyed
+/// by, so they are fixed once declared and read out of the id rather than
+/// stored beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Declaration {
-    /// Stable identity — see [`DeclarationId`].
-    pub id: DeclarationId,
-    /// Which kind of declaration it is.
-    pub kind: DeclarationKind,
-    /// The source item's name, as the Rust source spells it (`Calculator`,
-    /// `calculator_new`), or the signature for a callback that has no name of
-    /// its own.
-    pub rust_origin: String,
-    /// Where the export lands in the target language, spelled the way that
-    /// language spells it: `calculator_t`, `io.zenoh.jni.Session`. For a
-    /// function, this names what the foreign side calls; the source function
-    /// keeps its own name and is only ever called by the wrapper.
-    pub placement: String,
-    /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …).
-    /// The adapter's word, printed back verbatim.
-    pub representation: String,
-    /// What [`Self::rust_origin`] must name in the captured source.
-    ///
-    /// Not the same question as [`Self::kind`], which says what the *target*
-    /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
-    /// [`DeclarationKind::Const`] backed by a captured **function**. Stated by
-    /// the adapter, because only the adapter knows which of its own
-    /// declaration forms produced this one.
-    pub source: SourceKind,
+    id: DeclarationId,
+    placement: String,
+    representation: String,
+    source: SourceKind,
+}
+
+impl Serialize for Declaration {
+    /// Flat, and with the identity spelled out: the report carries `id`,
+    /// `kind` and `rust_origin` as separate columns, and a reader of the JSON
+    /// should not have to split the id to get at the last two.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut entry = serializer.serialize_struct("Declaration", 6)?;
+        entry.serialize_field("id", &self.id)?;
+        entry.serialize_field("kind", &self.id.kind())?;
+        entry.serialize_field("rust_origin", self.id.origin())?;
+        entry.serialize_field("placement", &self.placement)?;
+        entry.serialize_field("representation", &self.representation)?;
+        entry.serialize_field("source", &self.source)?;
+        entry.end()
+    }
 }
 
 /// What a declaration's Rust origin must name in the captured source.
@@ -142,6 +218,31 @@ pub enum SourceKind {
 }
 
 impl SourceKind {
+    /// The captured element an origin of this kind names, if the model holds it.
+    ///
+    /// The namespace is flat, so the name alone finds any element; the kind is
+    /// what says whether the element found is the one the declaration meant.
+    /// [`Self::BindingLocal`] names no captured item and so finds none — which
+    /// is not the same as a missing one, and [`Self::missing_from`] is the
+    /// question to ask about presence.
+    pub(crate) fn element<'f>(self, flat: &'f Flat, name: &str) -> Option<&'f Element> {
+        let element = flat.element(name)?;
+        matches!(
+            (self, element),
+            (SourceKind::Function, Element::Function(_))
+                | (SourceKind::Type, Element::Type(_))
+                | (SourceKind::Const, Element::Constant(_))
+        )
+        .then_some(element)
+    }
+
+    /// Whether the model lacks what an origin of this kind must name.
+    ///
+    /// False for a binding-local origin, which requires nothing of the model.
+    pub(crate) fn missing_from(self, flat: &Flat, name: &str) -> bool {
+        self != SourceKind::BindingLocal && self.element(flat, name).is_none()
+    }
+
     /// The word a refusal uses for this kind.
     pub(crate) fn describe(self) -> &'static str {
         match self {
@@ -154,41 +255,57 @@ impl SourceKind {
 }
 
 impl Declaration {
-    /// Declare `rust_origin` as a `kind` the target places at `placement`.
+    /// Declare `origin` as a `kind` the target places at `placement`.
     pub fn new(
         kind: DeclarationKind,
-        rust_origin: impl Into<String>,
+        origin: Origin,
         placement: impl Into<String>,
         representation: impl Into<String>,
     ) -> Self {
-        let rust_origin = rust_origin.into();
         Declaration {
-            id: DeclarationId::new(kind, &rust_origin),
-            kind,
-            rust_origin,
+            id: DeclarationId::new(kind, origin.name()),
             placement: placement.into(),
             representation: representation.into(),
-            // The usual case: the declaration is named after the item it is built
-            // from. `sourced_as` states the exceptions.
-            source: match kind {
-                DeclarationKind::Function => SourceKind::Function,
-                DeclarationKind::Type => SourceKind::Type,
-                DeclarationKind::Const => SourceKind::Const,
-                DeclarationKind::Callback | DeclarationKind::Conversion => SourceKind::BindingLocal,
-            },
+            source: origin.source_kind(),
         }
     }
 
-    /// The same, for something the binding defines itself rather than something
-    /// it selects out of the captured source — see [`SourceKind::BindingLocal`].
-    pub fn local(self) -> Self {
-        self.sourced_as(SourceKind::BindingLocal)
+    /// Stable identity — see [`DeclarationId`].
+    pub fn id(&self) -> &DeclarationId {
+        &self.id
     }
 
-    /// The same, for a declaration whose target kind and source kind differ — see
-    /// [`Self::source`].
-    pub fn sourced_as(mut self, source: SourceKind) -> Self {
-        self.source = source;
-        self
+    /// Which kind of declaration it is.
+    pub fn kind(&self) -> DeclarationKind {
+        self.id.kind()
+    }
+
+    /// What the Rust source calls it (`Calculator`, `calculator_new`), or the
+    /// signature for a callback that has no name of its own.
+    pub fn rust_origin(&self) -> &str {
+        self.id.origin()
+    }
+
+    /// Where it is meant to land in the target language, spelled the way that
+    /// language spells it: `calculator_t`, `io.zenoh.jni.Session`.
+    pub fn placement(&self) -> &str {
+        &self.placement
+    }
+
+    /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …) —
+    /// the adapter's own word, printed back verbatim.
+    pub fn representation(&self) -> &str {
+        &self.representation
+    }
+
+    /// What [`Self::rust_origin`] must name in the captured source.
+    ///
+    /// Not the same question as [`Self::kind`], which says what the *target*
+    /// gets: a Kotlin `val` declared with `constant!(X).fun(fun!(f))` is a
+    /// [`DeclarationKind::Const`] whose origin is [`Origin::Function`]. It
+    /// comes from that origin rather than being stated beside it, so the two
+    /// cannot disagree.
+    pub fn source(&self) -> SourceKind {
+        self.source
     }
 }

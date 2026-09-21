@@ -9,7 +9,7 @@
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind};
 
 use crate::{
-    decl::{Declaration, DeclarationKind},
+    decl::{Declaration, DeclarationKind, Origin},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
@@ -312,7 +312,7 @@ impl Target for Mini {
         // derived, and a null address is not a failure it can raise.
         let release = match (site.function, policy) {
             (None, Policy::Handle) => Some(exported(
-                &format!("{}_free", site.declaration.rust_origin),
+                &format!("{}_free", site.declaration.rust_origin()),
                 Routes::None,
             )),
             (None, Policy::HandleWithoutRelease) => {
@@ -333,7 +333,7 @@ impl Target for Mini {
         else {
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` is exported under a value policy",
-                site.declaration.rust_origin
+                site.declaration.rust_origin()
             )));
         };
         Ok(TargetAttempt::Ready(BoundarySpec {
@@ -420,13 +420,7 @@ impl Target for Mini {
         let requires = values
             .inputs
             .iter()
-            .filter_map(|value| match value.crossing.ty.kind() {
-                TypeKind::Named { id, .. } => Some(crate::decl::DeclarationId::new(
-                    DeclarationKind::Type,
-                    id.name.clone(),
-                )),
-                _ => None,
-            })
+            .filter_map(|value| crate::target::Requirement::of(&value.crossing.ty))
             .collect();
         if matches!(
             (request.policy, request.item),
@@ -455,14 +449,11 @@ impl Target for Mini {
             _ => Vec::new(),
         };
         Ok(TargetAttempt::Ready(SurfaceSpec {
-            declaration: request.declaration.id.clone(),
+            declaration: request.declaration.id().clone(),
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
                 (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
-                    vec![crate::decl::DeclarationId::new(
-                        DeclarationKind::Type,
-                        other,
-                    )]
+                    vec![crate::target::Requirement::type_named(other)]
                 }
                 (_, SourceItem::Struct(_) | SourceItem::Extern(_)) => Vec::new(),
             },
@@ -498,11 +489,18 @@ fn requests() -> BindingRequests<Policy> {
 }
 
 fn ty(origin: &str) -> Declaration {
-    Declaration::new(DeclarationKind::Type, origin, origin, "strukt")
+    let key = prebindgen_flat::TypeKey::parse(origin).expect("a test names a type");
+    Declaration::new(DeclarationKind::Type, Origin::Type(key), origin, "strukt")
 }
 
 fn function(origin: &str) -> Declaration {
-    Declaration::new(DeclarationKind::Function, origin, origin, "function")
+    let ident = syn::parse_str(origin).expect("a test names an ident");
+    Declaration::new(
+        DeclarationKind::Function,
+        Origin::Function(ident),
+        origin,
+        "function",
+    )
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
@@ -510,7 +508,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .report()
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id.as_str() == id)
+        .find(|entry| entry.declaration.id().to_string() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }
@@ -1430,7 +1428,7 @@ fn a_handle_is_carried_both_ways_and_released() {
         .collect();
     assert_eq!(symbols, ["Token_free", "token_new", "token_use"]);
     let release = &generation.functions()[0];
-    assert_eq!(release.declaration.as_str(), "type:Token");
+    assert_eq!(release.declaration.to_string(), "type:Token");
     assert!(release.result.is_none(), "a release delivers nothing");
 
     let rust = generation.rust();

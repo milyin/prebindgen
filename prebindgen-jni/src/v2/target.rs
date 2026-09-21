@@ -14,12 +14,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, DeclarationId, DeclarationKind, Direction,
-    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId,
-    ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
-    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-    WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, FailureCategory, FailureRoute,
+    Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
+    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement,
+    ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, SurfaceRequest,
+    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
+    WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -444,14 +444,14 @@ impl Target for JniTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 JNI target does \
                          not lower yet",
-                        site.declaration.rust_origin
+                        site.declaration.rust_origin()
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.rust_origin
+                    site.declaration.rust_origin()
                 )));
             }
         };
@@ -577,7 +577,7 @@ impl Target for JniTarget {
                 None => (String::new(), class.clone()),
             };
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id.clone(),
+                declaration: request.declaration.id().clone(),
                 requires: Vec::new(),
                 // What crosses is a `jlong`, and the release wrapper is Rust
                 // the registry renders: nothing to contribute.
@@ -637,15 +637,14 @@ impl Target for JniTarget {
                     },
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id.clone(),
+                    declaration: request.declaration.id().clone(),
                     // A method taking or returning a declared class is
                     // unusable unless the class it names is emitted too.
                     requires: values
                         .inputs
                         .iter()
                         .chain(values.output.iter())
-                        .filter_map(|value| named(&value.crossing.ty))
-                        .map(|name| DeclarationId::new(DeclarationKind::Type, name))
+                        .filter_map(|value| Requirement::of(&value.crossing.ty))
                         .collect(),
                     // What crosses is a JVM object: the Rust side holds a
                     // reference to it and declares no type of its own.
@@ -712,7 +711,7 @@ impl Target for JniTarget {
                     None => (String::new(), class.clone()),
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id.clone(),
+                    declaration: request.declaration.id().clone(),
                     requires: Vec::new(),
                     rust: Vec::new(),
                     payload: Some(JniPayload::Class {

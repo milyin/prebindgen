@@ -15,7 +15,7 @@
 mod target;
 
 use prebindgen_registry_v2::{
-    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation,
+    generate, BindingRequests, Declaration, DeclarationKind, EngineError, Generation, Origin,
 };
 pub use target::{CPayload, CPolicy, CTarget};
 
@@ -60,8 +60,12 @@ impl CbindgenBuilder {
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
             requests.output(
-                Declaration::new(DeclarationKind::Type, key.as_str(), c_name, "data_struct")
-                    .local(),
+                Declaration::new(
+                    DeclarationKind::Type,
+                    Origin::LocalType(key.clone()),
+                    c_name,
+                    "data_struct",
+                ),
                 policy,
             );
         }
@@ -78,7 +82,12 @@ impl CbindgenBuilder {
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
             requests.output(
-                Declaration::new(DeclarationKind::Type, key.as_str(), c_name, "opaque_ptr").local(),
+                Declaration::new(
+                    DeclarationKind::Type,
+                    Origin::LocalType(key.clone()),
+                    c_name,
+                    "opaque_ptr",
+                ),
                 policy,
             );
         }
@@ -99,11 +108,10 @@ impl CbindgenBuilder {
                 requests.output(
                     Declaration::new(
                         DeclarationKind::Type,
-                        key.as_str(),
+                        Origin::LocalType(key.clone()),
                         self.c_type_name(key),
                         declarator,
-                    )
-                    .local(),
+                    ),
                     policy,
                 );
             }
@@ -118,11 +126,10 @@ impl CbindgenBuilder {
             requests.output(
                 Declaration::new(
                     DeclarationKind::Callback,
-                    describe_callback(key),
+                    Origin::Local(describe_callback(key)),
                     self.callback_c_name(key),
                     "callback",
-                )
-                .local(),
+                ),
                 unimplemented,
             );
         }
@@ -136,11 +143,10 @@ impl CbindgenBuilder {
             requests.output(
                 Declaration::new(
                     DeclarationKind::Conversion,
-                    decl.key().as_str(),
+                    Origin::LocalType(decl.key().clone()),
                     self.c_type_name(decl.key()),
                     "convert",
-                )
-                .local(),
+                ),
                 unimplemented,
             );
         }
@@ -154,7 +160,7 @@ impl CbindgenBuilder {
             requests.output(
                 Declaration::new(
                     DeclarationKind::Function,
-                    ident.to_string(),
+                    Origin::Function(ident.clone()),
                     symbol,
                     "function",
                 ),
@@ -164,26 +170,20 @@ impl CbindgenBuilder {
 
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_functions) {
-            requests.ignored.push(
-                Declaration::new(
-                    DeclarationKind::Function,
-                    ident.to_string(),
-                    String::new(),
-                    "ignore_function",
-                )
-                .local(),
-            );
+            requests.ignored.push(Declaration::new(
+                DeclarationKind::Function,
+                Origin::Local(ident.to_string()),
+                String::new(),
+                "ignore_function",
+            ));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignored.push(
-                Declaration::new(
-                    DeclarationKind::Type,
-                    key.as_str(),
-                    String::new(),
-                    "ignore_type",
-                )
-                .local(),
-            );
+            requests.ignored.push(Declaration::new(
+                DeclarationKind::Type,
+                Origin::LocalType(key.clone()),
+                String::new(),
+                "ignore_type",
+            ));
         }
         requests
     }
