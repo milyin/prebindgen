@@ -29,14 +29,14 @@ that the registry will use when it discovers the struct [relation](../../stages/
 planning. All structures in the block are design notation, not exact current
 request fields. Current `OutputRequest` contains a `Declaration` — here
 `Declaration::Type(Stamp)` — and nothing else.
-The frontend records the type's [policy](../../stages/03-requests.md#what-policy-means) in its own target, which is how a later
+The frontend records the type's [choice](../../stages/03-requests.md#what-a-choice-records) in its own target, which is how a later
 function parameter finds this representation without repeating the configuration.
 
 ```text
 OutputRequest {
     id:     DeclarationId("type:Stamp"),
     source: SourceItemId(crate::source::Stamp),
-    // the target records this target's struct policy under the same id
+    // the target records what it holds for Stamp under the same id
 }
 
 relation: Stamp.fields = Relation::Struct(over the Stamp struct element)

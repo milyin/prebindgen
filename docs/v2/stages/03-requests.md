@@ -245,22 +245,22 @@ The implementation divides the registry's data between two structures:
 
 A binding crate normally builds one configured frontend. The frontend calls `generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using the run's working state.
 
-## Binding requests and target policy
+## Binding requests and target choices
 
 The common [`prebindgen-flat` library](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/lib.rs) supplies Rust source facts through `Flat`. Users call the C or JNI frontend's API to choose the generated interface: for example, exposing `Stamp` as a C data struct or a Kotlin class. The configured frontend creates `BindingRequests` and calls the registry.
 
 A declaration or setting recorded by the frontend is a **configuration entry**. A frontend call exposing a function records an output request; an argument override records the requested representation choice. The frontend also preserves naming hooks, ignored items and unsupported settings. Recording a request does not establish that the registry can generate it.
 
-### What policy means
+### What a choice records
 
-A **policy** records the target-specific choices applicable to a request or a
-particular value conversion. It is configuration data. It does not contain a
-recursive conversion algorithm or a finished wrapper.
+A **choice** is one target-specific decision the binding recorded about a
+request or about a particular value conversion — that `Stamp` crosses as a C
+struct passed by value, under the name `Stamp`. It is configuration data. It
+does not contain a recursive conversion algorithm or a finished wrapper.
 
 It belongs to the frontend that recorded it, and to the target that frontend
-builds. The registry holds no policy table and knows no precedence among
-entries: it asks the target, and the target resolves what applies from its own
-storage.
+builds. The registry holds no table of them and knows no precedence among them: it
+asks the target, and the target resolves what applies from its own storage.
 
 Examples include JNI object versus separate-argument input, C struct versus
 handle, and function error handling or public placement.

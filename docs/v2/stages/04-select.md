@@ -144,7 +144,7 @@ The algorithm receives the value's *position*, not just its type, and hands it
 to the target. In the design vocabulary, a `SiteId` (parameter 0 of this
 exported function) or a `PartId` (the `secs` field of this relation) is what an
 override is recorded against, so the position is what lets the target turn
-[its recorded choices](03-requests.md#what-policy-means) into this
+[its recorded choices](03-requests.md#what-a-choice-records) into this
 conversion's key. Positions are how overrides reach a nested child. Current
 code uses `Position { declaration, path }` instead of separate
 `SiteId`/`PartId` structs. `select` is the *only* call that sees a position,
@@ -327,14 +327,14 @@ or projector relation would be explicit — it names a function, so someone has
 to say which — and that declaration, like the rule that would pin a relation
 at a position, is
 [not built](../extensions.md#constructor-and-projector-relations): the target
-holds the [policies](03-requests.md#what-policy-means) recorded for a type and
+holds the [choices](03-requests.md#what-a-choice-records) recorded for a type and
 for a position, and derives its relation from those.
 
 The target answers `select` with a `Selection`: a `RelationId`, an index into
 that run's table under the same convention as every other `…Id` here — that is,
 it names which outgoing edge the walk takes from this type — together with the
 [conversion key](03-requests.md#finding-an-existing-conversion-plan) for the
-policy it just applied. The id rather than the value is what travels, because
+choice it just applied. The id rather than the value is what travels, because
 the id is what the cache key compares; the key travels beside it for the same
 reason.
 

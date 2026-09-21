@@ -21,7 +21,7 @@
 mod target;
 
 use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
-pub use target::{CPayload, CPolicy, CTarget};
+pub use target::{CChoice, CPayload, CTarget};
 
 use crate::CbindgenBuilder;
 
@@ -53,8 +53,8 @@ impl CbindgenBuilder {
     fn binding(&self, source_module: syn::Path) -> (CTarget, BindingRequests) {
         let mut target = CTarget::default();
         let mut requests = BindingRequests::new("c", source_module);
-        let mut declare = |declaration: Declaration, policy: CPolicy| {
-            target.declare(declaration.clone(), policy);
+        let mut declare = |declaration: Declaration, choice: CChoice| {
+            target.declare(declaration.clone(), choice);
             requests.output(declaration);
         };
 
@@ -64,7 +64,7 @@ impl CbindgenBuilder {
         for key in sorted(self.data.keys()) {
             declare(
                 Declaration::LocalType(key.clone()),
-                CPolicy::DataStruct {
+                CChoice::DataStruct {
                     c_name: self.c_type_name(key),
                 },
             );
@@ -75,7 +75,7 @@ impl CbindgenBuilder {
         for key in sorted(self.opaque.keys()) {
             declare(
                 Declaration::LocalType(key.clone()),
-                CPolicy::OpaquePtr {
+                CChoice::OpaquePtr {
                     c_name: self.c_type_name(key),
                     release: self.destructor_symbol(key).to_string(),
                 },
@@ -93,7 +93,7 @@ impl CbindgenBuilder {
             for key in keys {
                 declare(
                     Declaration::LocalType(key.clone()),
-                    CPolicy::Unimplemented {
+                    CChoice::Unimplemented {
                         declarator,
                         c_name: self.c_type_name(key),
                     },
@@ -106,7 +106,7 @@ impl CbindgenBuilder {
         for key in sorted(self.callbacks.keys()) {
             declare(
                 Declaration::Callback(describe_callback(key)),
-                CPolicy::Unimplemented {
+                CChoice::Unimplemented {
                     declarator: "callback",
                     c_name: self.callback_c_name(key),
                 },
@@ -118,7 +118,7 @@ impl CbindgenBuilder {
         for decl in &self.convert_decls {
             declare(
                 Declaration::Conversion(decl.key().clone()),
-                CPolicy::Unimplemented {
+                CChoice::Unimplemented {
                     declarator: "convert",
                     c_name: self.c_type_name(decl.key()),
                 },
@@ -129,7 +129,7 @@ impl CbindgenBuilder {
         for ident in sorted(self.functions.keys()) {
             declare(
                 Declaration::Function(ident.clone()),
-                CPolicy::Function {
+                CChoice::Function {
                     symbol: self.fn_symbol(ident).to_string(),
                 },
             );

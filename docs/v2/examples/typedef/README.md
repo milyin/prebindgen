@@ -41,7 +41,7 @@ only where the handle's conversions appear in them.
 Deliberately not covered: a handle passed by reference (`&Ledger`), which
 borrows what the foreign side keeps rather than consuming it; a handle inside
 an `Option`; and a struct declared under a handle
-[policy](../../stages/03-requests.md#what-policy-means), which crosses the same
+[choice](../../stages/03-requests.md#what-a-choice-records), which crosses the same
 way with its fields never read.
 
 Concurrency belongs to whatever holds the handle on the foreign side, not to

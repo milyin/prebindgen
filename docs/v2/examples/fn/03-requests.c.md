@@ -54,8 +54,8 @@ recorded in the CTarget, under `fn:stamp_sum` (C function):
 - C is opt-in: a function nobody declares produces no request and has no
   [outcome](../../stages/07-retain.md#retain-supported-output). An
   *unselected* outcome is planned, not implemented.
-- Without the `Stamp` declaration, the frontend records no struct [policy](../../stages/03-requests.md#what-policy-means).
-  Value planning then tries the default scalar policy and skips the function
+- Without the `Stamp` declaration, the frontend records no struct [choice](../../stages/03-requests.md#what-a-choice-records).
+  Value planning then tries the default scalar choice and skips the function
   with `unsupported.c.carrier`. [Retention][fn_retain] preserves that skip;
   it does not first discover the missing [conversion](../../stages/04-select.md#select-conversion-relations).
 

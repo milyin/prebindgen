@@ -13,7 +13,7 @@ The [selection][struct_select] for the struct, with its leaves already planned:
 Stamp, IntoRust, relation Stamp.fields
   +-- secs  -> node(i64, IntoRust)     // finished: identity conversion
   +-- nanos -> node(i64, IntoRust)     // the same node
-conversion: <this target's struct policy>   // the key select returned
+conversion: <what this target recorded for Stamp>   // the key select returned
 ```
 
 ## Result
@@ -45,7 +45,7 @@ struct.
 
 Both field positions resolve to the same cached `i64` input
 [node](../../stages/05-represent.md#represent-and-compose-values) under this
-[policy](../../stages/03-requests.md#what-policy-means); the
+[choice](../../stages/03-requests.md#what-a-choice-records); the
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) applies
 that plan once per field. Each carrier already has the required Rust `i64`
 value, so the child [conversion](../../stages/04-select.md#select-conversion-relations)

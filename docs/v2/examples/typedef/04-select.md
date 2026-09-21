@@ -13,7 +13,7 @@ Crossing { source: Ledger, direction: OutOfRust }   // the type's own request, a
 offered:  [ atomic ]                                // the only relation an extern has
 
 held by the target, not passed in:
-policy:   this target's handle policy
+choice:   what this target recorded for Ledger
 ```
 
 ## Result
@@ -21,11 +21,11 @@ policy:   this target's handle policy
 ```text
 Ledger, IntoRust
   relation: atomic                  // no parts; the tree ends here
-  conversion: <this target's handle policy>
+  conversion: <what this target recorded for Ledger>
 
 Ledger, OutOfRust
   relation: atomic
-  conversion: <this target's handle policy>
+  conversion: <what this target recorded for Ledger>
 ```
 
 The registry registers one
@@ -36,26 +36,26 @@ position. The target names it, and there is nothing under it to plan: the whole
 [conversion](../../stages/04-select.md#select-conversion-relations) will be
 one operation, chosen at the next stage. Beside the relation the target returns
 the [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
-standing for the [policy](../../stages/03-requests.md#what-policy-means) it
+standing for the [choice](../../stages/03-requests.md#what-a-choice-records) it
 holds for `Ledger`. Both directions are selected because
 the type's own request asks for both: a handle is a promise that what one
 function returns can be given to another.
 
 Selection is trivial here, and that is the point of the page. A struct under
-a handle policy gets the same answer from the same adapter, and its fields go
+a handle choice gets the same answer from the same adapter, and its fields go
 uninspected — which is how a type with private or unsupported fields can still
 cross, as [the C][typedef_select_c] and [Kotlin/JNI][typedef_select_jni] pages
 say.
 
 ## Checks
 
-- The answer is the one id the registry offered; a handle policy on a struct
-  selects `atomic` from the two offered, and a data policy on an extern finds
+- The answer is the one id the registry offered; a handle choice on a struct
+  selects `atomic` from the two offered, and a data choice on an extern finds
   no struct relation and is refused with `no_relation`.
 - No part is planned, so nothing under the type can be unsupported: the only
   refusals left are the target's own, at the next stage.
 - The same two selections serve the type's request, `ledger_open` and
-  `ledger_close`: the target resolves the same policy at all three positions,
+  `ledger_close`: the target resolves the same choice at all three positions,
   so the key it returns is equal at all three, and one conversion serves them
   all.
 

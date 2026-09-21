@@ -134,9 +134,9 @@ links document dependencies; they never replace an index or a backlink.
 ## Vocabulary
 
 The nouns that name what flows between stages — source item, declaration,
-policy, conversion key, root, site, part, conversion, crossing, relation,
-representation,
-carrier, primitive, node, artifact, wrapper, outcome, capability — are listed
+conversion key, root, site, part, conversion, crossing, relation,
+representation, carrier, primitive, node, artifact, wrapper, outcome,
+capability — are listed
 in the manifest's `vocabulary` with the page and heading that define each. A
 term is **defined**, set in bold, under that heading and nowhere else;
 [concepts.md](concepts.md) introduces every term in a `### Term` entry that

@@ -13,18 +13,18 @@ Crossing { source: Ledger, direction: OutOfRust }
 offered:  [ atomic ]
 
 held by the CTarget, not passed in:
-policy:   opaque_ptr Ledger
+choice:   opaque_ptr Ledger
 ```
 
 ## Result
 
 ```text
-atomic, conversion CPolicy::OpaquePtr { c_name: "Ledger", release: "ledger_drop" }
+atomic, conversion CChoice::OpaquePtr { c_name: "Ledger", release: "ledger_drop" }
 ```
 
 for both. An `opaque_ptr` is a pointer to a value C never looks into, so the C
 adapter wants the value whole and answers `atomic` — off the
-[policy](../../stages/03-requests.md#what-policy-means), before it knows
+[choice](../../stages/03-requests.md#what-a-choice-records), before it knows
 whether the type has fields. For an extern the answer is also the only one on
 offer.
 

@@ -22,16 +22,16 @@ and a build script asking for it to be exposed as a handle:
 OutputRequest {
     id:     DeclarationId(public Ledger in this target),
     source: SourceItemId(crate::source::Ledger),
-    // the target records this target's handle policy under the same id
+    // the target records what it holds for Ledger under the same id
 }
 
 the target's own storage, under that same id:
-    this target's handle policy  // carrier and release; the request set has neither
+    what this target holds for Ledger  // carrier and release; the request set has neither
     parts: none                  // an atomic value has no parts to record a rule for
 ```
 
 The request is a root, as a struct's is. Its
-[policy](../../stages/03-requests.md#what-policy-means) names two things a
+[choice](../../stages/03-requests.md#what-a-choice-records) names two things a
 struct's does not: the
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
 the address crosses as, and where the **release** — the exported function that
@@ -49,9 +49,9 @@ avoid.
 - A function returning or consuming a `Ledger` records nothing about the
   handle at its own
   [site](../../stages/03-requests.md#a-values-position-in-an-exported-function);
-  it takes the type's policy, exactly as
+  it takes the type's choice, exactly as
   [a function taking a struct does][fn_requests].
-- The same extern under a different carrier, or a struct under a handle policy,
+- The same extern under a different carrier, or a struct under a handle choice,
   is a different [conversion](../../stages/04-select.md#select-conversion-relations):
   the target answers `select` with a different
   [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan),

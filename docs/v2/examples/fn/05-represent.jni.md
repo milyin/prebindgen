@@ -10,7 +10,7 @@ Owner: the registry, on the JNI adapter's [representation](../../stages/05-repre
 The two selected [conversions](../../stages/04-select.md#select-conversion-relations), each with the
 [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
 `select` returned for it — which for this adapter is the JNI
-[policy](../../stages/03-requests.md#what-policy-means) itself:
+[choice](../../stages/03-requests.md#what-a-choice-records) itself:
 
 ```text
 Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   conversion: DataClass, read object properties

@@ -100,7 +100,7 @@ fn model() -> Flat {
 /// exactly what the key has to mean. An adapter whose settings held something
 /// incomparable would intern them and key on the index instead.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-enum Policy {
+enum Choice {
     #[default]
     Scalar,
     /// A scalar carried as itself, through an operation of this target's own
@@ -142,7 +142,7 @@ enum Policy {
     /// emit.
     FunctionWithWrongInput,
     /// A struct whose public declaration is Rust the target contributes: a
-    /// mirror of the source struct, one member per field. Only this policy
+    /// mirror of the source struct, one member per field. Only this choice
     /// produces an artifact, so every other test's generated file is unchanged.
     StructWithMirror,
 }
@@ -160,8 +160,8 @@ enum Routes {
     ReporterNeedsContext,
 }
 
-fn exported(symbol: &str, routes: Routes) -> Policy {
-    Policy::Function {
+fn exported(symbol: &str, routes: Routes) -> Choice {
+    Choice::Function {
         symbol: symbol.to_string(),
         routes,
         param_names: Vec::new(),
@@ -176,7 +176,7 @@ enum Payload {
     Report,
     /// The binding-failure reporter, which is handed a `String`.
     ReportMessage,
-    /// The operation a [`Policy::ScalarThrough`] value crosses by.
+    /// The operation a [`Choice::ScalarThrough`] value crosses by.
     Rebase,
 }
 
@@ -190,13 +190,13 @@ enum Payload {
 #[derive(Default)]
 struct Mini {
     /// How every value of this source type crosses, wherever it appears.
-    types: BTreeMap<String, Policy>,
+    types: BTreeMap<String, Choice>,
     /// How one value inside one declaration crosses instead: keyed by the
     /// declaration and the site's path, `param 0` or `param 0.field secs`.
-    sites: BTreeMap<(Declaration, String), Policy>,
+    sites: BTreeMap<(Declaration, String), Choice>,
     /// What each requested output was declared as: what shapes its wrapper,
     /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, Policy>,
+    outputs: BTreeMap<Declaration, Choice>,
 }
 
 impl Mini {
@@ -207,24 +207,24 @@ impl Mini {
     /// It is a pure function of the position and the type, so the same value
     /// asked twice answers the same: an adapter that let this drift would hand
     /// the registry two keys for one conversion and share nothing.
-    fn conversion(&self, position: &Position, ty: &TypeRef) -> Policy {
+    fn conversion(&self, position: &Position, ty: &TypeRef) -> Choice {
         let site = (position.declaration.clone(), position.path.join("."));
-        if let Some(policy) = self.sites.get(&site) {
-            return policy.clone();
+        if let Some(choice) = self.sites.get(&site) {
+            return choice.clone();
         }
         if let TypeKind::Named { id, .. } = ty.kind() {
-            if let Some(policy) = self.types.get(&id.name) {
-                return policy.clone();
+            if let Some(choice) = self.types.get(&id.name) {
+                return choice.clone();
             }
         }
-        Policy::Scalar
+        Choice::Scalar
     }
 
     /// What the binding declared this output as.
     ///
     /// Asking for an output and recording nothing about it is contradictory
     /// input from the frontend, not a capability this target is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&Policy, PlanningError> {
+    fn declared(&self, declaration: &Declaration) -> Result<&Choice, PlanningError> {
         self.outputs.get(declaration).ok_or_else(|| {
             PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
         })
@@ -232,18 +232,18 @@ impl Mini {
 }
 
 impl Target for Mini {
-    type ConversionKey = Policy;
+    type ConversionKey = Choice;
     type Payload = Payload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<Policy>> {
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<Choice>> {
         let conversion = self.conversion(query.position, &query.crossing.ty);
         let want_struct = matches!(
             conversion,
-            Policy::Struct
-                | Policy::FallibleStruct
-                | Policy::StructWithoutSurface
-                | Policy::StructRequiring(_)
-                | Policy::StructWithMirror
+            Choice::Struct
+                | Choice::FallibleStruct
+                | Choice::StructWithoutSurface
+                | Choice::StructRequiring(_)
+                | Choice::StructWithMirror
         );
         for (id, relation) in query.candidates {
             match (relation, want_struct) {
@@ -258,7 +258,7 @@ impl Target for Mini {
         }
         Ok(TargetAttempt::Unsupported(Unsupported::new(
             "unsupported.mini.no_relation",
-            "no relation for this policy",
+            "no relation for what this value was declared as",
         )))
     }
 
@@ -266,11 +266,11 @@ impl Target for Mini {
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        conversion: &Policy,
+        conversion: &Choice,
     ) -> TargetSupport<ReprSpec<Payload>> {
         match shape.relation {
             Relation::Atomic
-                if matches!(conversion, Policy::Handle | Policy::HandleWithoutRelease) =>
+                if matches!(conversion, Choice::Handle | Choice::HandleWithoutRelease) =>
             {
                 let carrier = WireType::abi(syn::parse_quote!(*mut Raw));
                 let ty = shape.crossing.ty.clone();
@@ -301,7 +301,7 @@ impl Target for Mini {
                 }
                 let carrier = WireType::abi(syn::parse_quote!(i64));
                 let codec = match conversion {
-                    Policy::ScalarThrough => PrimitiveSpec {
+                    Choice::ScalarThrough => PrimitiveSpec {
                         operands: vec![OperandSpec::value(
                             OperationType::Carrier(carrier.clone()),
                             Access::Owned,
@@ -323,7 +323,7 @@ impl Target for Mini {
                 let ident = quote::format_ident!("{}", strukt.name);
                 let aggregate = WireType::abi(syn::parse_quote!(#ident));
                 let item = shape.strukt.expect("a struct relation carries its strukt");
-                let fallible = matches!(conversion, Policy::FallibleStruct);
+                let fallible = matches!(conversion, Choice::FallibleStruct);
                 let projections = item
                     .fields
                     .iter()
@@ -373,8 +373,8 @@ impl Target for Mini {
     ) -> TargetSupport<BoundarySpec<Payload>> {
         // What this wrapper exports is what the binding declared for it, which
         // the site names.
-        let policy = self.declared(site.declaration)?;
-        if matches!(policy, Policy::FunctionWithWrongInput) {
+        let choice = self.declared(site.declaration)?;
+        if matches!(choice, Choice::FunctionWithWrongInput) {
             return Ok(TargetAttempt::Ready(BoundarySpec {
                 abi: AbiSpec {
                     abi: "C".to_string(),
@@ -394,14 +394,14 @@ impl Target for Mini {
                 failures: Vec::new(),
             }));
         }
-        // A release site carries the handle type's own policy: its symbol is
+        // A release site carries the handle type's own choice: its symbol is
         // derived, and a null address is not a failure it can raise.
-        let release = match (site.function, policy) {
-            (None, Policy::Handle) => Some(exported(
+        let release = match (site.function, choice) {
+            (None, Choice::Handle) => Some(exported(
                 &format!("{}_free", site.declaration.name()),
                 Routes::None,
             )),
-            (None, Policy::HandleWithoutRelease) => {
+            (None, Choice::HandleWithoutRelease) => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     "unsupported.mini.no_release",
                     "this target has nowhere to place a release",
@@ -409,16 +409,16 @@ impl Target for Mini {
             }
             _ => None,
         };
-        let Policy::Function {
+        let Choice::Function {
             symbol,
             routes,
             param_names,
             attrs,
             unsafety,
-        } = release.as_ref().unwrap_or(policy)
+        } = release.as_ref().unwrap_or(choice)
         else {
             return Err(PlanningError::InvalidInput(format!(
-                "`{}` is exported under a value policy",
+                "`{}` is declared as a value, not as a function to export",
                 site.declaration.name()
             )));
         };
@@ -503,15 +503,15 @@ impl Target for Mini {
         request: &SurfaceRequest<'_>,
         values: &ResolvedValues<'_, Payload>,
     ) -> TargetSupport<SurfaceSpec<Payload>> {
-        let policy = self.declared(request.declaration)?;
+        let choice = self.declared(request.declaration)?;
         let requires = values
             .inputs
             .iter()
             .filter_map(|value| crate::target::Requirement::of(&value.crossing.ty))
             .collect();
         if matches!(
-            (policy, request.item),
-            (Policy::StructWithoutSurface, SourceItem::Struct(_))
+            (choice, request.item),
+            (Choice::StructWithoutSurface, SourceItem::Struct(_))
         ) {
             return Ok(TargetAttempt::Unsupported(Unsupported::new(
                 "unsupported.mini.no_public_struct",
@@ -520,8 +520,8 @@ impl Target for Mini {
         }
         // The mirror is what a real C target contributes: a struct of its own,
         // one member per source field, each under that field's condition.
-        let rust = match (policy, request.item) {
-            (Policy::StructWithMirror, SourceItem::Struct(strukt)) => {
+        let rust = match (choice, request.item) {
+            (Choice::StructWithMirror, SourceItem::Struct(strukt)) => {
                 let ident = &strukt.name;
                 let conditions = request.field_conditions();
                 let members = strukt.fields.iter().zip(&conditions).map(|(field, under)| {
@@ -537,9 +537,9 @@ impl Target for Mini {
         };
         Ok(TargetAttempt::Ready(SurfaceSpec {
             declaration: request.declaration.clone(),
-            requires: match (policy, request.item) {
+            requires: match (choice, request.item) {
                 (_, SourceItem::Function(_)) => requires,
-                (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
+                (Choice::StructRequiring(other), SourceItem::Struct(_)) => {
                     vec![crate::target::Requirement::type_named(other)]
                 }
                 (_, SourceItem::Struct(_) | SourceItem::Extern(_)) => Vec::new(),
@@ -584,8 +584,8 @@ impl Target for Mini {
     /// never declared is described as that rather than as the scalar default.
     fn describe(&self, declaration: &Declaration) -> Described {
         match self.outputs.get(declaration) {
-            Some(Policy::Function { symbol, .. }) => Described::new("function", symbol),
-            Some(Policy::Scalar | Policy::ScalarThrough) => Described::new("scalar", ""),
+            Some(Choice::Function { symbol, .. }) => Described::new("function", symbol),
+            Some(Choice::Scalar | Choice::ScalarThrough) => Described::new("scalar", ""),
             Some(_) => Described::new("strukt", ""),
             None => Described::new("undeclared", ""),
         }
@@ -609,36 +609,36 @@ struct Binding {
 impl Binding {
     /// How every value of this source type crosses — without asking for the
     /// type itself to be declared.
-    fn crossing(&mut self, name: &str, policy: Policy) -> &mut Self {
-        self.target.types.insert(name.to_string(), policy);
+    fn crossing(&mut self, name: &str, choice: Choice) -> &mut Self {
+        self.target.types.insert(name.to_string(), choice);
         self
     }
 
     /// A declared type: how its values cross, and what its public declaration
     /// is. The two are one declarator in both real frontends.
-    fn declare_type(&mut self, name: &str, policy: Policy) -> &mut Self {
-        self.crossing(name, policy.clone());
-        self.declare(ty(name), policy)
+    fn declare_type(&mut self, name: &str, choice: Choice) -> &mut Self {
+        self.crossing(name, choice.clone());
+        self.declare(ty(name), choice)
     }
 
     /// An exported source function.
-    fn declare_fn(&mut self, name: &str, policy: Policy) -> &mut Self {
-        self.declare(function(name), policy)
+    fn declare_fn(&mut self, name: &str, choice: Choice) -> &mut Self {
+        self.declare(function(name), choice)
     }
 
     /// One requested output, as the binding declared it.
-    fn declare(&mut self, declaration: Declaration, policy: Policy) -> &mut Self {
-        self.target.outputs.insert(declaration.clone(), policy);
+    fn declare(&mut self, declaration: Declaration, choice: Choice) -> &mut Self {
+        self.target.outputs.insert(declaration.clone(), choice);
         self.outputs.push(declaration);
         self
     }
 
     /// How one value inside one declaration crosses, overriding its type's
     /// own: `("stamp_max", "param 0")`, `("stamp_max", "param 0.field secs")`.
-    fn at_site(&mut self, function_name: &str, path: &str, policy: Policy) -> &mut Self {
+    fn at_site(&mut self, function_name: &str, path: &str, choice: Choice) -> &mut Self {
         self.target
             .sites
-            .insert((function(function_name), path.to_string()), policy);
+            .insert((function(function_name), path.to_string()), choice);
         self
     }
 
@@ -690,7 +690,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
 #[test]
 fn one_conversion_serves_every_value_that_crosses_the_same_way() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
@@ -708,10 +708,10 @@ fn one_conversion_serves_every_value_that_crosses_the_same_way() {
 #[test]
 fn a_site_override_does_not_share_the_default_conversion() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     binding.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
-    binding.at_site("stamp_max", "param 0", Policy::FallibleStruct);
+    binding.at_site("stamp_max", "param 0", Choice::FallibleStruct);
 
     let generation = binding.generate(model()).expect("plans");
     assert_eq!(generation.report().counts().emitted, 3);
@@ -735,8 +735,8 @@ fn a_site_override_does_not_share_the_default_conversion() {
 #[test]
 fn an_unsupported_field_skips_its_struct_and_its_callers() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
-    binding.declare_type("Label", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
+    binding.declare_type("Label", Choice::Struct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     binding.declare_fn("label_len", exported("label_len", Routes::None));
 
@@ -799,7 +799,7 @@ fn a_conversion_that_needs_its_own_is_refused() {
         .expect("the fixture builds a model");
 
     let mut binding = binding();
-    binding.declare_type("Node", Policy::Struct);
+    binding.declare_type("Node", Choice::Struct);
     binding.declare_fn("node_sum", exported("node_sum", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
@@ -824,7 +824,7 @@ fn a_conversion_that_needs_its_own_is_refused() {
 fn a_function_needing_an_undeclared_public_type_is_skipped() {
     let mut binding = binding();
     // Its values cross, and the type itself was never asked for.
-    binding.crossing("Stamp", Policy::Struct);
+    binding.crossing("Stamp", Choice::Struct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(model()).expect("plans");
@@ -843,7 +843,7 @@ fn a_function_needing_an_undeclared_public_type_is_skipped() {
 #[test]
 fn a_declared_failure_with_no_route_skips_the_function() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::FallibleStruct);
+    binding.declare_type("Stamp", Choice::FallibleStruct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(model()).expect("plans");
@@ -867,9 +867,9 @@ fn a_declared_failure_with_no_route_skips_the_function() {
 #[test]
 fn a_value_declaration_on_an_exported_function_is_an_error() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     // A struct declarator where a function declarator belongs.
-    binding.declare(function("stamp_sum"), Policy::Struct);
+    binding.declare(function("stamp_sum"), Choice::Struct);
 
     let error = binding.generate(model()).expect_err("refuses");
     assert!(matches!(
@@ -889,7 +889,7 @@ fn a_value_declaration_on_an_exported_function_is_an_error() {
 #[test]
 fn an_output_the_target_recorded_nothing_for_is_an_error() {
     let mut binding = binding();
-    binding.crossing("Stamp", Policy::Struct);
+    binding.crossing("Stamp", Choice::Struct);
     // Asked for, and never declared: `declare` is what would have recorded it.
     binding.outputs.push(ty("Stamp"));
 
@@ -916,7 +916,7 @@ fn a_declaration_naming_nothing_is_an_error() {
 #[test]
 fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.ignore(function("stamp_max"));
 
     let generation = binding.generate(model()).expect("plans");
@@ -934,7 +934,7 @@ fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
 fn a_run_over_unchanged_input_produces_the_same_output() {
     let run = || {
         let mut binding = binding();
-        binding.declare_type("Stamp", Policy::Struct);
+        binding.declare_type("Stamp", Choice::Struct);
         binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
         let generation = binding.generate(model()).expect("plans");
         (generation.report().to_json(), generation.rust().to_string())
@@ -953,22 +953,22 @@ fn a_run_over_unchanged_input_produces_the_same_output() {
 fn a_field_override_is_part_of_its_struct_conversion() {
     let plan = |defaults_first: bool| {
         let mut binding = binding();
-        binding.crossing("Stamp", Policy::Struct);
+        binding.crossing("Stamp", Choice::Struct);
         // Read through fields, on a scalar field: the target offers no struct
         // relation for an `i64`, so this child cannot be selected at all.
-        binding.at_site("stamp_max", "param 0.field secs", Policy::Struct);
+        binding.at_site("stamp_max", "param 0.field secs", Choice::Struct);
         // Order matters twice over: which function is planned first, and
         // whether the struct's own request primed the conversion before either
         // of them. The refusal-first case must not be primed, or it would not
         // test what happens when a refusal is met before any success.
         if defaults_first {
-            binding.declare_type("Stamp", Policy::Struct);
+            binding.declare_type("Stamp", Choice::Struct);
             binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
             binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
         } else {
             binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
             binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-            binding.declare_type("Stamp", Policy::Struct);
+            binding.declare_type("Stamp", Choice::Struct);
         }
         binding.generate(model()).expect("plans")
     };
@@ -996,10 +996,10 @@ fn a_field_override_is_part_of_its_struct_conversion() {
 #[test]
 fn a_temporary_never_takes_a_live_parameter_name() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn(
         "stamp_pick",
-        Policy::Function {
+        Choice::Function {
             symbol: "stamp_pick".to_string(),
             routes: Routes::None,
             // The names a writer would otherwise allocate for itself.
@@ -1035,7 +1035,7 @@ fn a_temporary_never_takes_a_live_parameter_name() {
 #[test]
 fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::FallibleStruct);
+    binding.declare_type("Stamp", Choice::FallibleStruct);
     binding.declare_fn(
         "stamp_sum",
         exported("stamp_sum", Routes::ReporterNeedsContext),
@@ -1055,8 +1055,8 @@ fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
 #[test]
 fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
     let mut binding = binding();
-    binding.crossing("Stamp", Policy::Struct);
-    binding.declare_type("Label", Policy::Struct);
+    binding.crossing("Stamp", Choice::Struct);
+    binding.declare_type("Label", Choice::Struct);
     binding.declare_fn("label_len", exported("label_len", Routes::None));
 
     let generation = binding.generate(model()).expect("plans");
@@ -1082,7 +1082,7 @@ fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
 #[test]
 fn a_refused_public_declaration_skips_what_requires_it() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::StructWithoutSurface);
+    binding.declare_type("Stamp", Choice::StructWithoutSurface);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     // Unrelated, and skipped for a cause of its own: `Label` holds a `String`,
     // which nothing here carries.
@@ -1119,11 +1119,11 @@ fn a_refused_public_declaration_skips_what_requires_it() {
 #[test]
 fn two_supported_children_make_two_struct_conversions() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     // One field of one parameter crosses the same `i64` a different way. The
     // struct above it is declared identically in both functions, so only the
     // child can make the two conversions differ.
-    binding.at_site("stamp_max", "param 0.field secs", Policy::ScalarThrough);
+    binding.at_site("stamp_max", "param 0.field secs", Choice::ScalarThrough);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
@@ -1149,8 +1149,8 @@ fn two_supported_children_make_two_struct_conversions() {
 #[test]
 fn an_override_restating_the_default_shares_its_conversion() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
-    binding.at_site("stamp_max", "param 0.field secs", Policy::Scalar);
+    binding.declare_type("Stamp", Choice::Struct);
+    binding.at_site("stamp_max", "param 0.field secs", Choice::Scalar);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
@@ -1168,10 +1168,10 @@ fn an_override_restating_the_default_shares_its_conversion() {
 #[test]
 fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn(
         "stamp_pick",
-        Policy::Function {
+        Choice::Function {
             symbol: "stamp_pick".to_string(),
             routes: Routes::None,
             param_names: vec!["r#v0".to_string(), "r#v1".to_string()],
@@ -1207,8 +1207,8 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
     // Every conversion here succeeds: what fails is a public declaration, two
     // edges away from the function that needs it.
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_type("Stamp", Policy::StructRequiring("Point".to_string()));
-    binding.declare_type("Point", Policy::StructWithoutSurface);
+    binding.declare_type("Stamp", Choice::StructRequiring("Point".to_string()));
+    binding.declare_type("Point", Choice::StructWithoutSurface);
 
     let generation = binding.generate(model()).expect("plans");
     for declaration in ["type:Point", "type:Stamp", "fn:stamp_sum"] {
@@ -1239,8 +1239,8 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
 #[test]
 fn a_wrapper_parameter_must_carry_what_its_conversion_reads() {
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
-    binding.declare_fn("stamp_sum", Policy::FunctionWithWrongInput);
+    binding.declare_type("Stamp", Choice::Struct);
+    binding.declare_fn("stamp_sum", Choice::FunctionWithWrongInput);
 
     let error = binding.generate(model()).expect_err("refuses");
     let EngineError::Planning(PlanningError::InternalInvariant(message)) = error else {
@@ -1293,7 +1293,7 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
 
     // With something to emit.
     let mut full = binding();
-    full.declare_type("Stamp", Policy::Struct);
+    full.declare_type("Stamp", Choice::Struct);
     full.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let generation = full.generate(guarded()).expect("plans");
     assert_eq!(generation.report().counts().emitted, 2);
@@ -1358,7 +1358,7 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
     assert!(flat.function("stamp_sum").is_some());
 
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
@@ -1414,7 +1414,7 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
         .expect("the fixture builds a model");
 
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::Struct);
+    binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
@@ -1468,7 +1468,7 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
         .expect("the fixture builds a model");
 
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::StructWithMirror);
+    binding.declare_type("Stamp", Choice::StructWithMirror);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
@@ -1528,7 +1528,7 @@ fn an_item_condition_reaches_the_declaration_a_target_contributes() {
         .expect("the fixture builds a model");
 
     let mut binding = binding();
-    binding.declare_type("Stamp", Policy::StructWithMirror);
+    binding.declare_type("Stamp", Choice::StructWithMirror);
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
@@ -1553,10 +1553,10 @@ fn an_item_condition_reaches_the_declaration_a_target_contributes() {
 fn a_target_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
     let form = |attrs: Vec<syn::Attribute>, unsafety: bool| {
         let mut binding = binding();
-        binding.declare_type("Stamp", Policy::Struct);
+        binding.declare_type("Stamp", Choice::Struct);
         binding.declare_fn(
             "stamp_sum",
-            Policy::Function {
+            Choice::Function {
                 symbol: "stamp_sum".to_string(),
                 routes: Routes::None,
                 param_names: Vec::new(),
@@ -1594,7 +1594,7 @@ fn a_target_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
 #[test]
 fn a_handle_is_carried_both_ways_and_released() {
     let mut binding = binding();
-    binding.declare_type("Token", Policy::Handle);
+    binding.declare_type("Token", Choice::Handle);
     binding.declare_fn("token_new", exported("token_new", Routes::None));
     binding.declare_fn("token_use", exported("token_use", Routes::Reported));
 
@@ -1643,7 +1643,7 @@ fn a_handle_is_carried_both_ways_and_released() {
 #[test]
 fn a_consumed_handle_needs_a_binding_route() {
     let mut binding = binding();
-    binding.declare_type("Token", Policy::Handle);
+    binding.declare_type("Token", Choice::Handle);
     binding.declare_fn("token_use", exported("token_use", Routes::None));
 
     let generation = binding.generate(model()).expect("plans");
@@ -1666,7 +1666,7 @@ fn a_consumed_handle_needs_a_binding_route() {
 #[test]
 fn a_handle_without_a_release_skips_the_type_and_what_takes_it() {
     let mut binding = binding();
-    binding.declare_type("Token", Policy::HandleWithoutRelease);
+    binding.declare_type("Token", Choice::HandleWithoutRelease);
     binding.declare_fn("token_use", exported("token_use", Routes::Reported));
 
     let generation = binding.generate(model()).expect("plans");

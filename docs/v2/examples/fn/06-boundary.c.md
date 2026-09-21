@@ -43,7 +43,7 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
   The symbol and calling convention come from the
-  [policy](../../stages/03-requests.md#what-policy-means) the `CTarget` holds
+  [choice](../../stages/03-requests.md#what-a-choice-records) the `CTarget` holds
   for this declaration, [as the request cell shows][fn_requests_c]; the
   registry supplies the declaration and nothing about it.
 - An out-parameter form would require an additional delivery implementation;
@@ -52,7 +52,7 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
   [nodes](../../stages/05-represent.md#represent-and-compose-values) are infallible,
   [as planned][fn_represent_c]. A later change that makes an input
   [conversion](../../stages/04-select.md#select-conversion-relations) fallible must skip this function until
-  the C policy says where that failure goes.
+  the C choice says where that failure goes.
 
 [fn]: README.md
 [fn_boundary]: 06-boundary.md

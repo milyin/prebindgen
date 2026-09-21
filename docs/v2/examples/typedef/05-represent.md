@@ -12,7 +12,7 @@ The two [selections][typedef_select], each with nothing under it:
 ```text
 Ledger, IntoRust,  relation atomic
 Ledger, OutOfRust, relation atomic
-conversion: <this target's handle policy>   // the key select returned, both ways
+conversion: <what this target recorded for Ledger>   // the key select returned, both ways
 ```
 
 ## Result
@@ -81,7 +81,7 @@ for names none.
 - The same two nodes serve the type's own request, `ledger_open` and
   `ledger_close`: node identity is (type, direction, [relation](../../stages/04-select.md#what-a-relation-is),
   [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)),
-  and the target resolves the same [policy](../../stages/03-requests.md#what-policy-means) — so returns an equal key — at all
+  and the target resolves the same [choice](../../stages/03-requests.md#what-a-choice-records) — so returns an equal key — at all
   three positions.
 
 ## Language variants

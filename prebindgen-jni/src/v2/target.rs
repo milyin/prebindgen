@@ -34,7 +34,7 @@ use quote::{format_ident, quote};
 /// values the binding declared the same way convert the same way — which is
 /// what the key has to mean for the registry to reuse one conversion for both.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum JniPolicy {
+pub enum JniChoice {
     /// A scalar crossing as its JNI carrier. The default for every value
     /// nothing more specific covers.
     Scalar,
@@ -75,11 +75,11 @@ pub enum JniPolicy {
     },
 }
 
-impl JniPolicy {
+impl JniChoice {
     /// A declarator v2 does not lower: the capability missing is the
     /// declarator itself.
     pub(crate) fn unimplemented(declarator: &'static str, placement: String) -> Self {
-        JniPolicy::Unimplemented {
+        JniChoice::Unimplemented {
             declarator,
             capability: declarator,
             placement,
@@ -174,10 +174,10 @@ pub struct JniTarget {
     classes: BTreeMap<String, (String, bool)>,
     /// How every value of this source type crosses, wherever it appears, by
     /// the type's canonical key.
-    types: BTreeMap<String, JniPolicy>,
+    types: BTreeMap<String, JniChoice>,
     /// What each requested output was declared as: what shapes its wrapper,
     /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, JniPolicy>,
+    outputs: BTreeMap<Declaration, JniChoice>,
 }
 
 impl JniTarget {
@@ -194,11 +194,11 @@ impl JniTarget {
     /// One call rather than two: a declared type is one `data_class!` or
     /// `ptr_class!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
-    pub(crate) fn declare(&mut self, declaration: Declaration, policy: JniPolicy) {
+    pub(crate) fn declare(&mut self, declaration: Declaration, choice: JniChoice) {
         if let Declaration::LocalType(key) | Declaration::Type(key) = &declaration {
-            self.types.insert(key.as_str().to_string(), policy.clone());
+            self.types.insert(key.as_str().to_string(), choice.clone());
         }
-        self.outputs.insert(declaration, policy);
+        self.outputs.insert(declaration, choice);
     }
 
     /// How a value of this type crosses: what was declared for its type, else
@@ -211,10 +211,10 @@ impl JniTarget {
     /// here. When they arrive, this is where they take effect: a different
     /// key for that one value, and the registry plans it as a second
     /// conversion.
-    fn conversion(&self, ty: &TypeRef) -> JniPolicy {
+    fn conversion(&self, ty: &TypeRef) -> JniChoice {
         match named(ty) {
-            Some(name) => self.types.get(&name).cloned().unwrap_or(JniPolicy::Scalar),
-            None => JniPolicy::Scalar,
+            Some(name) => self.types.get(&name).cloned().unwrap_or(JniChoice::Scalar),
+            None => JniChoice::Scalar,
         }
     }
 
@@ -222,7 +222,7 @@ impl JniTarget {
     ///
     /// Asking the engine for an output the binding recorded nothing about is
     /// the frontend contradicting itself, not a capability JNI is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&JniPolicy, PlanningError> {
+    fn declared(&self, declaration: &Declaration) -> Result<&JniChoice, PlanningError> {
         self.outputs.get(declaration).ok_or_else(|| {
             PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
         })
@@ -329,17 +329,17 @@ fn free_name(preferred: &str, function: &prebindgen_registry::flat::Function) ->
 }
 
 impl Target for JniTarget {
-    type ConversionKey = JniPolicy;
+    type ConversionKey = JniChoice;
     type Payload = JniPayload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<JniPolicy>> {
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<JniChoice>> {
         let conversion = self.conversion(&query.crossing.ty);
         // A declarator v2 has no lowering for is refused here, before anything
         // under it is planned — never quietly crossed as the scalar default.
         let want_struct = match &conversion {
-            JniPolicy::DataClass { .. } => true,
-            JniPolicy::Scalar | JniPolicy::PtrClass { .. } | JniPolicy::Function { .. } => false,
-            JniPolicy::Unimplemented {
+            JniChoice::DataClass { .. } => true,
+            JniChoice::Scalar | JniChoice::PtrClass { .. } | JniChoice::Function { .. } => false,
+            JniChoice::Unimplemented {
                 declarator,
                 capability,
                 ..
@@ -368,7 +368,7 @@ impl Target for JniTarget {
         Ok(TargetAttempt::Unsupported(Unsupported::new(
             "unsupported.jni.no_relation",
             format!(
-                "no relation available for `{}` under this JNI policy",
+                "no relation available for `{}` as this binding declared it",
                 query.crossing.ty.key()
             ),
         )))
@@ -378,14 +378,14 @@ impl Target for JniTarget {
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        conversion: &JniPolicy,
+        conversion: &JniChoice,
     ) -> TargetSupport<ReprSpec<JniPayload>> {
         match (shape.relation, conversion) {
             // The address of a boxed source value as a `jlong`: JNI's wire is
             // 64 bits whatever the platform's pointer is. Both directions and
             // the release are the registry's standard operations; the adapter
             // states only the carrier.
-            (Relation::Atomic, JniPolicy::PtrClass { .. }) => {
+            (Relation::Atomic, JniChoice::PtrClass { .. }) => {
                 let carrier = WireType::abi(syn::parse_quote!(jni::sys::jlong));
                 let ty = shape.crossing.ty.clone();
                 Ok(TargetAttempt::Ready(match shape.crossing.direction {
@@ -524,13 +524,13 @@ impl Target for JniTarget {
         // A handle's release is a site with no source function, placed where
         // its declaration said.
         let symbol = match (self.declared(site.declaration)?, site.function) {
-            (JniPolicy::Function { symbol, .. }, Some(_)) => symbol,
-            (JniPolicy::PtrClass { symbol, .. }, None) => symbol,
+            (JniChoice::Function { symbol, .. }, Some(_)) => symbol,
+            (JniChoice::PtrClass { symbol, .. }, None) => symbol,
             // A class member reaches here when every value it takes has a
             // carrier; the member itself is still a declarator v2 does not
             // lower, and says so where the report can group it.
             (
-                JniPolicy::Unimplemented {
+                JniChoice::Unimplemented {
                     declarator,
                     capability,
                     ..
@@ -670,7 +670,7 @@ impl Target for JniTarget {
         let declared = self.declared(request.declaration)?;
         // A handle class is declared the same way whatever the item behind it:
         // an alias, or a struct whose fields the JVM never sees.
-        if let JniPolicy::PtrClass { class, native, .. } = declared {
+        if let JniChoice::PtrClass { class, native, .. } = declared {
             let (package, class) = match class.rsplit_once('.') {
                 Some((package, class)) => (package.to_string(), class.to_string()),
                 None => (String::new(), class.clone()),
@@ -701,7 +701,7 @@ impl Target for JniTarget {
                 opaque.name
             ))),
             SourceItem::Function(function) => {
-                let JniPolicy::Function {
+                let JniChoice::Function {
                     package,
                     method,
                     native,
@@ -759,7 +759,7 @@ impl Target for JniTarget {
                 }))
             }
             SourceItem::Struct(strukt) => {
-                let JniPolicy::DataClass { class } = declared else {
+                let JniChoice::DataClass { class } = declared else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is exposed as a data class, and is declared as something else",
                         strukt.name
@@ -865,13 +865,13 @@ impl Target for JniTarget {
     /// declaration.
     fn describe(&self, declaration: &Declaration) -> Described {
         match self.outputs.get(declaration) {
-            Some(JniPolicy::Scalar) => Described::new("scalar", ""),
-            Some(JniPolicy::DataClass { class }) => Described::new("data_class", class),
-            Some(JniPolicy::PtrClass { class, .. }) => Described::new("ptr_class", class),
-            Some(JniPolicy::Function {
+            Some(JniChoice::Scalar) => Described::new("scalar", ""),
+            Some(JniChoice::DataClass { class }) => Described::new("data_class", class),
+            Some(JniChoice::PtrClass { class, .. }) => Described::new("ptr_class", class),
+            Some(JniChoice::Function {
                 package, method, ..
             }) => Described::new("fun", format!("{package}.{method}")),
-            Some(JniPolicy::Unimplemented {
+            Some(JniChoice::Unimplemented {
                 declarator,
                 placement,
                 ..

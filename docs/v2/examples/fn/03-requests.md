@@ -43,9 +43,9 @@ sites:
     SiteId { owner: <that DeclarationId>, path: Return }     // the i64
 
 in the target, not the request set:
-    output    <this DeclarationId> -> this target's function policy
+    output    <this DeclarationId> -> what this target recorded for stamp_sum
     per site  none                 -> no position-specific overrides
-    per type  Stamp                -> <the struct's policy>
+    per type  Stamp                -> <the struct's choice>
 ```
 
 The struct's [representation](../../stages/05-represent.md#represent-and-compose-values) is not decided here: it comes from
@@ -56,7 +56,7 @@ converted.
 
 - Current ids combine the kind and Rust name. Requesting two placements of the
   same function is not yet supported; the stage chapter describes that extension.
-- A frontend setting V2 cannot translate becomes a request under a [policy](../../stages/03-requests.md#what-policy-means)
+- A frontend setting V2 cannot translate becomes a request under a [choice](../../stages/03-requests.md#what-a-choice-records)
   that reports the missing capability. It must not disappear silently.
 - Nothing here claims the function can be generated.
 

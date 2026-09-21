@@ -42,7 +42,7 @@ recorded in the CTarget, under `type:Stamp` (C struct):
 - `data_type!` selects a by-value aggregate
   [representation](../../stages/05-represent.md#represent-and-compose-values), rather
   than an opaque pointer handle or value-opaque type. A different declarator
-  records a different [policy](../../stages/03-requests.md#what-policy-means)
+  records a different [choice](../../stages/03-requests.md#what-a-choice-records)
   and would produce a different [conversion](../../stages/04-select.md#select-conversion-relations)
   [node](../../stages/05-represent.md#represent-and-compose-values) if supported.
   This increment does not implement those opaque alternatives.

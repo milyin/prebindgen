@@ -82,16 +82,16 @@ source function at multiple placements in one run would need a richer identity;
 current V2 rejects a declaration stated twice.
 See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
-### Policy
+### Choice
 
-The language-specific choices attached to a declaration or a value, held by the
-frontend that recorded them and by the target it builds. For example, a C
-policy says that `Stamp` uses a by-value struct, while a JNI policy names the
-Kotlin class that will carry it. The registry stores none of them and knows no
-precedence among them: it asks the target whenever it needs a language-specific
-decision, and the target resolves what applies from its own storage. The shared
-planner never interprets a C or Kotlin option.
-See [What policy means](stages/03-requests.md#what-policy-means).
+One language-specific decision the binding recorded about a declaration or a
+value, held by the frontend that recorded it and by the target that frontend
+builds. For example, C records that `Stamp` crosses as a by-value struct, while
+JNI records the Kotlin class that will carry it. The registry stores none of
+them and knows no precedence among them: it asks the target whenever it needs a
+language-specific decision, and the target resolves what applies from its own
+storage. The shared planner never interprets a C or Kotlin option.
+See [What a choice records](stages/03-requests.md#what-a-choice-records).
 
 ### Conversion key
 

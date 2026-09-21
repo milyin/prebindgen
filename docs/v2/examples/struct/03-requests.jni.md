@@ -25,7 +25,7 @@ instead use `PREBINDGEN_PIPELINE`, defaulting to V1 when that variable is unset.
 
 The package prefix and `package!()` place the class in `example`, alongside
 the binding's harness object. `data_class!(Stamp)`
-requests public properties corresponding to the source fields. The [policy](../../stages/03-requests.md#what-policy-means)'s
+requests public properties corresponding to the source fields. The [choice](../../stages/03-requests.md#what-a-choice-records)'s
 `class` is the fully qualified Kotlin name: package plus class name. `()J` is a
 JVM method descriptor: empty parentheses mean no arguments, and `J` means a
 64-bit `long`. It describes the getter the generated JNI code will invoke.
@@ -47,7 +47,7 @@ derived during planning:
   V2 struct path does not implement it.
 - The adapter derives public property names and JNI getter calls from the
   same Flat fields. The class name comes from the recorded
-  [policy](../../stages/03-requests.md#what-policy-means). Tests check that
+  [choice](../../stages/03-requests.md#what-a-choice-records). Tests check that
   the generated Kotlin and the generated Rust agree.
 - Object input means the
   [conversion](../../stages/04-select.md#select-conversion-relations) depends on the JVM at run time, which is why

@@ -63,7 +63,7 @@ each leaf is complete, made them one node.
 The input node is the struct's own conversion,
 [planned on its own path][struct_represent]; this function refers to it, and so
 does anything else taking an owned `Stamp` under the same
-[policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are
+[choice](../../stages/03-requests.md#what-a-choice-records). Their `NodeId`s are
 what [the boundary][fn_boundary] assembles.
 
 ## Checks

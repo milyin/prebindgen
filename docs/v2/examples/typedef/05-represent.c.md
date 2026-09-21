@@ -27,7 +27,7 @@ node(Ledger, OutOfRust)  ReprSpec { layout: Scalar(*mut Ledger),
 ```
 
 ```rust
-// The adapter's `represent`, for the atomic relation under an opaque_ptr policy.
+// The adapter's `represent`, for the atomic relation under an opaque_ptr choice.
 let carrier = WireType::abi(parse_quote!(*mut Ledger));   // the adapter's own type, not source::Ledger
 match direction {
     Direction::IntoRust => ReprSpec {

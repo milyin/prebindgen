@@ -40,7 +40,7 @@ call, so the input is applied to the release operation instead of being
 converted and passed on. The boundary is the target's answer to a
 `SiteDescriptor` whose source function is absent and whose declaration is the
 *type's*, so the target resolves the type's
-[policy](../../stages/03-requests.md#what-policy-means) rather than a
+[choice](../../stages/03-requests.md#what-a-choice-records) rather than a
 function's. The registry checks it as it checks any other: the wrapper parameter must carry what the
 release reads, and any failure the release could raise must have a route.
 

@@ -10,7 +10,7 @@ Owner: the registry, on the C adapter's [representation](../../stages/05-represe
 The two selected [conversions](../../stages/04-select.md#select-conversion-relations), each with the
 [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
 `select` returned for it — which for this adapter is the C
-[policy](../../stages/03-requests.md#what-policy-means) itself:
+[choice](../../stages/03-requests.md#what-a-choice-records) itself:
 
 ```text
 Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   conversion: data_struct, by value
@@ -46,7 +46,7 @@ The registry combines the two field reads with Rust struct construction.
 - The representation maps every source child to a member, and the registry
   validates that mapping; an unaccounted member is an error, not a dropped field.
 - A field type that made its conversion fallible would add a failure here, and
-  the C policy would have to route it or the function would be skipped.
+  the C choice would have to route it or the function would be skipped.
 
 [fn]: README.md
 [fn_represent]: 05-represent.md

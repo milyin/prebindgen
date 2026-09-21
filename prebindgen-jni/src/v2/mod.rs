@@ -22,7 +22,7 @@ mod kotlin;
 mod target;
 
 use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
-pub use target::{JniPayload, JniPolicy, JniTarget};
+pub use target::{JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
 
@@ -76,8 +76,8 @@ impl Declarations {
     ) -> (JniTarget, BindingRequests) {
         let mut target = JniTarget::new(classes);
         let mut requests = BindingRequests::new("jni", source_module);
-        let mut declare = |declaration: Declaration, policy: JniPolicy| {
-            target.declare(declaration.clone(), policy);
+        let mut declare = |declaration: Declaration, choice: JniChoice| {
+            target.declare(declaration.clone(), choice);
             requests.output(declaration);
         };
 
@@ -110,7 +110,7 @@ impl Declarations {
             declare(
                 Declaration::LocalType(key.clone()),
                 match config.kind {
-                    crate::jni::DeclaredKind::Data => JniPolicy::DataClass {
+                    crate::jni::DeclaredKind::Data => JniChoice::DataClass {
                         class: placement.clone(),
                     },
                     // The release is a native method on the harness like any
@@ -118,13 +118,13 @@ impl Declarations {
                     crate::jni::DeclaredKind::Ptr(_) => {
                         let short = placement.rsplit('.').next().unwrap_or_default();
                         let native = self.mangle_jni_method(&format!("free{short}"));
-                        JniPolicy::PtrClass {
+                        JniChoice::PtrClass {
                             class: placement.clone(),
                             symbol: self.native_method_symbol(&native),
                             native,
                         }
                     }
-                    _ => JniPolicy::unimplemented(declarator, placement.clone()),
+                    _ => JniChoice::unimplemented(declarator, placement.clone()),
                 },
             );
 
@@ -134,7 +134,7 @@ impl Declarations {
             for member in self.class_members.get(key).into_iter().flatten() {
                 declare(
                     fun_declaration(&member.rust_ident),
-                    JniPolicy::unimplemented(
+                    JniChoice::unimplemented(
                         member_representation(member),
                         format!("{placement}.{}", self.effective_method_name(key, member)),
                     ),
@@ -167,12 +167,12 @@ impl Declarations {
                 declare(
                     fun_declaration(&entry.rust_ident),
                     match self.unimplemented_setting(flat, &entry.rust_ident) {
-                        Some(setting) => JniPolicy::Unimplemented {
+                        Some(setting) => JniChoice::Unimplemented {
                             declarator: "fun",
                             capability: setting,
                             placement: placed(entry),
                         },
-                        None => JniPolicy::Function {
+                        None => JniChoice::Function {
                             package: package.clone(),
                             symbol: self.native_method_symbol(&native),
                             native,
@@ -185,7 +185,7 @@ impl Declarations {
             for entry in &config.constants {
                 declare(
                     Declaration::Const(entry.rust_ident.clone()),
-                    JniPolicy::unimplemented("constant", placed(entry)),
+                    JniChoice::unimplemented("constant", placed(entry)),
                 );
             }
             // A `constant!(X).fun(..)` is a Kotlin `val` backed by a nullary
@@ -194,14 +194,14 @@ impl Declarations {
             for entry in &config.constant_functions {
                 declare(
                     const_declaration(&entry.rust_ident),
-                    JniPolicy::unimplemented("constant_fun", placed(entry)),
+                    JniChoice::unimplemented("constant_fun", placed(entry)),
                 );
             }
             // A `constant!(X).expr(..)` has no Rust item behind it at all.
             for decl in &config.constant_exprs {
                 declare(
                     Declaration::LocalConst(decl.kotlin_name.clone()),
-                    JniPolicy::unimplemented(
+                    JniChoice::unimplemented(
                         "constant_expr",
                         format!("{package}.{}", decl.kotlin_name),
                     ),
@@ -219,7 +219,7 @@ impl Declarations {
         for decl in &self.convert_decls {
             declare(
                 Declaration::Conversion(decl.key().clone()),
-                JniPolicy::unimplemented(
+                JniChoice::unimplemented(
                     "convert",
                     self.kotlin_fqn(decl.key()).unwrap_or_default(),
                 ),

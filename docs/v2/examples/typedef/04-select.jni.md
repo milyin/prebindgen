@@ -13,18 +13,18 @@ Crossing { source: Ledger, direction: OutOfRust }
 offered:  [ atomic ]
 
 held by the JniTarget, not passed in:
-policy:   ptr_class example.Ledger
+choice:   ptr_class example.Ledger
 ```
 
 ## Result
 
 ```text
-atomic, conversion JniPolicy::PtrClass { class: "example.Ledger", .. }
+atomic, conversion JniChoice::PtrClass { class: "example.Ledger", .. }
 ```
 
 for both. A `ptr_class` holds an address, not properties, so the JNI adapter
 wants the value whole and answers `atomic` off the
-[policy](../../stages/03-requests.md#what-policy-means) — the same answer for
+[choice](../../stages/03-requests.md#what-a-choice-records) — the same answer for
 the same reason as C's, which is what makes the selection stage
 target-independent in practice: the adapters differ at the next stage, in what
 the address is carried as.

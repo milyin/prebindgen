@@ -32,7 +32,7 @@ use quote::{format_ident, quote};
 /// values the binding declared the same way convert the same way — which is
 /// what the key has to mean for the registry to reuse one conversion for both.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CPolicy {
+pub enum CChoice {
     /// A scalar crossing unchanged. The default for every value nothing more
     /// specific covers.
     Scalar,
@@ -66,10 +66,10 @@ pub enum CPayload {}
 pub struct CTarget {
     /// How every value of this source type crosses, wherever it appears, by
     /// the type's canonical key.
-    types: BTreeMap<String, CPolicy>,
+    types: BTreeMap<String, CChoice>,
     /// What each requested output was declared as: what shapes its wrapper,
     /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, CPolicy>,
+    outputs: BTreeMap<Declaration, CChoice>,
 }
 
 impl CTarget {
@@ -78,11 +78,11 @@ impl CTarget {
     /// One call rather than two: a declared type is one `data_type!` or
     /// `ptr_type!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
-    pub(crate) fn declare(&mut self, declaration: Declaration, policy: CPolicy) {
+    pub(crate) fn declare(&mut self, declaration: Declaration, choice: CChoice) {
         if let Declaration::LocalType(key) | Declaration::Type(key) = &declaration {
-            self.types.insert(key.as_str().to_string(), policy.clone());
+            self.types.insert(key.as_str().to_string(), choice.clone());
         }
-        self.outputs.insert(declaration, policy);
+        self.outputs.insert(declaration, choice);
     }
 
     /// How a value of this type crosses: what was declared for its type, else
@@ -92,12 +92,12 @@ impl CTarget {
     /// and `ptr_type!` are stated about a type, not about one parameter of one
     /// function — so every value of a type crosses the same way, and the key
     /// this yields depends on the type alone.
-    fn conversion(&self, ty: &TypeRef) -> CPolicy {
+    fn conversion(&self, ty: &TypeRef) -> CChoice {
         match ty.kind() {
             TypeKind::Named { id, .. } => {
-                self.types.get(&id.name).cloned().unwrap_or(CPolicy::Scalar)
+                self.types.get(&id.name).cloned().unwrap_or(CChoice::Scalar)
             }
-            _ => CPolicy::Scalar,
+            _ => CChoice::Scalar,
         }
     }
 
@@ -105,7 +105,7 @@ impl CTarget {
     ///
     /// Asking the engine for an output the binding recorded nothing about is
     /// the frontend contradicting itself, not a capability C is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&CPolicy, PlanningError> {
+    fn declared(&self, declaration: &Declaration) -> Result<&CChoice, PlanningError> {
         self.outputs.get(declaration).ok_or_else(|| {
             PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
         })
@@ -133,19 +133,19 @@ fn scalar_of(ty: &TypeRef) -> Option<ScalarKind> {
 }
 
 impl Target for CTarget {
-    type ConversionKey = CPolicy;
+    type ConversionKey = CChoice;
     type Payload = CPayload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<CPolicy>> {
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<CChoice>> {
         let conversion = self.conversion(&query.crossing.ty);
         // An aggregate carries its members, so it wants the struct's fields; a
         // scalar is carried whole. A declarator v2 has no lowering for is
         // refused here, before anything under it is planned — never quietly
         // crossed as the scalar default.
         let want_struct = match &conversion {
-            CPolicy::DataStruct { .. } => true,
-            CPolicy::Scalar | CPolicy::OpaquePtr { .. } | CPolicy::Function { .. } => false,
-            CPolicy::Unimplemented { declarator, .. } => {
+            CChoice::DataStruct { .. } => true,
+            CChoice::Scalar | CChoice::OpaquePtr { .. } | CChoice::Function { .. } => false,
+            CChoice::Unimplemented { declarator, .. } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
                     format!(
@@ -170,7 +170,7 @@ impl Target for CTarget {
         Ok(TargetAttempt::Unsupported(Unsupported::new(
             "unsupported.c.no_relation",
             format!(
-                "no relation available for `{}` under this C policy",
+                "no relation available for `{}` as this binding declared it",
                 query.crossing.ty.key()
             ),
         )))
@@ -180,14 +180,14 @@ impl Target for CTarget {
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        conversion: &CPolicy,
+        conversion: &CChoice,
     ) -> TargetSupport<ReprSpec<CPayload>> {
         match (shape.relation, conversion) {
             // The address of a boxed source value, cast to a pointer to the
             // incomplete C type this adapter declares. Both directions and the
             // release are the registry's standard operations; the adapter
             // states only the carrier.
-            (Relation::Atomic, CPolicy::OpaquePtr { c_name, .. }) => {
+            (Relation::Atomic, CChoice::OpaquePtr { c_name, .. }) => {
                 let ident = format_ident!("{c_name}");
                 let carrier = WireType::abi(syn::parse_quote!(*mut #ident));
                 let ty = shape.crossing.ty.clone();
@@ -226,7 +226,7 @@ impl Target for CTarget {
                 }))
             }
             (Relation::Struct(strukt), _) => {
-                let CPolicy::DataStruct { c_name } = conversion else {
+                let CChoice::DataStruct { c_name } = conversion else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is planned through its fields, and is declared to be carried whole",
                         strukt.name
@@ -300,9 +300,9 @@ impl Target for CTarget {
         // A handle's release is a site with no source function, exported under
         // the destructor symbol its declaration named.
         let symbol = match (self.declared(site.declaration)?, site.function) {
-            (CPolicy::Function { symbol }, Some(_)) => symbol,
-            (CPolicy::OpaquePtr { release, .. }, None) => release,
-            (CPolicy::Unimplemented { declarator, .. }, _) => {
+            (CChoice::Function { symbol }, Some(_)) => symbol,
+            (CChoice::OpaquePtr { release, .. }, None) => release,
+            (CChoice::Unimplemented { declarator, .. }, _) => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
                     format!(
@@ -371,7 +371,7 @@ impl Target for CTarget {
         let declared = self.declared(request.declaration)?;
         // An opaque handle is declared the same way whatever the item behind
         // it: an alias, or a struct whose fields C never sees.
-        if let CPolicy::OpaquePtr { c_name, .. } = declared {
+        if let CChoice::OpaquePtr { c_name, .. } = declared {
             let ident = format_ident!("{c_name}");
             return Ok(TargetAttempt::Ready(SurfaceSpec {
                 declaration: request.declaration.clone(),
@@ -412,7 +412,7 @@ impl Target for CTarget {
                 payload: None,
             })),
             SourceItem::Struct(strukt) => {
-                let CPolicy::DataStruct { c_name } = declared else {
+                let CChoice::DataStruct { c_name } = declared else {
                     return Err(PlanningError::InvalidInput(format!(
                         "`{}` is exposed as a data type, and is declared as something else",
                         strukt.name
@@ -513,11 +513,11 @@ impl Target for CTarget {
     /// cannot make a frontend defect look like an ordinary declaration.
     fn describe(&self, declaration: &Declaration) -> Described {
         match self.outputs.get(declaration) {
-            Some(CPolicy::Scalar) => Described::new("scalar", ""),
-            Some(CPolicy::DataStruct { c_name }) => Described::new("data_struct", c_name),
-            Some(CPolicy::OpaquePtr { c_name, .. }) => Described::new("opaque_ptr", c_name),
-            Some(CPolicy::Function { symbol }) => Described::new("function", symbol),
-            Some(CPolicy::Unimplemented { declarator, c_name }) => {
+            Some(CChoice::Scalar) => Described::new("scalar", ""),
+            Some(CChoice::DataStruct { c_name }) => Described::new("data_struct", c_name),
+            Some(CChoice::OpaquePtr { c_name, .. }) => Described::new("opaque_ptr", c_name),
+            Some(CChoice::Function { symbol }) => Described::new("function", symbol),
+            Some(CChoice::Unimplemented { declarator, c_name }) => {
                 Described::new(*declarator, c_name)
             }
             None => Described::new("undeclared", ""),

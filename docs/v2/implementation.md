@@ -221,7 +221,7 @@ establish the behavior of the resulting foreign interface.
    answered differently for two positions would have its second answer silently
    bypassed by the first one's [node](stages/05-represent.md#represent-and-compose-values). Varying by position is what
    `select` is for: it is the one call that sees a position, and a
-   [policy](stages/03-requests.md#what-policy-means) recorded there comes back
+   [choice](stages/03-requests.md#what-a-choice-records) recorded there comes back
    as a different key, which is in the identity.
 4. **How an adapter declares its types and generated units.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
@@ -347,7 +347,7 @@ this list says what the increment left open and why.
 Acceptance criteria:
 
 - [x] The design's boundaries are exercised by scalar and struct bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
-- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry, and the target that holds what each request is. `CPolicy` and `JniPolicy` represent implemented choices and include an `Unimplemented` case naming other declarators; each is its target's private storage and its conversion key, and the registry names neither.
+- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry, and the target that holds what each request is. `CChoice` and `JniChoice` represent implemented choices and include an `Unimplemented` case naming other declarators; each is its target's private storage and its conversion key, and the registry names neither.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
