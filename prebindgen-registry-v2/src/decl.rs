@@ -132,8 +132,11 @@ impl Declaration {
         (element.entity()?.kind() == wanted).then_some(element)
     }
 
-    /// Whether the binding defines this itself, requiring nothing of the model
-    /// — see [`Self::captured_kind`].
+    /// Whether the binding defines this itself: a callback signature, a
+    /// conversion helper, a function or constant of its own, or a type the
+    /// target represents although the source never exported it (`String` as
+    /// an opaque handle). Such a declaration names no captured item and
+    /// requires nothing of the model.
     pub fn is_binding_local(&self) -> bool {
         self.captured_kind().is_none()
     }
