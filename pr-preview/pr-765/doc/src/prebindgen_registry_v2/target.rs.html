@@ -965,7 +965,7 @@
 <a href=#965 id=965 data-nosnippet>965</a><span class="doccomment">/// The captured item a public declaration is made from, as the source model
 <a href=#966 id=966 data-nosnippet>966</a>/// describes it.
 <a href=#967 id=967 data-nosnippet>967</a>///
-<a href=#968 id=968 data-nosnippet>968</a>/// A binding asks for an output by name — an [`Declaration`] such as
+<a href=#968 id=968 data-nosnippet>968</a>/// A binding asks for an output by name — a [`Declaration`] such as
 <a href=#969 id=969 data-nosnippet>969</a>/// `type:Ledger` — and the registry resolves that name in the source model
 <a href=#970 id=970 data-nosnippet>970</a>/// before it plans anything. This is what it found: the model's own element,
 <a href=#971 id=971 data-nosnippet>971</a>/// borrowed from the [`Flat`] the run was planned over. A target receives it
@@ -1097,8 +1097,8 @@
 <a href=#1097 id=1097 data-nosnippet>1097</a></span><span class="kw">pub struct </span>Described {
 <a href=#1098 id=1098 data-nosnippet>1098</a>    <span class="doccomment">/// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
 <a href=#1099 id=1099 data-nosnippet>1099</a>    /// — the adapter's own word, printed back verbatim. Finer than the prefix
-<a href=#1100 id=1100 data-nosnippet>1100</a>    /// an [`Declaration`] prints with: `opaque_ptr` and
-<a href=#1101 id=1101 data-nosnippet>1101</a>    /// `data_struct` are both a `type`.
+<a href=#1100 id=1100 data-nosnippet>1100</a>    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
+<a href=#1101 id=1101 data-nosnippet>1101</a>    /// a `type`.
 <a href=#1102 id=1102 data-nosnippet>1102</a>    </span><span class="kw">pub </span>representation: String,
 <a href=#1103 id=1103 data-nosnippet>1103</a>    <span class="doccomment">/// Where it lands in the target language, spelled the way that language
 <a href=#1104 id=1104 data-nosnippet>1104</a>    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
