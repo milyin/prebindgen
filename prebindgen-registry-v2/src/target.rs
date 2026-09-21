@@ -1090,6 +1090,10 @@ pub enum SourceItem<'a> {
 /// something the adapter cannot do yet would break it in the other direction —
 /// the answer must be a reported [`Unsupported`], not the default.
 pub trait Target {
+    /// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
+    /// adapter, so nothing has to carry it alongside the requests.
+    const NAME: &'static str;
+
     /// What the adapter calls one way of converting a value.
     ///
     /// The registry never looks inside it: it compares keys to decide which

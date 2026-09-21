@@ -49,8 +49,8 @@ impl Declarations {
                 Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
             })
             .collect();
-        let (target, requests) = self.binding(&flat, classes, source_module);
-        generate(flat, &target, requests, declaring_crate)
+        let (target, requests) = self.binding(&flat, classes, declaring_crate, source_module);
+        generate(flat, &target, requests)
     }
 
     /// Write the Kotlin side of a v2 generation under `kotlin_root`.
@@ -72,10 +72,11 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         classes: std::collections::BTreeMap<String, (String, bool)>,
+        declaring_crate: impl Into<String>,
         source_module: syn::Path,
     ) -> (JniTarget, BindingRequests) {
         let mut target = JniTarget::new(classes);
-        let mut requests = BindingRequests::new("jni", source_module);
+        let mut requests = BindingRequests::new(declaring_crate, source_module);
         let mut declare = |declaration: Declaration, choice: JniChoice| {
             target.declare(declaration.clone(), choice);
             requests.output(declaration);
@@ -226,20 +227,17 @@ impl Declarations {
             );
         }
 
-        // Ignores are decisions, accounted apart from the gaps. They are not
+        // Ignores are decisions, accounted apart from the gaps. They name a
+        // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_fns) {
-            requests
-                .ignored
-                .push(Declaration::LocalFunction(ident.to_string()));
+            requests.ignored.push(Declaration::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_class_types) {
-            requests.ignored.push(Declaration::LocalType(key.clone()));
+            requests.ignored.push(Declaration::Type(key.clone()));
         }
         for ident in sorted(&self.ignored_const_idents) {
-            requests
-                .ignored
-                .push(Declaration::LocalConst(ident.to_string()));
+            requests.ignored.push(Declaration::Const(ident.clone()));
         }
         (target, requests)
     }

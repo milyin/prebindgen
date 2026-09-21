@@ -233,11 +233,12 @@ common Rust writer belongs to the engine.
 
 The implementation divides the registry's data between two structures:
 
-- **The generation operation**, `generate(flat, target, requests, crate)`, is a
-  free function that starts a fresh run. `requests` is the work list — what to
-  expose and what to leave alone; `target` implements the adapter interface and
-  holds the frontend's choices, which is where every question about them goes.
-  Current V2 selects
+- **The generation operation**, `generate(flat, target, requests)`, is a free
+  function that starts a fresh run. Three arguments, three kinds of thing: the
+  source model, the language, and what this binding asks of it. `requests` is
+  the work list — what to expose and what to leave alone; `target` implements
+  the adapter interface and holds the frontend's choices, which is where every
+  question about them goes. Current V2 selects
   atomic conversions or struct-field construction. Constructors, accessors
   and other helper [relations](04-select.md#what-a-relation-is) described by the design are future extensions.
 - **The run**, private `Run` state in `plan.rs`, keeps requests, offered
@@ -322,8 +323,10 @@ The registry separates what should be generated from how values should be conver
 ```rust
 // What the frontend hands the registry.
 struct BindingRequests {
-    outputs: Vec<OutputRequest>,  // Explicit output requests; defined below.
-    ignored: Vec<DeclarationId>,  // Explicit user opt-outs retained for reporting.
+    declaring_crate: String,      // The crate generating, for the report.
+    source_module: Path,          // How generated Rust reaches the source items.
+    outputs: Vec<DeclarationId>,  // Explicit output requests; defined below.
+    ignored: Vec<DeclarationId>,  // Captured items the user opted out of, for the report.
 }
 
 // What the frontend keeps and answers the registry's questions from —
@@ -342,9 +345,9 @@ output request that the target then refuses by name, so the report accounts for
 it like anything else.
 
 Neither structure is generic. C and JNI use the same `BindingRequests`, and
-differ only in the `Target` they pass beside it. The implementation also
-records a target label and a source-module path, and stores ignored entries as
-`Declaration`s. These sketches explain the responsibilities;
+differ only in the `Target` they pass beside it — which is also where the
+report's name for the language comes from, as `Target::NAME`, since an adapter
+knows what it is. These sketches explain the responsibilities;
 `prebindgen-registry-v2/src/plan.rs` defines the exact current fields.
 
 The registry plans `outputs`, reports `ignored` entries, and asks the adapter for every choice that applies to them.
@@ -362,7 +365,6 @@ pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
     requests: BindingRequests,
-    declaring_crate: impl Into<String>,
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
@@ -384,7 +386,7 @@ applied, the same answer v1 gives.
 let source_model = self.sources.clone().build()?;   // stage 2: the snapshot
 
 let (target, requests) = self.binding(source_module);  // this stage
-let generation = generate(source_model, &target, requests, declaring_crate)?;
+let generation = generate(source_model, &target, requests)?;
                                                      // stages 4 to 6
 ```
 

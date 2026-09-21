@@ -40,8 +40,8 @@ impl CbindgenBuilder {
                 .and_then(|module| syn::parse_str(module).ok())
                 .unwrap_or_else(|| syn::parse_quote!(crate))
         });
-        let (target, requests) = self.binding(source_module);
-        generate(flat, &target, requests, declaring_crate)
+        let (target, requests) = self.binding(declaring_crate, source_module);
+        generate(flat, &target, requests)
     }
 
     /// Everything this binding declared: what each declaration is, for the
@@ -50,9 +50,13 @@ impl CbindgenBuilder {
     /// One entry per declaration, in any order — the report sorts. Both halves
     /// are stated in the same pass, so a declaration cannot be planned without
     /// the target knowing what it is, or recorded without being asked for.
-    fn binding(&self, source_module: syn::Path) -> (CTarget, BindingRequests) {
+    fn binding(
+        &self,
+        declaring_crate: impl Into<String>,
+        source_module: syn::Path,
+    ) -> (CTarget, BindingRequests) {
         let mut target = CTarget::default();
-        let mut requests = BindingRequests::new("c", source_module);
+        let mut requests = BindingRequests::new(declaring_crate, source_module);
         let mut declare = |declaration: Declaration, choice: CChoice| {
             target.declare(declaration.clone(), choice);
             requests.output(declaration);
@@ -135,15 +139,14 @@ impl CbindgenBuilder {
             );
         }
 
-        // Ignores are decisions, accounted apart from the gaps. They are not
+        // Ignores are decisions, accounted apart from the gaps. They name a
+        // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_functions) {
-            requests
-                .ignored
-                .push(Declaration::LocalFunction(ident.to_string()));
+            requests.ignored.push(Declaration::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignored.push(Declaration::LocalType(key.clone()));
+            requests.ignored.push(Declaration::Type(key.clone()));
         }
         (target, requests)
     }

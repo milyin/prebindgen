@@ -21,6 +21,8 @@ use crate::{
 struct Nothing;
 
 impl Target for Nothing {
+    const NAME: &'static str = "test";
+
     type ConversionKey = ();
     type Payload = ();
 
@@ -77,12 +79,12 @@ fn plan(
     sources: FlatBuilder,
     crate_name: &str,
 ) -> Result<Generation<()>, EngineError> {
-    let mut requests = BindingRequests::new("test", syn::parse_quote!(fixture));
+    let mut requests = BindingRequests::new(crate_name, syn::parse_quote!(fixture));
     for declaration in &stated.declared {
         requests.output(declaration.clone());
     }
     requests.ignored = stated.ignored.clone();
-    generate(sources.build()?, &Nothing, requests, crate_name)
+    generate(sources.build()?, &Nothing, requests)
 }
 
 /// Two captured functions and a captured struct, in the shape a source crate
@@ -140,7 +142,7 @@ fn local_type(name: &str) -> Declaration {
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_new")), (local_type("Handle"))],
-        ignored: vec![(Declaration::LocalFunction("handle_value".to_string()))],
+        ignored: vec![captured_fn("handle_value")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();

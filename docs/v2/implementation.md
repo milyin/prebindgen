@@ -141,7 +141,7 @@ says. A JVM that loads the library and calls the method, which is what
 comes with the covertest work rather than here. What follows records what
 building this settled, so the chapters and the engine describe the same thing.
 
-To find the implementation, start with `generate(flat, &target, requests, crate)`
+To find the implementation, start with `generate(flat, &target, requests)`
 in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 - `target.rs` defines the questions adapters answer and the descriptions they return.

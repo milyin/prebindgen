@@ -232,6 +232,8 @@ impl Mini {
 }
 
 impl Target for Mini {
+    const NAME: &'static str = "mini";
+
     type ConversionKey = Choice;
     type Payload = Payload;
 
@@ -654,12 +656,12 @@ impl Binding {
             outputs,
             ignored,
         } = self;
-        let mut requests = BindingRequests::new("mini", syn::parse_quote!(source));
+        let mut requests = BindingRequests::new("fixture", syn::parse_quote!(source));
         for declaration in outputs {
             requests.output(declaration);
         }
         requests.ignored = ignored;
-        generate(flat, &target, requests, "fixture")
+        generate(flat, &target, requests)
     }
 }
 

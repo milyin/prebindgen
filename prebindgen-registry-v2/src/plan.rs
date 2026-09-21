@@ -39,21 +39,23 @@ use crate::{
 /// Users never write this; a frontend builds it from its own recorded calls,
 /// which is what lets two languages share everything after this point.
 pub struct BindingRequests {
-    /// The target this binding generates for — `"c"`, `"jni"`.
-    pub target: &'static str,
+    /// The crate whose build script is generating, for the report.
+    pub declaring_crate: String,
     /// The module generated code reaches the source items through.
     pub source_module: syn::Path,
     /// What to expose, in the order the frontend recorded it. Each is also
     /// what the target looks its own configuration for that output up by.
     pub outputs: Vec<Declaration>,
-    /// Declarations the user asked to leave alone.
+    /// Captured items the user asked to leave alone. They are not planned and
+    /// nothing is generated for them; the report accounts for them so that a
+    /// gap and a decision read differently.
     pub ignored: Vec<Declaration>,
 }
 
 impl BindingRequests {
-    pub fn new(target: &'static str, source_module: syn::Path) -> Self {
+    pub fn new(declaring_crate: impl Into<String>, source_module: syn::Path) -> Self {
         BindingRequests {
-            target,
+            declaring_crate: declaring_crate.into(),
             source_module,
             outputs: Vec::new(),
             ignored: Vec::new(),
@@ -654,7 +656,6 @@ pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
     requests: BindingRequests,
-    declaring_crate: impl Into<String>,
 ) -> Result<Generation<T::Payload>, EngineError> {
     check_declarations(&requests.outputs, &flat)?;
 
@@ -838,10 +839,10 @@ pub fn generate<T: Target>(
 
     let report = Report {
         pipeline: PIPELINE,
-        target: requests.target,
+        target: T::NAME,
         schema_version: SCHEMA_VERSION,
         source_identity: SourceIdentity {
-            declaring_crate: declaring_crate.into(),
+            declaring_crate: requests.declaring_crate.clone(),
             sources: flat.source_modules().to_vec(),
             captured_items: flat.elements().count(),
         },

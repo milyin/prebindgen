@@ -133,6 +133,8 @@ fn scalar_of(ty: &TypeRef) -> Option<ScalarKind> {
 }
 
 impl Target for CTarget {
+    const NAME: &'static str = "c";
+
     type ConversionKey = CChoice;
     type Payload = CPayload;
 

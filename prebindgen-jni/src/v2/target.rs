@@ -329,6 +329,8 @@ fn free_name(preferred: &str, function: &prebindgen_registry::flat::Function) ->
 }
 
 impl Target for JniTarget {
+    const NAME: &'static str = "jni";
+
     type ConversionKey = JniChoice;
     type Payload = JniPayload;
 
