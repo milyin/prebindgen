@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::Declaration,
+    decl::{CapturedName, Declaration},
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -27,43 +27,37 @@ use crate::{
     },
 };
 
-/// What a frontend hands the engine: what to expose, and what to leave alone.
+/// One entry of a [`BindingRequests`] work list: something the binding said
+/// about one item.
 ///
-/// Nothing about *how* anything crosses is here. A binding's choices — which
-/// C name a type gets, which Kotlin class, which parameter is expanded — stay
-/// in the frontend's own storage and are answered where the registry asks, in
-/// [`Target`]. What this carries is the work list, so the registry can plan
-/// each entry, decide what survives, and account for every one of them in the
-/// report.
-///
-/// Users never write this; a frontend builds it from its own recorded calls,
-/// which is what lets two languages share everything after this point.
-/// One thing the binding said about one declaration.
-///
-/// Both dispositions name a declaration, and the report accounts for both, so
-/// they are one list rather than two: an id can then appear once, which is
-/// what the report's "one id, one row" rests on. Declaring something and
-/// ignoring it is a contradiction the engine catches for that reason, rather
-/// than emitting two rows for it.
+/// Both dispositions are about a captured item, and the report accounts for
+/// both, so they are one list rather than two: an id can then appear once,
+/// which is what the report's "one id, one row" rests on. Exposing something
+/// and ignoring it is a contradiction the engine catches for that reason,
+/// rather than emitting two rows for it.
 #[derive(Clone, Debug)]
 pub enum Request {
     /// Expose this declaration. The target is asked what it is, and the
     /// registry plans it.
     Expose(Declaration),
-    /// Leave this one alone. Nothing is planned and nothing is generated; the
-    /// report carries it so that a decision and a gap read differently.
-    Ignore(Declaration),
+    /// Leave this captured item alone. Nothing is planned and nothing is
+    /// generated; the report carries it so that a decision and a gap read
+    /// differently. A name and a kind are all an ignore has to say, so that is
+    /// all it can carry.
+    Ignore(CapturedName),
 }
 
-impl Request {
-    /// The declaration either disposition is about.
-    pub fn declaration(&self) -> &Declaration {
-        match self {
-            Request::Expose(declaration) | Request::Ignore(declaration) => declaration,
-        }
-    }
-}
-
+/// What a frontend hands the engine: what to expose, and what to leave alone.
+///
+/// Nothing about *how* anything crosses is here. A binding's choices — which
+/// C name a type gets, which Kotlin class, which parameter is expanded — stay
+/// in the frontend's own storage and are answered where the registry asks, in
+/// [`Target`]. What this carries is the work list, one [`Request`] per entry,
+/// so the registry can plan each, decide what survives, and account for every
+/// one of them in the report.
+///
+/// Users never write this; a frontend builds it from its own recorded calls,
+/// which is what lets two languages share everything after this point.
 pub struct BindingRequests {
     /// The crate whose build script is generating, for the report.
     pub declaring_crate: String,
@@ -88,23 +82,25 @@ impl BindingRequests {
         self
     }
 
-    /// Ask for one declaration to be left alone.
-    pub fn ignore(&mut self, declaration: Declaration) -> &mut Self {
-        self.requests.push(Request::Ignore(declaration));
+    /// Ask for one captured item to be left alone.
+    pub fn ignore(&mut self, name: CapturedName) -> &mut Self {
+        self.requests.push(Request::Ignore(name));
         self
     }
 
-    /// The declarations to plan, and the ones only the report hears about.
+    /// The declarations to plan, and the ones only the report hears about —
+    /// the latter as the declarations that would have exposed them, which is
+    /// the id a report row and a duplicate check go by.
     ///
     /// Split once, here, so that nothing downstream can plan an ignore by
     /// forgetting to filter for it.
-    fn split(&self) -> (Vec<&Declaration>, Vec<&Declaration>) {
+    fn split(&self) -> (Vec<&Declaration>, Vec<Declaration>) {
         let mut exposed = Vec::new();
         let mut ignored = Vec::new();
         for request in &self.requests {
             match request {
                 Request::Expose(declaration) => exposed.push(declaration),
-                Request::Ignore(declaration) => ignored.push(declaration),
+                Request::Ignore(name) => ignored.push(Declaration::from(name.clone())),
             }
         }
         (exposed, ignored)
@@ -876,7 +872,7 @@ pub fn generate<T: Target>(
         // it lands nowhere. The id's prefix (`fn:`, `type:`, `const:`) already
         // says what was left alone.
         .chain(ignored.iter().map(|declaration| Entry {
-            declaration: (*declaration).clone(),
+            declaration: declaration.clone(),
             described: crate::target::Described::new("ignore", ""),
             outcome: Outcome::Ignored,
         }))

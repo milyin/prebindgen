@@ -145,7 +145,7 @@ impl<P> Generation<P> {
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
 pub(crate) fn check_declarations(
     exposed: &[&Declaration],
-    ignored: &[&Declaration],
+    ignored: &[Declaration],
     flat: &Flat,
 ) -> Result<(), EngineError> {
     let missing: Vec<_> = exposed
@@ -162,9 +162,10 @@ pub(crate) fn check_declarations(
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = exposed
         .iter()
+        .copied()
         .chain(ignored)
-        .filter(|declaration| !seen.insert(**declaration))
-        .map(|declaration| (*declaration).clone())
+        .filter(|declaration| !seen.insert(*declaration))
+        .cloned()
         .collect();
     repeated.sort();
     repeated.dedup();

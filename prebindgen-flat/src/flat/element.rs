@@ -43,7 +43,51 @@ pub enum Element {
     Unsupported(Unsupported),
 }
 
+/// One of the three kinds a flat API is made of, carrying whatever a use has
+/// for each: the modelled item, a captured name, a name the binding coined.
+///
+/// [`Element`] is the model's own instance, the kind with its whole item. Any
+/// other type shaped by the same three-way choice — a name to look up, a name
+/// to leave alone — states that shape with this rather than repeating the
+/// arms, and can meet the model's instance through [`Element::entity`] and
+/// compare kinds with [`Entity::kind`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Entity<T, F, C> {
+    Type(T),
+    Function(F),
+    Constant(C),
+}
+
+/// Which of the three kinds, on its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EntityKind {
+    Type,
+    Function,
+    Constant,
+}
+
+impl<T, F, C> Entity<T, F, C> {
+    pub fn kind(&self) -> EntityKind {
+        match self {
+            Entity::Type(_) => EntityKind::Type,
+            Entity::Function(_) => EntityKind::Function,
+            Entity::Constant(_) => EntityKind::Constant,
+        }
+    }
+}
+
 impl Element {
+    /// This element as one of the three API kinds — `None` for a guard or an
+    /// unsupported item, which are in the model and not in the API.
+    pub fn entity(&self) -> Option<Entity<&Type, &Function, &Constant>> {
+        match self {
+            Element::Type(t) => Some(Entity::Type(t)),
+            Element::Function(f) => Some(Entity::Function(f)),
+            Element::Constant(c) => Some(Entity::Constant(c)),
+            Element::Guard(_) | Element::Unsupported(_) => None,
+        }
+    }
+
     /// The item's name, which is also its address: `#[prebindgen]` names live
     /// in one flat namespace across every ingested source crate.
     ///

@@ -8,10 +8,10 @@
 
 use std::collections::BTreeMap;
 
-use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind, TypeRef};
+use prebindgen_flat::flat::{Entity, Flat, ScalarKind, TypeKind, TypeRef};
 
 use crate::{
-    decl::Declaration,
+    decl::{CapturedName, Declaration},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -605,7 +605,7 @@ impl Target for Mini {
 struct Binding {
     target: Mini,
     outputs: Vec<Declaration>,
-    ignored: Vec<Declaration>,
+    ignored: Vec<CapturedName>,
 }
 
 impl Binding {
@@ -644,8 +644,8 @@ impl Binding {
         self
     }
 
-    fn ignore(&mut self, declaration: Declaration) -> &mut Self {
-        self.ignored.push(declaration);
+    fn ignore(&mut self, name: CapturedName) -> &mut Self {
+        self.ignored.push(name);
         self
     }
 
@@ -660,8 +660,8 @@ impl Binding {
         for declaration in outputs {
             requests.expose(declaration);
         }
-        for declaration in ignored {
-            requests.ignore(declaration);
+        for name in ignored {
+            requests.ignore(name);
         }
         generate(flat, &target, requests)
     }
@@ -921,7 +921,7 @@ fn a_declaration_naming_nothing_is_an_error() {
 fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
     let mut binding = binding();
     binding.declare_type("Stamp", Choice::Struct);
-    binding.ignore(function("stamp_max"));
+    binding.ignore(Entity::Function(syn::parse_quote!(stamp_max)));
 
     let generation = binding.generate(model()).expect("plans");
     let counts = generation.report().counts();

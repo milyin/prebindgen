@@ -2,10 +2,10 @@
 
 mod pipeline;
 
-use prebindgen_flat::flat::FlatBuilder;
+use prebindgen_flat::flat::{Entity, FlatBuilder};
 
 use crate::{
-    decl::Declaration,
+    decl::{CapturedName, Declaration},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -70,7 +70,7 @@ impl Target for Nothing {
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
     declared: Vec<Declaration>,
-    ignored: Vec<Declaration>,
+    ignored: Vec<CapturedName>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -130,6 +130,11 @@ fn captured_fn(name: &str) -> Declaration {
     Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
+/// A captured function to leave alone, by name.
+fn ignored_fn(name: &str) -> CapturedName {
+    Entity::Function(syn::parse_str(name).expect("a test names an ident"))
+}
+
 /// A Kotlin `val` read through that captured function.
 fn constant_fn(name: &str) -> Declaration {
     Declaration::ConstFromFunction(syn::parse_str(name).expect("a test names an ident"))
@@ -144,7 +149,7 @@ fn local_type(name: &str) -> Declaration {
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_new")), (local_type("Handle"))],
-        ignored: vec![captured_fn("handle_value")],
+        ignored: vec![ignored_fn("handle_value")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
@@ -215,7 +220,7 @@ fn one_id_may_name_only_one_declaration() {
 fn one_declaration_may_not_be_both_exposed_and_ignored() {
     let stated = Stated {
         declared: vec![captured_fn("handle_new")],
-        ignored: vec![captured_fn("handle_new")],
+        ignored: vec![ignored_fn("handle_new")],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a contradiction is refused");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
@@ -231,7 +236,7 @@ fn one_declaration_may_not_be_both_exposed_and_ignored() {
 fn an_ignore_names_an_item_the_model_need_not_hold() {
     let stated = Stated {
         declared: Vec::new(),
-        ignored: vec![captured_fn("handle_absent")],
+        ignored: vec![ignored_fn("handle_absent")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("an ignore is tolerant");
     assert_eq!(generation.report().counts().ignored, 1);

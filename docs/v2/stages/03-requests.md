@@ -445,9 +445,20 @@ To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`
 ```rust
 enum Request {
     Expose(DeclarationId), // Plan this and generate it.
-    Ignore(DeclarationId), // Plan nothing; the report carries it as a decision.
+    Ignore(CapturedName),  // Plan nothing; the report carries it as a decision.
 }
+
+// A captured item by name: the kind the source captures it as, and what it is
+// called there. Flat's three kinds, stated once as `Entity<T, F, C>`.
+type CapturedName = Entity<TypeKey, Ident, Ident>;
 ```
+
+An ignore carries less than a declaration, deliberately. It names a captured
+item and says nothing about how the target would get it, so a callback, a
+conversion or anything the binding coined cannot be ignored — those are not
+captured, and there is nothing in the source to leave alone. What a report row
+and a duplicate check compare an ignore by is the declaration that would have
+exposed the same item.
 
 One list rather than two, because the report has one row per declaration and
 both dispositions produce one. An id that appeared under both would be two

@@ -52,7 +52,7 @@ pub mod target;
 mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
-pub use decl::Declaration;
+pub use decl::{CapturedName, Declaration};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{generate, BindingRequests, FunctionPlan, NodeId, Request, ValuePlan};
 pub use report::{Counts, Report, SCHEMA_VERSION};

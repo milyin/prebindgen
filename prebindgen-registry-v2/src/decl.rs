@@ -7,8 +7,29 @@
 //! own configuration up by — the request carries none: the foreign name and
 //! the declarator word the report prints come from that lookup.
 
-use prebindgen_flat::flat::{Element, Flat, TypeKey};
+use prebindgen_flat::flat::{Element, Entity, EntityKind, Flat, TypeKey};
 use serde::Serialize;
+
+/// A captured item by name: one of the three kinds the source captures, and
+/// what it is called there.
+///
+/// Less than a [`Declaration`], deliberately. An ignore names such an item and
+/// says nothing about how the target would get it, so it cannot be a
+/// callback, a conversion or anything the binding coined — those are not
+/// captured, and there is nothing in the source to leave alone.
+pub type CapturedName = Entity<TypeKey, syn::Ident, syn::Ident>;
+
+impl From<CapturedName> for Declaration {
+    /// The declaration that exposes the same captured item, which is what a
+    /// report row and a duplicate check compare an ignore by.
+    fn from(name: CapturedName) -> Self {
+        match name {
+            Entity::Type(key) => Declaration::Type(key),
+            Entity::Function(ident) => Declaration::Function(ident),
+            Entity::Constant(ident) => Declaration::Const(ident),
+        }
+    }
+}
 
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
@@ -74,43 +95,47 @@ impl Declaration {
         matches!(self, Declaration::Type(_) | Declaration::LocalType(_))
     }
 
+    /// The kind of captured item this declaration must name, if it names one.
+    ///
+    /// Not always the declaration's own kind: a constant read through a
+    /// function names a function, which is what separates
+    /// [`Self::ConstFromFunction`] from [`Self::Const`]. `None` for what the
+    /// binding defines itself — a callback signature, a conversion helper, a
+    /// function or constant of its own, or a type the target represents
+    /// although the source never exported it (`String` as an opaque handle).
+    pub(crate) fn captured_kind(&self) -> Option<EntityKind> {
+        match self {
+            Declaration::Function(_) | Declaration::ConstFromFunction(_) => {
+                Some(EntityKind::Function)
+            }
+            Declaration::Const(_) => Some(EntityKind::Constant),
+            Declaration::Type(_) => Some(EntityKind::Type),
+            Declaration::LocalFunction(_)
+            | Declaration::LocalConst(_)
+            | Declaration::LocalType(_)
+            | Declaration::Callback(_)
+            | Declaration::Conversion(_) => None,
+        }
+    }
+
     /// The captured element this declaration names, if the model holds it.
     ///
     /// Captured items live in one flat namespace holding functions, types and
-    /// constants, so the name alone finds any element; the variant is what says
-    /// whether the element found is the one the declaration meant. A constant
-    /// read through a function is looked up among the functions, which is what
-    /// separates [`Self::ConstFromFunction`] from [`Self::Const`]. A
-    /// binding-local declaration names no captured item and so finds none — which
-    /// is not the same as a missing one, and [`Self::missing_from`] is the
-    /// question to ask about presence.
+    /// constants, so the name alone finds any element; the kind is what says
+    /// whether the element found is the one the declaration meant. A
+    /// binding-local declaration names no captured item and so finds none —
+    /// which is not the same as a missing one, and [`Self::missing_from`] is
+    /// the question to ask about presence.
     pub(crate) fn captured<'f>(&self, flat: &'f Flat) -> Option<&'f Element> {
+        let wanted = self.captured_kind()?;
         let element = flat.element(&self.name())?;
-        matches!(
-            (self, element),
-            (
-                Declaration::Function(_) | Declaration::ConstFromFunction(_),
-                Element::Function(_)
-            ) | (Declaration::Type(_), Element::Type(_))
-                | (Declaration::Const(_), Element::Constant(_))
-        )
-        .then_some(element)
+        (element.entity()?.kind() == wanted).then_some(element)
     }
 
-    /// Whether the binding defines this itself: a callback signature, a
-    /// binding-local conversion helper, a function or constant of its own, or a
-    /// type the target represents although the source never exported it
-    /// (`String` as an opaque handle). Such a declaration requires nothing of the
-    /// model.
+    /// Whether the binding defines this itself, requiring nothing of the model
+    /// — see [`Self::captured_kind`].
     pub fn is_binding_local(&self) -> bool {
-        matches!(
-            self,
-            Declaration::LocalFunction(_)
-                | Declaration::LocalConst(_)
-                | Declaration::LocalType(_)
-                | Declaration::Callback(_)
-                | Declaration::Conversion(_)
-        )
+        self.captured_kind().is_none()
     }
 
     /// Whether the model lacks what this declaration must name.
@@ -125,11 +150,11 @@ impl Declaration {
 
     /// The word a refusal uses for what this declaration must name.
     pub(crate) fn describe_captured(&self) -> &'static str {
-        match self {
-            Declaration::Function(_) | Declaration::ConstFromFunction(_) => "function",
-            Declaration::Const(_) => "constant",
-            Declaration::Type(_) => "type",
-            _ => "binding-local item",
+        match self.captured_kind() {
+            Some(EntityKind::Function) => "function",
+            Some(EntityKind::Constant) => "constant",
+            Some(EntityKind::Type) => "type",
+            None => "binding-local item",
         }
     }
 

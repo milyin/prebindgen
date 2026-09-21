@@ -20,6 +20,7 @@
 
 mod target;
 
+use prebindgen_registry::flat::Entity;
 use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
 pub use target::{CChoice, CPayload, CTarget};
 
@@ -143,10 +144,10 @@ impl CbindgenBuilder {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_functions) {
-            requests.ignore(Declaration::Function(ident.clone()));
+            requests.ignore(Entity::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignore(Declaration::Type(key.clone()));
+            requests.ignore(Entity::Type(key.clone()));
         }
         (target, requests)
     }
