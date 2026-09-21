@@ -68,11 +68,11 @@ fn every_declared_element_is_accounted_for() {
     assert_eq!(
         ids,
         [
-            "type:ZThing",
             "fn:z_thing_describe",
             "fn:z_thing_internal",
             "fn:z_thing_new",
             "fn:z_thing_size",
+            "type:ZThing",
         ]
     );
 
@@ -323,7 +323,7 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
         .iter()
         .map(|entry| entry.origin.to_string())
         .collect();
-    assert_eq!(ids, ["type:ZThing", "fn:local_size", "fn:local_tag"]);
+    assert_eq!(ids, ["fn:local_size", "fn:local_tag", "type:ZThing"]);
 }
 
 /// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary
@@ -349,8 +349,7 @@ fn a_function_backed_constant_resolves_against_the_function() {
         .iter()
         .find(|entry| entry.representation() == "constant_fun")
         .expect("the constant is accounted for");
-    assert_eq!(constant.origin.name(), "z_thing_describe");
-    assert_eq!(constant.kind(), "const");
+    assert_eq!(constant.origin.to_string(), "const:z_thing_describe");
     // The target gets a `val`; the source must hold a function.
     assert!(matches!(
         &constant.origin,

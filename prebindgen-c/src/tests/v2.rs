@@ -79,13 +79,13 @@ fn every_declared_element_is_accounted_for() {
     assert_eq!(
         ids,
         [
-            "type:Calculator",
-            "type:Operation",
             "callback:impl Fn(f64)",
             "fn:calculator_internal",
             "fn:calculator_new",
+            "type:Calculator",
+            "type:Operation",
         ],
-        "every declaration, sorted deterministically"
+        "every declaration, sorted by id"
     );
 
     let placements: Vec<&str> = report
@@ -227,7 +227,6 @@ fn an_ignore_is_classified_separately() {
         .find(|entry| entry.origin.to_string() == "fn:calculator_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
-    assert_eq!(ignored.kind(), "fn");
 }
 
 /// A declared function the source never captured is a build error under v2 as
@@ -271,7 +270,7 @@ fn the_report_is_written_as_json_and_markdown() {
     let written = generated.write_report(&dir).expect("write_report");
     assert_eq!(written.len(), 2);
     let json = std::fs::read_to_string(&written[0]).unwrap();
-    assert!(json.contains("\"schema_version\": 2"), "{json}");
+    assert!(json.contains("\"schema_version\": 3"), "{json}");
     assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
     assert!(json.contains("unsupported.type.enum"), "{json}");
     let markdown = std::fs::read_to_string(&written[1]).unwrap();

@@ -475,14 +475,14 @@ impl Target for JniTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 JNI target does \
                          not lower yet",
-                        site.declaration.name()
+                        site.declaration
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.name()
+                    site.declaration
                 )));
             }
         };

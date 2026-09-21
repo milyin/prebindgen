@@ -2,8 +2,8 @@
 //!
 //! Two renderings of one value — JSON for tooling (the CI smoke check reads it
 //! today; selecting test sections from it is planned) and Markdown for a
-//! person. Both are deterministic: declarations sort by kind
-//! then id, and skip causes are grouped by code so a single missing capability
+//! person. Both are deterministic: declarations sort by id, and skip causes
+//! are grouped by code so a single missing capability
 //! is stated once with the list of roots it took down, rather than repeated
 //! forty times.
 
@@ -22,7 +22,7 @@ use crate::{
 
 /// The report's own version. A consumer that reads the JSON checks this
 /// before trusting the shape; it changes whenever a field's meaning does.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// One accounted-for declaration.
 #[derive(Clone, Debug)]
@@ -36,11 +36,6 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// Which kind of declaration it is — see [`Origin::kind`].
-    pub fn kind(&self) -> &'static str {
-        self.origin.kind()
-    }
-
     /// The adapter's declarator word — see [`Described::representation`].
     pub fn representation(&self) -> &str {
         &self.described.representation
@@ -53,16 +48,12 @@ impl Entry {
 }
 
 impl Serialize for Entry {
-    /// Flat, and with the identity spelled out: the report carries `id` (the
-    /// origin as it prints), `kind` and `rust_origin` as separate columns, and
-    /// a reader of the JSON should not have to split the id to get at the last
-    /// two. The outcome's own fields follow at the same level.
+    /// Flat: the `id` is the origin as it prints, and the outcome's own fields
+    /// follow at the same level.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         struct Columns<'a> {
             id: &'a Origin,
-            kind: &'static str,
-            rust_origin: String,
             placement: &'a str,
             representation: &'a str,
             #[serde(flatten)]
@@ -70,8 +61,6 @@ impl Serialize for Entry {
         }
         Columns {
             id: &self.origin,
-            kind: self.origin.kind(),
-            rust_origin: self.origin.name(),
             placement: self.placement(),
             representation: self.representation(),
             outcome: &self.outcome,
@@ -92,7 +81,7 @@ pub struct Report {
     /// Enough of the run's input to tell a stale report from a fresh one: the
     /// declaring crate and the source modules it read.
     pub source_identity: SourceIdentity,
-    /// Every declaration, sorted by kind then id.
+    /// Every declaration, sorted by id.
     pub declarations: Vec<Entry>,
 }
 
@@ -270,8 +259,7 @@ pub struct Counts {
     pub ignored: usize,
 }
 
-/// Sort key: the origin's own order — kind first, so a report reads types,
-/// then functions — then name.
+/// Sort key: the id, as it prints.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
     entries.sort_by(|a, b| a.origin.cmp(&b.origin));
 }

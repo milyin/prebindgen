@@ -157,8 +157,8 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
         .iter()
         .map(|entry| entry.origin.to_string())
         .collect();
-    assert_eq!(ids, ["type:Handle", "fn:handle_new", "fn:handle_value"]);
-    assert_eq!(report.declarations[2].outcome, Outcome::Ignored);
+    assert_eq!(ids, ["fn:handle_new", "fn:handle_value", "type:Handle"]);
+    assert_eq!(report.declarations[1].outcome, Outcome::Ignored);
 }
 
 #[test]
@@ -252,12 +252,11 @@ fn skips_are_grouped_by_capability_code() {
     assert_eq!(groups.len(), 1);
 }
 
-/// The report's declaration columns are a published schema, and the id's parts
-/// are spelled out rather than formatted into one string: `kind` and
-/// `rust_origin` stay separate columns beside the id a reader sorts and greps
-/// by, and the outcome's fields sit at the same level.
+/// The report's declaration columns are a published schema: the id as the
+/// origin prints, what the target described, and the outcome's fields at the
+/// same level.
 #[test]
-fn an_entry_serializes_its_identity_as_three_columns() {
+fn an_entry_serializes_flat() {
     let entry = crate::report::Entry {
         origin: constant_fn("z_thing_describe"),
         described: Described::new("constant_fun", "example.DESCRIBE"),
@@ -265,6 +264,6 @@ fn an_entry_serializes_its_identity_as_three_columns() {
     };
     assert_eq!(
         serde_json::to_string(&entry).expect("an entry is plain data"),
-        r#"{"id":"const:z_thing_describe","kind":"const","rust_origin":"z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
+        r#"{"id":"const:z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
     );
 }

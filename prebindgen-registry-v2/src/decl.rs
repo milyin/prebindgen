@@ -15,8 +15,8 @@ use serde::Serialize;
 /// A name alone says neither: `Sample` may be a captured type, a type key the
 /// binding coined for something the source never exported, or the name of a
 /// Kotlin constant built from an expression. The variant says which, and it
-/// says it once — what the target gets ([`Self::kind`]) and what the name must
-/// find in the captured source both follow from the variant instead of being
+/// says it once — what the target gets and what the name must find in the
+/// captured source both follow from the variant instead of being
 /// stated beside it, so they cannot disagree and a pair that means nothing (a
 /// callback backed by a captured constant, a function the binding both defines
 /// and selects out of the source) cannot be written down.
@@ -34,8 +34,8 @@ use serde::Serialize;
 /// must not silently retire a test's requirement. `<kind>:<name>` —
 /// `type:Stamp`, `fn:stamp_sum` — is how it prints and how the report writes
 /// it, and that spelling is a rendering: nothing reads an origin back out of
-/// it. Origins order by kind — types first, then conversions, callbacks,
-/// constants and functions, which is how a report reads — and then by name.
+/// it. Origins order as they print, so a report sorted by origin reads in id
+/// order.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Origin {
     /// A captured `#[prebindgen]` function, exported as a foreign function.
@@ -66,31 +66,6 @@ pub enum Origin {
 }
 
 impl Origin {
-    /// What the target gets: `fn`, `type`, `const`, `callback` or
-    /// `conversion` — the prefix the origin prints with, the report's `kind`
-    /// column, and the middle of an `unsupported.<kind>.…` code.
-    ///
-    /// The coarse, language-neutral category — the five things any binding can
-    /// be made of. Deliberately coarser than an adapter's own vocabulary:
-    /// `prebindgen-c` declares a type with `opaque_ptr` or `data_struct`, and
-    /// `prebindgen-jni` with `ptr_class` or `data_class`, but all four are a
-    /// `type`; the adapter's word is what [`Target::describe`] prints back.
-    /// And it says what the *target* gets, not what the captured Rust source
-    /// held: a Kotlin constant read through a captured function is a `const`.
-    /// It is what keeps the origins' several naming spaces apart — `type:Foo`
-    /// and `conversion:Foo` are two declarations about one Rust type.
-    ///
-    /// [`Target::describe`]: crate::target::Target::describe
-    pub fn kind(&self) -> &'static str {
-        match self {
-            Origin::Function(_) | Origin::LocalFunction(_) => "fn",
-            Origin::Const(_) | Origin::ConstFromFunction(_) | Origin::LocalConst(_) => "const",
-            Origin::Type(_) | Origin::LocalType(_) => "type",
-            Origin::Callback(_) => "callback",
-            Origin::Conversion(_) => "conversion",
-        }
-    }
-
     /// Whether this declares a type — captured or the binding's own.
     pub fn is_type(&self) -> bool {
         matches!(self, Origin::Type(_) | Origin::LocalType(_))
@@ -155,8 +130,9 @@ impl Origin {
         }
     }
 
-    /// The name it goes by — the part of the printed form after the kind.
-    pub fn name(&self) -> String {
+    /// The name it goes by — the part of the printed form after the prefix,
+    /// and what a captured item is looked up by.
+    pub(crate) fn name(&self) -> String {
         match self {
             Origin::Function(ident) | Origin::Const(ident) | Origin::ConstFromFunction(ident) => {
                 ident.to_string()
@@ -172,29 +148,26 @@ impl Origin {
 }
 
 impl Ord for Origin {
-    /// By kind in report order, then by name. A captured and a binding-local
-    /// origin of one kind and name print alike and are still distinct, so the
-    /// variant breaks that tie last, and `Ord` agrees with `Eq`.
+    /// As they print. A captured and a binding-local origin of one kind and
+    /// name print alike and are still distinct, so the variant breaks that
+    /// tie, and `Ord` agrees with `Eq`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Kind first, variant second: the variants of one kind are adjacent.
-        fn rank(origin: &Origin) -> (u8, u8) {
+        fn variant(origin: &Origin) -> u8 {
             match origin {
-                Origin::Type(_) => (0, 0),
-                Origin::LocalType(_) => (0, 1),
-                Origin::Conversion(_) => (1, 0),
-                Origin::Callback(_) => (2, 0),
-                Origin::Const(_) => (3, 0),
-                Origin::ConstFromFunction(_) => (3, 1),
-                Origin::LocalConst(_) => (3, 2),
-                Origin::Function(_) => (4, 0),
-                Origin::LocalFunction(_) => (4, 1),
+                Origin::Function(_) => 0,
+                Origin::LocalFunction(_) => 1,
+                Origin::Const(_) => 2,
+                Origin::ConstFromFunction(_) => 3,
+                Origin::LocalConst(_) => 4,
+                Origin::Type(_) => 5,
+                Origin::LocalType(_) => 6,
+                Origin::Callback(_) => 7,
+                Origin::Conversion(_) => 8,
             }
         }
-        let (kind, variant) = rank(self);
-        let (other_kind, other_variant) = rank(other);
-        kind.cmp(&other_kind)
-            .then_with(|| self.name().cmp(&other.name()))
-            .then_with(|| variant.cmp(&other_variant))
+        self.to_string()
+            .cmp(&other.to_string())
+            .then_with(|| variant(self).cmp(&variant(other)))
     }
 }
 
@@ -205,8 +178,22 @@ impl PartialOrd for Origin {
 }
 
 impl std::fmt::Display for Origin {
+    /// `<what the target gets>:<name>`. The prefix is the foreign side's word —
+    /// a function the binding defines and a captured one are both a `fn` —
+    /// and it is what keeps the origins' several naming spaces apart: `type:Foo`
+    /// and `conversion:Foo` are two declarations about one Rust type, and
+    /// `const:f` and `fn:f` are the `val` read through `f` and `f` itself.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.kind(), self.name())
+        let name = self.name();
+        match self {
+            Origin::Function(_) | Origin::LocalFunction(_) => write!(f, "fn:{name}"),
+            Origin::Const(_) | Origin::ConstFromFunction(_) | Origin::LocalConst(_) => {
+                write!(f, "const:{name}")
+            }
+            Origin::Type(_) | Origin::LocalType(_) => write!(f, "type:{name}"),
+            Origin::Callback(_) => write!(f, "callback:{name}"),
+            Origin::Conversion(_) => write!(f, "conversion:{name}"),
+        }
     }
 }
 

@@ -754,9 +754,19 @@ pub fn generate<T: Target>(
             // so there is nothing to plan from: its signature or its value is
             // the binding's own, and reading one is a capability this engine
             // does not have.
-            Origin::LocalFunction(name) | Origin::LocalConst(name) => Err(Refusal::at(
+            Origin::LocalFunction(name) => Err(Refusal::at(
                 Unsupported::new(
-                    format!("unsupported.{}.binding_local", declaration.kind()),
+                    "unsupported.fn.binding_local",
+                    format!(
+                        "`{name}` is defined by the binding, not captured from the source, so \
+                         there is no captured item to plan from"
+                    ),
+                ),
+                &root,
+            )),
+            Origin::LocalConst(name) => Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.const.binding_local",
                     format!(
                         "`{name}` is defined by the binding, not captured from the source, so \
                          there is no captured item to plan from"
@@ -767,16 +777,27 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            Origin::Const(_) | Origin::Callback(_) | Origin::Conversion(_) => {
-                let kind = declaration.kind();
-                Err(Refusal::at(
-                    Unsupported::new(
-                        format!("unsupported.{kind}.not_implemented"),
-                        format!("the v2 engine has no {kind} lowering yet"),
-                    ),
-                    &root,
-                ))
-            }
+            Origin::Const(_) => Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.const.not_implemented",
+                    "the v2 engine has no const lowering yet",
+                ),
+                &root,
+            )),
+            Origin::Callback(_) => Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.callback.not_implemented",
+                    "the v2 engine has no callback lowering yet",
+                ),
+                &root,
+            )),
+            Origin::Conversion(_) => Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.conversion.not_implemented",
+                    "the v2 engine has no conversion lowering yet",
+                ),
+                &root,
+            )),
         };
         match planned {
             Ok(Emitted { function, surface }) => {

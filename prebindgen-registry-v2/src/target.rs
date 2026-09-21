@@ -1096,9 +1096,9 @@ pub trait Target {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Described {
     /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
-    /// — the adapter's own word, printed back verbatim. Finer than
-    /// [`Origin::kind`](crate::Origin::kind): `opaque_ptr` and `data_struct`
-    /// are both a type.
+    /// — the adapter's own word, printed back verbatim. Finer than the prefix
+    /// an [`Origin`] prints with: `opaque_ptr` and
+    /// `data_struct` are both a `type`.
     pub representation: String,
     /// Where it lands in the target language, spelled the way that language
     /// spells it: `calculator_t`, `io.zenoh.jni.Session`.

@@ -246,14 +246,14 @@ impl Target for CTarget {
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 C target does not \
                          lower yet",
-                        site.declaration.name()
+                        site.declaration
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.name()
+                    site.declaration
                 )));
             }
         };
