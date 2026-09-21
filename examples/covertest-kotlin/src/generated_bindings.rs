@@ -516,9 +516,16 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
             env,
             v.priority.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Annotated",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Annotated",
+                &__cls,
                 "fromParts",
                 "(JIDZLjava/lang/String;ZJIDZLjava/lang/String;Ljava/lang/Long;Ljava/lang/Integer;)Lio/prebindgen/covertest/model/Annotated;",
                 &[
@@ -616,9 +623,16 @@ pub(crate) unsafe fn Arrays_to_JObject_71120c08<'a>(
                 v.raw.clone(),
             )?
             .into();
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Arrays",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Arrays",
+                &__cls,
                 "fromParts",
                 "([B[S[I[J[D[Z[J)Lio/prebindgen/covertest/model/Arrays;",
                 &[
@@ -673,9 +687,16 @@ pub(crate) unsafe fn BlobValue_to_JObject_89b5dab7<'a>(
             env,
             v.chunks.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/BlobValue",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/BlobValue",
+                &__cls,
                 "fromParts",
                 "(JJ[BLjava/util/List;)Lio/prebindgen/covertest/model/BlobValue;",
                 &[
@@ -882,9 +903,16 @@ pub(crate) unsafe fn CacheConfig_to_JObject_db89a97c<'a>(
             v.replies.max_samples.clone(),
         )?;
         let ___ttl: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.ttl.clone())?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/CacheConfig",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/CacheConfig",
+                &__cls,
                 "fromParts",
                 "(IJJ)Lio/prebindgen/covertest/model/CacheConfig;",
                 &[
@@ -946,9 +974,16 @@ pub(crate) unsafe fn Dossier_to_JObject_eabbdbfa<'a>(
             env,
             v.holder.summary.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/Dossier",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/Dossier",
+                &__cls,
                 "fromParts",
                 "(JJJ)Lio/prebindgen/covertest/Dossier;",
                 &[
@@ -993,9 +1028,16 @@ pub(crate) unsafe fn DurationBoundary_to_JObject_9c5bf9bc<'a>(
             env,
             v.delay.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/DurationBoundary",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/DurationBoundary",
+                &__cls,
                 "fromParts",
                 "(JJ)Lio/prebindgen/covertest/model/DurationBoundary;",
                 &[
@@ -1144,9 +1186,16 @@ pub(crate) unsafe fn HoldPolicy_to_JObject_d2a5bcc4<'a>(
                 ___grace_g0 = 0i64;
             }
         }
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/HoldPolicy",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/HoldPolicy",
+                &__cls,
                 "fromParts",
                 "(IJZIJ)Lio/prebindgen/covertest/model/HoldPolicy;",
                 &[
@@ -1187,9 +1236,16 @@ pub(crate) unsafe fn Holder_to_JObject_c36a9705<'a>(
             env,
             v.summary.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/Holder",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/Holder",
+                &__cls,
                 "fromParts",
                 "(JJ)Lio/prebindgen/covertest/Holder;",
                 &[
@@ -6400,9 +6456,16 @@ pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
             env,
             v.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary16",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary16",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary16;",
                 &[
@@ -6457,9 +6520,16 @@ pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
             env,
             v.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary2",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary2",
+                &__cls,
                 "fromParts",
                 "(JJ)Lio/prebindgen/covertest/model/ObjectBoundary2;",
                 &[
@@ -6620,9 +6690,16 @@ pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
             env,
             v.right.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary32",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary32",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary32;",
                 &[
@@ -6701,9 +6778,16 @@ pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
             env,
             v.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary4",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary4",
+                &__cls,
                 "fromParts",
                 "(JJJJ)Lio/prebindgen/covertest/model/ObjectBoundary4;",
                 &[
@@ -6990,9 +7074,16 @@ pub(crate) unsafe fn ObjectBoundary63_to_JObject_29aa82ff<'a>(
             env,
             v.leaf.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary63",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary63",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary63;",
                 &[
@@ -7408,9 +7499,16 @@ pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
             env,
             v.right.right.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary64",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary64",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary64;",
                 &[
@@ -7621,9 +7719,16 @@ pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
             env,
             v.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary8",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary8",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary8;",
                 &[
@@ -7663,9 +7768,16 @@ pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
         let ___value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.value.clone())?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundaryLeaf",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundaryLeaf",
+                &__cls,
                 "fromParts",
                 "(J)Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;",
                 &[jni::objects::JValue::from(___value)],
@@ -8203,9 +8315,16 @@ pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
             env,
             v.right.leaf.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/ObjectBoundary",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/ObjectBoundary",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary;",
                 &[
@@ -8768,9 +8887,16 @@ pub(crate) unsafe fn Observation_to_JObject_435b0724<'a>(
                 v.note.clone(),
             )?
             .into();
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Observation",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Observation",
+                &__cls,
                 "fromParts",
                 "(JIJJJLjava/lang/String;IJZIJJJLjava/lang/String;IJLjava/lang/String;)Lio/prebindgen/covertest/model/Observation;",
                 &[
@@ -9276,9 +9402,16 @@ pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
                 v.label.clone(),
             )?
             .into();
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/Payload",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/Payload",
+                &__cls,
                 "fromParts",
                 "(JIDZLjava/lang/String;)Lio/prebindgen/covertest/Payload;",
                 &[
@@ -9379,9 +9512,16 @@ pub(crate) unsafe fn RepliesConfig_to_JObject_eb8e9079<'a>(
             env,
             v.max_samples.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/RepliesConfig",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/RepliesConfig",
+                &__cls,
                 "fromParts",
                 "(IJ)Lio/prebindgen/covertest/model/RepliesConfig;",
                 &[
@@ -9511,9 +9651,16 @@ pub(crate) unsafe fn Stamp_to_JObject_f6b1e942<'a>(
     Ok({
         let ___secs: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.secs.clone())?;
         let ___nanos: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.nanos.clone())?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Stamp",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Stamp",
+                &__cls,
                 "fromParts",
                 "(JJ)Lio/prebindgen/covertest/model/Stamp;",
                 &[
@@ -9703,9 +9850,16 @@ pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
                 ___marker_g0 = ___marker_ranked_v0;
             }
         }
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Tagged",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Tagged",
+                &__cls,
                 "fromParts",
                 "(JILjava/lang/Integer;)Lio/prebindgen/covertest/model/Tagged;",
                 &[
@@ -9747,9 +9901,16 @@ pub(crate) unsafe fn Unsigned_to_JObject_7e3cc618<'a>(
             env,
             v.maybe_long.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Unsigned",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Unsigned",
+                &__cls,
                 "fromParts",
                 "(IIJJLjava/lang/Long;)Lio/prebindgen/covertest/model/Unsigned;",
                 &[
@@ -10047,9 +10208,16 @@ pub(crate) unsafe fn Verdict_to_JObject_a94c1ffd<'a>(
                 ___outcome_g0 = 0i64;
             }
         }
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/model/Verdict",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/model/Verdict",
+                &__cls,
                 "fromParts",
                 "(JIJLjava/lang/String;)Lio/prebindgen/covertest/model/Verdict;",
                 &[
@@ -10101,9 +10269,16 @@ pub(crate) unsafe fn WrappedFields_to_JObject_f14f08c1<'a>(
             env,
             v.plain_enum.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/covertest/WrappedFields",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/covertest/WrappedFields",
+                &__cls,
                 "fromParts",
                 "(JLjava/lang/Long;Ljava/lang/Long;II)Lio/prebindgen/covertest/WrappedFields;",
                 &[

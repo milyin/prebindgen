@@ -1263,9 +1263,16 @@ pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
             env,
             v.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary16",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary16",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJ)Lio/prebindgen/perftest/ObjectBoundary16;",
                 &[
@@ -1320,9 +1327,16 @@ pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
             env,
             v.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary2",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary2",
+                &__cls,
                 "fromParts",
                 "(JJ)Lio/prebindgen/perftest/ObjectBoundary2;",
                 &[
@@ -1483,9 +1497,16 @@ pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
             env,
             v.right.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary32",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary32",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/perftest/ObjectBoundary32;",
                 &[
@@ -1564,9 +1585,16 @@ pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
             env,
             v.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary4",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary4",
+                &__cls,
                 "fromParts",
                 "(JJJJ)Lio/prebindgen/perftest/ObjectBoundary4;",
                 &[
@@ -1857,9 +1885,16 @@ pub(crate) unsafe fn ObjectBoundary64Object_to_JObject_ecaf00ac<'a>(
             env,
             v.right.right.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary64Object",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary64Object",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/perftest/ObjectBoundary64Object;",
                 &[
@@ -2294,9 +2329,16 @@ pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
             env,
             v.right.right.right.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary64",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary64",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/perftest/ObjectBoundary64;",
                 &[
@@ -2507,9 +2549,16 @@ pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
             env,
             v.right.right.right.value.clone(),
         )?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundary8",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundary8",
+                &__cls,
                 "fromParts",
                 "(JJJJJJJJ)Lio/prebindgen/perftest/ObjectBoundary8;",
                 &[
@@ -2549,9 +2598,16 @@ pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
         let ___value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.value.clone())?;
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/ObjectBoundaryLeaf",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/ObjectBoundaryLeaf",
+                &__cls,
                 "fromParts",
                 "(J)Lio/prebindgen/perftest/ObjectBoundaryLeaf;",
                 &[jni::objects::JValue::from(___value)],
@@ -2754,9 +2810,16 @@ pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
                 v.label.clone(),
             )?
             .into();
+        let __cls = ::prebindgen_jni_runtime::find_class(
+                env,
+                "io/prebindgen/perftest/Payload",
+            )
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
         let __obj = env
             .call_static_method(
-                "io/prebindgen/perftest/Payload",
+                &__cls,
                 "fromParts",
                 "(JIDZLjava/lang/String;)Lio/prebindgen/perftest/Payload;",
                 &[
