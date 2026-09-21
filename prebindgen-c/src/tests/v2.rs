@@ -5,7 +5,7 @@
 //! `PREBINDGEN_PIPELINE` happens to hold in the runner's environment.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{DeclarationKind, Outcome};
+use prebindgen_registry_v2::Outcome;
 
 use super::*;
 use crate::test_util::unique_test_dir;
@@ -74,24 +74,24 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.origin().to_string())
+        .map(|entry| entry.declaration.to_string())
         .collect();
     assert_eq!(
         ids,
         [
-            "type:Calculator",
-            "type:Operation",
             "callback:impl Fn(f64)",
             "fn:calculator_internal",
             "fn:calculator_new",
+            "type:Calculator",
+            "type:Operation",
         ],
-        "every declaration, sorted deterministically"
+        "every declaration, sorted by id"
     );
 
     let placements: Vec<&str> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.placement())
+        .map(|entry| entry.placement())
         .collect();
     assert!(
         placements.contains(&"calculator_t") && placements.contains(&"z_calculator_new"),
@@ -224,10 +224,9 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.origin().to_string() == "fn:calculator_internal")
+        .find(|entry| entry.declaration.to_string() == "fn:calculator_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
-    assert_eq!(ignored.declaration.kind(), DeclarationKind::Function);
 }
 
 /// A declared function the source never captured is a build error under v2 as
@@ -271,7 +270,7 @@ fn the_report_is_written_as_json_and_markdown() {
     let written = generated.write_report(&dir).expect("write_report");
     assert_eq!(written.len(), 2);
     let json = std::fs::read_to_string(&written[0]).unwrap();
-    assert!(json.contains("\"schema_version\": 2"), "{json}");
+    assert!(json.contains("\"schema_version\": 3"), "{json}");
     assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
     assert!(json.contains("unsupported.type.enum"), "{json}");
     let markdown = std::fs::read_to_string(&written[1]).unwrap();

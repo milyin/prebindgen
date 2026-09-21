@@ -14,12 +14,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, FailureCategory, FailureRoute,
-    Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
-    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement,
-    ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, SurfaceRequest,
-    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
-    WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Described, Direction, FailureCategory,
+    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
+    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec,
+    Requirement, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
+    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
+    WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -53,9 +53,29 @@ pub enum JniPolicy {
         symbol: String,
     },
     /// A declarator v1 lowers and v2 does not yet — a handle class, an enum
-    /// class, a sealed class, a constant, a class member. Carries the
-    /// declarator's name so the refusal says which capability is missing.
-    Unimplemented { declarator: &'static str },
+    /// class, a sealed class, a constant, a class member — or a declarator v2
+    /// lowers under a setting it does not honour yet. Carries the declarator's
+    /// name for the report, the capability the refusal names, and the Kotlin
+    /// placement the declaration would have had.
+    Unimplemented {
+        declarator: &'static str,
+        /// The missing capability's code stem, `unsupported.jni.<capability>`.
+        /// The declarator itself, unless a setting on it is what v2 lacks.
+        capability: &'static str,
+        placement: String,
+    },
+}
+
+impl JniPolicy {
+    /// A declarator v2 does not lower: the capability missing is the
+    /// declarator itself.
+    pub(crate) fn unimplemented(declarator: &'static str, placement: String) -> Self {
+        JniPolicy::Unimplemented {
+            declarator,
+            capability: declarator,
+            placement,
+        }
+    }
 }
 
 /// What the JNI target renders itself: one operation, or one Kotlin
@@ -255,9 +275,13 @@ impl Target for JniTarget {
         let want_struct = match query.policy {
             JniPolicy::DataClass { .. } => true,
             JniPolicy::Scalar | JniPolicy::PtrClass { .. } | JniPolicy::Function { .. } => false,
-            JniPolicy::Unimplemented { declarator } => {
+            JniPolicy::Unimplemented {
+                declarator,
+                capability,
+                ..
+            } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                    format!("unsupported.jni.{declarator}"),
+                    format!("unsupported.jni.{capability}"),
                     format!(
                         "`{}` is declared with `{declarator}`, which the v2 JNI target does \
                          not lower yet",
@@ -438,20 +462,27 @@ impl Target for JniTarget {
             // A class member reaches here when every value it takes has a
             // carrier; the member itself is still a declarator v2 does not
             // lower, and says so where the report can group it.
-            (JniPolicy::Unimplemented { declarator }, _) => {
+            (
+                JniPolicy::Unimplemented {
+                    declarator,
+                    capability,
+                    ..
+                },
+                _,
+            ) => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                    format!("unsupported.jni.{declarator}"),
+                    format!("unsupported.jni.{capability}"),
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 JNI target does \
                          not lower yet",
-                        site.declaration.rust_origin()
+                        site.declaration
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.rust_origin()
+                    site.declaration
                 )));
             }
         };
@@ -577,7 +608,7 @@ impl Target for JniTarget {
                 None => (String::new(), class.clone()),
             };
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.origin().clone(),
+                declaration: request.declaration.clone(),
                 requires: Vec::new(),
                 // What crosses is a `jlong`, and the release wrapper is Rust
                 // the registry renders: nothing to contribute.
@@ -637,7 +668,7 @@ impl Target for JniTarget {
                     },
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.origin().clone(),
+                    declaration: request.declaration.clone(),
                     // A method taking or returning a declared class is
                     // unusable unless the class it names is emitted too.
                     requires: values
@@ -711,7 +742,7 @@ impl Target for JniTarget {
                     None => (String::new(), class.clone()),
                 };
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.origin().clone(),
+                    declaration: request.declaration.clone(),
                     requires: Vec::new(),
                     rust: Vec::new(),
                     payload: Some(JniPayload::Class {
@@ -751,6 +782,25 @@ impl Target for JniTarget {
             JniPayload::Class { .. } | JniPayload::Method { .. } | JniPayload::Handle { .. } => {
                 unreachable!("a Kotlin declaration is not an operation")
             }
+        }
+    }
+
+    /// The declarator each policy came from, and the Kotlin name it places —
+    /// the same values generation reads, so the report cannot drift from the
+    /// code.
+    fn describe(&self, policy: &JniPolicy) -> Described {
+        match policy {
+            JniPolicy::Scalar => Described::new("scalar", ""),
+            JniPolicy::DataClass { class } => Described::new("data_class", class),
+            JniPolicy::PtrClass { class, .. } => Described::new("ptr_class", class),
+            JniPolicy::Function {
+                package, method, ..
+            } => Described::new("fun", format!("{package}.{method}")),
+            JniPolicy::Unimplemented {
+                declarator,
+                placement,
+                ..
+            } => Described::new(*declarator, placement),
         }
     }
 }

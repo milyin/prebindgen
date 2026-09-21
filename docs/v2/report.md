@@ -67,13 +67,13 @@ Declared by `v2check` over 8 captured item(s) from: source
 
 | declaration | representation | placement | outcome |
 | --- | --- | --- | --- |
-| `type:Marker` | data_class | `example.Marker` | skipped: `unsupported.jni.empty_class` |
-| `type:Reading` | data_class | `example.Reading` | skipped: `unsupported.jni.carrier` |
-| `type:Stamp` | data_class | `example.Stamp` | emitted |
 | `fn:marker_value` | fun | `example.markerValue` | skipped: `unsupported.jni.empty_class` |
 | `fn:stamp_delta` | fun | `example.stampDelta` | emitted |
 | `fn:stamp_show` | fun | `example.stampShow` | emitted |
 | `fn:stamp_sum` | fun | `example.stampSum` | emitted |
+| `type:Marker` | data_class | `example.Marker` | skipped: `unsupported.jni.empty_class` |
+| `type:Reading` | data_class | `example.Reading` | skipped: `unsupported.jni.carrier` |
+| `type:Stamp` | data_class | `example.Stamp` | emitted |
 ```
 
 Read `type:Reading -> field level` as: “while planning the requested type

@@ -2,8 +2,8 @@
 //!
 //! Two renderings of one value — JSON for tooling (the CI smoke check reads it
 //! today; selecting test sections from it is planned) and Markdown for a
-//! person. Both are deterministic: declarations sort by kind
-//! then id, and skip causes are grouped by code so a single missing capability
+//! person. Both are deterministic: declarations sort by id, and skip causes
+//! are grouped by code so a single missing capability
 //! is stated once with the list of roots it took down, rather than repeated
 //! forty times.
 
@@ -15,21 +15,58 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    decl::{Declaration, DeclarationKind},
+    decl::Declaration,
     outcome::{EngineError, Outcome},
+    target::Described,
 };
 
 /// The report's own version. A consumer that reads the JSON checks this
 /// before trusting the shape; it changes whenever a field's meaning does.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// One accounted-for declaration.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Entry {
-    #[serde(flatten)]
+    /// What was declared, and the run's key for it.
     pub declaration: Declaration,
-    #[serde(flatten)]
+    /// What the target says it is on the foreign side — the adapter's
+    /// declarator word and the placement.
+    pub described: Described,
     pub outcome: Outcome,
+}
+
+impl Entry {
+    /// The adapter's declarator word — see [`Described::representation`].
+    pub fn representation(&self) -> &str {
+        &self.described.representation
+    }
+
+    /// The foreign placement — see [`Described::placement`].
+    pub fn placement(&self) -> &str {
+        &self.described.placement
+    }
+}
+
+impl Serialize for Entry {
+    /// Flat: the `id` is the declaration as it prints, and the outcome's own fields
+    /// follow at the same level.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Columns<'a> {
+            id: &'a Declaration,
+            placement: &'a str,
+            representation: &'a str,
+            #[serde(flatten)]
+            outcome: &'a Outcome,
+        }
+        Columns {
+            id: &self.declaration,
+            placement: self.placement(),
+            representation: self.representation(),
+            outcome: &self.outcome,
+        }
+        .serialize(serializer)
+    }
 }
 
 /// What a run generated, and what it did not.
@@ -44,7 +81,7 @@ pub struct Report {
     /// Enough of the run's input to tell a stale report from a fresh one: the
     /// declaring crate and the source modules it read.
     pub source_identity: SourceIdentity,
-    /// Every declaration, sorted by kind then id.
+    /// Every declaration, sorted by id.
     pub declarations: Vec<Entry>,
 }
 
@@ -149,7 +186,7 @@ impl Report {
                     .skip()
                     .map(|skip| skip.path())
                     .unwrap_or_default();
-                let _ = writeln!(out, "- `{}` ({})", entry.declaration.origin(), path);
+                let _ = writeln!(out, "- `{}` ({})", entry.declaration, path);
             }
             let _ = writeln!(out);
         }
@@ -169,9 +206,9 @@ impl Report {
             let _ = writeln!(
                 out,
                 "| `{}` | {} | `{}` | {} |",
-                entry.declaration.origin(),
-                entry.declaration.representation(),
-                entry.declaration.placement(),
+                entry.declaration,
+                entry.representation(),
+                entry.placement(),
                 outcome
             );
         }
@@ -199,7 +236,7 @@ impl Report {
         for (capability, entries) in self.skips_by_capability() {
             let roots = entries
                 .iter()
-                .map(|entry| entry.declaration.origin().to_string())
+                .map(|entry| entry.declaration.to_string())
                 .collect::<Vec<_>>();
             let shown = roots.len().min(5);
             let more = match roots.len() - shown {
@@ -222,21 +259,7 @@ pub struct Counts {
     pub ignored: usize,
 }
 
-/// Sort key: kind first (so a report reads types, then functions), then id.
+/// Sort key: the id, as it prints.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
-    entries.sort_by(|a, b| {
-        kind_order(a.declaration.kind())
-            .cmp(&kind_order(b.declaration.kind()))
-            .then_with(|| a.declaration.origin().cmp(b.declaration.origin()))
-    });
-}
-
-fn kind_order(kind: DeclarationKind) -> u8 {
-    match kind {
-        DeclarationKind::Type => 0,
-        DeclarationKind::Conversion => 1,
-        DeclarationKind::Callback => 2,
-        DeclarationKind::Const => 3,
-        DeclarationKind::Function => 4,
-    }
+    entries.sort_by(|a, b| a.declaration.cmp(&b.declaration));
 }

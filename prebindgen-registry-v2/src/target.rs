@@ -52,10 +52,7 @@ use prebindgen_flat::{
 };
 use proc_macro2::TokenStream;
 
-use crate::{
-    decl::{Declaration, Origin},
-    outcome::Capability,
-};
+use crate::{decl::Declaration, outcome::Capability};
 
 /// Which way a value crosses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -749,7 +746,7 @@ impl std::fmt::Display for Requirement {
 /// A target's description of one public declaration and what it requires.
 #[derive(Clone, Debug)]
 pub struct SurfaceSpec<P> {
-    pub declaration: Origin,
+    pub declaration: Declaration,
     /// Types that must be declared and emitted for this declaration to be.
     pub requires: Vec<Requirement>,
     /// Rust this declaration contributes: the `repr(C)` aggregate a C caller
@@ -768,13 +765,13 @@ pub struct SurfaceSpec<P> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position {
     /// The requested output this conversion is reached from.
-    pub declaration: Origin,
+    pub declaration: Declaration,
     /// Root to here: `param 0`, then `field secs`.
     pub path: Vec<String>,
 }
 
 impl Position {
-    pub fn root(declaration: Origin) -> Self {
+    pub fn root(declaration: Declaration) -> Self {
         Position {
             declaration,
             path: Vec::new(),
@@ -893,11 +890,9 @@ impl<P> ResolvedValues<'_, P> {
 /// function: the boundary places each such position on a wrapper parameter or
 /// the return, and this identifies the function the positions belong to.
 pub struct SiteDescriptor<'a> {
-    /// The export this wrapper is for: its Rust origin
-    /// ([`Declaration::rust_origin`]) and the foreign name it was requested
-    /// under ([`Declaration::placement`]). For a release, the handle type's
-    /// own declaration. The exported symbol is not read from here; the
-    /// frontend settled it in the policy.
+    /// The export this wrapper is for. For a release, the handle type's own
+    /// declaration. The exported symbol is not read from here; the frontend
+    /// settled it in the policy.
     pub declaration: &'a Declaration,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
@@ -988,13 +983,13 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 /// struct declared to C as an opaque pointer still arrives as
 /// [`SourceItem::Struct`], and how the target carries it is in
 /// [`SurfaceRequest::policy`]. Read the policy first. A declaration the
-/// binding defines itself ([`Origin::is_binding_local`]) names no captured
+/// binding defines itself ([`Declaration::is_binding_local`]) names no captured
 /// item and is refused before `surface` is asked, so nothing here is ever
 /// absent.
 ///
 /// [`Flat`]: prebindgen_flat::flat::Flat
 /// [`Element`]: prebindgen_flat::flat::Element
-/// [`Origin::is_binding_local`]: crate::decl::Origin::is_binding_local
+/// [`Declaration::is_binding_local`]: crate::decl::Declaration::is_binding_local
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
     /// A captured free function, the item behind a `fn:` declaration.
@@ -1088,4 +1083,33 @@ pub trait Target {
     /// The operands arrive already named by the writer, in the order the
     /// operation's specification lists them.
     fn render_operation(&self, payload: &Self::Payload, operands: &[syn::Ident]) -> TokenStream;
+
+    /// Say, for the report, what a declaration under this policy is: the
+    /// adapter's own declarator word and where the thing lands in the foreign
+    /// language. Read from the policy that drives generation, so the report
+    /// cannot say one thing and the generated code another.
+    fn describe(&self, policy: &Self::Policy) -> Described;
+}
+
+/// How a report names one declaration on the foreign side — see
+/// [`Target::describe`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Described {
+    /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
+    /// — the adapter's own word, printed back verbatim. Finer than the prefix
+    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
+    /// a `type`.
+    pub representation: String,
+    /// Where it lands in the target language, spelled the way that language
+    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
+    pub placement: String,
+}
+
+impl Described {
+    pub fn new(representation: impl Into<String>, placement: impl Into<String>) -> Self {
+        Described {
+            representation: representation.into(),
+            placement: placement.into(),
+        }
+    }
 }
