@@ -52,10 +52,7 @@ use prebindgen_flat::{
 };
 use proc_macro2::TokenStream;
 
-use crate::{
-    decl::{Declaration, Origin},
-    outcome::Capability,
-};
+use crate::{decl::Origin, outcome::Capability};
 
 /// Which way a value crosses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -893,12 +890,10 @@ impl<P> ResolvedValues<'_, P> {
 /// function: the boundary places each such position on a wrapper parameter or
 /// the return, and this identifies the function the positions belong to.
 pub struct SiteDescriptor<'a> {
-    /// The export this wrapper is for: its Rust origin
-    /// ([`Declaration::rust_origin`]) and the foreign name it was requested
-    /// under ([`Declaration::placement`]). For a release, the handle type's
-    /// own declaration. The exported symbol is not read from here; the
-    /// frontend settled it in the policy.
-    pub declaration: &'a Declaration,
+    /// The export this wrapper is for. For a release, the handle type's own
+    /// declaration. The exported symbol is not read from here; the frontend
+    /// settled it in the policy.
+    pub declaration: &'a Origin,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
     /// The target reads its parameter *names*: a wrapper parameter keeps its
@@ -911,7 +906,7 @@ pub struct SiteDescriptor<'a> {
 
 /// What `surface` is given: the requested public declaration.
 pub struct SurfaceRequest<'a, Policy> {
-    pub declaration: &'a Declaration,
+    pub declaration: &'a Origin,
     pub policy: &'a Policy,
     pub item: SourceItem<'a>,
 }
@@ -970,7 +965,7 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 /// The captured item a public declaration is made from, as the source model
 /// describes it.
 ///
-/// A binding asks for an output by name — a [`Declaration`] such as
+/// A binding asks for an output by name — an [`Origin`] such as
 /// `type:Ledger` — and the registry resolves that name in the source model
 /// before it plans anything. This is what it found: the model's own element,
 /// borrowed from the [`Flat`] the run was planned over. A target receives it
@@ -1088,4 +1083,33 @@ pub trait Target {
     /// The operands arrive already named by the writer, in the order the
     /// operation's specification lists them.
     fn render_operation(&self, payload: &Self::Payload, operands: &[syn::Ident]) -> TokenStream;
+
+    /// Say, for the report, what a declaration under this policy is: the
+    /// adapter's own declarator word and where the thing lands in the foreign
+    /// language. Read from the policy that drives generation, so the report
+    /// cannot say one thing and the generated code another.
+    fn describe(&self, policy: &Self::Policy) -> Described;
+}
+
+/// How a report names one declaration on the foreign side — see
+/// [`Target::describe`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Described {
+    /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
+    /// — the adapter's own word, printed back verbatim. Finer than
+    /// [`DeclarationKind`](crate::DeclarationKind): `opaque_ptr` and
+    /// `data_struct` are both a type.
+    pub representation: String,
+    /// Where it lands in the target language, spelled the way that language
+    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
+    pub placement: String,
+}
+
+impl Described {
+    pub fn new(representation: impl Into<String>, placement: impl Into<String>) -> Self {
+        Described {
+            representation: representation.into(),
+            placement: placement.into(),
+        }
+    }
 }

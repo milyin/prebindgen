@@ -12,12 +12,12 @@
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Direction, FailureCategory, FailureRoute,
-    Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole, PlanningError,
-    PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement,
-    ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp,
-    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-    WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Described, Direction, FailureCategory,
+    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
+    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec,
+    Requirement, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
+    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
+    Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -36,8 +36,12 @@ pub enum CPolicy {
     Function { symbol: String },
     /// A declaration v1 lowers and v2 does not yet: an enum, a value-opaque
     /// type, a tagged union. Carries the declarator's name so the refusal says
-    /// which capability is missing.
-    Unimplemented { declarator: &'static str },
+    /// which capability is missing, and the C name it would have had so the
+    /// report can say where it was going.
+    Unimplemented {
+        declarator: &'static str,
+        c_name: String,
+    },
 }
 
 /// C contributes no operation of its own: reading an aggregate member is a
@@ -82,7 +86,7 @@ impl Target for CTarget {
         let want_struct = match query.policy {
             CPolicy::DataStruct { .. } => true,
             CPolicy::Scalar | CPolicy::OpaquePtr { .. } | CPolicy::Function { .. } => false,
-            CPolicy::Unimplemented { declarator } => {
+            CPolicy::Unimplemented { declarator, .. } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
                     format!(
@@ -236,20 +240,20 @@ impl Target for CTarget {
         let symbol = match (policy, site.function) {
             (CPolicy::Function { symbol }, Some(_)) => symbol,
             (CPolicy::OpaquePtr { release, .. }, None) => release,
-            (CPolicy::Unimplemented { declarator }, _) => {
+            (CPolicy::Unimplemented { declarator, .. }, _) => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
                     format!(
                         "`{}` is declared as a `{declarator}`, which the v2 C target does not \
                          lower yet",
-                        site.declaration.rust_origin()
+                        site.declaration.name()
                     ),
                 )));
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
                     "`{}` is exported under a policy that does not fit this site",
-                    site.declaration.rust_origin()
+                    site.declaration.name()
                 )));
             }
         };
@@ -307,7 +311,7 @@ impl Target for CTarget {
         if let CPolicy::OpaquePtr { c_name, .. } = request.policy {
             let ident = format_ident!("{c_name}");
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.origin().clone(),
+                declaration: request.declaration.clone(),
                 requires: Vec::new(),
                 // A struct whose only member is a zero-length array is what
                 // `cbindgen` renders as an incomplete type: a C caller can
@@ -332,7 +336,7 @@ impl Target for CTarget {
                 opaque.name
             ))),
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.origin().clone(),
+                declaration: request.declaration.clone(),
                 // A wrapper taking or returning a declared type is unusable
                 // unless the public type it names is emitted too.
                 requires: values
@@ -411,7 +415,7 @@ impl Target for CTarget {
                     fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.origin().clone(),
+                    declaration: request.declaration.clone(),
                     requires: Vec::new(),
                     // `repr(C)` is required: without it the layout the header
                     // promises is not the layout the wrapper reads. The C name
@@ -433,5 +437,17 @@ impl Target for CTarget {
 
     fn render_operation(&self, payload: &CPayload, _: &[syn::Ident]) -> proc_macro2::TokenStream {
         match *payload {}
+    }
+
+    /// The declarator each policy came from, and the C name it places — the
+    /// same values generation reads, so the report cannot drift from the code.
+    fn describe(&self, policy: &CPolicy) -> Described {
+        match policy {
+            CPolicy::Scalar => Described::new("scalar", ""),
+            CPolicy::DataStruct { c_name } => Described::new("data_struct", c_name),
+            CPolicy::OpaquePtr { c_name, .. } => Described::new("opaque_ptr", c_name),
+            CPolicy::Function { symbol } => Described::new("function", symbol),
+            CPolicy::Unimplemented { declarator, c_name } => Described::new(*declarator, c_name),
+        }
     }
 }

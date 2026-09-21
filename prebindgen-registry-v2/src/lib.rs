@@ -52,7 +52,7 @@ pub mod target;
 mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
-pub use decl::{Declaration, DeclarationKind, Origin};
+pub use decl::{DeclarationKind, Origin};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{
     generate, BindingRequests, FunctionPlan, NodeId, OutputRequest, PolicyId, ValuePlan,
@@ -60,11 +60,11 @@ pub use plan::{
 pub use report::{Counts, Report, SCHEMA_VERSION};
 pub use run::{Generation, PIPELINE};
 pub use target::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Direction, FailureCategory,
-    FailureRoute, Layout, OperandRole, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, Part, PlanningError, Position, PrimitiveFailure, PrimitiveId, PrimitiveSpec,
-    Protocol, Relation, RelationId, ReprSpec, Requirement, ResolvedShape, ResolvedValues,
-    SelectionQuery, SiteDescriptor, SourceItem, StandardOp, StructRelation, SurfaceRequest,
-    SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType,
-    WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Described, Direction,
+    FailureCategory, FailureRoute, Layout, OperandRole, OperandSpec, Operation, OperationType,
+    OutputPlacement, ParamRole, Part, PlanningError, Position, PrimitiveFailure, PrimitiveId,
+    PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, Requirement, ResolvedShape,
+    ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, StructRelation,
+    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
+    WireType, WrapperParam,
 };

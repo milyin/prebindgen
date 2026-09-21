@@ -9,14 +9,13 @@
 //! Nothing of v1 runs on this route. The engine reads the same sources and the
 //! same declarations and owns everything after that; the frontend's part is
 //! naming — which C name a type or a symbol gets is its manglers applied, the
-//! same answer v1 would give — and saying which declarator produced each
-//! declaration, so a skip can name the capability it waits for.
+//! same answer v1 would give — and saying, in each policy, which declarator
+//! produced the declaration, so a skip can name the capability it waits for
+//! and the report can print the word back.
 
 mod target;
 
-use prebindgen_registry_v2::{
-    generate, BindingRequests, Declaration, EngineError, Generation, Origin,
-};
+use prebindgen_registry_v2::{generate, BindingRequests, EngineError, Generation, Origin};
 pub use target::{CPayload, CPolicy, CTarget};
 
 use crate::CbindgenBuilder;
@@ -42,9 +41,9 @@ impl CbindgenBuilder {
 
     /// Everything this binding declared, as the engine plans it.
     ///
-    /// One entry per declaration, in any order — the report sorts. Which
-    /// declarator a type came from is this adapter's word for its
-    /// representation, printed back by the report rather than re-derived.
+    /// One entry per declaration, in any order — the report sorts. Each
+    /// declaration's policy carries the C name it gets and which declarator it
+    /// came from: what the target generates from, and what the report prints.
     fn requests(&self, source_module: syn::Path) -> BindingRequests<CPolicy> {
         let mut requests = BindingRequests::new("c", source_module, CPolicy::Scalar);
 
@@ -59,10 +58,7 @@ impl CbindgenBuilder {
             requests
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
-            requests.output(
-                Declaration::new(Origin::LocalType(key.clone()), c_name, "data_struct"),
-                policy,
-            );
+            requests.output(Origin::LocalType(key.clone()), policy);
         }
 
         // Opaque handles: `<c_name> *` to a Rust-owned value, freed through
@@ -76,10 +72,7 @@ impl CbindgenBuilder {
             requests
                 .type_policies
                 .insert(key.as_str().to_string(), policy);
-            requests.output(
-                Declaration::new(Origin::LocalType(key.clone()), c_name, "opaque_ptr"),
-                policy,
-            );
+            requests.output(Origin::LocalType(key.clone()), policy);
         }
 
         // Every other declarator is accounted for and refused by name. A
@@ -91,51 +84,35 @@ impl CbindgenBuilder {
             (sorted(self.tagged_unions.keys()), "tagged_union"),
         ] {
             for key in keys {
-                let policy = requests.policy(CPolicy::Unimplemented { declarator });
+                let policy = requests.policy(CPolicy::Unimplemented {
+                    declarator,
+                    c_name: self.c_type_name(key),
+                });
                 requests
                     .type_policies
                     .insert(key.as_str().to_string(), policy);
-                requests.output(
-                    Declaration::new(
-                        Origin::LocalType(key.clone()),
-                        self.c_type_name(key),
-                        declarator,
-                    ),
-                    policy,
-                );
+                requests.output(Origin::LocalType(key.clone()), policy);
             }
         }
 
         // Callback signatures: no captured item names one, and its C closure
         // struct is what the target places.
-        let unimplemented = requests.policy(CPolicy::Unimplemented {
-            declarator: "callback",
-        });
         for key in sorted(self.callbacks.keys()) {
-            requests.output(
-                Declaration::new(
-                    Origin::Callback(describe_callback(key)),
-                    self.callback_c_name(key),
-                    "callback",
-                ),
-                unimplemented,
-            );
+            let policy = requests.policy(CPolicy::Unimplemented {
+                declarator: "callback",
+                c_name: self.callback_c_name(key),
+            });
+            requests.output(Origin::Callback(describe_callback(key)), policy);
         }
 
         // Declared conversions: the wire mapping for one Rust type, defined by
         // the binding rather than selected out of the source.
-        let unimplemented = requests.policy(CPolicy::Unimplemented {
-            declarator: "convert",
-        });
         for decl in &self.convert_decls {
-            requests.output(
-                Declaration::new(
-                    Origin::Conversion(decl.key().clone()),
-                    self.c_type_name(decl.key()),
-                    "convert",
-                ),
-                unimplemented,
-            );
+            let policy = requests.policy(CPolicy::Unimplemented {
+                declarator: "convert",
+                c_name: self.c_type_name(decl.key()),
+            });
+            requests.output(Origin::Conversion(decl.key().clone()), policy);
         }
 
         // Exported functions — the one kind that must name a captured item.
@@ -144,26 +121,17 @@ impl CbindgenBuilder {
             let policy = requests.policy(CPolicy::Function {
                 symbol: symbol.clone(),
             });
-            requests.output(
-                Declaration::new(Origin::Function(ident.clone()), symbol, "function"),
-                policy,
-            );
+            requests.output(Origin::Function(ident.clone()), policy);
         }
 
         // Ignores are decisions, accounted apart from the gaps.
         for ident in sorted(&self.ignored_functions) {
-            requests.ignored.push(Declaration::new(
-                Origin::LocalFunction(ident.to_string()),
-                String::new(),
-                "ignore_function",
-            ));
+            requests
+                .ignored
+                .push(Origin::LocalFunction(ident.to_string()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignored.push(Declaration::new(
-                Origin::LocalType(key.clone()),
-                String::new(),
-                "ignore_type",
-            ));
+            requests.ignored.push(Origin::LocalType(key.clone()));
         }
         requests
     }

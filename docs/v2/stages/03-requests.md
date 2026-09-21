@@ -315,7 +315,7 @@ struct BindingRequests<Policy> {
 the same generic request structure with different configuration types. In the
 sketch, `PolicyTable` stores entries addressed by `PolicyId`. The implementation
 uses a `Vec`, also records a target label, source-module path and default policy
-id, and stores ignored entries as full `Declaration` records. This sketch
+id, and stores ignored entries as `Origin`s. This sketch
 explains the responsibilities; `prebindgen-registry-v2/src/plan.rs` defines the
 exact current fields.
 
@@ -418,7 +418,7 @@ struct OutputRequest {
 
 `DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine identifies a declaration by its `Origin`, the kind and the Rust name, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
-The implemented request carries a `Declaration` in place of those two ids, and the declaration names an `Origin`: one value that is the declaration's identity and says both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
+The implemented request carries an `Origin` in place of those two ids: one value that is the declaration's identity and says both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
 
 ### A value's position in an exported function
 
