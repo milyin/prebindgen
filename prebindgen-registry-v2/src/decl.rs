@@ -25,12 +25,12 @@ use serde::Serialize;
 /// Kotlin `val` read through a nullary function is planned as that function.
 /// Two things depend on the category:
 ///
-/// * **Identity.** A [`DeclarationId`] pairs the kind with the origin, and the
-///   kind is what keeps the origins' several naming spaces apart: an origin may
-///   be a captured item's name, a type key, a callback's signature or a name
-///   the binding coined, so `type:Foo` and `conversion:Foo` are two
-///   declarations about one Rust type, and the engine can tell which of them a
-///   report entry or an outcome belongs to.
+/// * **Identity.** An [`Origin`] prints as `<kind>:<name>`, and the kind is
+///   what keeps the origins' several naming spaces apart: an origin may be a
+///   captured item's name, a type key, a callback's signature or a name the
+///   binding coined, so `type:Foo` and `conversion:Foo` are two declarations
+///   about one Rust type, and a reader of the report can tell which of them an
+///   entry belongs to.
 /// * **Report layout.** [`Report`](crate::Report) groups and sorts by it, so a
 ///   report reads types first, then conversions, callbacks, constants and
 ///   functions.
@@ -54,7 +54,7 @@ pub enum DeclarationKind {
 }
 
 impl DeclarationKind {
-    /// The id prefix and report label.
+    /// The prefix an [`Origin`] prints with, and the report label.
     pub fn as_str(self) -> &'static str {
         match self {
             DeclarationKind::Function => "fn",
@@ -63,61 +63,6 @@ impl DeclarationKind {
             DeclarationKind::Callback => "callback",
             DeclarationKind::Conversion => "conversion",
         }
-    }
-}
-
-/// A declaration's stable identity: its [`DeclarationKind`] and the name its
-/// Rust origin goes by.
-///
-/// Stable across runs and across pipelines, so a report, a build script and a
-/// capability-selected test section can all name the same declaration. Derived from
-/// what the *source* calls the thing, not from what the target does — a rename
-/// on the foreign side must not silently retire a test's requirement.
-///
-/// The two parts are stored, readable ([`Self::kind`], [`Self::origin`]) and
-/// fixed at construction. `<kind>:<origin>` — `type:Stamp`, `fn:stamp_sum` —
-/// is how an id prints and how the report writes it, and that spelling is a
-/// rendering: nothing reads an id back out of it.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DeclarationId {
-    kind: DeclarationKind,
-    origin: String,
-}
-
-impl DeclarationId {
-    /// The id of `origin` declared as `kind`.
-    ///
-    /// Crate-internal: an id is what a [`Declaration`] already has, and the
-    /// engine hands it out. Nothing outside builds one from a name — a target
-    /// naming another declaration names the type it needs, with a
-    /// [`Requirement`](crate::Requirement).
-    pub(crate) fn new(kind: DeclarationKind, origin: impl AsRef<str>) -> Self {
-        DeclarationId {
-            kind,
-            origin: origin.as_ref().to_string(),
-        }
-    }
-
-    /// Which kind of declaration this names.
-    pub fn kind(&self) -> DeclarationKind {
-        self.kind
-    }
-
-    /// What the Rust source calls it — see [`Declaration::rust_origin`].
-    pub fn origin(&self) -> &str {
-        &self.origin
-    }
-}
-
-impl std::fmt::Display for DeclarationId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.kind.as_str(), self.origin)
-    }
-}
-
-impl Serialize for DeclarationId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_str(self)
     }
 }
 
@@ -136,7 +81,19 @@ impl Serialize for DeclarationId {
 /// [`generate`](crate::generate) routes on this: each planner is reached by its
 /// own variants and is handed the captured item they name, rather than a kind
 /// to decode and a name to look up.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// It is also the declaration's identity — what an outcome is keyed by, what a
+/// [`Position`](crate::target::Position) is rooted at, what a target's
+/// [`Requirement`](crate::target::Requirement) resolves to. Stable across runs
+/// and across pipelines, so a report, a build script and a capability-selected
+/// test section can all name the same declaration: it is what the *source*
+/// calls the thing, not what the target does, and a rename on the foreign side
+/// must not silently retire a test's requirement. `<kind>:<name>` —
+/// `type:Stamp`, `fn:stamp_sum` — is how it prints and how the report writes
+/// it, and that spelling is a rendering: nothing reads an origin back out of
+/// it. Origins order the way they print — by kind, then by name — so a report
+/// sorted by origin reads as its ids read.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Origin {
     /// A captured `#[prebindgen]` function, exported as a foreign function.
     Function(syn::Ident),
@@ -238,7 +195,7 @@ impl Origin {
         }
     }
 
-    /// The name it goes by — what an id carries and a report prints.
+    /// The name it goes by — the part of the printed form after the kind.
     pub fn name(&self) -> String {
         match self {
             Origin::Function(ident) | Origin::Const(ident) | Origin::ConstFromFunction(ident) => {
@@ -254,32 +211,75 @@ impl Origin {
     }
 }
 
+impl Ord for Origin {
+    /// By kind, then by name — the printed order. A captured and a
+    /// binding-local origin of one kind and name print alike and are still
+    /// distinct, so the variant breaks that tie last, and `Ord` agrees with
+    /// `Eq`.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        fn variant(origin: &Origin) -> u8 {
+            match origin {
+                Origin::Function(_) => 0,
+                Origin::LocalFunction(_) => 1,
+                Origin::Const(_) => 2,
+                Origin::ConstFromFunction(_) => 3,
+                Origin::LocalConst(_) => 4,
+                Origin::Type(_) => 5,
+                Origin::LocalType(_) => 6,
+                Origin::Callback(_) => 7,
+                Origin::Conversion(_) => 8,
+            }
+        }
+        self.kind()
+            .cmp(&other.kind())
+            .then_with(|| self.name().cmp(&other.name()))
+            .then_with(|| variant(self).cmp(&variant(other)))
+    }
+}
+
+impl PartialOrd for Origin {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::fmt::Display for Origin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.kind().as_str(), self.name())
+    }
+}
+
+impl Serialize for Origin {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
 /// One declaration, as the report accounts for it.
 ///
 /// Built by the adapter with [`Self::new`] and read back through the accessors.
-/// It holds two things about what was declared, for two jobs: the
-/// [`DeclarationId`] the run is keyed by, and the [`Origin`] the engine plans
-/// from. Everything else about the declaration's identity — its kind, its
-/// source kind, the name it goes by — is read back out of those, so nothing is
-/// stated twice and nothing can disagree.
+/// The [`Origin`] is both the run's key for it and what the engine plans it
+/// from; everything else about its identity — its kind, what it must find in
+/// the captured source, the name it goes by — is read back out of the origin,
+/// so nothing is stated twice and nothing can disagree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Declaration {
-    id: DeclarationId,
     origin: Origin,
     placement: String,
     representation: String,
 }
 
 impl Serialize for Declaration {
-    /// Flat, and with the identity spelled out: the report carries `id`,
-    /// `kind` and `rust_origin` as separate columns, and a reader of the JSON
-    /// should not have to split the id to get at the last two.
+    /// Flat, and with the identity spelled out: the report carries `id` (the
+    /// origin as it prints), `kind` and `rust_origin` as separate columns, and
+    /// a reader of the JSON should not have to split the id to get at the last
+    /// two.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
         let mut entry = serializer.serialize_struct("Declaration", 5)?;
-        entry.serialize_field("id", &self.id)?;
-        entry.serialize_field("kind", &self.id.kind())?;
-        entry.serialize_field("rust_origin", self.id.origin())?;
+        entry.serialize_field("id", &self.origin)?;
+        entry.serialize_field("kind", &self.origin.kind())?;
+        entry.serialize_field("rust_origin", &self.origin.name())?;
         entry.serialize_field("placement", &self.placement)?;
         entry.serialize_field("representation", &self.representation)?;
         entry.end()
@@ -294,33 +294,27 @@ impl Declaration {
         representation: impl Into<String>,
     ) -> Self {
         Declaration {
-            id: DeclarationId::new(origin.kind(), origin.name()),
             origin,
             placement: placement.into(),
             representation: representation.into(),
         }
     }
 
-    /// What this declaration is made of, and what the engine plans it from —
-    /// see [`Origin`].
+    /// What this declaration is, what the engine plans it from, and what the
+    /// run keys it by — see [`Origin`].
     pub fn origin(&self) -> &Origin {
         &self.origin
     }
 
-    /// Stable identity — see [`DeclarationId`].
-    pub fn id(&self) -> &DeclarationId {
-        &self.id
-    }
-
     /// Which kind of declaration it is.
     pub fn kind(&self) -> DeclarationKind {
-        self.id.kind()
+        self.origin.kind()
     }
 
     /// What the Rust source calls it (`Calculator`, `calculator_new`), or the
     /// signature for a callback that has no name of its own.
-    pub fn rust_origin(&self) -> &str {
-        self.id.origin()
+    pub fn rust_origin(&self) -> String {
+        self.origin.name()
     }
 
     /// Where it is meant to land in the target language, spelled the way that

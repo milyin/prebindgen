@@ -150,7 +150,7 @@ pub(crate) fn check_declarations(
     let missing: Vec<_> = declared
         .iter()
         .filter(|declaration| declaration.origin().missing_from(flat))
-        .map(|declaration| (declaration.id().clone(), declaration.origin().clone()))
+        .map(|declaration| declaration.origin().clone())
         .collect();
     if !missing.is_empty() {
         return Err(EngineError::DeclaredNotFound { entries: missing });
@@ -161,8 +161,8 @@ pub(crate) fn check_declarations(
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|declaration| !seen.insert(declaration.id()))
-        .map(|declaration| declaration.id().clone())
+        .filter(|declaration| !seen.insert(declaration.origin()))
+        .map(|declaration| declaration.origin().clone())
         .collect();
     repeated.sort();
     repeated.dedup();

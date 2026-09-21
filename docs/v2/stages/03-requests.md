@@ -395,9 +395,10 @@ applied where the requests are built; nothing is serialized.
 
 Names ending in `Id` identify particular records, but they do not all have the
 same lifetime or construction rules. `PolicyId`, `RelationId` and `NodeId`
-identify entries used within a generation run. `DeclarationId` is instead a
-stable label built from the declaration kind and Rust name, such as
-`fn:stamp_sum`; reports and tests can use it across runs. The proposed `SiteId`
+identify entries used within a generation run. A declaration is instead
+identified by its `Origin` — a stable value naming the declaration kind and the
+Rust item, printed as `fn:stamp_sum`; reports and tests can use it across runs.
+(`DeclarationId` below is this chapter's name for that role.) The proposed `SiteId`
 and `PartId` describe positions within a declaration or relation. Keeping these
 identities separate prevents a field position from being confused with a public
 function or a reusable conversion.
@@ -415,9 +416,9 @@ struct OutputRequest {
 }
 ```
 
-`DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `DeclarationId` is the kind and the Rust origin, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
+`DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine identifies a declaration by its `Origin`, the kind and the Rust name, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
 
-The implemented request carries a `Declaration` in place of those two ids, and the declaration names an `Origin`: one value saying both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
+The implemented request carries a `Declaration` in place of those two ids, and the declaration names an `Origin`: one value that is the declaration's identity and says both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
 
 ### A value's position in an exported function
 

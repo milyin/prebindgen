@@ -9,7 +9,7 @@
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind};
 
 use crate::{
-    decl::{Declaration, DeclarationKind, Origin},
+    decl::{Declaration, Origin},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
@@ -449,7 +449,7 @@ impl Target for Mini {
             _ => Vec::new(),
         };
         Ok(TargetAttempt::Ready(SurfaceSpec {
-            declaration: request.declaration.id().clone(),
+            declaration: request.declaration.origin().clone(),
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
                 (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
@@ -503,7 +503,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .report()
         .declarations
         .iter()
-        .find(|entry| entry.declaration.id().to_string() == id)
+        .find(|entry| entry.declaration.origin().to_string() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }
@@ -542,7 +542,7 @@ fn a_site_override_does_not_share_the_default_conversion() {
     let max = requests.policy(exported("stamp_max", Routes::Reported));
     requests.site_policies.insert(
         (
-            crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
+            Origin::Function(syn::parse_quote!(stamp_max)),
             "param 0".to_string(),
         ),
         fallible,
@@ -740,7 +740,7 @@ fn a_field_override_is_part_of_its_struct_conversion() {
         // relation for an `i64`, so this child cannot be selected at all.
         requests.site_policies.insert(
             (
-                crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
+                Origin::Function(syn::parse_quote!(stamp_max)),
                 "param 0.field secs".to_string(),
             ),
             strukt,
@@ -925,7 +925,7 @@ fn two_supported_children_make_two_struct_conversions() {
     let max = requests.policy(exported("stamp_max", Routes::None));
     requests.site_policies.insert(
         (
-            crate::decl::DeclarationId::new(DeclarationKind::Function, "stamp_max"),
+            Origin::Function(syn::parse_quote!(stamp_max)),
             "param 0.field secs".to_string(),
         ),
         other_scalar,

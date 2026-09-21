@@ -161,7 +161,7 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.id().to_string())
+        .map(|entry| entry.declaration.origin().to_string())
         .collect();
     assert_eq!(ids, ["type:Handle", "fn:handle_new", "fn:handle_value"]);
     assert_eq!(report.declarations[2].outcome, Outcome::Ignored);

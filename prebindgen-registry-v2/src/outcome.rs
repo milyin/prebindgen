@@ -9,7 +9,7 @@
 
 use serde::Serialize;
 
-use crate::decl::{DeclarationId, Origin};
+use crate::decl::Origin;
 
 /// A stable code naming *what* is not implemented, dotted from general to
 /// specific: `unsupported.string`, `unsupported.handle.borrowed_input`.
@@ -104,14 +104,12 @@ pub enum EngineError {
     /// declaration is a statement of intent; its target being absent is a typo
     /// or a source-crate rename, and never a capability question. All of them
     /// are collected before failing.
-    DeclaredNotFound {
-        entries: Vec<(DeclarationId, Origin)>,
-    },
-    /// Two declarations answering to one id. An id identifies a declaration,
-    /// and a report that gave one id to two entries could not account for
+    DeclaredNotFound { entries: Vec<Origin> },
+    /// Two declarations of one origin. The origin identifies a declaration,
+    /// and a report that gave one origin to two entries could not account for
     /// either — so this is a contradiction in the declarations, not a gap in
     /// what v2 implements.
-    DuplicateDeclaration { entries: Vec<DeclarationId> },
+    DuplicateDeclaration { entries: Vec<Origin> },
     /// Planning refused the input, or an internal contract was violated. A
     /// missing capability is never one of these — that is a [`Skip`].
     Planning(crate::target::PlanningError),
@@ -129,10 +127,10 @@ impl std::fmt::Display for EngineError {
                     "v2: {} declared item(s) match no captured `#[prebindgen]` item:",
                     entries.len()
                 )?;
-                for (id, origin) in entries {
+                for origin in entries {
                     writeln!(
                         f,
-                        "  {id} — no captured {} `{}`",
+                        "  {origin} — no captured {} `{}`",
                         origin.describe_captured(),
                         origin.name()
                     )?;

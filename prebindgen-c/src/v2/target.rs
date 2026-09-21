@@ -307,7 +307,7 @@ impl Target for CTarget {
         if let CPolicy::OpaquePtr { c_name, .. } = request.policy {
             let ident = format_ident!("{c_name}");
             return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id().clone(),
+                declaration: request.declaration.origin().clone(),
                 requires: Vec::new(),
                 // A struct whose only member is a zero-length array is what
                 // `cbindgen` renders as an incomplete type: a C caller can
@@ -332,7 +332,7 @@ impl Target for CTarget {
                 opaque.name
             ))),
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.id().clone(),
+                declaration: request.declaration.origin().clone(),
                 // A wrapper taking or returning a declared type is unusable
                 // unless the public type it names is emitted too.
                 requires: values
@@ -411,7 +411,7 @@ impl Target for CTarget {
                     fields.push(quote!(#(#condition)* pub #name: #ty));
                 }
                 Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.id().clone(),
+                    declaration: request.declaration.origin().clone(),
                     requires: Vec::new(),
                     // `repr(C)` is required: without it the layout the header
                     // promises is not the layout the wrapper reads. The C name
