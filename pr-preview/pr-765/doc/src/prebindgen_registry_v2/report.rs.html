@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>serde::Serialize;
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use crate</span>::{
-<a href=#18 id=18 data-nosnippet>18</a>    decl::Origin,
+<a href=#18 id=18 data-nosnippet>18</a>    decl::Declaration,
 <a href=#19 id=19 data-nosnippet>19</a>    outcome::{EngineError, Outcome},
 <a href=#20 id=20 data-nosnippet>20</a>    target::Described,
 <a href=#21 id=21 data-nosnippet>21</a>};
@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a></span><span class="attr">#[derive(Clone, Debug)]
 <a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub struct </span>Entry {
 <a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// What was declared, and the run's key for it.
-<a href=#31 id=31 data-nosnippet>31</a>    </span><span class="kw">pub </span>origin: Origin,
+<a href=#31 id=31 data-nosnippet>31</a>    </span><span class="kw">pub </span>declaration: Declaration,
 <a href=#32 id=32 data-nosnippet>32</a>    <span class="doccomment">/// What the target says it is on the foreign side — the adapter's
 <a href=#33 id=33 data-nosnippet>33</a>    /// declarator word and the placement.
 <a href=#34 id=34 data-nosnippet>34</a>    </span><span class="kw">pub </span>described: Described,
@@ -48,19 +48,19 @@
 <a href=#48 id=48 data-nosnippet>48</a>}
 <a href=#49 id=49 data-nosnippet>49</a>
 <a href=#50 id=50 data-nosnippet>50</a><span class="kw">impl </span>Serialize <span class="kw">for </span>Entry {
-<a href=#51 id=51 data-nosnippet>51</a>    <span class="doccomment">/// Flat: the `id` is the origin as it prints, and the outcome's own fields
+<a href=#51 id=51 data-nosnippet>51</a>    <span class="doccomment">/// Flat: the `id` is the declaration as it prints, and the outcome's own fields
 <a href=#52 id=52 data-nosnippet>52</a>    /// follow at the same level.
 <a href=#53 id=53 data-nosnippet>53</a>    </span><span class="kw">fn </span>serialize&lt;S: serde::Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
 <a href=#54 id=54 data-nosnippet>54</a>        <span class="attr">#[derive(Serialize)]
 <a href=#55 id=55 data-nosnippet>55</a>        </span><span class="kw">struct </span>Columns&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#56 id=56 data-nosnippet>56</a>            id: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Origin,
+<a href=#56 id=56 data-nosnippet>56</a>            id: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Declaration,
 <a href=#57 id=57 data-nosnippet>57</a>            placement: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
 <a href=#58 id=58 data-nosnippet>58</a>            representation: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
 <a href=#59 id=59 data-nosnippet>59</a>            <span class="attr">#[serde(flatten)]
 <a href=#60 id=60 data-nosnippet>60</a>            </span>outcome: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Outcome,
 <a href=#61 id=61 data-nosnippet>61</a>        }
 <a href=#62 id=62 data-nosnippet>62</a>        Columns {
-<a href=#63 id=63 data-nosnippet>63</a>            id: <span class="kw-2">&amp;</span><span class="self">self</span>.origin,
+<a href=#63 id=63 data-nosnippet>63</a>            id: <span class="kw-2">&amp;</span><span class="self">self</span>.declaration,
 <a href=#64 id=64 data-nosnippet>64</a>            placement: <span class="self">self</span>.placement(),
 <a href=#65 id=65 data-nosnippet>65</a>            representation: <span class="self">self</span>.representation(),
 <a href=#66 id=66 data-nosnippet>66</a>            outcome: <span class="kw-2">&amp;</span><span class="self">self</span>.outcome,
@@ -186,7 +186,7 @@
 <a href=#186 id=186 data-nosnippet>186</a>                    .skip()
 <a href=#187 id=187 data-nosnippet>187</a>                    .map(|skip| skip.path())
 <a href=#188 id=188 data-nosnippet>188</a>                    .unwrap_or_default();
-<a href=#189 id=189 data-nosnippet>189</a>                <span class="kw">let _ </span>= <span class="macro">writeln!</span>(out, <span class="string">"- `{}` ({})"</span>, entry.origin, path);
+<a href=#189 id=189 data-nosnippet>189</a>                <span class="kw">let _ </span>= <span class="macro">writeln!</span>(out, <span class="string">"- `{}` ({})"</span>, entry.declaration, path);
 <a href=#190 id=190 data-nosnippet>190</a>            }
 <a href=#191 id=191 data-nosnippet>191</a>            <span class="kw">let _ </span>= <span class="macro">writeln!</span>(out);
 <a href=#192 id=192 data-nosnippet>192</a>        }
@@ -206,7 +206,7 @@
 <a href=#206 id=206 data-nosnippet>206</a>            <span class="kw">let _ </span>= <span class="macro">writeln!</span>(
 <a href=#207 id=207 data-nosnippet>207</a>                out,
 <a href=#208 id=208 data-nosnippet>208</a>                <span class="string">"| `{}` | {} | `{}` | {} |"</span>,
-<a href=#209 id=209 data-nosnippet>209</a>                entry.origin,
+<a href=#209 id=209 data-nosnippet>209</a>                entry.declaration,
 <a href=#210 id=210 data-nosnippet>210</a>                entry.representation(),
 <a href=#211 id=211 data-nosnippet>211</a>                entry.placement(),
 <a href=#212 id=212 data-nosnippet>212</a>                outcome
@@ -236,7 +236,7 @@
 <a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">for </span>(capability, entries) <span class="kw">in </span><span class="self">self</span>.skips_by_capability() {
 <a href=#237 id=237 data-nosnippet>237</a>            <span class="kw">let </span>roots = entries
 <a href=#238 id=238 data-nosnippet>238</a>                .iter()
-<a href=#239 id=239 data-nosnippet>239</a>                .map(|entry| entry.origin.to_string())
+<a href=#239 id=239 data-nosnippet>239</a>                .map(|entry| entry.declaration.to_string())
 <a href=#240 id=240 data-nosnippet>240</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <a href=#241 id=241 data-nosnippet>241</a>            <span class="kw">let </span>shown = roots.len().min(<span class="number">5</span>);
 <a href=#242 id=242 data-nosnippet>242</a>            <span class="kw">let </span>more = <span class="kw">match </span>roots.len() - shown {
@@ -261,6 +261,6 @@
 <a href=#261 id=261 data-nosnippet>261</a>
 <a href=#262 id=262 data-nosnippet>262</a><span class="doccomment">/// Sort key: the id, as it prints.
 <a href=#263 id=263 data-nosnippet>263</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>sort_entries(entries: <span class="kw-2">&amp;mut </span>[Entry]) {
-<a href=#264 id=264 data-nosnippet>264</a>    entries.sort_by(|a, b| a.origin.cmp(<span class="kw-2">&amp;</span>b.origin));
+<a href=#264 id=264 data-nosnippet>264</a>    entries.sort_by(|a, b| a.declaration.cmp(<span class="kw-2">&amp;</span>b.declaration));
 <a href=#265 id=265 data-nosnippet>265</a>}
 </code></pre></div></section></main></body></html>

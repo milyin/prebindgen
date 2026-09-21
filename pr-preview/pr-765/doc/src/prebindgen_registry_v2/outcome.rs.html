@@ -9,7 +9,7 @@
 <a href=#9 id=9 data-nosnippet>9</a>
 <a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">use </span>serde::Serialize;
 <a href=#11 id=11 data-nosnippet>11</a>
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::decl::Origin;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::decl::Declaration;
 <a href=#13 id=13 data-nosnippet>13</a>
 <a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// A stable code naming *what* is not implemented, dotted from general to
 <a href=#15 id=15 data-nosnippet>15</a>/// specific: `unsupported.string`, `unsupported.handle.borrowed_input`.
@@ -104,71 +104,70 @@
 <a href=#104 id=104 data-nosnippet>104</a>    /// declaration is a statement of intent; its target being absent is a typo
 <a href=#105 id=105 data-nosnippet>105</a>    /// or a source-crate rename, and never a capability question. All of them
 <a href=#106 id=106 data-nosnippet>106</a>    /// are collected before failing.
-<a href=#107 id=107 data-nosnippet>107</a>    </span>DeclaredNotFound { entries: Vec&lt;Origin&gt; },
-<a href=#108 id=108 data-nosnippet>108</a>    <span class="doccomment">/// Two declarations of one origin. The origin identifies a declaration,
-<a href=#109 id=109 data-nosnippet>109</a>    /// and a report that gave one origin to two entries could not account for
-<a href=#110 id=110 data-nosnippet>110</a>    /// either — so this is a contradiction in the declarations, not a gap in
-<a href=#111 id=111 data-nosnippet>111</a>    /// what v2 implements.
-<a href=#112 id=112 data-nosnippet>112</a>    </span>DuplicateDeclaration { entries: Vec&lt;Origin&gt; },
-<a href=#113 id=113 data-nosnippet>113</a>    <span class="doccomment">/// Planning refused the input, or an internal contract was violated. A
-<a href=#114 id=114 data-nosnippet>114</a>    /// missing capability is never one of these — that is a [`Skip`].
-<a href=#115 id=115 data-nosnippet>115</a>    </span>Planning(<span class="kw">crate</span>::target::PlanningError),
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// Writing an artifact or a report failed.
-<a href=#117 id=117 data-nosnippet>117</a>    </span>Io(std::io::Error),
-<a href=#118 id=118 data-nosnippet>118</a>}
-<a href=#119 id=119 data-nosnippet>119</a>
-<a href=#120 id=120 data-nosnippet>120</a><span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>EngineError {
-<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-<a href=#122 id=122 data-nosnippet>122</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#123 id=123 data-nosnippet>123</a>            EngineError::Source(error) =&gt; <span class="macro">write!</span>(f, <span class="string">"v2: {error}"</span>),
-<a href=#124 id=124 data-nosnippet>124</a>            EngineError::DeclaredNotFound { entries } =&gt; {
-<a href=#125 id=125 data-nosnippet>125</a>                <span class="macro">writeln!</span>(
-<a href=#126 id=126 data-nosnippet>126</a>                    f,
-<a href=#127 id=127 data-nosnippet>127</a>                    <span class="string">"v2: {} declared item(s) match no captured `#[prebindgen]` item:"</span>,
-<a href=#128 id=128 data-nosnippet>128</a>                    entries.len()
-<a href=#129 id=129 data-nosnippet>129</a>                )<span class="question-mark">?</span>;
-<a href=#130 id=130 data-nosnippet>130</a>                <span class="kw">for </span>origin <span class="kw">in </span>entries {
-<a href=#131 id=131 data-nosnippet>131</a>                    <span class="macro">writeln!</span>(
-<a href=#132 id=132 data-nosnippet>132</a>                        f,
-<a href=#133 id=133 data-nosnippet>133</a>                        <span class="string">"  {origin} — no captured {} `{}`"</span>,
-<a href=#134 id=134 data-nosnippet>134</a>                        origin.describe_captured(),
-<a href=#135 id=135 data-nosnippet>135</a>                        origin.name()
-<a href=#136 id=136 data-nosnippet>136</a>                    )<span class="question-mark">?</span>;
-<a href=#137 id=137 data-nosnippet>137</a>                }
-<a href=#138 id=138 data-nosnippet>138</a>                <span class="macro">write!</span>(
-<a href=#139 id=139 data-nosnippet>139</a>                    f,
-<a href=#140 id=140 data-nosnippet>140</a>                    <span class="string">"check the spelling in build.rs, and that the source crate still \
-<a href=#141 id=141 data-nosnippet>141</a>                     exports them"
-<a href=#142 id=142 data-nosnippet>142</a>                </span>)
-<a href=#143 id=143 data-nosnippet>143</a>            }
-<a href=#144 id=144 data-nosnippet>144</a>            EngineError::DuplicateDeclaration { entries } =&gt; {
-<a href=#145 id=145 data-nosnippet>145</a>                <span class="macro">writeln!</span>(
-<a href=#146 id=146 data-nosnippet>146</a>                    f,
-<a href=#147 id=147 data-nosnippet>147</a>                    <span class="string">"v2: {} declaration id(s) were declared more than once:"</span>,
-<a href=#148 id=148 data-nosnippet>148</a>                    entries.len()
-<a href=#149 id=149 data-nosnippet>149</a>                )<span class="question-mark">?</span>;
-<a href=#150 id=150 data-nosnippet>150</a>                <span class="kw">for </span>id <span class="kw">in </span>entries {
-<a href=#151 id=151 data-nosnippet>151</a>                    <span class="macro">writeln!</span>(f, <span class="string">"  {id}"</span>)<span class="question-mark">?</span>;
-<a href=#152 id=152 data-nosnippet>152</a>                }
-<a href=#153 id=153 data-nosnippet>153</a>                <span class="macro">write!</span>(f, <span class="string">"each declaration answers to one id"</span>)
-<a href=#154 id=154 data-nosnippet>154</a>            }
-<a href=#155 id=155 data-nosnippet>155</a>            EngineError::Planning(error) =&gt; <span class="macro">write!</span>(f, <span class="string">"v2: {error}"</span>),
-<a href=#156 id=156 data-nosnippet>156</a>            EngineError::Io(error) =&gt; <span class="macro">write!</span>(f, <span class="string">"v2: {error}"</span>),
-<a href=#157 id=157 data-nosnippet>157</a>        }
-<a href=#158 id=158 data-nosnippet>158</a>    }
-<a href=#159 id=159 data-nosnippet>159</a>}
-<a href=#160 id=160 data-nosnippet>160</a>
-<a href=#161 id=161 data-nosnippet>161</a><span class="kw">impl </span>std::error::Error <span class="kw">for </span>EngineError {}
-<a href=#162 id=162 data-nosnippet>162</a>
-<a href=#163 id=163 data-nosnippet>163</a><span class="kw">impl </span>From&lt;std::io::Error&gt; <span class="kw">for </span>EngineError {
-<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>from(error: std::io::Error) -&gt; <span class="self">Self </span>{
-<a href=#165 id=165 data-nosnippet>165</a>        EngineError::Io(error)
-<a href=#166 id=166 data-nosnippet>166</a>    }
-<a href=#167 id=167 data-nosnippet>167</a>}
-<a href=#168 id=168 data-nosnippet>168</a>
-<a href=#169 id=169 data-nosnippet>169</a><span class="kw">impl </span>From&lt;prebindgen_flat::flat::ParseError&gt; <span class="kw">for </span>EngineError {
-<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">fn </span>from(error: prebindgen_flat::flat::ParseError) -&gt; <span class="self">Self </span>{
-<a href=#171 id=171 data-nosnippet>171</a>        EngineError::Source(error)
-<a href=#172 id=172 data-nosnippet>172</a>    }
-<a href=#173 id=173 data-nosnippet>173</a>}
+<a href=#107 id=107 data-nosnippet>107</a>    </span>DeclaredNotFound { entries: Vec&lt;Declaration&gt; },
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="doccomment">/// One declaration stated twice. A report that gave one id to two entries
+<a href=#109 id=109 data-nosnippet>109</a>    /// could not account for either — so this is a contradiction in the
+<a href=#110 id=110 data-nosnippet>110</a>    /// declarations, not a gap in what v2 implements.
+<a href=#111 id=111 data-nosnippet>111</a>    </span>DuplicateDeclaration { entries: Vec&lt;Declaration&gt; },
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// Planning refused the input, or an internal contract was violated. A
+<a href=#113 id=113 data-nosnippet>113</a>    /// missing capability is never one of these — that is a [`Skip`].
+<a href=#114 id=114 data-nosnippet>114</a>    </span>Planning(<span class="kw">crate</span>::target::PlanningError),
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="doccomment">/// Writing an artifact or a report failed.
+<a href=#116 id=116 data-nosnippet>116</a>    </span>Io(std::io::Error),
+<a href=#117 id=117 data-nosnippet>117</a>}
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a><span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>EngineError {
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#122 id=122 data-nosnippet>122</a>            EngineError::Source(error) =&gt; <span class="macro">write!</span>(f, <span class="string">"v2: {error}"</span>),
+<a href=#123 id=123 data-nosnippet>123</a>            EngineError::DeclaredNotFound { entries } =&gt; {
+<a href=#124 id=124 data-nosnippet>124</a>                <span class="macro">writeln!</span>(
+<a href=#125 id=125 data-nosnippet>125</a>                    f,
+<a href=#126 id=126 data-nosnippet>126</a>                    <span class="string">"v2: {} declared item(s) match no captured `#[prebindgen]` item:"</span>,
+<a href=#127 id=127 data-nosnippet>127</a>                    entries.len()
+<a href=#128 id=128 data-nosnippet>128</a>                )<span class="question-mark">?</span>;
+<a href=#129 id=129 data-nosnippet>129</a>                <span class="kw">for </span>declaration <span class="kw">in </span>entries {
+<a href=#130 id=130 data-nosnippet>130</a>                    <span class="macro">writeln!</span>(
+<a href=#131 id=131 data-nosnippet>131</a>                        f,
+<a href=#132 id=132 data-nosnippet>132</a>                        <span class="string">"  {declaration} — no captured {} `{}`"</span>,
+<a href=#133 id=133 data-nosnippet>133</a>                        declaration.describe_captured(),
+<a href=#134 id=134 data-nosnippet>134</a>                        declaration.name()
+<a href=#135 id=135 data-nosnippet>135</a>                    )<span class="question-mark">?</span>;
+<a href=#136 id=136 data-nosnippet>136</a>                }
+<a href=#137 id=137 data-nosnippet>137</a>                <span class="macro">write!</span>(
+<a href=#138 id=138 data-nosnippet>138</a>                    f,
+<a href=#139 id=139 data-nosnippet>139</a>                    <span class="string">"check the spelling in build.rs, and that the source crate still \
+<a href=#140 id=140 data-nosnippet>140</a>                     exports them"
+<a href=#141 id=141 data-nosnippet>141</a>                </span>)
+<a href=#142 id=142 data-nosnippet>142</a>            }
+<a href=#143 id=143 data-nosnippet>143</a>            EngineError::DuplicateDeclaration { entries } =&gt; {
+<a href=#144 id=144 data-nosnippet>144</a>                <span class="macro">writeln!</span>(
+<a href=#145 id=145 data-nosnippet>145</a>                    f,
+<a href=#146 id=146 data-nosnippet>146</a>                    <span class="string">"v2: {} declaration id(s) were declared more than once:"</span>,
+<a href=#147 id=147 data-nosnippet>147</a>                    entries.len()
+<a href=#148 id=148 data-nosnippet>148</a>                )<span class="question-mark">?</span>;
+<a href=#149 id=149 data-nosnippet>149</a>                <span class="kw">for </span>id <span class="kw">in </span>entries {
+<a href=#150 id=150 data-nosnippet>150</a>                    <span class="macro">writeln!</span>(f, <span class="string">"  {id}"</span>)<span class="question-mark">?</span>;
+<a href=#151 id=151 data-nosnippet>151</a>                }
+<a href=#152 id=152 data-nosnippet>152</a>                <span class="macro">write!</span>(f, <span class="string">"each declaration answers to one id"</span>)
+<a href=#153 id=153 data-nosnippet>153</a>            }
+<a href=#154 id=154 data-nosnippet>154</a>            EngineError::Planning(error) =&gt; <span class="macro">write!</span>(f, <span class="string">"v2: {error}"</span>),
+<a href=#155 id=155 data-nosnippet>155</a>            EngineError::Io(error) =&gt; <span class="macro">write!</span>(f, <span class="string">"v2: {error}"</span>),
+<a href=#156 id=156 data-nosnippet>156</a>        }
+<a href=#157 id=157 data-nosnippet>157</a>    }
+<a href=#158 id=158 data-nosnippet>158</a>}
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a><span class="kw">impl </span>std::error::Error <span class="kw">for </span>EngineError {}
+<a href=#161 id=161 data-nosnippet>161</a>
+<a href=#162 id=162 data-nosnippet>162</a><span class="kw">impl </span>From&lt;std::io::Error&gt; <span class="kw">for </span>EngineError {
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">fn </span>from(error: std::io::Error) -&gt; <span class="self">Self </span>{
+<a href=#164 id=164 data-nosnippet>164</a>        EngineError::Io(error)
+<a href=#165 id=165 data-nosnippet>165</a>    }
+<a href=#166 id=166 data-nosnippet>166</a>}
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a><span class="kw">impl </span>From&lt;prebindgen_flat::flat::ParseError&gt; <span class="kw">for </span>EngineError {
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">fn </span>from(error: prebindgen_flat::flat::ParseError) -&gt; <span class="self">Self </span>{
+<a href=#170 id=170 data-nosnippet>170</a>        EngineError::Source(error)
+<a href=#171 id=171 data-nosnippet>171</a>    }
+<a href=#172 id=172 data-nosnippet>172</a>}
 </code></pre></div></section></main></body></html>

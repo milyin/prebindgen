@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>};
 <a href=#53 id=53 data-nosnippet>53</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use crate</span>::{decl::Origin, outcome::Capability};
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use crate</span>::{decl::Declaration, outcome::Capability};
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a><span class="doccomment">/// Which way a value crosses.
 <a href=#58 id=58 data-nosnippet>58</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -746,7 +746,7 @@
 <a href=#746 id=746 data-nosnippet>746</a><span class="doccomment">/// A target's description of one public declaration and what it requires.
 <a href=#747 id=747 data-nosnippet>747</a></span><span class="attr">#[derive(Clone, Debug)]
 <a href=#748 id=748 data-nosnippet>748</a></span><span class="kw">pub struct </span>SurfaceSpec&lt;P&gt; {
-<a href=#749 id=749 data-nosnippet>749</a>    <span class="kw">pub </span>declaration: Origin,
+<a href=#749 id=749 data-nosnippet>749</a>    <span class="kw">pub </span>declaration: Declaration,
 <a href=#750 id=750 data-nosnippet>750</a>    <span class="doccomment">/// Types that must be declared and emitted for this declaration to be.
 <a href=#751 id=751 data-nosnippet>751</a>    </span><span class="kw">pub </span>requires: Vec&lt;Requirement&gt;,
 <a href=#752 id=752 data-nosnippet>752</a>    <span class="doccomment">/// Rust this declaration contributes: the `repr(C)` aggregate a C caller
@@ -765,13 +765,13 @@
 <a href=#765 id=765 data-nosnippet>765</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 <a href=#766 id=766 data-nosnippet>766</a></span><span class="kw">pub struct </span>Position {
 <a href=#767 id=767 data-nosnippet>767</a>    <span class="doccomment">/// The requested output this conversion is reached from.
-<a href=#768 id=768 data-nosnippet>768</a>    </span><span class="kw">pub </span>declaration: Origin,
+<a href=#768 id=768 data-nosnippet>768</a>    </span><span class="kw">pub </span>declaration: Declaration,
 <a href=#769 id=769 data-nosnippet>769</a>    <span class="doccomment">/// Root to here: `param 0`, then `field secs`.
 <a href=#770 id=770 data-nosnippet>770</a>    </span><span class="kw">pub </span>path: Vec&lt;String&gt;,
 <a href=#771 id=771 data-nosnippet>771</a>}
 <a href=#772 id=772 data-nosnippet>772</a>
 <a href=#773 id=773 data-nosnippet>773</a><span class="kw">impl </span>Position {
-<a href=#774 id=774 data-nosnippet>774</a>    <span class="kw">pub fn </span>root(declaration: Origin) -&gt; <span class="self">Self </span>{
+<a href=#774 id=774 data-nosnippet>774</a>    <span class="kw">pub fn </span>root(declaration: Declaration) -&gt; <span class="self">Self </span>{
 <a href=#775 id=775 data-nosnippet>775</a>        Position {
 <a href=#776 id=776 data-nosnippet>776</a>            declaration,
 <a href=#777 id=777 data-nosnippet>777</a>            path: Vec::new(),
@@ -893,7 +893,7 @@
 <a href=#893 id=893 data-nosnippet>893</a>    <span class="doccomment">/// The export this wrapper is for. For a release, the handle type's own
 <a href=#894 id=894 data-nosnippet>894</a>    /// declaration. The exported symbol is not read from here; the frontend
 <a href=#895 id=895 data-nosnippet>895</a>    /// settled it in the policy.
-<a href=#896 id=896 data-nosnippet>896</a>    </span><span class="kw">pub </span>declaration: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Origin,
+<a href=#896 id=896 data-nosnippet>896</a>    </span><span class="kw">pub </span>declaration: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Declaration,
 <a href=#897 id=897 data-nosnippet>897</a>    <span class="doccomment">/// The source function the wrapper calls once, or `None` for a release.
 <a href=#898 id=898 data-nosnippet>898</a>    ///
 <a href=#899 id=899 data-nosnippet>899</a>    /// The target reads its parameter *names*: a wrapper parameter keeps its
@@ -906,7 +906,7 @@
 <a href=#906 id=906 data-nosnippet>906</a>
 <a href=#907 id=907 data-nosnippet>907</a><span class="doccomment">/// What `surface` is given: the requested public declaration.
 <a href=#908 id=908 data-nosnippet>908</a></span><span class="kw">pub struct </span>SurfaceRequest&lt;<span class="lifetime">'a</span>, Policy&gt; {
-<a href=#909 id=909 data-nosnippet>909</a>    <span class="kw">pub </span>declaration: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Origin,
+<a href=#909 id=909 data-nosnippet>909</a>    <span class="kw">pub </span>declaration: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Declaration,
 <a href=#910 id=910 data-nosnippet>910</a>    <span class="kw">pub </span>policy: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Policy,
 <a href=#911 id=911 data-nosnippet>911</a>    <span class="kw">pub </span>item: SourceItem&lt;<span class="lifetime">'a</span>&gt;,
 <a href=#912 id=912 data-nosnippet>912</a>}
@@ -965,7 +965,7 @@
 <a href=#965 id=965 data-nosnippet>965</a><span class="doccomment">/// The captured item a public declaration is made from, as the source model
 <a href=#966 id=966 data-nosnippet>966</a>/// describes it.
 <a href=#967 id=967 data-nosnippet>967</a>///
-<a href=#968 id=968 data-nosnippet>968</a>/// A binding asks for an output by name — an [`Origin`] such as
+<a href=#968 id=968 data-nosnippet>968</a>/// A binding asks for an output by name — an [`Declaration`] such as
 <a href=#969 id=969 data-nosnippet>969</a>/// `type:Ledger` — and the registry resolves that name in the source model
 <a href=#970 id=970 data-nosnippet>970</a>/// before it plans anything. This is what it found: the model's own element,
 <a href=#971 id=971 data-nosnippet>971</a>/// borrowed from the [`Flat`] the run was planned over. A target receives it
@@ -983,13 +983,13 @@
 <a href=#983 id=983 data-nosnippet>983</a>/// struct declared to C as an opaque pointer still arrives as
 <a href=#984 id=984 data-nosnippet>984</a>/// [`SourceItem::Struct`], and how the target carries it is in
 <a href=#985 id=985 data-nosnippet>985</a>/// [`SurfaceRequest::policy`]. Read the policy first. A declaration the
-<a href=#986 id=986 data-nosnippet>986</a>/// binding defines itself ([`Origin::is_binding_local`]) names no captured
+<a href=#986 id=986 data-nosnippet>986</a>/// binding defines itself ([`Declaration::is_binding_local`]) names no captured
 <a href=#987 id=987 data-nosnippet>987</a>/// item and is refused before `surface` is asked, so nothing here is ever
 <a href=#988 id=988 data-nosnippet>988</a>/// absent.
 <a href=#989 id=989 data-nosnippet>989</a>///
 <a href=#990 id=990 data-nosnippet>990</a>/// [`Flat`]: prebindgen_flat::flat::Flat
 <a href=#991 id=991 data-nosnippet>991</a>/// [`Element`]: prebindgen_flat::flat::Element
-<a href=#992 id=992 data-nosnippet>992</a>/// [`Origin::is_binding_local`]: crate::decl::Origin::is_binding_local
+<a href=#992 id=992 data-nosnippet>992</a>/// [`Declaration::is_binding_local`]: crate::decl::Declaration::is_binding_local
 <a href=#993 id=993 data-nosnippet>993</a></span><span class="attr">#[derive(Clone, Copy)]
 <a href=#994 id=994 data-nosnippet>994</a></span><span class="kw">pub enum </span>SourceItem&lt;<span class="lifetime">'a</span>&gt; {
 <a href=#995 id=995 data-nosnippet>995</a>    <span class="doccomment">/// A captured free function, the item behind a `fn:` declaration.
@@ -1097,7 +1097,7 @@
 <a href=#1097 id=1097 data-nosnippet>1097</a></span><span class="kw">pub struct </span>Described {
 <a href=#1098 id=1098 data-nosnippet>1098</a>    <span class="doccomment">/// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
 <a href=#1099 id=1099 data-nosnippet>1099</a>    /// — the adapter's own word, printed back verbatim. Finer than the prefix
-<a href=#1100 id=1100 data-nosnippet>1100</a>    /// an [`Origin`] prints with: `opaque_ptr` and
+<a href=#1100 id=1100 data-nosnippet>1100</a>    /// an [`Declaration`] prints with: `opaque_ptr` and
 <a href=#1101 id=1101 data-nosnippet>1101</a>    /// `data_struct` are both a `type`.
 <a href=#1102 id=1102 data-nosnippet>1102</a>    </span><span class="kw">pub </span>representation: String,
 <a href=#1103 id=1103 data-nosnippet>1103</a>    <span class="doccomment">/// Where it lands in the target language, spelled the way that language
