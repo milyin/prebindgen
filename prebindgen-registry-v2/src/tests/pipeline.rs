@@ -9,15 +9,15 @@
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind};
 
 use crate::{
-    decl::{Declaration, Origin},
+    decl::Origin,
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     target::{
-        AbiSpec, Access, BoundarySpec, ChildValue, FailureCategory, Layout, OperandSpec, Operation,
-        OperationType, OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec,
-        Protocol, Relation, RelationId, ReprSpec, ResolvedShape, ResolvedValues, SelectionQuery,
-        SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
-        TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
+        AbiSpec, Access, BoundarySpec, ChildValue, Described, FailureCategory, Layout, OperandSpec,
+        Operation, OperationType, OutputPlacement, ParamRole, PlanningError, PrimitiveFailure,
+        PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec, ResolvedShape, ResolvedValues,
+        SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec,
+        Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
     },
 };
 
@@ -312,7 +312,7 @@ impl Target for Mini {
         // derived, and a null address is not a failure it can raise.
         let release = match (site.function, policy) {
             (None, Policy::Handle) => Some(exported(
-                &format!("{}_free", site.declaration.rust_origin()),
+                &format!("{}_free", site.declaration.name()),
                 Routes::None,
             )),
             (None, Policy::HandleWithoutRelease) => {
@@ -333,7 +333,7 @@ impl Target for Mini {
         else {
             return Err(PlanningError::InvalidInput(format!(
                 "`{}` is exported under a value policy",
-                site.declaration.rust_origin()
+                site.declaration.name()
             )));
         };
         Ok(TargetAttempt::Ready(BoundarySpec {
@@ -449,7 +449,7 @@ impl Target for Mini {
             _ => Vec::new(),
         };
         Ok(TargetAttempt::Ready(SurfaceSpec {
-            declaration: request.declaration.origin().clone(),
+            declaration: request.declaration.clone(),
             requires: match (request.policy, request.item) {
                 (_, SourceItem::Function(_)) => requires,
                 (Policy::StructRequiring(other), SourceItem::Struct(_)) => {
@@ -482,20 +482,29 @@ impl Target for Mini {
             }
         }
     }
+
+    /// The report column is the policy's own word; the placement is the
+    /// symbol a function exports, and a type's own name otherwise — this
+    /// target has no foreign spelling of its own.
+    fn describe(&self, policy: &Policy) -> Described {
+        match policy {
+            Policy::Function { symbol, .. } => Described::new("function", symbol),
+            Policy::Scalar => Described::new("scalar", ""),
+            _ => Described::new("strukt", ""),
+        }
+    }
 }
 
 fn requests() -> BindingRequests<Policy> {
     BindingRequests::new("mini", syn::parse_quote!(source), Policy::Scalar)
 }
 
-fn ty(origin: &str) -> Declaration {
-    let key = prebindgen_flat::TypeKey::parse(origin).expect("a test names a type");
-    Declaration::new(Origin::Type(key), origin, "strukt")
+fn ty(origin: &str) -> Origin {
+    Origin::Type(prebindgen_flat::TypeKey::parse(origin).expect("a test names a type"))
 }
 
-fn function(origin: &str) -> Declaration {
-    let ident = syn::parse_str(origin).expect("a test names an ident");
-    Declaration::new(Origin::Function(ident), origin, "function")
+fn function(origin: &str) -> Origin {
+    Origin::Function(syn::parse_str(origin).expect("a test names an ident"))
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
@@ -503,7 +512,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .report()
         .declarations
         .iter()
-        .find(|entry| entry.declaration.origin().to_string() == id)
+        .find(|entry| entry.origin.to_string() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }

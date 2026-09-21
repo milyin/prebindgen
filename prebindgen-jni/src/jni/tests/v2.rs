@@ -63,7 +63,7 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.origin().to_string())
+        .map(|entry| entry.origin.to_string())
         .collect();
     assert_eq!(
         ids,
@@ -80,8 +80,8 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.origin().to_string() == id)
-            .map(|entry| entry.declaration.placement().to_string())
+            .find(|entry| entry.origin.to_string() == id)
+            .map(|entry| entry.placement().to_string())
             .unwrap_or_default()
     };
     assert_eq!(placement("type:ZThing"), "io.test.jni.thing.ZThing");
@@ -109,7 +109,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.origin().to_string() == id)
+            .find(|entry| entry.origin.to_string() == id)
             .and_then(|entry| entry.outcome.skip())
             .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
             .expect("skipped")
@@ -221,8 +221,8 @@ fn class_members_are_elements_of_their_own() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.origin().to_string() == id)
-            .map(|entry| entry.declaration.representation().to_string())
+            .find(|entry| entry.origin.to_string() == id)
+            .map(|entry| entry.representation().to_string())
             .unwrap_or_default()
     };
     assert_eq!(representation("type:ZThing"), "ptr_class");
@@ -239,7 +239,7 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.origin().to_string() == "fn:z_thing_internal")
+        .find(|entry| entry.origin.to_string() == "fn:z_thing_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
 }
@@ -321,7 +321,7 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.origin().to_string())
+        .map(|entry| entry.origin.to_string())
         .collect();
     assert_eq!(ids, ["type:ZThing", "fn:local_size", "fn:local_tag"]);
 }
@@ -347,13 +347,13 @@ fn a_function_backed_constant_resolves_against_the_function() {
     let constant = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.representation() == "constant_fun")
+        .find(|entry| entry.representation() == "constant_fun")
         .expect("the constant is accounted for");
-    assert_eq!(constant.declaration.rust_origin(), "z_thing_describe");
-    assert_eq!(constant.declaration.kind(), DeclarationKind::Const);
+    assert_eq!(constant.origin.name(), "z_thing_describe");
+    assert_eq!(constant.kind(), DeclarationKind::Const);
     // The target gets a `val`; the source must hold a function.
     assert!(matches!(
-        constant.declaration.origin(),
+        &constant.origin,
         Origin::ConstFromFunction(ident) if ident == "z_thing_describe"
     ));
     // And it is planned from that function: what stops this one is the value
@@ -389,7 +389,7 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
         .expect("v2 produces a report")
         .declarations
         .iter()
-        .find(|entry| entry.declaration.origin().to_string() == id)
+        .find(|entry| entry.origin.to_string() == id)
         .and_then(|entry| entry.outcome.skip())
         .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))

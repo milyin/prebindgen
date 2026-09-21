@@ -5,12 +5,12 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::{Declaration, Origin},
+    decl::Origin,
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
     target::{
-        BoundarySpec, ChildValue, RelationId, ReprSpec, ResolvedShape, ResolvedValues,
+        BoundarySpec, ChildValue, Described, RelationId, ReprSpec, ResolvedShape, ResolvedValues,
         SelectionQuery, SiteDescriptor, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
         TargetSupport, Unsupported,
     },
@@ -60,12 +60,16 @@ impl Target for Nothing {
     fn render_operation(&self, _: &(), _: &[syn::Ident]) -> proc_macro2::TokenStream {
         unreachable!("nothing is selected")
     }
+
+    fn describe(&self, _: &()) -> Described {
+        Described::new("declared", "c_")
+    }
 }
 
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
-    declared: Vec<Declaration>,
-    ignored: Vec<Declaration>,
+    declared: Vec<Origin>,
+    ignored: Vec<Origin>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -118,11 +122,6 @@ fn sources() -> FlatBuilder {
     prebindgen_flat::Flat::builder().items(items)
 }
 
-fn declaration(origin: Origin) -> Declaration {
-    let name = origin.name();
-    Declaration::new(origin, format!("c_{name}"), "declared")
-}
-
 /// A captured function's origin, by name.
 fn captured_fn(name: &str) -> Origin {
     Origin::Function(syn::parse_str(name).expect("a test names an ident"))
@@ -141,13 +140,8 @@ fn local_type(name: &str) -> Origin {
 #[test]
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
-        declared: vec![
-            declaration(captured_fn("handle_new")),
-            declaration(local_type("Handle")),
-        ],
-        ignored: vec![declaration(Origin::LocalFunction(
-            "handle_value".to_string(),
-        ))],
+        declared: vec![(captured_fn("handle_new")), (local_type("Handle"))],
+        ignored: vec![(Origin::LocalFunction("handle_value".to_string()))],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
@@ -161,7 +155,7 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.origin().to_string())
+        .map(|entry| entry.origin.to_string())
         .collect();
     assert_eq!(ids, ["type:Handle", "fn:handle_new", "fn:handle_value"]);
     assert_eq!(report.declarations[2].outcome, Outcome::Ignored);
@@ -170,7 +164,7 @@ fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
 #[test]
 fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
-        declared: vec![declaration(captured_fn("handle_neu"))],
+        declared: vec![(captured_fn("handle_neu"))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a typo is refused");
@@ -183,7 +177,7 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![declaration(Origin::Callback("impl Fn(i64)".to_string()))],
+        declared: vec![(Origin::Callback("impl Fn(i64)".to_string()))],
         ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -193,10 +187,7 @@ fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
 #[test]
 fn one_id_may_name_only_one_declaration() {
     let stated = Stated {
-        declared: vec![
-            declaration(captured_fn("handle_new")),
-            declaration(captured_fn("handle_new")),
-        ],
+        declared: vec![(captured_fn("handle_new")), (captured_fn("handle_new"))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a repeat is refused");
@@ -206,10 +197,7 @@ fn one_id_may_name_only_one_declaration() {
     // The same name under two target kinds is two declarations, and legal: the
     // captured function may back both a callable and a `val`.
     let stated = Stated {
-        declared: vec![
-            declaration(captured_fn("handle_new")),
-            declaration(constant_fn("handle_new")),
-        ],
+        declared: vec![(captured_fn("handle_new")), (constant_fn("handle_new"))],
         ignored: Vec::new(),
     };
     plan(&stated, sources(), "fixture-crate").expect("two kinds, two ids");
@@ -222,9 +210,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as
     // wrong as declaring a name nothing captured.
     let stated = Stated {
-        declared: vec![declaration(Origin::Const(
-            syn::parse_str("handle_new").expect("an ident"),
-        ))],
+        declared: vec![(Origin::Const(syn::parse_str("handle_new").expect("an ident")))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
@@ -239,7 +225,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // And a constant-shaped output backed by a captured function resolves,
     // because the origin says which kind to look for.
     let stated = Stated {
-        declared: vec![declaration(constant_fn("handle_new"))],
+        declared: vec![(constant_fn("handle_new"))],
         ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("a function-backed constant");
@@ -252,9 +238,9 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
 fn skips_are_grouped_by_capability_code() {
     let stated = Stated {
         declared: vec![
-            declaration(captured_fn("handle_new")),
-            declaration(captured_fn("handle_value")),
-            declaration(local_type("Handle")),
+            (captured_fn("handle_new")),
+            (captured_fn("handle_value")),
+            (local_type("Handle")),
         ],
         ignored: Vec::new(),
     };
@@ -267,17 +253,18 @@ fn skips_are_grouped_by_capability_code() {
 }
 
 /// The report's declaration columns are a published schema, and the id's parts
-/// are stored rather than formatted into one string: `kind` and `rust_origin`
-/// stay separate columns beside the id a reader sorts and greps by.
+/// are spelled out rather than formatted into one string: `kind` and
+/// `rust_origin` stay separate columns beside the id a reader sorts and greps
+/// by, and the outcome's fields sit at the same level.
 #[test]
-fn a_declaration_serializes_its_identity_as_three_columns() {
-    let declaration = Declaration::new(
-        constant_fn("z_thing_describe"),
-        "example.DESCRIBE",
-        "constant_fun",
-    );
+fn an_entry_serializes_its_identity_as_three_columns() {
+    let entry = crate::report::Entry {
+        origin: constant_fn("z_thing_describe"),
+        described: Described::new("constant_fun", "example.DESCRIBE"),
+        outcome: Outcome::Emitted,
+    };
     assert_eq!(
-        serde_json::to_string(&declaration).expect("a declaration is plain data"),
-        r#"{"id":"const:z_thing_describe","kind":"const","rust_origin":"z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun"}"#
+        serde_json::to_string(&entry).expect("an entry is plain data"),
+        r#"{"id":"const:z_thing_describe","kind":"const","rust_origin":"z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
     );
 }

@@ -1,26 +1,28 @@
 //! What a binding declared, in terms neither language owns.
 //!
-//! A frontend turns its own declaration storage into these — one
-//! [`Declaration`] per thing the user asked for, inside the
-//! [`BindingRequests`](crate::BindingRequests) it hands the engine. The
-//! declaration is what the report accounts for; the request carries the target's
-//! configuration for it.
+//! A frontend turns its own declaration storage into these — one [`Origin`]
+//! per thing the user asked for, inside the
+//! [`BindingRequests`](crate::BindingRequests) it hands the engine. The origin
+//! is what the report accounts for; the request carries the target's
+//! configuration for it, and that policy is also where the foreign name and
+//! the declarator word the report prints come from.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
 
-/// What a [`Declaration`] declares: a function, a type, a constant, a callback
-/// or a conversion.
+/// What an [`Origin`] declares: a function, a type, a constant, a callback or
+/// a conversion.
 ///
 /// This is the coarse, language-neutral category — the five things any binding
 /// can be made of. It is deliberately coarser than an adapter's own vocabulary:
 /// `prebindgen-c` declares a type with `opaque_ptr` or `data_struct`, and
 /// `prebindgen-jni` with `ptr_class` or `data_class`, but all four produce a
-/// `Type`. The word the adapter used is kept separately in
-/// [`Declaration::representation`] and printed back verbatim.
+/// `Type`. The word the adapter used is what its
+/// [`Target::describe`](crate::target::Target::describe) prints back for the
+/// declaration's policy.
 ///
-/// It is bookkeeping, not a plan: what a declaration is planned from comes from
-/// its [`Origin`] — the captured item there is to work with — and the kind only
+/// It is bookkeeping, not a plan: what a declaration is planned from is the
+/// [`Origin`] itself — the captured item there is to work with — and the kind only
 /// picks between planners where one captured item backs two surfaces, as a
 /// Kotlin `val` read through a nullary function is planned as that function.
 /// Two things depend on the category:
@@ -252,80 +254,5 @@ impl std::fmt::Display for Origin {
 impl Serialize for Origin {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_str(self)
-    }
-}
-
-/// One declaration, as the report accounts for it.
-///
-/// Built by the adapter with [`Self::new`] and read back through the accessors.
-/// The [`Origin`] is both the run's key for it and what the engine plans it
-/// from; everything else about its identity — its kind, what it must find in
-/// the captured source, the name it goes by — is read back out of the origin,
-/// so nothing is stated twice and nothing can disagree.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Declaration {
-    origin: Origin,
-    placement: String,
-    representation: String,
-}
-
-impl Serialize for Declaration {
-    /// Flat, and with the identity spelled out: the report carries `id` (the
-    /// origin as it prints), `kind` and `rust_origin` as separate columns, and
-    /// a reader of the JSON should not have to split the id to get at the last
-    /// two.
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        let mut entry = serializer.serialize_struct("Declaration", 5)?;
-        entry.serialize_field("id", &self.origin)?;
-        entry.serialize_field("kind", &self.origin.kind())?;
-        entry.serialize_field("rust_origin", &self.origin.name())?;
-        entry.serialize_field("placement", &self.placement)?;
-        entry.serialize_field("representation", &self.representation)?;
-        entry.end()
-    }
-}
-
-impl Declaration {
-    /// Declare `origin`, which the target places at `placement`.
-    pub fn new(
-        origin: Origin,
-        placement: impl Into<String>,
-        representation: impl Into<String>,
-    ) -> Self {
-        Declaration {
-            origin,
-            placement: placement.into(),
-            representation: representation.into(),
-        }
-    }
-
-    /// What this declaration is, what the engine plans it from, and what the
-    /// run keys it by — see [`Origin`].
-    pub fn origin(&self) -> &Origin {
-        &self.origin
-    }
-
-    /// Which kind of declaration it is.
-    pub fn kind(&self) -> DeclarationKind {
-        self.origin.kind()
-    }
-
-    /// What the Rust source calls it (`Calculator`, `calculator_new`), or the
-    /// signature for a callback that has no name of its own.
-    pub fn rust_origin(&self) -> String {
-        self.origin.name()
-    }
-
-    /// Where it is meant to land in the target language, spelled the way that
-    /// language spells it: `calculator_t`, `io.zenoh.jni.Session`.
-    pub fn placement(&self) -> &str {
-        &self.placement
-    }
-
-    /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …) —
-    /// the adapter's own word, printed back verbatim.
-    pub fn representation(&self) -> &str {
-        &self.representation
     }
 }

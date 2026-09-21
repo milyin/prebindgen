@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use prebindgen_flat::flat::Flat;
 
-use crate::{outcome::EngineError, report::Report};
+use crate::{decl::Origin, outcome::EngineError, report::Report};
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
@@ -143,14 +143,11 @@ impl<P> Generation<P> {
 /// nullary function. Looking a function up among the constants reported a typo
 /// that was not there; looking it up in the whole namespace let a
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
-pub(crate) fn check_declarations(
-    declared: &[crate::decl::Declaration],
-    flat: &Flat,
-) -> Result<(), EngineError> {
+pub(crate) fn check_declarations(declared: &[Origin], flat: &Flat) -> Result<(), EngineError> {
     let missing: Vec<_> = declared
         .iter()
-        .filter(|declaration| declaration.origin().missing_from(flat))
-        .map(|declaration| declaration.origin().clone())
+        .filter(|origin| origin.missing_from(flat))
+        .cloned()
         .collect();
     if !missing.is_empty() {
         return Err(EngineError::DeclaredNotFound { entries: missing });
@@ -161,8 +158,8 @@ pub(crate) fn check_declarations(
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|declaration| !seen.insert(declaration.origin()))
-        .map(|declaration| declaration.origin().clone())
+        .filter(|origin| !seen.insert(*origin))
+        .cloned()
         .collect();
     repeated.sort();
     repeated.dedup();

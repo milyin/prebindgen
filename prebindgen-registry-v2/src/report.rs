@@ -15,8 +15,9 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    decl::{Declaration, DeclarationKind},
+    decl::{DeclarationKind, Origin},
     outcome::{EngineError, Outcome},
+    target::Described,
 };
 
 /// The report's own version. A consumer that reads the JSON checks this
@@ -24,12 +25,59 @@ use crate::{
 pub const SCHEMA_VERSION: u32 = 2;
 
 /// One accounted-for declaration.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Entry {
-    #[serde(flatten)]
-    pub declaration: Declaration,
-    #[serde(flatten)]
+    /// What was declared, and the run's key for it.
+    pub origin: Origin,
+    /// What the target says it is on the foreign side — the adapter's
+    /// declarator word and the placement.
+    pub described: Described,
     pub outcome: Outcome,
+}
+
+impl Entry {
+    /// Which kind of declaration it is.
+    pub fn kind(&self) -> DeclarationKind {
+        self.origin.kind()
+    }
+
+    /// The adapter's declarator word — see [`Described::representation`].
+    pub fn representation(&self) -> &str {
+        &self.described.representation
+    }
+
+    /// The foreign placement — see [`Described::placement`].
+    pub fn placement(&self) -> &str {
+        &self.described.placement
+    }
+}
+
+impl Serialize for Entry {
+    /// Flat, and with the identity spelled out: the report carries `id` (the
+    /// origin as it prints), `kind` and `rust_origin` as separate columns, and
+    /// a reader of the JSON should not have to split the id to get at the last
+    /// two. The outcome's own fields follow at the same level.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Columns<'a> {
+            id: &'a Origin,
+            kind: DeclarationKind,
+            rust_origin: String,
+            placement: &'a str,
+            representation: &'a str,
+            #[serde(flatten)]
+            outcome: &'a Outcome,
+        }
+        Columns {
+            id: &self.origin,
+            kind: self.origin.kind(),
+            rust_origin: self.origin.name(),
+            placement: self.placement(),
+            representation: self.representation(),
+            outcome: &self.outcome,
+        }
+        .serialize(serializer)
+    }
 }
 
 /// What a run generated, and what it did not.
@@ -149,7 +197,7 @@ impl Report {
                     .skip()
                     .map(|skip| skip.path())
                     .unwrap_or_default();
-                let _ = writeln!(out, "- `{}` ({})", entry.declaration.origin(), path);
+                let _ = writeln!(out, "- `{}` ({})", entry.origin, path);
             }
             let _ = writeln!(out);
         }
@@ -169,9 +217,9 @@ impl Report {
             let _ = writeln!(
                 out,
                 "| `{}` | {} | `{}` | {} |",
-                entry.declaration.origin(),
-                entry.declaration.representation(),
-                entry.declaration.placement(),
+                entry.origin,
+                entry.representation(),
+                entry.placement(),
                 outcome
             );
         }
@@ -199,7 +247,7 @@ impl Report {
         for (capability, entries) in self.skips_by_capability() {
             let roots = entries
                 .iter()
-                .map(|entry| entry.declaration.origin().to_string())
+                .map(|entry| entry.origin.to_string())
                 .collect::<Vec<_>>();
             let shown = roots.len().min(5);
             let more = match roots.len() - shown {
@@ -225,9 +273,9 @@ pub struct Counts {
 /// Sort key: kind first (so a report reads types, then functions), then id.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
     entries.sort_by(|a, b| {
-        kind_order(a.declaration.kind())
-            .cmp(&kind_order(b.declaration.kind()))
-            .then_with(|| a.declaration.origin().cmp(b.declaration.origin()))
+        kind_order(a.kind())
+            .cmp(&kind_order(b.kind()))
+            .then_with(|| a.origin.cmp(&b.origin))
     });
 }
 

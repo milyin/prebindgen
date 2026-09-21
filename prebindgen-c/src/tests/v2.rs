@@ -74,7 +74,7 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.origin().to_string())
+        .map(|entry| entry.origin.to_string())
         .collect();
     assert_eq!(
         ids,
@@ -91,7 +91,7 @@ fn every_declared_element_is_accounted_for() {
     let placements: Vec<&str> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.placement())
+        .map(|entry| entry.placement())
         .collect();
     assert!(
         placements.contains(&"calculator_t") && placements.contains(&"z_calculator_new"),
@@ -224,10 +224,10 @@ fn an_ignore_is_classified_separately() {
     let ignored = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.origin().to_string() == "fn:calculator_internal")
+        .find(|entry| entry.origin.to_string() == "fn:calculator_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
-    assert_eq!(ignored.declaration.kind(), DeclarationKind::Function);
+    assert_eq!(ignored.kind(), DeclarationKind::Function);
 }
 
 /// A declared function the source never captured is a build error under v2 as
