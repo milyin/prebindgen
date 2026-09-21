@@ -12,7 +12,7 @@ The two [selections][typedef_select], each with nothing under it:
 ```text
 Ledger, IntoRust,  relation atomic
 Ledger, OutOfRust, relation atomic
-policy:   this target's handle policy
+conversion: <this target's handle policy>   // the key select returned, both ways
 ```
 
 ## Result
@@ -79,8 +79,10 @@ for names none.
   (`&Ledger`) breaks this argument, and is what
   [the extensions page](../../extensions.md) reserves the contract for.
 - The same two nodes serve the type's own request, `ledger_open` and
-  `ledger_close`: node identity is (type, direction, [relation](../../stages/04-select.md#what-a-relation-is), effective
-  [policy](../../stages/03-requests.md#what-policy-means)), and all three name the same policy.
+  `ledger_close`: node identity is (type, direction, [relation](../../stages/04-select.md#what-a-relation-is),
+  [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)),
+  and the target resolves the same [policy](../../stages/03-requests.md#what-policy-means) — so returns an equal key — at all
+  three positions.
 
 ## Language variants
 

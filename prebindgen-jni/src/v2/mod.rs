@@ -3,10 +3,16 @@
 //! [`Declarations`] keeps accumulating exactly as it does for v1 — same
 //! `package!`/`ptr_class!`/`fun!` surface, same `set_*` settings, same
 //! name-mangle closures — and this module is the only thing that reads them
-//! for the other engine: it turns that storage into the [`BindingRequests`]
-//! the registry plans, hands them to [`generate`] with the [`JniTarget`], and
-//! gets back a [`Generation`] the frontend writes out — the Rust through the
+//! for the other engine: it turns that storage into a [`JniTarget`], which is
+//! what the binding declared and what answers the registry's questions about
+//! it, plus the [`BindingRequests`] naming what to plan. [`generate`] hands
+//! back a [`Generation`] the frontend writes out — the Rust through the
 //! engine's writer, the Kotlin through its own writer in `kotlin.rs`.
+//!
+//! The requests are a work list and nothing more. What a declaration *is* —
+//! its Kotlin class or package function, its native method, its `Java_…`
+//! symbol, and which setting on it v2 does not honour yet — stays in the
+//! target, which is where the registry asks for it (#766).
 //!
 //! Nothing of v1 runs on this route. Kotlin names, packages and `Java_…`
 //! symbols come from this adapter's settings applied to the declarations,
@@ -43,8 +49,8 @@ impl Declarations {
                 Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
             })
             .collect();
-        let requests = self.requests(&flat, source_module);
-        generate(flat, &JniTarget::new(classes), requests, declaring_crate)
+        let (target, requests) = self.binding(&flat, classes, source_module);
+        generate(flat, &target, requests, declaring_crate)
     }
 
     /// Write the Kotlin side of a v2 generation under `kotlin_root`.
@@ -56,18 +62,24 @@ impl Declarations {
         kotlin::write(self, generation, kotlin_root)
     }
 
-    /// Everything this binding declared, as the engine plans it.
+    /// Everything this binding declared: what each declaration is, for the
+    /// target to answer from, and the list of them, for the engine to plan.
     ///
-    /// One entry per declaration, in any order — the report sorts. Each
-    /// declaration's policy carries the Kotlin name it gets and which
-    /// declarator it came from: what the target generates from, and what the
-    /// report prints.
-    fn requests(
+    /// One entry per declaration, in any order — the report sorts. Both halves
+    /// are stated in the same pass, so a declaration cannot be planned without
+    /// the target knowing what it is, or recorded without being asked for.
+    fn binding(
         &self,
         flat: &prebindgen_registry::flat::Flat,
+        classes: std::collections::BTreeMap<String, (String, bool)>,
         source_module: syn::Path,
-    ) -> BindingRequests<JniPolicy> {
-        let mut requests = BindingRequests::new("jni", source_module, JniPolicy::Scalar);
+    ) -> (JniTarget, BindingRequests) {
+        let mut target = JniTarget::new(classes);
+        let mut requests = BindingRequests::new("jni", source_module);
+        let mut declare = |declaration: Declaration, policy: JniPolicy| {
+            target.declare(declaration.clone(), policy);
+            requests.output(declaration);
+        };
 
         // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
         // other, as a class member or as a package function, but the binding
@@ -87,7 +99,7 @@ impl Declarations {
         };
 
         // Declared classes. A data class is the one representation v2 lowers;
-        // the type policy makes every value of the type cross that way,
+        // the per-type entry makes every value of the type cross that way,
         // wherever it appears. A declared class need not name a captured item:
         // a target may represent `String` or `Vec<u8>` without the source
         // exporting one.
@@ -95,37 +107,38 @@ impl Declarations {
             let config = &self.types[key];
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
-            let policy = requests.policy(match config.kind {
-                crate::jni::DeclaredKind::Data => JniPolicy::DataClass {
-                    class: placement.clone(),
-                },
-                // The release is a native method on the harness like any
-                // other, named after the class: `freeLedger`.
-                crate::jni::DeclaredKind::Ptr(_) => {
-                    let short = placement.rsplit('.').next().unwrap_or_default();
-                    let native = self.mangle_jni_method(&format!("free{short}"));
-                    JniPolicy::PtrClass {
+            declare(
+                Declaration::LocalType(key.clone()),
+                match config.kind {
+                    crate::jni::DeclaredKind::Data => JniPolicy::DataClass {
                         class: placement.clone(),
-                        symbol: self.native_method_symbol(&native),
-                        native,
+                    },
+                    // The release is a native method on the harness like any
+                    // other, named after the class: `freeLedger`.
+                    crate::jni::DeclaredKind::Ptr(_) => {
+                        let short = placement.rsplit('.').next().unwrap_or_default();
+                        let native = self.mangle_jni_method(&format!("free{short}"));
+                        JniPolicy::PtrClass {
+                            class: placement.clone(),
+                            symbol: self.native_method_symbol(&native),
+                            native,
+                        }
                     }
-                }
-                _ => JniPolicy::unimplemented(declarator, placement.clone()),
-            });
-            requests
-                .type_policies
-                .insert(key.as_str().to_string(), policy);
-            requests.output(Declaration::LocalType(key.clone()), policy);
+                    _ => JniPolicy::unimplemented(declarator, placement.clone()),
+                },
+            );
 
             // Members are separately selected: a class can be emitted with one
             // of its methods skipped, so each is a declaration of its own. None is
             // lowered yet: a method's receiver is a handle.
             for member in self.class_members.get(key).into_iter().flatten() {
-                let policy = requests.policy(JniPolicy::unimplemented(
-                    member_representation(member),
-                    format!("{placement}.{}", self.effective_method_name(key, member)),
-                ));
-                requests.output(fun_declaration(&member.rust_ident), policy);
+                declare(
+                    fun_declaration(&member.rust_ident),
+                    JniPolicy::unimplemented(
+                        member_representation(member),
+                        format!("{placement}.{}", self.effective_method_name(key, member)),
+                    ),
+                );
             }
         }
 
@@ -148,8 +161,12 @@ impl Declarations {
                     .mangle_jni_method(&crate::util::snake_to_camel(&entry.rust_ident.to_string()));
                 // A function under a setting v2 does not honour is still a
                 // `fun` in the report; the setting is the capability missing.
-                let policy =
-                    requests.policy(match self.unimplemented_setting(flat, &entry.rust_ident) {
+                // It is refused rather than emitted with the setting dropped:
+                // a lookup that fell back to the default here would generate
+                // an interface the binding did not ask for.
+                declare(
+                    fun_declaration(&entry.rust_ident),
+                    match self.unimplemented_setting(flat, &entry.rust_ident) {
                         Some(setting) => JniPolicy::Unimplemented {
                             declarator: "fun",
                             capability: setting,
@@ -161,29 +178,34 @@ impl Declarations {
                             native,
                             method,
                         },
-                    });
-                requests.output(fun_declaration(&entry.rust_ident), policy);
+                    },
+                );
             }
             // A `constant!(X)` names the `#[prebindgen]` const it reads.
             for entry in &config.constants {
-                let policy = requests.policy(JniPolicy::unimplemented("constant", placed(entry)));
-                requests.output(Declaration::Const(entry.rust_ident.clone()), policy);
+                declare(
+                    Declaration::Const(entry.rust_ident.clone()),
+                    JniPolicy::unimplemented("constant", placed(entry)),
+                );
             }
             // A `constant!(X).fun(..)` is a Kotlin `val` backed by a nullary
             // captured **function**, so its target kind and its source kind
             // differ — and a binding-local one names no captured item at all.
             for entry in &config.constant_functions {
-                let policy =
-                    requests.policy(JniPolicy::unimplemented("constant_fun", placed(entry)));
-                requests.output(const_declaration(&entry.rust_ident), policy);
+                declare(
+                    const_declaration(&entry.rust_ident),
+                    JniPolicy::unimplemented("constant_fun", placed(entry)),
+                );
             }
             // A `constant!(X).expr(..)` has no Rust item behind it at all.
             for decl in &config.constant_exprs {
-                let policy = requests.policy(JniPolicy::unimplemented(
-                    "constant_expr",
-                    format!("{package}.{}", decl.kotlin_name),
-                ));
-                requests.output(Declaration::LocalConst(decl.kotlin_name.clone()), policy);
+                declare(
+                    Declaration::LocalConst(decl.kotlin_name.clone()),
+                    JniPolicy::unimplemented(
+                        "constant_expr",
+                        format!("{package}.{}", decl.kotlin_name),
+                    ),
+                );
             }
         }
 
@@ -195,14 +217,17 @@ impl Declarations {
         // package function it was bound to — already stated above. Listing it
         // twice would give one id to two entries.
         for decl in &self.convert_decls {
-            let policy = requests.policy(JniPolicy::unimplemented(
-                "convert",
-                self.kotlin_fqn(decl.key()).unwrap_or_default(),
-            ));
-            requests.output(Declaration::Conversion(decl.key().clone()), policy);
+            declare(
+                Declaration::Conversion(decl.key().clone()),
+                JniPolicy::unimplemented(
+                    "convert",
+                    self.kotlin_fqn(decl.key()).unwrap_or_default(),
+                ),
+            );
         }
 
-        // Ignores are decisions, accounted apart from the gaps.
+        // Ignores are decisions, accounted apart from the gaps. They are not
+        // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_fns) {
             requests
                 .ignored
@@ -216,7 +241,7 @@ impl Declarations {
                 .ignored
                 .push(Declaration::LocalConst(ident.to_string()));
         }
-        requests
+        (target, requests)
     }
 }
 

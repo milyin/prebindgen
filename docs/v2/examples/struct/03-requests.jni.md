@@ -31,7 +31,8 @@ JVM method descriptor: empty parentheses mean no arguments, and `J` means a
 64-bit `long`. It describes the getter the generated JNI code will invoke.
 
 ```text
-recorded policy: DataClass { class: "example.Stamp" }
+recorded in the JniTarget, under `type:Stamp`:
+    DataClass { class: "example.Stamp" }
 
 derived during planning:
     properties: secs:  Long -> getter "getSecs",  descriptor "()J"

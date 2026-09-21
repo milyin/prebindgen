@@ -69,7 +69,8 @@ what [the boundary][fn_boundary] assembles.
 ## Checks
 
 - Reuse depends on type, direction, [relation](../../stages/04-select.md#what-a-relation-is),
-  effective policy and child conversions. A second owned `Stamp` input with
+  [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
+  and child conversions. A second owned `Stamp` input with
   the same choices can reuse this plan. C and JNI run separate generation jobs.
 - The cache is checked after the children exist, not before: the key includes
   them.

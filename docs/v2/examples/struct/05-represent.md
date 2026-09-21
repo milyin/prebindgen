@@ -13,7 +13,7 @@ The [selection][struct_select] for the struct, with its leaves already planned:
 Stamp, IntoRust, relation Stamp.fields
   +-- secs  -> node(i64, IntoRust)     // finished: identity conversion
   +-- nanos -> node(i64, IntoRust)     // the same node
-policy:   this target's struct policy
+conversion: <this target's struct policy>   // the key select returned
 ```
 
 ## Result
@@ -62,8 +62,9 @@ input; the full validity-contract structure remains a proposed extension.
 - Construction follows declaration order, and a read that fails stops the body
   before the construction: no `Stamp` is built from a partial set of fields.
 - The node is recorded only once its children exist, so its identity — type,
-  direction, relation, policy, children — is complete when it is cached and
-  another struct with the same identity shares it.
+  direction, relation, [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan),
+  children — is complete when it is cached and another struct with the same
+  identity shares it.
 - This is the struct entering Rust. Leaving Rust needs a construction
   operation on the target side that `Product` does not have yet, and is a
   reported skip.

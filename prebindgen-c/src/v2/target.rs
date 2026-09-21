@@ -6,23 +6,32 @@
 //! control flow — the registry owns both — which is why the adapter is a
 //! handful of local answers rather than a pipeline of its own.
 //!
-//! Names arrive in the policies. Which C name a type or a symbol gets is the
-//! frontend's manglers' business, settled when the requests are built in
-//! [`super`], so the target never spells a name of its own.
+//! It also *holds* what the binding declared. The registry stores no
+//! configuration and knows no precedence: which C name a type gets, which
+//! declarator produced a declaration, which destructor frees a handle are all
+//! recorded here by [`super`] and looked up here when the registry asks
+//! (#766). The names themselves are the frontend's manglers' business, settled
+//! when the binding is built, so the target never spells one of its own.
+
+use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Described, Direction, FailureCategory,
-    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
-    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec,
-    Requirement, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
-    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
+    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
+    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec,
+    Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor,
+    SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport,
+    Terminal, Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
 /// What the C frontend recorded for one value or one exported function.
-#[derive(Clone, Debug)]
+///
+/// Also this target's [`Target::ConversionKey`]: it is plain data, so two
+/// values the binding declared the same way convert the same way — which is
+/// what the key has to mean for the registry to reuse one conversion for both.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CPolicy {
     /// A scalar crossing unchanged. The default for every value nothing more
     /// specific covers.
@@ -51,8 +60,57 @@ pub enum CPolicy {
 #[derive(Clone, Debug)]
 pub enum CPayload {}
 
-/// The C target. Stateless: everything it needs arrives in a policy.
-pub struct CTarget;
+/// The C target: what the binding declared, and the answers the registry gets
+/// out of it.
+#[derive(Default)]
+pub struct CTarget {
+    /// How every value of this source type crosses, wherever it appears, by
+    /// the type's canonical key.
+    types: BTreeMap<String, CPolicy>,
+    /// What each requested output was declared as: what shapes its wrapper,
+    /// its public declaration, and its report line.
+    outputs: BTreeMap<Declaration, CPolicy>,
+}
+
+impl CTarget {
+    /// Record one declaration, and — for a type — how its values cross.
+    ///
+    /// One call rather than two: a declared type is one `data_type!` or
+    /// `ptr_type!` in the binding, so its public declaration and the crossing
+    /// of its values cannot disagree.
+    pub(crate) fn declare(&mut self, declaration: Declaration, policy: CPolicy) {
+        if let Declaration::LocalType(key) | Declaration::Type(key) = &declaration {
+            self.types.insert(key.as_str().to_string(), policy.clone());
+        }
+        self.outputs.insert(declaration, policy);
+    }
+
+    /// How a value of this type crosses: what was declared for its type, else
+    /// a scalar.
+    ///
+    /// The position goes unread. C has no per-site declarator — `data_type!`
+    /// and `ptr_type!` are stated about a type, not about one parameter of one
+    /// function — so every value of a type crosses the same way, and the key
+    /// this yields depends on the type alone.
+    fn conversion(&self, ty: &TypeRef) -> CPolicy {
+        match ty.kind() {
+            TypeKind::Named { id, .. } => {
+                self.types.get(&id.name).cloned().unwrap_or(CPolicy::Scalar)
+            }
+            _ => CPolicy::Scalar,
+        }
+    }
+
+    /// What the binding declared this output as.
+    ///
+    /// Asking the engine for an output the binding recorded nothing about is
+    /// the frontend contradicting itself, not a capability C is missing.
+    fn declared(&self, declaration: &Declaration) -> Result<&CPolicy, PlanningError> {
+        self.outputs.get(declaration).ok_or_else(|| {
+            PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
+        })
+    }
+}
 
 /// The C carrier for a scalar, when this adapter has one.
 ///
@@ -74,16 +132,17 @@ fn scalar_of(ty: &TypeRef) -> Option<ScalarKind> {
     }
 }
 
-/// The declared name of a nominal type.
 impl Target for CTarget {
-    type Policy = CPolicy;
+    type ConversionKey = CPolicy;
     type Payload = CPayload;
 
-    fn select(&self, query: &SelectionQuery<'_, CPolicy>) -> TargetSupport<RelationId> {
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<CPolicy>> {
+        let conversion = self.conversion(&query.crossing.ty);
         // An aggregate carries its members, so it wants the struct's fields; a
         // scalar is carried whole. A declarator v2 has no lowering for is
-        // refused here, before anything under it is planned.
-        let want_struct = match query.policy {
+        // refused here, before anything under it is planned — never quietly
+        // crossed as the scalar default.
+        let want_struct = match &conversion {
             CPolicy::DataStruct { .. } => true,
             CPolicy::Scalar | CPolicy::OpaquePtr { .. } | CPolicy::Function { .. } => false,
             CPolicy::Unimplemented { declarator, .. } => {
@@ -99,8 +158,12 @@ impl Target for CTarget {
         };
         for (id, relation) in query.candidates {
             match (relation, want_struct) {
-                (Relation::Struct(_), true) => return Ok(TargetAttempt::Ready(*id)),
-                (Relation::Atomic, false) => return Ok(TargetAttempt::Ready(*id)),
+                (Relation::Struct(_), true) | (Relation::Atomic, false) => {
+                    return Ok(TargetAttempt::Ready(Selection {
+                        relation: *id,
+                        conversion,
+                    }))
+                }
                 _ => {}
             }
         }
@@ -117,9 +180,9 @@ impl Target for CTarget {
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        policy: &CPolicy,
+        conversion: &CPolicy,
     ) -> TargetSupport<ReprSpec<CPayload>> {
-        match (shape.relation, policy) {
+        match (shape.relation, conversion) {
             // The address of a boxed source value, cast to a pointer to the
             // incomplete C type this adapter declares. Both directions and the
             // release are the registry's standard operations; the adapter
@@ -163,9 +226,9 @@ impl Target for CTarget {
                 }))
             }
             (Relation::Struct(strukt), _) => {
-                let CPolicy::DataStruct { c_name } = policy else {
+                let CPolicy::DataStruct { c_name } = conversion else {
                     return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is planned through its fields under a policy that carries it whole",
+                        "`{}` is planned through its fields, and is declared to be carried whole",
                         strukt.name
                     )));
                 };
@@ -233,11 +296,10 @@ impl Target for CTarget {
         &self,
         site: &SiteDescriptor<'_>,
         values: &ResolvedValues<'_, CPayload>,
-        policy: &CPolicy,
     ) -> TargetSupport<BoundarySpec<CPayload>> {
         // A handle's release is a site with no source function, exported under
         // the destructor symbol its declaration named.
-        let symbol = match (policy, site.function) {
+        let symbol = match (self.declared(site.declaration)?, site.function) {
             (CPolicy::Function { symbol }, Some(_)) => symbol,
             (CPolicy::OpaquePtr { release, .. }, None) => release,
             (CPolicy::Unimplemented { declarator, .. }, _) => {
@@ -252,7 +314,7 @@ impl Target for CTarget {
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
-                    "`{}` is exported under a policy that does not fit this site",
+                    "`{}` is declared in a way that does not fit this site",
                     site.declaration
                 )));
             }
@@ -303,12 +365,13 @@ impl Target for CTarget {
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_, CPolicy>,
+        request: &SurfaceRequest<'_>,
         values: &ResolvedValues<'_, CPayload>,
     ) -> TargetSupport<SurfaceSpec<CPayload>> {
+        let declared = self.declared(request.declaration)?;
         // An opaque handle is declared the same way whatever the item behind
         // it: an alias, or a struct whose fields C never sees.
-        if let CPolicy::OpaquePtr { c_name, .. } = request.policy {
+        if let CPolicy::OpaquePtr { c_name, .. } = declared {
             let ident = format_ident!("{c_name}");
             return Ok(TargetAttempt::Ready(SurfaceSpec {
                 declaration: request.declaration.clone(),
@@ -332,7 +395,7 @@ impl Target for CTarget {
         }
         match request.item {
             SourceItem::Extern(opaque) => Err(PlanningError::InvalidInput(format!(
-                "`{}` is an opaque declaration under a policy that reads fields",
+                "`{}` has no fields, and is declared as something that reads them",
                 opaque.name
             ))),
             SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
@@ -349,9 +412,9 @@ impl Target for CTarget {
                 payload: None,
             })),
             SourceItem::Struct(strukt) => {
-                let CPolicy::DataStruct { c_name } = request.policy else {
+                let CPolicy::DataStruct { c_name } = declared else {
                     return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is exposed as a data type under a policy that is not one",
+                        "`{}` is exposed as a data type, and is declared as something else",
                         strukt.name
                     )));
                 };
@@ -439,15 +502,25 @@ impl Target for CTarget {
         match *payload {}
     }
 
-    /// The declarator each policy came from, and the C name it places — the
-    /// same values generation reads, so the report cannot drift from the code.
-    fn describe(&self, policy: &CPolicy) -> Described {
-        match policy {
-            CPolicy::Scalar => Described::new("scalar", ""),
-            CPolicy::DataStruct { c_name } => Described::new("data_struct", c_name),
-            CPolicy::OpaquePtr { c_name, .. } => Described::new("opaque_ptr", c_name),
-            CPolicy::Function { symbol } => Described::new("function", symbol),
-            CPolicy::Unimplemented { declarator, c_name } => Described::new(*declarator, c_name),
+    /// The declarator each declaration came from, and the C name it places —
+    /// read from the same storage generation reads, so the report cannot drift
+    /// from the code.
+    ///
+    /// An output with nothing recorded for it fails the run at
+    /// [`CTarget::declared`], so it reaches this only when its value planning
+    /// refused it first and no boundary or surface was ever asked for. It is
+    /// described as what it is rather than as the scalar default, so a report
+    /// cannot make a frontend defect look like an ordinary declaration.
+    fn describe(&self, declaration: &Declaration) -> Described {
+        match self.outputs.get(declaration) {
+            Some(CPolicy::Scalar) => Described::new("scalar", ""),
+            Some(CPolicy::DataStruct { c_name }) => Described::new("data_struct", c_name),
+            Some(CPolicy::OpaquePtr { c_name, .. }) => Described::new("opaque_ptr", c_name),
+            Some(CPolicy::Function { symbol }) => Described::new("function", symbol),
+            Some(CPolicy::Unimplemented { declarator, c_name }) => {
+                Described::new(*declarator, c_name)
+            }
+            None => Described::new("undeclared", ""),
         }
     }
 }

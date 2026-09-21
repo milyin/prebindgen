@@ -11,7 +11,7 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
 node(output) : produces jlong, failures {}
 
-policy (JNI function): example.JNINative.stampSum, extern "system",
+JniTarget, under `fn:stamp_sum`: example.JNINative.stampSum, extern "system",
                        input one object, output jlong,
                        Runtime -> report to the JVM, then return a default
 ```

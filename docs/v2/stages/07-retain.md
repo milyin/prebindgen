@@ -203,7 +203,7 @@ struct Registry {
 struct GenerationRun<'a, T: Target> {
     registry: &'a Registry, // Source facts used throughout this generate call.
     target: &'a T,         // Read-only target decision/operation provider.
-    requests: BindingRequests<T::Policy>, // Complete translated requests and configuration.
+    requests: BindingRequests,            // The declarations to plan, and the ignores.
     nodes: NodeArena<T::Payload>,       // Conversion attempts and completed value plans.
     functions: FunctionArena<T::Payload>, // Candidate complete wrapper plans.
     surfaces: SurfaceArena<T::Payload>, // Candidate public declaration descriptions.
@@ -220,8 +220,8 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend creates BindingRequests internally and calls generate
- -> registry validates/imports source references, policies and requests
+ -> v2 frontend creates BindingRequests and its target internally, and calls generate
+ -> registry validates/imports source references and requests
  -> for each requested value: select its source relation
  -> registry resolves the selected source operation's children
  -> target describes the requested value's representation

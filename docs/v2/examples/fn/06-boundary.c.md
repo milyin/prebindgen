@@ -11,7 +11,7 @@ Owner: the registry, on the C adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures {}
 node(output) : produces c_i64, failures {}
 
-policy (C function): symbol "stamp_sum", extern "C",
+CTarget, under `fn:stamp_sum`: symbol "stamp_sum", extern "C",
                      input by value, output through the wrapper's return
 ```
 
@@ -42,9 +42,10 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 ## Checks
 
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
-  The symbol and calling convention come from the recorded
-  [policy](../../stages/03-requests.md#what-policy-means),
-  [as the request cell shows][fn_requests_c].
+  The symbol and calling convention come from the
+  [policy](../../stages/03-requests.md#what-policy-means) the `CTarget` holds
+  for this declaration, [as the request cell shows][fn_requests_c]; the
+  registry supplies the declaration and nothing about it.
 - An out-parameter form would require an additional delivery implementation;
   the current V2 increment supports only a wrapper return or no value.
 - No route is declared because both

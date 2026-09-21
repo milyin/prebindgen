@@ -7,13 +7,14 @@ Owner: the registry, on the JNI adapter's selections
 
 ## Input
 
-The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the JNI [policy](../../stages/03-requests.md#what-policy-means) recorded for them and the [relations](../../stages/04-select.md#what-a-relation-is) the registry offers:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan) and the [relations](../../stages/04-select.md#what-a-relation-is) the registry offers, beside the JNI [policy](../../stages/03-requests.md#what-policy-means) the `JniTarget` holds for each — which
+the registry does not pass in and cannot read:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   policy: DataClass { class: "example.Stamp" }
-                                                    offered: [ Stamp.fields, atomic ]
-Crossing { source: i64,   direction: OutOfRust }   policy: jlong carrier
-                                                    offered: [ atomic ]
+Crossing { source: Stamp, direction: IntoRust  }   offered: [ Stamp.fields, atomic ]
+                                                    JniTarget: DataClass { class: "example.Stamp" }
+Crossing { source: i64,   direction: OutOfRust }   offered: [ atomic ]
+                                                    JniTarget: jlong carrier
 ```
 
 ## Result
@@ -31,7 +32,10 @@ data class: a Kotlin `Stamp` object exposes its fields as properties, and the
 Rust `Stamp` is made of reading each of them. The same policy family has a
 different answer for a type declared as a pointer class — an opaque handle in a
 `jlong` — which would select `atomic` and leave the fields unread. As in C, the
-adapter answers from the policy, before the registry has shown it any field.
+adapter answers from the policy it looked up for this position, before the
+registry has shown it any field. It returns that policy beside the relation, as
+this value's [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan): `JniPolicy` is plain data, so two values declared
+the same way get equal keys and share one conversion.
 
 The scalars select `atomic`; the JNI policy for an `i64` is a `jlong`
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations),

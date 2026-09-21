@@ -10,8 +10,10 @@ Owner: the registry, on the target adapter's selections · Previous: [Record bin
 ```text
 Crossing { source: Ledger, direction: IntoRust  }   // the type's own request, and ledger_close's parameter
 Crossing { source: Ledger, direction: OutOfRust }   // the type's own request, and ledger_open's return
-policy:   this target's handle policy
 offered:  [ atomic ]                                // the only relation an extern has
+
+held by the target, not passed in:
+policy:   this target's handle policy
 ```
 
 ## Result
@@ -19,19 +21,23 @@ offered:  [ atomic ]                                // the only relation an exte
 ```text
 Ledger, IntoRust
   relation: atomic                  // no parts; the tree ends here
+  conversion: <this target's handle policy>
 
 Ledger, OutOfRust
   relation: atomic
+  conversion: <this target's handle policy>
 ```
 
 The registry registers one
 [relation](../../stages/04-select.md#what-a-relation-is) for an extern — the
 atomic one every type has — and offers it with each
 [crossing](../../stages/03-requests.md#finding-an-existing-conversion-plan) and
-the [policy](../../stages/03-requests.md#what-policy-means). The target names
-it, and there is nothing under it to plan: the whole
+position. The target names it, and there is nothing under it to plan: the whole
 [conversion](../../stages/04-select.md#select-conversion-relations) will be
-one operation, chosen at the next stage. Both directions are selected because
+one operation, chosen at the next stage. Beside the relation the target returns
+the [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
+standing for the [policy](../../stages/03-requests.md#what-policy-means) it
+holds for `Ledger`. Both directions are selected because
 the type's own request asks for both: a handle is a promise that what one
 function returns can be given to another.
 
@@ -49,7 +55,9 @@ say.
 - No part is planned, so nothing under the type can be unsupported: the only
   refusals left are the target's own, at the next stage.
 - The same two selections serve the type's request, `ledger_open` and
-  `ledger_close`, since all three name the same policy.
+  `ledger_close`: the target resolves the same policy at all three positions,
+  so the key it returns is equal at all three, and one conversion serves them
+  all.
 
 ## Language variants
 

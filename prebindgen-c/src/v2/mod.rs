@@ -3,15 +3,20 @@
 //! [`CbindgenBuilder`] keeps accumulating declarations exactly as it does for
 //! v1 — same builder, same modifiers, same manglers — and this module is the
 //! only thing that reads them for the other engine: it turns that storage into
-//! the [`BindingRequests`] the registry plans, hands them to [`generate`] with
-//! the [`CTarget`], and gets back a [`Generation`] the frontend writes out.
+//! a [`CTarget`], which is what the binding declared and what answers the
+//! registry's questions about it, plus the [`BindingRequests`] naming what to
+//! plan. [`generate`] hands back a [`Generation`] the frontend writes out.
+//!
+//! The requests are a work list and nothing more. What a declaration *is* —
+//! its C name, which declarator produced it, which destructor frees it —
+//! stays in the target, which is where the registry asks for it (#766).
 //!
 //! Nothing of v1 runs on this route. The engine reads the same sources and the
 //! same declarations and owns everything after that; the frontend's part is
 //! naming — which C name a type or a symbol gets is its manglers applied, the
-//! same answer v1 would give — and saying, in each policy, which declarator
-//! produced the declaration, so a skip can name the capability it waits for
-//! and the report can print the word back.
+//! same answer v1 would give — and saying, in each declaration, which
+//! declarator produced it, so a skip can name the capability it waits for and
+//! the report can print the word back.
 
 mod target;
 
@@ -35,44 +40,46 @@ impl CbindgenBuilder {
                 .and_then(|module| syn::parse_str(module).ok())
                 .unwrap_or_else(|| syn::parse_quote!(crate))
         });
-        let requests = self.requests(source_module);
-        generate(flat, &CTarget, requests, declaring_crate)
+        let (target, requests) = self.binding(source_module);
+        generate(flat, &target, requests, declaring_crate)
     }
 
-    /// Everything this binding declared, as the engine plans it.
+    /// Everything this binding declared: what each declaration is, for the
+    /// target to answer from, and the list of them, for the engine to plan.
     ///
-    /// One entry per declaration, in any order — the report sorts. Each
-    /// declaration's policy carries the C name it gets and which declarator it
-    /// came from: what the target generates from, and what the report prints.
-    fn requests(&self, source_module: syn::Path) -> BindingRequests<CPolicy> {
-        let mut requests = BindingRequests::new("c", source_module, CPolicy::Scalar);
+    /// One entry per declaration, in any order — the report sorts. Both halves
+    /// are stated in the same pass, so a declaration cannot be planned without
+    /// the target knowing what it is, or recorded without being asked for.
+    fn binding(&self, source_module: syn::Path) -> (CTarget, BindingRequests) {
+        let mut target = CTarget::default();
+        let mut requests = BindingRequests::new("c", source_module);
+        let mut declare = |declaration: Declaration, policy: CPolicy| {
+            target.declare(declaration.clone(), policy);
+            requests.output(declaration);
+        };
 
         // By-value data structs: the one type representation v2 lowers. The
-        // type policy makes every value of the type cross this way, wherever
-        // it appears.
+        // per-type entry makes every value of the type cross this way,
+        // wherever it appears.
         for key in sorted(self.data.keys()) {
-            let c_name = self.c_type_name(key);
-            let policy = requests.policy(CPolicy::DataStruct {
-                c_name: c_name.clone(),
-            });
-            requests
-                .type_policies
-                .insert(key.as_str().to_string(), policy);
-            requests.output(Declaration::LocalType(key.clone()), policy);
+            declare(
+                Declaration::LocalType(key.clone()),
+                CPolicy::DataStruct {
+                    c_name: self.c_type_name(key),
+                },
+            );
         }
 
         // Opaque handles: `<c_name> *` to a Rust-owned value, freed through
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
-            let c_name = self.c_type_name(key);
-            let policy = requests.policy(CPolicy::OpaquePtr {
-                c_name: c_name.clone(),
-                release: self.destructor_symbol(key).to_string(),
-            });
-            requests
-                .type_policies
-                .insert(key.as_str().to_string(), policy);
-            requests.output(Declaration::LocalType(key.clone()), policy);
+            declare(
+                Declaration::LocalType(key.clone()),
+                CPolicy::OpaquePtr {
+                    c_name: self.c_type_name(key),
+                    release: self.destructor_symbol(key).to_string(),
+                },
+            );
         }
 
         // Every other declarator is accounted for and refused by name. A
@@ -84,47 +91,52 @@ impl CbindgenBuilder {
             (sorted(self.tagged_unions.keys()), "tagged_union"),
         ] {
             for key in keys {
-                let policy = requests.policy(CPolicy::Unimplemented {
-                    declarator,
-                    c_name: self.c_type_name(key),
-                });
-                requests
-                    .type_policies
-                    .insert(key.as_str().to_string(), policy);
-                requests.output(Declaration::LocalType(key.clone()), policy);
+                declare(
+                    Declaration::LocalType(key.clone()),
+                    CPolicy::Unimplemented {
+                        declarator,
+                        c_name: self.c_type_name(key),
+                    },
+                );
             }
         }
 
         // Callback signatures: no captured item names one, and its C closure
         // struct is what the target places.
         for key in sorted(self.callbacks.keys()) {
-            let policy = requests.policy(CPolicy::Unimplemented {
-                declarator: "callback",
-                c_name: self.callback_c_name(key),
-            });
-            requests.output(Declaration::Callback(describe_callback(key)), policy);
+            declare(
+                Declaration::Callback(describe_callback(key)),
+                CPolicy::Unimplemented {
+                    declarator: "callback",
+                    c_name: self.callback_c_name(key),
+                },
+            );
         }
 
         // Declared conversions: the wire mapping for one Rust type, defined by
         // the binding rather than selected out of the source.
         for decl in &self.convert_decls {
-            let policy = requests.policy(CPolicy::Unimplemented {
-                declarator: "convert",
-                c_name: self.c_type_name(decl.key()),
-            });
-            requests.output(Declaration::Conversion(decl.key().clone()), policy);
+            declare(
+                Declaration::Conversion(decl.key().clone()),
+                CPolicy::Unimplemented {
+                    declarator: "convert",
+                    c_name: self.c_type_name(decl.key()),
+                },
+            );
         }
 
         // Exported functions — the one kind that must name a captured item.
         for ident in sorted(self.functions.keys()) {
-            let symbol = self.fn_symbol(ident).to_string();
-            let policy = requests.policy(CPolicy::Function {
-                symbol: symbol.clone(),
-            });
-            requests.output(Declaration::Function(ident.clone()), policy);
+            declare(
+                Declaration::Function(ident.clone()),
+                CPolicy::Function {
+                    symbol: self.fn_symbol(ident).to_string(),
+                },
+            );
         }
 
-        // Ignores are decisions, accounted apart from the gaps.
+        // Ignores are decisions, accounted apart from the gaps. They are not
+        // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_functions) {
             requests
                 .ignored
@@ -133,7 +145,7 @@ impl CbindgenBuilder {
         for key in sorted(&self.ignored_types) {
             requests.ignored.push(Declaration::LocalType(key.clone()));
         }
-        requests
+        (target, requests)
     }
 }
 

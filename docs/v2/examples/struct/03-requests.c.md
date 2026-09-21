@@ -30,7 +30,7 @@ default snake-case name. The following summarizes the intended representation;
 the planner obtains the member types from Flat in the next stage.
 
 ```text
-policy (C struct):
+recorded in the CTarget, under `type:Stamp` (C struct):
     representation: data_struct
     c_name:         "Stamp"                       // this example's name; the default base is `stamp`
     members:        secs: int64_t, nanos: int64_t // declaration order

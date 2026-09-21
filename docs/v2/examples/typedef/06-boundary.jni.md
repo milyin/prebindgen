@@ -10,7 +10,7 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 ```text
 node(taken) : carrier jlong, release infallible
 
-policy (JNI handle): native example.JNINative.freeLedger, extern "system"
+JniTarget, under `type:Ledger`: native example.JNINative.freeLedger, extern "system"
                      Binding -> throw the message, then return a default
                      Runtime -> report to the JVM, then return a default
 ```

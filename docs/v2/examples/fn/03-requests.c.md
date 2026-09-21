@@ -38,7 +38,7 @@ The following summarizes the requested calling interface. **ABI** means the
 binary calling convention and types a compiled C caller must use.
 
 ```text
-policy (C function):
+recorded in the CTarget, under `fn:stamp_sum` (C function):
     symbol:     "stamp_sum"      // a function keeps its Rust name; no hook renamed it
     convention: extern "C"
     input:      by value at its ABI position

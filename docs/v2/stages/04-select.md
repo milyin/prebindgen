@@ -94,12 +94,13 @@ loop, with the two target questions marked:
 
 ```text
 plan(type, direction, position):
-    policy   = effective policy for this position     # site path, else type policy,
-                                                      # else run default
-    relation = target.select(type, direction, applicable rules, policy)
-                                                      # which way out of this type;
+    relation, conversion = target.select(type, direction, position, candidates)
+                                                      # which way out of this type, and
+                                                      # the target's name for the settings
+                                                      # it applied — its own lookup, over
+                                                      # its own storage, by position
                                                       # cheap: no recursion yet
-    mark (type, direction, relation, policy) as being resolved
+    mark (type, direction, relation, conversion) as being resolved
                                                       # meeting this mark again is a cycle
 
     parts    = the source model's parts of that relation
@@ -112,11 +113,11 @@ plan(type, direction, position):
 
     ---- everything above is this chapter; everything below is the next ----
 
-    if a node exists for (type, direction, relation, policy, children):
+    if a node exists for (type, direction, relation, conversion, children):
         return it                                     # the identity is complete
                                                       # only once the children are
 
-    repr = target.represent(relation, children, policy)
+    repr = target.represent(relation, children, conversion)
                # which carriers hold the value, and the operations that access them
     body = compose(relation, children, repr)
                # obtain each part, convert it, construct the Rust value — or the
@@ -139,15 +140,19 @@ leaves upward, with what carries each value and the instructions that move it,
 and its result is the [node](05-represent.md#represent-and-compose-values), the
 unit the later stages read.
 
-The algorithm receives the value's *position*, not just its type. In the
-design vocabulary, a `SiteId` (parameter 0 of this exported function) or a
-`PartId` (the `secs` field of this relation) is what an override is recorded
-against, so the position is what turns the recorded rules into this
-conversion's effective [policy](03-requests.md#what-policy-means). Positions
-are how overrides reach a nested child. Current code uses
-`Position { declaration, path }` instead of separate `SiteId`/`PartId`
-structs. The plan that results is still shared by identity, so two positions
-that resolve to the same key get the same node.
+The algorithm receives the value's *position*, not just its type, and hands it
+to the target. In the design vocabulary, a `SiteId` (parameter 0 of this
+exported function) or a `PartId` (the `secs` field of this relation) is what an
+override is recorded against, so the position is what lets the target turn
+[its recorded choices](03-requests.md#what-policy-means) into this
+conversion's key. Positions are how overrides reach a nested child. Current
+code uses `Position { declaration, path }` instead of separate
+`SiteId`/`PartId` structs. `select` is the *only* call that sees a position,
+which is deliberate: every later question is asked about a conversion's
+identity rather than about one of the places it is used, so a choice recorded
+at a position has to take effect here, as a different key. The plan that
+results is shared by identity, so two positions whose key, relation and
+children all match get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no
 work of their own. A struct with a struct field simply makes `plan` call itself
@@ -321,14 +326,17 @@ whole value converted by a single operation the target supplies. A constructor
 or projector relation would be explicit — it names a function, so someone has
 to say which — and that declaration, like the rule that would pin a relation
 at a position, is
-[not built](../extensions.md#constructor-and-projector-relations): a request
-carries policies recorded for a type and for a position, and the target
-derives its relation from those.
+[not built](../extensions.md#constructor-and-projector-relations): the target
+holds the [policies](03-requests.md#what-policy-means) recorded for a type and
+for a position, and derives its relation from those.
 
-The target answers `select` with a `RelationId`, an index into that run's
-table under the same convention as every other `…Id` here — that is, it names
-which outgoing edge the walk takes from this type. The id rather than the value
-is what travels, because the id is what the cache key compares.
+The target answers `select` with a `Selection`: a `RelationId`, an index into
+that run's table under the same convention as every other `…Id` here — that is,
+it names which outgoing edge the walk takes from this type — together with the
+[conversion key](03-requests.md#finding-an-existing-conversion-plan) for the
+policy it just applied. The id rather than the value is what travels, because
+the id is what the cache key compares; the key travels beside it for the same
+reason.
 
 So `select` chooses from the edges leaving that type: the implicit relation,
 plus any explicit ones registered for it. Selection precedes child traversal,
@@ -344,39 +352,59 @@ is this chapter's; `represent` is [the next chapter's](05-represent.md), and
 the other two belong to the stages after that. The sketch below uses the
 design's descriptor names. Current `represent` receives `ChildValue` entries
 containing a part and layout, not full validity and resource contracts. The
-same trait also has `render_operation`, used later during Rust emission.
+same trait also has `render_operation`, used later during Rust emission, and
+`describe`, which supplies the [report](../report.md)'s line for a declaration.
+
+The target is also where the binding's configuration lives, which is why none
+of these methods is handed any: each resolves what applies from its own
+storage, addressed by the `position` in a selection query or by the
+`Declaration` a boundary, surface or report line is about.
 
 ```rust
 trait Target {
-    type Policy;  // Configuration choices recorded by the frontend.
+    type ConversionKey: Clone + Eq + Hash; // The target's name for one way of converting.
     type Payload; // Owned operation/rendering descriptions.
 
     fn select(
         &self,
-        query: SelectionQuery<'_, Self::Policy>, // Source value and applicable choices.
-    ) -> TargetSupport<RelationId>; // One of the relations the query offered.
+        query: SelectionQuery<'_>, // Source value, its position, and the relations offered.
+    ) -> TargetSupport<Selection<Self::ConversionKey>>; // A relation the query offered,
+                                                        // and the conversion it makes.
 
     fn represent(
         &self,
         shape: ResolvedShape<'_>, // Selected source operation and its direct children.
         children: &[ValueDescriptor<Self::Payload>], // Completed child conversion descriptions.
-        policy: &Self::Policy,    // Effective choices for this value.
+        conversion: &Self::ConversionKey, // The key `select` returned for this value.
     ) -> TargetSupport<ReprSpec<Self::Payload>>;
 
     fn boundary(
         &self,
-        site: &SiteDescriptor, // Exported call's signature and boundary roles.
+        site: &SiteDescriptor, // Exported call's signature, boundary roles and declaration.
         values: &ResolvedValues<Self::Payload>, // Its resolved input/output values.
-        policy: &Self::Policy, // Calling and error-delivery choices.
     ) -> TargetSupport<BoundarySpec<Self::Payload>>;
 
     fn surface(
         &self,
-        request: &SurfaceRequest<Self::Policy>, // Public name/placement, policy and promises.
+        request: &SurfaceRequest<'_>, // Public declaration, its source item and promises.
         values: &ResolvedValues<Self::Payload>, // Values needed to describe that public API.
     ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
 }
+
+struct Selection<K> {
+    relation: RelationId, // One of the candidates the query offered.
+    conversion: K,        // What the target decided this value converts by.
+}
 ```
+
+`Selection::conversion` is the identity the registry reuses plans by, so it
+carries one rule: equal keys mean interchangeable conversions. Two values whose
+[crossing](03-requests.md#finding-an-existing-conversion-plan), relation,
+children and key all match get one node, and a key already being resolved is a
+cycle. Settings that generate differently must therefore produce different
+keys, and a target must not mint a fresh key per visit.
+[Record binding requests](03-requests.md#finding-an-existing-conversion-plan)
+states the rule in full.
 
 Every method answers with `TargetSupport<Answer>`, which is one of three things:
 a ready description, a specific unsupported reason, or a fatal planning error
@@ -392,10 +420,10 @@ The method inputs and results serve different stages:
 
 | Method | Information available | Target's answer | Registry's next job |
 | --- | --- | --- | --- |
-| `select` | Exact source type/direction, local source facts and applicable conversion rules and policy | The relation chosen for *this* value, and nothing else | Inspect that relation's parts and recursively resolve their conversions. |
+| `select` | Exact source type/direction, the value's position, local source facts and the relations offered | The relation chosen for *this* value, and the conversion key its own settings make it | Inspect that relation's parts and recursively resolve their conversions. |
 | `represent` | `ResolvedShape`: source operation with model-derived child types; `ValueDescriptor`s: completed child layouts and contracts | Representation layout and target operations | Compose the complete value conversion. |
 | `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete wrapper. |
-| `surface` | `SurfaceRequest`: requested name, placement, policy and promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |
+| `surface` | `SurfaceRequest`: the declaration, the captured item behind it and its promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |
 
 A selection speaks for one value. It cannot declare a choice for a child,
 because a child is planned by a recursion that asks the target again, and two
@@ -431,12 +459,12 @@ direction and exact type.
 | Struct shape and typed fields | Recursive field conversions and value construction/decomposition. |
 | `Result` child types | Whether a selected constructor treats `Ok` as construction success and routes `Err` as failure. |
 | Exact reference/wrapper structure and source access facts | Temporary lifetimes, borrow use and ownership in the generated conversion. |
-| Stable snapshot association and normalized type keys | Conversion-cache identity including direction, selected relation and target policy. |
+| Stable snapshot association and normalized type keys | Conversion-cache identity including direction, selected relation and the target's conversion key. |
 | Source locations and unsupported-item descriptions | Binding-specific dependency paths and skipped-output reports. |
 
-The registry and language frontends use Flat independently. Flat has no
-conversion-selection policy, target representation, recursive binding planner,
-or dependency on the registry. A `FunctionView` has no `as_constructor()`
+The registry and language frontends use Flat independently. Flat makes no
+conversion choice, has no target representation, no recursive binding planner,
+and no dependency on the registry. A `FunctionView` has no `as_constructor()`
 method; `ConstructorRelation::new(function)` belongs to the registry library.
 
 ## What is not settled here

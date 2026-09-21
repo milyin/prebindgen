@@ -28,15 +28,15 @@ independent of the request for `stamp_sum`. This sketch also shows the fields
 that the registry will use when it discovers the struct [relation](../../stages/04-select.md#what-a-relation-is) during value
 planning. All structures in the block are design notation, not exact current
 request fields. Current `OutputRequest` contains a `Declaration` — here
-`Declaration::Type(Stamp)` — and a `PolicyId`.
-The frontend also records a type [policy](../../stages/03-requests.md#what-policy-means) for `Stamp`, which is how a later
+`Declaration::Type(Stamp)` — and nothing else.
+The frontend records the type's [policy](../../stages/03-requests.md#what-policy-means) in its own target, which is how a later
 function parameter finds this representation without repeating the configuration.
 
 ```text
 OutputRequest {
     id:     DeclarationId("type:Stamp"),
     source: SourceItemId(crate::source::Stamp),
-    policy: PolicyId(this target's struct policy),
+    // the target records this target's struct policy under the same id
 }
 
 relation: Stamp.fields = Relation::Struct(over the Stamp struct element)

@@ -7,24 +7,33 @@
 //! in [`super::kotlin`] renders. There is no type walk and no control flow
 //! here; the registry owns both.
 //!
-//! Names arrive in the policies. Which Kotlin class a type is declared as and
-//! where a function lands are the frontend's settings applied, settled when
-//! the requests are built in [`super`], so the target never spells a name of
-//! its own.
+//! It also *holds* what the binding declared. The registry stores no
+//! configuration and knows no precedence: which Kotlin class a type is
+//! declared as, where a function lands, which native method and `Java_…`
+//! symbol it gets, and which setting on it v2 does not honour yet are all
+//! recorded here by [`super`] and looked up here when the registry asks
+//! (#766). The names themselves are the frontend's settings applied, settled
+//! when the binding is built, so the target never spells one of its own.
+
+use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Described, Direction, FailureCategory,
-    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
-    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec,
-    Requirement, ResolvedShape, ResolvedValues, SelectionQuery, SiteDescriptor, SourceItem,
-    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-    WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
+    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
+    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec,
+    Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor,
+    SourceItem, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
+    Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
 /// What the JNI frontend recorded for one value or one exported function.
-#[derive(Clone, Debug)]
+///
+/// Also this target's [`Target::ConversionKey`]: it is plain data, so two
+/// values the binding declared the same way convert the same way — which is
+/// what the key has to mean for the registry to reuse one conversion for both.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum JniPolicy {
     /// A scalar crossing as its JNI carrier. The default for every value
     /// nothing more specific covers.
@@ -149,22 +158,74 @@ impl KotlinType {
     }
 }
 
-/// The JNI target.
+/// The JNI target: what the binding declared, and the answers the registry
+/// gets out of it.
 ///
-/// It carries the Kotlin class declared for each Rust type, because a Kotlin
-/// signature has to name the class the frontend chose — not the Rust type it
-/// was built from — and a value's own policy is not in view where a signature
-/// is written. Renaming a class in the declarations therefore moves it in the
-/// declaration and in every signature mentioning it.
+/// [`Self::classes`] is separate from [`Self::types`] because a Kotlin
+/// signature has to name the class the frontend chose for a type — not the
+/// Rust type it was built from — wherever that type appears, including in a
+/// function's signature where the *function's* declaration is what is in view.
+/// Renaming a class in the declarations therefore moves it in the declaration
+/// and in every signature mentioning it.
 pub struct JniTarget {
     /// Rust type key → fully qualified Kotlin class, and whether it is a
-    /// handle class rather than a data class.
-    classes: std::collections::BTreeMap<String, (String, bool)>,
+    /// handle class rather than a data class. Spelling, for every signature
+    /// that names the type.
+    classes: BTreeMap<String, (String, bool)>,
+    /// How every value of this source type crosses, wherever it appears, by
+    /// the type's canonical key.
+    types: BTreeMap<String, JniPolicy>,
+    /// What each requested output was declared as: what shapes its wrapper,
+    /// its public declaration, and its report line.
+    outputs: BTreeMap<Declaration, JniPolicy>,
 }
 
 impl JniTarget {
-    pub(crate) fn new(classes: std::collections::BTreeMap<String, (String, bool)>) -> Self {
-        JniTarget { classes }
+    pub(crate) fn new(classes: BTreeMap<String, (String, bool)>) -> Self {
+        JniTarget {
+            classes,
+            types: BTreeMap::new(),
+            outputs: BTreeMap::new(),
+        }
+    }
+
+    /// Record one declaration, and — for a type — how its values cross.
+    ///
+    /// One call rather than two: a declared type is one `data_class!` or
+    /// `ptr_class!` in the binding, so its public declaration and the crossing
+    /// of its values cannot disagree.
+    pub(crate) fn declare(&mut self, declaration: Declaration, policy: JniPolicy) {
+        if let Declaration::LocalType(key) | Declaration::Type(key) = &declaration {
+            self.types.insert(key.as_str().to_string(), policy.clone());
+        }
+        self.outputs.insert(declaration, policy);
+    }
+
+    /// How a value of this type crosses: what was declared for its type, else
+    /// a scalar.
+    ///
+    /// The position goes unread. The per-site declarators JNI has —
+    /// `expand_param`, `expand_return`, `split_on_param` — are exactly the
+    /// settings v2 does not lower yet, and a function carrying one is refused
+    /// whole when the binding is built rather than having the setting dropped
+    /// here. When they arrive, this is where they take effect: a different
+    /// key for that one value, and the registry plans it as a second
+    /// conversion.
+    fn conversion(&self, ty: &TypeRef) -> JniPolicy {
+        match named(ty) {
+            Some(name) => self.types.get(&name).cloned().unwrap_or(JniPolicy::Scalar),
+            None => JniPolicy::Scalar,
+        }
+    }
+
+    /// What the binding declared this output as.
+    ///
+    /// Asking the engine for an output the binding recorded nothing about is
+    /// the frontend contradicting itself, not a capability JNI is missing.
+    fn declared(&self, declaration: &Declaration) -> Result<&JniPolicy, PlanningError> {
+        self.outputs.get(declaration).ok_or_else(|| {
+            PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
+        })
     }
 
     /// The Kotlin spelling of a value: the class its type was declared as, or
@@ -268,11 +329,14 @@ fn free_name(preferred: &str, function: &prebindgen_registry::flat::Function) ->
 }
 
 impl Target for JniTarget {
-    type Policy = JniPolicy;
+    type ConversionKey = JniPolicy;
     type Payload = JniPayload;
 
-    fn select(&self, query: &SelectionQuery<'_, JniPolicy>) -> TargetSupport<RelationId> {
-        let want_struct = match query.policy {
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<JniPolicy>> {
+        let conversion = self.conversion(&query.crossing.ty);
+        // A declarator v2 has no lowering for is refused here, before anything
+        // under it is planned — never quietly crossed as the scalar default.
+        let want_struct = match &conversion {
             JniPolicy::DataClass { .. } => true,
             JniPolicy::Scalar | JniPolicy::PtrClass { .. } | JniPolicy::Function { .. } => false,
             JniPolicy::Unimplemented {
@@ -292,8 +356,12 @@ impl Target for JniTarget {
         };
         for (id, relation) in query.candidates {
             match (relation, want_struct) {
-                (Relation::Struct(_), true) => return Ok(TargetAttempt::Ready(*id)),
-                (Relation::Atomic, false) => return Ok(TargetAttempt::Ready(*id)),
+                (Relation::Struct(_), true) | (Relation::Atomic, false) => {
+                    return Ok(TargetAttempt::Ready(Selection {
+                        relation: *id,
+                        conversion,
+                    }))
+                }
                 _ => {}
             }
         }
@@ -310,9 +378,9 @@ impl Target for JniTarget {
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        policy: &JniPolicy,
+        conversion: &JniPolicy,
     ) -> TargetSupport<ReprSpec<JniPayload>> {
-        match (shape.relation, policy) {
+        match (shape.relation, conversion) {
             // The address of a boxed source value as a `jlong`: JNI's wire is
             // 64 bits whatever the platform's pointer is. Both directions and
             // the release are the registry's standard operations; the adapter
@@ -452,11 +520,10 @@ impl Target for JniTarget {
         &self,
         site: &SiteDescriptor<'_>,
         values: &ResolvedValues<'_, JniPayload>,
-        policy: &JniPolicy,
     ) -> TargetSupport<BoundarySpec<JniPayload>> {
         // A handle's release is a site with no source function, placed where
         // its declaration said.
-        let symbol = match (policy, site.function) {
+        let symbol = match (self.declared(site.declaration)?, site.function) {
             (JniPolicy::Function { symbol, .. }, Some(_)) => symbol,
             (JniPolicy::PtrClass { symbol, .. }, None) => symbol,
             // A class member reaches here when every value it takes has a
@@ -481,7 +548,7 @@ impl Target for JniTarget {
             }
             _ => {
                 return Err(PlanningError::InvalidInput(format!(
-                    "`{}` is exported under a policy that does not fit this site",
+                    "`{}` is declared in a way that does not fit this site",
                     site.declaration
                 )));
             }
@@ -597,12 +664,13 @@ impl Target for JniTarget {
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_, JniPolicy>,
+        request: &SurfaceRequest<'_>,
         values: &ResolvedValues<'_, JniPayload>,
     ) -> TargetSupport<SurfaceSpec<JniPayload>> {
+        let declared = self.declared(request.declaration)?;
         // A handle class is declared the same way whatever the item behind it:
         // an alias, or a struct whose fields the JVM never sees.
-        if let JniPolicy::PtrClass { class, native, .. } = request.policy {
+        if let JniPolicy::PtrClass { class, native, .. } = declared {
             let (package, class) = match class.rsplit_once('.') {
                 Some((package, class)) => (package.to_string(), class.to_string()),
                 None => (String::new(), class.clone()),
@@ -629,7 +697,7 @@ impl Target for JniTarget {
         }
         match request.item {
             SourceItem::Extern(opaque) => Err(PlanningError::InvalidInput(format!(
-                "`{}` is an opaque declaration under a policy that reads fields",
+                "`{}` has no fields, and is declared as something that reads them",
                 opaque.name
             ))),
             SourceItem::Function(function) => {
@@ -638,10 +706,10 @@ impl Target for JniTarget {
                     method,
                     native,
                     ..
-                } = request.policy
+                } = declared
                 else {
                     return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is exported under a policy that is not a function policy",
+                        "`{}` is exported, and is declared as something that is not a function",
                         function.name
                     )));
                 };
@@ -691,9 +759,9 @@ impl Target for JniTarget {
                 }))
             }
             SourceItem::Struct(strukt) => {
-                let JniPolicy::DataClass { class } = request.policy else {
+                let JniPolicy::DataClass { class } = declared else {
                     return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is exposed as a data class under a policy that is not one",
+                        "`{}` is exposed as a data class, and is declared as something else",
                         strukt.name
                     )));
                 };
@@ -785,22 +853,30 @@ impl Target for JniTarget {
         }
     }
 
-    /// The declarator each policy came from, and the Kotlin name it places —
-    /// the same values generation reads, so the report cannot drift from the
-    /// code.
-    fn describe(&self, policy: &JniPolicy) -> Described {
-        match policy {
-            JniPolicy::Scalar => Described::new("scalar", ""),
-            JniPolicy::DataClass { class } => Described::new("data_class", class),
-            JniPolicy::PtrClass { class, .. } => Described::new("ptr_class", class),
-            JniPolicy::Function {
+    /// The declarator each declaration came from, and the Kotlin name it
+    /// places — read from the same storage generation reads, so the report
+    /// cannot drift from the code.
+    ///
+    /// An output with nothing recorded for it fails the run at
+    /// [`JniTarget::declared`], so it reaches this only when its value
+    /// planning refused it first and no boundary or surface was ever asked
+    /// for. It is described as what it is rather than as the scalar default,
+    /// so a report cannot make a frontend defect look like an ordinary
+    /// declaration.
+    fn describe(&self, declaration: &Declaration) -> Described {
+        match self.outputs.get(declaration) {
+            Some(JniPolicy::Scalar) => Described::new("scalar", ""),
+            Some(JniPolicy::DataClass { class }) => Described::new("data_class", class),
+            Some(JniPolicy::PtrClass { class, .. }) => Described::new("ptr_class", class),
+            Some(JniPolicy::Function {
                 package, method, ..
-            } => Described::new("fun", format!("{package}.{method}")),
-            JniPolicy::Unimplemented {
+            }) => Described::new("fun", format!("{package}.{method}")),
+            Some(JniPolicy::Unimplemented {
                 declarator,
                 placement,
                 ..
-            } => Described::new(*declarator, placement),
+            }) => Described::new(*declarator, placement),
+            None => Described::new("undeclared", ""),
         }
     }
 }

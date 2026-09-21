@@ -22,10 +22,12 @@ and a build script asking for it to be exposed as a handle:
 OutputRequest {
     id:     DeclarationId(public Ledger in this target),
     source: SourceItemId(crate::source::Ledger),
-    policy: PolicyId(this target's handle policy),
+    // the target records this target's handle policy under the same id
 }
 
-conversion_rules.parts: {}       // an atomic value has no parts to record a rule for
+the target's own storage, under that same id:
+    this target's handle policy  // carrier and release; the request set has neither
+    parts: none                  // an atomic value has no parts to record a rule for
 ```
 
 The request is a root, as a struct's is. Its
@@ -51,7 +53,9 @@ avoid.
   [a function taking a struct does][fn_requests].
 - The same extern under a different carrier, or a struct under a handle policy,
   is a different [conversion](../../stages/04-select.md#select-conversion-relations):
-  the policy is part of a conversion's identity.
+  the target answers `select` with a different
+  [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan),
+  and that key is part of a conversion's identity.
 
 ## Language variants
 

@@ -10,7 +10,7 @@ use crate::{
     plan::{generate, BindingRequests},
     run::Generation,
     target::{
-        BoundarySpec, ChildValue, Described, RelationId, ReprSpec, ResolvedShape, ResolvedValues,
+        BoundarySpec, ChildValue, Described, ReprSpec, ResolvedShape, ResolvedValues, Selection,
         SelectionQuery, SiteDescriptor, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
         TargetSupport, Unsupported,
     },
@@ -21,10 +21,10 @@ use crate::{
 struct Nothing;
 
 impl Target for Nothing {
-    type Policy = ();
+    type ConversionKey = ();
     type Payload = ();
 
-    fn select(&self, query: &SelectionQuery<'_, ()>) -> TargetSupport<RelationId> {
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<()>> {
         Ok(TargetAttempt::Unsupported(Unsupported::new(
             "unsupported.nothing.carrier",
             format!("`{}` is carried by no target here", query.crossing.ty.key()),
@@ -44,14 +44,13 @@ impl Target for Nothing {
         &self,
         _: &SiteDescriptor<'_>,
         _: &ResolvedValues<'_, ()>,
-        _: &(),
     ) -> TargetSupport<BoundarySpec<()>> {
         unreachable!("nothing is selected")
     }
 
     fn surface(
         &self,
-        _: &SurfaceRequest<'_, ()>,
+        _: &SurfaceRequest<'_>,
         _: &ResolvedValues<'_, ()>,
     ) -> TargetSupport<SurfaceSpec<()>> {
         unreachable!("nothing is selected")
@@ -61,7 +60,7 @@ impl Target for Nothing {
         unreachable!("nothing is selected")
     }
 
-    fn describe(&self, _: &()) -> Described {
+    fn describe(&self, _: &Declaration) -> Described {
         Described::new("declared", "c_")
     }
 }
@@ -78,9 +77,9 @@ fn plan(
     sources: FlatBuilder,
     crate_name: &str,
 ) -> Result<Generation<()>, EngineError> {
-    let mut requests = BindingRequests::new("test", syn::parse_quote!(fixture), ());
+    let mut requests = BindingRequests::new("test", syn::parse_quote!(fixture));
     for declaration in &stated.declared {
-        requests.output(declaration.clone(), requests.default_policy);
+        requests.output(declaration.clone());
     }
     requests.ignored = stated.ignored.clone();
     generate(sources.build()?, &Nothing, requests, crate_name)

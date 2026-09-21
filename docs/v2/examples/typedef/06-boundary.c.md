@@ -10,7 +10,7 @@ Owner: the registry, on the C adapter's `BoundarySpec`
 ```text
 node(taken) : carrier *mut Ledger, release infallible
 
-policy (C handle): release symbol "ledger_drop", extern "C"
+CTarget, under `type:Ledger`: release symbol "ledger_drop", extern "C"
                    Binding -> abort
 ```
 
@@ -32,10 +32,10 @@ Fixing the signature that [emission][typedef_emit_c] renders:
 pub extern "C" fn ledger_drop(this_: *mut Ledger)
 ```
 
-The adapter answers a boundary with no source function by reading the release
-symbol out of the type's
-[policy](../../stages/03-requests.md#what-policy-means), and names the one
-parameter `this_`, as v1's destructors do. The same policy fixes the
+The adapter answers a boundary with no source function by looking the type's
+[policy](../../stages/03-requests.md#what-policy-means) up under the
+declaration it is given, reading the release symbol out of it, and naming the
+one parameter `this_`, as v1's destructors do. The same policy fixes the
 boundaries of the two functions reaching the handle, which are ordinary
 function boundaries with the binding route added:
 

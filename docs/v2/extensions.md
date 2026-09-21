@@ -134,9 +134,9 @@ struct RelationDefinition {
     operation: Relation, // Checked role; no independently assignable subject field.
 }
 struct RelationId { /* private table identity and entry ID */ }
-struct Selection {
+struct Selection<ConversionKey> {
     relation: RelationId, // Registered RelationDefinition containing the checked role.
-    policy: PolicyId,     // Target representation settings.
+    conversion: ConversionKey, // The target's name for the settings it applied.
 }
 struct ConversionRules {
     sites: Map<SiteId, Selection>, // Parameter/result overrides.
@@ -410,9 +410,8 @@ explicit request mechanism if a target requires additional conversions beyond
 those; that mechanism is not implemented. Rendering must not discover new
 conversions.
 
-Descriptions returned by a target can contain new primitive, layout, helper, or
-[policy](stages/03-requests.md#what-policy-means) definitions with references
-local to that description. The registry validates and registers the
+Descriptions returned by a target can contain new primitive, layout or helper
+definitions with references local to that description. The registry validates and registers the
 definitions and assigns its own table IDs. Existing descriptors can reference
 IDs the registry already supplied. The target does not allocate entries in
 registry-owned tables itself.

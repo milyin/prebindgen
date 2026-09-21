@@ -7,22 +7,23 @@ Owner: the registry, on the C adapter's selections
 
 ## Input
 
-The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), with the C [policy](../../stages/03-requests.md#what-policy-means) recorded for them and the [relations](../../stages/04-select.md#what-a-relation-is) the registry offers:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan) and the [relations](../../stages/04-select.md#what-a-relation-is) the registry offers, beside the C [policy](../../stages/03-requests.md#what-policy-means) the `CTarget` holds for each — which
+the registry does not pass in and cannot read:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   policy: data_struct named Stamp, by value
-                                                    offered: [ Stamp.fields, atomic ]
-Crossing { source: i64,   direction: OutOfRust }   policy: scalar carrier
-                                                    offered: [ atomic ]
+Crossing { source: Stamp, direction: IntoRust  }   offered: [ Stamp.fields, atomic ]
+                                                    CTarget: data_struct named Stamp, by value
+Crossing { source: i64,   direction: OutOfRust }   offered: [ atomic ]
+                                                    CTarget: scalar carrier
 ```
 
 ## Result
 
 ```text
-Param(0)  Stamp, IntoRust   -> Stamp.fields
-  secs    i64,   IntoRust   -> atomic
-  nanos   i64,   IntoRust   -> atomic
-Return    i64,   OutOfRust  -> atomic
+Param(0)  Stamp, IntoRust   -> Stamp.fields, conversion CPolicy::DataStruct { c_name: "Stamp" }
+  secs    i64,   IntoRust   -> atomic,       conversion CPolicy::Scalar
+  nanos   i64,   IntoRust   -> atomic,       conversion CPolicy::Scalar
+Return    i64,   OutOfRust  -> atomic,       conversion CPolicy::Scalar
 ```
 
 The C adapter selects `Stamp.fields` because the struct is declared as a
@@ -31,12 +32,17 @@ The C adapter selects `Stamp.fields` because the struct is declared as a
 made of the field conversions. Had the build script declared `Stamp` as an
 opaque pointer type instead, the same query would answer `atomic` — the whole
 value carried behind a pointer, its fields never read — and the registry would
-descend no further. The adapter answers from the policy alone; it has not seen
-the fields and does not need to.
+descend no further. The adapter answers from the policy it looked up for this
+position; it has not seen the fields and does not need to.
 
 The two `i64` positions are answered the same way, `atomic`, and the return
 position likewise: a scalar has one relation and the C policy for it is a
 scalar [carrier](../../stages/05-represent.md#describing-target-values-and-operations).
+
+`CPolicy` is both what the C frontend recorded and this target's
+[conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan):
+it is plain data, so the three scalar answers above are equal, and the registry
+plans one `i64` conversion per direction rather than one per position.
 
 ## Checks
 

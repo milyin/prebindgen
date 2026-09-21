@@ -217,10 +217,12 @@ establish the behavior of the resulting foreign interface.
 
    For the same reason, `represent` is not told the position it is answering
    for. A representation is reused wherever a conversion of the same identity is
-   needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, effective [policy](stages/03-requests.md#what-policy-means), children — so a target that
+   needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, [conversion key](stages/03-requests.md#finding-an-existing-conversion-plan), children — so a target that
    answered differently for two positions would have its second answer silently
-   bypassed by the first one's [node](stages/05-represent.md#represent-and-compose-values). Varying by position is what a policy
-   recorded at that position is for, and that policy is in the identity.
+   bypassed by the first one's [node](stages/05-represent.md#represent-and-compose-values). Varying by position is what
+   `select` is for: it is the one call that sees a position, and a
+   [policy](stages/03-requests.md#what-policy-means) recorded there comes back
+   as a different key, which is in the identity.
 4. **How an adapter declares its types and generated units.** Neither is an id an
    adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
    plus whether it may appear in an extern signature — carried inline in the
@@ -345,7 +347,7 @@ this list says what the increment left open and why.
 Acceptance criteria:
 
 - [x] The design's boundaries are exercised by scalar and struct bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
-- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry. `CPolicy` and `JniPolicy` represent implemented choices and include an `Unimplemented` case naming other declarators; their corresponding targets interpret them.
+- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry, and the target that holds what each request is. `CPolicy` and `JniPolicy` represent implemented choices and include an `Unimplemented` case naming other declarators; each is its target's private storage and its conversion key, and the registry names neither.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
