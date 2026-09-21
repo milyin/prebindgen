@@ -161,7 +161,7 @@ struct SurfaceSpec<Payload> {
 }
 ```
 
-`Requirement` is a typed reference to a dependency that must succeed. It is the resolved obligation derived from an output request's semantic promises or actual usage. `members` describes association; a member that is essential to a promised interface must also be a requirement.
+`Requirement` is a typed reference to a dependency that must succeed. Today it is derived from what a declaration's signature uses — the public type a value crosses as — and the sketch extends it to what a declaration promises. `members` describes association; a member that is essential to a promised interface must also be a requirement.
 
 The full design requires the following dependency behavior. Struct/caller
 propagation is implemented; interface and method promises extend that rule:
