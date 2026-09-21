@@ -5,7 +5,7 @@
 //! explicitly, so a test never depends on the runner's `PREBINDGEN_PIPELINE`.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{DeclarationKind, Origin, Outcome};
+use prebindgen_registry_v2::{Origin, Outcome};
 
 use super::*;
 
@@ -350,7 +350,7 @@ fn a_function_backed_constant_resolves_against_the_function() {
         .find(|entry| entry.representation() == "constant_fun")
         .expect("the constant is accounted for");
     assert_eq!(constant.origin.name(), "z_thing_describe");
-    assert_eq!(constant.kind(), DeclarationKind::Const);
+    assert_eq!(constant.kind(), "const");
     // The target gets a `val`; the source must hold a function.
     assert!(matches!(
         &constant.origin,

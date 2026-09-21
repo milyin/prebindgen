@@ -5,7 +5,7 @@
 //! `PREBINDGEN_PIPELINE` happens to hold in the runner's environment.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{DeclarationKind, Outcome};
+use prebindgen_registry_v2::Outcome;
 
 use super::*;
 use crate::test_util::unique_test_dir;
@@ -227,7 +227,7 @@ fn an_ignore_is_classified_separately() {
         .find(|entry| entry.origin.to_string() == "fn:calculator_internal")
         .expect("the ignore is accounted for");
     assert_eq!(ignored.outcome, Outcome::Ignored);
-    assert_eq!(ignored.kind(), DeclarationKind::Function);
+    assert_eq!(ignored.kind(), "fn");
 }
 
 /// A declared function the source never captured is a build error under v2 as
