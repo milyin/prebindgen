@@ -338,7 +338,6 @@ The registry separates what should be generated from how values should be conver
 // What the frontend hands the registry, beside the model and the target.
 declarations: Vec<(Declaration, CChoice)>, // Expose each of these, as this.
 source_module: Path,                       // How generated Rust reaches the source items.
-declaring_crate: &str,                     // The crate generating, for the report.
 
 // What the frontend keeps and answers the registry's questions from —
 // `CbindgenBuilder` and the `CTarget` it builds, schematically.
@@ -351,22 +350,22 @@ struct FrontendStorage {
 The registry meets a conversion rule one value at a time, as the conversion key
 the target returns from `select`; it never sees the table. A setting the
 frontend cannot lower needs no list of its own either — it becomes an ordinary
-output request that the target then refuses by name, so the report accounts for
+output request that the target then refuses by name, so the run accounts for
 it like anything else.
 
 Nothing here is generic. C and JNI hand over the same kind of declaration
-list, and differ only in the `Target` they pass beside it — which is also where the
-report's name for the language comes from, as `Target::NAME`, since an adapter
-knows what it is. These sketches explain the responsibilities;
+list, and differ only in the `Target` they pass beside it — which is also where
+the language's name comes from, as `Target::NAME`, since an adapter knows what
+it is. The generated file carries it. These sketches explain the responsibilities;
 `prebindgen-registry-v2/src/plan.rs` defines the exact current fields.
 
-The registry plans what is to be exposed, reports what is left alone, and asks the adapter for every choice that applies.
+The registry plans what is to be exposed, hands back what it left out, and asks the adapter for every choice that applies.
 
 Suppose the user configures the JNI frontend to accept `Stamp` as two integer arguments by default, then overrides the `Stamp` parameter of function `f` to accept a JVM object. The JNI target resolves that override when the registry asks it to select a relation for `f`'s parameter 0, and returns a different conversion key than it does for function `g`, which has no override. A choice recorded for a particular field or constructor argument is applied the same way, where that child is converted, following the frontend API's documented override rules.
 
 Identical type, construction and representation choices produce an equal key and can share a converter; the object override produces a different key and needs a different converter.
 
-A setting the frontend cannot honor needs no record of its own: the declaration it applies to is requested like any other, and the target refuses it by name when the registry asks. Identity, location and reason then reach the report through the ordinary [skip](07-retain.md#retain-supported-output), and propagate as one.
+A setting the frontend cannot honor needs no record of its own: the declaration it applies to is requested like any other, and the target refuses it by name when the registry asks. Identity, location and reason then travel together as the ordinary [skip](07-retain.md#retain-supported-output), and propagate as one.
 
 The engine's one entry point (signature only):
 
@@ -376,7 +375,6 @@ pub fn generate<T: Target>(
     target: &T,
     declarations: Vec<(Declaration, T::ConversionKey)>,
     source_module: syn::Path,
-    declaring_crate: &str,
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
@@ -399,8 +397,7 @@ applied, the same answer v1 gives.
 let source_model = self.sources.clone().build()?;   // stage 2: the snapshot
 
 let (target, declarations) = self.binding();         // this stage
-let generation = generate(source_model, &target, declarations,
-                          source_module, &declaring_crate)?;
+let generation = generate(source_model, &target, declarations, source_module)?;
                                                      // stages 4 to 6
 ```
 
@@ -474,7 +471,7 @@ binding stated are the same entity, and differ in origin alone.
 A declaration is that identity and nothing else. What the declaration *is* —
 its symbol, its placement, the declarator it came from — is the choice
 recorded beside it, which the registry hands the target back when it asks for
-a boundary, a public declaration or a report line. What it *depends on* is the
+a boundary or a public declaration. What it *depends on* is the
 target's answer too, at
 [`surface`](04-select.md#how-the-registry-asks-a-target-for-decisions):
 `SurfaceSpec.requires` names the public types a declaration is unusable
@@ -512,14 +509,20 @@ the entity they name.
 
 One entity may be declared more than once — `stamp_sum` as a Kotlin `fun` in
 one package and as the `val` a `constant!` reads through it, `Stamp` as a data
-class and as a handle. Each is an output of its own, with its own choice,
-outcome and report row, and what tells them apart is that choice: the engine
-compares choices for equality and never reads one. The declaration is
-unchanged by any of this, which is why a binding declaring each entity once
-has exactly the ids it always had; declaring one entity twice as the same
-thing is the binding saying one thing twice, and is refused. The report tells
-two rows of one entity apart by the foreign placement the target describes
-each by — `fn:stamp_sum@example.Totals.SUM`.
+class and as a handle. Each is an output of its own, planned and accounted for
+on its own, and what tells them apart is the choice recorded with it: the
+engine compares choices for equality and never reads one. The declaration is
+unchanged by any of this, which is why a binding declaring each entity once is
+described exactly as it always was; declaring one entity twice as the same
+thing is the binding saying one thing twice, and is refused.
+
+The declaration is all the engine can say about an output afterwards, so two
+outputs of one entity are indistinguishable in what a run leaves out:
+`Generation::skipped` returns the same `Declaration` twice, once per output it
+could not generate. What separates them is the target's own vocabulary — a
+Kotlin placement, a C symbol — which the engine does not speak, so a binding
+that needs its diagnostics to tell them apart says so in its own terms, from
+the choices it recorded.
 
 Two declarations of one type each plan as declared. A target keeps a default
 for values *of* a type, and that default is one of the two; the other would

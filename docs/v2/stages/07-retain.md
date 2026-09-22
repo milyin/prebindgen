@@ -35,8 +35,8 @@ the members of that interface too.
 So a missing capability propagates. Suppose one field of the struct had a type no
 [representation](05-represent.md#represent-and-compose-values) covers yet. Its conversion is unsupported; the struct's conversion
 is therefore unsupported; the public struct cannot be emitted; and the function
-that takes it is skipped as well. Current reports copy the underlying reason
-and preserve each dependent's path to it. An unrelated function in
+that takes it is skipped as well. Each dependent's skip copies the underlying
+reason and keeps its own path to it. An unrelated function in
 the same package is still generated. Nothing is emitted in a reduced form. A
 struct is never emitted with a field left out, because a foreign type missing a
 field is a different type, not a partial one.
@@ -67,7 +67,7 @@ generation decision.
 
 What survives is then **frozen**: planning is over and retained plans determine
 the output. Current `generate` renders Rust before returning `Generation`,
-which stores that text, the plans and the report. The Kotlin writer reads the
+which stores that text, the plans, and what it left out. The Kotlin writer reads the
 retained public descriptions. Neither writer may plan a missing conversion,
 add a dependency or reverse a support decision.
 
@@ -76,7 +76,7 @@ add a dependency or reverse a support decision.
 **Specified behavior: a requested binding that cannot be generated fails the
 build.** A build script asks for an exported API; quietly shipping less than it
 asked for is not something the finished engine offers, and a consumer must not
-have to read a report to learn that a function it declared does not exist.
+have to read a diagnostic to learn that a function it declared does not exist.
 
 **Skipping is transitional.** V2's coverage is still smaller than V1's, so while
 that gap lasts the engine accepts a request it cannot generate, records it as a
@@ -238,17 +238,17 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> registry assembles functions and resolves all required dependencies
  -> registry propagates skips and retains complete supported output
  -> common Rust writer renders the retained wrapper plans
- -> return Generation with Rust text, retained descriptions and report
+ -> return Generation with Rust text, retained descriptions and the skips
  -> C: cbindgen derives headers from generated Rust
     JNI: optional foreign-writer interface is implemented by the Kotlin writer
  -> publish generated files
- -> optionally write the diagnostic report beside them
+ -> the binding prints or publishes the skips as it chooses
 ```
 
 Selection, child resolution and representation happen together for each [node](05-represent.md#represent-and-compose-values). A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
 
 The following is the proposed storage organization. Current `Generation` owns
-Flat, vectors of value/function/surface/primitive records, a `Report` and the
+Flat, vectors of value/function/surface/primitive records, the skips and the
 already-rendered Rust string. It does not contain an ordered artifact arena.
 
 ```rust

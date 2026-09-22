@@ -20,7 +20,8 @@ use crate::{
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
 
-/// A finished v2 run: the model it read, what it generated, and the report.
+/// A finished v2 run: the model it read, what it generated, and what a
+/// missing capability left out.
 ///
 /// Immutable. Every writer is a pure emission over it, so they can run in any
 /// order, or not at all.
