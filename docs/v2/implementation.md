@@ -320,8 +320,9 @@ establish the behavior of the resulting foreign interface.
    need, and what `#[non_exhaustive]` is about in either position, so those
    are the shapes it declares: an enum with explicit and implicit numbers, one
    whose values are constructors, and one refusal for each place the attribute
-   can sit. The remaining refusals produce nothing to compile, and a unit test
-   is where each is checked.
+   can sit. The remaining refusals produce nothing to compile, so each is
+   checked by a test that asks a frontend for such an enum and reads the
+   capability back.
 
 ### What it does not settle
 

@@ -518,3 +518,60 @@ fn a_non_exhaustive_enum_is_refused() {
         "unsupported.c.non_exhaustive_enum"
     );
 }
+
+/// A number the model could not evaluate refuses the enum.
+///
+/// A mirror is the numbers, and the model reads them from literals alone: an
+/// arithmetic discriminant, or one naming a `const`, ends the chain and leaves
+/// the values after it unnumbered. Emitting the mirror from what is left would
+/// renumber them behind the source's back.
+#[test]
+fn an_unevaluable_number_refuses_the_enum() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub enum Operation {
+                Add = 1 + 1,
+                Mul,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.enum_discriminant");
+}
+
+/// An enum with no values refuses too: there is nothing to mirror, and C has
+/// no empty enumeration to mirror it as.
+#[test]
+fn an_enum_with_no_values_is_refused() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub enum Operation {}
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.empty_enum");
+}
