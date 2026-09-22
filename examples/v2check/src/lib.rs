@@ -69,6 +69,47 @@ mod tests {
         crate::ledger_drop(std::ptr::null_mut());
     }
 
+    /// An enum comes into Rust as the number C put in it, and each number a
+    /// value has becomes that value.
+    ///
+    /// `MaybeUninit` is what C's `Gear` arrives in, so a number no value has
+    /// is still a valid argument; the wrapper aborts on one, which a test
+    /// cannot observe.
+    #[test]
+    fn the_c_enum_input_becomes_the_source_value() {
+        use core::mem::MaybeUninit;
+        assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::Low)), 1);
+        assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::High)), 30);
+    }
+
+    /// The header declares an enum that only ever comes in, and names it as
+    /// the type of the parameter that takes it.
+    ///
+    /// cbindgen emits a type only when an exported signature reaches it, and
+    /// nothing returns a `Gear`. The parameter is typed `MaybeUninit<Gear>`,
+    /// which cbindgen reads as `Gear` — so the enum and its constants are in
+    /// the header, where a C caller needs them.
+    #[test]
+    fn the_c_header_declares_an_input_only_enum() {
+        let mut header = Vec::new();
+        cbindgen::Builder::new()
+            .with_src(env!("V2CHECK_C"))
+            .with_language(cbindgen::Language::C)
+            .generate()
+            .expect("cbindgen reads the generated C binding")
+            .write(&mut header);
+        let header = String::from_utf8(header).unwrap();
+        let compact: String = header.split_whitespace().collect();
+        assert!(
+            compact.contains("typedefenumGear{Low=0,High=3,}Gear;"),
+            "{header}"
+        );
+        assert!(
+            compact.contains("int64_tgear_rank(enumGeargear);"),
+            "{header}"
+        );
+    }
+
     /// A field written under a condition nothing could answer reaches every
     /// place the generated C binding's Rust names that field.
     ///

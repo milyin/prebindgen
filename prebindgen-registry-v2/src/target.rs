@@ -396,10 +396,19 @@ pub enum StandardOp {
     /// carrier does. Without it the arms are exhaustive over the carrier's
     /// own type and the operation is infallible, which is what a carrier that
     /// is itself an enum of the same values gives.
+    ///
+    /// With `bits` set the match is on the carrier's bits read as that
+    /// integer type rather than on the carrier itself. That is for a carrier
+    /// typed as a foreign enum the foreign side may have filled with any
+    /// number: C's `MaybeUninit<op_t>` keeps `op_t` in the header and holds
+    /// whatever `int` the caller passed, which a match on `op_t` could not
+    /// see. The carrier must be exactly as large as `bits`; the target that
+    /// chose both is what asserts it.
     EnumIn {
         source: Box<TypeRef>,
         values: Vec<EnumArm>,
         invalid: Option<String>,
+        bits: Option<Box<syn::Type>>,
     },
 }
 

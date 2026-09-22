@@ -63,6 +63,8 @@ fn main() {
                 .fun(prebindgen_c::fun!(operation_flip))
                 .enum_type(prebindgen_c::enum_type!(Adjust))
                 .fun(prebindgen_c::fun!(adjust_invert))
+                .enum_type(prebindgen_c::enum_type!(Gear))
+                .fun(prebindgen_c::fun!(gear_rank))
                 .enum_type(prebindgen_c::enum_type!(Sweep))
                 .enum_type(prebindgen_c::enum_type!(Detent))
                 .data_type(prebindgen_c::data_type!(Sample))

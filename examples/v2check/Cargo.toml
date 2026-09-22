@@ -17,6 +17,9 @@ source = { package = "v2check-source", path = "../v2check-source" }
 jni = "0.21.1"
 
 [dev-dependencies]
+# One test reads the generated C binding through cbindgen, as a C consumer's
+# build does, to check what the header declares.
+cbindgen = "=0.29.4"
 # The tests compare emitted items with the ones the specification pages show,
 # which means parsing both rather than diffing text.
 syn = { workspace = true }

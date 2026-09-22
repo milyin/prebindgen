@@ -42,7 +42,8 @@ pub enum CChoice {
     /// frees it through the `release` symbol.
     OpaquePtr { c_name: String, release: String },
     /// A fieldless enum: C declares an enum of the same values under this
-    /// name. A value leaves Rust as one of them and comes back as a C `int`.
+    /// name, and a value of the type crosses as one of them — read, coming
+    /// into Rust, as the C `int` it holds.
     /// The enumerators keep the Rust value names; cbindgen's `[enum]
     /// prefix_with_name` is what keeps two enums' `Add` apart in a header.
     Enum { c_name: String },
@@ -216,12 +217,13 @@ impl Target for CTarget {
                     },
                 }))
             }
-            // A fieldless enum leaves Rust as the C enum this target
-            // declares for it, and comes back as a C `int`. C lets an enum
-            // variable hold any `int`, and a Rust enum holding a number none
-            // of its values has is undefined behaviour before any match can
-            // look at it, so the direction into Rust reads the number and
-            // fails on one no value has.
+            // A fieldless enum crosses as the C enum this target declares for
+            // it, both ways, so the header names it wherever the source does.
+            // Into Rust it arrives as `MaybeUninit` of that enum and is read
+            // as the C `int` it holds: C lets an enum variable hold any `int`,
+            // and a Rust enum holding a number none of its values has is
+            // undefined behaviour before any match can look at it. So that
+            // direction matches the number, and fails on one no value has.
             (Relation::Atomic, CChoice::Enum { c_name }) => {
                 let values = match mirrored_i32_enum(shape.unit, c_name, Self::NAME) {
                     Ok(values) => values,
@@ -259,7 +261,8 @@ impl Target for CTarget {
                         (carrier, codec)
                     }
                     Direction::IntoRust => {
-                        let carrier = WireType::abi(syn::parse_quote!(::core::ffi::c_int));
+                        let carrier =
+                            WireType::abi(syn::parse_quote!(::core::mem::MaybeUninit<#ident>));
                         let values = values
                             .iter()
                             .map(|(value, number)| {
@@ -288,6 +291,7 @@ impl Target for CTarget {
                                 source: Box::new(ty),
                                 values,
                                 invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
+                                bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
                             }),
                         };
                         (carrier, codec)
@@ -520,6 +524,7 @@ impl Target for CTarget {
                     Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };
                 let ident = format_ident!("{c_name}");
+                let size_message = format!("`{c_name}` is not the size of a C `int`");
                 let values = values.iter().map(|(value, number)| {
                     let name = &value.name;
                     let number = proc_macro2::Literal::i32_unsuffixed(*number);
@@ -528,17 +533,33 @@ impl Target for CTarget {
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     declaration: request.declaration.clone(),
                     requires: Vec::new(),
-                    rust: vec![Artifact::new(
-                        c_name.clone(),
-                        quote! {
-                            #[repr(C)]
-                            #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-                            #[allow(non_camel_case_types)]
-                            pub enum #ident {
-                                #(#values),*
-                            }
-                        },
-                    )],
+                    rust: vec![
+                        Artifact::new(
+                            c_name.clone(),
+                            quote! {
+                                #[repr(C)]
+                                #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+                                #[allow(non_camel_case_types)]
+                                pub enum #ident {
+                                    #(#values),*
+                                }
+                            },
+                        ),
+                        // A value coming into Rust is read as a C `int`, which is
+                        // only its bits where the two are one size — not on a
+                        // target whose C enums are narrower. An artifact of its
+                        // own, so the enum's condition reaches it too.
+                        Artifact::new(
+                            format!("{c_name} size"),
+                            quote! {
+                                const _: () = assert!(
+                                    ::core::mem::size_of::<#ident>()
+                                        == ::core::mem::size_of::<::core::ffi::c_int>(),
+                                    #size_message
+                                );
+                            },
+                        ),
+                    ],
                     payload: None,
                 }))
             }

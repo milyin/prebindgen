@@ -290,13 +290,16 @@ establish the behavior of the resulting foreign interface.
    `EnumOut` and `EnumIn`, for the reason the handle operations are standard:
    they name the source type, and an adapter cannot spell a source path. What
    the number is carried *as* is the adapter's. C declares an enum of the same
-   values and a value leaves Rust as one of them, through an exhaustive `match`
-   that cannot fail; it comes back as a C `int`, because C lets an enum variable
-   hold any `int` and a Rust enum holding a number none of its values has is
-   undefined behaviour. JNI carries a `jint` and a Kotlin `enum class`. In both,
-   the direction into Rust can meet a number no value names and fails as a
-   `Binding` error. An alternative carrying a field makes a sum, which the model
-   calls a variant and which has no lowering.
+   values, and a value crosses as one of them either way, so the header names
+   the enum wherever the source does. Out of Rust that is an exhaustive `match`
+   that cannot fail. Into Rust the enum arrives as `MaybeUninit` and is matched
+   as the C `int` it holds, because C lets an enum variable hold any `int` and a
+   Rust enum holding a number none of its values has is undefined behaviour.
+   `EnumIn` takes the integer type to read the carrier as for this. JNI carries
+   a `jint` and a Kotlin `enum class`. In both, the direction into Rust can meet
+   a number no value names and fails as a `Binding` error. An alternative
+   carrying a field makes a sum, which the model calls a variant and which has
+   no lowering.
 
    Some shapes are refused rather than mirrored, by one check both targets
    share. A number the model could not evaluate — a `const`, arithmetic — is not
@@ -317,13 +320,15 @@ establish the behavior of the resulting foreign interface.
    captured.
 
    `examples/v2check` parses a crate it also links, so rustc compiles the
-   generated matches across the boundary. That is what the accepted shapes
-   need, and what `#[non_exhaustive]` is about in either position, so those
-   are the shapes it declares: an enum with explicit and implicit numbers, one
-   whose values are constructors, and one refusal for each place the attribute
-   can sit. The remaining refusals produce nothing to compile, so each is
-   checked by a test that asks a frontend for such an enum and reads the
-   capability back.
+   generated matches across the boundary. That is what the accepted shapes need,
+   and what `#[non_exhaustive]` is about in either position, so those are the
+   shapes it declares: an enum with explicit and implicit numbers, one whose
+   values are constructors, one only ever passed in, and one refusal for each
+   place the attribute can sit. A test runs cbindgen over the C binding, because
+   the header declares an enum only if an exported signature names it, and the
+   input-only one is named by nothing else. The remaining refusals produce
+   nothing to compile, so each is checked by a test that asks a frontend for
+   such an enum and reads the capability back.
 
 ### What it does not settle
 

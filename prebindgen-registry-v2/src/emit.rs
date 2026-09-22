@@ -378,8 +378,13 @@ fn operation<T: Target>(
             source,
             values,
             invalid,
+            bits,
         }) => {
             let value = &operands[0];
+            let value = match bits {
+                Some(bits) => quote!(unsafe { ::core::mem::transmute_copy::<_, #bits>(&(#value)) }),
+                None => quote!(#value),
+            };
             let ty = source_type(source);
             let arms = values.iter().map(|arm| {
                 let carried = &arm.carried;

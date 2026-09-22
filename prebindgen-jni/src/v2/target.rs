@@ -508,6 +508,7 @@ impl Target for JniTarget {
                             source: Box::new(ty),
                             values: arms,
                             invalid: Some(format!("`{class}` has no value numbered {{}}")),
+                            bits: None,
                         }),
                     },
                 };

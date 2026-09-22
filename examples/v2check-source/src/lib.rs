@@ -67,6 +67,20 @@ pub fn adjust_invert(adjust: Adjust) -> Adjust {
     }
 }
 
+/// An enum only ever passed in. Nothing the C binding exports returns one, so
+/// the header declares it only if the parameter that takes it is typed as it.
+pub enum Gear {
+    Low,
+    High = 3,
+}
+
+pub fn gear_rank(gear: Gear) -> i64 {
+    match gear {
+        Gear::Low => 1,
+        Gear::High => 30,
+    }
+}
+
 /// An enum another crate may not match without an arm for a value it does not
 /// know, and one whose values another crate may not name at all.
 ///

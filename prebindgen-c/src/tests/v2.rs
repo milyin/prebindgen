@@ -298,17 +298,17 @@ fn v1_is_unchanged_and_reachable_by_name() {
         .is_some());
 }
 
-/// A fieldless enum leaves Rust as the C enum this adapter declares for it —
-/// the same values under the same names, carrying the numbers Rust assigns —
-/// and comes back as a C `int`.
+/// A fieldless enum crosses as the C enum this adapter declares for it: the
+/// same values under the same names, carrying the numbers Rust assigns.
 ///
 /// The wrapper goes between the source type and the carrier by matching one
 /// value at a time. Out of Rust the match names every value and cannot fail;
 /// if the two enums ever drift apart, the generated Rust stops compiling
-/// rather than mapping a value to the wrong one. Into Rust the carrier is an
-/// `int`, because C lets an enum variable hold any `int` and a Rust enum
-/// holding a number none of its values has is undefined behaviour — so a
-/// number no value has fails instead.
+/// rather than mapping a value to the wrong one. Into Rust the enum arrives
+/// as `MaybeUninit` and is matched as the C `int` it holds, because C lets an
+/// enum variable hold any `int` and a Rust enum holding a number none of its
+/// values has is undefined behaviour — so a number no value has fails
+/// instead.
 #[test]
 fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
     let loc = SourceLocation::default();
@@ -355,16 +355,27 @@ fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
         compact.contains("pubenumoperation_t{Add=0,Mul=7,}"),
         "{rust}"
     );
-    // The wrapper takes an `int` and returns the enum.
+    // Reading it as an `int` is reading its bits only where the two are one
+    // size, which the build asserts.
     assert!(
-        compact.contains("pubextern\"C\"fnoperation_flip(op:::core::ffi::c_int)->operation_t{"),
+        compact.contains(
+            "::core::mem::size_of::<operation_t>()==::core::mem::size_of::<::core::ffi::c_int>()"
+        ),
         "{rust}"
     );
+    // The wrapper takes and returns the enum, so the header names it both
+    // ways.
+    assert!(
+        compact.contains("pubextern\"C\"fnoperation_flip(op:::core::mem::MaybeUninit<operation_t>"),
+        "{rust}"
+    );
+    assert!(compact.contains(")->operation_t{"), "{rust}");
     // One arm per value each way; into Rust, a default arm for a number no
     // value has.
     assert!(
         compact.contains(
-            "matchop{0=>::core::result::Result::Ok(fixture::Operation::Add),\
+            "matchunsafe{::core::mem::transmute_copy::<_,::core::ffi::c_int>(&(op))}{\
+             0=>::core::result::Result::Ok(fixture::Operation::Add),\
              7=>::core::result::Result::Ok(fixture::Operation::Mul),\
              other=>{::core::result::Result::Err(\
              ::std::format!(\"`operation_t`hasnovaluenumbered{}\",other),)}}"
