@@ -50,11 +50,14 @@ impl Declarations {
             });
             sources = sources.local_function(sig, module);
         }
+        // Every declared class, not only the handle ones: a data class over a
+        // type the model cannot see into is then refused by the target for
+        // what it is, rather than failing the build as a name nothing
+        // captured. The item's name is the key's, without the arguments a key
+        // may carry — `ptr_class!(Publisher<'static>)` names `Publisher`.
         for key in sorted(self.types.keys()) {
-            if matches!(self.types[key].kind, crate::jni::DeclaredKind::Ptr(_)) {
-                if let Some(name) = key.ident() {
-                    sources = sources.local_type(name);
-                }
+            if let Some(name) = key.short_name().and_then(|name| syn::parse_str(&name).ok()) {
+                sources = sources.local_type(name);
             }
         }
         let flat = sources.build()?;

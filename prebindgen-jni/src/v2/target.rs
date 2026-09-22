@@ -370,10 +370,13 @@ impl Target for JniTarget {
                 _ => {}
             }
         }
+        // A data class is read through properties, and the model offers no
+        // fields for this type: it is an extern, captured or the binding's
+        // own, and there is nothing to see into.
         Ok(TargetAttempt::Unsupported(Unsupported::new(
-            "unsupported.jni.no_relation",
+            "unsupported.jni.not_a_struct",
             format!(
-                "no relation available for `{}` as this binding declared it",
+                "`{}` is declared as a data class, and the model has no fields for it",
                 query.crossing.ty.key()
             ),
         )))

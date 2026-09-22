@@ -51,7 +51,7 @@ say.
 
 - The answer is the one id the registry offered; a handle choice on a struct
   selects `atomic` from the two offered, and a data choice on an extern finds
-  no struct relation and is refused with `no_relation`.
+  no struct relation and is refused with `not_a_struct`.
 - No part is planned, so nothing under the type can be unsupported: the only
   refusals left are the target's own, at the next stage.
 - The same two selections serve the type's request, `ledger_open` and

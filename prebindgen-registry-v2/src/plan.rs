@@ -799,7 +799,9 @@ pub fn generate<T: Target>(
     let declared_types: BTreeMap<String, &Declaration> = exposed
         .iter()
         .filter(|declaration| declaration.is_type())
-        .map(|declaration| (declaration.name(), *declaration))
+        // Keyed by the item's name, which is what a requirement names: a
+        // declaration's key may carry arguments the item does not.
+        .filter_map(|declaration| Some((declaration.entity()?.name(), *declaration)))
         .collect();
 
     // A public declaration can require another one. Propagate until a pass
@@ -1359,7 +1361,11 @@ fn plan_type<T: Target>(
     // binding declared over a type the source never exported, which entered
     // the model as an extern — and the declarations were checked against it
     // before planning, so this lookup finds one.
-    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(&declaration.name()) {
+    let name = declaration
+        .entity()
+        .expect("a type declaration names an entity")
+        .name();
+    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(&name) {
         Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
         Some(Type::Extern(opaque)) => {
             // A declaration answers what reading names it; an extern keeps
@@ -1378,7 +1384,7 @@ fn plan_type<T: Target>(
         None => {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` was checked against the model and is not in it",
-                declaration.name()
+                name
             )))
         }
         Some(Type::Enum(_) | Type::Variant(_)) => {
@@ -1387,7 +1393,7 @@ fn plan_type<T: Target>(
                     "unsupported.type.enum",
                     format!(
                         "`{}` is an enum, which v2 has no representation for yet",
-                        declaration.name()
+                        name
                     ),
                 ),
                 &root,

@@ -2133,3 +2133,65 @@ fn removing_an_element_takes_what_names_it() {
         .without(&["Absent".to_string()].into_iter().collect())
         .is_empty());
 }
+
+/// An item the binding states is an element like a captured one, and where it
+/// came from travels with it: removing a captured item does not change what
+/// the binding's own are, and the source-module list never learns a
+/// binding-local module.
+#[test]
+fn provenance_is_the_elements_own_and_survives_removal() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let mut flat = Flat::builder()
+        .items(
+            [
+                syn::parse_quote!(
+                    pub struct Stamp {
+                        pub secs: i64,
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn stamp_sum(stamp: Stamp) -> i64 {
+                        unimplemented!()
+                    }
+                ),
+                syn::parse_quote!(
+                    pub fn tick() -> i64 {
+                        unimplemented!()
+                    }
+                ),
+            ]
+            .into_iter()
+            .map(|item: syn::Item| (item, location.clone())),
+        )
+        .local_function(
+            syn::parse_quote!(fn helper() -> i64),
+            syn::parse_quote!(crate::helpers),
+        )
+        .local_type(syn::parse_quote!(Handle))
+        // Captured already; the binding's own steps aside.
+        .local_type(syn::parse_quote!(Stamp))
+        .build()
+        .expect("the fixture builds a model");
+
+    assert_eq!(flat.provenance("tick"), Some(Provenance::Captured));
+    assert_eq!(flat.provenance("Stamp"), Some(Provenance::Captured));
+    assert_eq!(flat.provenance("helper"), Some(Provenance::Binding));
+    assert_eq!(flat.provenance("Handle"), Some(Provenance::Binding));
+    assert_eq!(flat.provenance("absent"), None);
+    assert_eq!(flat.captured().count(), 3);
+    assert_eq!(flat.source_modules(), ["fixture"]);
+
+    // Removing a captured item — and the captured function that takes it —
+    // leaves the binding's own exactly as they were.
+    flat.without(&["Stamp".to_string()].into_iter().collect());
+    assert!(flat.declared_type("Stamp").is_none());
+    assert_eq!(flat.captured().count(), 1);
+    assert_eq!(flat.provenance("tick"), Some(Provenance::Captured));
+    assert_eq!(flat.provenance("helper"), Some(Provenance::Binding));
+    assert_eq!(flat.provenance("Handle"), Some(Provenance::Binding));
+    assert!(flat.is_binding_local("Handle"));
+    assert!(!flat.is_binding_local("tick"));
+}

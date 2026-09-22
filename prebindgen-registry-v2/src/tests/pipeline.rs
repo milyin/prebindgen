@@ -28,6 +28,14 @@ use crate::{
 /// Two structs and three functions, one of which has a field nothing can carry;
 /// an opaque type, and the two functions that hand one out and take it back.
 fn model() -> Flat {
+    Flat::builder()
+        .items(model_items())
+        .build()
+        .expect("the fixture builds a model")
+}
+
+/// The same, as the items a builder takes — for a test that adds to them.
+fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     let location = prebindgen::SourceLocation {
         crate_name: Some("fixture".to_string()),
         ..Default::default()
@@ -87,10 +95,7 @@ fn model() -> Flat {
     .into_iter()
     .map(|item| (item, location.clone()))
     .collect();
-    Flat::builder()
-        .items(items)
-        .build()
-        .expect("the fixture builds a model")
+    items
 }
 
 /// What this target was told about one value or one function.
@@ -397,10 +402,17 @@ impl Target for Mini {
             }));
         }
         // A release site carries the handle type's own choice: its symbol is
-        // derived, and a null address is not a failure it can raise.
+        // derived from the item's name — the key may carry arguments a symbol
+        // cannot — and a null address is not a failure it can raise.
         let release = match (site.function, choice) {
             (None, Choice::Handle) => Some(exported(
-                &format!("{}_free", site.declaration.name()),
+                &format!(
+                    "{}_free",
+                    site.declaration
+                        .entity()
+                        .expect("a handle is an entity")
+                        .name()
+                ),
                 Routes::None,
             )),
             (None, Choice::HandleWithoutRelease) => {
@@ -824,6 +836,81 @@ fn an_entity_the_binding_defines_is_planned_and_reached_where_it_says() {
     assert!(rust.contains("crate::helpers::stamp_zero()"), "{rust}");
     assert!(rust.contains("source::token_use("), "{rust}");
     assert!(rust.contains("as *mut crate::Token"), "{rust}");
+}
+
+/// A helper's signature is normalized like a captured one: `fixture::Stamp`
+/// in what the binding stated — the captured crate's own spelling — is the
+/// `Stamp` the captured struct is indexed as, and the helper is a function
+/// the engine can plan.
+#[test]
+fn a_local_function_names_captured_types_as_the_source_spells_them() {
+    let flat = Flat::builder()
+        .items(model_items())
+        .local_function(
+            syn::parse_quote!(fn stamp_twice(stamp: fixture::Stamp) -> i64),
+            syn::parse_quote!(crate::helpers),
+        )
+        .build()
+        .expect("the fixture builds a model");
+    let helper = flat.function("stamp_twice").unwrap_or_else(|| {
+        panic!(
+            "a local function is an element: {:?}",
+            flat.element("stamp_twice")
+        )
+    });
+    assert_eq!(helper.params[0].ty.key().as_str(), "Stamp");
+
+    let mut binding = binding();
+    binding.declare_type("Stamp", Choice::Struct);
+    binding.declare_fn("stamp_twice", exported("stamp_twice", Routes::None));
+    let generation = binding.generate(flat).expect("plans");
+    assert_eq!(
+        generation.report().counts().emitted,
+        2,
+        "{:?}",
+        generation.report()
+    );
+    assert!(
+        generation
+            .rust()
+            .contains("crate::helpers::stamp_twice(v2)"),
+        "{}",
+        generation.rust()
+    );
+}
+
+/// A declared type's key may carry arguments the item does not:
+/// `Token<'static>` names the item `Token`. And a conversion names no entity
+/// at all — it is the binding's own wire mapping about a type, `Option<Foo>`
+/// or otherwise — so it needs nothing in the model to be requested.
+#[test]
+fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
+    let mut binding = binding();
+    binding.declare(
+        Declaration::Type(prebindgen_flat::TypeKey::parse("Token<'static>").unwrap()),
+        Choice::Handle,
+    );
+    binding.crossing("Token", Choice::Handle);
+    binding.declare(
+        Declaration::Conversion(prebindgen_flat::TypeKey::parse("Option<Stamp>").unwrap()),
+        Choice::Scalar,
+    );
+    let generation = binding.generate(model()).expect("both are valid requests");
+    assert!(
+        matches!(
+            outcome(&generation, "type:Token < 'static >"),
+            Outcome::Emitted
+        ),
+        "{:?}",
+        generation.report()
+    );
+    let Outcome::Skipped(skip) = outcome(&generation, "conversion:Option < Stamp >") else {
+        panic!("a conversion is a capability the engine lacks, not a missing item");
+    };
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.conversion.not_implemented"
+    );
 }
 
 /// A type whose conversion needs its own is refused, rather than recursed on

@@ -105,7 +105,7 @@ record its spelling. A function declaration must name a captured function, and
 one that does not is an error when the requests meet the model; a class
 declaration need not name a captured type at all — a target may represent
 `String` without the source exporting one — so `data_class!(Absent)` is a
-reported skip (`unsupported.type.not_a_struct`) rather than an error.
+reported skip (`unsupported.jni.not_a_struct`) rather than an error.
 
 The adapter also chooses how conversion failures reach the caller. For example,
 reading a JVM property can fail before the Rust function runs. The adapter

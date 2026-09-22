@@ -32,7 +32,7 @@ the address is carried as.
 ## Checks
 
 - Declared as `data_class!` instead, the extern would be refused here with
-  `unsupported.jni.no_relation`: no struct relation is offered for a type with
+  `unsupported.jni.not_a_struct`: no struct relation is offered for a type with
   no fields.
 - Under `ptr_class` the adapter has committed to describing a `jlong`
   [carrier](../../stages/05-represent.md#describing-target-values-and-operations)

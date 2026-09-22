@@ -261,7 +261,7 @@ mod tests {
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, declaration, capability) in [
-            ("c", "type:Pair", "unsupported.c.no_relation"),
+            ("c", "type:Pair", "unsupported.c.not_a_struct"),
             ("c", "type:Marker", "unsupported.c.empty_aggregate"),
             ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
             ("jni", "type:Reading", "unsupported.jni.carrier"),

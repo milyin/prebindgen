@@ -170,10 +170,13 @@ impl Target for CTarget {
                 _ => {}
             }
         }
+        // A data struct is read through fields, and the model offers none for
+        // this type: it is an extern, captured or the binding's own, and there
+        // is nothing to see into.
         Ok(TargetAttempt::Unsupported(Unsupported::new(
-            "unsupported.c.no_relation",
+            "unsupported.c.not_a_struct",
             format!(
-                "no relation available for `{}` as this binding declared it",
+                "`{}` is declared as a data struct, and the model has no fields for it",
                 query.crossing.ty.key()
             ),
         )))

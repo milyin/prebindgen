@@ -33,12 +33,25 @@ impl CbindgenBuilder {
         &self,
         declaring_crate: impl Into<String>,
     ) -> Result<Generation<CPayload>, EngineError> {
-        // An opaque type the source never exported — `String` as a handle — is
-        // an entity the binding defines: the model gets one, and steps aside
-        // where the source captured a type of that name.
+        // A declared type the source never exported — `String` as a handle —
+        // is an item the binding defines: the model gets an extern for it, and
+        // steps aside where the source captured a type of that name. Every
+        // declared type is registered, not only the opaque ones: a data
+        // declaration over a type the model cannot see into is then refused
+        // by the target for what it is, rather than failing the build as a
+        // name nothing captured. The item's name is the key's, without the
+        // arguments a key may carry — `ptr_type!(Publisher<'static>)` names
+        // the item `Publisher`.
         let mut sources = self.sources.clone();
-        for key in sorted(self.opaque.keys()) {
-            if let Some(name) = key.ident() {
+        let declared_types = self
+            .data
+            .keys()
+            .chain(self.opaque.keys())
+            .chain(self.value_opaque.keys())
+            .chain(self.enums.keys())
+            .chain(self.tagged_unions.keys());
+        for key in sorted(declared_types) {
+            if let Some(name) = key.short_name().and_then(|name| syn::parse_str(&name).ok()) {
                 sources = sources.local_type(name);
             }
         }

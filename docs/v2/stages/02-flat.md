@@ -360,12 +360,14 @@ which is exactly what it is — reached at the binding's crate root; when the
 source captured a type of that name, that one is what the binding meant, and
 the local declaration steps aside.
 
-The model keeps the captured items apart from the binding's own where a
-consumer needs the distinction: `Flat::captured` iterates the former alone,
-which is what a report counts as the API it was generated against;
-`Flat::is_binding_local` answers for one name; and the source-module list is
-frozen from the captured stream alone, so a binding-local item never changes
-which module an unqualified reference resolves against. Everything else —
+Each element carries its **provenance** — `Captured` or `Binding` — as a fact
+of its own, so nothing that removes or appends an element has a boundary to
+keep. The model answers with it where a consumer needs the distinction:
+`Flat::captured` iterates the captured elements alone, which is what a report
+counts as the API it was generated against; `Flat::provenance` answers for one
+name; and the source-module list is frozen from the captured stream alone, so
+a binding-local item never changes which module an unqualified reference
+resolves against. Everything else —
 lookup by name, the typed accessors, planning — sees one namespace. What the
 model does *not* do is rank its elements: a guard and an unsupported item are
 held beside the functions and types, and which of them a binding may name is

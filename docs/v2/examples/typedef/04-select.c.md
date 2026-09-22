@@ -32,7 +32,7 @@ offer.
 
 - Declared as `data_type!` instead, the same extern would be refused here:
   the adapter would ask for the struct relation and find none offered. That
-  refusal is `unsupported.c.no_relation`, and it is the adapter's, not the
+  refusal is `unsupported.c.not_a_struct`, and it is the adapter's, not the
   registry's.
 - Declared as `ptr_type!`, a struct with private fields would get `atomic` too,
   and the registry would plan it as one whole value with no parts, its fields

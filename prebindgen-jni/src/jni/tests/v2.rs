@@ -350,6 +350,41 @@ fn a_binding_local_fn_is_an_entity_and_is_generated() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A class declaration need not name a captured type. `ptr_class!` over one
+/// the source never exported is a handle; `data_class!` over one is a
+/// reported skip, since there are no fields to read — and neither is an
+/// error, which a function naming nothing captured is.
+#[test]
+fn a_class_over_a_type_the_source_never_exported_is_a_skip_not_an_error() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(fixture_items())
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(String))
+                .class(crate::data_class!(Absent)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("a declared class the source did not capture is not an error");
+    let report = generated.report().expect("v2 produces a report");
+    let outcome = |id: &str| {
+        &report
+            .declarations
+            .iter()
+            .find(|entry| entry.declaration.to_string() == id)
+            .unwrap_or_else(|| panic!("no entry for {id}: {report:?}"))
+            .outcome
+    };
+    assert_eq!(
+        *outcome("type:String"),
+        prebindgen_registry_v2::Outcome::Emitted
+    );
+    let prebindgen_registry_v2::Outcome::Skipped(skip) = outcome("type:Absent") else {
+        panic!("a data class over a type nothing describes has no fields to read");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.jni.not_a_struct");
+}
+
 /// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary
 /// **function**. The captured item is a function, and looking `f` up among the
 /// constants reported a typo that was not there.

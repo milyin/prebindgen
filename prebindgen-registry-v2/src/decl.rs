@@ -16,8 +16,9 @@ use crate::entity::{Entity, EntityKind};
 ///
 /// What an ignore names, and what a declaration resolves to when it names an
 /// entity at all. Less than a [`Declaration`]: it says nothing about how the
-/// target would get the item, so it cannot be a callback or a constant the
-/// binding computes on the foreign side — those name no entity.
+/// target would get the item, so it cannot be a callback, a constant the
+/// binding computes on the foreign side, or a conversion — those name no
+/// entity.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum EntityName {
     Type(TypeKey),
@@ -35,9 +36,14 @@ impl EntityName {
     }
 
     /// The name as the model indexes it.
+    ///
+    /// A type key may carry arguments the item does not — `ptr_class!(
+    /// Publisher<'static>)` means the item `Publisher` — so the item's name is
+    /// the key's last segment without them. A key that is not a path at all
+    /// names no item, and is looked up as it is spelled, to be found missing.
     pub fn name(&self) -> String {
         match self {
-            EntityName::Type(key) => key.as_str().to_string(),
+            EntityName::Type(key) => key.short_name().unwrap_or_else(|| key.as_str().to_string()),
             EntityName::Function(ident) | EntityName::Constant(ident) => ident.to_string(),
         }
     }
@@ -69,9 +75,11 @@ impl From<EntityName> for Declaration {
 /// Where an entity came from is not part of this. A `#[prebindgen]` function
 /// and one the binding defines itself are both a [`Declaration::Function`];
 /// the model holds both, and only its [`Origin`](prebindgen_flat::flat::Origin)
-/// tells them apart. Two declarations name no entity at all, because nothing
-/// in Rust backs them: a callback signature, and a constant the binding
-/// computes on the foreign side.
+/// tells them apart. Three declarations name no entity: a callback signature
+/// and a constant the binding computes on the foreign side, because nothing in
+/// Rust backs them; and a conversion, which is the binding's own wire mapping
+/// *about* a type — `convert!(Option<Payload>)` — and requires no item of that
+/// name in the model.
 ///
 /// [`generate`](crate::generate) routes on this: each planner is reached by its
 /// own variants and is handed the entity they name, rather than a kind to
@@ -121,18 +129,18 @@ impl Declaration {
     ///
     /// Not always the declaration's own kind: a constant read through a
     /// function names a function, which is what separates
-    /// [`Self::ConstFromFunction`] from [`Self::Const`]. `None` for a callback
-    /// and a computed constant, which nothing in Rust backs.
+    /// [`Self::ConstFromFunction`] from [`Self::Const`]. `None` for a callback,
+    /// a computed constant and a conversion.
     pub fn entity(&self) -> Option<EntityName> {
         match self {
             Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
                 Some(EntityName::Function(ident.clone()))
             }
             Declaration::Const(ident) => Some(EntityName::Constant(ident.clone())),
-            Declaration::Type(key) | Declaration::Conversion(key) => {
-                Some(EntityName::Type(key.clone()))
-            }
-            Declaration::Callback(_) | Declaration::ComputedConst(_) => None,
+            Declaration::Type(key) => Some(EntityName::Type(key.clone())),
+            Declaration::Conversion(_)
+            | Declaration::Callback(_)
+            | Declaration::ComputedConst(_) => None,
         }
     }
 
