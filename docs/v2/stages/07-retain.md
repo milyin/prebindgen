@@ -35,8 +35,8 @@ the members of that interface too.
 So a missing capability propagates. Suppose one field of the struct had a type no
 [representation](05-represent.md#represent-and-compose-values) covers yet. Its conversion is unsupported; the struct's conversion
 is therefore unsupported; the public struct cannot be emitted; and the function
-that takes it is skipped as well. Current reports copy the underlying reason
-and preserve each dependent's path to it. An unrelated function in
+that takes it is skipped as well. Each dependent's skip copies the underlying
+reason and keeps its own path to it. An unrelated function in
 the same package is still generated. Nothing is emitted in a reduced form. A
 struct is never emitted with a field left out, because a foreign type missing a
 field is a different type, not a partial one.
@@ -48,9 +48,7 @@ data struct to lose a field silently, or permit V2 to replace an unsupported
 data representation with a handle.
 
 Every declaration finishes with exactly one **outcome**. *Emitted* means its
-requirements succeeded and it can be generated. *Ignored* means the user
-explicitly excluded it; that is a configuration decision, not a gap in support.
-*Skipped* means the request needs support V2 does not yet provide — an outcome
+requirements succeeded and it can be generated. *Skipped* means the request needs support V2 does not yet provide — an outcome
 that exists only while V2 is being brought up to V1's coverage, as
 [the next section](#unsupported-requests-and-public-api-dependencies) sets
 out.
@@ -63,12 +61,13 @@ requested, but that fourth outcome is not implemented.
 
 Contradictory configuration and broken internal assumptions are different:
 they fail generation rather than becoming ordinary skips. On a completed run,
-[the report](../report.md) records the outcomes for inspection. It is diagnostic
-output; the pipeline does not read it back to make generation decisions.
+`Generation::skipped` hands back every skip for inspection — a build script
+prints them, a test reads them, and no stage reads them back to make a
+generation decision.
 
 What survives is then **frozen**: planning is over and retained plans determine
 the output. Current `generate` renders Rust before returning `Generation`,
-which stores that text, the plans and the report. The Kotlin writer reads the
+which stores that text, the plans, and what it left out. The Kotlin writer reads the
 retained public descriptions. Neither writer may plan a missing conversion,
 add a dependency or reverse a support decision.
 
@@ -77,7 +76,7 @@ add a dependency or reverse a support decision.
 **Specified behavior: a requested binding that cannot be generated fails the
 build.** A build script asks for an exported API; quietly shipping less than it
 asked for is not something the finished engine offers, and a consumer must not
-have to read a report to learn that a function it declared does not exist.
+have to read a diagnostic to learn that a function it declared does not exist.
 
 **Skipping is transitional.** V2's coverage is still smaller than V1's, so while
 that gap lasts the engine accepts a request it cannot generate, records it as a
@@ -122,7 +121,6 @@ struct Cause {
 enum ElementOutcome {
     Emitted { artifacts: Vec<ArtifactId> }, // Complete retained output for the request.
     Skipped { causes: Vec<CauseId> },       // Requested output omitted with explicit reasons.
-    Ignored,    // Explicitly excluded by the consumer.
     Unselected, // Present in source but not selected by this configuration.
 }
 ```
@@ -146,11 +144,20 @@ contradictory configuration, panics and I/O failures are not ordinary skips.
 ### Dependencies of public declarations
 
 A function also needs the public type used by its parameters.
-`SurfaceSpec.requires` lists `Requirement`s, each naming a type: the target
-states what a value crosses as, and the engine matches that type to the
-declaration representing it. A requirement no declaration covers produces
-`unsupported.requirement.unrequested`. The design sketch below extends these
-requirements to interface promises and member associations.
+`SurfaceSpec.requires` lists `Requirement`s, each made from a value: the
+target states which values the declaration is unusable without, and the
+engine matches each to the output covering its type. With a type declared
+once that is a lookup by name. Declared several times, the value settles it:
+its own
+[crossing](03-requests.md#finding-an-existing-conversion-plan) is planned
+under some conversion, chosen by the target at selection, and it requires the
+output declared under that same conversion — which holds
+whatever became of that output, so a value crossing as a refused one is
+skipped with its cause. A requirement stated by name alone, with no value
+behind it, resolves only while the type is declared once; over several it is
+`unsupported.requirement.ambiguous`. A requirement no declaration covers
+produces `unsupported.requirement.unrequested`. The design sketch below
+extends these requirements to interface promises and member associations.
 
 ```rust
 struct SurfaceSpec<Payload> {
@@ -203,7 +210,7 @@ struct Registry {
 struct GenerationRun<'a, T: Target> {
     registry: &'a Registry, // Source facts used throughout this generate call.
     target: &'a T,         // Read-only target decision/operation provider.
-    requests: BindingRequests,            // The declarations to plan, and the ignores.
+    declarations: Vec<Declaration>,       // The declarations to plan.
     nodes: NodeArena<T::Payload>,       // Conversion attempts and completed value plans.
     functions: FunctionArena<T::Payload>, // Candidate complete wrapper plans.
     surfaces: SurfaceArena<T::Payload>, // Candidate public declaration descriptions.
@@ -220,8 +227,8 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend creates BindingRequests and its target internally, and calls generate
- -> registry validates/imports source references and requests
+ -> v2 frontend builds its declaration list and its target internally, and calls generate
+ -> registry validates/imports source references and declarations
  -> for each requested value: target selects its source relation and names
     the conversion its own settings make
  -> registry resolves the selected source operation's children
@@ -231,17 +238,17 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> registry assembles functions and resolves all required dependencies
  -> registry propagates skips and retains complete supported output
  -> common Rust writer renders the retained wrapper plans
- -> return Generation with Rust text, retained descriptions and report
+ -> return Generation with Rust text, retained descriptions and the skips
  -> C: cbindgen derives headers from generated Rust
     JNI: optional foreign-writer interface is implemented by the Kotlin writer
  -> publish generated files
- -> optionally write the diagnostic report beside them
+ -> the binding prints or publishes the skips as it chooses
 ```
 
 Selection, child resolution and representation happen together for each [node](05-represent.md#represent-and-compose-values). A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
 
 The following is the proposed storage organization. Current `Generation` owns
-Flat, vectors of value/function/surface/primitive records, a `Report` and the
+Flat, vectors of value/function/surface/primitive records, the skips and the
 already-rendered Rust string. It does not contain an ordered artifact arena.
 
 ```rust
@@ -273,8 +280,8 @@ public descriptions for Kotlin. The C build passes generated Rust to `cbindgen`
 for headers. Writers must not introduce a newly discovered dependency or reverse
 a support decision. Files should be published only after output generation succeeds.
 
-The report's contents, frontend accessors and planned use for test selection
-are explained on [its own page](../report.md). Those are separate from the
+What a binding makes of a skip — a cargo warning, a file beside the generated
+code, a test's expectation — is the frontend's business, and separate from the
 retention decisions described here.
 
 ## Elements at this stage

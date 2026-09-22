@@ -13,15 +13,14 @@ use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind, TypeRef};
 use crate::{
     decl::Declaration,
     outcome::{EngineError, Outcome},
-    plan::{generate, BindingRequests},
+    plan::generate,
     run::Generation,
     target::{
-        AbiSpec, Access, BoundarySpec, ChildValue, Described, FailureCategory, Layout, OperandSpec,
-        Operation, OperationType, OutputPlacement, ParamRole, PlanningError, Position,
-        PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, ResolvedShape,
-        ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem, StandardOp,
-        SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-        WireType, WrapperParam,
+        AbiSpec, Access, BoundarySpec, ChildValue, FailureCategory, Layout, OperandSpec, Operation,
+        OperationType, OutputPlacement, ParamRole, PlanningError, Position, PrimitiveFailure,
+        PrimitiveSpec, Protocol, Relation, ReprSpec, ResolvedShape, ResolvedValues, Selection,
+        SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec,
+        Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
     },
 };
 
@@ -199,9 +198,6 @@ struct Mini {
     /// How one value inside one declaration crosses instead: keyed by the
     /// declaration and the site's path, `param 0` or `param 0.field secs`.
     sites: BTreeMap<(Declaration, String), Choice>,
-    /// What each requested output was declared as: what shapes its wrapper,
-    /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, Choice>,
 }
 
 impl Mini {
@@ -212,7 +208,11 @@ impl Mini {
     /// It is a pure function of the position and the type, so the same value
     /// asked twice answers the same: an adapter that let this drift would hand
     /// the registry two keys for one conversion and share nothing.
-    fn conversion(&self, position: &Position, ty: &TypeRef) -> Choice {
+    fn conversion(&self, position: &Position, declared: &Choice, ty: &TypeRef) -> Choice {
+        // A declared type's own crossing is planned as that declaration says.
+        if position.is_declared_type() {
+            return declared.clone();
+        }
         let site = (position.declaration.clone(), position.path.join("."));
         if let Some(choice) = self.sites.get(&site) {
             return choice.clone();
@@ -222,16 +222,6 @@ impl Mini {
             .cloned()
             .unwrap_or(Choice::Scalar)
     }
-
-    /// What the binding declared this output as.
-    ///
-    /// Asking for an output and recording nothing about it is contradictory
-    /// input from the frontend, not a capability this target is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&Choice, PlanningError> {
-        self.outputs.get(declaration).ok_or_else(|| {
-            PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
-        })
-    }
 }
 
 impl Target for Mini {
@@ -240,8 +230,8 @@ impl Target for Mini {
     type ConversionKey = Choice;
     type Payload = Payload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<Choice>> {
-        let conversion = self.conversion(query.position, &query.crossing.ty);
+    fn select(&self, query: &SelectionQuery<'_, Choice>) -> TargetSupport<Selection<Choice>> {
+        let conversion = self.conversion(query.position, query.declared, &query.crossing.ty);
         let want_struct = matches!(
             conversion,
             Choice::Struct
@@ -373,12 +363,12 @@ impl Target for Mini {
 
     fn boundary(
         &self,
-        site: &SiteDescriptor<'_>,
+        site: &SiteDescriptor<'_, Choice>,
         values: &ResolvedValues<'_, Payload>,
     ) -> TargetSupport<BoundarySpec<Payload>> {
         // What this wrapper exports is what the binding declared for it, which
         // the site names.
-        let choice = self.declared(site.declaration)?;
+        let choice = site.declared;
         if matches!(choice, Choice::FunctionWithWrongInput) {
             return Ok(TargetAttempt::Ready(BoundarySpec {
                 abi: AbiSpec {
@@ -511,14 +501,14 @@ impl Target for Mini {
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>,
+        request: &SurfaceRequest<'_, Choice>,
         values: &ResolvedValues<'_, Payload>,
     ) -> TargetSupport<SurfaceSpec<Payload>> {
-        let choice = self.declared(request.declaration)?;
+        let choice = request.declared;
         let requires = values
             .inputs
             .iter()
-            .filter_map(|value| crate::target::Requirement::of(&value.crossing.ty))
+            .filter_map(|value| crate::target::Requirement::of(value))
             .collect();
         if matches!(
             (choice, request.item),
@@ -584,37 +574,18 @@ impl Target for Mini {
             }
         }
     }
-
-    /// The report column is the declarator's own word; the placement is the
-    /// symbol a function exports, and a type's own name otherwise — this
-    /// target has no foreign spelling of its own.
-    ///
-    /// Read from the same storage [`Mini::boundary`] and [`Mini::surface`]
-    /// read, so the report cannot describe one thing and generate another. A
-    /// declaration is described whether or not it survived; one the binding
-    /// never declared is described as that rather than as the scalar default.
-    fn describe(&self, declaration: &Declaration) -> Described {
-        match self.outputs.get(declaration) {
-            Some(Choice::Function { symbol, .. }) => Described::new("function", symbol),
-            Some(Choice::Scalar | Choice::ScalarThrough) => Described::new("scalar", ""),
-            Some(_) => Described::new("strukt", ""),
-            None => Described::new("undeclared", ""),
-        }
-    }
 }
 
 /// A miniature frontend: what the binding declared, and the work list it hands
 /// the engine.
 ///
-/// Every test states its binding here rather than in a request set, which is
-/// what the engine no longer holds. The declarations go into [`Mini`], where
-/// the target answers from; only the list of outputs, and the ignores, reach
-/// the registry.
+/// Every test states its binding here. A declared value crossing goes into
+/// [`Mini`], which answers about values of a type wherever they turn up; what
+/// each output *is* travels with the output itself.
 #[derive(Default)]
 struct Binding {
     target: Mini,
-    outputs: Vec<Declaration>,
-    ignored: Vec<Declaration>,
+    outputs: Vec<(Declaration, Choice)>,
 }
 
 impl Binding {
@@ -640,8 +611,7 @@ impl Binding {
 
     /// One requested output, as the binding declared it.
     fn declare(&mut self, declaration: Declaration, choice: Choice) -> &mut Self {
-        self.target.outputs.insert(declaration.clone(), choice);
-        self.outputs.push(declaration);
+        self.outputs.push((declaration, choice));
         self
     }
 
@@ -654,26 +624,10 @@ impl Binding {
         self
     }
 
-    fn ignore(&mut self, declaration: Declaration) -> &mut Self {
-        self.ignored.push(declaration);
-        self
-    }
-
     /// Plan this binding over `flat`.
     fn generate(self, flat: Flat) -> Result<Generation<Payload>, EngineError> {
-        let Binding {
-            target,
-            outputs,
-            ignored,
-        } = self;
-        let mut requests = BindingRequests::new("fixture", syn::parse_quote!(source));
-        for declaration in outputs {
-            requests.expose(declaration);
-        }
-        for declaration in ignored {
-            requests.ignore(declaration);
-        }
-        generate(flat, &target, requests)
+        let Binding { target, outputs } = self;
+        generate(flat, &target, outputs, syn::parse_quote!(source))
     }
 }
 
@@ -689,14 +643,34 @@ fn function(name: &str) -> Declaration {
     Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
-fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
-    &generation
-        .report()
-        .declarations
+/// What became of the declaration that prints as `id`.
+///
+/// Skipped when the run left it out, emitted when it produced a public
+/// declaration, and a panic when the binding never asked for it — so a typo
+/// in a test cannot read as success. An entity declared twice has two outputs
+/// under one printed name; a test that declares one twice counts the skips
+/// instead of naming them.
+fn outcome<P>(generation: &crate::run::Generation<P>, id: &str) -> Outcome {
+    if let Some((_, skip)) = generation
+        .skipped()
         .iter()
-        .find(|entry| entry.declaration.to_string() == id)
-        .unwrap_or_else(|| panic!("no report entry for {id}"))
-        .outcome
+        .find(|(declaration, _)| declaration.to_string() == id)
+    {
+        return Outcome::Skipped(skip.clone());
+    }
+    assert!(
+        generation
+            .surfaces()
+            .iter()
+            .any(|surface| surface.declaration.to_string() == id),
+        "nothing was declared as {id}"
+    );
+    Outcome::Emitted
+}
+
+/// How many declarations the run generated: one public declaration each.
+fn emitted<P>(generation: &crate::run::Generation<P>) -> usize {
+    generation.surfaces().len()
 }
 
 /// Two exported functions taking the same struct the same way share its
@@ -709,7 +683,7 @@ fn one_conversion_serves_every_value_that_crosses_the_same_way() {
     binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
     let generation = binding.generate(model()).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 3);
+    assert_eq!(emitted(&generation), 3);
     // `Stamp` into Rust, `i64` into Rust, `i64` out of Rust. Twice over, and
     // once for the struct's own request, is still three.
     assert_eq!(generation.values().len(), 3);
@@ -728,7 +702,7 @@ fn a_site_override_does_not_share_the_default_conversion() {
     binding.at_site("stamp_max", "param 0", Choice::FallibleStruct);
 
     let generation = binding.generate(model()).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 3);
+    assert_eq!(emitted(&generation), 3);
     // The two `Stamp` conversions are distinct; their `i64` children still are
     // not, because nothing overrode them.
     assert_eq!(generation.values().len(), 4);
@@ -821,15 +795,10 @@ fn an_entity_the_binding_defines_is_planned_and_reached_where_it_says() {
     binding.declare_fn("stamp_zero", exported("stamp_zero", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
-    assert_eq!(
-        generation.report().counts().emitted,
-        3,
-        "{:?}",
-        generation.report()
-    );
+    assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
     // The report counts the API it was generated against, which the
     // binding's own items are not part of.
-    assert_eq!(generation.report().source_identity.captured_items, 1);
+    assert_eq!(generation.flat().captured().count(), 1);
     let rust = generation.rust();
     assert!(rust.contains("crate::helpers::stamp_zero()"), "{rust}");
     assert!(rust.contains("source::token_use("), "{rust}");
@@ -862,12 +831,7 @@ fn a_local_function_names_captured_types_as_the_source_spells_them() {
     binding.declare_type("Stamp", Choice::Struct);
     binding.declare_fn("stamp_twice", exported("stamp_twice", Routes::None));
     let generation = binding.generate(flat).expect("plans");
-    assert_eq!(
-        generation.report().counts().emitted,
-        2,
-        "{:?}",
-        generation.report()
-    );
+    assert_eq!(emitted(&generation), 2, "{:?}", generation.skipped());
     assert!(
         generation
             .rust()
@@ -898,7 +862,7 @@ fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
             Outcome::Emitted
         ),
         "{:?}",
-        generation.report()
+        generation.skipped()
     );
     assert!(
         generation.rust().contains("as *mut source::Token<'static>"),
@@ -911,6 +875,146 @@ fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
     assert_eq!(
         skip.capability.as_str(),
         "unsupported.conversion.not_implemented"
+    );
+}
+
+/// One function declared twice: each declaration is planned under its own
+/// choice and exports its own wrapper. Sharing is by conversion, as between
+/// two different functions — the `Stamp` both take crosses the same way and
+/// is planned once.
+#[test]
+fn one_function_declared_twice_is_two_outputs() {
+    let mut binding = binding();
+    binding.declare_type("Stamp", Choice::Struct);
+    binding.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
+    binding.declare(
+        function("stamp_sum"),
+        exported("stamp_sum_b", Routes::Reported),
+    );
+
+    let generation = binding.generate(model()).expect("plans");
+    assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
+    let mut declared: Vec<String> = generation
+        .surfaces()
+        .iter()
+        .map(|surface| surface.declaration.to_string())
+        .collect();
+    declared.sort();
+    assert_eq!(declared, ["fn:stamp_sum", "fn:stamp_sum", "type:Stamp"]);
+    let symbols: Vec<&str> = generation
+        .functions()
+        .iter()
+        .map(|plan| plan.abi.symbol.as_str())
+        .collect();
+    assert_eq!(symbols, ["stamp_sum_a", "stamp_sum_b"]);
+    // `Stamp` into Rust once, `i64` each way once: the two wrappers share
+    // every conversion, because nothing about the value differs.
+    assert_eq!(generation.values().len(), 3);
+
+    // One entity declared twice as the same thing is the binding saying one
+    // thing twice: two plans for one foreign declaration.
+    let mut twice = Binding::default();
+    twice.declare_type("Stamp", Choice::Struct);
+    twice.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
+    twice.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
+    let error = twice
+        .generate(model())
+        .expect_err("one choice, one declaration");
+    assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
+}
+
+/// One type declared twice, and a value resolves its requirement to the
+/// declaration it crosses as.
+///
+/// `Stamp` is declared as a struct and as a handle. Values of it cross as a
+/// struct by default; `stamp_max`'s parameter is overridden to cross as a
+/// handle. Each function requires the declaration its value crosses as — so
+/// when the handle cannot be placed, `stamp_max` goes with it and `stamp_sum`
+/// does not.
+#[test]
+fn a_value_requires_the_declaration_it_crosses_as() {
+    let plan = |handle: Choice| {
+        let mut binding = binding();
+        binding.declare(ty("Stamp"), Choice::Struct);
+        binding.declare(ty("Stamp"), handle.clone());
+        binding.crossing("Stamp", Choice::Struct);
+        binding.at_site("stamp_max", "param 0", handle);
+        binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+        binding.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
+        binding.generate(model()).expect("plans")
+    };
+
+    // Both declarations placed: everything is emitted, and each function's
+    // requirement went to the one it crosses as.
+    let generation = plan(Choice::Handle);
+    assert_eq!(emitted(&generation), 4, "{:?}", generation.skipped());
+    let rust = generation.rust();
+    assert!(
+        rust.contains("pub extern \"C\" fn stamp_sum(arg0: Stamp)"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("pub extern \"C\" fn stamp_max(arg0: *mut Raw)"),
+        "{rust}"
+    );
+
+    // The handle declaration refused: only the function crossing that way
+    // requires it, and only that function is skipped.
+    let generation = plan(Choice::HandleWithoutRelease);
+    // One of the two `Stamp` declarations is skipped — the handle, which has
+    // nowhere to place a release — and the other is emitted. They print the
+    // same, so what says which is that exactly one survived.
+    let skipped: Vec<(String, &str)> = generation
+        .skipped()
+        .iter()
+        .map(|(declaration, skip)| (declaration.to_string(), skip.capability.as_str()))
+        .collect();
+    // Declaration order: the handle first, then the function that crosses as
+    // it.
+    assert_eq!(
+        skipped,
+        [
+            ("type:Stamp".to_string(), "unsupported.mini.no_release"),
+            ("fn:stamp_max".to_string(), "unsupported.mini.no_release"),
+        ]
+    );
+    assert_eq!(
+        generation
+            .surfaces()
+            .iter()
+            .filter(|surface| surface.declaration.to_string() == "type:Stamp")
+            .count(),
+        1,
+        "the struct declaration of `Stamp` is emitted"
+    );
+    assert!(matches!(
+        outcome(&generation, "fn:stamp_sum"),
+        Outcome::Emitted
+    ));
+    // `stamp_max` went down with the declaration its parameter crosses as, and
+    // says so.
+    let (_, skip) = &generation.skipped()[1];
+    assert_eq!(skip.dependency_path, ["fn:stamp_max", "type:Stamp"]);
+}
+
+/// A requirement stated by name alone cannot choose between two declarations
+/// of one type.
+#[test]
+fn a_requirement_by_name_is_ambiguous_over_two_declarations() {
+    let mut binding = binding();
+    binding.declare(ty("Stamp"), Choice::Struct);
+    binding.declare(ty("Stamp"), Choice::Handle);
+    binding.crossing("Stamp", Choice::Struct);
+    // `Point` requires `Stamp` by name, not through a value of it.
+    binding.declare_type("Point", Choice::StructRequiring("Stamp".to_string()));
+
+    let generation = binding.generate(model()).expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "type:Point") else {
+        panic!("a name does not say which declaration");
+    };
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.requirement.ambiguous"
     );
 }
 
@@ -1028,28 +1132,6 @@ fn a_value_declaration_on_an_exported_function_is_an_error() {
     ));
 }
 
-/// The same rule in the other direction: asking for an output and recording
-/// nothing about it is the frontend contradicting itself, not a capability the
-/// target is missing.
-///
-/// This is the failure the move in #766 makes possible — the engine no longer
-/// holds an entry per output, so nothing but the adapter can notice a request
-/// its own storage does not cover. It has to fail the build rather than
-/// quietly generate a default the binding never asked for.
-#[test]
-fn an_output_the_target_recorded_nothing_for_is_an_error() {
-    let mut binding = binding();
-    binding.crossing("Stamp", Choice::Struct);
-    // Asked for, and never declared: `declare` is what would have recorded it.
-    binding.outputs.push(ty("Stamp"));
-
-    let error = binding.generate(model()).expect_err("refuses");
-    let EngineError::Planning(PlanningError::InvalidInput(message)) = error else {
-        panic!("a request the frontend's own storage does not cover is bad input");
-    };
-    assert!(message.contains("type:Stamp"), "{message}");
-}
-
 /// A declaration the source never captured is an error, not a skip — the
 /// same rule the engine already held for its report-only run.
 #[test]
@@ -1061,23 +1143,6 @@ fn a_declaration_naming_nothing_is_an_error() {
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
 }
 
-/// An ignored declaration is accounted for apart from a skipped one: an ignore is a
-/// decision, not a gap.
-#[test]
-fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.ignore(function("stamp_max"));
-
-    let generation = binding.generate(model()).expect("plans");
-    let counts = generation.report().counts();
-    assert_eq!((counts.emitted, counts.skipped, counts.ignored), (1, 0, 1));
-    assert!(matches!(
-        outcome(&generation, "fn:stamp_max"),
-        Outcome::Ignored
-    ));
-}
-
 /// Two runs over unchanged inputs produce the same report and the same code, so
 /// a diff of either means something.
 #[test]
@@ -1087,7 +1152,10 @@ fn a_run_over_unchanged_input_produces_the_same_output() {
         binding.declare_type("Stamp", Choice::Struct);
         binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
         let generation = binding.generate(model()).expect("plans");
-        (generation.report().to_json(), generation.rust().to_string())
+        (
+            format!("{:?}", generation.skipped()),
+            generation.rust().to_string(),
+        )
     };
     assert_eq!(run(), run());
 }
@@ -1278,7 +1346,7 @@ fn two_supported_children_make_two_struct_conversions() {
     binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
     let generation = binding.generate(model()).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 3);
+    assert_eq!(emitted(&generation), 3);
     // `Stamp` twice, `i64` into Rust twice, `i64` out of Rust once.
     assert_eq!(generation.values().len(), 5);
     assert_eq!(generation.functions().len(), 2);
@@ -1446,7 +1514,7 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
     full.declare_type("Stamp", Choice::Struct);
     full.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let generation = full.generate(guarded()).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 2);
+    assert_eq!(emitted(&generation), 2);
     assert!(
         generation.rust().contains("konst::assertc_eq!"),
         "the guard must reach the generated file:\n{}",
@@ -1458,7 +1526,7 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
     let mut bare = binding();
     bare.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let generation = bare.generate(guarded()).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 0);
+    assert_eq!(emitted(&generation), 0);
     assert!(
         generation.rust().contains("konst::assertc_eq!"),
         "a run that emitted nothing still carries its guard:\n{}",
@@ -1512,7 +1580,7 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
     binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = binding.generate(flat).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 2);
+    assert_eq!(emitted(&generation), 2);
     let rust = generation.rust();
     assert!(
         rust.contains("#[cfg(some_custom_flag)]"),
@@ -1749,7 +1817,7 @@ fn a_handle_is_carried_both_ways_and_released() {
     binding.declare_fn("token_use", exported("token_use", Routes::Reported));
 
     let generation = binding.generate(model()).expect("plans");
-    assert_eq!(generation.report().counts().emitted, 3);
+    assert_eq!(emitted(&generation), 3);
     // `Token` out of Rust, `Token` into Rust, `i64` out of Rust — and the type's
     // own request planned nothing the functions did not.
     assert_eq!(generation.values().len(), 3);

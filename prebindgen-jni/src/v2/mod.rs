@@ -3,16 +3,21 @@
 //! [`Declarations`] keeps accumulating exactly as it does for v1 — same
 //! `package!`/`ptr_class!`/`fun!` surface, same `set_*` settings, same
 //! name-mangle closures — and this module is the only thing that reads them
-//! for the other engine: it turns that storage into a [`JniTarget`], which is
-//! what the binding declared and what answers the registry's questions about
-//! it, plus the [`BindingRequests`] naming what to plan. [`generate`] hands
-//! back a [`Generation`] the frontend writes out — the Rust through the
-//! engine's writer, the Kotlin through its own writer in `kotlin.rs`.
+//! for the other engine: it turns that storage into a list of
+//! [`Declaration`]s, each paired with the [`JniChoice`] saying what the
+//! binding declared it as, and a [`JniTarget`] that answers about values of a
+//! type wherever they turn up. An ignore is a v1 decision about v1's
+//! undeclared-item warnings, which v2 does not emit, so none reaches the
+//! engine. [`generate`] hands back a [`Generation`] the frontend writes out —
+//! the Rust through the engine's writer, the Kotlin through its own writer in
+//! `kotlin.rs`.
 //!
-//! The requests are a work list and nothing more. What a declaration *is* —
-//! its Kotlin class or package function, its native method, its `Java_…`
-//! symbol, and which setting on it v2 does not honour yet — stays in the
-//! target, which is where the registry asks for it (#766).
+//! What a declaration *is* — its Kotlin class or package function, its native
+//! method, its `Java_…` symbol, and which setting on it v2 does not honour
+//! yet — is the choice beside it, which the engine hands back with every
+//! question about that output. The declaration itself names the entity and
+//! nothing more, so one function placed twice is two outputs of one
+//! declaration rather than one setting overwriting the other.
 //!
 //! Nothing of v1 runs on this route. Kotlin names, packages and `Java_…`
 //! symbols come from this adapter's settings applied to the declarations,
@@ -21,7 +26,7 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
+use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation, PlanningError};
 pub use target::{JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
@@ -31,14 +36,13 @@ impl Declarations {
     pub(crate) fn generate_v2(
         &self,
         sources: prebindgen_registry::flat::FlatBuilder,
-        declaring_crate: impl Into<String>,
     ) -> Result<Generation<JniPayload>, EngineError> {
+        let mut sources = sources;
         // What the binding defines itself enters the model as entities: a
         // helper with the signature `fun!(crate::x).sig(..)` stated, reached
         // where its path says; an opaque class the source never exported,
         // reached at the binding's root. A captured item of the same name is
         // what a class meant, and an error for a function, as under v1.
-        let mut sources = sources;
         for (ident, path, sig) in &self.local_fns {
             let mut sig = sig.clone();
             sig.ident = ident.clone();
@@ -74,8 +78,8 @@ impl Declarations {
                 Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
             })
             .collect();
-        let (target, requests) = self.binding(&flat, classes, declaring_crate, source_module);
-        generate(flat, &target, requests)
+        let (target, declarations) = self.binding(&flat, classes)?;
+        generate(flat, &target, declarations, source_module)
     }
 
     /// Write the Kotlin side of a v2 generation under `kotlin_root`.
@@ -87,32 +91,71 @@ impl Declarations {
         kotlin::write(self, generation, kotlin_root)
     }
 
-    /// Everything this binding declared: what each declaration is, for the
-    /// target to answer from, and the list of them, for the engine to plan.
+    /// Everything this binding declared: each declaration paired with what
+    /// this target recorded it as, which together are what the engine plans
+    /// and accounts for.
     ///
-    /// One entry per declaration, in any order — the report sorts. Both halves
-    /// are stated in the same pass, so a declaration cannot be planned without
-    /// the target knowing what it is, or recorded without being asked for.
+    /// One entry per declaration, in any order. Stating the two halves
+    /// together is what keeps them in step: a declaration cannot be planned
+    /// without saying what it is.
+    ///
+    /// Fails when the binding contradicts itself — two declarations claiming
+    /// one native method on the harness — which is the frontend's own
+    /// validation and not a capability the engine lacks.
     fn binding(
         &self,
         flat: &prebindgen_registry::flat::Flat,
         classes: std::collections::BTreeMap<String, (String, bool)>,
-        declaring_crate: impl Into<String>,
-        source_module: syn::Path,
-    ) -> (JniTarget, BindingRequests) {
+    ) -> Result<(JniTarget, Vec<(Declaration, JniChoice)>), EngineError> {
         let mut target = JniTarget::new(classes);
-        let mut requests = BindingRequests::new(declaring_crate, source_module);
+        let mut declarations = Vec::new();
+        // Every wrapper hangs off one harness object, so its native methods
+        // share a namespace: two declarations naming the same one would be two
+        // definitions of one `Java_…` symbol, which the generated code cannot
+        // compile. The binding is what decides the names, so it is told here.
+        let mut natives: std::collections::HashMap<String, Declaration> =
+            std::collections::HashMap::new();
+        let mut collision = None;
         let mut declare = |declaration: Declaration, choice: JniChoice| {
-            target.declare(declaration.clone(), choice);
-            requests.expose(declaration);
+            if let Some(native) = choice.native() {
+                if let Some(taken) = natives.insert(native.to_string(), declaration.clone()) {
+                    collision.get_or_insert_with(|| {
+                        format!(
+                            "`{taken}` and `{declaration}` would both be the native method \
+                             `{native}` on the JNI harness; give one of them another Kotlin name"
+                        )
+                    });
+                }
+            }
+            target.declare(&declaration, &choice);
+            declarations.push((declaration, choice));
         };
 
-        // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
-        // other, as a class member or as a package function: it is an entity
-        // in the model now, and is stated where it is bound and nowhere else.
-        // A second entry for the helper itself would give one id to two
-        // declarations.
-        let fun_declaration = |ident: &syn::Ident| Declaration::Function(ident.clone());
+        // A function is declared wherever it is placed — as a class member, as
+        // a package function, as the `val` a `constant!(X).fun(..)` reads
+        // through — and one function may be placed more than once. Each
+        // placement is declared and accounted for on its own, and each needs
+        // its own native method, because the harness has one namespace: the
+        // name a single placement takes is the Rust identifier's, as v1 names
+        // it, and a further placement is named after where it is placed.
+        let placements: std::collections::HashMap<&syn::Ident, usize> = self
+            .class_members
+            .values()
+            .flatten()
+            .map(|member| &member.rust_ident)
+            .chain(self.packages.values().flat_map(|config| {
+                config
+                    .functions
+                    .iter()
+                    .chain(&config.constant_functions)
+                    .map(|entry| &entry.rust_ident)
+            }))
+            .fold(std::collections::HashMap::new(), |mut count, ident| {
+                *count.entry(ident).or_default() += 1;
+                count
+            });
+        let placed_more_than_once =
+            |ident: &syn::Ident| placements.get(ident).is_some_and(|n| *n > 1);
 
         // Declared classes. A data class is the one representation v2 lowers;
         // the per-type entry makes every value of the type cross that way,
@@ -148,12 +191,10 @@ impl Declarations {
             // of its methods skipped, so each is a declaration of its own. None is
             // lowered yet: a method's receiver is a handle.
             for member in self.class_members.get(key).into_iter().flatten() {
+                let placed = format!("{placement}.{}", self.effective_method_name(key, member));
                 declare(
-                    fun_declaration(&member.rust_ident),
-                    JniChoice::unimplemented(
-                        member_representation(member),
-                        format!("{placement}.{}", self.effective_method_name(key, member)),
-                    ),
+                    Declaration::Function(member.rust_ident.clone()),
+                    JniChoice::unimplemented(member_representation(member), placed),
                 );
             }
         }
@@ -172,16 +213,23 @@ impl Declarations {
                 // The native method is named from the Rust identifier, through
                 // the method-name hook, as v1 names it — never from the public
                 // function's `.name()`: two packages may each export a `value`,
-                // and the harness has one namespace.
-                let native = self
-                    .mangle_jni_method(&crate::util::snake_to_camel(&entry.rust_ident.to_string()));
+                // and the harness has one namespace. A function placed more
+                // than once is the exception: each placement is a wrapper of
+                // its own, so each is named after where it is placed, which is
+                // what tells the placements apart.
+                let native_name = match placed_more_than_once(&entry.rust_ident) {
+                    true if subpackage.is_empty() => method.clone(),
+                    true => format!("{}_{method}", subpackage.replace('.', "_")),
+                    false => entry.rust_ident.to_string(),
+                };
+                let native = self.mangle_jni_method(&crate::util::snake_to_camel(&native_name));
                 // A function under a setting v2 does not honour is still a
                 // `fun` in the report; the setting is the capability missing.
                 // It is refused rather than emitted with the setting dropped:
                 // a lookup that fell back to the default here would generate
                 // an interface the binding did not ask for.
                 declare(
-                    fun_declaration(&entry.rust_ident),
+                    Declaration::Function(entry.rust_ident.clone()),
                     match self.unimplemented_setting(flat, &entry.rust_ident) {
                         Some(setting) => JniChoice::Unimplemented {
                             declarator: "fun",
@@ -197,11 +245,20 @@ impl Declarations {
                     },
                 );
             }
-            // A `constant!(X)` names the `#[prebindgen]` const it reads.
+            // A `constant!(X)` names the `#[prebindgen]` const it reads. The
+            // Kotlin `val` keeps the const's own name — it is not a function
+            // and takes neither the camel-casing nor the function-name hook.
             for entry in &config.constants {
+                let placed = format!(
+                    "{package}.{}",
+                    entry
+                        .kotlin_name_override
+                        .clone()
+                        .unwrap_or_else(|| entry.rust_ident.to_string())
+                );
                 declare(
                     Declaration::Const(entry.rust_ident.clone()),
-                    JniChoice::unimplemented("constant", placed(entry)),
+                    JniChoice::unimplemented("constant", placed),
                 );
             }
             // A `constant!(X).fun(..)` is a Kotlin `val` read through a nullary
@@ -209,7 +266,7 @@ impl Declarations {
             // what this target chooses to show the call as.
             for entry in &config.constant_functions {
                 declare(
-                    fun_declaration(&entry.rust_ident),
+                    Declaration::Function(entry.rust_ident.clone()),
                     JniChoice::unimplemented("constant_fun", placed(entry)),
                 );
             }
@@ -242,19 +299,12 @@ impl Declarations {
             );
         }
 
-        // Ignores are decisions, accounted apart from the gaps. They name a
-        // captured item the binding declined to expose, and they are not
-        // outputs, so the target is never asked about one.
-        for ident in sorted(&self.ignored_fns) {
-            requests.ignore(Declaration::Function(ident.clone()));
+        if let Some(collision) = collision {
+            return Err(EngineError::Planning(PlanningError::InvalidInput(
+                collision,
+            )));
         }
-        for key in sorted(&self.ignored_class_types) {
-            requests.ignore(Declaration::Type(key.clone()));
-        }
-        for ident in sorted(&self.ignored_const_idents) {
-            requests.ignore(Declaration::Const(ident.clone()));
-        }
-        (target, requests)
+        Ok((target, declarations))
     }
 }
 
@@ -326,5 +376,36 @@ fn member_representation(member: &ClassMember) -> &'static str {
     match member.kind {
         crate::jni::MemberKind::Method => "method",
         crate::jni::MemberKind::Constructor => "constructor",
+    }
+}
+
+/// Print one cargo warning per capability a skip named, with the declarations
+/// it took down.
+///
+/// A build log is not a list of everything: at most five declarations per
+/// capability, and a count of the rest. What a build script needs from it is
+/// which capability to ask for next, not which of forty declarations waits on
+/// it.
+pub(crate) fn warn_skipped(skipped: &[(Declaration, prebindgen_registry_v2::Skip)]) {
+    let mut by_capability: std::collections::BTreeMap<&str, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for (declaration, skip) in skipped {
+        by_capability
+            .entry(skip.capability.as_str())
+            .or_default()
+            .push(declaration.to_string());
+    }
+    for (capability, mut roots) in by_capability {
+        roots.sort();
+        roots.dedup();
+        let shown = roots.len().min(5);
+        let more = match roots.len() - shown {
+            0 => String::new(),
+            rest => format!(" (+{rest} more)"),
+        };
+        println!(
+            "cargo:warning=SKIP {capability}: {}{more}",
+            roots[..shown].join(", ")
+        );
     }
 }

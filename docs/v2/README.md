@@ -204,10 +204,11 @@ those words once; read it first.
 Then: [implementation sequence and acceptance](implementation.md), which is not a
 pipeline stage but the plan for building one, and
 [the extension contracts](extensions.md), the design for what the stages do not
-do yet, kept apart so that each chapter describes only what its cells show. Beside the generated code the
-engine produces [a report](report.md) of what became of each declaration.
-The build script can write it beside the code with `write_report`. It is a
-diagnostic that nothing in the pipeline reads, described on its own page.
+do yet, kept apart so that each chapter describes only what its cells show.
+Beside the generated code the engine hands back what it could not generate —
+`Generation::skipped`, one entry per declaration a missing capability stopped —
+which a build script prints, a test reads, and nothing in the pipeline
+consumes.
 
 This order is the order of information dependencies, not a requirement to make
 eight passes over the project. The registry interleaves selection, child planning

@@ -72,14 +72,15 @@ See [Capture source items](stages/01-source.md#capture-source-items).
 
 One requested public item: for example, expose `Stamp` as a C struct or
 `stamp_sum` as a Kotlin function. This is a statement of intent, not proof that
-the generator supports it. [The report](report.md) later accounts for each
-declaration; a source item that nobody requested currently has no entry.
+the generator supports it. The run later says which declarations it could not
+generate; a source item nobody requested is not one of them.
 
 The current engine's `Declaration` is one value: the kind the target gets and
-the Rust name, printed as `type:Stamp` or `fn:stamp_sum`, and it is its own
-identity. Renaming the foreign function does not change it. Exposing the same
-source function at multiple placements in one run would need a richer identity;
-current V2 rejects a declaration stated twice.
+the Rust name, printed as `type:Stamp` or `fn:stamp_sum`. Renaming the foreign
+function does not change it. What the engine plans and accounts for is that
+declaration together with the [choice](#choice) recorded with it, so exposing
+the same source function at several placements makes several outputs; stating
+one declaration twice under one choice is rejected.
 See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
 ### Choice
@@ -239,12 +240,12 @@ See [Assemble the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-b
 
 ### Outcome
 
-The final status of one declaration on a completed run: emitted, skipped or
-explicitly ignored. [The report](report.md) lists them so a missing function
-does not have to be diagnosed by inspecting generated code alone. An emitted
-declaration passed generation; it still needs compilation and runtime testing.
-A generation error, such as contradictory configuration, returns no completed
-generation result or report. The skipped outcome belongs to the V2 transition:
+The final status of one declaration on a completed run: emitted or skipped.
+`Generation::skipped` lists the skipped ones with the capability that stopped
+each, so a missing function does not have to be diagnosed by inspecting
+generated code alone. An emitted declaration passed generation; it still needs
+compilation and runtime testing. A generation error, such as contradictory
+configuration, returns no generation at all. The skipped outcome belongs to the V2 transition:
 once V2 covers what V1 covers, a request it cannot generate fails the build
 instead. See [Retain supported output](stages/07-retain.md#retain-supported-output).
 

@@ -187,9 +187,10 @@ JNI string/byte-array helpers. The simple `Stamp` example needs only a small
 subset of the overall binding machinery; it does not establish V2 support for
 all the conversions provided by those runtime crates.
 
-[The report](../report.md) can be written alongside the code to explain which
-declarations were emitted or skipped and why. It is diagnostic output, not an
-input to generation. Its own page explains how to write and interpret it.
+What the engine could not generate comes back beside the code as
+`Generation::skipped`, each entry naming the capability that stopped it. It is
+diagnostic output, not an input to generation, and what a build script makes
+of it is its own business.
 
 The [element paths](#elements-at-this-stage) below show each generated file in
 full, including the parts elided above.

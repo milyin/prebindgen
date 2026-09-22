@@ -1,14 +1,13 @@
 //! What a binding declared, in terms neither language owns.
 //!
 //! A frontend turns its own declaration storage into these — one [`Declaration`]
-//! per thing the user asked for, inside the
-//! [`BindingRequests`](crate::BindingRequests) it hands the engine. The
-//! declaration is what the report accounts for, and what the target looks its
-//! own configuration up by — the request carries none: the foreign name and
-//! the declarator word the report prints come from that lookup.
+//! per thing the user asked for, each paired with what the target recorded it
+//! as, in the list it hands [`generate`](crate::generate). The declaration
+//! says which entity, in the source's own words; the choice beside it says
+//! what the binding wants made of it, and the engine hands that choice back
+//! with every question it asks about the output.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
-use serde::Serialize;
 
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
@@ -40,17 +39,25 @@ use serde::Serialize;
 /// own variants and is handed the entity they name, rather than a kind to
 /// decode and a name to look up.
 ///
-/// It is also the declaration's identity — what an outcome is keyed by, what a
-/// [`Position`](crate::target::Position) is rooted at, what a target's
-/// [`Requirement`](crate::target::Requirement) resolves to. Stable across runs
-/// and across pipelines, so a report, a build script and a capability-selected
-/// test section can all name the same declaration: it is what the *source*
-/// calls the thing, not what the target does, and a rename on the foreign side
-/// must not silently retire a test's requirement. `<kind>:<name>` —
-/// `type:Stamp`, `fn:stamp_sum` — is how it prints and how the report writes
-/// it, and that spelling is a rendering: nothing reads a declaration back out
-/// of it. Declarations order as they print, so a report sorted by declaration
-/// reads in id order.
+/// It is what the *source* calls the thing, not what the target does, and it
+/// is stable across runs and across pipelines, so a report, a build script and
+/// a capability-selected test section can all name the same declaration: a
+/// rename on the foreign side must not silently retire a test's requirement.
+/// `<kind>:<name>` — `type:Stamp`, `fn:stamp_sum` — is how it prints and how
+/// the report writes it, and that spelling is a rendering: nothing reads a
+/// declaration back out of it.
+///
+/// # One entity, several declarations
+///
+/// A binding may expose one entity more than once — `stamp_sum` as a Kotlin
+/// `fun` in one package and as a `val` read through it, `Stamp` as a data
+/// class and as a handle. What tells those apart is not the declaration but
+/// what the target recorded beside it: an [`OutputId`](crate::plan::OutputId)
+/// stands for the pair, and that is what an outcome is keyed by, what a
+/// [`Position`](crate::target::Position) is rooted at, and what a target's
+/// [`Requirement`](crate::target::Requirement) resolves to. Two outputs of one
+/// entity therefore print alike — what tells them apart is the target's own
+/// vocabulary, which this engine does not speak.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     /// A function, exported through a wrapper that calls it — as a foreign
@@ -191,11 +198,5 @@ impl std::fmt::Display for Declaration {
             Declaration::Callback(_) => "callback",
         };
         write!(f, "{prefix}:{}", self.name())
-    }
-}
-
-impl Serialize for Declaration {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_str(self)
     }
 }

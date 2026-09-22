@@ -5,7 +5,7 @@
 //! explicitly, so a test never depends on the runner's `PREBINDGEN_PIPELINE`.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::{Declaration, Outcome};
+use prebindgen_registry_v2::Declaration;
 
 use super::*;
 
@@ -53,74 +53,68 @@ fn fixture_items() -> Vec<(syn::Item, SourceLocation)> {
 }
 
 /// The gate #719 §A names: the whole declaration set reaches v2, and every
-/// requested declaration comes back accounted for — placed where this adapter's
-/// package prefix and name-mangle hooks put it, not where v2 guesses.
+/// requested declaration comes back either generated or skipped, with each
+/// skip saying what the value waits on and where the walk stopped.
 #[test]
 fn every_declared_element_is_accounted_for() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
 
-    let ids: Vec<String> = report
-        .declarations
+    // The handle class is emitted — an address in a `Long`, with its release;
+    // the members and the borrowed-handle function are not.
+    let skipped: Vec<(String, &str, String)> = generated
+        .skipped()
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|(declaration, skip)| {
+            (
+                declaration.to_string(),
+                skip.capability.as_str(),
+                skip.path(),
+            )
+        })
         .collect();
     assert_eq!(
-        ids,
+        skipped,
         [
-            "fn:z_thing_describe",
-            "fn:z_thing_internal",
-            "fn:z_thing_new",
-            "fn:z_thing_size",
-            "type:ZThing",
+            (
+                "fn:z_thing_new".to_string(),
+                "unsupported.jni.constructor",
+                "fn:z_thing_new".to_string()
+            ),
+            (
+                "fn:z_thing_size".to_string(),
+                "unsupported.jni.carrier",
+                "fn:z_thing_size -> param 0".to_string()
+            ),
+            (
+                // A borrowed handle is a reference, which no v2 carrier holds
+                // yet.
+                "fn:z_thing_describe".to_string(),
+                "unsupported.jni.carrier",
+                "fn:z_thing_describe -> param 0".to_string()
+            ),
         ]
     );
 
-    let placement = |id: &str| {
-        report
-            .declarations
-            .iter()
-            .find(|entry| entry.declaration.to_string() == id)
-            .map(|entry| entry.placement().to_string())
-            .unwrap_or_default()
-    };
-    assert_eq!(placement("type:ZThing"), "io.test.jni.thing.ZThing");
-    assert_eq!(
-        placement("fn:z_thing_size"),
-        "io.test.jni.thing.ZThing.zThingSize"
-    );
-    // The `set_fun_name_mangle` closure travelled across intact: a package
-    // function is placed under the name it returns.
-    assert_eq!(
-        placement("fn:z_thing_describe"),
-        "io.test.jni.thing.doZThingDescribe"
-    );
+    // What is left is the handle class, placed where this adapter's package
+    // prefix puts it rather than where v2 would guess.
+    let kotlin = kotlin_of(&generated, "jnigen_v2_accounted");
+    assert!(kotlin.contains("package io.test.jni.thing"), "{kotlin}");
+    assert!(kotlin.contains("public class ZThing"), "{kotlin}");
+}
 
-    let counts = report.counts();
-    // The handle class is emitted — an address in a `Long`, with its release;
-    // the members and the borrowed-handle function are not.
-    assert_eq!(counts.emitted, 1);
-    assert_eq!(counts.skipped, 3);
-    assert_eq!(counts.ignored, 1);
-
-    // Each skip says what the value waits on and where the walk stopped: a
-    // borrowed handle is a reference, which no v2 carrier holds yet.
-    let skip = |id: &str| {
-        report
-            .declarations
-            .iter()
-            .find(|entry| entry.declaration.to_string() == id)
-            .and_then(|entry| entry.outcome.skip())
-            .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
-            .expect("skipped")
-    };
-    assert_eq!(
-        skip("fn:z_thing_describe"),
-        (
-            "unsupported.jni.carrier".to_string(),
-            "fn:z_thing_describe -> param 0".to_string()
-        )
-    );
+/// The Kotlin this generation writes, as one string.
+fn kotlin_of(generated: &JniGen, name: &str) -> String {
+    let dir = unique_test_dir(name);
+    let _ = std::fs::remove_dir_all(&dir);
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    let kotlin: String = written
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    kotlin
 }
 
 /// The implemented subset, through the ordinary frontend: a `data_class!` of
@@ -155,9 +149,7 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
         )
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
-    let counts = report.counts();
-    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{report:?}");
+    assert_eq!(generated.skipped().len(), 1, "{:?}", generated.skipped());
 
     let dir = unique_test_dir("jnigen_v2_emitted");
     let _ = std::fs::remove_dir_all(&dir);
@@ -211,37 +203,49 @@ fn a_data_class_and_a_function_over_it_are_emitted() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Class members are separately selected: the class and each of its methods are
-/// declarations in their own right, so one can be skipped without the others.
+/// Class members are separately selected: the class and each of its methods
+/// are declarations in their own right, so one can be skipped without the
+/// others — and each waits on the declarator it was declared with, which is
+/// what its capability code names.
 #[test]
 fn class_members_are_elements_of_their_own() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
-    let representation = |id: &str| {
-        report
-            .declarations
+    let capability = |id: &str| {
+        generated
+            .skipped()
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
-            .map(|entry| entry.representation().to_string())
+            .find(|(declaration, _)| declaration.to_string() == id)
+            .map(|(_, skip)| skip.capability.as_str().to_string())
             .unwrap_or_default()
     };
-    assert_eq!(representation("type:ZThing"), "ptr_class");
-    assert_eq!(representation("fn:z_thing_new"), "constructor");
-    assert_eq!(representation("fn:z_thing_size"), "method");
-    assert_eq!(representation("fn:z_thing_describe"), "fun");
+    // The class itself is emitted; each member waits on its own declarator.
+    assert_eq!(capability("type:ZThing"), "");
+    assert_eq!(capability("fn:z_thing_new"), "unsupported.jni.constructor");
+    // Both take a borrowed handle, which no v2 carrier holds yet — the method
+    // and the package function alike, each refused on its own.
+    assert_eq!(capability("fn:z_thing_size"), "unsupported.jni.carrier");
+    assert_eq!(capability("fn:z_thing_describe"), "unsupported.jni.carrier");
 }
 
-/// An ignore keeps its meaning under v2 and is counted apart from the gaps.
+/// An ignore silences v1's undeclared-item warning and nothing else: under v2
+/// the item is not declared, so nothing is generated for it and nothing
+/// accounts for it, and it stays in the model, where a declared item may still
+/// depend on it.
 #[test]
-fn an_ignore_is_classified_separately() {
+fn an_ignore_does_not_reach_the_engine() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
-    let ignored = report
-        .declarations
-        .iter()
-        .find(|entry| entry.declaration.to_string() == "fn:z_thing_internal")
-        .expect("the ignore is accounted for");
-    assert_eq!(ignored.outcome, Outcome::Ignored);
+    assert!(
+        !generated
+            .skipped()
+            .iter()
+            .any(|(declaration, _)| declaration.to_string() == "fn:z_thing_internal"),
+        "{:?}",
+        generated.skipped()
+    );
+    assert!(
+        !kotlin_of(&generated, "jnigen_v2_ignored").contains("zThingInternal"),
+        "nothing is generated for it either"
+    );
 }
 
 /// Both writers work under an engine that generated nothing. A zero-output plan
@@ -284,10 +288,6 @@ fn the_ordinary_writers_run_under_v2() {
         "with the wrapper the JVM binds it to:\n{contents}"
     );
 
-    let written = generated.write_report(&dir).expect("write_report");
-    assert_eq!(written.len(), 2);
-    let json = std::fs::read_to_string(&written[0]).unwrap();
-    assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -315,31 +315,17 @@ fn a_binding_local_fn_is_an_entity_and_is_generated() {
         )
         .build_with(Pipeline::V2)
         .expect("a binding-local fn needs no captured item");
-    let report = generated.report().expect("v2 produces a report");
-
-    // Once each: a helper is stated where it is bound, and a second entry for
-    // the helper itself would give one id to two declarations.
-    let ids: Vec<String> = report
-        .declarations
+    // Once each: a helper is stated where it is bound, and declaring the
+    // helper itself again would be the binding saying one thing twice.
+    // `local_tag` takes nothing and returns an `i64`, so it is a wrapper the
+    // engine can build; `local_size` takes a borrowed handle and is not.
+    let skipped: Vec<String> = generated
+        .skipped()
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|(declaration, _)| declaration.to_string())
         .collect();
-    assert_eq!(ids, ["fn:local_size", "fn:local_tag", "type:ZThing"]);
+    assert_eq!(skipped, ["fn:local_size"]);
 
-    // `local_tag` takes nothing and returns an `i64`: a wrapper the engine can
-    // build, over a call to where the binding put the helper.
-    let outcome = |id: &str| {
-        &report
-            .declarations
-            .iter()
-            .find(|entry| entry.declaration.to_string() == id)
-            .expect("reported")
-            .outcome
-    };
-    assert_eq!(
-        *outcome("fn:local_tag"),
-        prebindgen_registry_v2::Outcome::Emitted
-    );
     let dir = unique_test_dir("jnigen_v2_local_fn");
     let _ = std::fs::remove_dir_all(&dir);
     let rust = generated
@@ -366,22 +352,12 @@ fn a_class_over_a_type_the_source_never_exported_is_a_skip_not_an_error() {
         )
         .build_with(Pipeline::V2)
         .expect("a declared class the source did not capture is not an error");
-    let report = generated.report().expect("v2 produces a report");
-    let outcome = |id: &str| {
-        &report
-            .declarations
-            .iter()
-            .find(|entry| entry.declaration.to_string() == id)
-            .unwrap_or_else(|| panic!("no entry for {id}: {report:?}"))
-            .outcome
+    // The handle is generated; the data class over a type nothing describes
+    // has no fields to read.
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one skip: {:?}", generated.skipped());
     };
-    assert_eq!(
-        *outcome("type:String"),
-        prebindgen_registry_v2::Outcome::Emitted
-    );
-    let prebindgen_registry_v2::Outcome::Skipped(skip) = outcome("type:Absent") else {
-        panic!("a data class over a type nothing describes has no fields to read");
-    };
+    assert_eq!(declaration.to_string(), "type:Absent");
     assert_eq!(skip.capability.as_str(), "unsupported.jni.not_a_struct");
 }
 
@@ -398,17 +374,7 @@ fn a_ptr_class_over_a_key_with_arguments_is_planned_as_declared() {
         .package(crate::package!("thing").class(crate::ptr_class!(Wrapper<'static>)))
         .build_with(Pipeline::V2)
         .expect("a parameterized key names its item");
-    let report = generated.report().expect("v2 produces a report");
-    let entry = report
-        .declarations
-        .iter()
-        .find(|entry| entry.declaration.to_string() == "type:Wrapper < 'static >")
-        .unwrap_or_else(|| panic!("no entry: {report:?}"));
-    assert_eq!(
-        entry.outcome,
-        prebindgen_registry_v2::Outcome::Emitted,
-        "{report:?}"
-    );
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
 
     let dir = unique_test_dir("jnigen_v2_parameterized_key");
     let _ = std::fs::remove_dir_all(&dir);
@@ -418,6 +384,43 @@ fn a_ptr_class_over_a_key_with_arguments_is_planned_as_declared() {
     let rust = std::fs::read_to_string(&rust).unwrap();
     assert!(rust.contains("as *mut crate::Wrapper<'static>"), "{rust}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// One function placed twice — as a package `fun` and as the `val` a
+/// `constant!(X).fun(..)` reads through — is two outputs: two declarations of
+/// one entity, each planned and accounted for on its own. Neither is lowered
+/// yet, so each comes back as the capability its own declarator waits for.
+#[test]
+fn a_function_placed_twice_is_two_outputs() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(fixture_items())
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing))
+                .fun(prebindgen_registry::fun!(z_thing_new))
+                .fun(prebindgen_registry::fun!(z_thing_describe))
+                .constant(
+                    crate::constant!(THE_SIZE).fun(prebindgen_registry::fun!(z_thing_describe)),
+                ),
+        )
+        .build_with(Pipeline::V2)
+        .expect("two placements of one function are two declarations");
+    // `z_thing_describe` twice: the package function, whose parameter has no
+    // carrier, and the `val` over the same call.
+    let skipped: Vec<(String, &str)> = generated
+        .skipped()
+        .iter()
+        .map(|(declaration, skip)| (declaration.to_string(), skip.capability.as_str()))
+        .collect();
+    assert_eq!(
+        skipped,
+        [
+            ("fn:z_thing_describe".to_string(), "unsupported.jni.carrier"),
+            ("fn:z_thing_describe".to_string(), "unsupported.jni.carrier"),
+        ],
+        "one function, two placements, two skips"
+    );
 }
 
 /// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary
@@ -438,25 +441,18 @@ fn a_function_backed_constant_is_the_functions_declaration() {
         )
         .build_with(Pipeline::V2)
         .expect("a function-backed constant resolves");
-    let report = generated.report().expect("v2 produces a report");
-    let constant = report
-        .declarations
-        .iter()
-        .find(|entry| entry.representation() == "constant_fun")
-        .expect("the constant is accounted for");
     // The declaration is the function's; that the target shows the call as a
-    // `val` is its own choice, which the report's representation column says.
-    assert_eq!(constant.declaration.to_string(), "fn:z_thing_describe");
+    // `val` is its own choice, recorded beside it.
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
     assert!(matches!(
-        &constant.declaration,
+        declaration,
         Declaration::Function(ident) if ident == "z_thing_describe"
     ));
-    // And it is planned from that function: what stops this one is the value
-    // its parameter crosses as, reported against the parameter, rather than
-    // the engine turning away everything declared as a constant.
-    let Outcome::Skipped(skip) = &constant.outcome else {
-        panic!("the backing function takes a handle the JNI target has no carrier for");
-    };
+    // And it is planned from that function: what stops it is the value its
+    // parameter crosses as, blamed on the parameter, rather than the engine
+    // turning away everything declared as a constant.
     assert_eq!(skip.dependency_path, ["fn:z_thing_describe", "param 0"]);
 }
 
@@ -477,16 +473,14 @@ fn stamp_items(extra: &[&str]) -> Vec<(syn::Item, SourceLocation)> {
     )
 }
 
-/// The skip recorded for `id`, as `(capability, path)`.
+/// The skip recorded for the declaration that prints as `id`, as
+/// `(capability, path)`.
 fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
     generated
-        .report()
-        .expect("v2 produces a report")
-        .declarations
+        .skipped()
         .iter()
-        .find(|entry| entry.declaration.to_string() == id)
-        .and_then(|entry| entry.outcome.skip())
-        .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
+        .find(|(declaration, _)| declaration.to_string() == id)
+        .map(|(_, skip)| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))
 }
 
@@ -525,9 +519,10 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         "unsupported.jni.expand_param"
     );
     assert_eq!(
-        generated.report().unwrap().counts().emitted,
+        generated.skipped().len(),
         1,
-        "the class alone"
+        "the class alone is generated: {:?}",
+        generated.skipped()
     );
 
     // For a declared class: the function taking it is refused, the class stays.
@@ -552,9 +547,10 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         )
     );
     assert_eq!(
-        generated.report().unwrap().counts().emitted,
+        generated.skipped().len(),
         1,
-        "the class alone"
+        "the class alone is generated: {:?}",
+        generated.skipped()
     );
 
     // For a scalar with no class: a parameter of that type, and a result of it.
@@ -582,7 +578,12 @@ fn an_unimplemented_setting_refuses_its_function_rather_than_being_dropped() {
         skip_of(&generated, "fn:give_value").0,
         "unsupported.jni.expand_return"
     );
-    assert_eq!(generated.report().unwrap().counts().emitted, 0);
+    assert_eq!(
+        generated.skipped().len(),
+        2,
+        "both functions are refused: {:?}",
+        generated.skipped()
+    );
 }
 
 /// Two packages may each export a function called `value`; the harness has one
@@ -600,7 +601,7 @@ fn a_public_name_does_not_name_the_native_method() {
         .package(crate::package!("b").fun(prebindgen_registry::fun!(second_value).name("value")))
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    assert_eq!(generated.report().unwrap().counts().emitted, 2);
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
 
     let dir = unique_test_dir("jnigen_v2_two_values");
     let _ = std::fs::remove_dir_all(&dir);
@@ -787,15 +788,119 @@ fn an_unsafe_source_function_is_a_reported_skip() {
 }
 
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole
-/// existing surface, and no report.
+/// existing surface, and nothing left out.
 #[test]
 fn v1_is_unchanged_and_reachable_by_name() {
     let generated = binding().build_with(Pipeline::V1).expect("v1 resolves");
     assert_eq!(generated.pipeline(), Pipeline::V1);
-    assert!(generated.report().is_none());
+    assert!(generated.skipped().is_empty());
     assert!(generated
         .registry()
         .flat()
         .function("z_thing_new")
         .is_some());
+}
+
+/// Two placements of one supported function are two wrappers. Each is its own
+/// native method on the harness — the harness has one namespace, and two
+/// definitions of one `Java_…` symbol would not compile — so a placement past
+/// the first is named after where it is placed.
+#[test]
+fn two_placements_of_one_function_are_two_wrappers() {
+    let loc = myflat_loc();
+    let sources: &[&str] = &[
+        "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+        "pub fn stamp_sum(stamp: Stamp) -> i64 { unimplemented!() }",
+    ];
+    let items = declare_referenced(
+        sources
+            .iter()
+            .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .fun(prebindgen_registry::fun!(stamp_sum)),
+        )
+        .package(crate::package!("other").fun(prebindgen_registry::fun!(stamp_sum)))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
+
+    let dir = unique_test_dir("jnigen_v2_two_placements");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    for symbol in [
+        "Java_io_test_jni_JNINative_stampSum",
+        "Java_io_test_jni_JNINative_otherStampSum",
+    ] {
+        assert_eq!(rust.matches(symbol).count(), 1, "{rust}");
+    }
+
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    let kotlin: String = written
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+    for line in [
+        "public fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)",
+        "public fun stampSum(stamp: Stamp): Long = io.test.jni.JNINative.otherStampSum(stamp)",
+        "external fun stampSum(stamp: Stamp): Long",
+        "external fun otherStampSum(stamp: Stamp): Long",
+    ] {
+        assert!(
+            kotlin.lines().any(|emitted| emitted.trim() == line),
+            "missing `{line}`:\n{kotlin}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A captured constant exposed in two packages is two outputs, as a function
+/// placed twice is. Both are `constant`, which v2 does not lower yet, so both
+/// come back as capability skips — under ids of their own, rather than failing
+/// the run as one declaration made twice.
+#[test]
+fn a_constant_exposed_twice_is_two_outputs() {
+    let loc = myflat_loc();
+    let items = declare_referenced(vec![(
+        syn::parse_str::<syn::Item>("pub const THE_SIZE: i64 = 8;").unwrap(),
+        loc,
+    )]);
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(crate::package!("a").constant(crate::constant!(THE_SIZE)))
+        .package(crate::package!("b").constant(crate::constant!(THE_SIZE)))
+        .build_with(Pipeline::V2)
+        .expect("two placements of one constant are two declarations");
+    // One constant, two packages, two outputs — each waiting on the constant
+    // lowering v2 does not have.
+    let skipped: Vec<(String, &str)> = generated
+        .skipped()
+        .iter()
+        .map(|(declaration, skip)| (declaration.to_string(), skip.capability.as_str()))
+        .collect();
+    assert_eq!(
+        skipped,
+        [
+            (
+                "const:THE_SIZE".to_string(),
+                "unsupported.const.not_implemented"
+            ),
+            (
+                "const:THE_SIZE".to_string(),
+                "unsupported.const.not_implemented"
+            ),
+        ]
+    );
 }

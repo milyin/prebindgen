@@ -126,12 +126,7 @@ fn main() {
     println!("cargo:rustc-env=EMITCHECK_BINDINGS={}", written.display());
     println!("cargo:warning=emitcheck: wrote {}", written.display());
 
-    // The report, for an engine that produces one. Empty
-    // under v1, whose answer is "everything declared, or the build failed".
-    for path in generation
-        .write_report(dest.parent().expect("the written file has a parent"))
-        .expect("write_report failed")
-    {
-        println!("cargo:warning=emitcheck: wrote {}", path.display());
-    }
+    // What the engine could not generate, as cargo warnings. Silent under an
+    // engine that skips nothing.
+    generation.warn_skipped();
 }

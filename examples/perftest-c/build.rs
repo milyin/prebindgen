@@ -134,14 +134,9 @@ fn generate_ffi_bindings() -> (PathBuf, PathBuf) {
     };
     write_if_changed(&published, &std::fs::read_to_string(&out_file).unwrap());
 
-    // The report, for an engine that produces one. Empty
-    // under v1, whose answer is "everything declared, or the build failed".
-    for path in binding
-        .write_report(published.parent().expect("the published file has a parent"))
-        .expect("write_report failed")
-    {
-        println!("cargo:warning=Wrote {}", path.display());
-    }
+    // What the engine could not generate, as cargo warnings. Silent under an
+    // engine that skips nothing.
+    binding.warn_skipped();
 
     // `lib.rs` includes the path this build script chose rather than a literal
     // one, so the engine that ran decides which file is compiled.

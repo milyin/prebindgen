@@ -102,3 +102,7 @@ pub use kotlin_codegen::WriteKotlinError;
 /// Which engine a build script runs, and where each one writes — re-exported
 /// so a build script names this crate for the whole binding.
 pub use prebindgen_registry::pipeline;
+/// The v2 engine, so a build script can name what [`JniGen::skipped`] hands
+/// it without depending on the engine itself.
+#[cfg(feature = "v2")]
+pub use prebindgen_registry_v2;

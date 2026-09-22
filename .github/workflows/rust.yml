@@ -123,37 +123,46 @@ jobs:
       run: PREBINDGEN_PIPELINE=v2 cargo build --workspace --all-features
     - name: v2 wrote nothing into v1's committed artifacts
       run: git diff --exit-code
-    - name: Every example accounted for its declarations
-      # A build that passes says nothing on its own while v2 emits nothing:
-      # the milestone is that each example's whole declaration set reached the
-      # engine and came back with an outcome. Assert that from the reports,
-      # so an example that silently stopped submitting cannot look like
-      # progress.
+    - name: Every example submitted its declarations to v2, and got wrappers back
+      # A build that passes says nothing on its own while v2 emits little, and
+      # v2 writes a valid file even having generated nothing: an example that
+      # silently stopped declaring would still compile. So require what only a
+      # submitted declaration produces — an exported wrapper in the file v2
+      # stamped. The counts are the floor each example clears today; raising
+      # one is a coverage win, and dropping below it is the regression this
+      # gate exists to catch.
       run: |
         python3 - <<'PY'
-        import json, pathlib, sys
+        import pathlib, re, sys
 
-        expected = {
-            "covertest-kotlin": "jni",
-            "example-cbindgen": "c",
-            "perftest-kotlin": "jni",
-            "perftest-c": "c",
-            "emitcheck": "jni",
+        # example -> the fewest wrappers its declarations produce today.
+        floors = {
+            "covertest-kotlin": 18,
+            "example-cbindgen": 2,
+            "perftest-kotlin": 6,
+            "perftest-c": 5,
+            "emitcheck": 2,
         }
+        wrapper = re.compile(r'pub extern "(C|system)" fn ')
         failed = False
-        for example, target in expected.items():
-            path = pathlib.Path("examples") / example / "build/prebindgen/v2" / f"{target}-report.json"
-            if not path.is_file():
-                print(f"{example}: no v2 report at {path}")
+        for example, floor in floors.items():
+            root = pathlib.Path("examples") / example / "build/prebindgen/v2"
+            written = sorted(root.glob("*.rs")) if root.is_dir() else []
+            stamped = [
+                path
+                for path in written
+                if "prebindgen v2" in path.read_text().splitlines()[0]
+            ]
+            if not stamped:
+                print(f"{example}: no file stamped by v2 under {root} (found {[p.name for p in written]})")
                 failed = True
                 continue
-            report = json.loads(path.read_text())
-            accounted = len(report["declarations"])
-            if report["pipeline"] != "v2" or accounted == 0:
-                print(f"{example}: report accounts for {accounted} declaration(s) of pipeline {report['pipeline']!r}")
+            emitted = sum(len(wrapper.findall(path.read_text())) for path in stamped)
+            if emitted < floor:
+                print(f"{example}: v2 emitted {emitted} wrapper(s), below the {floor} it clears today")
                 failed = True
                 continue
-            print(f"{example}: {accounted} declaration(s) accounted for ({target})")
+            print(f"{example}: {emitted} wrapper(s) emitted by v2 (floor {floor})")
         sys.exit(1 if failed else 0)
         PY
     - name: Switching back needs no manual cleaning

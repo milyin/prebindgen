@@ -225,30 +225,28 @@ mod tests {
         }
     }
 
-    /// Every declaration was emitted, and the report says so.
+    /// Each target left out exactly what it cannot carry, and generated the
+    /// rest.
     ///
-    /// The counts differ over `Sample`, which both targets declare and only C
-    /// emits: Kotlin cannot write a condition, so the JNI target refuses the
-    /// struct rather than promise a property the library reads only sometimes.
-    /// A conditional *function* is emitted by both, because a function has no
+    /// The two differ over `Sample`, which both declare and only C emits:
+    /// Kotlin cannot write a condition, so the JNI target refuses the struct
+    /// rather than promise a property the library reads only sometimes. A
+    /// conditional *function* is emitted by both, because a function has no
     /// property to promise.
     #[test]
-    fn both_targets_report_every_declaration_as_emitted() {
-        // The struct, the three functions over it and `stamp_ratio`, the
-        // handle and the two functions over it, plus `Sample` and
-        // `sample_total` for C.
-        for (target, emitted) in [("c", 10), ("jni", 8)] {
-            let report = report(target);
+    fn each_target_left_out_only_what_it_cannot_carry() {
+        for (target, left_out) in [("c", 3), ("jni", 5)] {
+            let skipped = skipped(target);
             assert_eq!(
-                report.matches("\"outcome\": \"emitted\"").count(),
-                emitted,
-                "{target} report: {report}"
+                skipped.lines().filter(|line| !line.is_empty()).count(),
+                left_out,
+                "{target} skipped: {skipped}"
             );
         }
     }
 
-    /// Every declaration a target could not generate is reported as skipped,
-    /// with the capability that would unblock it.
+    /// Every declaration a target could not generate is left out with the
+    /// capability that would unblock it.
     ///
     /// Each is declared deliberately: a struct whose field has no carrier, a
     /// tuple struct — which the model declares opaque, so an aggregate finds no
@@ -274,17 +272,12 @@ mod tests {
                 "unsupported.jni.conditional_field",
             ),
         ] {
-            let report = report(target);
-            let entry = report
-                .lines()
-                .collect::<Vec<_>>()
-                .windows(8)
-                .find(|window| window[0].contains(declaration))
-                .map(|window| window.join("\n"))
-                .unwrap_or_else(|| panic!("{target} report has no entry for {declaration}"));
+            let skipped = skipped(target);
             assert!(
-                entry.contains("\"outcome\": \"skipped\"") && entry.contains(capability),
-                "{declaration} should be skipped with {capability}:\n{entry}"
+                skipped
+                    .lines()
+                    .any(|line| line == format!("{declaration}\t{capability}")),
+                "{target} should leave {declaration} out with {capability}:\n{skipped}"
             );
         }
         // Nothing partial reaches the file either: no empty aggregate, no
@@ -354,15 +347,16 @@ mod tests {
         );
     }
 
-    /// One target's report, as JSON.
-    fn report(target: &str) -> String {
+    /// What one target left out, as the build script wrote it: one
+    /// `<declaration>\t<capability>` line per skip.
+    fn skipped(target: &str) -> String {
         std::fs::read_to_string(
             std::path::Path::new(env!("V2CHECK_C"))
                 .parent()
                 .unwrap()
-                .join(format!("{target}-report.json")),
+                .join(format!("{target}-skipped.txt")),
         )
-        .expect("the report")
+        .expect("the skip list")
     }
 
     /// Every fenced block of `language` on a specification page, concatenated.

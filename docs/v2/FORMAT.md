@@ -30,7 +30,6 @@ existing page rather than represented by a missing file.
 | Root | `README.md` |
 | Format contract | `FORMAT.md` |
 | Vocabulary introduction | `concepts.md` |
-| Generation report guide | `report.md` |
 | The specification's source crate | `source.md` |
 | Stage chapter | `stages/<stage>.md` |
 | Implementation plan | `implementation.md` |
@@ -49,7 +48,7 @@ under a section that names the stage it extends; the chapter links there at
 the point where the gap is, instead of carrying the design itself.
 
 Every Markdown file starts with exactly one `<!-- spec: {...} -->` metadata line.
-`kind` is `root`, `format`, `concepts`, `report`, `fixture`, `stage`, `implementation`,
+`kind` is `root`, `format`, `concepts`, `fixture`, `stage`, `implementation`,
 `extensions`, `example`, `cell` or `variant`. A stage page carries `stage`; an element TOC carries
 `example`; a cell carries both; a variant adds `language`. The identity has to
 match the canonical path, and every Markdown file under `docs/v2/` has to be one

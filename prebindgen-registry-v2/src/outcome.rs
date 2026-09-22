@@ -1,23 +1,20 @@
 //! What became of a declaration, and why.
 //!
-//! Four outcomes, and they are not interchangeable. A capability v2 has not
+//! Two outcomes, and they are not interchangeable. A capability v2 has not
 //! implemented is a [`Skipped`](Outcome::Skipped) declaration with a code and a
 //! path to the site that could not be lowered. Malformed input, a missing
 //! declared item, or a bug in the engine are **errors** — never skips — because
-//! a build that quietly reports its own bug as an unsupported feature is a
-//! build that cannot be trusted to say what it generated.
-
-use serde::Serialize;
+//! a build that quietly presents its own bug as an unsupported feature is a
+//! build that cannot be trusted.
 
 use crate::decl::Declaration;
 
 /// A stable code naming *what* is not implemented, dotted from general to
 /// specific: `unsupported.string`, `unsupported.handle.borrowed_input`.
 ///
-/// Stable because reports are diffed and CI gates name codes. The readable
-/// explanation beside it is free to change; this is not.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(transparent)]
+/// Stable because CI gates and tests name codes. The readable explanation
+/// beside it is free to change; this is not.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Capability(String);
 
 impl Capability {
@@ -37,7 +34,7 @@ impl std::fmt::Display for Capability {
 }
 
 /// Why one declaration was not generated.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Skip {
     /// The unimplemented capability — see [`Capability`].
     pub capability: Capability,
@@ -70,16 +67,13 @@ impl Skip {
 }
 
 /// What became of one declaration.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "outcome", rename_all = "snake_case")]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
     /// Fully generated, with its dependencies and its declared semantics.
     Emitted,
     /// Not generated: a capability is missing, here or in something this
     /// declaration needs.
     Skipped(Skip),
-    /// The binding asked for it to be left alone.
-    Ignored,
 }
 
 impl Outcome {
@@ -87,12 +81,12 @@ impl Outcome {
     pub fn skip(&self) -> Option<&Skip> {
         match self {
             Outcome::Skipped(skip) => Some(skip),
-            Outcome::Emitted | Outcome::Ignored => None,
+            Outcome::Emitted => None,
         }
     }
 }
 
-/// The engine failed, and no report describes the run.
+/// The engine failed, and there is no generation to read.
 ///
 /// Distinct from a skip on purpose: everything here means the *input* or the
 /// *engine* is wrong, not that a feature is missing.
@@ -105,14 +99,14 @@ pub enum EngineError {
     /// or a source-crate rename, and never a capability question. All of them
     /// are collected before failing.
     DeclaredNotFound { entries: Vec<Declaration> },
-    /// One declaration stated twice. A report that gave one id to two entries
-    /// could not account for either — so this is a contradiction in the
-    /// declarations, not a gap in what v2 implements.
+    /// One entity declared twice as the same thing: two plans for one foreign
+    /// declaration. A contradiction in the declarations, not a gap in what v2
+    /// implements.
     DuplicateDeclaration { entries: Vec<Declaration> },
     /// Planning refused the input, or an internal contract was violated. A
     /// missing capability is never one of these — that is a [`Skip`].
     Planning(crate::target::PlanningError),
-    /// Writing an artifact or a report failed.
+    /// Writing an artifact failed.
     Io(std::io::Error),
 }
 
@@ -143,13 +137,17 @@ impl std::fmt::Display for EngineError {
             EngineError::DuplicateDeclaration { entries } => {
                 writeln!(
                     f,
-                    "v2: {} declaration id(s) were declared more than once:",
+                    "v2: {} declaration(s) were declared more than once as the same thing:",
                     entries.len()
                 )?;
                 for id in entries {
                     writeln!(f, "  {id}")?;
                 }
-                write!(f, "each declaration answers to one id")
+                write!(
+                    f,
+                    "one entity may be declared several times, but each declaration must say \
+                     something different"
+                )
             }
             EngineError::Planning(error) => write!(f, "v2: {error}"),
             EngineError::Io(error) => write!(f, "v2: {error}"),

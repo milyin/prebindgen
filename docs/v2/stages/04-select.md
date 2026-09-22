@@ -352,13 +352,13 @@ is this chapter's; `represent` is [the next chapter's](05-represent.md), and
 the other two belong to the stages after that. The sketch below uses the
 design's descriptor names. Current `represent` receives `ChildValue` entries
 containing a part and layout, not full validity and resource contracts. The
-same trait also has `render_operation`, used later during Rust emission, and
-`describe`, which supplies the [report](../report.md)'s line for a declaration.
+same trait also has `render_operation`, used later during Rust emission.
 
 The target is also where the binding's configuration lives, which is why none
 of these methods is handed any: each resolves what applies from its own
-storage, addressed by the `position` in a selection query or by the
-`Declaration` a boundary, surface or report line is about.
+storage, addressed by the `position` in a selection query — except for what
+the binding declared one output as, which arrives with every question about
+that output.
 
 ```rust
 trait Target {
@@ -367,7 +367,10 @@ trait Target {
 
     fn select(
         &self,
-        query: SelectionQuery<'_>, // Source value, its position, and the relations offered.
+        query: SelectionQuery<'_, Self::ConversionKey>, // Source value, its position, the
+                                                        // relations offered, and what the
+                                                        // output it is reached from was
+                                                        // declared as.
     ) -> TargetSupport<Selection<Self::ConversionKey>>; // A relation the query offered,
                                                         // and the conversion it makes.
 
@@ -380,13 +383,15 @@ trait Target {
 
     fn boundary(
         &self,
-        site: &SiteDescriptor, // Exported call's signature, boundary roles and declaration.
+        site: &SiteDescriptor<'_, Self::ConversionKey>, // Exported call's signature, boundary
+                                                        // roles, declaration and its choice.
         values: &ResolvedValues<Self::Payload>, // Its resolved input/output values.
     ) -> TargetSupport<BoundarySpec<Self::Payload>>;
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>, // Public declaration, its source item and promises.
+        request: &SurfaceRequest<'_, Self::ConversionKey>, // Public declaration, its choice,
+                                                           // source item and promises.
         values: &ResolvedValues<Self::Payload>, // Values needed to describe that public API.
     ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
 }
