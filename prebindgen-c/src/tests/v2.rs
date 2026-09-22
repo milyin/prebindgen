@@ -298,14 +298,17 @@ fn v1_is_unchanged_and_reachable_by_name() {
         .is_some());
 }
 
-/// A fieldless enum crosses as the C enum this adapter declares for it: the
-/// same values under the same names, carrying the numbers Rust assigns.
+/// A fieldless enum leaves Rust as the C enum this adapter declares for it —
+/// the same values under the same names, carrying the numbers Rust assigns —
+/// and comes back as a C `int`.
 ///
-/// The wrapper takes and returns that enum, and goes between it and the source
-/// type by matching one value at a time. Both matches name every value, so
-/// neither can fail and neither needs a route — and if the two types ever drift
-/// apart, the generated Rust stops compiling rather than mapping a value to the
-/// wrong one.
+/// The wrapper goes between the source type and the carrier by matching one
+/// value at a time. Out of Rust the match names every value and cannot fail;
+/// if the two enums ever drift apart, the generated Rust stops compiling
+/// rather than mapping a value to the wrong one. Into Rust the carrier is an
+/// `int`, because C lets an enum variable hold any `int` and a Rust enum
+/// holding a number none of its values has is undefined behaviour — so a
+/// number no value has fails instead.
 #[test]
 fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
     let loc = SourceLocation::default();
@@ -352,16 +355,19 @@ fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
         compact.contains("pubenumoperation_t{Add=0,Mul=7,}"),
         "{rust}"
     );
-    // The wrapper's parameter and return are that enum.
+    // The wrapper takes an `int` and returns the enum.
     assert!(
-        compact.contains("pubextern\"C\"fnoperation_flip(op:operation_t)->operation_t{"),
+        compact.contains("pubextern\"C\"fnoperation_flip(op:::core::ffi::c_int)->operation_t{"),
         "{rust}"
     );
-    // One arm per value, each way, and no default arm.
+    // One arm per value each way; into Rust, a default arm for a number no
+    // value has.
     assert!(
         compact.contains(
-            "matchop{operation_t::Add=>fixture::Operation::Add,\
-             operation_t::Mul=>fixture::Operation::Mul,}"
+            "matchop{0=>::core::result::Result::Ok(fixture::Operation::Add),\
+             7=>::core::result::Result::Ok(fixture::Operation::Mul),\
+             other=>{::core::result::Result::Err(\
+             ::std::format!(\"`operation_t`hasnovaluenumbered{}\",other),)}}"
         ),
         "{rust}"
     );
@@ -431,11 +437,11 @@ fn a_fieldless_value_keeps_its_constructor_shape() {
         "{rust}"
     );
     assert!(
-        compact.contains("operation_t::Add=>fixture::Operation::Add()"),
+        compact.contains("0=>::core::result::Result::Ok(fixture::Operation::Add())"),
         "{rust}"
     );
     assert!(
-        compact.contains("operation_t::Mul=>fixture::Operation::Mul{}"),
+        compact.contains("1=>::core::result::Result::Ok(fixture::Operation::Mul{})"),
         "{rust}"
     );
     assert!(
@@ -574,4 +580,34 @@ fn an_enum_with_no_values_is_refused() {
     };
     assert_eq!(declaration.to_string(), "type:Operation");
     assert_eq!(skip.capability.as_str(), "unsupported.c.empty_enum");
+}
+
+/// A number outside a C `int` refuses the enum.
+///
+/// `#[repr(i64)]` makes `5_000_000_000` valid Rust, but the C enum and the
+/// `int` it comes back as are 32 bits, so neither could carry it.
+#[test]
+fn a_number_outside_int_is_refused() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            #[repr(i64)]
+            pub enum Operation {
+                Add = 5_000_000_000,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.enum_range");
 }

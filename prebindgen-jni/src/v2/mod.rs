@@ -170,9 +170,18 @@ impl Declarations {
             let config = &self.types[key];
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
+            // A class implementing an interface, or generating one, is
+            // refused rather than emitted without it: the binding asked for
+            // that supertype, and v2 writes none.
+            let interface = config.interface_enabled || !config.interfaces.is_empty();
             declare(
                 Declaration::Type(key.clone()),
                 match config.kind {
+                    _ if interface => JniChoice::Unimplemented {
+                        declarator,
+                        capability: "interface",
+                        placement: placement.clone(),
+                    },
                     crate::jni::DeclaredKind::Data => JniChoice::DataClass {
                         class: placement.clone(),
                     },

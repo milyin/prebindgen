@@ -20,8 +20,8 @@ use std::{
 };
 
 use kotlin_codegen::{
-    write_files, KtClass, KtCode, KtCompanion, KtCtorParam, KtDecl, KtEnumEntry, KtFile, KtFun,
-    KtParam, KtProperty, KtType, KtVis, WriteKotlinError,
+    write_files, KtClass, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtParam, KtProperty, KtType,
+    KtVis, WriteKotlinError,
 };
 use prebindgen_registry_v2::Generation;
 
@@ -77,27 +77,17 @@ pub(super) fn write(
                 values,
                 conditions,
             }) => {
-                let mut declaration = KtClass::enum_(class)
-                    .vis(KtVis::Public)
-                    .ctor_param(KtCtorParam::new("value", KtType::int()).val());
-                for (name, number) in values {
-                    declaration =
-                        declaration.entry(KtEnumEntry::with_args(name, number.to_string()));
-                }
-                // `@JvmStatic` so the companion's `fromInt` is a real static
-                // method on the class, which is how a caller outside Kotlin
-                // reaches it.
-                declaration = declaration.companion(
-                    KtCompanion::new().vis(KtVis::Public).member(
-                        KtFun::new("fromInt")
-                            .vis(KtVis::Public)
-                            .annotation("JvmStatic")
-                            .param(KtParam::new("value", KtType::int()))
-                            .returns(KtType::cls(class))
-                            .expr_body(KtCode::new().line("entries.first { it.value == value }")),
-                    ),
+                let mut declaration = crate::jni::render::enum_class(
+                    class,
+                    values
+                        .iter()
+                        .map(|(name, number)| (name.clone(), i64::from(*number))),
                 );
-                if let Some(kdoc) = conditions_kdoc(conditions) {
+                if let Some(kdoc) = conditions_kdoc(
+                    conditions,
+                    "the functions that take or return it are what a library built without \
+                     that condition lacks",
+                ) {
                     declaration = declaration.kdoc(kdoc);
                 }
                 file(package, &mut files).decls.push(declaration.into());
@@ -129,7 +119,11 @@ pub(super) fn write(
                 // whatever that condition says, and the symbol behind it is
                 // there only where the condition held. Saying so is all this
                 // writer can do about it.
-                if let Some(kdoc) = conditions_kdoc(conditions) {
+                if let Some(kdoc) = conditions_kdoc(
+                    conditions,
+                    "using it against a library built without that condition raises \
+                     UnsatisfiedLinkError",
+                ) {
                     // `kdoc` replaces. Nothing carries a source item's `///`
                     // into Kotlin yet, so there is nothing to replace; whoever
                     // adds that has to join the two rather than call this
@@ -288,9 +282,11 @@ fn call(
 /// itself, or `None` for the ordinary unconditional one.
 ///
 /// Kotlin has no conditional compilation, so the declaration exists whatever
-/// the condition says and the symbol behind it is there only where the
-/// condition held. Saying so is all this writer can do about it.
-fn conditions_kdoc(conditions: &[String]) -> Option<String> {
+/// the condition says. `consequence` is what a caller meets where the
+/// condition did not hold, which differs between a function, whose symbol is
+/// missing, and a class, which has none. Saying so is all this writer can do
+/// about it.
+fn conditions_kdoc(conditions: &[String], consequence: &str) -> Option<String> {
     if conditions.is_empty() {
         return None;
     }
@@ -303,8 +299,7 @@ fn conditions_kdoc(conditions: &[String]) -> Option<String> {
         .collect();
     Some(format!(
         "Present only where {} holds in the source crate.\n\nKotlin cannot state a \
-         condition, so this is declared either way; using it against a library built \
-         without that condition raises UnsatisfiedLinkError.",
+         condition, so this is declared either way; {consequence}.",
         spelled.join(" and ")
     ))
 }

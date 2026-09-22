@@ -471,9 +471,14 @@ impl Enum {
     /// implicit one, and a mirror entry for an absent value names a variant
     /// that is not there.
     pub fn has_conditional_value(&self) -> bool {
-        self.values
-            .iter()
-            .any(|value| !value.conditions().is_empty())
+        self.values.iter().any(|value| {
+            value
+                .origin
+                .syntax
+                .attrs
+                .iter()
+                .any(|attr| attr.path().is_ident("cfg"))
+        })
     }
 
     /// Every value paired with the number Rust assigns it, or the first value
@@ -583,20 +588,6 @@ impl Enum {
     }
 }
 
-impl EnumValue {
-    /// The `#[cfg]` attributes this value was captured with — see
-    /// [`conditions_from`].
-    ///
-    /// A value's condition is the enum's one level down. It also breaks the
-    /// numbering: [`Self::discriminant`] counts every value as present, so a
-    /// conditional value followed by implicit ones gives numbers the compiled
-    /// enum disagrees with. A consumer that needs the numbers refuses an enum
-    /// with any conditional value rather than emitting them.
-    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
-        conditions_from(&self.origin.syntax.attrs)
-    }
-}
-
 impl Field {
     /// The `#[cfg]` attributes this field was captured with — see
     /// [`conditions_from`].
@@ -686,6 +677,13 @@ pub struct Unsupported {
     pub origin: Origin<syn::Item>,
 }
 
+/// Whether one of `attrs` is `#[non_exhaustive]`.
+fn non_exhaustive(attrs: &[syn::Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("non_exhaustive"))
+}
+
 /// The `#[cfg]` attributes an item was captured with, one inert token stream
 /// each.
 ///
@@ -703,12 +701,6 @@ pub struct Unsupported {
 /// conditions from several items can tell one condition from another. Rust
 /// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
 /// by side and never has to know what any of them says.
-fn non_exhaustive(attrs: &[syn::Attribute]) -> bool {
-    attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("non_exhaustive"))
-}
-
 fn conditions_from(attrs: &[syn::Attribute]) -> Vec<proc_macro2::TokenStream> {
     use quote::ToTokens;
     attrs

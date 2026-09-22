@@ -976,7 +976,7 @@ fn a_fieldless_enum_crosses_as_its_number() {
         .collect();
     let _ = std::fs::remove_dir_all(&dir);
     for line in [
-        "public enum class Priority(val value: Int) {",
+        "public enum class Priority(public val value: Int) {",
         "LOW(0),",
         // The last entry closes the list, because a companion follows it.
         "HIGH(7);",
@@ -1019,4 +1019,30 @@ fn a_number_beyond_the_carrier_refuses_the_enum() {
     };
     assert_eq!(declaration.to_string(), "type:Priority");
     assert_eq!(skip.capability.as_str(), "unsupported.jni.enum_range");
+}
+
+/// A class declared with an interface is refused rather than emitted without
+/// it.
+///
+/// v1 adds `.implements(..)` to the class's supertypes and emits the
+/// `.interface()` it generates. v2 writes neither, so a class it emitted
+/// would compile and be missing the supertype the binding asked for.
+#[test]
+fn a_class_with_an_interface_is_refused() {
+    let loc = myflat_loc();
+    let items = declare_referenced(vec![(
+        syn::parse_str::<syn::Item>("pub enum Priority { Low, High }").unwrap(),
+        loc,
+    )]);
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(crate::package!().class(crate::enum_class!(Priority).implements("io.test.Ranked")))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Priority");
+    assert_eq!(skip.capability.as_str(), "unsupported.jni.interface");
 }

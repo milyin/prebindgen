@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    mirrored_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
+    mirrored_i32_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
     EnumArm, FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType,
     OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
     ReprSpec, Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery,
@@ -64,11 +64,11 @@ pub enum JniChoice {
         /// The `Java_…` symbol the JVM looks that native method up by.
         symbol: String,
     },
-    /// A declarator v1 lowers and v2 does not yet — a handle class, an enum
-    /// class, a sealed class, a constant, a class member — or a declarator v2
-    /// lowers under a setting it does not honour yet. Carries the declarator's
-    /// name for the report, the capability the refusal names, and the Kotlin
-    /// placement the declaration would have had.
+    /// A declarator v1 lowers and v2 does not yet — a sealed class, a constant,
+    /// a class member — or a declarator v2 lowers under a setting it does not
+    /// honour yet. Carries the declarator's name for the report, the capability
+    /// the refusal names, and the Kotlin placement the declaration would have
+    /// had.
     Unimplemented {
         declarator: &'static str,
         /// The missing capability's code stem, `unsupported.jni.<capability>`.
@@ -281,37 +281,6 @@ impl JniTarget {
     }
 }
 
-/// The values of a fieldless enum with their numbers as a `jint` holds them.
-///
-/// Everything [`mirrored_enum`] refuses, plus the one this carrier adds: a
-/// number outside `i32`. `#[repr(i64)] enum P { High = 2147483648 }` is valid
-/// Rust, and neither the Kotlin `Int` nor the `jint` match arm can hold it —
-/// so it is refused rather than emitted as a literal that does not compile.
-fn jint_values<'a>(
-    unit: Option<&'a prebindgen_registry::flat::Enum>,
-    class: &str,
-) -> Result<Vec<(&'a prebindgen_registry::flat::EnumValue, i32)>, Unsupported> {
-    let values = mirrored_enum(unit, class, JniTarget::NAME)?;
-    values
-        .iter()
-        .map(|value| {
-            let number = value
-                .discriminant
-                .expect("the numbers were checked before they were read");
-            match i32::try_from(number) {
-                Ok(number) => Ok((value, number)),
-                Err(_) => Err(Unsupported::new(
-                    "unsupported.jni.enum_range",
-                    format!(
-                        "`{class}` numbers `{}` {number}, which a Kotlin `Int` cannot hold",
-                        value.name
-                    ),
-                )),
-            }
-        })
-        .collect()
-}
-
 /// The Rust name of the error-reporting helper the wrappers call.
 pub(crate) const REPORT_ERROR: &str = "report_jni_error";
 
@@ -490,7 +459,7 @@ impl Target for JniTarget {
             // an `Int` and can hold something no value names, so that
             // direction can fail.
             (Relation::Atomic, JniChoice::EnumClass { class }) => {
-                let values = match jint_values(shape.unit, class) {
+                let values = match mirrored_i32_enum(shape.unit, class, Self::NAME) {
                     Ok(values) => values,
                     Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };
@@ -856,7 +825,7 @@ impl Target for JniTarget {
                 // The same numbers the conversion matches on, refused for the
                 // same reasons: a class whose entries disagreed with the
                 // wrapper's arms would compile and be wrong.
-                let values = match jint_values(Some(unit), class) {
+                let values = match mirrored_i32_enum(Some(unit), class, Self::NAME) {
                     Ok(values) => values,
                     Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };

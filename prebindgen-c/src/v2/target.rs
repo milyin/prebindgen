@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    mirrored_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
+    mirrored_i32_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
     EnumArm, FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType,
     OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
     ReprSpec, Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery,
@@ -42,12 +42,14 @@ pub enum CChoice {
     /// frees it through the `release` symbol.
     OpaquePtr { c_name: String, release: String },
     /// A fieldless enum: C declares an enum of the same values under this
-    /// name, and a value of the type crosses as one of them.
+    /// name. A value leaves Rust as one of them and comes back as a C `int`.
+    /// The enumerators keep the Rust value names; cbindgen's `[enum]
+    /// prefix_with_name` is what keeps two enums' `Add` apart in a header.
     Enum { c_name: String },
     /// A source function to expose: the wrapper around it carries this symbol.
     Function { symbol: String },
-    /// A declaration v1 lowers and v2 does not yet: an enum, a value-opaque
-    /// type, a tagged union. Carries the declarator's name so the refusal says
+    /// A declaration v1 lowers and v2 does not yet: a value-opaque type, a
+    /// tagged union. Carries the declarator's name so the refusal says
     /// which capability is missing, and the C name it would have had so the
     /// report can say where it was going.
     Unimplemented {
@@ -214,58 +216,82 @@ impl Target for CTarget {
                     },
                 }))
             }
-            // A fieldless enum crosses as the C enum this target declares for
-            // it: the same values, so the match either way is exhaustive and
-            // cannot fail.
+            // A fieldless enum leaves Rust as the C enum this target
+            // declares for it, and comes back as a C `int`. C lets an enum
+            // variable hold any `int`, and a Rust enum holding a number none
+            // of its values has is undefined behaviour before any match can
+            // look at it, so the direction into Rust reads the number and
+            // fails on one no value has.
             (Relation::Atomic, CChoice::Enum { c_name }) => {
-                let unit = match mirrored_enum(shape.unit, c_name, Self::NAME) {
-                    Ok(unit) => unit,
+                let values = match mirrored_i32_enum(shape.unit, c_name, Self::NAME) {
+                    Ok(values) => values,
                     Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };
                 let ident = format_ident!("{c_name}");
-                let carrier = WireType::abi(syn::parse_quote!(#ident));
                 let ty = shape.crossing.ty.clone();
-                // Each value is carried as the same value of the C enum, so
-                // both directions name every value and neither can fail.
-                let values: Vec<EnumArm> = unit
-                    .iter()
-                    .map(|value| {
-                        let name = &value.name;
-                        EnumArm {
-                            name: name.clone(),
-                            shape: value.shape,
-                            carried: syn::parse_quote!(#ident::#name),
-                        }
-                    })
-                    .collect();
-                let codec = match shape.crossing.direction {
-                    Direction::OutOfRust => PrimitiveSpec {
-                        operands: vec![OperandSpec::value(
-                            OperationType::Source(ty.clone()),
-                            Access::Owned,
-                        )],
-                        result: Some(OperationType::Carrier(carrier.clone())),
-                        failure: PrimitiveFailure::Infallible,
-                        dependencies: Vec::new(),
-                        implementation: Operation::Standard(StandardOp::EnumOut {
-                            source: Box::new(ty),
-                            values,
-                        }),
-                    },
-                    Direction::IntoRust => PrimitiveSpec {
-                        operands: vec![OperandSpec::value(
-                            OperationType::Carrier(carrier.clone()),
-                            Access::Owned,
-                        )],
-                        result: Some(OperationType::Source(ty.clone())),
-                        failure: PrimitiveFailure::Infallible,
-                        dependencies: Vec::new(),
-                        implementation: Operation::Standard(StandardOp::EnumIn {
-                            source: Box::new(ty),
-                            values,
-                            invalid: None,
-                        }),
-                    },
+                let (carrier, codec) = match shape.crossing.direction {
+                    Direction::OutOfRust => {
+                        let carrier = WireType::abi(syn::parse_quote!(#ident));
+                        let values = values
+                            .iter()
+                            .map(|(value, _)| {
+                                let name = &value.name;
+                                EnumArm {
+                                    name: name.clone(),
+                                    shape: value.shape,
+                                    carried: syn::parse_quote!(#ident::#name),
+                                }
+                            })
+                            .collect();
+                        let codec = PrimitiveSpec {
+                            operands: vec![OperandSpec::value(
+                                OperationType::Source(ty.clone()),
+                                Access::Owned,
+                            )],
+                            result: Some(OperationType::Carrier(carrier.clone())),
+                            failure: PrimitiveFailure::Infallible,
+                            dependencies: Vec::new(),
+                            implementation: Operation::Standard(StandardOp::EnumOut {
+                                source: Box::new(ty),
+                                values,
+                            }),
+                        };
+                        (carrier, codec)
+                    }
+                    Direction::IntoRust => {
+                        let carrier = WireType::abi(syn::parse_quote!(::core::ffi::c_int));
+                        let values = values
+                            .iter()
+                            .map(|(value, number)| {
+                                let number = proc_macro2::Literal::i32_unsuffixed(*number);
+                                EnumArm {
+                                    name: value.name.clone(),
+                                    shape: value.shape,
+                                    carried: syn::parse_quote!(#number),
+                                }
+                            })
+                            .collect();
+                        let codec = PrimitiveSpec {
+                            operands: vec![OperandSpec::value(
+                                OperationType::Carrier(carrier.clone()),
+                                Access::Owned,
+                            )],
+                            result: Some(OperationType::Source(ty.clone())),
+                            failure: PrimitiveFailure::fallible(
+                                OperationType::Carrier(WireType::internal(syn::parse_quote!(
+                                    String
+                                ))),
+                                FailureCategory::Binding,
+                            ),
+                            dependencies: Vec::new(),
+                            implementation: Operation::Standard(StandardOp::EnumIn {
+                                source: Box::new(ty),
+                                values,
+                                invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
+                            }),
+                        };
+                        (carrier, codec)
+                    }
                 };
                 Ok(TargetAttempt::Ready(ReprSpec {
                     layout: Layout::Scalar(carrier),
@@ -487,18 +513,18 @@ impl Target for CTarget {
                         unit.name
                     )));
                 };
-                if let Err(reason) = mirrored_enum(Some(unit), c_name, Self::NAME) {
-                    return Ok(TargetAttempt::Unsupported(reason));
-                }
+                // The same numbers the conversion matches on, refused for the
+                // same reasons.
+                let values = match mirrored_i32_enum(Some(unit), c_name, Self::NAME) {
+                    Ok(values) => values,
+                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
+                };
                 let ident = format_ident!("{c_name}");
-                let values = unit
-                    .discriminant_values()
-                    .expect("the values were checked before the mirror was built")
-                    .into_iter()
-                    .map(|(name, number)| {
-                        let number = proc_macro2::Literal::i64_unsuffixed(number);
-                        quote!(#name = #number)
-                    });
+                let values = values.iter().map(|(value, number)| {
+                    let name = &value.name;
+                    let number = proc_macro2::Literal::i32_unsuffixed(*number);
+                    quote!(#name = #number)
+                });
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     declaration: request.declaration.clone(),
                     requires: Vec::new(),

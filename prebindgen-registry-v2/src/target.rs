@@ -478,6 +478,39 @@ pub fn mirrored_enum<'a>(
     Ok(&unit.values)
 }
 
+/// [`mirrored_enum`]'s values with their numbers as an `i32`, for a target
+/// whose carrier is 32 bits: a C `int`, a JNI `jint`.
+///
+/// Everything [`mirrored_enum`] refuses, plus a number outside `i32`.
+/// `#[repr(i64)] enum P { High = 2147483648 }` is valid Rust, and a 32-bit
+/// carrier cannot hold it, so the enum is refused rather than mirrored with a
+/// number the target's side truncates or does not accept.
+pub fn mirrored_i32_enum<'a>(
+    unit: Option<&'a Enum>,
+    declared_as: &str,
+    language: &str,
+) -> Result<Vec<(&'a EnumValue, i32)>, Unsupported> {
+    mirrored_enum(unit, declared_as, language)?
+        .iter()
+        .map(|value| {
+            let number = value
+                .discriminant
+                .expect("mirrored_enum refuses an enum with a number it could not evaluate");
+            match i32::try_from(number) {
+                Ok(number) => Ok((value, number)),
+                Err(_) => Err(Unsupported::new(
+                    format!("unsupported.{language}.enum_range"),
+                    format!(
+                        "`{declared_as}` numbers `{}` {number}, which a 32-bit carrier cannot \
+                         hold",
+                        value.name
+                    ),
+                )),
+            }
+        })
+        .collect()
+}
+
 /// One value of a fieldless enum, as the two enum operations match it.
 ///
 /// [`Self::shape`] is why this is not a bare name: `enum Op { Add(), Mul {} }`

@@ -289,26 +289,27 @@ establish the behavior of the resulting foreign interface.
    model already computes. Two more standard operations spell the conversion,
    `EnumOut` and `EnumIn`, for the reason the handle operations are standard:
    they name the source type, and an adapter cannot spell a source path. What
-   the number is carried *as* is the adapter's: C declares an enum of the same
-   values and each direction is an exhaustive `match` that cannot fail, while
-   JNI carries a `jint` and a Kotlin `enum class`, so the direction into Rust
-   can meet a number no value names and fails as a `Binding` error. An
-   alternative carrying a field makes a sum, which the model calls a variant
-   and which has no lowering.
+   the number is carried *as* is the adapter's. C declares an enum of the same
+   values and a value leaves Rust as one of them, through an exhaustive `match`
+   that cannot fail; it comes back as a C `int`, because C lets an enum variable
+   hold any `int` and a Rust enum holding a number none of its values has is
+   undefined behaviour. JNI carries a `jint` and a Kotlin `enum class`. In both,
+   the direction into Rust can meet a number no value names and fails as a
+   `Binding` error. An alternative carrying a field makes a sum, which the model
+   calls a variant and which has no lowering.
 
    Some shapes are refused rather than mirrored, by one check both targets
-   share. A number the model could not evaluate — a `const`, arithmetic — is
-   not a number to mirror. A value written under a `#[cfg]` breaks the
-   numbering, because the model counts every value as present, and would put
-   an entry in the mirror for a variant the source crate compiled out. An
-   enum with no values has nothing to mirror at all. A number outside the
-   carrier's range is refused where the carrier is narrower than the model's
-   `i64`, which is JNI's `Int`. And `#[non_exhaustive]` is refused wherever it
-   sits: on the enum, which another crate cannot match without an arm for a
-   value it does not know — and going out of Rust there is nothing for that
-   arm to produce — or on a value, which another crate cannot name at all, a
-   unit value included, whose constructor is private outside the crate that
-   declared it.
+   share. A number the model could not evaluate — a `const`, arithmetic — is not
+   a number to mirror. A value written under a `#[cfg]` breaks the numbering,
+   because the model counts every value as present, and would put an entry in
+   the mirror for a variant the source crate compiled out. An enum with no
+   values has nothing to mirror at all. A number outside `i32` is refused,
+   because both carriers are 32 bits: a C `int` and JNI's `Int`. And
+   `#[non_exhaustive]` is refused wherever it sits: on the enum, which another
+   crate cannot match without an arm for a value it does not know — and going
+   out of Rust there is nothing for that arm to produce — or on a value, which
+   another crate cannot name at all, a unit value included, whose constructor is
+   private outside the crate that declared it.
 
    What is *not* refused is a fieldless value written `Add()` or `Mul {}`:
    those are not unit variants, so every mention of them carries its
