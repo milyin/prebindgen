@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::{Declaration, EntityName},
+    decl::Declaration,
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -30,13 +30,13 @@ use crate::{
 /// One entry of a [`BindingRequests`] work list: something the binding said
 /// about one item.
 ///
-/// The two dispositions accept different things. An expose takes any
-/// [`Declaration`], including the two that name no entity. An ignore takes an
-/// [`EntityName`]: what is left alone is an item, and only an item can be. The
-/// report accounts for both, so they are one list rather than two: an id can
-/// then appear once, which is what the report's "one id, one row" rests on.
-/// Exposing something and ignoring it is a contradiction the engine catches
-/// for that reason, rather than emitting two rows for it.
+/// Both dispositions name a declaration, and the report accounts for both,
+/// so they are one list rather than two: an id can then appear once, which is
+/// what the report's "one id, one row" rests on. Exposing something and
+/// ignoring it is a contradiction the engine catches for that reason, rather
+/// than emitting two rows for it. An ignore must name an entity — what is
+/// left alone is an item — and one that names none is refused as
+/// contradictory input before anything is planned.
 #[derive(Clone, Debug)]
 pub enum Request {
     /// Expose this declaration. The target is asked what it is, and the
@@ -44,7 +44,7 @@ pub enum Request {
     Expose(Declaration),
     /// Leave this entity alone. Nothing is planned and nothing is generated;
     /// the report carries it so that a decision and a gap read differently.
-    Ignore(EntityName),
+    Ignore(Declaration),
 }
 
 /// What a frontend hands the engine: what to expose, and what to leave alone.
@@ -83,24 +83,22 @@ impl BindingRequests {
     }
 
     /// Ask for one entity to be left alone.
-    pub fn ignore(&mut self, name: EntityName) -> &mut Self {
-        self.requests.push(Request::Ignore(name));
+    pub fn ignore(&mut self, declaration: Declaration) -> &mut Self {
+        self.requests.push(Request::Ignore(declaration));
         self
     }
 
-    /// The declarations to plan, and the ones only the report hears about —
-    /// the latter as the declarations that would have exposed them, which is
-    /// the id a report row and a duplicate check go by.
+    /// The declarations to plan, and the ones only the report hears about.
     ///
     /// Split once, here, so that nothing downstream can plan an ignore by
     /// forgetting to filter for it.
-    fn split(&self) -> (Vec<&Declaration>, Vec<Declaration>) {
+    fn split(&self) -> (Vec<&Declaration>, Vec<&Declaration>) {
         let mut exposed = Vec::new();
         let mut ignored = Vec::new();
         for request in &self.requests {
             match request {
                 Request::Expose(declaration) => exposed.push(declaration),
-                Request::Ignore(name) => ignored.push(Declaration::from(name.clone())),
+                Request::Ignore(declaration) => ignored.push(declaration),
             }
         }
         (exposed, ignored)
@@ -801,7 +799,7 @@ pub fn generate<T: Target>(
         .filter(|declaration| declaration.is_type())
         // Keyed by the item's name, which is what a requirement names: a
         // declaration's key may carry arguments the item does not.
-        .filter_map(|declaration| Some((declaration.entity()?.name(), *declaration)))
+        .filter_map(|declaration| Some((declaration.entity_name()?, *declaration)))
         .collect();
 
     // A public declaration can require another one. Propagate until a pass
@@ -866,7 +864,7 @@ pub fn generate<T: Target>(
         // it lands nowhere. The id's prefix (`fn:`, `type:`, `const:`) already
         // says what was left alone.
         .chain(ignored.iter().map(|declaration| Entry {
-            declaration: declaration.clone(),
+            declaration: (*declaration).clone(),
             described: crate::target::Described::new("ignore", ""),
             outcome: Outcome::Ignored,
         }))
@@ -1367,9 +1365,8 @@ fn plan_type<T: Target>(
         )));
     };
     let name = declaration
-        .entity()
-        .expect("a type declaration names an entity")
-        .name();
+        .entity_name()
+        .expect("a type declaration names an entity");
     // The item is looked up by its name, and the type is read from the key
     // as the binding declared it: `ptr_class!(Publisher<'static>)` names the
     // item `Publisher` and means values of `Publisher<'static>`, which is

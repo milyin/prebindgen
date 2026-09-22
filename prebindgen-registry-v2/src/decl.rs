@@ -10,57 +10,6 @@
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
 
-use crate::entity::{Entity, EntityKind};
-
-/// An entity by name: which of the three kinds, and what it is called.
-///
-/// What an ignore names, and what a declaration resolves to when it names an
-/// entity at all. Less than a [`Declaration`]: it says nothing about how the
-/// target would get the item, so it cannot be a callback, a constant the
-/// binding computes on the foreign side, or a conversion — those name no
-/// entity.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum EntityName {
-    Type(TypeKey),
-    Function(syn::Ident),
-    Constant(syn::Ident),
-}
-
-impl EntityName {
-    pub fn kind(&self) -> EntityKind {
-        match self {
-            EntityName::Type(_) => EntityKind::Type,
-            EntityName::Function(_) => EntityKind::Function,
-            EntityName::Constant(_) => EntityKind::Constant,
-        }
-    }
-
-    /// The name as the model indexes it.
-    ///
-    /// A type key may carry arguments the item does not — `ptr_class!(
-    /// Publisher<'static>)` means the item `Publisher` — so the item's name is
-    /// the key's last segment without them. A key that is not a path at all
-    /// names no item, and is looked up as it is spelled, to be found missing.
-    pub fn name(&self) -> String {
-        match self {
-            EntityName::Type(key) => key.short_name().unwrap_or_else(|| key.as_str().to_string()),
-            EntityName::Function(ident) | EntityName::Constant(ident) => ident.to_string(),
-        }
-    }
-}
-
-impl From<EntityName> for Declaration {
-    /// The declaration that exposes the entity as what it is — what a report
-    /// row and a duplicate check compare an ignore by.
-    fn from(name: EntityName) -> Self {
-        match name {
-            EntityName::Type(key) => Declaration::Type(key),
-            EntityName::Function(ident) => Declaration::Function(ident),
-            EntityName::Constant(ident) => Declaration::Const(ident),
-        }
-    }
-}
-
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
 ///
@@ -74,12 +23,16 @@ impl From<EntityName> for Declaration {
 /// through it is still [`Declaration::Function`], and the `val` is the
 /// target's choice, recorded under that declaration.
 ///
-/// Where an entity came from is not part of this. A `#[prebindgen]` function
-/// and one the binding defines itself are both a [`Declaration::Function`];
-/// the model holds both, and only its [`Origin`](prebindgen_flat::flat::Origin)
-/// tells them apart. Three declarations name no entity: a callback signature
-/// and a constant the binding computes on the foreign side, because nothing in
-/// Rust backs them; and a conversion, which is the binding's own wire mapping
+/// An **entity** is one real item of the API — a type, a function or a
+/// constant — and the three variants that name one are the registry's whole
+/// judgment of which elements those are: the model holds a guard and an
+/// unsupported item beside them and ranks none of it. Where an entity came
+/// from is not part of this either. A `#[prebindgen]` function and one the
+/// binding defines itself are both a [`Declaration::Function`]; the model
+/// holds both, and only its [`Origin`](prebindgen_flat::flat::Origin) tells
+/// them apart. Three declarations name no entity: a callback signature and a
+/// constant the binding computes on the foreign side, because nothing in Rust
+/// backs them; and a conversion, which is the binding's own wire mapping
 /// *about* a type — `convert!(Option<Payload>)` — and requires no item of that
 /// name in the model.
 ///
@@ -126,13 +79,19 @@ impl Declaration {
         matches!(self, Declaration::Type(_))
     }
 
-    /// The entity this declaration names, if it names one — `None` for a
-    /// callback, a computed constant and a conversion.
-    pub fn entity(&self) -> Option<EntityName> {
+    /// The name the model indexes the entity this declaration names under —
+    /// `None` for a callback, a computed constant and a conversion.
+    ///
+    /// A type key may carry arguments the item does not — `ptr_class!(
+    /// Publisher<'static>)` means the item `Publisher` — so the item's name is
+    /// the key's last segment without them. A key that is not a path at all
+    /// names no item, and is looked up as it is spelled, to be found missing.
+    pub fn entity_name(&self) -> Option<String> {
         match self {
-            Declaration::Function(ident) => Some(EntityName::Function(ident.clone())),
-            Declaration::Const(ident) => Some(EntityName::Constant(ident.clone())),
-            Declaration::Type(key) => Some(EntityName::Type(key.clone())),
+            Declaration::Function(ident) | Declaration::Const(ident) => Some(ident.to_string()),
+            Declaration::Type(key) => {
+                Some(key.short_name().unwrap_or_else(|| key.as_str().to_string()))
+            }
             Declaration::Conversion(_)
             | Declaration::Callback(_)
             | Declaration::ComputedConst(_) => None,
@@ -142,15 +101,20 @@ impl Declaration {
     /// The element this declaration names, if the model holds it.
     ///
     /// Entities live in one flat namespace holding functions, types and
-    /// constants, so the name alone finds any element; the kind is what says
-    /// whether the element found is the one the declaration meant. A
+    /// constants, so the name alone finds any element; the variant is what
+    /// says whether the element found is the one the declaration meant. A
     /// declaration naming no entity finds none — which is not the same as a
     /// missing one, and [`Self::missing_from`] is the question to ask about
     /// presence.
     pub(crate) fn captured<'f>(&self, flat: &'f Flat) -> Option<&'f Element> {
-        let wanted = self.entity()?;
-        let element = flat.element(&wanted.name())?;
-        (Entity::of(element)?.kind() == wanted.kind()).then_some(element)
+        let element = flat.element(&self.entity_name()?)?;
+        matches!(
+            (self, element),
+            (Declaration::Function(_), Element::Function(_))
+                | (Declaration::Const(_), Element::Constant(_))
+                | (Declaration::Type(_), Element::Type(_))
+        )
+        .then_some(element)
     }
 
     /// Whether the model lacks what this declaration must name.
@@ -160,16 +124,18 @@ impl Declaration {
     /// engine fails the run over it instead of reporting a skip. False for a
     /// declaration that names no entity.
     pub(crate) fn missing_from(&self, flat: &Flat) -> bool {
-        self.entity().is_some() && self.captured(flat).is_none()
+        self.entity_name().is_some() && self.captured(flat).is_none()
     }
 
     /// The word a refusal uses for what this declaration must name.
     pub(crate) fn describe_captured(&self) -> &'static str {
-        match self.entity().map(|entity| entity.kind()) {
-            Some(EntityKind::Function) => "function",
-            Some(EntityKind::Constant) => "constant",
-            Some(EntityKind::Type) => "type",
-            None => "item",
+        match self {
+            Declaration::Function(_) => "function",
+            Declaration::Const(_) => "constant",
+            Declaration::Type(_) => "type",
+            Declaration::Conversion(_)
+            | Declaration::Callback(_)
+            | Declaration::ComputedConst(_) => "item",
         }
     }
 

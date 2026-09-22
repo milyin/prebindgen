@@ -52,11 +52,11 @@ impl Reach {
     pub(crate) fn new(flat: &Flat, default: syn::Path) -> Self {
         let modules = flat
             .elements()
-            .filter_map(crate::entity::Entity::of)
-            .filter(|entity| flat.is_binding_local(entity.name()))
-            .filter_map(|entity| {
-                let module = entity.crate_name()?;
-                Some((entity.name().to_string(), syn::parse_str(module).ok()?))
+            .filter_map(|element| Some((element.name()?, element)))
+            .filter(|(name, _)| flat.is_binding_local(*name))
+            .filter_map(|(name, element)| {
+                let module = element.location().crate_name.as_deref()?;
+                Some((name.to_string(), syn::parse_str(module).ok()?))
             })
             .collect();
         Reach { modules, default }

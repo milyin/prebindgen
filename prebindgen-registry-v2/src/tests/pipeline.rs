@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind, TypeRef};
 
 use crate::{
-    decl::{Declaration, EntityName},
+    decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -407,9 +407,8 @@ impl Target for Mini {
                 &format!(
                     "{}_free",
                     site.declaration
-                        .entity()
+                        .entity_name()
                         .expect("a handle is an entity")
-                        .name()
                 ),
                 Routes::None,
             )),
@@ -615,7 +614,7 @@ impl Target for Mini {
 struct Binding {
     target: Mini,
     outputs: Vec<Declaration>,
-    ignored: Vec<EntityName>,
+    ignored: Vec<Declaration>,
 }
 
 impl Binding {
@@ -655,8 +654,8 @@ impl Binding {
         self
     }
 
-    fn ignore(&mut self, name: EntityName) -> &mut Self {
-        self.ignored.push(name);
+    fn ignore(&mut self, declaration: Declaration) -> &mut Self {
+        self.ignored.push(declaration);
         self
     }
 
@@ -671,8 +670,8 @@ impl Binding {
         for declaration in outputs {
             requests.expose(declaration);
         }
-        for name in ignored {
-            requests.ignore(name);
+        for declaration in ignored {
+            requests.ignore(declaration);
         }
         generate(flat, &target, requests)
     }
@@ -1068,7 +1067,7 @@ fn a_declaration_naming_nothing_is_an_error() {
 fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
     let mut binding = binding();
     binding.declare_type("Stamp", Choice::Struct);
-    binding.ignore(EntityName::Function(syn::parse_quote!(stamp_max)));
+    binding.ignore(function("stamp_max"));
 
     let generation = binding.generate(model()).expect("plans");
     let counts = generation.report().counts();

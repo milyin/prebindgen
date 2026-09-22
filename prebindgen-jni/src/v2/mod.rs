@@ -21,9 +21,7 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry_v2::{
-    generate, BindingRequests, Declaration, EngineError, EntityName, Generation,
-};
+use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
 pub use target::{JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
@@ -248,13 +246,13 @@ impl Declarations {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_fns) {
-            requests.ignore(EntityName::Function(ident.clone()));
+            requests.ignore(Declaration::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_class_types) {
-            requests.ignore(EntityName::Type(key.clone()));
+            requests.ignore(Declaration::Type(key.clone()));
         }
         for ident in sorted(&self.ignored_const_idents) {
-            requests.ignore(EntityName::Constant(ident.clone()));
+            requests.ignore(Declaration::Const(ident.clone()));
         }
         (target, requests)
     }

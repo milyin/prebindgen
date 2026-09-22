@@ -449,27 +449,23 @@ To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`
 ```rust
 enum Request {
     Expose(DeclarationId), // Plan this and generate it.
-    Ignore(EntityName),    // Plan nothing; the report carries it as a decision.
+    Ignore(DeclarationId), // Plan nothing; the report carries it as a decision.
 }
-
-// An entity by name: which of the three kinds, and what it is called.
-enum EntityName { Type(TypeKey), Function(Ident), Constant(Ident) }
 ```
 
 An **entity** is one real item of the API: a type, a function or a constant,
 with its whole description. The model holds more than that — a guard, an
 unsupported item — and does not rank what it holds; that a binding can name
 exactly these three kinds, and nothing else, is the registry's judgment, and
-`Entity` is where it states it. Where an entity came from is not a kind: a
-captured item and one the binding stated are the same entity, and differ in
-origin alone.
+the three variants of `Declaration` that name an entity are where it states
+it. Where an entity came from is not a kind: a captured item and one the
+binding stated are the same entity, and differ in origin alone.
 
-An ignore carries less than a declaration, deliberately. It names an entity
-and says nothing about how the target would get it, so a callback or a
-constant computed on the foreign side cannot be ignored — nothing in the model
-backs them, so there is nothing to leave alone. What a report row and a
-duplicate check compare an ignore by is the declaration that would have
-exposed the same entity.
+An ignore names an entity and says nothing about how the target would get it.
+A callback or a constant computed on the foreign side cannot be ignored —
+nothing in the model backs them, so there is nothing to leave alone — and an
+ignore naming one is refused as contradictory input before anything is
+planned.
 
 One list rather than two, because the report has one row per declaration and
 both dispositions produce one. An id that appeared under both would be two

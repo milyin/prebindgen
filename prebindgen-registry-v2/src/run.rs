@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use prebindgen_flat::flat::Flat;
 
-use crate::{decl::Declaration, outcome::EngineError, report::Report};
+use crate::{decl::Declaration, outcome::EngineError, report::Report, target::PlanningError};
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
@@ -145,9 +145,21 @@ impl<P> Generation<P> {
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
 pub(crate) fn check_declarations(
     exposed: &[&Declaration],
-    ignored: &[Declaration],
+    ignored: &[&Declaration],
     flat: &Flat,
 ) -> Result<(), EngineError> {
+    // An ignore leaves an item alone, so it has to name one: a callback or a
+    // computed constant is nothing in the source, and a frontend that wrote
+    // such an ignore is contradicting itself.
+    if let Some(declaration) = ignored
+        .iter()
+        .find(|declaration| declaration.entity_name().is_none())
+    {
+        return Err(EngineError::Planning(PlanningError::InvalidInput(format!(
+            "`{declaration}` is ignored, and names no entity to leave alone"
+        ))));
+    }
+
     let missing: Vec<_> = exposed
         .iter()
         .filter(|declaration| declaration.missing_from(flat))
@@ -162,8 +174,8 @@ pub(crate) fn check_declarations(
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = exposed
         .iter()
-        .copied()
         .chain(ignored)
+        .copied()
         .filter(|declaration| !seen.insert(*declaration))
         .cloned()
         .collect();

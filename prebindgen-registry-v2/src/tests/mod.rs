@@ -5,7 +5,7 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::{Declaration, EntityName},
+    decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -70,7 +70,7 @@ impl Target for Nothing {
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
     declared: Vec<Declaration>,
-    ignored: Vec<EntityName>,
+    ignored: Vec<Declaration>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -130,11 +130,6 @@ fn captured_fn(name: &str) -> Declaration {
     Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
-/// A function to leave alone, by name.
-fn ignored_fn(name: &str) -> EntityName {
-    EntityName::Function(syn::parse_str(name).expect("a test names an ident"))
-}
-
 /// A type, by name.
 fn declared_type(name: &str) -> Declaration {
     Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
@@ -144,7 +139,7 @@ fn declared_type(name: &str) -> Declaration {
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_new")), (declared_type("Handle"))],
-        ignored: vec![ignored_fn("handle_value")],
+        ignored: vec![captured_fn("handle_value")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
@@ -207,7 +202,7 @@ fn one_id_may_name_only_one_declaration() {
 fn one_declaration_may_not_be_both_exposed_and_ignored() {
     let stated = Stated {
         declared: vec![captured_fn("handle_new")],
-        ignored: vec![ignored_fn("handle_new")],
+        ignored: vec![captured_fn("handle_new")],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a contradiction is refused");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
@@ -223,10 +218,32 @@ fn one_declaration_may_not_be_both_exposed_and_ignored() {
 fn an_ignore_names_an_item_the_model_need_not_hold() {
     let stated = Stated {
         declared: Vec::new(),
-        ignored: vec![ignored_fn("handle_absent")],
+        ignored: vec![captured_fn("handle_absent")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("an ignore is tolerant");
     assert_eq!(generation.report().counts().ignored, 1);
+}
+
+/// An ignore leaves an item alone, so it has to name one: ignoring a callback
+/// — nothing in the source — is the frontend contradicting itself.
+#[test]
+fn an_ignore_that_names_no_entity_is_an_error() {
+    let stated = Stated {
+        declared: Vec::new(),
+        ignored: vec![Declaration::Callback("impl Fn(i64)".to_string())],
+    };
+    let error = plan(&stated, sources(), "fixture-crate").expect_err("nothing to leave alone");
+    assert!(
+        matches!(
+            error,
+            EngineError::Planning(crate::target::PlanningError::InvalidInput(_))
+        ),
+        "{error}"
+    );
+    assert!(
+        error.to_string().contains("callback:impl Fn(i64)"),
+        "{error}"
+    );
 }
 
 /// A declaration names one of the three captured kinds, and naming the wrong
