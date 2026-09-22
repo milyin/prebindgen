@@ -19,12 +19,12 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction, FailureCategory,
-    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
-    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, Requirement,
-    ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem,
-    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    mirrored_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
+    EnumArm, FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType,
+    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
+    ReprSpec, Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery,
+    SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
+    TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -124,12 +124,15 @@ pub enum JniPayload {
     },
     /// A Kotlin `enum class` and its values, `(SCREAMING_SNAKE name, number)`.
     ///
+    /// The number is an `i32` because a Kotlin `Int` is: an enum numbering a
+    /// value outside that range is refused rather than mirrored.
+    ///
     /// Each value carries its number, and a `fromInt` companion looks one up
     /// — which is what the generated wrapper hands over and takes back.
     EnumClass {
         package: String,
         class: String,
-        values: Vec<(String, i64)>,
+        values: Vec<(String, i32)>,
         /// The conditions the source enum was written under, as written.
         conditions: Vec<String>,
     },
@@ -276,6 +279,37 @@ impl JniTarget {
                 .map(|(_, kotlin, _)| KotlinType::Value(kotlin.to_string())),
         }
     }
+}
+
+/// The values of a fieldless enum with their numbers as a `jint` holds them.
+///
+/// Everything [`mirrored_enum`] refuses, plus the one this carrier adds: a
+/// number outside `i32`. `#[repr(i64)] enum P { High = 2147483648 }` is valid
+/// Rust, and neither the Kotlin `Int` nor the `jint` match arm can hold it —
+/// so it is refused rather than emitted as a literal that does not compile.
+fn jint_values<'a>(
+    unit: Option<&'a prebindgen_registry::flat::Enum>,
+    class: &str,
+) -> Result<Vec<(&'a prebindgen_registry::flat::EnumValue, i32)>, Unsupported> {
+    let values = mirrored_enum(unit, class, JniTarget::NAME)?;
+    values
+        .iter()
+        .map(|value| {
+            let number = value
+                .discriminant
+                .expect("the numbers were checked before they were read");
+            match i32::try_from(number) {
+                Ok(number) => Ok((value, number)),
+                Err(_) => Err(Unsupported::new(
+                    "unsupported.jni.enum_range",
+                    format!(
+                        "`{class}` numbers `{}` {number}, which a Kotlin `Int` cannot hold",
+                        value.name
+                    ),
+                )),
+            }
+        })
+        .collect()
 }
 
 /// The Rust name of the error-reporting helper the wrappers call.
@@ -456,26 +490,23 @@ impl Target for JniTarget {
             // an `Int` and can hold something no value names, so that
             // direction can fail.
             (Relation::Atomic, JniChoice::EnumClass { class }) => {
-                let Some(unit) = shape.unit else {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.jni.not_an_enum",
-                        format!(
-                            "`{}` is declared as an enum class, and is not a fieldless enum",
-                            shape.crossing.ty.key()
-                        ),
-                    )));
-                };
-                let Ok(values) = unit.discriminant_values() else {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.jni.enum_discriminant",
-                        format!(
-                            "`{class}` has a value whose number the model cannot evaluate, and \
-                             what crosses is the numbers"
-                        ),
-                    )));
+                let values = match jint_values(shape.unit, class) {
+                    Ok(values) => values,
+                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };
                 let carrier = WireType::abi(syn::parse_quote!(::jni::sys::jint));
                 let ty = shape.crossing.ty.clone();
+                let arms: Vec<EnumArm> = values
+                    .iter()
+                    .map(|(value, number)| {
+                        let number = proc_macro2::Literal::i32_unsuffixed(*number);
+                        EnumArm {
+                            name: value.name.clone(),
+                            shape: value.shape,
+                            carried: syn::parse_quote!(#number),
+                        }
+                    })
+                    .collect();
                 let codec = match shape.crossing.direction {
                     Direction::OutOfRust => PrimitiveSpec {
                         operands: vec![OperandSpec::value(
@@ -487,15 +518,12 @@ impl Target for JniTarget {
                         dependencies: Vec::new(),
                         implementation: Operation::Standard(StandardOp::EnumOut {
                             source: Box::new(ty),
-                            arms: values
-                                .iter()
-                                .map(|(name, number)| {
-                                    let number = proc_macro2::Literal::i64_unsuffixed(*number);
-                                    ((*name).clone(), syn::parse_quote!(#number))
-                                })
-                                .collect(),
+                            values: arms,
                         }),
                     },
+                    // The carrier is an `Int`, which can hold a number no
+                    // value names — which is what a caller passing one gets
+                    // told, rather than a value it did not ask for.
                     Direction::IntoRust => PrimitiveSpec {
                         operands: vec![OperandSpec::value(
                             OperationType::Carrier(carrier.clone()),
@@ -509,13 +537,7 @@ impl Target for JniTarget {
                         dependencies: Vec::new(),
                         implementation: Operation::Standard(StandardOp::EnumIn {
                             source: Box::new(ty),
-                            arms: values
-                                .iter()
-                                .map(|(name, number)| {
-                                    let number = proc_macro2::Literal::i64_unsuffixed(*number);
-                                    (syn::parse_quote!(#number), (*name).clone())
-                                })
-                                .collect(),
+                            values: arms,
                             invalid: Some(format!("`{class}` has no value numbered {{}}")),
                         }),
                     },
@@ -831,25 +853,17 @@ impl Target for JniTarget {
                         unit.name
                     )));
                 };
-                let Ok(values) = unit.discriminant_values() else {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.jni.enum_discriminant",
-                        format!(
-                            "`{class}` has a value whose number the model cannot evaluate, and \
-                             what crosses is the numbers"
-                        ),
-                    )));
+                // The same numbers the conversion matches on, refused for the
+                // same reasons: a class whose entries disagreed with the
+                // wrapper's arms would compile and be wrong.
+                let values = match jint_values(Some(unit), class) {
+                    Ok(values) => values,
+                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };
-                if values.is_empty() {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.jni.empty_enum",
-                        format!("`{class}` has no values, and an enum class needs one"),
-                    )));
-                }
                 let values = values
                     .iter()
-                    .map(|(name, number)| {
-                        let screaming = crate::util::camel_to_screaming_snake(&plain(name));
+                    .map(|(value, number)| {
+                        let screaming = crate::util::camel_to_screaming_snake(&plain(&value.name));
                         (kotlin_codegen::escape_kotlin_ident(&screaming), *number)
                     })
                     .collect();

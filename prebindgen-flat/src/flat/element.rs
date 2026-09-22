@@ -442,6 +442,19 @@ pub struct Enum {
 }
 
 impl Enum {
+    /// Whether any value of this enum was written under a `#[cfg]`.
+    ///
+    /// Such an enum cannot be mirrored from [`Self::discriminant_values`]:
+    /// those numbers count every value as present, so the mirror and the
+    /// compiled enum disagree wherever a conditional value is followed by an
+    /// implicit one, and a mirror entry for an absent value names a variant
+    /// that is not there.
+    pub fn has_conditional_value(&self) -> bool {
+        self.values
+            .iter()
+            .any(|value| !value.conditions().is_empty())
+    }
+
     /// Every value paired with the number Rust assigns it, or the first value
     /// whose discriminant could not be evaluated.
     ///
@@ -544,6 +557,20 @@ impl Extern {
 impl Enum {
     /// The `#[cfg]` attributes this enum was captured with — see
     /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(&self.origin.syntax.attrs)
+    }
+}
+
+impl EnumValue {
+    /// The `#[cfg]` attributes this value was captured with — see
+    /// [`conditions_from`].
+    ///
+    /// A value's condition is the enum's one level down. It also breaks the
+    /// numbering: [`Self::discriminant`] counts every value as present, so a
+    /// conditional value followed by implicit ones gives numbers the compiled
+    /// enum disagrees with. A consumer that needs the numbers refuses an enum
+    /// with any conditional value rather than emitting them.
     pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
         conditions_from(&self.origin.syntax.attrs)
     }

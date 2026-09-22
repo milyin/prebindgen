@@ -373,3 +373,111 @@ fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
         "{rust}"
     );
 }
+
+/// A fieldless value keeps the delimiters the source wrote.
+///
+/// `enum Operation { Add(), Mul {} }` carries nothing, so the model calls it a
+/// fieldless enum — but `Add` and `Mul` are not unit variants, and a pattern
+/// or a constructor naming them without their delimiters does not compile
+/// (E0532/E0533).
+///
+/// Only the source side of the conversion is spelled that way. The C enum is
+/// this target's own declaration and its values are numbers, which is what a
+/// C enum has; a variant with a discriminant cannot carry delimiters anyway.
+#[test]
+fn a_fieldless_value_keeps_its_constructor_shape() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub enum Operation {
+                    Add(),
+                    Mul {},
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn operation_flip(op: Operation) -> Operation {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .function(syn::parse_quote!(operation_flip))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
+
+    let dir = unique_test_dir("cbindgen_v2_enum_shape");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let compact: String = rust.split_whitespace().collect();
+
+    // The mirror is numbers; every mention of the source enum keeps its
+    // delimiters, in a pattern and in a constructor alike.
+    assert!(
+        compact.contains("pubenumoperation_t{Add=0,Mul=1,}"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("operation_t::Add=>fixture::Operation::Add()"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("operation_t::Mul=>fixture::Operation::Mul{}"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("fixture::Operation::Add()=>operation_t::Add"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("fixture::Operation::Mul{}=>operation_t::Mul"),
+        "{rust}"
+    );
+}
+
+/// A value written under a `#[cfg]` is refused, rather than mirrored as if it
+/// were always there.
+///
+/// The model numbers every value as present, so a conditional value followed
+/// by an implicit one gives numbers the compiled enum disagrees with — and a
+/// mirror entry for a value the source crate compiled out names a variant that
+/// does not exist, which the generated matches would then reference.
+#[test]
+fn a_conditional_value_refuses_the_enum() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub enum Operation {
+                Add,
+                #[cfg(any())]
+                Mul = 7,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.conditional_value");
+}

@@ -47,7 +47,7 @@
 //! them, and `docs/v2/implementation.md` lists exactly what is absent.
 
 use prebindgen_flat::{
-    flat::{Enum, Extern, Function, Struct, TypeKind, TypeRef},
+    flat::{Enum, EnumValue, Extern, FieldShape, Function, Struct, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
@@ -382,7 +382,7 @@ pub enum StandardOp {
     /// payload — an adapter cannot spell a source path.
     EnumOut {
         source: Box<TypeRef>,
-        arms: Vec<(syn::Ident, syn::Expr)>,
+        values: Vec<EnumArm>,
     },
     /// The reverse: a carried value back to the source enum.
     ///
@@ -394,9 +394,81 @@ pub enum StandardOp {
     /// is itself an enum of the same values gives.
     EnumIn {
         source: Box<TypeRef>,
-        arms: Vec<(syn::Pat, syn::Ident)>,
+        values: Vec<EnumArm>,
         invalid: Option<String>,
     },
+}
+
+/// The values of a fieldless enum a target may mirror, or why it may not.
+///
+/// Three things stop a mirror, and they stop every target alike, so the check
+/// lives here rather than once per adapter:
+///
+/// * the type is not a fieldless enum at all, which is the binding declaring
+///   one thing as another;
+/// * a value's number could not be evaluated — a `const`, arithmetic,
+///   anything but a literal — and the numbers are what a mirror is made of;
+/// * a value was written under a `#[cfg]`. The model numbers every value as
+///   present, so a conditional value followed by an implicit one gives
+///   numbers the compiled enum disagrees with, and a mirror entry for an
+///   absent value names a variant that is not there.
+///
+/// `language` is the adapter's own name, for the capability code: a refusal
+/// reads `unsupported.c.enum_discriminant`, and the next target's reads its
+/// own.
+pub fn mirrored_enum<'a>(
+    unit: Option<&'a Enum>,
+    declared_as: &str,
+    language: &str,
+) -> Result<&'a [EnumValue], Unsupported> {
+    let Some(unit) = unit else {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.not_an_enum"),
+            format!("`{declared_as}` is declared as an enum, and is not a fieldless enum"),
+        ));
+    };
+    if let Err(value) = unit.discriminant_values() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.enum_discriminant"),
+            format!(
+                "`{declared_as}` has a value `{value}` whose number the model cannot \
+                 evaluate, and what crosses is the numbers"
+            ),
+        ));
+    }
+    if unit.has_conditional_value() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.conditional_value"),
+            format!(
+                "`{declared_as}` has a value written under a `#[cfg]`, and the numbers \
+                 count every value as present"
+            ),
+        ));
+    }
+    if unit.values.is_empty() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.empty_enum"),
+            format!("`{declared_as}` has no values, and an enumeration needs one"),
+        ));
+    }
+    Ok(&unit.values)
+}
+
+/// One value of a fieldless enum, as the two enum operations match it.
+///
+/// [`Self::shape`] is why this is not a bare name: `enum Op { Add(), Mul {} }`
+/// has no fields and is a fieldless enum to the model, but its values are
+/// spelled `Add()` and `Mul {}` in a pattern and a constructor alike. The
+/// registry renders through the model's own speller, so what it writes is
+/// what the source declared.
+#[derive(Clone, Debug)]
+pub struct EnumArm {
+    /// The value's name in the source enum.
+    pub name: syn::Ident,
+    /// Its constructor and pattern shape, from the model.
+    pub shape: FieldShape,
+    /// What it is carried as: the target's own enum value, or a number.
+    pub carried: syn::Expr,
 }
 
 /// What actually performs an operation.

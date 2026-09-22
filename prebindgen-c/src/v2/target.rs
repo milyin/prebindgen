@@ -17,12 +17,12 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction, FailureCategory,
-    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
-    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, Requirement,
-    ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem,
-    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    mirrored_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
+    EnumArm, FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType,
+    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
+    ReprSpec, Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery,
+    SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
+    TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -218,20 +218,26 @@ impl Target for CTarget {
             // it: the same values, so the match either way is exhaustive and
             // cannot fail.
             (Relation::Atomic, CChoice::Enum { c_name }) => {
-                let Some(unit) = shape.unit else {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.not_an_enum",
-                        format!(
-                            "`{}` is declared as a C enum, and is not a fieldless enum",
-                            shape.crossing.ty.key()
-                        ),
-                    )));
+                let unit = match mirrored_enum(shape.unit, c_name, Self::NAME) {
+                    Ok(unit) => unit,
+                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
                 };
                 let ident = format_ident!("{c_name}");
                 let carrier = WireType::abi(syn::parse_quote!(#ident));
                 let ty = shape.crossing.ty.clone();
-                let values: Vec<syn::Ident> =
-                    unit.values.iter().map(|value| value.name.clone()).collect();
+                // Each value is carried as the same value of the C enum, so
+                // both directions name every value and neither can fail.
+                let values: Vec<EnumArm> = unit
+                    .iter()
+                    .map(|value| {
+                        let name = &value.name;
+                        EnumArm {
+                            name: name.clone(),
+                            shape: value.shape,
+                            carried: syn::parse_quote!(#ident::#name),
+                        }
+                    })
+                    .collect();
                 let codec = match shape.crossing.direction {
                     Direction::OutOfRust => PrimitiveSpec {
                         operands: vec![OperandSpec::value(
@@ -243,10 +249,7 @@ impl Target for CTarget {
                         dependencies: Vec::new(),
                         implementation: Operation::Standard(StandardOp::EnumOut {
                             source: Box::new(ty),
-                            arms: values
-                                .iter()
-                                .map(|name| (name.clone(), syn::parse_quote!(#ident::#name)))
-                                .collect(),
+                            values,
                         }),
                     },
                     Direction::IntoRust => PrimitiveSpec {
@@ -259,10 +262,7 @@ impl Target for CTarget {
                         dependencies: Vec::new(),
                         implementation: Operation::Standard(StandardOp::EnumIn {
                             source: Box::new(ty),
-                            arms: values
-                                .iter()
-                                .map(|name| (syn::parse_quote!(#ident::#name), name.clone()))
-                                .collect(),
+                            values,
                             invalid: None,
                         }),
                     },
@@ -487,26 +487,18 @@ impl Target for CTarget {
                         unit.name
                     )));
                 };
-                let Ok(values) = unit.discriminant_values() else {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.enum_discriminant",
-                        format!(
-                            "`{c_name}` has a value whose number the model cannot evaluate, and \
-                             a C enum is its numbers"
-                        ),
-                    )));
-                };
-                if values.is_empty() {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.empty_enum",
-                        format!("`{c_name}` has no values, and C has no empty enumeration"),
-                    )));
+                if let Err(reason) = mirrored_enum(Some(unit), c_name, Self::NAME) {
+                    return Ok(TargetAttempt::Unsupported(reason));
                 }
                 let ident = format_ident!("{c_name}");
-                let values = values.iter().map(|(name, number)| {
-                    let number = proc_macro2::Literal::i64_unsuffixed(*number);
-                    quote!(#name = #number)
-                });
+                let values = unit
+                    .discriminant_values()
+                    .expect("the values were checked before the mirror was built")
+                    .into_iter()
+                    .map(|(name, number)| {
+                        let number = proc_macro2::Literal::i64_unsuffixed(number);
+                        quote!(#name = #number)
+                    });
                 Ok(TargetAttempt::Ready(SurfaceSpec {
                     declaration: request.declaration.clone(),
                     requires: Vec::new(),

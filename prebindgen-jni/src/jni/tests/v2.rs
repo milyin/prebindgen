@@ -992,3 +992,31 @@ fn a_fieldless_enum_crosses_as_its_number() {
         );
     }
 }
+
+/// A number a Kotlin `Int` cannot hold refuses the enum.
+///
+/// `#[repr(i64)] enum Priority { Low, High = 2147483648 }` is valid Rust, and
+/// the model reads its numbers as the `i64` they are. Neither the `jint` the
+/// wrapper matches on nor the `Int` the enum class carries can hold that one,
+/// so it is refused — rather than emitted as a literal rustc rejects as
+/// overflowing, and an enum entry the JVM would read as a different number.
+#[test]
+fn a_number_beyond_the_carrier_refuses_the_enum() {
+    let loc = myflat_loc();
+    let items = declare_referenced(vec![(
+        syn::parse_str::<syn::Item>("#[repr(i64)] pub enum Priority { Low, High = 2147483648 }")
+            .unwrap(),
+        loc,
+    )]);
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(crate::package!().class(crate::enum_class!(Priority)))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Priority");
+    assert_eq!(skip.capability.as_str(), "unsupported.jni.enum_range");
+}

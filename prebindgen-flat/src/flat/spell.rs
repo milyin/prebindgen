@@ -27,6 +27,18 @@ pub(crate) fn fields(shape: FieldShape, head: TokenStream, parts: &[TokenStream]
     }
 }
 
+impl FieldShape {
+    /// Spell a group with no parts: `Add`, `Add()` or `Mul {}`.
+    ///
+    /// What a value of a fieldless enum needs — as a pattern and as a
+    /// constructor alike, since for such a value the two are the same text.
+    /// A consumer holding the shape and the path spells it without reaching
+    /// for the captured syntax.
+    pub fn spell_fieldless(self, head: TokenStream) -> TokenStream {
+        fields(self, head, &[])
+    }
+}
+
 impl Field {
     /// How the field is addressed in a pattern or an initializer: by name when
     /// it has one, else by position.

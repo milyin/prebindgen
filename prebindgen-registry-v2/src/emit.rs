@@ -364,33 +364,39 @@ fn operation<T: Target>(
                     .ok_or_else(|| String::from(#message))
             }
         }
-        Operation::Standard(StandardOp::EnumOut { source, arms }) => {
+        Operation::Standard(StandardOp::EnumOut { source, values }) => {
             let value = &operands[0];
             let ty = source_type(source);
-            let arms = arms
-                .iter()
-                .map(|(name, carried)| quote!(#ty::#name => #carried));
+            let arms = values.iter().map(|arm| {
+                let pattern = enum_value(&ty, arm);
+                let carried = &arm.carried;
+                quote!(#pattern => #carried)
+            });
             quote!(match #value { #(#arms),* })
         }
         Operation::Standard(StandardOp::EnumIn {
             source,
-            arms,
+            values,
             invalid,
         }) => {
             let value = &operands[0];
             let ty = source_type(source);
-            let matched = arms.iter().map(|(pattern, name)| match invalid {
-                Some(_) => quote!(#pattern => ::core::result::Result::Ok(#ty::#name)),
-                None => quote!(#pattern => #ty::#name),
+            let arms = values.iter().map(|arm| {
+                let carried = &arm.carried;
+                let constructed = enum_value(&ty, arm);
+                match invalid {
+                    Some(_) => quote!(#carried => ::core::result::Result::Ok(#constructed)),
+                    None => quote!(#carried => #constructed),
+                }
             });
             match invalid {
                 Some(message) => quote! {
                     match #value {
-                        #(#matched,)*
+                        #(#arms,)*
                         other => ::core::result::Result::Err(::std::format!(#message, other)),
                     }
                 },
-                None => quote!(match #value { #(#matched),* }),
+                None => quote!(match #value { #(#arms),* }),
             }
         }
         Operation::Standard(StandardOp::Release { source }) => {
@@ -403,6 +409,17 @@ fn operation<T: Target>(
         }
         Operation::Target(payload) => target.render_operation(payload, operands),
     }
+}
+
+/// One value of a fieldless enum, spelled as the source declared it.
+///
+/// A pattern and a constructor are the same text for a fieldless value, so
+/// this serves both sides of the two enum operations. `Add` stays `Add`, and
+/// `Add()` and `Mul {}` keep their delimiters — the model's speller decides,
+/// from the shape it captured.
+fn enum_value(ty: &TokenStream, arm: &crate::target::EnumArm) -> TokenStream {
+    let name = &arm.name;
+    arm.shape.spell_fieldless(quote!(#ty::#name))
 }
 
 /// The pattern a failure arm binds the error with: the name when a reporter
