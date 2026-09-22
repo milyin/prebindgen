@@ -63,44 +63,32 @@ fn binding() -> CbindgenBuilder {
 }
 
 /// The gate #719 §A names: the whole declaration set reaches v2, and every
-/// requested declaration comes back accounted for — under the names this adapter's
-/// manglers give them, not under a v2 invention.
+/// requested declaration comes back either generated or skipped.
 #[test]
 fn every_declared_element_is_accounted_for() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
 
-    let ids: Vec<String> = report
-        .declarations
+    let skipped: Vec<String> = generated
+        .skipped()
         .iter()
-        .map(|entry| entry.id().to_string())
+        .map(|(declaration, _)| declaration.to_string())
         .collect();
-    assert_eq!(
-        ids,
-        [
-            "callback:impl Fn(f64)",
-            "fn:calculator_new",
-            "type:Calculator",
-            "type:Operation",
-        ],
-        "every declaration, sorted by id"
-    );
+    assert_eq!(skipped, ["type:Operation", "callback:impl Fn(f64)"]);
 
-    let placements: Vec<&str> = report
-        .declarations
-        .iter()
-        .map(|entry| entry.placement())
-        .collect();
-    assert!(
-        placements.contains(&"calculator_t") && placements.contains(&"z_calculator_new"),
-        "the frontend's manglers name the C surface: {placements:?}"
-    );
-
-    let counts = report.counts();
     // The handle — a struct carried whole under `opaque_ptr`, its fields never
-    // read — and the function returning it.
-    assert_eq!(counts.emitted, 2);
-    assert_eq!(counts.skipped, 2);
+    // read — and the function returning it are what is left, under the names
+    // this adapter's manglers give them.
+    let dir = unique_test_dir("cbindgen_v2_accounted");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(rust.contains("pub struct calculator_t {"), "{rust}");
+    assert!(
+        rust.contains("pub extern \"C\" fn z_calculator_new()"),
+        "{rust}"
+    );
 }
 
 /// An unimplemented capability is a skip with a code and a path — never a
@@ -109,15 +97,21 @@ fn every_declared_element_is_accounted_for() {
 #[test]
 fn a_missing_capability_is_reported_per_element() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
 
-    // Grouped by cause, so one missing capability is stated once with the list
-    // of roots it took down. An enum has no fields to walk, so the registry
-    // refuses it before the target is asked; the entry's representation still
-    // says `enum_type`.
-    let groups = report.skips_by_capability();
-    assert_eq!(groups["unsupported.type.enum"].len(), 1);
-    assert_eq!(groups["unsupported.callback.not_implemented"].len(), 1);
+    // An enum has no fields to walk, so the registry refuses it before the
+    // target is asked; a callback has no lowering at all.
+    let codes: Vec<&str> = generated
+        .skipped()
+        .iter()
+        .map(|(_, skip)| skip.capability.as_str())
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            "unsupported.type.enum",
+            "unsupported.callback.not_implemented"
+        ]
+    );
 
     // The handle is emitted under the manglers' names — the incomplete type,
     // its destructor, and the function returning one — with the struct's
@@ -182,9 +176,7 @@ fn a_data_struct_and_a_function_over_it_are_emitted() {
         .function(syn::parse_quote!(stamp_new))
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
-    let counts = report.counts();
-    assert_eq!((counts.emitted, counts.skipped), (2, 1), "{report:?}");
+    assert_eq!(generated.skipped().len(), 1, "{:?}", generated.skipped());
 
     let dir = unique_test_dir("cbindgen_v2_emitted");
     let path = generated
@@ -213,21 +205,28 @@ fn a_data_struct_and_a_function_over_it_are_emitted() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// An ignore silences v1's undeclared-item warning and nothing else: under
-/// v2 the item is not declared, so it has no report row, and it stays in the
-/// model, where a declared item may still depend on it.
+/// An ignore silences v1's undeclared-item warning and nothing else: under v2
+/// the item is not declared, so nothing is generated for it and nothing
+/// accounts for it, and it stays in the model, where a declared item may still
+/// depend on it.
 #[test]
 fn an_ignore_does_not_reach_the_engine() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
     assert!(
-        !report
-            .declarations
+        !generated
+            .skipped()
             .iter()
-            .any(|entry| entry.id() == "fn:calculator_internal"),
-        "{report:?}"
+            .any(|(declaration, _)| declaration.to_string() == "fn:calculator_internal"),
+        "{:?}",
+        generated.skipped()
     );
-    assert_eq!(report.source_identity.captured_items, 4, "{report:?}");
+    let dir = unique_test_dir("cbindgen_v2_ignored");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(!rust.contains("calculator_internal"), "{rust}");
 }
 
 /// A declared function the source never captured is a build error under v2 as
@@ -263,22 +262,6 @@ fn the_generated_rust_is_stamped_with_its_pipeline() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Both renderings of the report land beside the generated file.
-#[test]
-fn the_report_is_written_as_json_and_markdown() {
-    let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
-    let dir = unique_test_dir("cbindgen_v2_report");
-    let written = generated.write_report(&dir).expect("write_report");
-    assert_eq!(written.len(), 2);
-    let json = std::fs::read_to_string(&written[0]).unwrap();
-    assert!(json.contains("\"schema_version\": 3"), "{json}");
-    assert!(json.contains("\"pipeline\": \"v2\""), "{json}");
-    assert!(json.contains("unsupported.type.enum"), "{json}");
-    let markdown = std::fs::read_to_string(&written[1]).unwrap();
-    assert!(markdown.contains("## Skipped, by cause"), "{markdown}");
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
 /// An `unsafe fn` is refused: the wrapper is a safe function and the call it
 /// renders is a plain one, and hiding the contract in an `unsafe` block would
 /// not establish it. Under v1 the wrapper itself is `unsafe`, so the same
@@ -300,19 +283,21 @@ fn an_unsafe_source_function_is_a_reported_skip() {
         .function(syn::parse_quote!(raw_sum))
         .build_with(Pipeline::V2)
         .expect("v2 plans");
-    let report = generated.report().expect("v2 produces a report");
-    let skip = report.declarations[0].outcome.skip().expect("skipped");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "fn:raw_sum");
     assert_eq!(skip.capability.as_str(), "unsupported.fn.unsafe");
     assert_eq!(skip.path(), "fn:raw_sum");
 }
 
 /// Selecting v1 explicitly still runs v1: the same declarations, the whole
-/// existing surface, and no report.
+/// existing surface, and nothing left out.
 #[test]
 fn v1_is_unchanged_and_reachable_by_name() {
     let generated = binding().build_with(Pipeline::V1).expect("v1 resolves");
     assert_eq!(generated.pipeline(), Pipeline::V1);
-    assert!(generated.report().is_none());
+    assert!(generated.skipped().is_empty());
     assert!(generated
         .registry()
         .flat()

@@ -30,7 +30,6 @@ existing page rather than represented by a missing file.
 | Root | `README.md` |
 | Format contract | `FORMAT.md` |
 | Vocabulary introduction | `concepts.md` |
-| Generation report guide | `report.md` |
 | The specification's source crate | `source.md` |
 | Stage chapter | `stages/<stage>.md` |
 | Implementation plan | `implementation.md` |

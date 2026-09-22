@@ -135,7 +135,7 @@ fn main() {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     let jni = binding.build().expect("build failed");
-    let (rust_dest, kotlin_root, reports) = destinations(&crate_dir, jni.pipeline());
+    let (rust_dest, kotlin_root) = destinations(&crate_dir, jni.pipeline());
 
     let rust_path = jni
         .write_rust(&rust_dest)
@@ -152,37 +152,27 @@ fn main() {
         println!("cargo:warning=Wrote {}", path.display());
     }
 
-    // The report, for an engine that produces one. Empty
-    // under v1, whose answer is "everything declared, or the build failed".
-    for path in jni.write_report(&reports).expect("write_report failed") {
-        println!("cargo:warning=Wrote {}", path.display());
-    }
+    // What the engine could not generate, as cargo warnings. Silent under an
+    // engine that skips nothing.
+    jni.warn_skipped();
 }
 
-/// Where this build script writes its Rust file, its Kotlin root and its
-/// report, for the engine that ran.
+/// Where this build script writes its Rust file and its Kotlin root, for the
+/// engine that ran.
 ///
 /// V1 owns the committed source-tree artifacts and keeps writing them. Any
 /// other engine writes into a root of its own, emptied first, so it can never
 /// overwrite v1's files and cannot leave its own previous run's behind.
-fn destinations(
-    crate_dir: &str,
-    pipeline: Pipeline,
-) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+fn destinations(crate_dir: &str, pipeline: Pipeline) -> (std::path::PathBuf, std::path::PathBuf) {
     let crate_dir = std::path::Path::new(crate_dir);
     match pipeline {
         Pipeline::V1 => (
             crate_dir.join("src").join("generated_bindings.rs"),
             crate_dir.join("kotlin").join("generated"),
-            crate_dir.join("kotlin"),
         ),
         other => {
             let root = fresh_output_root(crate_dir, other).expect("make the output root");
-            (
-                root.join("generated_bindings.rs"),
-                root.join("kotlin"),
-                root,
-            )
+            (root.join("generated_bindings.rs"), root.join("kotlin"))
         }
     }
 }

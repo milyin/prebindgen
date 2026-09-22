@@ -363,8 +363,8 @@ the local declaration steps aside.
 Each element carries its **provenance** — `Captured` or `Binding` — as a fact
 of its own, so nothing that removes or appends an element has a boundary to
 keep. The model answers with it where a consumer needs the distinction:
-`Flat::captured` iterates the captured elements alone, which is what a report
-counts as the API it was generated against; `Flat::provenance` answers for one
+`Flat::captured` iterates the captured elements alone, which is the API a
+generation was made against; `Flat::provenance` answers for one
 name; and the source-module list is frozen from the captured stream alone, so
 a binding-local item never changes which module an unqualified reference
 resolves against. Everything else —

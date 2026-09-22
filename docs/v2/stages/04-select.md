@@ -352,13 +352,13 @@ is this chapter's; `represent` is [the next chapter's](05-represent.md), and
 the other two belong to the stages after that. The sketch below uses the
 design's descriptor names. Current `represent` receives `ChildValue` entries
 containing a part and layout, not full validity and resource contracts. The
-same trait also has `render_operation`, used later during Rust emission, and
-`describe`, which supplies the [report](../report.md)'s line for a declaration.
+same trait also has `render_operation`, used later during Rust emission.
 
 The target is also where the binding's configuration lives, which is why none
 of these methods is handed any: each resolves what applies from its own
-storage, addressed by the `position` in a selection query or by the
-`Declaration` a boundary, surface or report line is about.
+storage, addressed by the `position` in a selection query — except for what
+the binding declared one output as, which arrives with every question about
+that output.
 
 ```rust
 trait Target {

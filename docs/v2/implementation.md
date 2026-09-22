@@ -12,7 +12,7 @@ The current increment generates scalar and owned-struct input bindings through
 the real C and JNI frontends. The C entry point is executed in tests; generated
 JNI Rust is compiled and Kotlin text is checked, but that fixture does not yet
 execute a JVM call. Owned source-model views, optional [conversions](stages/04-select.md#select-conversion-relations), resource
-contracts and report-based test selection remain future work. The sections
+contracts and skip-based test selection remain future work. The sections
 below explain the planned sequence, the completed increment and its limits.
 
 ## Flat implementation sequence and acceptance
@@ -93,7 +93,7 @@ The initial implementation should demonstrate the architecture with both existin
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
 3. Add named-field structs with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/05-represent.md#represent-and-compose-values) using the same source [relation](stages/04-select.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
-5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces its report and complete generated outputs.
+5. Verify dependency-based skipping, existing test-section selection, and repeated switching between engines. Each preceding executable increment also produces complete generated outputs and accounts for what it left out.
 
 Steps 2 and 3 are exactly the first two element paths specified in this
 document: the [function path][fn] is the scalar function and its owned struct
@@ -149,8 +149,9 @@ in `prebindgen-registry-v2`. Its responsibilities are divided across files:
   [wrappers](stages/06-boundary.md#assemble-the-wrapper-boundary) and checks public dependencies.
 - `body.rs` defines the instructions stored in those plans; `emit.rs` writes
   the corresponding Rust code.
-- `run.rs` holds the completed `Generation`; `decl.rs`, `outcome.rs` and
-  `report.rs` describe requested declarations, their outcomes and report output.
+- `run.rs` holds the completed `Generation`, including what it left out;
+  `decl.rs` and `outcome.rs` describe requested declarations and their
+  outcomes.
 
 The two targets live in the language frontends, under their `v2` feature:
 `prebindgen-c/src/v2/` and `prebindgen-jni/src/v2/`. Each is two things. A
@@ -163,8 +164,8 @@ writer, over the payloads its declarations came back with. A frontend's
 `build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
 `build_with(Pipeline::V2)` states it — and nothing of v1 runs on that route.
 The user's `build.rs` is the same under either engine: the one thing v2 adds to
-it is [the report](report.md) beside the generated file, and the fact that a declaration the
-engine cannot lower is a reported skip rather than a build failure.
+it is that a declaration the engine cannot lower is a skip it can print rather
+than a build failure.
 
 `examples/v2check` provides evidence for this increment. It includes
 [the specification's fixture](source.md), plus additional test cases,
@@ -337,10 +338,9 @@ this list says what the increment left open and why.
   those a retained output reaches. Nodes are referenced by nothing after
   inlining, so this costs memory and no correctness; pruning them needs the
   reachability the retention loop does not yet track.
-- **A `Declaration` is its own identity** (printed `<kind>:<name>`), so exposing one Rust function at two
-  foreign placements — which [the request chapter](stages/03-requests.md) uses to
-  explain output identity — cannot be expressed yet. The `Unselected` outcome is
-  likewise absent from the report.
+- **The `Unselected` outcome** is not implemented: a captured item nobody
+  declared is not accounted for at all, since the engine hears only what the
+  binding asked for.
 
 ## Acceptance and feasibility evidence
 
@@ -352,8 +352,8 @@ Acceptance criteria:
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
 - [x] Complete unsupported inputs produce actionable per-declaration outcomes; malformed configuration and generator defects fail generation.
-- [x] One immutable generation result supplies Rust output, optional foreign-writer output and reports; C headers are derived from the retained Rust output by `cbindgen`.
-- [ ] Test selection from the report.
+- [x] One immutable generation result supplies Rust output, optional foreign-writer output and what the run left out; C headers are derived from the retained Rust output by `cbindgen`.
+- [ ] Test selection from what a run left out.
 - [x] Emitted output preserves logical behavior and declared interfaces without a byte-identity requirement — checked item by item against the emit pages, compiled by rustc, and executed for C.
 - [ ] New nested combinations reuse the registry's composition algorithm instead of requiring a new per-language wrapper implementation.
 - [ ] Remaining unsupported capabilities and any API refinements discovered during implementation are documented.

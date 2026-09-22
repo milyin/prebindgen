@@ -799,13 +799,6 @@ const V2_AVAILABLE: bool = cfg!(feature = "v2");
 /// The crate an unavailable-engine message tells the user to enable the feature on.
 const FACADE_CRATE: &str = "prebindgen-c";
 
-/// The crate whose build script is declaring this binding, for the report's
-/// source identity. Empty outside a build script.
-#[cfg(feature = "v2")]
-fn declaring_crate() -> String {
-    std::env::var("CARGO_PKG_NAME").unwrap_or_default()
-}
-
 impl CbindgenBuilder {
     /// State this binding into `registry` — see `JniGenBuilder::declare_into`.
     ///
@@ -905,12 +898,12 @@ impl CbindgenBuilder {
     /// everything after that — see [`crate::v2`].
     #[cfg(feature = "v2")]
     fn build_v2(self) -> Result<Cbindgen, prebindgen_registry::WriteRustError> {
-        let generation = self.generate_v2(declaring_crate()).map_err(|error| {
-            prebindgen_registry::WriteRustError::Engine {
-                pipeline: prebindgen_registry_v2::PIPELINE,
-                message: error.to_string(),
-            }
-        })?;
+        let generation =
+            self.generate_v2()
+                .map_err(|error| prebindgen_registry::WriteRustError::Engine {
+                    pipeline: prebindgen_registry_v2::PIPELINE,
+                    message: error.to_string(),
+                })?;
         Ok(Cbindgen {
             gen: self,
             engine: crate::Engine::V2(Box::new(generation)),

@@ -6,11 +6,11 @@ use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
     decl::Declaration,
-    outcome::{EngineError, Outcome},
+    outcome::EngineError,
     plan::generate,
     run::Generation,
     target::{
-        BoundarySpec, ChildValue, Described, ReprSpec, ResolvedShape, ResolvedValues, Selection,
+        BoundarySpec, ChildValue, ReprSpec, ResolvedShape, ResolvedValues, Selection,
         SelectionQuery, SiteDescriptor, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
         TargetSupport, Unsupported,
     },
@@ -92,10 +92,6 @@ impl Target for Nothing {
     fn render_operation(&self, _: &(), _: &[syn::Ident]) -> proc_macro2::TokenStream {
         unreachable!("nothing is selected")
     }
-
-    fn describe(&self, _: &Declaration, declared: &Declared) -> Described {
-        Described::new("declared", &declared.placement)
-    }
 }
 
 /// A binding stated directly, standing in for a facade's own storage.
@@ -104,17 +100,12 @@ struct Stated {
 }
 
 /// Run the stated binding through the engine over [`sources`].
-fn plan(
-    stated: &Stated,
-    sources: FlatBuilder,
-    crate_name: &str,
-) -> Result<Generation<()>, EngineError> {
+fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<()>, EngineError> {
     generate(
         sources.build()?,
         &Nothing,
         stated.declared.clone(),
         syn::parse_quote!(fixture),
-        crate_name,
     )
 }
 
@@ -172,21 +163,18 @@ fn every_declaration_is_skipped_and_accounted_for() {
             (declared_type("Handle"), Declared::any()),
         ],
     };
-    let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
-    let report = generation.report();
+    let generation = plan(&stated, sources()).expect("v2 plans");
 
-    let counts = report.counts();
-    assert_eq!((counts.emitted, counts.skipped), (0, 2));
-    assert_eq!(report.source_identity.captured_items, 3);
-    assert_eq!(report.source_identity.declaring_crate, "fixture-crate");
-
-    // Types sort before functions.
-    let ids: Vec<String> = report
-        .declarations
+    // Nothing crosses for this target, so both declarations come back as
+    // skips — in the order the binding stated them.
+    let skipped: Vec<String> = generation
+        .skipped()
         .iter()
-        .map(|entry| entry.id().to_string())
+        .map(|(declaration, _)| declaration.to_string())
         .collect();
-    assert_eq!(ids, ["fn:handle_new", "type:Handle"]);
+    assert_eq!(skipped, ["fn:handle_new", "type:Handle"]);
+    assert!(generation.surfaces().is_empty());
+    assert_eq!(generation.flat().captured().count(), 3);
 }
 
 #[test]
@@ -194,7 +182,7 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_neu"), Declared::any())],
     };
-    let error = plan(&stated, sources(), "fixture-crate").expect_err("a typo is refused");
+    let error = plan(&stated, sources()).expect_err("a typo is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
     assert!(error.to_string().contains("handle_neu"), "{error}");
 }
@@ -209,19 +197,19 @@ fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
             Declared::any(),
         )],
     };
-    let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
-    assert_eq!(generation.report().counts().skipped, 1);
+    let generation = plan(&stated, sources()).expect("v2 plans");
+    assert_eq!(generation.skipped().len(), 1);
 }
 
 #[test]
-fn one_id_may_name_only_one_declaration() {
+fn one_declaration_may_be_stated_once_per_choice() {
     let stated = Stated {
         declared: vec![
             (captured_fn("handle_new"), Declared::any()),
             (captured_fn("handle_new"), Declared::any()),
         ],
     };
-    let error = plan(&stated, sources(), "fixture-crate").expect_err("a repeat is refused");
+    let error = plan(&stated, sources()).expect_err("a repeat is refused");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
     assert!(error.to_string().contains("fn:handle_new"), "{error}");
 }
@@ -238,7 +226,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
             Declared::any(),
         )],
     };
-    let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
+    let error = plan(&stated, sources()).expect_err("wrong kind is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
     assert!(
         error
@@ -248,10 +236,10 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     );
 }
 
-/// The report groups by cause, so one missing capability is stated once with
-/// every declaration it took down.
+/// One missing capability takes down every declaration that needed it, and
+/// each says so for itself: the code is what a build script groups on.
 #[test]
-fn skips_are_grouped_by_capability_code() {
+fn every_skip_names_the_capability_that_stopped_it() {
     let stated = Stated {
         declared: vec![
             (captured_fn("handle_new"), Declared::any()),
@@ -259,41 +247,21 @@ fn skips_are_grouped_by_capability_code() {
             (declared_type("Handle"), Declared::any()),
         ],
     };
-    let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
-    let groups = generation.report().skips_by_capability();
+    let generation = plan(&stated, sources()).expect("v2 plans");
     // One cause, three roots: each stops at the first value the target is
     // asked about.
-    assert_eq!(groups["unsupported.nothing.carrier"].len(), 3);
-    assert_eq!(groups.len(), 1);
+    let codes: Vec<&str> = generation
+        .skipped()
+        .iter()
+        .map(|(_, skip)| skip.capability.as_str())
+        .collect();
+    assert_eq!(codes, ["unsupported.nothing.carrier"; 3]);
 }
 
-/// The report's declaration columns are a published schema: the id as the
-/// origin prints, what the target described, and the outcome's fields at the
-/// same level.
+/// One entity declared several times is several skips, in the order the
+/// binding stated them.
 #[test]
-fn an_entry_serializes_flat() {
-    let entry = crate::report::Entry {
-        id: "fn:z_thing_describe".to_string(),
-        declaration: captured_fn("z_thing_describe"),
-        described: Described::new("constant_fun", "example.DESCRIBE"),
-        outcome: Outcome::Emitted,
-    };
-    assert_eq!(
-        serde_json::to_string(&entry).expect("an entry is plain data"),
-        r#"{"id":"fn:z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
-    );
-}
-
-/// A report id is unique however a target places its outputs.
-///
-/// A placement is a string the target chooses: two outputs of one entity may
-/// carry the same one, and one of them may itself end in the `#n` the engine
-/// appends to separate them. Each id is taken from what is still free, so no
-/// arrangement of placements can leave two rows sharing an id — which is what
-/// a build script reading the report, or a capability-selected test section,
-/// identifies an output by.
-#[test]
-fn every_report_id_is_unique_whatever_the_target_places() {
+fn one_entity_declared_three_times_is_three_skips() {
     let stated = Stated {
         declared: vec![
             (captured_fn("handle_new"), Declared::placed(1, "x#2")),
@@ -301,17 +269,11 @@ fn every_report_id_is_unique_whatever_the_target_places() {
             (captured_fn("handle_new"), Declared::placed(3, "x")),
         ],
     };
-    let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
-    let ids: Vec<&str> = generation
-        .report()
-        .declarations
+    let generation = plan(&stated, sources()).expect("v2 plans");
+    let skipped: Vec<String> = generation
+        .skipped()
         .iter()
-        .map(|entry| entry.id())
+        .map(|(declaration, _)| declaration.to_string())
         .collect();
-    assert_eq!(
-        ids,
-        ["fn:handle_new@x", "fn:handle_new@x#2", "fn:handle_new@x#3"],
-        "{:?}",
-        generation.report()
-    );
+    assert_eq!(skipped, ["fn:handle_new"; 3]);
 }

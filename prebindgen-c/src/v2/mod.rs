@@ -30,10 +30,7 @@ use crate::CbindgenBuilder;
 
 impl CbindgenBuilder {
     /// Run the v2 engine over the declarations accumulated so far.
-    pub(crate) fn generate_v2(
-        &self,
-        declaring_crate: impl Into<String>,
-    ) -> Result<Generation<CPayload>, EngineError> {
+    pub(crate) fn generate_v2(&self) -> Result<Generation<CPayload>, EngineError> {
         // A declared type the source never exported — `String` as a handle —
         // is an item the binding defines: the model gets an extern for it, and
         // steps aside where the source captured a type of that name. Every
@@ -66,13 +63,7 @@ impl CbindgenBuilder {
                 .unwrap_or_else(|| syn::parse_quote!(crate))
         });
         let (target, declarations) = self.binding();
-        generate(
-            flat,
-            &target,
-            declarations,
-            source_module,
-            &declaring_crate.into(),
-        )
+        generate(flat, &target, declarations, source_module)
     }
 
     /// Everything this binding declared: each declaration paired with what
@@ -191,4 +182,35 @@ fn describe_callback(key: &[prebindgen_registry::TypeKey]) -> String {
         .map(|k| prebindgen_registry::close_up(k.as_str()))
         .collect();
     format!("impl Fn({})", args.join(", "))
+}
+
+/// Print one cargo warning per capability a skip named, with the declarations
+/// it took down.
+///
+/// A build log is not a list of everything: at most five declarations per
+/// capability, and a count of the rest. What a build script needs from it is
+/// which capability to ask for next, not which of forty declarations waits on
+/// it.
+pub(crate) fn warn_skipped(skipped: &[(Declaration, prebindgen_registry_v2::Skip)]) {
+    let mut by_capability: std::collections::BTreeMap<&str, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for (declaration, skip) in skipped {
+        by_capability
+            .entry(skip.capability.as_str())
+            .or_default()
+            .push(declaration.to_string());
+    }
+    for (capability, mut roots) in by_capability {
+        roots.sort();
+        roots.dedup();
+        let shown = roots.len().min(5);
+        let more = match roots.len() - shown {
+            0 => String::new(),
+            rest => format!(" (+{rest} more)"),
+        };
+        println!(
+            "cargo:warning=SKIP {capability}: {}{more}",
+            roots[..shown].join(", ")
+        );
+    }
 }

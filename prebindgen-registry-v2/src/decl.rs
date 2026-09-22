@@ -8,7 +8,6 @@
 //! with every question it asks about the output.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
-use serde::Serialize;
 
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
@@ -56,10 +55,9 @@ use serde::Serialize;
 /// what the target recorded beside it: an [`OutputId`](crate::plan::OutputId)
 /// stands for the pair, and that is what an outcome is keyed by, what a
 /// [`Position`](crate::target::Position) is rooted at, and what a target's
-/// [`Requirement`](crate::target::Requirement) resolves to. The report keeps
-/// one row per pair and tells them apart by the foreign placement — see
-/// [`Entry::id`](crate::report::Entry::id) — so an entity declared once reads
-/// exactly as it always did.
+/// [`Requirement`](crate::target::Requirement) resolves to. Two outputs of one
+/// entity therefore print alike — what tells them apart is the target's own
+/// vocabulary, which this engine does not speak.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     /// A function, exported through a wrapper that calls it — as a foreign
@@ -200,11 +198,5 @@ impl std::fmt::Display for Declaration {
             Declaration::Callback(_) => "callback",
         };
         write!(f, "{prefix}:{}", self.name())
-    }
-}
-
-impl Serialize for Declaration {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_str(self)
     }
 }

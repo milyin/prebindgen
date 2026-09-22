@@ -19,12 +19,12 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
-    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec,
-    Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor,
-    SourceItem, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction, FailureCategory,
+    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
+    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, Requirement,
+    ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem,
+    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
+    WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -860,25 +860,6 @@ impl Target for JniTarget {
             JniPayload::Class { .. } | JniPayload::Method { .. } | JniPayload::Handle { .. } => {
                 unreachable!("a Kotlin declaration is not an operation")
             }
-        }
-    }
-
-    /// The declarator each declaration came from, and the Kotlin name it
-    /// places — answered from the same choice generation is answered from, so
-    /// the report cannot drift from the code.
-    fn describe(&self, _declaration: &Declaration, declared: &JniChoice) -> Described {
-        match declared {
-            JniChoice::Scalar => Described::new("scalar", ""),
-            JniChoice::DataClass { class } => Described::new("data_class", class),
-            JniChoice::PtrClass { class, .. } => Described::new("ptr_class", class),
-            JniChoice::Function {
-                package, method, ..
-            } => Described::new("fun", format!("{package}.{method}")),
-            JniChoice::Unimplemented {
-                declarator,
-                placement,
-                ..
-            } => Described::new(*declarator, placement),
         }
     }
 }

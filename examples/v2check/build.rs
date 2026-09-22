@@ -99,9 +99,25 @@ fn main() {
         other => panic!("one package, one Kotlin file; written: {other:?}"),
     };
 
-    // The report is published beside the code, as it is for a real binding.
-    c.write_report(&out_dir).expect("write the C report");
-    jni.write_report(&out_dir).expect("write the JNI report");
+    // What neither target could generate, as cargo warnings, and as a file
+    // the tests read back: a build script owns what it makes of a skip, and
+    // this one publishes it.
+    c.warn_skipped();
+    jni.warn_skipped();
+    write_skipped(
+        &out_dir.join("c-skipped.txt"),
+        c.skipped()
+            .iter()
+            .map(|(declaration, skip)| format!("{declaration}\t{}", skip.capability))
+            .collect(),
+    );
+    write_skipped(
+        &out_dir.join("jni-skipped.txt"),
+        jni.skipped()
+            .iter()
+            .map(|(declaration, skip)| format!("{declaration}\t{}", skip.capability))
+            .collect(),
+    );
 
     // `Sample`'s field condition reaches the generated Rust, so this crate
     // compiles a `#[cfg]` over a name rustc would otherwise report as one
@@ -112,6 +128,12 @@ fn main() {
     println!("cargo:rustc-env=V2CHECK_C={}", c_path.display());
     println!("cargo:rustc-env=V2CHECK_JNI={}", jni_path.display());
     println!("cargo:rustc-env=V2CHECK_KOTLIN={}", kotlin_path.display());
+}
+
+/// One `<declaration>\t<capability>` line per skip, in the order the engine
+/// left them out.
+fn write_skipped(path: &Path, lines: Vec<String>) {
+    std::fs::write(path, lines.join("\n")).expect("write the skip list");
 }
 
 /// The fixture's items, as a captured source crate would hand them over.

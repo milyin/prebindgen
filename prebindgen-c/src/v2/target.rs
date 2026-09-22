@@ -17,12 +17,12 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
-    FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec,
-    Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor,
-    SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport,
-    Terminal, Unsupported, WireType, WrapperParam,
+    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction, FailureCategory,
+    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
+    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, Requirement,
+    ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem,
+    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
+    Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -500,18 +500,5 @@ impl Target for CTarget {
 
     fn render_operation(&self, payload: &CPayload, _: &[syn::Ident]) -> proc_macro2::TokenStream {
         match *payload {}
-    }
-
-    /// The declarator each declaration came from, and the C name it places —
-    /// answered from the same choice generation is answered from, so the
-    /// report cannot drift from the code.
-    fn describe(&self, _declaration: &Declaration, declared: &CChoice) -> Described {
-        match declared {
-            CChoice::Scalar => Described::new("scalar", ""),
-            CChoice::DataStruct { c_name } => Described::new("data_struct", c_name),
-            CChoice::OpaquePtr { c_name, .. } => Described::new("opaque_ptr", c_name),
-            CChoice::Function { symbol } => Described::new("function", symbol),
-            CChoice::Unimplemented { declarator, c_name } => Described::new(*declarator, c_name),
-        }
     }
 }

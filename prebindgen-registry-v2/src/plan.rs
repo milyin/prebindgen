@@ -16,8 +16,7 @@ use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
     decl::Declaration,
     outcome::{EngineError, Outcome, Skip},
-    report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
-    run::{check_declarations, Generation, PIPELINE},
+    run::{check_declarations, Generation},
     target::{
         AbiSpec, ChildValue, Crossing, Direction, FailureCategory, FailureRoute, Layout,
         OperandRole, OutputPlacement, ParamRole, Part, PlanningError, PrimitiveFailure,
@@ -63,13 +62,6 @@ struct Output<K> {
     /// What the target recorded for it, handed back with every question the
     /// engine asks about this output.
     choice: K,
-    /// What the target says it is, for the report.
-    described: crate::target::Described,
-    /// What the report calls this output. The declaration as it prints, and
-    /// where an entity is declared more than once, that plus the foreign
-    /// placement telling them apart — so a binding declaring each entity once
-    /// reads exactly as it always did.
-    id: String,
 }
 
 /// A complete wrapper: the exported function, as planned.
@@ -652,10 +644,15 @@ pub fn generate<T: Target>(
     target: &T,
     declarations: Vec<(Declaration, T::ConversionKey)>,
     source_module: syn::Path,
-    declaring_crate: &str,
 ) -> Result<Generation<T::Payload>, EngineError> {
     check_declarations(&declarations, &flat)?;
-    let exposed = outputs(target, declarations);
+    let exposed: Vec<Output<T::ConversionKey>> = declarations
+        .into_iter()
+        .map(|(declaration, choice)| Output {
+            declaration,
+            choice,
+        })
+        .collect();
 
     let mut run = Run::new(&flat, target, &exposed);
     let mut functions: Vec<(OutputId, FunctionPlan<T::Payload>)> = Vec::new();
@@ -742,9 +739,7 @@ pub fn generate<T: Target>(
                     Outcome::Skipped(Skip {
                         capability: refusal.reason.capability,
                         explanation: refusal.reason.explanation,
-                        dependency_path: refusal
-                            .at
-                            .dependency_path(&exposed[refusal.at.output.0].id),
+                        dependency_path: refusal.at.dependency_path(),
                     }),
                 );
             }
@@ -823,7 +818,7 @@ pub fn generate<T: Target>(
                     },
                     Err(skip) => skip,
                 };
-                let mut path = vec![exposed[id.0].id.clone()];
+                let mut path = vec![exposed[id.0].declaration.to_string()];
                 path.extend(cause.dependency_path.iter().cloned());
                 outcomes.insert(
                     *id,
@@ -847,32 +842,17 @@ pub fn generate<T: Target>(
     functions.retain(|(id, _)| emitted(id));
     surfaces.retain(|(id, _)| emitted(id));
 
-    let mut entries: Vec<Entry> = exposed
+    // What the binding asked for and did not get, in the order it asked. A
+    // build script prints it, a test reads it; nothing downstream of planning
+    // depends on it.
+    let skipped: Vec<(Declaration, Skip)> = exposed
         .iter()
         .enumerate()
-        .map(|(index, output)| Entry {
-            id: output.id.clone(),
-            declaration: output.declaration.clone(),
-            described: output.described.clone(),
-            outcome: outcomes
-                .get(&OutputId(index))
-                .cloned()
-                .unwrap_or(Outcome::Emitted),
+        .filter_map(|(index, output)| match outcomes.get(&OutputId(index)) {
+            Some(Outcome::Skipped(skip)) => Some((output.declaration.clone(), skip.clone())),
+            _ => None,
         })
         .collect();
-    sort_entries(&mut entries);
-
-    let report = Report {
-        pipeline: PIPELINE,
-        target: T::NAME,
-        schema_version: SCHEMA_VERSION,
-        source_identity: SourceIdentity {
-            declaring_crate: declaring_crate.to_string(),
-            sources: flat.source_modules().to_vec(),
-            captured_items: flat.captured().count(),
-        },
-        declarations: entries,
-    };
 
     // Planning is over: the working state hands over its tables, and the model
     // moves into the frozen result.
@@ -939,68 +919,15 @@ pub fn generate<T: Target>(
     let rust = crate::emit::render(&flat, target, &reach, &artifacts, &primitives, &functions);
 
     Ok(Generation::new(
-        flat, report, nodes, functions, surfaces, primitives, rust,
+        flat,
+        T::NAME,
+        skipped,
+        nodes,
+        functions,
+        surfaces,
+        primitives,
+        rust,
     ))
-}
-
-/// The binding's outputs, in the order it stated them, each with what the
-/// report calls it.
-///
-/// An entity declared once keeps the id it has always had — `fn:stamp_sum`.
-/// Declared several times, each output is that plus the foreign placement the
-/// target describes it by, which is what tells the rows apart.
-///
-/// A placement is a string the target chooses, so nothing about it is
-/// guaranteed: two outputs may be placed identically, and a placement may
-/// itself end in the `#n` this uses to separate those. Every id is therefore
-/// taken from what is still free — the candidate, then `#2`, `#3`, … until
-/// one is — so that ids are unique whatever a target answers, and an output
-/// whose id was taken is still named by where it is placed.
-fn outputs<T: Target>(
-    target: &T,
-    declarations: Vec<(Declaration, T::ConversionKey)>,
-) -> Vec<Output<T::ConversionKey>> {
-    let mut described: Vec<(Declaration, T::ConversionKey, crate::target::Described)> =
-        declarations
-            .into_iter()
-            .map(|(declaration, choice)| {
-                let described = target.describe(&declaration, &choice);
-                (declaration, choice, described)
-            })
-            .collect();
-    let mut count: HashMap<&Declaration, usize> = HashMap::new();
-    for (declaration, _, _) in &described {
-        *count.entry(declaration).or_default() += 1;
-    }
-    let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let ids: Vec<String> = described
-        .iter()
-        .map(|(declaration, _, described)| {
-            let candidate = match count[declaration] {
-                1 => declaration.to_string(),
-                _ => format!("{declaration}@{}", described.placement),
-            };
-            let id = match taken.contains(&candidate) {
-                false => candidate,
-                true => (2..)
-                    .map(|n| format!("{candidate}#{n}"))
-                    .find(|id| !taken.contains(id))
-                    .expect("an unbounded sequence has a free id"),
-            };
-            taken.insert(id.clone());
-            id
-        })
-        .collect();
-    described
-        .drain(..)
-        .zip(ids)
-        .map(|((declaration, choice, described), id)| Output {
-            declaration,
-            choice,
-            described,
-            id,
-        })
-        .collect()
 }
 
 /// A requested output that survived planning.

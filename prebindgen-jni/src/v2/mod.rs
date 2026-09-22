@@ -36,7 +36,6 @@ impl Declarations {
     pub(crate) fn generate_v2(
         &self,
         sources: prebindgen_registry::flat::FlatBuilder,
-        declaring_crate: impl Into<String>,
     ) -> Result<Generation<JniPayload>, EngineError> {
         let mut sources = sources;
         // What the binding defines itself enters the model as entities: a
@@ -80,13 +79,7 @@ impl Declarations {
             })
             .collect();
         let (target, declarations) = self.binding(&flat, classes);
-        generate(
-            flat,
-            &target,
-            declarations,
-            source_module,
-            &declaring_crate.into(),
-        )
+        generate(flat, &target, declarations, source_module)
     }
 
     /// Write the Kotlin side of a v2 generation under `kotlin_root`.
@@ -370,5 +363,36 @@ fn member_representation(member: &ClassMember) -> &'static str {
     match member.kind {
         crate::jni::MemberKind::Method => "method",
         crate::jni::MemberKind::Constructor => "constructor",
+    }
+}
+
+/// Print one cargo warning per capability a skip named, with the declarations
+/// it took down.
+///
+/// A build log is not a list of everything: at most five declarations per
+/// capability, and a count of the rest. What a build script needs from it is
+/// which capability to ask for next, not which of forty declarations waits on
+/// it.
+pub(crate) fn warn_skipped(skipped: &[(Declaration, prebindgen_registry_v2::Skip)]) {
+    let mut by_capability: std::collections::BTreeMap<&str, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for (declaration, skip) in skipped {
+        by_capability
+            .entry(skip.capability.as_str())
+            .or_default()
+            .push(declaration.to_string());
+    }
+    for (capability, mut roots) in by_capability {
+        roots.sort();
+        roots.dedup();
+        let shown = roots.len().min(5);
+        let more = match roots.len() - shown {
+            0 => String::new(),
+            rest => format!(" (+{rest} more)"),
+        };
+        println!(
+            "cargo:warning=SKIP {capability}: {}{more}",
+            roots[..shown].join(", ")
+        );
     }
 }

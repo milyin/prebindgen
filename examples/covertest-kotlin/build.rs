@@ -979,14 +979,9 @@ fn main() {
         println!("cargo:warning=Wrote {}", path.display());
     }
 
-    // The report, for an engine that produces one. Empty
-    // under v1, whose answer is "everything declared, or the build failed".
-    for path in jni
-        .write_report(&destinations.reports)
-        .expect("write_report failed")
-    {
-        println!("cargo:warning=Wrote {}", path.display());
-    }
+    // What the engine could not generate, as cargo warnings. Silent under an
+    // engine that skips nothing.
+    jni.warn_skipped();
 
     if jni.pipeline() == Pipeline::V1 {
         // The resolved-surface report (C7): committed next to the regen so a

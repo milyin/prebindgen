@@ -825,10 +825,10 @@ impl Position {
             && (self.path.is_empty() || self.path.as_slice() == ["out_of_rust"])
     }
 
-    /// This position as a report's dependency path, under the report's own
-    /// id for the output it is rooted at.
-    pub(crate) fn dependency_path(&self, id: &str) -> Vec<String> {
-        std::iter::once(id.to_string())
+    /// This position as a skip's dependency path: the declaration it is
+    /// rooted at, then how the walk reached here.
+    pub(crate) fn dependency_path(&self) -> Vec<String> {
+        std::iter::once(self.declaration.to_string())
             .chain(self.path.iter().cloned())
             .collect()
     }
@@ -1131,7 +1131,7 @@ pub enum SourceItem<'a> {
 /// [`generate`](crate::generate) each [`Declaration`] paired with it, and the
 /// engine hands it back with every question about that output —
 /// [`SelectionQuery::declared`], [`SiteDescriptor::declared`],
-/// [`SurfaceRequest::declared`], and `declared` at [`Target::describe`]. An
+/// and [`SurfaceRequest::declared`]. An
 /// adapter must answer from that rather than from a table of its own keyed by
 /// [`Declaration`], because one entity may be declared more than once —
 /// `Stamp` as a data class and as a handle — and such a table would hold one
@@ -1221,37 +1221,4 @@ pub trait Target {
     /// The operands arrive already named by the writer, in the order the
     /// operation's specification lists them.
     fn render_operation(&self, payload: &Self::Payload, operands: &[syn::Ident]) -> TokenStream;
-
-    /// Say, for the report, what this declaration is: the adapter's own
-    /// declarator word and where the thing lands in the foreign language.
-    ///
-    /// Answered from the same `declared` choice [`Target::boundary`] and
-    /// [`Target::surface`] are given, so the report cannot say one thing and
-    /// the generated code another. Asked of every requested output, including
-    /// one that was skipped — the report says what a declaration was *for*,
-    /// not only what became of it.
-    fn describe(&self, declaration: &Declaration, declared: &Self::ConversionKey) -> Described;
-}
-
-/// How a report names one declaration on the foreign side — see
-/// [`Target::describe`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Described {
-    /// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
-    /// — the adapter's own word, printed back verbatim. Finer than the prefix
-    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
-    /// a `type`.
-    pub representation: String,
-    /// Where it lands in the target language, spelled the way that language
-    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
-    pub placement: String,
-}
-
-impl Described {
-    pub fn new(representation: impl Into<String>, placement: impl Into<String>) -> Self {
-        Described {
-            representation: representation.into(),
-            placement: placement.into(),
-        }
-    }
 }

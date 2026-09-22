@@ -61,8 +61,9 @@ requested, but that fourth outcome is not implemented.
 
 Contradictory configuration and broken internal assumptions are different:
 they fail generation rather than becoming ordinary skips. On a completed run,
-[the report](../report.md) records the outcomes for inspection. It is diagnostic
-output; the pipeline does not read it back to make generation decisions.
+`Generation::skipped` hands back every skip for inspection — a build script
+prints them, a test reads them, and no stage reads them back to make a
+generation decision.
 
 What survives is then **frozen**: planning is over and retained plans determine
 the output. Current `generate` renders Rust before returning `Generation`,
@@ -279,8 +280,8 @@ public descriptions for Kotlin. The C build passes generated Rust to `cbindgen`
 for headers. Writers must not introduce a newly discovered dependency or reverse
 a support decision. Files should be published only after output generation succeeds.
 
-The report's contents, frontend accessors and planned use for test selection
-are explained on [its own page](../report.md). Those are separate from the
+What a binding makes of a skip — a cargo warning, a file beside the generated
+code, a test's expectation — is the frontend's business, and separate from the
 retention decisions described here.
 
 ## Elements at this stage
