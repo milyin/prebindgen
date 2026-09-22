@@ -73,7 +73,7 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|entry| entry.id().to_string())
         .collect();
     assert_eq!(
         ids,
@@ -224,7 +224,7 @@ fn an_ignore_does_not_reach_the_engine() {
         !report
             .declarations
             .iter()
-            .any(|entry| entry.declaration.to_string() == "fn:calculator_internal"),
+            .any(|entry| entry.id() == "fn:calculator_internal"),
         "{report:?}"
     );
     assert_eq!(report.source_identity.captured_items, 4, "{report:?}");

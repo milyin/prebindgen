@@ -74,18 +74,19 @@ impl CbindgenBuilder {
         )
     }
 
-    /// Everything this binding declared: what each declaration is, for the
-    /// target to answer from, and the list of them, for the engine to plan.
+    /// Everything this binding declared: each declaration paired with what
+    /// this target recorded it as, which together are what the engine plans
+    /// and accounts for.
     ///
-    /// One entry per declaration, in any order — the report sorts. Both halves
-    /// are stated in the same pass, so a declaration cannot be planned without
-    /// the target knowing what it is, or recorded without being asked for.
-    fn binding(&self) -> (CTarget, Vec<Declaration>) {
+    /// One entry per declaration, in any order — the report sorts. Stating the
+    /// two halves together is what keeps them in step: a declaration cannot be
+    /// planned without saying what it is.
+    fn binding(&self) -> (CTarget, Vec<(Declaration, CChoice)>) {
         let mut target = CTarget::default();
         let mut declarations = Vec::new();
         let mut declare = |declaration: Declaration, choice: CChoice| {
-            target.declare(declaration.clone(), choice);
-            declarations.push(declaration);
+            target.declare(&declaration, &choice);
+            declarations.push((declaration, choice));
         };
 
         // By-value data structs: the one type representation v2 lowers. The
@@ -93,7 +94,7 @@ impl CbindgenBuilder {
         // wherever it appears.
         for key in sorted(self.data.keys()) {
             declare(
-                Declaration::declared_type(key.clone()),
+                Declaration::Type(key.clone()),
                 CChoice::DataStruct {
                     c_name: self.c_type_name(key),
                 },
@@ -104,7 +105,7 @@ impl CbindgenBuilder {
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
             declare(
-                Declaration::declared_type(key.clone()),
+                Declaration::Type(key.clone()),
                 CChoice::OpaquePtr {
                     c_name: self.c_type_name(key),
                     release: self.destructor_symbol(key).to_string(),
@@ -122,7 +123,7 @@ impl CbindgenBuilder {
         ] {
             for key in keys {
                 declare(
-                    Declaration::declared_type(key.clone()),
+                    Declaration::Type(key.clone()),
                     CChoice::Unimplemented {
                         declarator,
                         c_name: self.c_type_name(key),
@@ -158,7 +159,7 @@ impl CbindgenBuilder {
         // Exported functions — the one kind that must name a captured item.
         for ident in sorted(self.functions.keys()) {
             declare(
-                Declaration::function(ident.clone()),
+                Declaration::Function(ident.clone()),
                 CChoice::Function {
                     symbol: self.fn_symbol(ident).to_string(),
                 },

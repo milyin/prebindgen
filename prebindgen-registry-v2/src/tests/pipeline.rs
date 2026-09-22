@@ -199,9 +199,6 @@ struct Mini {
     /// How one value inside one declaration crosses instead: keyed by the
     /// declaration and the site's path, `param 0` or `param 0.field secs`.
     sites: BTreeMap<(Declaration, String), Choice>,
-    /// What each requested output was declared as: what shapes its wrapper,
-    /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, Choice>,
 }
 
 impl Mini {
@@ -212,12 +209,10 @@ impl Mini {
     /// It is a pure function of the position and the type, so the same value
     /// asked twice answers the same: an adapter that let this drift would hand
     /// the registry two keys for one conversion and share nothing.
-    fn conversion(&self, position: &Position, ty: &TypeRef) -> Choice {
+    fn conversion(&self, position: &Position, declared: &Choice, ty: &TypeRef) -> Choice {
         // A declared type's own crossing is planned as that declaration says.
         if position.is_declared_type() {
-            if let Some(choice) = self.outputs.get(&position.declaration) {
-                return choice.clone();
-            }
+            return declared.clone();
         }
         let site = (position.declaration.clone(), position.path.join("."));
         if let Some(choice) = self.sites.get(&site) {
@@ -228,16 +223,6 @@ impl Mini {
             .cloned()
             .unwrap_or(Choice::Scalar)
     }
-
-    /// What the binding declared this output as.
-    ///
-    /// Asking for an output and recording nothing about it is contradictory
-    /// input from the frontend, not a capability this target is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&Choice, PlanningError> {
-        self.outputs.get(declaration).ok_or_else(|| {
-            PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
-        })
-    }
 }
 
 impl Target for Mini {
@@ -246,8 +231,8 @@ impl Target for Mini {
     type ConversionKey = Choice;
     type Payload = Payload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<Choice>> {
-        let conversion = self.conversion(query.position, &query.crossing.ty);
+    fn select(&self, query: &SelectionQuery<'_, Choice>) -> TargetSupport<Selection<Choice>> {
+        let conversion = self.conversion(query.position, query.declared, &query.crossing.ty);
         let want_struct = matches!(
             conversion,
             Choice::Struct
@@ -379,12 +364,12 @@ impl Target for Mini {
 
     fn boundary(
         &self,
-        site: &SiteDescriptor<'_>,
+        site: &SiteDescriptor<'_, Choice>,
         values: &ResolvedValues<'_, Payload>,
     ) -> TargetSupport<BoundarySpec<Payload>> {
         // What this wrapper exports is what the binding declared for it, which
         // the site names.
-        let choice = self.declared(site.declaration)?;
+        let choice = site.declared;
         if matches!(choice, Choice::FunctionWithWrongInput) {
             return Ok(TargetAttempt::Ready(BoundarySpec {
                 abi: AbiSpec {
@@ -517,10 +502,10 @@ impl Target for Mini {
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>,
+        request: &SurfaceRequest<'_, Choice>,
         values: &ResolvedValues<'_, Payload>,
     ) -> TargetSupport<SurfaceSpec<Payload>> {
-        let choice = self.declared(request.declaration)?;
+        let choice = request.declared;
         let requires = values
             .inputs
             .iter()
@@ -595,16 +580,18 @@ impl Target for Mini {
     /// symbol a function exports, and a type's own name otherwise — this
     /// target has no foreign spelling of its own.
     ///
-    /// Read from the same storage [`Mini::boundary`] and [`Mini::surface`]
-    /// read, so the report cannot describe one thing and generate another. A
-    /// declaration is described whether or not it survived; one the binding
-    /// never declared is described as that rather than as the scalar default.
-    fn describe(&self, declaration: &Declaration) -> Described {
-        match self.outputs.get(declaration) {
-            Some(Choice::Function { symbol, .. }) => Described::new("function", symbol),
-            Some(Choice::Scalar | Choice::ScalarThrough) => Described::new("scalar", ""),
-            Some(_) => Described::new("strukt", ""),
-            None => Described::new("undeclared", ""),
+    /// Answered from the same choice [`Mini::boundary`] and [`Mini::surface`]
+    /// are answered from, so the report cannot describe one thing and generate
+    /// another. A declaration is described whether or not it survived.
+    fn describe(&self, _declaration: &Declaration, declared: &Choice) -> Described {
+        match declared {
+            Choice::Function { symbol, .. } => Described::new("function", symbol),
+            Choice::Scalar | Choice::ScalarThrough => Described::new("scalar", ""),
+            // A fixture has no foreign names, so a type is placed under the
+            // choice it was declared with — which is what tells two
+            // declarations of one type apart in the report.
+            Choice::Handle | Choice::HandleWithoutRelease => Described::new("strukt", "handle"),
+            _ => Described::new("strukt", "struct"),
         }
     }
 }
@@ -612,13 +599,13 @@ impl Target for Mini {
 /// A miniature frontend: what the binding declared, and the work list it hands
 /// the engine.
 ///
-/// Every test states its binding here rather than in a request set, which is
-/// what the engine no longer holds. The declarations go into [`Mini`], where
-/// the target answers from; only the list of outputs reaches the registry.
+/// Every test states its binding here. A declared value crossing goes into
+/// [`Mini`], which answers about values of a type wherever they turn up; what
+/// each output *is* travels with the output itself.
 #[derive(Default)]
 struct Binding {
     target: Mini,
-    outputs: Vec<Declaration>,
+    outputs: Vec<(Declaration, Choice)>,
 }
 
 impl Binding {
@@ -644,8 +631,7 @@ impl Binding {
 
     /// One requested output, as the binding declared it.
     fn declare(&mut self, declaration: Declaration, choice: Choice) -> &mut Self {
-        self.target.outputs.insert(declaration.clone(), choice);
-        self.outputs.push(declaration);
+        self.outputs.push((declaration, choice));
         self
     }
 
@@ -670,11 +656,11 @@ fn binding() -> Binding {
 }
 
 fn ty(name: &str) -> Declaration {
-    Declaration::declared_type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
 fn function(name: &str) -> Declaration {
-    Declaration::function(syn::parse_str(name).expect("a test names an ident"))
+    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
@@ -682,7 +668,7 @@ fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Ou
         .report()
         .declarations
         .iter()
-        .find(|entry| entry.declaration.to_string() == id)
+        .find(|entry| entry.id() == id)
         .unwrap_or_else(|| panic!("no report entry for {id}"))
         .outcome
 }
@@ -902,20 +888,18 @@ fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
     );
 }
 
-/// One function, two projections: each is its own declaration, planned under
-/// its own choice, with its own wrapper and its own report row. Sharing is by
-/// conversion, as between two different functions — the `Stamp` both take
-/// crosses the same way and is planned once.
+/// One function declared twice: each declaration is planned under its own
+/// choice, with its own wrapper and its own report row, told apart by the
+/// foreign placement the target describes each by. Sharing is by conversion,
+/// as between two different functions — the `Stamp` both take crosses the
+/// same way and is planned once.
 #[test]
-fn two_projections_of_one_function_are_two_declarations() {
+fn one_function_declared_twice_is_two_outputs() {
     let mut binding = binding();
     binding.declare_type("Stamp", Choice::Struct);
+    binding.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
     binding.declare(
-        function("stamp_sum").projected("example.Sums.sum"),
-        exported("stamp_sum_a", Routes::None),
-    );
-    binding.declare(
-        function("stamp_sum").projected("example.Totals.SUM"),
+        function("stamp_sum"),
         exported("stamp_sum_b", Routes::Reported),
     );
 
@@ -930,13 +914,13 @@ fn two_projections_of_one_function_are_two_declarations() {
         .report()
         .declarations
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|entry| entry.id().to_string())
         .collect();
     assert_eq!(
         ids,
         [
-            "fn:stamp_sum@example.Sums.sum",
-            "fn:stamp_sum@example.Totals.SUM",
+            "fn:stamp_sum@stamp_sum_a",
+            "fn:stamp_sum@stamp_sum_b",
             "type:Stamp"
         ]
     );
@@ -950,37 +934,32 @@ fn two_projections_of_one_function_are_two_declarations() {
     // every conversion, because nothing about the value differs.
     assert_eq!(generation.values().len(), 3);
 
-    // Two projections under one label are one declaration said twice.
+    // One entity declared twice as the same thing is the binding saying one
+    // thing twice: two plans for one foreign declaration.
     let mut twice = Binding::default();
     twice.declare_type("Stamp", Choice::Struct);
-    twice.declare(
-        function("stamp_sum").projected("same"),
-        exported("stamp_sum_a", Routes::None),
-    );
-    twice.declare(
-        function("stamp_sum").projected("same"),
-        exported("stamp_sum_b", Routes::None),
-    );
+    twice.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
+    twice.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
     let error = twice
         .generate(model())
-        .expect_err("one label, one declaration");
+        .expect_err("one choice, one declaration");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
 }
 
-/// One type, two projections, and a value resolves its requirement to the one
-/// it crosses as.
+/// One type declared twice, and a value resolves its requirement to the
+/// declaration it crosses as.
 ///
 /// `Stamp` is declared as a struct and as a handle. Values of it cross as a
 /// struct by default; `stamp_max`'s parameter is overridden to cross as a
-/// handle. Each function requires the projection its value crosses as — so
-/// when the handle projection cannot be placed, `stamp_max` goes with it and
-/// `stamp_sum` does not.
+/// handle. Each function requires the declaration its value crosses as — so
+/// when the handle cannot be placed, `stamp_max` goes with it and `stamp_sum`
+/// does not.
 #[test]
-fn a_value_requires_the_projection_it_crosses_as() {
+fn a_value_requires_the_declaration_it_crosses_as() {
     let plan = |handle: Choice| {
         let mut binding = binding();
-        binding.declare(ty("Stamp").projected("example.Stamp"), Choice::Struct);
-        binding.declare(ty("Stamp").projected("example.StampHandle"), handle.clone());
+        binding.declare(ty("Stamp"), Choice::Struct);
+        binding.declare(ty("Stamp"), handle.clone());
         binding.crossing("Stamp", Choice::Struct);
         binding.at_site("stamp_max", "param 0", handle);
         binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
@@ -988,8 +967,8 @@ fn a_value_requires_the_projection_it_crosses_as() {
         binding.generate(model()).expect("plans")
     };
 
-    // Both projections placed: everything is emitted, and each function's
-    // requirement went to its own projection.
+    // Both declarations placed: everything is emitted, and each function's
+    // requirement went to the one it crosses as.
     let generation = plan(Choice::Handle);
     assert_eq!(
         generation.report().counts().emitted,
@@ -1007,15 +986,15 @@ fn a_value_requires_the_projection_it_crosses_as() {
         "{rust}"
     );
 
-    // The handle projection refused: only the function crossing that way
+    // The handle declaration refused: only the function crossing that way
     // requires it, and only that function is skipped.
     let generation = plan(Choice::HandleWithoutRelease);
-    let Outcome::Skipped(skip) = outcome(&generation, "type:Stamp@example.StampHandle") else {
-        panic!("the handle projection has nowhere to place a release");
+    let Outcome::Skipped(skip) = outcome(&generation, "type:Stamp@handle") else {
+        panic!("the handle declaration has nowhere to place a release");
     };
     assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
     assert!(matches!(
-        outcome(&generation, "type:Stamp@example.Stamp"),
+        outcome(&generation, "type:Stamp@struct"),
         Outcome::Emitted
     ));
     assert!(matches!(
@@ -1023,28 +1002,26 @@ fn a_value_requires_the_projection_it_crosses_as() {
         Outcome::Emitted
     ));
     let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_max") else {
-        panic!("its parameter crosses as the projection that was refused");
+        panic!("its parameter crosses as the declaration that was refused");
     };
     assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
-    assert_eq!(
-        skip.dependency_path,
-        ["fn:stamp_max", "type:Stamp@example.StampHandle"]
-    );
+    assert_eq!(skip.dependency_path, ["fn:stamp_max", "type:Stamp@handle"]);
 }
 
-/// A requirement stated by name alone cannot choose between projections.
+/// A requirement stated by name alone cannot choose between two declarations
+/// of one type.
 #[test]
-fn a_requirement_by_name_is_ambiguous_over_two_projections() {
+fn a_requirement_by_name_is_ambiguous_over_two_declarations() {
     let mut binding = binding();
-    binding.declare(ty("Stamp").projected("a"), Choice::Struct);
-    binding.declare(ty("Stamp").projected("b"), Choice::Handle);
+    binding.declare(ty("Stamp"), Choice::Struct);
+    binding.declare(ty("Stamp"), Choice::Handle);
     binding.crossing("Stamp", Choice::Struct);
     // `Point` requires `Stamp` by name, not through a value of it.
     binding.declare_type("Point", Choice::StructRequiring("Stamp".to_string()));
 
     let generation = binding.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "type:Point") else {
-        panic!("a name does not say which projection");
+        panic!("a name does not say which declaration");
     };
     assert_eq!(
         skip.capability.as_str(),
@@ -1164,28 +1141,6 @@ fn a_value_declaration_on_an_exported_function_is_an_error() {
         error,
         EngineError::Planning(PlanningError::InvalidInput(_))
     ));
-}
-
-/// The same rule in the other direction: asking for an output and recording
-/// nothing about it is the frontend contradicting itself, not a capability the
-/// target is missing.
-///
-/// This is the failure the move in #766 makes possible — the engine no longer
-/// holds an entry per output, so nothing but the adapter can notice a request
-/// its own storage does not cover. It has to fail the build rather than
-/// quietly generate a default the binding never asked for.
-#[test]
-fn an_output_the_target_recorded_nothing_for_is_an_error() {
-    let mut binding = binding();
-    binding.crossing("Stamp", Choice::Struct);
-    // Asked for, and never declared: `declare` is what would have recorded it.
-    binding.outputs.push(ty("Stamp"));
-
-    let error = binding.generate(model()).expect_err("refuses");
-    let EngineError::Planning(PlanningError::InvalidInput(message)) = error else {
-        panic!("a request the frontend's own storage does not cover is bad input");
-    };
-    assert!(message.contains("type:Stamp"), "{message}");
 }
 
 /// A declaration the source never captured is an error, not a skip — the

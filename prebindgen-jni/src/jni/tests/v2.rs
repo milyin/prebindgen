@@ -63,7 +63,7 @@ fn every_declared_element_is_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|entry| entry.id().to_string())
         .collect();
     assert_eq!(
         ids,
@@ -79,7 +79,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
+            .find(|entry| entry.id() == id)
             .map(|entry| entry.placement().to_string())
             .unwrap_or_default()
     };
@@ -107,7 +107,7 @@ fn every_declared_element_is_accounted_for() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
+            .find(|entry| entry.id() == id)
             .and_then(|entry| entry.outcome.skip())
             .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
             .expect("skipped")
@@ -219,7 +219,7 @@ fn class_members_are_elements_of_their_own() {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
+            .find(|entry| entry.id() == id)
             .map(|entry| entry.representation().to_string())
             .unwrap_or_default()
     };
@@ -240,7 +240,7 @@ fn an_ignore_does_not_reach_the_engine() {
         !report
             .declarations
             .iter()
-            .any(|entry| entry.declaration.to_string() == "fn:z_thing_internal"),
+            .any(|entry| entry.id() == "fn:z_thing_internal"),
         "{report:?}"
     );
     // Four functions and the `ZThing` they reference: the ignored one included.
@@ -325,7 +325,7 @@ fn a_binding_local_fn_is_an_entity_and_is_generated() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|entry| entry.id().to_string())
         .collect();
     assert_eq!(ids, ["fn:local_size", "fn:local_tag", "type:ZThing"]);
 
@@ -335,7 +335,7 @@ fn a_binding_local_fn_is_an_entity_and_is_generated() {
         &report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
+            .find(|entry| entry.id() == id)
             .expect("reported")
             .outcome
     };
@@ -374,7 +374,7 @@ fn a_class_over_a_type_the_source_never_exported_is_a_skip_not_an_error() {
         &report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
+            .find(|entry| entry.id() == id)
             .unwrap_or_else(|| panic!("no entry for {id}: {report:?}"))
             .outcome
     };
@@ -405,7 +405,7 @@ fn a_ptr_class_over_a_key_with_arguments_is_planned_as_declared() {
     let entry = report
         .declarations
         .iter()
-        .find(|entry| entry.declaration.to_string() == "type:Wrapper < 'static >")
+        .find(|entry| entry.id() == "type:Wrapper < 'static >")
         .unwrap_or_else(|| panic!("no entry: {report:?}"));
     assert_eq!(
         entry.outcome,
@@ -424,11 +424,11 @@ fn a_ptr_class_over_a_key_with_arguments_is_planned_as_declared() {
 }
 
 /// One function placed twice — as a package `fun` and as the `val` a
-/// `constant!(X).fun(..)` reads through — is two projections: two
-/// declarations told apart by their Kotlin placement, each with its own row.
-/// A function placed once keeps the id it always had.
+/// `constant!(X).fun(..)` reads through — is two outputs: two declarations of
+/// one entity, told apart in the report by their Kotlin placement, each with
+/// its own row. A function placed once keeps the id it always had.
 #[test]
-fn a_function_placed_twice_is_two_projections() {
+fn a_function_placed_twice_is_two_outputs() {
     let generated = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .items(fixture_items())
@@ -447,7 +447,7 @@ fn a_function_placed_twice_is_two_projections() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|entry| entry.id().to_string())
         .collect();
     assert_eq!(
         ids,
@@ -459,12 +459,12 @@ fn a_function_placed_twice_is_two_projections() {
         ],
         "{report:?}"
     );
-    // Each projection is described as what it was declared as.
+    // Each is described as what it was declared as.
     let representation = |id: &str| {
         report
             .declarations
             .iter()
-            .find(|entry| entry.declaration.to_string() == id)
+            .find(|entry| entry.id() == id)
             .map(|entry| entry.representation().to_string())
             .unwrap_or_else(|| panic!("no entry {id}"))
     };
@@ -507,7 +507,7 @@ fn a_function_backed_constant_is_the_functions_declaration() {
     assert_eq!(constant.declaration.to_string(), "fn:z_thing_describe");
     assert!(matches!(
         &constant.declaration,
-        Declaration::Function { name: ident, .. } if ident == "z_thing_describe"
+        Declaration::Function(ident) if ident == "z_thing_describe"
     ));
     // And it is planned from that function: what stops this one is the value
     // its parameter crosses as, reported against the parameter, rather than
@@ -542,7 +542,7 @@ fn skip_of(generated: &JniGen, id: &str) -> (String, String) {
         .expect("v2 produces a report")
         .declarations
         .iter()
-        .find(|entry| entry.declaration.to_string() == id)
+        .find(|entry| entry.id() == id)
         .and_then(|entry| entry.outcome.skip())
         .map(|skip| (skip.capability.as_str().to_string(), skip.path()))
         .unwrap_or_else(|| panic!("{id} is not skipped"))
@@ -856,4 +856,120 @@ fn v1_is_unchanged_and_reachable_by_name() {
         .flat()
         .function("z_thing_new")
         .is_some());
+}
+
+/// Two placements of one supported function are two wrappers. Each is its own
+/// native method on the harness — the harness has one namespace, and two
+/// definitions of one `Java_…` symbol would not compile — so a placement past
+/// the first is named after where it is placed.
+#[test]
+fn two_placements_of_one_function_are_two_wrappers() {
+    let loc = myflat_loc();
+    let sources: &[&str] = &[
+        "pub struct Stamp { pub secs: i64, pub nanos: i64 }",
+        "pub fn stamp_sum(stamp: Stamp) -> i64 { unimplemented!() }",
+    ];
+    let items = declare_referenced(
+        sources
+            .iter()
+            .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Stamp))
+                .fun(prebindgen_registry::fun!(stamp_sum)),
+        )
+        .package(crate::package!("other").fun(prebindgen_registry::fun!(stamp_sum)))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let report = generated.report().expect("v2 produces a report");
+    let ids: Vec<String> = report
+        .declarations
+        .iter()
+        .map(|entry| entry.id().to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "fn:stamp_sum@io.test.jni.other.stampSum",
+            "fn:stamp_sum@io.test.jni.stampSum",
+            "type:Stamp",
+        ],
+        "{report:?}"
+    );
+    let counts = report.counts();
+    assert_eq!((counts.emitted, counts.skipped), (3, 0), "{report:?}");
+
+    let dir = unique_test_dir("jnigen_v2_two_placements");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    for symbol in [
+        "Java_io_test_jni_JNINative_stampSum",
+        "Java_io_test_jni_JNINative_otherStampSum",
+    ] {
+        assert_eq!(rust.matches(symbol).count(), 1, "{rust}");
+    }
+
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    let kotlin: String = written
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+    for line in [
+        "public fun stampSum(stamp: Stamp): Long = JNINative.stampSum(stamp)",
+        "public fun stampSum(stamp: Stamp): Long = io.test.jni.JNINative.otherStampSum(stamp)",
+        "external fun stampSum(stamp: Stamp): Long",
+        "external fun otherStampSum(stamp: Stamp): Long",
+    ] {
+        assert!(
+            kotlin.lines().any(|emitted| emitted.trim() == line),
+            "missing `{line}`:\n{kotlin}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A captured constant exposed in two packages is two outputs, as a function
+/// placed twice is. Both are `constant`, which v2 does not lower yet, so both
+/// come back as capability skips — under ids of their own, rather than failing
+/// the run as one declaration made twice.
+#[test]
+fn a_constant_exposed_twice_is_two_outputs() {
+    let loc = myflat_loc();
+    let items = declare_referenced(vec![(
+        syn::parse_str::<syn::Item>("pub const THE_SIZE: i64 = 8;").unwrap(),
+        loc,
+    )]);
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(crate::package!("a").constant(crate::constant!(THE_SIZE)))
+        .package(crate::package!("b").constant(crate::constant!(THE_SIZE)))
+        .build_with(Pipeline::V2)
+        .expect("two placements of one constant are two declarations");
+    let report = generated.report().expect("v2 produces a report");
+    let ids: Vec<String> = report
+        .declarations
+        .iter()
+        .map(|entry| entry.id().to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "const:THE_SIZE@io.test.jni.a.THE_SIZE",
+            "const:THE_SIZE@io.test.jni.b.THE_SIZE",
+        ],
+        "{report:?}"
+    );
+    let counts = report.counts();
+    assert_eq!((counts.emitted, counts.skipped), (0, 2), "{report:?}");
 }

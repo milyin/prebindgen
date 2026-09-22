@@ -367,7 +367,10 @@ trait Target {
 
     fn select(
         &self,
-        query: SelectionQuery<'_>, // Source value, its position, and the relations offered.
+        query: SelectionQuery<'_, Self::ConversionKey>, // Source value, its position, the
+                                                        // relations offered, and what the
+                                                        // output it is reached from was
+                                                        // declared as.
     ) -> TargetSupport<Selection<Self::ConversionKey>>; // A relation the query offered,
                                                         // and the conversion it makes.
 
@@ -380,13 +383,15 @@ trait Target {
 
     fn boundary(
         &self,
-        site: &SiteDescriptor, // Exported call's signature, boundary roles and declaration.
+        site: &SiteDescriptor<'_, Self::ConversionKey>, // Exported call's signature, boundary
+                                                        // roles, declaration and its choice.
         values: &ResolvedValues<Self::Payload>, // Its resolved input/output values.
     ) -> TargetSupport<BoundarySpec<Self::Payload>>;
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>, // Public declaration, its source item and promises.
+        request: &SurfaceRequest<'_, Self::ConversionKey>, // Public declaration, its choice,
+                                                           // source item and promises.
         values: &ResolvedValues<Self::Payload>, // Values needed to describe that public API.
     ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
 }

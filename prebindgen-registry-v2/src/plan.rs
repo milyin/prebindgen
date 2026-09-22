@@ -46,6 +46,32 @@ pub struct ValuePlan<P> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
+/// Which of the binding's outputs is being planned.
+///
+/// An output is a declaration *and* what the target recorded for it, and the
+/// pair is what tells two of them apart: one entity declared twice — `Stamp`
+/// as a data class and as a handle — is two outputs, each planned, accounted
+/// for and required separately. The engine never compares the target's half,
+/// beyond asking whether two outputs recorded the same one; what a choice
+/// means is the target's business.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OutputId(pub(crate) usize);
+
+/// One thing the binding asked for, as the engine holds it.
+struct Output<K> {
+    declaration: Declaration,
+    /// What the target recorded for it, handed back with every question the
+    /// engine asks about this output.
+    choice: K,
+    /// What the target says it is, for the report.
+    described: crate::target::Described,
+    /// What the report calls this output. The declaration as it prints, and
+    /// where an entity is declared more than once, that plus the foreign
+    /// placement telling them apart — so a binding declaring each entity once
+    /// reads exactly as it always did.
+    id: String,
+}
+
 /// A complete wrapper: the exported function, as planned.
 ///
 /// One per declaration that exports a source function, plus one per handle
@@ -129,18 +155,16 @@ impl Refusal {
 struct Run<'a, T: Target> {
     flat: &'a Flat,
     target: &'a T,
+    /// What the binding asked for. A conversion is planned under one of these,
+    /// and the target is handed that output's choice with every question about
+    /// it.
+    outputs: &'a [Output<T::ConversionKey>],
     relations: Vec<Relation>,
     primitives: Vec<PrimitiveSpec<T::Payload>>,
     nodes: Vec<ValuePlan<T::Payload>>,
     /// Each node's conversion key, by [`NodeId`] — what a requirement made
     /// from a value is matched to a type declaration by.
     keys: Vec<T::ConversionKey>,
-    /// Which projection of a type a value has to cross as to require it: the
-    /// declaration, by the type's name and the node its own crossing into
-    /// Rust planned to. Recorded as soon as that node exists, before anything
-    /// later in the declaration can refuse it, so a value crossing the same
-    /// way finds the projection it needs whatever became of it.
-    represented: BTreeMap<(String, NodeId), Declaration>,
     cache: HashMap<NodeKey<T::ConversionKey>, NodeId>,
     resolving: std::collections::HashSet<ResolvingKey<T::ConversionKey>>,
     /// The relations offered for a type, registered the first time it is
@@ -151,15 +175,15 @@ struct Run<'a, T: Target> {
 }
 
 impl<'a, T: Target> Run<'a, T> {
-    fn new(flat: &'a Flat, target: &'a T) -> Self {
+    fn new(flat: &'a Flat, target: &'a T, outputs: &'a [Output<T::ConversionKey>]) -> Self {
         Run {
             flat,
             target,
+            outputs,
             relations: Vec::new(),
             primitives: Vec::new(),
             nodes: Vec::new(),
             keys: Vec::new(),
-            represented: BTreeMap::new(),
             cache: HashMap::new(),
             resolving: std::collections::HashSet::new(),
             offered: HashMap::new(),
@@ -238,6 +262,7 @@ impl<'a, T: Target> Run<'a, T> {
         let query = SelectionQuery {
             crossing: &crossing,
             position,
+            declared: &self.outputs[position.output.0].choice,
             candidates: &candidates,
         };
         let Selection {
@@ -625,39 +650,41 @@ fn same_member(left: &syn::Member, right: &syn::Member) -> bool {
 pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
-    declarations: Vec<Declaration>,
+    declarations: Vec<(Declaration, T::ConversionKey)>,
     source_module: syn::Path,
     declaring_crate: &str,
 ) -> Result<Generation<T::Payload>, EngineError> {
     check_declarations(&declarations, &flat)?;
-    let exposed: Vec<&Declaration> = declarations.iter().collect();
+    let exposed = outputs(target, declarations);
 
-    let mut run = Run::new(&flat, target);
-    let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
-    let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
-    let mut outcomes: BTreeMap<Declaration, Outcome> = BTreeMap::new();
+    let mut run = Run::new(&flat, target, &exposed);
+    let mut functions: Vec<(OutputId, FunctionPlan<T::Payload>)> = Vec::new();
+    let mut surfaces: Vec<(OutputId, SurfaceSpec<T::Payload>)> = Vec::new();
+    let mut outcomes: BTreeMap<OutputId, Outcome> = BTreeMap::new();
 
-    for &declaration in &exposed {
-        let root = crate::target::Position::root(declaration.clone());
+    for (index, output) in exposed.iter().enumerate() {
+        let id = OutputId(index);
+        let declaration = &output.declaration;
+        let root = crate::target::Position::root(id, declaration.clone());
         // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it. Each
         // planner is reached by its own variants and is given the captured item
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Declaration::Type { .. } => {
-                plan_type(&mut run, declaration).map_err(EngineError::Planning)?
-            }
+            Declaration::Type(_) => plan_type(&mut run, id, declaration, &output.choice)
+                .map_err(EngineError::Planning)?,
             // Whether the function was captured or is the binding's own makes
             // no difference here: the model holds both, and the writer reaches
             // each through its own origin. Nor does what the target shows the
             // call as — a `fun`, or a `val` read through it — which is the
             // target's choice under this one declaration.
-            Declaration::Function { name: ident, .. } => {
+            Declaration::Function(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
-                plan_function(&mut run, declaration, function).map_err(EngineError::Planning)?
+                plan_function(&mut run, id, declaration, &output.choice, function)
+                    .map_err(EngineError::Planning)?
             }
             // A constant computed on the foreign side has no value in Rust to
             // plan from; what it has is a foreign expression the target alone
@@ -676,7 +703,7 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            Declaration::Const { .. } => Err(Refusal::at(
+            Declaration::Const(_) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.not_implemented",
                     "the v2 engine has no const lowering yet",
@@ -701,44 +728,47 @@ pub fn generate<T: Target>(
         match planned {
             Ok(Emitted { function, surface }) => {
                 if let Some(function) = function {
-                    functions.push(function);
+                    functions.push((id, function));
                 }
-                surfaces.push(surface);
-                outcomes.insert(declaration.clone(), Outcome::Emitted);
+                surfaces.push((id, surface));
+                outcomes.insert(id, Outcome::Emitted);
             }
             Err(refusal) => {
                 // The path is where the walk actually stopped — the exported
                 // function, the parameter, the field — so the report says what
                 // to look at rather than only which declaration vanished.
                 outcomes.insert(
-                    declaration.clone(),
+                    id,
                     Outcome::Skipped(Skip {
                         capability: refusal.reason.capability,
                         explanation: refusal.reason.explanation,
-                        dependency_path: refusal.at.dependency_path(),
+                        dependency_path: refusal
+                            .at
+                            .dependency_path(&exposed[refusal.at.output.0].id),
                     }),
                 );
             }
         }
     }
 
-    // Which declaration a requirement resolves to. A target names a
-    // requirement by the value that needs it, because that is what the model
-    // told it about; matching the value to the declaration covering it is the
-    // engine's side of that, and with a type projected more than once the
-    // match is by conversion: the projection whose own crossing planned under
-    // the same key the value crosses by. A requirement by name alone resolves
-    // while the type has one projection, whatever its outcome.
-    let by_name: BTreeMap<String, Vec<&Declaration>> = exposed
+    // Which output a requirement resolves to. A target names a requirement by
+    // the value that needs it, because that is what the model told it about;
+    // matching the value to the output covering it is the engine's side of
+    // that, and with one type declared several times the match is by
+    // conversion: the output whose choice is the key the value crosses by,
+    // since that is the choice the type's own crossing was planned under. A
+    // requirement by name alone resolves while the type is declared once,
+    // whatever its outcome.
+    let by_name: BTreeMap<String, Vec<OutputId>> = exposed
         .iter()
-        .filter(|declaration| declaration.is_type())
-        .filter_map(|declaration| Some((declaration.entity_name()?, *declaration)))
-        .fold(BTreeMap::new(), |mut all, (name, declaration)| {
-            all.entry(name).or_default().push(declaration);
+        .enumerate()
+        .filter(|(_, output)| output.declaration.is_type())
+        .filter_map(|(index, output)| Some((output.declaration.entity_name()?, OutputId(index))))
+        .fold(BTreeMap::new(), |mut all, (name, id)| {
+            all.entry(name).or_default().push(id);
             all
         });
-    let key_of = |node: NodeId| &run.keys[node.0];
-    let resolve = |required: &crate::target::Requirement| -> Result<&Declaration, Skip> {
+    let resolve = |required: &crate::target::Requirement| -> Result<OutputId, Skip> {
         let name = required.type_name();
         let unrequested = || {
             Skip::direct(
@@ -747,25 +777,24 @@ pub fn generate<T: Target>(
                 required.to_string(),
             )
         };
+        let declared = by_name.get(name).map(Vec::as_slice).unwrap_or_default();
         match required.node() {
             Some(node) => {
-                let key = key_of(node);
-                // The projection this value crosses as, if it was planned: a
-                // skipped projection has no node, and a name with one
-                // projection covers the value however it crosses.
-                run.represented
+                let key = &run.keys[node.0];
+                declared
                     .iter()
-                    .find(|((n, represents), _)| n == name && key_of(*represents) == key)
-                    .map(|(_, declaration)| declaration)
-                    .or_else(|| match by_name.get(name).map(Vec::as_slice) {
-                        Some([only]) => Some(*only),
+                    .find(|id| exposed[id.0].choice == *key)
+                    .or(match declared {
+                        [only] => Some(only),
                         _ => None,
                     })
+                    .copied()
                     .ok_or_else(unrequested)
             }
-            None => match by_name.get(name).map(Vec::as_slice) {
-                Some([only]) => Ok(*only),
-                Some(several) => Err(Skip::direct(
+            None => match declared {
+                [only] => Ok(*only),
+                [] => Err(unrequested()),
+                several => Err(Skip::direct(
                     "unsupported.requirement.ambiguous",
                     format!(
                         "requires {required} by name, and this binding declares it {} ways",
@@ -773,7 +802,6 @@ pub fn generate<T: Target>(
                     ),
                     required.to_string(),
                 )),
-                None => Err(unrequested()),
             },
         }
     };
@@ -783,22 +811,22 @@ pub fn generate<T: Target>(
     // keeping its own path to the cause.
     loop {
         let mut changed = false;
-        for surface in &surfaces {
-            if !matches!(outcomes.get(&surface.declaration), Some(Outcome::Emitted)) {
+        for (id, surface) in &surfaces {
+            if !matches!(outcomes.get(id), Some(Outcome::Emitted)) {
                 continue;
             }
             for required in &surface.requires {
                 let cause = match resolve(required) {
-                    Ok(declaration) => match outcomes.get(declaration) {
+                    Ok(required) => match outcomes.get(&required) {
                         Some(Outcome::Skipped(skip)) => skip.clone(),
                         _ => continue,
                     },
                     Err(skip) => skip,
                 };
-                let mut path = vec![surface.declaration.to_string()];
+                let mut path = vec![exposed[id.0].id.clone()];
                 path.extend(cause.dependency_path.iter().cloned());
                 outcomes.insert(
-                    surface.declaration.clone(),
+                    *id,
                     Outcome::Skipped(Skip {
                         capability: cause.capability,
                         explanation: cause.explanation,
@@ -815,18 +843,19 @@ pub fn generate<T: Target>(
     }
 
     // Only what a retained output needs is published.
-    let emitted =
-        |declaration: &Declaration| matches!(outcomes.get(declaration), Some(Outcome::Emitted));
-    functions.retain(|function| emitted(&function.declaration));
-    surfaces.retain(|surface| emitted(&surface.declaration));
+    let emitted = |id: &OutputId| matches!(outcomes.get(id), Some(Outcome::Emitted));
+    functions.retain(|(id, _)| emitted(id));
+    surfaces.retain(|(id, _)| emitted(id));
 
     let mut entries: Vec<Entry> = exposed
         .iter()
-        .map(|declaration| Entry {
-            declaration: (*declaration).clone(),
-            described: target.describe(declaration),
+        .enumerate()
+        .map(|(index, output)| Entry {
+            id: output.id.clone(),
+            declaration: output.declaration.clone(),
+            described: output.described.clone(),
             outcome: outcomes
-                .get(*declaration)
+                .get(&OutputId(index))
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
@@ -863,7 +892,7 @@ pub fn generate<T: Target>(
             artifacts.push(artifact.clone());
         }
     };
-    for surface in &surfaces {
+    for (_, surface) in &surfaces {
         // Rust a target contributes for its own public declaration of an
         // entity — the `repr(C)` mirror of a struct — exists only where that
         // entity does, by the rule a wrapper follows. A declaration naming no
@@ -887,7 +916,7 @@ pub fn generate<T: Target>(
             keep(&artifact, &mut artifacts);
         }
     }
-    for function in &functions {
+    for (_, function) in &functions {
         for step in &function.instrs {
             if let Instr::Apply { primitive, .. } = &step.instr {
                 for artifact in &primitives[primitive.0].dependencies {
@@ -902,12 +931,64 @@ pub fn generate<T: Target>(
         }
     }
 
+    let functions: Vec<FunctionPlan<T::Payload>> =
+        functions.into_iter().map(|(_, plan)| plan).collect();
+    let surfaces: Vec<SurfaceSpec<T::Payload>> =
+        surfaces.into_iter().map(|(_, spec)| spec).collect();
     let reach = crate::emit::Reach::new(&flat, source_module);
     let rust = crate::emit::render(&flat, target, &reach, &artifacts, &primitives, &functions);
 
     Ok(Generation::new(
         flat, report, nodes, functions, surfaces, primitives, rust,
     ))
+}
+
+/// The binding's outputs, in the order it stated them, each with what the
+/// report calls it.
+///
+/// An entity declared once keeps the id it has always had — `fn:stamp_sum`.
+/// Declared several times, each output is that plus the foreign placement the
+/// target describes it by, which is what tells the rows apart; two outputs the
+/// target places identically fall back to their order in the list, so the ids
+/// are unique whatever a target answers.
+fn outputs<T: Target>(
+    target: &T,
+    declarations: Vec<(Declaration, T::ConversionKey)>,
+) -> Vec<Output<T::ConversionKey>> {
+    let mut described: Vec<(Declaration, T::ConversionKey, crate::target::Described)> =
+        declarations
+            .into_iter()
+            .map(|(declaration, choice)| {
+                let described = target.describe(&declaration, &choice);
+                (declaration, choice, described)
+            })
+            .collect();
+    let mut count: HashMap<&Declaration, usize> = HashMap::new();
+    for (declaration, _, _) in &described {
+        *count.entry(declaration).or_default() += 1;
+    }
+    let mut ids: Vec<String> = described
+        .iter()
+        .map(|(declaration, _, described)| match count[declaration] {
+            1 => declaration.to_string(),
+            _ => format!("{declaration}@{}", described.placement),
+        })
+        .collect();
+    for index in 0..ids.len() {
+        if ids[..index].contains(&ids[index]) {
+            ids[index] = format!("{}#{index}", ids[index]);
+        }
+    }
+    described
+        .drain(..)
+        .zip(ids)
+        .map(|((declaration, choice, described), id)| Output {
+            declaration,
+            choice,
+            described,
+            id,
+        })
+        .collect()
 }
 
 /// A requested output that survived planning.
@@ -921,10 +1002,12 @@ struct Emitted<P> {
 /// interface around them.
 fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
+    id: OutputId,
     declaration: &Declaration,
+    declared: &T::ConversionKey,
     function: &Function,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
-    let root = crate::target::Position::root(declaration.clone());
+    let root = crate::target::Position::root(id, declaration.clone());
 
     // The wrapper is a safe function, and the writer renders a plain call.
     // Wrapping an `unsafe fn` would need the wrapper to state the caller's
@@ -980,6 +1063,7 @@ fn plan_function<T: Target>(
     };
     let site = SiteDescriptor {
         declaration,
+        declared,
         function: Some(function),
     };
     let boundary = match run.target.boundary(&site, &values)? {
@@ -1009,6 +1093,7 @@ fn plan_function<T: Target>(
     let surface = match run.target.surface(
         &SurfaceRequest {
             declaration,
+            declared,
             item: SourceItem::Function(function),
         },
         &values,
@@ -1020,6 +1105,7 @@ fn plan_function<T: Target>(
 
     let plan = match assemble(
         run,
+        id,
         declaration,
         Body::Call(function),
         &inputs,
@@ -1048,6 +1134,7 @@ enum Body<'a, P> {
 /// for a release, one drop — the result out.
 fn assemble<T: Target>(
     run: &mut Run<'_, T>,
+    id: OutputId,
     declaration: &Declaration,
     action: Body<'_, T::Payload>,
     inputs: &[NodeId],
@@ -1058,7 +1145,7 @@ fn assemble<T: Target>(
     let refuse = |reason: Unsupported| {
         Ok(Err(Refusal::at(
             reason,
-            &crate::target::Position::root(declaration.clone()),
+            &crate::target::Position::root(id, declaration.clone()),
         )))
     };
     // A symbol reaches generated Rust as a function name, so a target that
@@ -1313,15 +1400,17 @@ fn assemble<T: Target>(
 /// plans the release as a wrapper under the type's own identity.
 fn plan_type<T: Target>(
     run: &mut Run<'_, T>,
+    id: OutputId,
     declaration: &Declaration,
+    declared: &T::ConversionKey,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
-    let root = crate::target::Position::root(declaration.clone());
+    let root = crate::target::Position::root(id, declaration.clone());
     // The model holds every declared type — a captured one, or one the
     // binding declared over a type the source never exported, which entered
     // the model as an extern — and the declarations were checked against it
     // before planning, so this lookup finds one.
-    let Declaration::Type { key, .. } = declaration else {
+    let Declaration::Type(key) = declaration else {
         return Err(PlanningError::InternalInvariant(format!(
             "`{declaration}` was routed to the type planner"
         )));
@@ -1381,11 +1470,6 @@ fn plan_type<T: Target>(
         Planned::Ready(id) => id,
         Planned::Unsupported(refusal) => return Ok(Err(refusal)),
     };
-    // This projection is what a value crossing the same way requires —
-    // recorded now, whatever the rest of the declaration decides.
-    run.represented
-        .insert((name.clone(), taken), declaration.clone());
-
     let mut given = None;
     let mut release_plan = None;
     if let Some(release) = run.nodes[taken.0].repr.release.clone() {
@@ -1408,6 +1492,7 @@ fn plan_type<T: Target>(
         };
         let site = SiteDescriptor {
             declaration,
+            declared,
             function: None,
         };
         let boundary = match run.target.boundary(&site, &values)? {
@@ -1436,6 +1521,7 @@ fn plan_type<T: Target>(
         }
         release_plan = match assemble(
             run,
+            id,
             declaration,
             Body::Release(Box::new(release)),
             &[taken],
@@ -1451,10 +1537,14 @@ fn plan_type<T: Target>(
         inputs: vec![&run.nodes[taken.0]],
         output: given.map(|id| &run.nodes[id.0]),
     };
-    let surface = match run
-        .target
-        .surface(&SurfaceRequest { declaration, item }, &values)?
-    {
+    let surface = match run.target.surface(
+        &SurfaceRequest {
+            declaration,
+            declared,
+            item,
+        },
+        &values,
+    )? {
         TargetAttempt::Ready(surface) => surface,
         TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
     };

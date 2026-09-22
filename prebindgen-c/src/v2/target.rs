@@ -67,22 +67,20 @@ pub struct CTarget {
     /// How every value of this source type crosses, wherever it appears, by
     /// the type's canonical key.
     types: BTreeMap<String, CChoice>,
-    /// What each requested output was declared as: what shapes its wrapper,
-    /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, CChoice>,
 }
 
 impl CTarget {
-    /// Record one declaration, and — for a type — how its values cross.
+    /// Record how a declared type's values cross.
     ///
-    /// One call rather than two: a declared type is one `data_type!` or
-    /// `ptr_type!` in the binding, so its public declaration and the crossing
-    /// of its values cannot disagree.
-    pub(crate) fn declare(&mut self, declaration: Declaration, choice: CChoice) {
-        if let Declaration::Type { key, .. } = &declaration {
+    /// What each output *is* travels with it: the engine holds the binding's
+    /// declarations as the pair of what was declared and what this target
+    /// recorded for it, and hands the choice back with every question about
+    /// that output. This table answers the other question — how a value of
+    /// the type crosses wherever else it turns up.
+    pub(crate) fn declare(&mut self, declaration: &Declaration, choice: &CChoice) {
+        if let Declaration::Type(key) = declaration {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
-        self.outputs.insert(declaration, choice);
     }
 
     /// How a value of this type crosses: what was declared for its type, else
@@ -100,16 +98,6 @@ impl CTarget {
             .get(ty.key().as_str())
             .cloned()
             .unwrap_or(CChoice::Scalar)
-    }
-
-    /// What the binding declared this output as.
-    ///
-    /// Asking the engine for an output the binding recorded nothing about is
-    /// the frontend contradicting itself, not a capability C is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&CChoice, PlanningError> {
-        self.outputs.get(declaration).ok_or_else(|| {
-            PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
-        })
     }
 }
 
@@ -139,14 +127,13 @@ impl Target for CTarget {
     type ConversionKey = CChoice;
     type Payload = CPayload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<CChoice>> {
+    fn select(&self, query: &SelectionQuery<'_, CChoice>) -> TargetSupport<Selection<CChoice>> {
         // A declared type's own crossing is planned as that declaration says,
         // not as the per-type default for values of it: the two agree for a
-        // type projected once, and differ by design for one projected twice.
-        let conversion = if query.position.is_declared_type() {
-            self.declared(&query.position.declaration)?.clone()
-        } else {
-            self.conversion(&query.crossing.ty)
+        // type declared once, and differ by design for one declared twice.
+        let conversion = match query.position.is_declared_type() {
+            true => query.declared.clone(),
+            false => self.conversion(&query.crossing.ty),
         };
         // An aggregate carries its members, so it wants the struct's fields; a
         // scalar is carried whole. A declarator v2 has no lowering for is
@@ -307,12 +294,12 @@ impl Target for CTarget {
 
     fn boundary(
         &self,
-        site: &SiteDescriptor<'_>,
+        site: &SiteDescriptor<'_, CChoice>,
         values: &ResolvedValues<'_, CPayload>,
     ) -> TargetSupport<BoundarySpec<CPayload>> {
         // A handle's release is a site with no source function, exported under
         // the destructor symbol its declaration named.
-        let symbol = match (self.declared(site.declaration)?, site.function) {
+        let symbol = match (site.declared, site.function) {
             (CChoice::Function { symbol }, Some(_)) => symbol,
             (CChoice::OpaquePtr { release, .. }, None) => release,
             (CChoice::Unimplemented { declarator, .. }, _) => {
@@ -378,10 +365,10 @@ impl Target for CTarget {
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>,
+        request: &SurfaceRequest<'_, CChoice>,
         values: &ResolvedValues<'_, CPayload>,
     ) -> TargetSupport<SurfaceSpec<CPayload>> {
-        let declared = self.declared(request.declaration)?;
+        let declared = request.declared;
         // An opaque handle is declared the same way whatever the item behind
         // it: an alias, or a struct whose fields C never sees.
         if let CChoice::OpaquePtr { c_name, .. } = declared {
@@ -516,24 +503,15 @@ impl Target for CTarget {
     }
 
     /// The declarator each declaration came from, and the C name it places —
-    /// read from the same storage generation reads, so the report cannot drift
-    /// from the code.
-    ///
-    /// An output with nothing recorded for it fails the run at
-    /// [`CTarget::declared`], so it reaches this only when its value planning
-    /// refused it first and no boundary or surface was ever asked for. It is
-    /// described as what it is rather than as the scalar default, so a report
-    /// cannot make a frontend defect look like an ordinary declaration.
-    fn describe(&self, declaration: &Declaration) -> Described {
-        match self.outputs.get(declaration) {
-            Some(CChoice::Scalar) => Described::new("scalar", ""),
-            Some(CChoice::DataStruct { c_name }) => Described::new("data_struct", c_name),
-            Some(CChoice::OpaquePtr { c_name, .. }) => Described::new("opaque_ptr", c_name),
-            Some(CChoice::Function { symbol }) => Described::new("function", symbol),
-            Some(CChoice::Unimplemented { declarator, c_name }) => {
-                Described::new(*declarator, c_name)
-            }
-            None => Described::new("undeclared", ""),
+    /// answered from the same choice generation is answered from, so the
+    /// report cannot drift from the code.
+    fn describe(&self, _declaration: &Declaration, declared: &CChoice) -> Described {
+        match declared {
+            CChoice::Scalar => Described::new("scalar", ""),
+            CChoice::DataStruct { c_name } => Described::new("data_struct", c_name),
+            CChoice::OpaquePtr { c_name, .. } => Described::new("opaque_ptr", c_name),
+            CChoice::Function { symbol } => Described::new("function", symbol),
+            CChoice::Unimplemented { declarator, c_name } => Described::new(*declarator, c_name),
         }
     }
 }

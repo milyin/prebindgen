@@ -26,7 +26,7 @@ impl Target for Nothing {
     type ConversionKey = ();
     type Payload = ();
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<()>> {
+    fn select(&self, query: &SelectionQuery<'_, ()>) -> TargetSupport<Selection<()>> {
         Ok(TargetAttempt::Unsupported(Unsupported::new(
             "unsupported.nothing.carrier",
             format!("`{}` is carried by no target here", query.crossing.ty.key()),
@@ -44,7 +44,7 @@ impl Target for Nothing {
 
     fn boundary(
         &self,
-        _: &SiteDescriptor<'_>,
+        _: &SiteDescriptor<'_, ()>,
         _: &ResolvedValues<'_, ()>,
     ) -> TargetSupport<BoundarySpec<()>> {
         unreachable!("nothing is selected")
@@ -52,7 +52,7 @@ impl Target for Nothing {
 
     fn surface(
         &self,
-        _: &SurfaceRequest<'_>,
+        _: &SurfaceRequest<'_, ()>,
         _: &ResolvedValues<'_, ()>,
     ) -> TargetSupport<SurfaceSpec<()>> {
         unreachable!("nothing is selected")
@@ -62,14 +62,14 @@ impl Target for Nothing {
         unreachable!("nothing is selected")
     }
 
-    fn describe(&self, _: &Declaration) -> Described {
+    fn describe(&self, _: &Declaration, _: &()) -> Described {
         Described::new("declared", "c_")
     }
 }
 
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
-    declared: Vec<Declaration>,
+    declared: Vec<(Declaration, ())>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -125,18 +125,21 @@ fn sources() -> FlatBuilder {
 
 /// A function, by name.
 fn captured_fn(name: &str) -> Declaration {
-    Declaration::function(syn::parse_str(name).expect("a test names an ident"))
+    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
 /// A type, by name.
 fn declared_type(name: &str) -> Declaration {
-    Declaration::declared_type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
 #[test]
 fn every_declaration_is_skipped_and_accounted_for() {
     let stated = Stated {
-        declared: vec![(captured_fn("handle_new")), (declared_type("Handle"))],
+        declared: vec![
+            ((captured_fn("handle_new")), ()),
+            ((declared_type("Handle")), ()),
+        ],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
@@ -150,7 +153,7 @@ fn every_declaration_is_skipped_and_accounted_for() {
     let ids: Vec<String> = report
         .declarations
         .iter()
-        .map(|entry| entry.declaration.to_string())
+        .map(|entry| entry.id().to_string())
         .collect();
     assert_eq!(ids, ["fn:handle_new", "type:Handle"]);
 }
@@ -158,7 +161,7 @@ fn every_declaration_is_skipped_and_accounted_for() {
 #[test]
 fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
-        declared: vec![(captured_fn("handle_neu"))],
+        declared: vec![((captured_fn("handle_neu")), ())],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a typo is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
@@ -170,7 +173,7 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![(Declaration::Callback("impl Fn(i64)".to_string()))],
+        declared: vec![((Declaration::Callback("impl Fn(i64)".to_string())), ())],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     assert_eq!(generation.report().counts().skipped, 1);
@@ -179,7 +182,10 @@ fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
 #[test]
 fn one_id_may_name_only_one_declaration() {
     let stated = Stated {
-        declared: vec![(captured_fn("handle_new")), (captured_fn("handle_new"))],
+        declared: vec![
+            ((captured_fn("handle_new")), ()),
+            ((captured_fn("handle_new")), ()),
+        ],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a repeat is refused");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
@@ -193,7 +199,10 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as
     // wrong as declaring a name nothing captured.
     let stated = Stated {
-        declared: vec![(Declaration::constant(syn::parse_str("handle_new").expect("an ident")))],
+        declared: vec![(
+            (Declaration::Const(syn::parse_str("handle_new").expect("an ident"))),
+            (),
+        )],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
@@ -211,9 +220,9 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
 fn skips_are_grouped_by_capability_code() {
     let stated = Stated {
         declared: vec![
-            (captured_fn("handle_new")),
-            (captured_fn("handle_value")),
-            (declared_type("Handle")),
+            ((captured_fn("handle_new")), ()),
+            ((captured_fn("handle_value")), ()),
+            ((declared_type("Handle")), ()),
         ],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -230,6 +239,7 @@ fn skips_are_grouped_by_capability_code() {
 #[test]
 fn an_entry_serializes_flat() {
     let entry = crate::report::Entry {
+        id: "fn:z_thing_describe".to_string(),
         declaration: captured_fn("z_thing_describe"),
         described: Described::new("constant_fun", "example.DESCRIBE"),
         outcome: Outcome::Emitted,

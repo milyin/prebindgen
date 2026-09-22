@@ -27,10 +27,11 @@ function exists and asking to export it are separate inputs.
 The request names the public declaration; the adapter's function settings stay
 with the adapter, under that same name. This sketch names the two positions
 whose values need [conversion](../../stages/04-select.md#select-conversion-relations): the first parameter and the return value.
-The block uses design notation, not exact current fields. Current
-`OutputRequest` contains a `Declaration` and nothing else — here
-`Declaration::Function(stamp_sum)`; the engine uses
-`Position { declaration, path }` rather than the proposed `SiteId` below.
+The block uses design notation, not exact current fields. The frontend hands
+the engine a `Declaration` — here `Declaration::Function(stamp_sum)` — paired
+with the choice it recorded for it; the engine uses
+`Position { output, declaration, path }` rather than the proposed `SiteId`
+below.
 
 ```text
 OutputRequest {

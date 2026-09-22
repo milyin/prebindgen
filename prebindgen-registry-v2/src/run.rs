@@ -133,7 +133,7 @@ impl<P> Generation<P> {
     }
 }
 
-/// Check declarations against the model before anything is planned.
+/// Check the binding's outputs against the model before anything is planned.
 ///
 /// A declaration is a statement of intent, so a declared item the source never
 /// captured is an error and not a capability question — the same rule v1 holds.
@@ -143,9 +143,19 @@ impl<P> Generation<P> {
 /// nullary function. Looking a function up among the constants reported a typo
 /// that was not there; looking it up in the whole namespace let a
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
-pub(crate) fn check_declarations(declared: &[Declaration], flat: &Flat) -> Result<(), EngineError> {
+///
+/// An output is the declaration *and* what the target recorded for it, so one
+/// entity declared twice is two outputs and is allowed; the same entity
+/// declared twice as the same thing is the binding saying one thing twice, and
+/// is refused — the two would be one foreign declaration emitted from two
+/// plans.
+pub(crate) fn check_declarations<K: Clone + Eq + std::hash::Hash>(
+    declared: &[(Declaration, K)],
+    flat: &Flat,
+) -> Result<(), EngineError> {
     let missing: Vec<_> = declared
         .iter()
+        .map(|(declaration, _)| declaration)
         .filter(|declaration| declaration.missing_from(flat))
         .cloned()
         .collect();
@@ -153,13 +163,11 @@ pub(crate) fn check_declarations(declared: &[Declaration], flat: &Flat) -> Resul
         return Err(EngineError::DeclaredNotFound { entries: missing });
     }
 
-    // One id, one declaration: the report is read by id, and a repeat would leave
-    // one of the two entries unaccounted for.
     let mut seen = std::collections::HashSet::new();
     let mut repeated: Vec<_> = declared
         .iter()
-        .filter(|declaration| !seen.insert(*declaration))
-        .cloned()
+        .filter(|output| !seen.insert(*output))
+        .map(|(declaration, _)| declaration.clone())
         .collect();
     repeated.sort();
     repeated.dedup();

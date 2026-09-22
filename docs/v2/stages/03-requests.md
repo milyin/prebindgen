@@ -130,10 +130,10 @@ any C or JNI configuration option, and has no table of them to keep in step
 with the frontend's.
 
 This stage also fixes the names by which everything is addressed afterwards. A
-**declaration** is one requested output, identified by a `DeclarationId` —
+**declaration** is one requested output, identified by an `OutputId` standing
+for the declaration and the [choice](#what-a-choice-records) recorded with it —
 exposing the same Rust function at two Kotlin placements makes two of them, with
-separate [outcomes](07-retain.md#retain-supported-output), told apart by a
-projection label the frontend supplies. A **site** is a position inside such a declaration:
+separate [outcomes](07-retain.md#retain-supported-output). A **site** is a position inside such a declaration:
 parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
 `Stamp`, or the single argument of a `stamp_from_millis` constructor. Sites and
@@ -323,15 +323,14 @@ The registry separates what should be generated from how values should be conver
 
 ```rust
 // What the frontend hands the registry, beside the model and the target.
-declarations: Vec<Declaration>,   // Expose each of these.
-source_module: Path,              // How generated Rust reaches the source items.
-declaring_crate: &str,            // The crate generating, for the report.
+declarations: Vec<(Declaration, CChoice)>, // Expose each of these, as this.
+source_module: Path,                       // How generated Rust reaches the source items.
+declaring_crate: &str,                     // The crate generating, for the report.
 
 // What the frontend keeps and answers the registry's questions from —
 // `CbindgenBuilder` and the `CTarget` it builds, schematically.
 struct FrontendStorage {
-    conversion_rules: ConversionRules,     // Per-type, per-position and default choices.
-    declared: Map<DeclarationId, CChoice>, // What each requested output is.
+    conversion_rules: ConversionRules, // Per-type, per-position and default choices.
     // …plus the naming hooks, which are closures and go nowhere.
 }
 ```
@@ -362,13 +361,13 @@ The engine's one entry point (signature only):
 pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
-    declarations: Vec<Declaration>,
+    declarations: Vec<(Declaration, T::ConversionKey)>,
     source_module: syn::Path,
     declaring_crate: &str,
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [conversion-key and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target — which is also where every choice the binding recorded lives — consumes the declarations, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [conversion-key and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target — which answers about values of a type wherever they turn up — consumes the declarations, each carrying what the binding recorded it as, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
@@ -437,10 +436,11 @@ Names ending in `Id` identify particular records, but they do not all have the
 same lifetime or construction rules. `RelationId` and `NodeId` identify entries
 used within a generation run; a **conversion key** plays the same role for the
 settings a target applied, except that the target mints it and the registry
-only compares it. A `Declaration` is instead its
-own identity — a stable value naming the kind the target gets and the Rust
-item, printed as `fn:stamp_sum`; reports and tests can use it across runs.
-(`DeclarationId` below is this chapter's name for that role.) The proposed `SiteId`
+only compares it. A `Declaration` is instead a
+stable value naming the kind the target gets and the Rust item, printed as
+`fn:stamp_sum`; an `OutputId` stands for one of those together with the choice
+recorded with it, and is what the run is keyed by. (`DeclarationId` below is
+this chapter's name for that role.) The proposed `SiteId`
 and `PartId` describe positions within a declaration or relation. Keeping these
 identities separate prevents a field position from being confused with a public
 function or a reusable conversion.
@@ -469,15 +469,15 @@ declaration covering it. Requiring a type does not export it: a type nothing
 requested is not emitted because something needed it, and whatever needed it is
 skipped instead.
 
-A `DeclarationId` is a `Declaration`: one value that is its own identity and
-says both which of the kinds the target gets and which entity, if any, the
-engine plans it from:
+An `OutputId` stands for one entry of the list the frontend hands over: a
+`Declaration` and the choice recorded with it. The `Declaration` says which of
+the kinds the target gets and which entity, if any, the engine plans it from:
 
 ```rust
 enum Declaration {
-    Function { name: Ident, projection: Option<String> },  // exported through a wrapper that calls it
-    Const    { name: Ident, projection: Option<String> },  // exposed as a foreign constant
-    Type     { key: TypeKey, projection: Option<String> }, // given a foreign representation
+    Function(Ident),        // exported through a wrapper that calls it
+    Const(Ident),           // exposed as a foreign constant
+    Type(TypeKey),          // given a foreign representation
     Conversion(TypeKey),    // a wire mapping the binding defines for a type
     Callback(String),       // a callback signature the binding exports
     ComputedConst(String),  // a constant the binding computes on the foreign side
@@ -495,25 +495,24 @@ and a computed constant name no entity at all. `generate` matches on the
 whole, so each planner is reached by the variants it can plan and is handed
 the entity they name.
 
-One entity may be projected more than once — `stamp_sum` as a Kotlin `fun` in
+One entity may be declared more than once — `stamp_sum` as a Kotlin `fun` in
 one package and as the `val` a `constant!` reads through it, `Stamp` as a data
-class and as a handle. Each projection is a declaration of its own, with its
-own choices, outcome and report row, and what tells them apart is the
-**projection**: a label the frontend supplies in the target's own terms — a
-placement's fully qualified name, a symbol — which the engine compares and
-never reads. It prints after an `@`, `fn:stamp_sum@example.Totals.SUM`. A
-frontend labels an entity's projections only when there is more than one, so
-the common single projection is `fn:stamp_sum` as it always was; two
-declarations with the same entity and label are one declaration said twice,
-and refused.
+class and as a handle. Each is an output of its own, with its own choice,
+outcome and report row, and what tells them apart is that choice: the engine
+compares choices for equality and never reads one. The declaration is
+unchanged by any of this, which is why a binding declaring each entity once
+has exactly the ids it always had; declaring one entity twice as the same
+thing is the binding saying one thing twice, and is refused. The report tells
+two rows of one entity apart by the foreign placement the target describes
+each by — `fn:stamp_sum@example.Totals.SUM`.
 
-Two projections of one type each plan as declared. A target keeps a default
-for values *of* a type, and that default is one of the projections; the other
-is found under its own declaration, which is why a type's own crossing —
-the root [position](#a-values-position-in-an-exported-function) of a type
-declaration — is answered from the declaration rather than from the per-type
-default. Which projection a *value* requires is then settled at
-[retention](07-retain.md#retain-supported-output).
+Two declarations of one type each plan as declared. A target keeps a default
+for values *of* a type, and that default is one of the two; the other would
+otherwise be planned as that one, which is why a type's own crossing — the
+root [position](#a-values-position-in-an-exported-function) of a type
+declaration — is answered from the choice recorded with the declaration rather
+than from the per-type default. Which of them a *value* requires is then
+settled at [retention](07-retain.md#retain-supported-output).
 
 ### A value's position in an exported function
 

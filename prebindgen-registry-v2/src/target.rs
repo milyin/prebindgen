@@ -707,13 +707,13 @@ pub struct BoundarySpec<P> {
 /// model's answer about a value, not the binding's declaration of a type, and
 /// the engine is the side that knows which declaration covers which type.
 ///
-/// Which declaration that is depends on how the value crosses. A type may be
-/// projected more than once — `Stamp` as a data class and as a handle — and a
+/// Which declaration that is depends on how the value crosses. One type may be
+/// declared more than once — `Stamp` as a data class and as a handle — and a
 /// value of it crosses one of those ways, chosen by the target at
 /// [`Target::select`]. A requirement made from a value therefore carries the
-/// value's conversion, and resolves to the projection planned under the same
-/// one; a requirement made from a name alone resolves only while the type has
-/// one projection.
+/// value's conversion, and resolves to the declaration recorded under the same
+/// one; a requirement made from a name alone resolves only while the type is
+/// declared once.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Requirement {
     type_name: String,
@@ -736,8 +736,8 @@ impl Requirement {
     }
 
     /// The same for a type the target knows by name without holding a value
-    /// of it. Resolves only while the type has one projection: with several,
-    /// a name says nothing about which.
+    /// of it. Resolves only while the type is declared once: with several
+    /// declarations of it, a name says nothing about which.
     pub fn type_named(name: impl Into<String>) -> Self {
         Requirement {
             type_name: name.into(),
@@ -783,15 +783,20 @@ pub struct SurfaceSpec<P> {
 /// what a diagnostic prints.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position {
-    /// The requested output this conversion is reached from.
+    /// The output this conversion is reached from.
+    pub output: crate::plan::OutputId,
+    /// What that output declares. Two outputs may declare the same entity
+    /// under different choices, so this is what the target looks a per-site
+    /// choice up by and [`Self::output`] is which of them is being planned.
     pub declaration: Declaration,
     /// Root to here: `param 0`, then `field secs`.
     pub path: Vec<String>,
 }
 
 impl Position {
-    pub fn root(declaration: Declaration) -> Self {
+    pub fn root(output: crate::plan::OutputId, declaration: Declaration) -> Self {
         Position {
+            output,
             declaration,
             path: Vec::new(),
         }
@@ -801,6 +806,7 @@ impl Position {
         let mut path = self.path.clone();
         path.push(step.into());
         Position {
+            output: self.output,
             declaration: self.declaration.clone(),
             path,
         }
@@ -810,18 +816,19 @@ impl Position {
     /// declaration itself represents, into Rust at its root and out of Rust
     /// beside it — rather than a value somewhere inside a declaration.
     ///
-    /// A target answers such a position with the declaration's own choice,
-    /// which is what lets two projections of one type each be planned as
+    /// A target answers such a position with [`SelectionQuery::declared`],
+    /// which is what lets two declarations of one type each be planned as
     /// declared: the per-type default a target keeps for values *of* the type
-    /// is one of them, and the other has to be found under its declaration.
+    /// is one of them, and the other would otherwise be planned as that one.
     pub fn is_declared_type(&self) -> bool {
         self.declaration.is_type()
             && (self.path.is_empty() || self.path.as_slice() == ["out_of_rust"])
     }
 
-    /// This position as a report's dependency path.
-    pub fn dependency_path(&self) -> Vec<String> {
-        std::iter::once(self.declaration.to_string())
+    /// This position as a report's dependency path, under the report's own
+    /// id for the output it is rooted at.
+    pub(crate) fn dependency_path(&self, id: &str) -> Vec<String> {
+        std::iter::once(id.to_string())
             .chain(self.path.iter().cloned())
             .collect()
     }
@@ -834,9 +841,13 @@ impl Position {
 /// target's own lookup, over its own storage, from the type in
 /// [`Crossing::ty`] and the [`Position`] — which is how a choice recorded for
 /// one parameter of one function differs from the type's default.
-pub struct SelectionQuery<'a> {
+pub struct SelectionQuery<'a, K> {
     pub crossing: &'a Crossing,
     pub position: &'a Position,
+    /// What the binding recorded for the output this conversion is reached
+    /// from — the answer for the output's own crossing, which
+    /// [`Position::is_declared_type`] identifies.
+    pub declared: &'a K,
     /// The relations registered for this type: the implicit one, plus any the
     /// configuration declared. A target picks one; it does not invent one.
     ///
@@ -947,12 +958,13 @@ impl<P> ResolvedValues<'_, P> {
 /// Named after the specification's *site*, a value's position in an exported
 /// function: the boundary places each such position on a wrapper parameter or
 /// the return, and this identifies the function the positions belong to.
-pub struct SiteDescriptor<'a> {
+pub struct SiteDescriptor<'a, K> {
     /// The export this wrapper is for. For a release, the handle type's own
-    /// declaration — and what the target looks its configuration for this
-    /// wrapper up by. The exported symbol is not spelled here; the frontend
-    /// settled it when it recorded the declaration.
+    /// declaration.
     pub declaration: &'a Declaration,
+    /// What the binding recorded for it: the exported symbol above all. The
+    /// declaration says which entity is exported, and this says as what.
+    pub declared: &'a K,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
     /// The target reads its parameter *names*: a wrapper parameter keeps its
@@ -965,15 +977,15 @@ pub struct SiteDescriptor<'a> {
 
 /// What `surface` is given: the requested public declaration.
 ///
-/// [`Self::declaration`] is what the target looks its own configuration for
-/// this output up by — which class or C name it was declared under, which
-/// declarator it came from.
-pub struct SurfaceRequest<'a> {
+/// [`Self::declared`] is what the binding recorded for this output — which
+/// class or C name it was declared under, which declarator it came from.
+pub struct SurfaceRequest<'a, K> {
     pub declaration: &'a Declaration,
+    pub declared: &'a K,
     pub item: SourceItem<'a>,
 }
 
-impl SurfaceRequest<'_> {
+impl<K> SurfaceRequest<'_, K> {
     /// The `#[cfg]` conditions the captured item behind this request was
     /// written under, spelled as the source wrote them — empty in the ordinary
     /// case.
@@ -1152,7 +1164,10 @@ pub trait Target {
     /// This is the one call that sees a [`Position`], and so the only place a
     /// per-site choice can take effect: it does so by coming back as a
     /// different [`Selection::conversion`].
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<Self::ConversionKey>>;
+    fn select(
+        &self,
+        query: &SelectionQuery<'_, Self::ConversionKey>,
+    ) -> TargetSupport<Selection<Self::ConversionKey>>;
 
     /// Describe what carries this value and how its parts are accessed, for
     /// the conversion [`Target::select`] named.
@@ -1170,7 +1185,7 @@ pub trait Target {
     /// adapter reads from its own storage under [`SiteDescriptor::declaration`].
     fn boundary(
         &self,
-        site: &SiteDescriptor<'_>,
+        site: &SiteDescriptor<'_, Self::ConversionKey>,
         values: &ResolvedValues<'_, Self::Payload>,
     ) -> TargetSupport<BoundarySpec<Self::Payload>>;
 
@@ -1178,7 +1193,7 @@ pub trait Target {
     /// binding recorded under [`SurfaceRequest::declaration`].
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>,
+        request: &SurfaceRequest<'_, Self::ConversionKey>,
         values: &ResolvedValues<'_, Self::Payload>,
     ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
 
@@ -1192,12 +1207,12 @@ pub trait Target {
     /// Say, for the report, what this declaration is: the adapter's own
     /// declarator word and where the thing lands in the foreign language.
     ///
-    /// Read from the same storage [`Target::boundary`] and [`Target::surface`]
-    /// read, under the same [`Declaration`], so the report cannot say one
-    /// thing and the generated code another. Asked of every requested output,
-    /// including one that was skipped — the report says what a declaration was
-    /// *for*, not only what became of it.
-    fn describe(&self, declaration: &Declaration) -> Described;
+    /// Answered from the same `declared` choice [`Target::boundary`] and
+    /// [`Target::surface`] are given, so the report cannot say one thing and
+    /// the generated code another. Asked of every requested output, including
+    /// one that was skipped — the report says what a declaration was *for*,
+    /// not only what became of it.
+    fn describe(&self, declaration: &Declaration, declared: &Self::ConversionKey) -> Described;
 }
 
 /// How a report names one declaration on the foreign side — see

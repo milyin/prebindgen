@@ -105,22 +105,35 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         classes: std::collections::BTreeMap<String, (String, bool)>,
-    ) -> (JniTarget, Vec<Declaration>) {
+    ) -> (JniTarget, Vec<(Declaration, JniChoice)>) {
         let mut target = JniTarget::new(classes);
         let mut declarations = Vec::new();
+        // Every wrapper hangs off one harness object, so its native methods
+        // share a namespace: two declarations naming the same one would be two
+        // definitions of one `Java_…` symbol, which the generated code cannot
+        // compile. The binding is what decides the names, so it is told here.
+        let mut natives: std::collections::HashMap<String, Declaration> =
+            std::collections::HashMap::new();
         let mut declare = |declaration: Declaration, choice: JniChoice| {
-            target.declare(declaration.clone(), choice);
-            declarations.push(declaration);
+            if let Some(native) = choice.native() {
+                if let Some(taken) = natives.insert(native.to_string(), declaration.clone()) {
+                    panic!(
+                        "`{taken}` and `{declaration}` would both be the native method \
+                         `{native}` on the JNI harness; give one of them another Kotlin name"
+                    );
+                }
+            }
+            target.declare(&declaration, &choice);
+            declarations.push((declaration, choice));
         };
 
         // A function is declared wherever it is placed — as a class member, as
         // a package function, as the `val` a `constant!(X).fun(..)` reads
         // through — and one function may be placed more than once. Each
-        // placement is a projection of its own, with its own choice and its
-        // own report row; when there are several, each is labelled with its
-        // Kotlin placement, so the ids stay apart. A binding-local fn —
-        // `fun!(crate::x).sig(..)` — is an entity in the model and is declared
-        // the same way.
+        // placement is declared and accounted for on its own, and each needs
+        // its own native method, because the harness has one namespace: the
+        // name a single placement takes is the Rust identifier's, as v1 names
+        // it, and a further placement is named after where it is placed.
         let placements: std::collections::HashMap<&syn::Ident, usize> = self
             .class_members
             .values()
@@ -137,13 +150,8 @@ impl Declarations {
                 *count.entry(ident).or_default() += 1;
                 count
             });
-        let fun_declaration = |ident: &syn::Ident, placement: &str| {
-            let declaration = Declaration::function(ident.clone());
-            match placements.get(ident) {
-                Some(several) if *several > 1 => declaration.projected(placement),
-                _ => declaration,
-            }
-        };
+        let placed_more_than_once =
+            |ident: &syn::Ident| placements.get(ident).is_some_and(|n| *n > 1);
 
         // Declared classes. A data class is the one representation v2 lowers;
         // the per-type entry makes every value of the type cross that way,
@@ -155,7 +163,7 @@ impl Declarations {
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
             declare(
-                Declaration::declared_type(key.clone()),
+                Declaration::Type(key.clone()),
                 match config.kind {
                     crate::jni::DeclaredKind::Data => JniChoice::DataClass {
                         class: placement.clone(),
@@ -181,7 +189,7 @@ impl Declarations {
             for member in self.class_members.get(key).into_iter().flatten() {
                 let placed = format!("{placement}.{}", self.effective_method_name(key, member));
                 declare(
-                    fun_declaration(&member.rust_ident, &placed),
+                    Declaration::Function(member.rust_ident.clone()),
                     JniChoice::unimplemented(member_representation(member), placed),
                 );
             }
@@ -201,16 +209,23 @@ impl Declarations {
                 // The native method is named from the Rust identifier, through
                 // the method-name hook, as v1 names it — never from the public
                 // function's `.name()`: two packages may each export a `value`,
-                // and the harness has one namespace.
-                let native = self
-                    .mangle_jni_method(&crate::util::snake_to_camel(&entry.rust_ident.to_string()));
+                // and the harness has one namespace. A function placed more
+                // than once is the exception: each placement is a wrapper of
+                // its own, so each is named after where it is placed, which is
+                // what tells the placements apart.
+                let native_name = match placed_more_than_once(&entry.rust_ident) {
+                    true if subpackage.is_empty() => method.clone(),
+                    true => format!("{}_{method}", subpackage.replace('.', "_")),
+                    false => entry.rust_ident.to_string(),
+                };
+                let native = self.mangle_jni_method(&crate::util::snake_to_camel(&native_name));
                 // A function under a setting v2 does not honour is still a
                 // `fun` in the report; the setting is the capability missing.
                 // It is refused rather than emitted with the setting dropped:
                 // a lookup that fell back to the default here would generate
                 // an interface the binding did not ask for.
                 declare(
-                    fun_declaration(&entry.rust_ident, &placed(entry)),
+                    Declaration::Function(entry.rust_ident.clone()),
                     match self.unimplemented_setting(flat, &entry.rust_ident) {
                         Some(setting) => JniChoice::Unimplemented {
                             declarator: "fun",
@@ -226,11 +241,20 @@ impl Declarations {
                     },
                 );
             }
-            // A `constant!(X)` names the `#[prebindgen]` const it reads.
+            // A `constant!(X)` names the `#[prebindgen]` const it reads. The
+            // Kotlin `val` keeps the const's own name — it is not a function
+            // and takes neither the camel-casing nor the function-name hook.
             for entry in &config.constants {
+                let placed = format!(
+                    "{package}.{}",
+                    entry
+                        .kotlin_name_override
+                        .clone()
+                        .unwrap_or_else(|| entry.rust_ident.to_string())
+                );
                 declare(
-                    Declaration::constant(entry.rust_ident.clone()),
-                    JniChoice::unimplemented("constant", placed(entry)),
+                    Declaration::Const(entry.rust_ident.clone()),
+                    JniChoice::unimplemented("constant", placed),
                 );
             }
             // A `constant!(X).fun(..)` is a Kotlin `val` read through a nullary
@@ -238,7 +262,7 @@ impl Declarations {
             // what this target chooses to show the call as.
             for entry in &config.constant_functions {
                 declare(
-                    fun_declaration(&entry.rust_ident, &placed(entry)),
+                    Declaration::Function(entry.rust_ident.clone()),
                     JniChoice::unimplemented("constant_fun", placed(entry)),
                 );
             }

@@ -76,6 +76,15 @@ pub enum JniChoice {
 }
 
 impl JniChoice {
+    /// The native method on the harness this choice names, if it names one.
+    /// Two choices naming the same one are two definitions of one symbol.
+    pub(crate) fn native(&self) -> Option<&str> {
+        match self {
+            JniChoice::PtrClass { native, .. } | JniChoice::Function { native, .. } => Some(native),
+            _ => None,
+        }
+    }
+
     /// A declarator v2 does not lower: the capability missing is the
     /// declarator itself.
     pub(crate) fn unimplemented(declarator: &'static str, placement: String) -> Self {
@@ -175,9 +184,6 @@ pub struct JniTarget {
     /// How every value of this source type crosses, wherever it appears, by
     /// the type's canonical key.
     types: BTreeMap<String, JniChoice>,
-    /// What each requested output was declared as: what shapes its wrapper,
-    /// its public declaration, and its report line.
-    outputs: BTreeMap<Declaration, JniChoice>,
 }
 
 impl JniTarget {
@@ -185,20 +191,20 @@ impl JniTarget {
         JniTarget {
             classes,
             types: BTreeMap::new(),
-            outputs: BTreeMap::new(),
         }
     }
 
-    /// Record one declaration, and — for a type — how its values cross.
+    /// Record how a declared type's values cross.
     ///
-    /// One call rather than two: a declared type is one `data_class!` or
-    /// `ptr_class!` in the binding, so its public declaration and the crossing
-    /// of its values cannot disagree.
-    pub(crate) fn declare(&mut self, declaration: Declaration, choice: JniChoice) {
-        if let Declaration::Type { key, .. } = &declaration {
+    /// What each output *is* travels with it: the engine holds the binding's
+    /// declarations as the pair of what was declared and what this target
+    /// recorded for it, and hands the choice back with every question about
+    /// that output. This table answers the other question — how a value of
+    /// the type crosses wherever else it turns up.
+    pub(crate) fn declare(&mut self, declaration: &Declaration, choice: &JniChoice) {
+        if let Declaration::Type(key) = declaration {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
-        self.outputs.insert(declaration, choice);
     }
 
     /// How a value of this type crosses: what was declared for its type, else
@@ -219,16 +225,6 @@ impl JniTarget {
             .get(ty.key().as_str())
             .cloned()
             .unwrap_or(JniChoice::Scalar)
-    }
-
-    /// What the binding declared this output as.
-    ///
-    /// Asking the engine for an output the binding recorded nothing about is
-    /// the frontend contradicting itself, not a capability JNI is missing.
-    fn declared(&self, declaration: &Declaration) -> Result<&JniChoice, PlanningError> {
-        self.outputs.get(declaration).ok_or_else(|| {
-            PlanningError::InvalidInput(format!("`{declaration}` was requested and never declared"))
-        })
     }
 
     /// The Kotlin spelling of a value: the class its type was declared as, or
@@ -337,14 +333,13 @@ impl Target for JniTarget {
     type ConversionKey = JniChoice;
     type Payload = JniPayload;
 
-    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<JniChoice>> {
+    fn select(&self, query: &SelectionQuery<'_, JniChoice>) -> TargetSupport<Selection<JniChoice>> {
         // A declared type's own crossing is planned as that declaration says,
         // not as the per-type default for values of it: the two agree for a
-        // type projected once, and differ by design for one projected twice.
-        let conversion = if query.position.is_declared_type() {
-            self.declared(&query.position.declaration)?.clone()
-        } else {
-            self.conversion(&query.crossing.ty)
+        // type declared once, and differ by design for one declared twice.
+        let conversion = match query.position.is_declared_type() {
+            true => query.declared.clone(),
+            false => self.conversion(&query.crossing.ty),
         };
         // A declarator v2 has no lowering for is refused here, before anything
         // under it is planned — never quietly crossed as the scalar default.
@@ -533,12 +528,12 @@ impl Target for JniTarget {
 
     fn boundary(
         &self,
-        site: &SiteDescriptor<'_>,
+        site: &SiteDescriptor<'_, JniChoice>,
         values: &ResolvedValues<'_, JniPayload>,
     ) -> TargetSupport<BoundarySpec<JniPayload>> {
         // A handle's release is a site with no source function, placed where
         // its declaration said.
-        let symbol = match (self.declared(site.declaration)?, site.function) {
+        let symbol = match (site.declared, site.function) {
             (JniChoice::Function { symbol, .. }, Some(_)) => symbol,
             (JniChoice::PtrClass { symbol, .. }, None) => symbol,
             // A class member reaches here when every value it takes has a
@@ -679,10 +674,10 @@ impl Target for JniTarget {
 
     fn surface(
         &self,
-        request: &SurfaceRequest<'_>,
+        request: &SurfaceRequest<'_, JniChoice>,
         values: &ResolvedValues<'_, JniPayload>,
     ) -> TargetSupport<SurfaceSpec<JniPayload>> {
-        let declared = self.declared(request.declaration)?;
+        let declared = request.declared;
         // A handle class is declared the same way whatever the item behind it:
         // an alias, or a struct whose fields the JVM never sees.
         if let JniChoice::PtrClass { class, native, .. } = declared {
@@ -869,29 +864,21 @@ impl Target for JniTarget {
     }
 
     /// The declarator each declaration came from, and the Kotlin name it
-    /// places — read from the same storage generation reads, so the report
-    /// cannot drift from the code.
-    ///
-    /// An output with nothing recorded for it fails the run at
-    /// [`JniTarget::declared`], so it reaches this only when its value
-    /// planning refused it first and no boundary or surface was ever asked
-    /// for. It is described as what it is rather than as the scalar default,
-    /// so a report cannot make a frontend defect look like an ordinary
-    /// declaration.
-    fn describe(&self, declaration: &Declaration) -> Described {
-        match self.outputs.get(declaration) {
-            Some(JniChoice::Scalar) => Described::new("scalar", ""),
-            Some(JniChoice::DataClass { class }) => Described::new("data_class", class),
-            Some(JniChoice::PtrClass { class, .. }) => Described::new("ptr_class", class),
-            Some(JniChoice::Function {
+    /// places — answered from the same choice generation is answered from, so
+    /// the report cannot drift from the code.
+    fn describe(&self, _declaration: &Declaration, declared: &JniChoice) -> Described {
+        match declared {
+            JniChoice::Scalar => Described::new("scalar", ""),
+            JniChoice::DataClass { class } => Described::new("data_class", class),
+            JniChoice::PtrClass { class, .. } => Described::new("ptr_class", class),
+            JniChoice::Function {
                 package, method, ..
-            }) => Described::new("fun", format!("{package}.{method}")),
-            Some(JniChoice::Unimplemented {
+            } => Described::new("fun", format!("{package}.{method}")),
+            JniChoice::Unimplemented {
                 declarator,
                 placement,
                 ..
-            }) => Described::new(*declarator, placement),
-            None => Described::new("undeclared", ""),
+            } => Described::new(*declarator, placement),
         }
     }
 }

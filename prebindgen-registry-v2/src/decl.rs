@@ -1,10 +1,11 @@
 //! What a binding declared, in terms neither language owns.
 //!
 //! A frontend turns its own declaration storage into these — one [`Declaration`]
-//! per thing the user asked for, in the list it hands [`generate`](crate::generate).
-//! The declaration is what the report accounts for, and what the target looks
-//! its own configuration up by — the declaration carries none: the foreign
-//! name and the declarator word the report prints come from that lookup.
+//! per thing the user asked for, each paired with what the target recorded it
+//! as, in the list it hands [`generate`](crate::generate). The declaration
+//! says which entity, in the source's own words; the choice beside it says
+//! what the binding wants made of it, and the engine hands that choice back
+//! with every question it asks about the output.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
@@ -39,50 +40,37 @@ use serde::Serialize;
 /// own variants and is handed the entity they name, rather than a kind to
 /// decode and a name to look up.
 ///
-/// It is also the declaration's identity — what an outcome is keyed by, what a
-/// [`Position`](crate::target::Position) is rooted at, what a target's
-/// [`Requirement`](crate::target::Requirement) resolves to. Stable across runs
-/// and across pipelines, so a report, a build script and a capability-selected
-/// test section can all name the same declaration: it is what the *source*
-/// calls the thing, not what the target does, and a rename on the foreign side
-/// must not silently retire a test's requirement. `<kind>:<name>` —
-/// `type:Stamp`, `fn:stamp_sum` — is how it prints and how the report writes
-/// it, and that spelling is a rendering: nothing reads a declaration back out
-/// of it. Declarations order as they print, so a report sorted by declaration
-/// reads in id order.
+/// It is what the *source* calls the thing, not what the target does, and it
+/// is stable across runs and across pipelines, so a report, a build script and
+/// a capability-selected test section can all name the same declaration: a
+/// rename on the foreign side must not silently retire a test's requirement.
+/// `<kind>:<name>` — `type:Stamp`, `fn:stamp_sum` — is how it prints and how
+/// the report writes it, and that spelling is a rendering: nothing reads a
+/// declaration back out of it.
 ///
-/// # One entity, several projections
+/// # One entity, several declarations
 ///
 /// A binding may expose one entity more than once — `stamp_sum` as a Kotlin
 /// `fun` in one package and as a `val` read through it, `Stamp` as a data
-/// class and as a handle. Each is its own declaration, with its own choices,
-/// outcome and report row, and what tells them apart is the **projection**:
-/// a label the frontend supplies, in the target's own terms (a placement's
-/// fully qualified name, a symbol), which the engine compares and never
-/// reads. It prints after an `@`: `fn:stamp_sum@io.zenoh.jni.Other.stampSum`.
-/// A frontend labels an entity's projections only when there is more than
-/// one, so the common single projection is `fn:stamp_sum` as it always was,
-/// and two declarations with the same entity and label are a duplicate.
+/// class and as a handle. What tells those apart is not the declaration but
+/// what the target recorded beside it: an [`OutputId`](crate::plan::OutputId)
+/// stands for the pair, and that is what an outcome is keyed by, what a
+/// [`Position`](crate::target::Position) is rooted at, and what a target's
+/// [`Requirement`](crate::target::Requirement) resolves to. The report keeps
+/// one row per pair and tells them apart by the foreign placement — see
+/// [`Entry::id`](crate::report::Entry::id) — so an entity declared once reads
+/// exactly as it always did.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     /// A function, exported through a wrapper that calls it — as a foreign
     /// function, or as whatever else the target chooses to show a call as: a
     /// Kotlin `val` over `constant!(X).fun(fun!(f))` is this, with the `val`
     /// the target's business.
-    Function {
-        name: syn::Ident,
-        projection: Option<String>,
-    },
+    Function(syn::Ident),
     /// A constant, exposed as a foreign constant.
-    Const {
-        name: syn::Ident,
-        projection: Option<String>,
-    },
+    Const(syn::Ident),
     /// A type, given a foreign representation.
-    Type {
-        key: TypeKey,
-        projection: Option<String>,
-    },
+    Type(TypeKey),
     /// A declared conversion between a type and its wire form, defined by the
     /// binding.
     Conversion(TypeKey),
@@ -95,59 +83,9 @@ pub enum Declaration {
 }
 
 impl Declaration {
-    /// A function, as the one projection of it.
-    pub fn function(name: syn::Ident) -> Self {
-        Declaration::Function {
-            name,
-            projection: None,
-        }
-    }
-
-    /// A constant, as the one projection of it.
-    pub fn constant(name: syn::Ident) -> Self {
-        Declaration::Const {
-            name,
-            projection: None,
-        }
-    }
-
-    /// A type, as the one projection of it.
-    pub fn declared_type(key: TypeKey) -> Self {
-        Declaration::Type {
-            key,
-            projection: None,
-        }
-    }
-
-    /// This declaration as one of several projections of its entity, told
-    /// apart by `label`. A declaration that names no entity has nothing to
-    /// project, and is returned as it is.
-    pub fn projected(self, label: impl Into<String>) -> Self {
-        let projection = Some(label.into());
-        match self {
-            Declaration::Function { name, .. } => Declaration::Function { name, projection },
-            Declaration::Const { name, .. } => Declaration::Const { name, projection },
-            Declaration::Type { key, .. } => Declaration::Type { key, projection },
-            other => other,
-        }
-    }
-
-    /// The label telling this projection from its entity's others, when the
-    /// entity has more than one.
-    pub fn projection(&self) -> Option<&str> {
-        match self {
-            Declaration::Function { projection, .. }
-            | Declaration::Const { projection, .. }
-            | Declaration::Type { projection, .. } => projection.as_deref(),
-            Declaration::Conversion(_)
-            | Declaration::Callback(_)
-            | Declaration::ComputedConst(_) => None,
-        }
-    }
-
     /// Whether this declares a type.
     pub fn is_type(&self) -> bool {
-        matches!(self, Declaration::Type { .. })
+        matches!(self, Declaration::Type(_))
     }
 
     /// The name the model indexes the entity this declaration names under —
@@ -159,10 +97,8 @@ impl Declaration {
     /// names no item, and is looked up as it is spelled, to be found missing.
     pub fn entity_name(&self) -> Option<String> {
         match self {
-            Declaration::Function { name, .. } | Declaration::Const { name, .. } => {
-                Some(name.to_string())
-            }
-            Declaration::Type { key, .. } => {
+            Declaration::Function(ident) | Declaration::Const(ident) => Some(ident.to_string()),
+            Declaration::Type(key) => {
                 Some(key.short_name().unwrap_or_else(|| key.as_str().to_string()))
             }
             Declaration::Conversion(_)
@@ -183,9 +119,9 @@ impl Declaration {
         let element = flat.element(&self.entity_name()?)?;
         matches!(
             (self, element),
-            (Declaration::Function { .. }, Element::Function(_))
-                | (Declaration::Const { .. }, Element::Constant(_))
-                | (Declaration::Type { .. }, Element::Type(_))
+            (Declaration::Function(_), Element::Function(_))
+                | (Declaration::Const(_), Element::Constant(_))
+                | (Declaration::Type(_), Element::Type(_))
         )
         .then_some(element)
     }
@@ -203,9 +139,9 @@ impl Declaration {
     /// The word a refusal uses for what this declaration must name.
     pub(crate) fn describe_captured(&self) -> &'static str {
         match self {
-            Declaration::Function { .. } => "function",
-            Declaration::Const { .. } => "constant",
-            Declaration::Type { .. } => "type",
+            Declaration::Function(_) => "function",
+            Declaration::Const(_) => "constant",
+            Declaration::Type(_) => "type",
             Declaration::Conversion(_)
             | Declaration::Callback(_)
             | Declaration::ComputedConst(_) => "item",
@@ -216,12 +152,8 @@ impl Declaration {
     /// and what an entity is looked up by.
     pub(crate) fn name(&self) -> String {
         match self {
-            Declaration::Function { name, .. } | Declaration::Const { name, .. } => {
-                name.to_string()
-            }
-            Declaration::Type { key, .. } | Declaration::Conversion(key) => {
-                key.as_str().to_string()
-            }
+            Declaration::Function(ident) | Declaration::Const(ident) => ident.to_string(),
+            Declaration::Type(key) | Declaration::Conversion(key) => key.as_str().to_string(),
             Declaration::Callback(name) | Declaration::ComputedConst(name) => name.clone(),
         }
     }
@@ -234,9 +166,9 @@ impl Ord for Declaration {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         fn variant(declaration: &Declaration) -> u8 {
             match declaration {
-                Declaration::Function { .. } => 0,
-                Declaration::Const { .. } => 1,
-                Declaration::Type { .. } => 2,
+                Declaration::Function(_) => 0,
+                Declaration::Const(_) => 1,
+                Declaration::Type(_) => 2,
                 Declaration::Conversion(_) => 3,
                 Declaration::Callback(_) => 4,
                 Declaration::ComputedConst(_) => 5,
@@ -261,17 +193,13 @@ impl std::fmt::Display for Declaration {
     /// type.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prefix = match self {
-            Declaration::Function { .. } => "fn",
-            Declaration::Const { .. } | Declaration::ComputedConst(_) => "const",
-            Declaration::Type { .. } => "type",
+            Declaration::Function(_) => "fn",
+            Declaration::Const(_) | Declaration::ComputedConst(_) => "const",
+            Declaration::Type(_) => "type",
             Declaration::Conversion(_) => "conversion",
             Declaration::Callback(_) => "callback",
         };
-        write!(f, "{prefix}:{}", self.name())?;
-        if let Some(projection) = self.projection() {
-            write!(f, "@{projection}")?;
-        }
-        Ok(())
+        write!(f, "{prefix}:{}", self.name())
     }
 }
 

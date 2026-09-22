@@ -27,7 +27,9 @@ pub const SCHEMA_VERSION: u32 = 3;
 /// One accounted-for declaration.
 #[derive(Clone, Debug)]
 pub struct Entry {
-    /// What was declared, and the run's key for it.
+    /// What the report calls this row — see [`Entry::id`].
+    pub(crate) id: String,
+    /// What was declared.
     pub declaration: Declaration,
     /// What the target says it is on the foreign side — the adapter's
     /// declarator word and the placement.
@@ -36,6 +38,18 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// The row's id: what a report, a build script and a capability-selected
+    /// test section name this output by.
+    ///
+    /// The declaration as it prints — `type:Stamp`, `fn:stamp_sum` — which is
+    /// what the *source* calls the thing. An entity the binding declares more
+    /// than once has one row per declaration, and those rows carry the foreign
+    /// placement after an `@` to tell them apart, since the source name no
+    /// longer does.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
     /// The adapter's declarator word — see [`Described::representation`].
     pub fn representation(&self) -> &str {
         &self.described.representation
@@ -53,14 +67,14 @@ impl Serialize for Entry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         struct Columns<'a> {
-            id: &'a Declaration,
+            id: &'a str,
             placement: &'a str,
             representation: &'a str,
             #[serde(flatten)]
             outcome: &'a Outcome,
         }
         Columns {
-            id: &self.declaration,
+            id: self.id(),
             placement: self.placement(),
             representation: self.representation(),
             outcome: &self.outcome,
@@ -185,7 +199,7 @@ impl Report {
                     .skip()
                     .map(|skip| skip.path())
                     .unwrap_or_default();
-                let _ = writeln!(out, "- `{}` ({})", entry.declaration, path);
+                let _ = writeln!(out, "- `{}` ({})", entry.id(), path);
             }
             let _ = writeln!(out);
         }
@@ -204,7 +218,7 @@ impl Report {
             let _ = writeln!(
                 out,
                 "| `{}` | {} | `{}` | {} |",
-                entry.declaration,
+                entry.id(),
                 entry.representation(),
                 entry.placement(),
                 outcome
@@ -234,7 +248,7 @@ impl Report {
         for (capability, entries) in self.skips_by_capability() {
             let roots = entries
                 .iter()
-                .map(|entry| entry.declaration.to_string())
+                .map(|entry| entry.id().to_string())
                 .collect::<Vec<_>>();
             let shown = roots.len().min(5);
             let more = match roots.len() - shown {
@@ -258,5 +272,8 @@ pub struct Counts {
 
 /// Sort key: the id, as it prints.
 pub(crate) fn sort_entries(entries: &mut [Entry]) {
-    entries.sort_by(|a, b| a.declaration.cmp(&b.declaration));
+    entries.sort_by(|a, b| {
+        a.id.cmp(&b.id)
+            .then_with(|| a.declaration.cmp(&b.declaration))
+    });
 }

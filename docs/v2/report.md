@@ -33,8 +33,12 @@ count the model was built from. These fields help you recognize the run; they
 are not a content hash or proof that the files match the latest source revision.
 
 Next, read the counts of emitted and skipped declarations. *Skipped* means the
-engine could not satisfy a request. An item the user deliberately excluded
-never entered the model and has no row. A skip includes a stable
+engine could not satisfy a request. The report accounts for declarations, so a
+captured item the binding did not declare — including one it ignored, which
+under V1 only silences that engine's warning about it — has no row of its own.
+It stays in the model, where a declared item may still require it, and such a
+requirement is reported against the declaration that has it. A skip includes a
+stable
 [capability](stages/07-retain.md#retain-supported-output) code, a readable
 explanation and a path to the problem. That path can identify the function
 [site](stages/03-requests.md#a-values-position-in-an-exported-function), such
