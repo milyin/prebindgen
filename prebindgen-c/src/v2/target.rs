@@ -79,7 +79,7 @@ impl CTarget {
     /// `ptr_type!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
     pub(crate) fn declare(&mut self, declaration: Declaration, choice: CChoice) {
-        if let Declaration::Type(key) = &declaration {
+        if let Declaration::Type { key, .. } = &declaration {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
         self.outputs.insert(declaration, choice);
@@ -140,7 +140,14 @@ impl Target for CTarget {
     type Payload = CPayload;
 
     fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<CChoice>> {
-        let conversion = self.conversion(&query.crossing.ty);
+        // A declared type's own crossing is planned as that declaration says,
+        // not as the per-type default for values of it: the two agree for a
+        // type projected once, and differ by design for one projected twice.
+        let conversion = if query.position.is_declared_type() {
+            self.declared(&query.position.declaration)?.clone()
+        } else {
+            self.conversion(&query.crossing.ty)
+        };
         // An aggregate carries its members, so it wants the struct's fields; a
         // scalar is carried whole. A declarator v2 has no lowering for is
         // refused here, before anything under it is planned — never quietly
@@ -412,7 +419,7 @@ impl Target for CTarget {
                     .inputs
                     .iter()
                     .chain(values.output.iter())
-                    .filter_map(|value| Requirement::of(&value.crossing.ty))
+                    .filter_map(|value| Requirement::of(value))
                     .collect(),
                 rust: Vec::new(),
                 payload: None,

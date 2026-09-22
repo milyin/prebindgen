@@ -210,6 +210,15 @@ struct Run<'a, T: Target> {
     relations: Vec<Relation>,
     primitives: Vec<PrimitiveSpec<T::Payload>>,
     nodes: Vec<ValuePlan<T::Payload>>,
+    /// Each node's conversion key, by [`NodeId`] — what a requirement made
+    /// from a value is matched to a type declaration by.
+    keys: Vec<T::ConversionKey>,
+    /// Which projection of a type a value has to cross as to require it: the
+    /// declaration, by the type's name and the node its own crossing into
+    /// Rust planned to. Recorded as soon as that node exists, before anything
+    /// later in the declaration can refuse it, so a value crossing the same
+    /// way finds the projection it needs whatever became of it.
+    represented: BTreeMap<(String, NodeId), Declaration>,
     cache: HashMap<NodeKey<T::ConversionKey>, NodeId>,
     resolving: std::collections::HashSet<ResolvingKey<T::ConversionKey>>,
     /// The relations offered for a type, registered the first time it is
@@ -227,6 +236,8 @@ impl<'a, T: Target> Run<'a, T> {
             relations: Vec::new(),
             primitives: Vec::new(),
             nodes: Vec::new(),
+            keys: Vec::new(),
+            represented: BTreeMap::new(),
             cache: HashMap::new(),
             resolving: std::collections::HashSet::new(),
             offered: HashMap::new(),
@@ -564,6 +575,7 @@ impl<'a, T: Target> Run<'a, T> {
             },
             failures,
         });
+        self.keys.push(conversion);
         self.cache.insert(key, id);
         Ok(Planned::Ready(id))
     }
@@ -714,7 +726,7 @@ pub fn generate<T: Target>(
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Declaration::Type(_) => {
+            Declaration::Type { .. } => {
                 plan_type(&mut run, declaration).map_err(EngineError::Planning)?
             }
             // Whether the function was captured or is the binding's own makes
@@ -722,7 +734,7 @@ pub fn generate<T: Target>(
             // each through its own origin. Nor does what the target shows the
             // call as — a `fun`, or a `val` read through it — which is the
             // target's choice under this one declaration.
-            Declaration::Function(ident) => {
+            Declaration::Function { name: ident, .. } => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
@@ -745,7 +757,7 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            Declaration::Const(_) => Err(Refusal::at(
+            Declaration::Const { .. } => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.not_implemented",
                     "the v2 engine has no const lowering yet",
@@ -791,16 +803,61 @@ pub fn generate<T: Target>(
         }
     }
 
-    // Which declaration represents which type. A target names a requirement by
-    // type, because that is what the model told it about a value; matching the
-    // type to the declaration covering it is the engine's side of that.
-    let declared_types: BTreeMap<String, &Declaration> = exposed
+    // Which declaration a requirement resolves to. A target names a
+    // requirement by the value that needs it, because that is what the model
+    // told it about; matching the value to the declaration covering it is the
+    // engine's side of that, and with a type projected more than once the
+    // match is by conversion: the projection whose own crossing planned under
+    // the same key the value crosses by. A requirement by name alone resolves
+    // while the type has one projection, whatever its outcome.
+    let by_name: BTreeMap<String, Vec<&Declaration>> = exposed
         .iter()
         .filter(|declaration| declaration.is_type())
-        // Keyed by the item's name, which is what a requirement names: a
-        // declaration's key may carry arguments the item does not.
         .filter_map(|declaration| Some((declaration.entity_name()?, *declaration)))
-        .collect();
+        .fold(BTreeMap::new(), |mut all, (name, declaration)| {
+            all.entry(name).or_default().push(declaration);
+            all
+        });
+    let key_of = |node: NodeId| &run.keys[node.0];
+    let resolve = |required: &crate::target::Requirement| -> Result<&Declaration, Skip> {
+        let name = required.type_name();
+        let unrequested = || {
+            Skip::direct(
+                "unsupported.requirement.unrequested",
+                format!("requires {required}, which this binding declares no type for"),
+                required.to_string(),
+            )
+        };
+        match required.node() {
+            Some(node) => {
+                let key = key_of(node);
+                // The projection this value crosses as, if it was planned: a
+                // skipped projection has no node, and a name with one
+                // projection covers the value however it crosses.
+                run.represented
+                    .iter()
+                    .find(|((n, represents), _)| n == name && key_of(*represents) == key)
+                    .map(|(_, declaration)| declaration)
+                    .or_else(|| match by_name.get(name).map(Vec::as_slice) {
+                        Some([only]) => Some(*only),
+                        _ => None,
+                    })
+                    .ok_or_else(unrequested)
+            }
+            None => match by_name.get(name).map(Vec::as_slice) {
+                Some([only]) => Ok(*only),
+                Some(several) => Err(Skip::direct(
+                    "unsupported.requirement.ambiguous",
+                    format!(
+                        "requires {required} by name, and this binding declares it {} ways",
+                        several.len()
+                    ),
+                    required.to_string(),
+                )),
+                None => Err(unrequested()),
+            },
+        }
+    };
 
     // A public declaration can require another one. Propagate until a pass
     // changes nothing: one missing capability, several skipped outputs, each
@@ -812,17 +869,12 @@ pub fn generate<T: Target>(
                 continue;
             }
             for required in &surface.requires {
-                let declared = declared_types
-                    .get(required.type_name())
-                    .and_then(|id| outcomes.get(*id));
-                let cause = match declared {
-                    Some(Outcome::Skipped(skip)) => skip.clone(),
-                    Some(_) => continue,
-                    None => Skip::direct(
-                        "unsupported.requirement.unrequested",
-                        format!("requires {required}, which this binding declares no type for"),
-                        required.to_string(),
-                    ),
+                let cause = match resolve(required) {
+                    Ok(declaration) => match outcomes.get(declaration) {
+                        Some(Outcome::Skipped(skip)) => skip.clone(),
+                        _ => continue,
+                    },
+                    Err(skip) => skip,
                 };
                 let mut path = vec![surface.declaration.to_string()];
                 path.extend(cause.dependency_path.iter().cloned());
@@ -1359,7 +1411,7 @@ fn plan_type<T: Target>(
     // binding declared over a type the source never exported, which entered
     // the model as an extern — and the declarations were checked against it
     // before planning, so this lookup finds one.
-    let Declaration::Type(key) = declaration else {
+    let Declaration::Type { key, .. } = declaration else {
         return Err(PlanningError::InternalInvariant(format!(
             "`{declaration}` was routed to the type planner"
         )));
@@ -1419,6 +1471,10 @@ fn plan_type<T: Target>(
         Planned::Ready(id) => id,
         Planned::Unsupported(refusal) => return Ok(Err(refusal)),
     };
+    // This projection is what a value crossing the same way requires —
+    // recorded now, whatever the rest of the declaration decides.
+    run.represented
+        .insert((name.clone(), taken), declaration.clone());
 
     let mut given = None;
     let mut release_plan = None;

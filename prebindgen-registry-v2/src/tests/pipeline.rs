@@ -213,6 +213,12 @@ impl Mini {
     /// asked twice answers the same: an adapter that let this drift would hand
     /// the registry two keys for one conversion and share nothing.
     fn conversion(&self, position: &Position, ty: &TypeRef) -> Choice {
+        // A declared type's own crossing is planned as that declaration says.
+        if position.is_declared_type() {
+            if let Some(choice) = self.outputs.get(&position.declaration) {
+                return choice.clone();
+            }
+        }
         let site = (position.declaration.clone(), position.path.join("."));
         if let Some(choice) = self.sites.get(&site) {
             return choice.clone();
@@ -518,7 +524,7 @@ impl Target for Mini {
         let requires = values
             .inputs
             .iter()
-            .filter_map(|value| crate::target::Requirement::of(&value.crossing.ty))
+            .filter_map(|value| crate::target::Requirement::of(value))
             .collect();
         if matches!(
             (choice, request.item),
@@ -682,11 +688,11 @@ fn binding() -> Binding {
 }
 
 fn ty(name: &str) -> Declaration {
-    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+    Declaration::declared_type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
 fn function(name: &str) -> Declaration {
-    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
+    Declaration::function(syn::parse_str(name).expect("a test names an ident"))
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
@@ -911,6 +917,156 @@ fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
     assert_eq!(
         skip.capability.as_str(),
         "unsupported.conversion.not_implemented"
+    );
+}
+
+/// One function, two projections: each is its own declaration, planned under
+/// its own choice, with its own wrapper and its own report row. Sharing is by
+/// conversion, as between two different functions — the `Stamp` both take
+/// crosses the same way and is planned once.
+#[test]
+fn two_projections_of_one_function_are_two_declarations() {
+    let mut binding = binding();
+    binding.declare_type("Stamp", Choice::Struct);
+    binding.declare(
+        function("stamp_sum").projected("example.Sums.sum"),
+        exported("stamp_sum_a", Routes::None),
+    );
+    binding.declare(
+        function("stamp_sum").projected("example.Totals.SUM"),
+        exported("stamp_sum_b", Routes::Reported),
+    );
+
+    let generation = binding.generate(model()).expect("plans");
+    assert_eq!(
+        generation.report().counts().emitted,
+        3,
+        "{:?}",
+        generation.report()
+    );
+    let ids: Vec<String> = generation
+        .report()
+        .declarations
+        .iter()
+        .map(|entry| entry.declaration.to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "fn:stamp_sum@example.Sums.sum",
+            "fn:stamp_sum@example.Totals.SUM",
+            "type:Stamp"
+        ]
+    );
+    let symbols: Vec<&str> = generation
+        .functions()
+        .iter()
+        .map(|plan| plan.abi.symbol.as_str())
+        .collect();
+    assert_eq!(symbols, ["stamp_sum_a", "stamp_sum_b"]);
+    // `Stamp` into Rust once, `i64` each way once: the two wrappers share
+    // every conversion, because nothing about the value differs.
+    assert_eq!(generation.values().len(), 3);
+
+    // Two projections under one label are one declaration said twice.
+    let mut twice = Binding::default();
+    twice.declare_type("Stamp", Choice::Struct);
+    twice.declare(
+        function("stamp_sum").projected("same"),
+        exported("stamp_sum_a", Routes::None),
+    );
+    twice.declare(
+        function("stamp_sum").projected("same"),
+        exported("stamp_sum_b", Routes::None),
+    );
+    let error = twice
+        .generate(model())
+        .expect_err("one label, one declaration");
+    assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
+}
+
+/// One type, two projections, and a value resolves its requirement to the one
+/// it crosses as.
+///
+/// `Stamp` is declared as a struct and as a handle. Values of it cross as a
+/// struct by default; `stamp_max`'s parameter is overridden to cross as a
+/// handle. Each function requires the projection its value crosses as — so
+/// when the handle projection cannot be placed, `stamp_max` goes with it and
+/// `stamp_sum` does not.
+#[test]
+fn a_value_requires_the_projection_it_crosses_as() {
+    let plan = |handle: Choice| {
+        let mut binding = binding();
+        binding.declare(ty("Stamp").projected("example.Stamp"), Choice::Struct);
+        binding.declare(ty("Stamp").projected("example.StampHandle"), handle.clone());
+        binding.crossing("Stamp", Choice::Struct);
+        binding.at_site("stamp_max", "param 0", handle);
+        binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+        binding.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
+        binding.generate(model()).expect("plans")
+    };
+
+    // Both projections placed: everything is emitted, and each function's
+    // requirement went to its own projection.
+    let generation = plan(Choice::Handle);
+    assert_eq!(
+        generation.report().counts().emitted,
+        4,
+        "{:?}",
+        generation.report()
+    );
+    let rust = generation.rust();
+    assert!(
+        rust.contains("pub extern \"C\" fn stamp_sum(arg0: Stamp)"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("pub extern \"C\" fn stamp_max(arg0: *mut Raw)"),
+        "{rust}"
+    );
+
+    // The handle projection refused: only the function crossing that way
+    // requires it, and only that function is skipped.
+    let generation = plan(Choice::HandleWithoutRelease);
+    let Outcome::Skipped(skip) = outcome(&generation, "type:Stamp@example.StampHandle") else {
+        panic!("the handle projection has nowhere to place a release");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
+    assert!(matches!(
+        outcome(&generation, "type:Stamp@example.Stamp"),
+        Outcome::Emitted
+    ));
+    assert!(matches!(
+        outcome(&generation, "fn:stamp_sum"),
+        Outcome::Emitted
+    ));
+    let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_max") else {
+        panic!("its parameter crosses as the projection that was refused");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
+    assert_eq!(
+        skip.dependency_path,
+        ["fn:stamp_max", "type:Stamp@example.StampHandle"]
+    );
+}
+
+/// A requirement stated by name alone cannot choose between projections.
+#[test]
+fn a_requirement_by_name_is_ambiguous_over_two_projections() {
+    let mut binding = binding();
+    binding.declare(ty("Stamp").projected("a"), Choice::Struct);
+    binding.declare(ty("Stamp").projected("b"), Choice::Handle);
+    binding.crossing("Stamp", Choice::Struct);
+    // `Point` requires `Stamp` by name, not through a value of it.
+    binding.declare_type("Point", Choice::StructRequiring("Stamp".to_string()));
+
+    let generation = binding.generate(model()).expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "type:Point") else {
+        panic!("a name does not say which projection");
+    };
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.requirement.ambiguous"
     );
 }
 

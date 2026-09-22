@@ -89,7 +89,7 @@ impl CbindgenBuilder {
         // wherever it appears.
         for key in sorted(self.data.keys()) {
             declare(
-                Declaration::Type(key.clone()),
+                Declaration::declared_type(key.clone()),
                 CChoice::DataStruct {
                     c_name: self.c_type_name(key),
                 },
@@ -100,7 +100,7 @@ impl CbindgenBuilder {
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
             declare(
-                Declaration::Type(key.clone()),
+                Declaration::declared_type(key.clone()),
                 CChoice::OpaquePtr {
                     c_name: self.c_type_name(key),
                     release: self.destructor_symbol(key).to_string(),
@@ -118,7 +118,7 @@ impl CbindgenBuilder {
         ] {
             for key in keys {
                 declare(
-                    Declaration::Type(key.clone()),
+                    Declaration::declared_type(key.clone()),
                     CChoice::Unimplemented {
                         declarator,
                         c_name: self.c_type_name(key),
@@ -154,7 +154,7 @@ impl CbindgenBuilder {
         // Exported functions — the one kind that must name a captured item.
         for ident in sorted(self.functions.keys()) {
             declare(
-                Declaration::Function(ident.clone()),
+                Declaration::function(ident.clone()),
                 CChoice::Function {
                     symbol: self.fn_symbol(ident).to_string(),
                 },
@@ -165,10 +165,10 @@ impl CbindgenBuilder {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_functions) {
-            requests.ignore(Declaration::Function(ident.clone()));
+            requests.ignore(Declaration::function(ident.clone()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignore(Declaration::Type(key.clone()));
+            requests.ignore(Declaration::declared_type(key.clone()));
         }
         (target, requests)
     }

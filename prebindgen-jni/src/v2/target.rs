@@ -195,7 +195,7 @@ impl JniTarget {
     /// `ptr_class!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
     pub(crate) fn declare(&mut self, declaration: Declaration, choice: JniChoice) {
-        if let Declaration::Type(key) = &declaration {
+        if let Declaration::Type { key, .. } = &declaration {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
         self.outputs.insert(declaration, choice);
@@ -338,7 +338,14 @@ impl Target for JniTarget {
     type Payload = JniPayload;
 
     fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<JniChoice>> {
-        let conversion = self.conversion(&query.crossing.ty);
+        // A declared type's own crossing is planned as that declaration says,
+        // not as the per-type default for values of it: the two agree for a
+        // type projected once, and differ by design for one projected twice.
+        let conversion = if query.position.is_declared_type() {
+            self.declared(&query.position.declaration)?.clone()
+        } else {
+            self.conversion(&query.crossing.ty)
+        };
         // A declarator v2 has no lowering for is refused here, before anything
         // under it is planned — never quietly crossed as the scalar default.
         let want_struct = match &conversion {
@@ -751,7 +758,7 @@ impl Target for JniTarget {
                         .inputs
                         .iter()
                         .chain(values.output.iter())
-                        .filter_map(|value| Requirement::of(&value.crossing.ty))
+                        .filter_map(|value| Requirement::of(value))
                         .collect(),
                     // What crosses is a JVM object: the Rust side holds a
                     // reference to it and declares no type of its own.

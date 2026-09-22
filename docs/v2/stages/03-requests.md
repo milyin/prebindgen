@@ -132,8 +132,8 @@ with the frontend's.
 This stage also fixes the names by which everything is addressed afterwards. A
 **declaration** is one requested output, identified by a `DeclarationId` —
 exposing the same Rust function at two Kotlin placements makes two of them, with
-separate [outcomes](07-retain.md#retain-supported-output), which the engine cannot express yet (its identity is the kind
-and the Rust origin). A **site** is a position inside such a declaration:
+separate [outcomes](07-retain.md#retain-supported-output), told apart by a
+projection label the frontend supplies. A **site** is a position inside such a declaration:
 parameter 0 of the exported `stamp_sum`, or its
 return. A **part** is a position inside a source value: the `secs` field of
 `Stamp`, or the single argument of a `stamp_from_millis` constructor. Sites and
@@ -493,9 +493,9 @@ engine plans it from:
 
 ```rust
 enum Declaration {
-    Function(Ident),        // a function, exported through a wrapper that calls it
-    Const(Ident),           // a constant, exposed as a foreign constant
-    Type(TypeKey),          // a type, given a foreign representation
+    Function { name: Ident, projection: Option<String> },  // exported through a wrapper that calls it
+    Const    { name: Ident, projection: Option<String> },  // exposed as a foreign constant
+    Type     { key: TypeKey, projection: Option<String> }, // given a foreign representation
     Conversion(TypeKey),    // a wire mapping the binding defines for a type
     Callback(String),       // a callback signature the binding exports
     ComputedConst(String),  // a constant the binding computes on the foreign side
@@ -511,8 +511,27 @@ through a nullary function, `constant!(X).fun(fun!(f))`, is `Function(f)`, and
 the `val` is the target's choice recorded under that declaration. A callback
 and a computed constant name no entity at all. `generate` matches on the
 whole, so each planner is reached by the variants it can plan and is handed
-the entity they name. One entity has one declaration of each kind, so a
-request that names the same declaration twice is refused.
+the entity they name.
+
+One entity may be projected more than once — `stamp_sum` as a Kotlin `fun` in
+one package and as the `val` a `constant!` reads through it, `Stamp` as a data
+class and as a handle. Each projection is a declaration of its own, with its
+own choices, outcome and report row, and what tells them apart is the
+**projection**: a label the frontend supplies in the target's own terms — a
+placement's fully qualified name, a symbol — which the engine compares and
+never reads. It prints after an `@`, `fn:stamp_sum@example.Totals.SUM`. A
+frontend labels an entity's projections only when there is more than one, so
+the common single projection is `fn:stamp_sum` as it always was; two
+declarations with the same entity and label are one declaration said twice,
+and refused.
+
+Two projections of one type each plan as declared. A target keeps a default
+for values *of* a type, and that default is one of the projections; the other
+is found under its own declaration, which is why a type's own crossing —
+the root [position](#a-values-position-in-an-exported-function) of a type
+declaration — is answered from the declaration rather than from the per-type
+default. Which projection a *value* requires is then settled at
+[retention](07-retain.md#retain-supported-output).
 
 ### A value's position in an exported function
 

@@ -420,6 +420,61 @@ fn a_ptr_class_over_a_key_with_arguments_is_planned_as_declared() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// One function placed twice — as a package `fun` and as the `val` a
+/// `constant!(X).fun(..)` reads through — is two projections: two
+/// declarations told apart by their Kotlin placement, each with its own row.
+/// A function placed once keeps the id it always had.
+#[test]
+fn a_function_placed_twice_is_two_projections() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(fixture_items())
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing))
+                .fun(prebindgen_registry::fun!(z_thing_new))
+                .fun(prebindgen_registry::fun!(z_thing_describe))
+                .constant(
+                    crate::constant!(THE_SIZE).fun(prebindgen_registry::fun!(z_thing_describe)),
+                ),
+        )
+        .build_with(Pipeline::V2)
+        .expect("two placements of one function are two declarations");
+    let report = generated.report().expect("v2 produces a report");
+    let ids: Vec<String> = report
+        .declarations
+        .iter()
+        .map(|entry| entry.declaration.to_string())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "fn:z_thing_describe@io.test.jni.thing.THE_SIZE",
+            "fn:z_thing_describe@io.test.jni.thing.zThingDescribe",
+            "fn:z_thing_new",
+            "type:ZThing",
+        ],
+        "{report:?}"
+    );
+    // Each projection is described as what it was declared as.
+    let representation = |id: &str| {
+        report
+            .declarations
+            .iter()
+            .find(|entry| entry.declaration.to_string() == id)
+            .map(|entry| entry.representation().to_string())
+            .unwrap_or_else(|| panic!("no entry {id}"))
+    };
+    assert_eq!(
+        representation("fn:z_thing_describe@io.test.jni.thing.THE_SIZE"),
+        "constant_fun"
+    );
+    assert_eq!(
+        representation("fn:z_thing_describe@io.test.jni.thing.zThingDescribe"),
+        "fun"
+    );
+}
+
 /// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary
 /// function. The declaration is the function's — the `val` is what this target
 /// shows the call as — so it resolves against the captured function and is
@@ -449,7 +504,7 @@ fn a_function_backed_constant_is_the_functions_declaration() {
     assert_eq!(constant.declaration.to_string(), "fn:z_thing_describe");
     assert!(matches!(
         &constant.declaration,
-        Declaration::Function(ident) if ident == "z_thing_describe"
+        Declaration::Function { name: ident, .. } if ident == "z_thing_describe"
     ));
     // And it is planned from that function: what stops this one is the value
     // its parameter crosses as, reported against the parameter, rather than

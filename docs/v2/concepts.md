@@ -78,8 +78,9 @@ declaration; a source item that nobody requested currently has no entry.
 The current engine's `Declaration` is one value: the kind the target gets and
 the Rust name, printed as `type:Stamp` or `fn:stamp_sum`, and it is its own
 identity. Renaming the foreign function does not change it. Exposing the same
-source function at multiple placements in one run would need a richer identity;
-current V2 rejects a declaration stated twice.
+source function at several placements makes several declarations, told apart
+by a projection label the frontend supplies; one declaration stated twice is
+rejected.
 See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
 ### Choice

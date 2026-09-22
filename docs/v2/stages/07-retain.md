@@ -146,11 +146,20 @@ contradictory configuration, panics and I/O failures are not ordinary skips.
 ### Dependencies of public declarations
 
 A function also needs the public type used by its parameters.
-`SurfaceSpec.requires` lists `Requirement`s, each naming a type: the target
-states what a value crosses as, and the engine matches that type to the
-declaration representing it. A requirement no declaration covers produces
-`unsupported.requirement.unrequested`. The design sketch below extends these
-requirements to interface promises and member associations.
+`SurfaceSpec.requires` lists `Requirement`s, each made from a value: the
+target states which values the declaration is unusable without, and the
+engine matches each to the declaration covering its type. With a type
+projected once that is a lookup by name. With several, the value settles it:
+it crosses under some conversion, chosen by the target at selection, and the
+projection it requires is the one whose own
+[crossing](03-requests.md#finding-an-existing-conversion-plan) planned under
+the same conversion — recorded when that projection was planned, whatever
+became of it afterwards, so a value crossing as a refused projection is
+skipped with that projection's cause. A requirement stated by name alone, with no value behind
+it, resolves only while the type has one projection; over several it is
+`unsupported.requirement.ambiguous`. A requirement no declaration covers
+produces `unsupported.requirement.unrequested`. The design sketch below
+extends these requirements to interface promises and member associations.
 
 ```rust
 struct SurfaceSpec<Payload> {

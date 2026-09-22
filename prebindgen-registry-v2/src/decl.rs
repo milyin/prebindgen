@@ -51,17 +51,39 @@ use serde::Serialize;
 /// it, and that spelling is a rendering: nothing reads a declaration back out
 /// of it. Declarations order as they print, so a report sorted by declaration
 /// reads in id order.
+///
+/// # One entity, several projections
+///
+/// A binding may expose one entity more than once — `stamp_sum` as a Kotlin
+/// `fun` in one package and as a `val` read through it, `Stamp` as a data
+/// class and as a handle. Each is its own declaration, with its own choices,
+/// outcome and report row, and what tells them apart is the **projection**:
+/// a label the frontend supplies, in the target's own terms (a placement's
+/// fully qualified name, a symbol), which the engine compares and never
+/// reads. It prints after an `@`: `fn:stamp_sum@io.zenoh.jni.Other.stampSum`.
+/// A frontend labels an entity's projections only when there is more than
+/// one, so the common single projection is `fn:stamp_sum` as it always was,
+/// and two declarations with the same entity and label are a duplicate.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     /// A function, exported through a wrapper that calls it — as a foreign
     /// function, or as whatever else the target chooses to show a call as: a
     /// Kotlin `val` over `constant!(X).fun(fun!(f))` is this, with the `val`
     /// the target's business.
-    Function(syn::Ident),
+    Function {
+        name: syn::Ident,
+        projection: Option<String>,
+    },
     /// A constant, exposed as a foreign constant.
-    Const(syn::Ident),
+    Const {
+        name: syn::Ident,
+        projection: Option<String>,
+    },
     /// A type, given a foreign representation.
-    Type(TypeKey),
+    Type {
+        key: TypeKey,
+        projection: Option<String>,
+    },
     /// A declared conversion between a type and its wire form, defined by the
     /// binding.
     Conversion(TypeKey),
@@ -74,9 +96,59 @@ pub enum Declaration {
 }
 
 impl Declaration {
+    /// A function, as the one projection of it.
+    pub fn function(name: syn::Ident) -> Self {
+        Declaration::Function {
+            name,
+            projection: None,
+        }
+    }
+
+    /// A constant, as the one projection of it.
+    pub fn constant(name: syn::Ident) -> Self {
+        Declaration::Const {
+            name,
+            projection: None,
+        }
+    }
+
+    /// A type, as the one projection of it.
+    pub fn declared_type(key: TypeKey) -> Self {
+        Declaration::Type {
+            key,
+            projection: None,
+        }
+    }
+
+    /// This declaration as one of several projections of its entity, told
+    /// apart by `label`. A declaration that names no entity has nothing to
+    /// project, and is returned as it is.
+    pub fn projected(self, label: impl Into<String>) -> Self {
+        let projection = Some(label.into());
+        match self {
+            Declaration::Function { name, .. } => Declaration::Function { name, projection },
+            Declaration::Const { name, .. } => Declaration::Const { name, projection },
+            Declaration::Type { key, .. } => Declaration::Type { key, projection },
+            other => other,
+        }
+    }
+
+    /// The label telling this projection from its entity's others, when the
+    /// entity has more than one.
+    pub fn projection(&self) -> Option<&str> {
+        match self {
+            Declaration::Function { projection, .. }
+            | Declaration::Const { projection, .. }
+            | Declaration::Type { projection, .. } => projection.as_deref(),
+            Declaration::Conversion(_)
+            | Declaration::Callback(_)
+            | Declaration::ComputedConst(_) => None,
+        }
+    }
+
     /// Whether this declares a type.
     pub fn is_type(&self) -> bool {
-        matches!(self, Declaration::Type(_))
+        matches!(self, Declaration::Type { .. })
     }
 
     /// The name the model indexes the entity this declaration names under —
@@ -88,8 +160,10 @@ impl Declaration {
     /// names no item, and is looked up as it is spelled, to be found missing.
     pub fn entity_name(&self) -> Option<String> {
         match self {
-            Declaration::Function(ident) | Declaration::Const(ident) => Some(ident.to_string()),
-            Declaration::Type(key) => {
+            Declaration::Function { name, .. } | Declaration::Const { name, .. } => {
+                Some(name.to_string())
+            }
+            Declaration::Type { key, .. } => {
                 Some(key.short_name().unwrap_or_else(|| key.as_str().to_string()))
             }
             Declaration::Conversion(_)
@@ -110,9 +184,9 @@ impl Declaration {
         let element = flat.element(&self.entity_name()?)?;
         matches!(
             (self, element),
-            (Declaration::Function(_), Element::Function(_))
-                | (Declaration::Const(_), Element::Constant(_))
-                | (Declaration::Type(_), Element::Type(_))
+            (Declaration::Function { .. }, Element::Function(_))
+                | (Declaration::Const { .. }, Element::Constant(_))
+                | (Declaration::Type { .. }, Element::Type(_))
         )
         .then_some(element)
     }
@@ -130,9 +204,9 @@ impl Declaration {
     /// The word a refusal uses for what this declaration must name.
     pub(crate) fn describe_captured(&self) -> &'static str {
         match self {
-            Declaration::Function(_) => "function",
-            Declaration::Const(_) => "constant",
-            Declaration::Type(_) => "type",
+            Declaration::Function { .. } => "function",
+            Declaration::Const { .. } => "constant",
+            Declaration::Type { .. } => "type",
             Declaration::Conversion(_)
             | Declaration::Callback(_)
             | Declaration::ComputedConst(_) => "item",
@@ -143,8 +217,12 @@ impl Declaration {
     /// and what an entity is looked up by.
     pub(crate) fn name(&self) -> String {
         match self {
-            Declaration::Function(ident) | Declaration::Const(ident) => ident.to_string(),
-            Declaration::Type(key) | Declaration::Conversion(key) => key.as_str().to_string(),
+            Declaration::Function { name, .. } | Declaration::Const { name, .. } => {
+                name.to_string()
+            }
+            Declaration::Type { key, .. } | Declaration::Conversion(key) => {
+                key.as_str().to_string()
+            }
             Declaration::Callback(name) | Declaration::ComputedConst(name) => name.clone(),
         }
     }
@@ -157,9 +235,9 @@ impl Ord for Declaration {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         fn variant(declaration: &Declaration) -> u8 {
             match declaration {
-                Declaration::Function(_) => 0,
-                Declaration::Const(_) => 1,
-                Declaration::Type(_) => 2,
+                Declaration::Function { .. } => 0,
+                Declaration::Const { .. } => 1,
+                Declaration::Type { .. } => 2,
                 Declaration::Conversion(_) => 3,
                 Declaration::Callback(_) => 4,
                 Declaration::ComputedConst(_) => 5,
@@ -184,13 +262,17 @@ impl std::fmt::Display for Declaration {
     /// type.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prefix = match self {
-            Declaration::Function(_) => "fn",
-            Declaration::Const(_) | Declaration::ComputedConst(_) => "const",
-            Declaration::Type(_) => "type",
+            Declaration::Function { .. } => "fn",
+            Declaration::Const { .. } | Declaration::ComputedConst(_) => "const",
+            Declaration::Type { .. } => "type",
             Declaration::Conversion(_) => "conversion",
             Declaration::Callback(_) => "callback",
         };
-        write!(f, "{prefix}:{}", self.name())
+        write!(f, "{prefix}:{}", self.name())?;
+        if let Some(projection) = self.projection() {
+            write!(f, "@{projection}")?;
+        }
+        Ok(())
     }
 }
 

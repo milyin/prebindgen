@@ -107,12 +107,37 @@ impl Declarations {
             requests.expose(declaration);
         };
 
-        // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
-        // other, as a class member or as a package function: it is an entity
-        // in the model now, and is stated where it is bound and nowhere else.
-        // A second entry for the helper itself would give one id to two
-        // declarations.
-        let fun_declaration = |ident: &syn::Ident| Declaration::Function(ident.clone());
+        // A function is declared wherever it is placed — as a class member, as
+        // a package function, as the `val` a `constant!(X).fun(..)` reads
+        // through — and one function may be placed more than once. Each
+        // placement is a projection of its own, with its own choice and its
+        // own report row; when there are several, each is labelled with its
+        // Kotlin placement, so the ids stay apart. A binding-local fn —
+        // `fun!(crate::x).sig(..)` — is an entity in the model and is declared
+        // the same way.
+        let placements: std::collections::HashMap<&syn::Ident, usize> = self
+            .class_members
+            .values()
+            .flatten()
+            .map(|member| &member.rust_ident)
+            .chain(self.packages.values().flat_map(|config| {
+                config
+                    .functions
+                    .iter()
+                    .chain(&config.constant_functions)
+                    .map(|entry| &entry.rust_ident)
+            }))
+            .fold(std::collections::HashMap::new(), |mut count, ident| {
+                *count.entry(ident).or_default() += 1;
+                count
+            });
+        let fun_declaration = |ident: &syn::Ident, placement: &str| {
+            let declaration = Declaration::function(ident.clone());
+            match placements.get(ident) {
+                Some(several) if *several > 1 => declaration.projected(placement),
+                _ => declaration,
+            }
+        };
 
         // Declared classes. A data class is the one representation v2 lowers;
         // the per-type entry makes every value of the type cross that way,
@@ -124,7 +149,7 @@ impl Declarations {
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
             declare(
-                Declaration::Type(key.clone()),
+                Declaration::declared_type(key.clone()),
                 match config.kind {
                     crate::jni::DeclaredKind::Data => JniChoice::DataClass {
                         class: placement.clone(),
@@ -148,12 +173,10 @@ impl Declarations {
             // of its methods skipped, so each is a declaration of its own. None is
             // lowered yet: a method's receiver is a handle.
             for member in self.class_members.get(key).into_iter().flatten() {
+                let placed = format!("{placement}.{}", self.effective_method_name(key, member));
                 declare(
-                    fun_declaration(&member.rust_ident),
-                    JniChoice::unimplemented(
-                        member_representation(member),
-                        format!("{placement}.{}", self.effective_method_name(key, member)),
-                    ),
+                    fun_declaration(&member.rust_ident, &placed),
+                    JniChoice::unimplemented(member_representation(member), placed),
                 );
             }
         }
@@ -181,7 +204,7 @@ impl Declarations {
                 // a lookup that fell back to the default here would generate
                 // an interface the binding did not ask for.
                 declare(
-                    fun_declaration(&entry.rust_ident),
+                    fun_declaration(&entry.rust_ident, &placed(entry)),
                     match self.unimplemented_setting(flat, &entry.rust_ident) {
                         Some(setting) => JniChoice::Unimplemented {
                             declarator: "fun",
@@ -200,7 +223,7 @@ impl Declarations {
             // A `constant!(X)` names the `#[prebindgen]` const it reads.
             for entry in &config.constants {
                 declare(
-                    Declaration::Const(entry.rust_ident.clone()),
+                    Declaration::constant(entry.rust_ident.clone()),
                     JniChoice::unimplemented("constant", placed(entry)),
                 );
             }
@@ -209,7 +232,7 @@ impl Declarations {
             // what this target chooses to show the call as.
             for entry in &config.constant_functions {
                 declare(
-                    fun_declaration(&entry.rust_ident),
+                    fun_declaration(&entry.rust_ident, &placed(entry)),
                     JniChoice::unimplemented("constant_fun", placed(entry)),
                 );
             }
@@ -246,13 +269,13 @@ impl Declarations {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_fns) {
-            requests.ignore(Declaration::Function(ident.clone()));
+            requests.ignore(Declaration::function(ident.clone()));
         }
         for key in sorted(&self.ignored_class_types) {
-            requests.ignore(Declaration::Type(key.clone()));
+            requests.ignore(Declaration::declared_type(key.clone()));
         }
         for ident in sorted(&self.ignored_const_idents) {
-            requests.ignore(Declaration::Const(ident.clone()));
+            requests.ignore(Declaration::constant(ident.clone()));
         }
         (target, requests)
     }

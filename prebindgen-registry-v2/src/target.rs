@@ -702,33 +702,51 @@ pub struct BoundarySpec<P> {
 /// A public type another declaration depends on.
 ///
 /// A wrapper taking an aggregate is unusable unless the type it names is
-/// emitted too. A target states that with the type, not with the id of the
-/// declaration representing it: at [`Target::surface`] it holds the model's
-/// answer about a value, not the binding's declaration of a type, and the
-/// engine is the side that knows which declaration covers which type.
+/// emitted too. A target states that with the value, not with the id of the
+/// declaration representing its type: at [`Target::surface`] it holds the
+/// model's answer about a value, not the binding's declaration of a type, and
+/// the engine is the side that knows which declaration covers which type.
+///
+/// Which declaration that is depends on how the value crosses. A type may be
+/// projected more than once — `Stamp` as a data class and as a handle — and a
+/// value of it crosses one of those ways, chosen by the target at
+/// [`Target::select`]. A requirement made from a value therefore carries the
+/// value's conversion, and resolves to the projection planned under the same
+/// one; a requirement made from a name alone resolves only while the type has
+/// one projection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Requirement {
     type_name: String,
+    /// The conversion the requiring value crosses by, when the requirement
+    /// was made from a value.
+    node: Option<crate::plan::NodeId>,
 }
 
 impl Requirement {
-    /// What `ty` requires, if it names a type at all — `None` for a scalar or
-    /// anything else with no declared type of its own.
-    pub fn of(ty: &TypeRef) -> Option<Self> {
-        match ty.kind() {
+    /// What this value requires, if its type is a declared one at all —
+    /// `None` for a scalar or anything else with no declared type of its own.
+    pub fn of<P>(value: &crate::plan::ValuePlan<P>) -> Option<Self> {
+        match value.crossing.ty.kind() {
             TypeKind::Named { id, .. } => Some(Requirement {
                 type_name: id.name.clone(),
+                node: Some(value.id),
             }),
             _ => None,
         }
     }
 
-    /// The same for a type the target knows by name without holding a
-    /// reference to it.
+    /// The same for a type the target knows by name without holding a value
+    /// of it. Resolves only while the type has one projection: with several,
+    /// a name says nothing about which.
     pub fn type_named(name: impl Into<String>) -> Self {
         Requirement {
             type_name: name.into(),
+            node: None,
         }
+    }
+
+    pub(crate) fn node(&self) -> Option<crate::plan::NodeId> {
+        self.node
     }
 
     /// The type's name, as the model spells it.
@@ -786,6 +804,19 @@ impl Position {
             declaration: self.declaration.clone(),
             path,
         }
+    }
+
+    /// Whether this is a declared type's own crossing — the value the
+    /// declaration itself represents, into Rust at its root and out of Rust
+    /// beside it — rather than a value somewhere inside a declaration.
+    ///
+    /// A target answers such a position with the declaration's own choice,
+    /// which is what lets two projections of one type each be planned as
+    /// declared: the per-type default a target keeps for values *of* the type
+    /// is one of them, and the other has to be found under its declaration.
+    pub fn is_declared_type(&self) -> bool {
+        self.declaration.is_type()
+            && (self.path.is_empty() || self.path.as_slice() == ["out_of_rust"])
     }
 
     /// This position as a report's dependency path.
