@@ -72,7 +72,7 @@ they already are. Call it as often as needed; the streams accumulate.</p>
     .build()<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(flat.types().count(), <span class="number">1</span>);</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.local_function" class="method"><h4 class="code-header">pub fn <a href="#method.local_function" class="fn">local_function</a>(self, sig: <a class="struct" href="https://docs.rs/syn/2.0.119/syn/item/struct.Signature.html" title="struct syn::item::Signature">Signature</a>, module: <a class="struct" href="https://docs.rs/syn/2.0.119/syn/path/struct.Path.html" title="struct syn::path::Path">Path</a>) -&gt; <a class="struct" href="struct.FlatBuilder.html" title="struct prebindgen_registry::flat::FlatBuilder">FlatBuilder</a></h4></section></summary><div class="docblock"><p>A function the binding defines itself, with the signature it states.</p>
 <p>It becomes a <a href="struct.Function.html" title="struct prebindgen_registry::flat::Function"><code>Function</code></a> in the model like a captured one — the same
-entity, whose origin says the binding — so a declaration can name it
+element, whose origin says the binding — so a declaration can name it
 and a wrapper can call it. <code>module</code> is where generated code reaches it:
 <code>crate::helpers</code> for a helper at <code>crate::helpers::x</code>. The body is never
 read; only the signature is.</p>
