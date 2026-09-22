@@ -1014,180 +1014,181 @@
 <a href=#1014 id=1014 data-nosnippet>1014</a>/// struct declared to C as an opaque pointer still arrives as
 <a href=#1015 id=1015 data-nosnippet>1015</a>/// [`SourceItem::Struct`], and how the target carries it is in the target's
 <a href=#1016 id=1016 data-nosnippet>1016</a>/// own configuration, under [`SurfaceRequest::declaration`]. Read that first.
-<a href=#1017 id=1017 data-nosnippet>1017</a>/// A declaration the binding defines itself
-<a href=#1018 id=1018 data-nosnippet>1018</a>/// ([`Declaration::is_binding_local`]) names no captured item and is refused
-<a href=#1019 id=1019 data-nosnippet>1019</a>/// before `surface` is asked, so nothing here is ever absent.
-<a href=#1020 id=1020 data-nosnippet>1020</a>///
-<a href=#1021 id=1021 data-nosnippet>1021</a>/// [`Flat`]: prebindgen_flat::flat::Flat
-<a href=#1022 id=1022 data-nosnippet>1022</a>/// [`Element`]: prebindgen_flat::flat::Element
-<a href=#1023 id=1023 data-nosnippet>1023</a>/// [`Declaration::is_binding_local`]: crate::decl::Declaration::is_binding_local
-<a href=#1024 id=1024 data-nosnippet>1024</a></span><span class="attr">#[derive(Clone, Copy)]
-<a href=#1025 id=1025 data-nosnippet>1025</a></span><span class="kw">pub enum </span>SourceItem&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#1026 id=1026 data-nosnippet>1026</a>    <span class="doccomment">/// A captured free function, the item behind a `fn:` declaration.
-<a href=#1027 id=1027 data-nosnippet>1027</a>    ///
-<a href=#1028 id=1028 data-nosnippet>1028</a>    /// The target reads its signature — [`Function::params`] and
-<a href=#1029 id=1029 data-nosnippet>1029</a>    /// [`Function::ret`] — to spell the foreign declaration, and pairs each
-<a href=#1030 id=1030 data-nosnippet>1030</a>    /// parameter with the already-planned conversion the registry hands over
-<a href=#1031 id=1031 data-nosnippet>1031</a>    /// in [`ResolvedValues::inputs`], in the same order. The call itself is
-<a href=#1032 id=1032 data-nosnippet>1032</a>    /// not the target's business: the registry places it when it assembles
-<a href=#1033 id=1033 data-nosnippet>1033</a>    /// the wrapper, from the [`SiteDescriptor`] it asked [`Target::boundary`]
-<a href=#1034 id=1034 data-nosnippet>1034</a>    /// about.
-<a href=#1035 id=1035 data-nosnippet>1035</a>    </span>Function(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Function),
-<a href=#1036 id=1036 data-nosnippet>1036</a>    <span class="doccomment">/// A captured struct with fields the model can inspect, the usual item
-<a href=#1037 id=1037 data-nosnippet>1037</a>    /// behind a `type:` declaration.
-<a href=#1038 id=1038 data-nosnippet>1038</a>    ///
-<a href=#1039 id=1039 data-nosnippet>1039</a>    /// A target declaring one — a `repr(C)` mirror, a Kotlin `data class` —
-<a href=#1040 id=1040 data-nosnippet>1040</a>    /// re-declares its fields: [`Struct::fields`], with the `#[cfg]`
-<a href=#1041 id=1041 data-nosnippet>1041</a>    /// condition of each in [`SurfaceRequest::field_conditions`]. A struct
-<a href=#1042 id=1042 data-nosnippet>1042</a>    /// the binding declared to be carried whole crosses as a handle instead,
-<a href=#1043 id=1043 data-nosnippet>1043</a>    /// and its fields go unread; the target learns that from its own
-<a href=#1044 id=1044 data-nosnippet>1044</a>    /// configuration, not from this variant. A tuple struct is not this
-<a href=#1045 id=1045 data-nosnippet>1045</a>    /// variant at all: its fields are not modelled, and the model declares it
-<a href=#1046 id=1046 data-nosnippet>1046</a>    /// as [`SourceItem::Extern`].
-<a href=#1047 id=1047 data-nosnippet>1047</a>    </span>Struct(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Struct),
-<a href=#1048 id=1048 data-nosnippet>1048</a>    <span class="doccomment">/// A captured declaration with nothing behind it — a marked type alias
-<a href=#1049 id=1049 data-nosnippet>1049</a>    /// such as `pub type Ledger = crate::ledger::Ledger;`, or a tuple struct —
-<a href=#1050 id=1050 data-nosnippet>1050</a>    /// which the source model calls an extern.
-<a href=#1051 id=1051 data-nosnippet>1051</a>    ///
-<a href=#1052 id=1052 data-nosnippet>1052</a>    /// It has no parts to convert through, so a value of it crosses whole: as
-<a href=#1053 id=1053 data-nosnippet>1053</a>    /// an opaque handle, represented by a carrier for the address and a
-<a href=#1054 id=1054 data-nosnippet>1054</a>    /// release for it (see [`ReprSpec::release`]). [`Extern::target`]
-<a href=#1055 id=1055 data-nosnippet>1055</a>    /// says what the alias pointed at, as text, for a target that wants to
-<a href=#1056 id=1056 data-nosnippet>1056</a>    /// recognise one; the model does not classify it. A target with no handle
-<a href=#1057 id=1057 data-nosnippet>1057</a>    /// representation refuses this variant, and one that declared this type to
-<a href=#1058 id=1058 data-nosnippet>1058</a>    /// be read through its fields finds no struct relation to select at all.
-<a href=#1059 id=1059 data-nosnippet>1059</a>    </span>Extern(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Extern),
-<a href=#1060 id=1060 data-nosnippet>1060</a>}
-<a href=#1061 id=1061 data-nosnippet>1061</a>
-<a href=#1062 id=1062 data-nosnippet>1062</a><span class="comment">// ---------------------------------------------------------------------------
-<a href=#1063 id=1063 data-nosnippet>1063</a>// The interface
-<a href=#1064 id=1064 data-nosnippet>1064</a>// ---------------------------------------------------------------------------
-<a href=#1065 id=1065 data-nosnippet>1065</a>
-<a href=#1066 id=1066 data-nosnippet>1066</a></span><span class="doccomment">/// The language adapter, as the engine sees it.
-<a href=#1067 id=1067 data-nosnippet>1067</a>///
-<a href=#1068 id=1068 data-nosnippet>1068</a>/// Every method answers a local question about one value, one call or one
-<a href=#1069 id=1069 data-nosnippet>1069</a>/// declaration. None of them walks a type, allocates a name, or decides control
-<a href=#1070 id=1070 data-nosnippet>1070</a>/// flow: those are the registry's, which is why a second field, a nested struct
-<a href=#1071 id=1071 data-nosnippet>1071</a>/// or a third target costs an adapter nothing new.
-<a href=#1072 id=1072 data-nosnippet>1072</a>///
-<a href=#1073 id=1073 data-nosnippet>1073</a>/// # Where the settings live
-<a href=#1074 id=1074 data-nosnippet>1074</a>///
-<a href=#1075 id=1075 data-nosnippet>1075</a>/// Here. The registry stores no configuration of its own and knows no
-<a href=#1076 id=1076 data-nosnippet>1076</a>/// precedence rule: it does not hold a table of the binding's choices, and it
-<a href=#1077 id=1077 data-nosnippet>1077</a>/// cannot say whether one recorded for a parameter outranks one recorded for a
-<a href=#1078 id=1078 data-nosnippet>1078</a>/// type. An adapter keeps its `build.rs` storage — the same storage its v1
-<a href=#1079 id=1079 data-nosnippet>1079</a>/// route reads — and answers each question below out of it, addressed by
-<a href=#1080 id=1080 data-nosnippet>1080</a>/// [`SelectionQuery::position`] for a value and by the [`Declaration`] for an
-<a href=#1081 id=1081 data-nosnippet>1081</a>/// output.
-<a href=#1082 id=1082 data-nosnippet>1082</a>///
-<a href=#1083 id=1083 data-nosnippet>1083</a>/// What the registry does own is *identity*: [`Target::select`] returns a
-<a href=#1084 id=1084 data-nosnippet>1084</a>/// [`Selection`] whose `conversion` key stands for the settings the adapter
-<a href=#1085 id=1085 data-nosnippet>1085</a>/// just applied, and the registry reuses one conversion for every value whose
-<a href=#1086 id=1086 data-nosnippet>1086</a>/// crossing, relation, children and key all match. Hence the one rule an
-<a href=#1087 id=1087 data-nosnippet>1087</a>/// adapter owes it, [`Selection`]'s: equal keys are interchangeable
-<a href=#1088 id=1088 data-nosnippet>1088</a>/// conversions, and settings that generate differently get different keys.
-<a href=#1089 id=1089 data-nosnippet>1089</a>/// A lookup that silently fell back to a default where the binding asked for
-<a href=#1090 id=1090 data-nosnippet>1090</a>/// something the adapter cannot do yet would break it in the other direction —
-<a href=#1091 id=1091 data-nosnippet>1091</a>/// the answer must be a reported [`Unsupported`], not the default.
-<a href=#1092 id=1092 data-nosnippet>1092</a></span><span class="kw">pub trait </span>Target {
-<a href=#1093 id=1093 data-nosnippet>1093</a>    <span class="doccomment">/// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
-<a href=#1094 id=1094 data-nosnippet>1094</a>    /// adapter, so nothing has to carry it alongside the requests.
-<a href=#1095 id=1095 data-nosnippet>1095</a>    </span><span class="kw">const </span>NAME: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
-<a href=#1096 id=1096 data-nosnippet>1096</a>
-<a href=#1097 id=1097 data-nosnippet>1097</a>    <span class="doccomment">/// What the adapter calls one way of converting a value.
-<a href=#1098 id=1098 data-nosnippet>1098</a>    ///
-<a href=#1099 id=1099 data-nosnippet>1099</a>    /// The registry never looks inside it: it compares keys to decide which
-<a href=#1100 id=1100 data-nosnippet>1100</a>    /// values share a conversion ([`Selection`]), and to notice a type whose
-<a href=#1101 id=1101 data-nosnippet>1101</a>    /// conversion needs its own. The obligations that come with minting one
-<a href=#1102 id=1102 data-nosnippet>1102</a>    /// are [`Selection`]'s.
-<a href=#1103 id=1103 data-nosnippet>1103</a>    ///
-<a href=#1104 id=1104 data-nosnippet>1104</a>    /// An adapter whose settings are plain data can use those directly; one
-<a href=#1105 id=1105 data-nosnippet>1105</a>    /// holding something incomparable — a naming closure, say, which cannot be
-<a href=#1106 id=1106 data-nosnippet>1106</a>    /// compared to another closure — interns it and uses the index.
-<a href=#1107 id=1107 data-nosnippet>1107</a>    </span><span class="kw">type </span>ConversionKey: Clone + Eq + std::hash::Hash;
-<a href=#1108 id=1108 data-nosnippet>1108</a>    <span class="doccomment">/// The adapter's own rendering data, retained in the plans and read back by
-<a href=#1109 id=1109 data-nosnippet>1109</a>    /// [`Target::render_operation`] and by the adapter's foreign writer.
-<a href=#1110 id=1110 data-nosnippet>1110</a>    ///
-<a href=#1111 id=1111 data-nosnippet>1111</a>    /// `Clone` because one described operation is applied wherever it is
-<a href=#1112 id=1112 data-nosnippet>1112</a>    /// needed: the description is registered once per use site, and the
-<a href=#1113 id=1113 data-nosnippet>1113</a>    /// alternative is an adapter allocating its own identities for the registry
-<a href=#1114 id=1114 data-nosnippet>1114</a>    /// to trust.
-<a href=#1115 id=1115 data-nosnippet>1115</a>    </span><span class="kw">type </span>Payload: Clone;
-<a href=#1116 id=1116 data-nosnippet>1116</a>
-<a href=#1117 id=1117 data-nosnippet>1117</a>    <span class="doccomment">/// Choose the relation this value is read through, and name the conversion
-<a href=#1118 id=1118 data-nosnippet>1118</a>    /// that makes it.
-<a href=#1119 id=1119 data-nosnippet>1119</a>    ///
-<a href=#1120 id=1120 data-nosnippet>1120</a>    /// This is the one call that sees a [`Position`], and so the only place a
-<a href=#1121 id=1121 data-nosnippet>1121</a>    /// per-site choice can take effect: it does so by coming back as a
-<a href=#1122 id=1122 data-nosnippet>1122</a>    /// different [`Selection::conversion`].
-<a href=#1123 id=1123 data-nosnippet>1123</a>    </span><span class="kw">fn </span>select(<span class="kw-2">&amp;</span><span class="self">self</span>, query: <span class="kw-2">&amp;</span>SelectionQuery&lt;<span class="lifetime">'_</span>&gt;) -&gt; TargetSupport&lt;Selection&lt;<span class="self">Self</span>::ConversionKey&gt;&gt;;
-<a href=#1124 id=1124 data-nosnippet>1124</a>
-<a href=#1125 id=1125 data-nosnippet>1125</a>    <span class="doccomment">/// Describe what carries this value and how its parts are accessed, for
-<a href=#1126 id=1126 data-nosnippet>1126</a>    /// the conversion [`Target::select`] named.
-<a href=#1127 id=1127 data-nosnippet>1127</a>    </span><span class="kw">fn </span>represent(
-<a href=#1128 id=1128 data-nosnippet>1128</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1129 id=1129 data-nosnippet>1129</a>        shape: <span class="kw-2">&amp;</span>ResolvedShape&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1130 id=1130 data-nosnippet>1130</a>        children: <span class="kw-2">&amp;</span>[ChildValue&lt;<span class="lifetime">'_</span>&gt;],
-<a href=#1131 id=1131 data-nosnippet>1131</a>        conversion: <span class="kw-2">&amp;</span><span class="self">Self</span>::ConversionKey,
-<a href=#1132 id=1132 data-nosnippet>1132</a>    ) -&gt; TargetSupport&lt;ReprSpec&lt;<span class="self">Self</span>::Payload&gt;&gt;;
-<a href=#1133 id=1133 data-nosnippet>1133</a>
-<a href=#1134 id=1134 data-nosnippet>1134</a>    <span class="doccomment">/// Describe the wrapper that will export this source function: its
-<a href=#1135 id=1135 data-nosnippet>1135</a>    /// interface, and its routes for the failures its conversions can raise.
-<a href=#1136 id=1136 data-nosnippet>1136</a>    ///
-<a href=#1137 id=1137 data-nosnippet>1137</a>    /// What the binding asked for this export — its symbol above all — the
-<a href=#1138 id=1138 data-nosnippet>1138</a>    /// adapter reads from its own storage under [`SiteDescriptor::declaration`].
-<a href=#1139 id=1139 data-nosnippet>1139</a>    </span><span class="kw">fn </span>boundary(
-<a href=#1140 id=1140 data-nosnippet>1140</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1141 id=1141 data-nosnippet>1141</a>        site: <span class="kw-2">&amp;</span>SiteDescriptor&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1142 id=1142 data-nosnippet>1142</a>        values: <span class="kw-2">&amp;</span>ResolvedValues&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>::Payload&gt;,
-<a href=#1143 id=1143 data-nosnippet>1143</a>    ) -&gt; TargetSupport&lt;BoundarySpec&lt;<span class="self">Self</span>::Payload&gt;&gt;;
-<a href=#1144 id=1144 data-nosnippet>1144</a>
-<a href=#1145 id=1145 data-nosnippet>1145</a>    <span class="doccomment">/// Describe one public declaration and what it requires, from what the
-<a href=#1146 id=1146 data-nosnippet>1146</a>    /// binding recorded under [`SurfaceRequest::declaration`].
-<a href=#1147 id=1147 data-nosnippet>1147</a>    </span><span class="kw">fn </span>surface(
-<a href=#1148 id=1148 data-nosnippet>1148</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1149 id=1149 data-nosnippet>1149</a>        request: <span class="kw-2">&amp;</span>SurfaceRequest&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#1150 id=1150 data-nosnippet>1150</a>        values: <span class="kw-2">&amp;</span>ResolvedValues&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>::Payload&gt;,
-<a href=#1151 id=1151 data-nosnippet>1151</a>    ) -&gt; TargetSupport&lt;SurfaceSpec&lt;<span class="self">Self</span>::Payload&gt;&gt;;
-<a href=#1152 id=1152 data-nosnippet>1152</a>
-<a href=#1153 id=1153 data-nosnippet>1153</a>    <span class="doccomment">/// Render one of this target's operations as a single Rust expression.
-<a href=#1154 id=1154 data-nosnippet>1154</a>    ///
-<a href=#1155 id=1155 data-nosnippet>1155</a>    /// One expression and nothing around it: no `let`, no `match`, no return.
-<a href=#1156 id=1156 data-nosnippet>1156</a>    /// The operands arrive already named by the writer, in the order the
-<a href=#1157 id=1157 data-nosnippet>1157</a>    /// operation's specification lists them.
-<a href=#1158 id=1158 data-nosnippet>1158</a>    </span><span class="kw">fn </span>render_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: <span class="kw-2">&amp;</span><span class="self">Self</span>::Payload, operands: <span class="kw-2">&amp;</span>[syn::Ident]) -&gt; TokenStream;
-<a href=#1159 id=1159 data-nosnippet>1159</a>
-<a href=#1160 id=1160 data-nosnippet>1160</a>    <span class="doccomment">/// Say, for the report, what this declaration is: the adapter's own
-<a href=#1161 id=1161 data-nosnippet>1161</a>    /// declarator word and where the thing lands in the foreign language.
-<a href=#1162 id=1162 data-nosnippet>1162</a>    ///
-<a href=#1163 id=1163 data-nosnippet>1163</a>    /// Read from the same storage [`Target::boundary`] and [`Target::surface`]
-<a href=#1164 id=1164 data-nosnippet>1164</a>    /// read, under the same [`Declaration`], so the report cannot say one
-<a href=#1165 id=1165 data-nosnippet>1165</a>    /// thing and the generated code another. Asked of every requested output,
-<a href=#1166 id=1166 data-nosnippet>1166</a>    /// including one that was skipped — the report says what a declaration was
-<a href=#1167 id=1167 data-nosnippet>1167</a>    /// *for*, not only what became of it.
-<a href=#1168 id=1168 data-nosnippet>1168</a>    </span><span class="kw">fn </span>describe(<span class="kw-2">&amp;</span><span class="self">self</span>, declaration: <span class="kw-2">&amp;</span>Declaration) -&gt; Described;
-<a href=#1169 id=1169 data-nosnippet>1169</a>}
-<a href=#1170 id=1170 data-nosnippet>1170</a>
-<a href=#1171 id=1171 data-nosnippet>1171</a><span class="doccomment">/// How a report names one declaration on the foreign side — see
-<a href=#1172 id=1172 data-nosnippet>1172</a>/// [`Target::describe`].
-<a href=#1173 id=1173 data-nosnippet>1173</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
-<a href=#1174 id=1174 data-nosnippet>1174</a></span><span class="kw">pub struct </span>Described {
-<a href=#1175 id=1175 data-nosnippet>1175</a>    <span class="doccomment">/// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
-<a href=#1176 id=1176 data-nosnippet>1176</a>    /// — the adapter's own word, printed back verbatim. Finer than the prefix
-<a href=#1177 id=1177 data-nosnippet>1177</a>    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
-<a href=#1178 id=1178 data-nosnippet>1178</a>    /// a `type`.
-<a href=#1179 id=1179 data-nosnippet>1179</a>    </span><span class="kw">pub </span>representation: String,
-<a href=#1180 id=1180 data-nosnippet>1180</a>    <span class="doccomment">/// Where it lands in the target language, spelled the way that language
-<a href=#1181 id=1181 data-nosnippet>1181</a>    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
-<a href=#1182 id=1182 data-nosnippet>1182</a>    </span><span class="kw">pub </span>placement: String,
-<a href=#1183 id=1183 data-nosnippet>1183</a>}
-<a href=#1184 id=1184 data-nosnippet>1184</a>
-<a href=#1185 id=1185 data-nosnippet>1185</a><span class="kw">impl </span>Described {
-<a href=#1186 id=1186 data-nosnippet>1186</a>    <span class="kw">pub fn </span>new(representation: <span class="kw">impl </span>Into&lt;String&gt;, placement: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="self">Self </span>{
-<a href=#1187 id=1187 data-nosnippet>1187</a>        Described {
-<a href=#1188 id=1188 data-nosnippet>1188</a>            representation: representation.into(),
-<a href=#1189 id=1189 data-nosnippet>1189</a>            placement: placement.into(),
-<a href=#1190 id=1190 data-nosnippet>1190</a>        }
-<a href=#1191 id=1191 data-nosnippet>1191</a>    }
-<a href=#1192 id=1192 data-nosnippet>1192</a>}
+<a href=#1017 id=1017 data-nosnippet>1017</a>/// A declaration that names no entity — a callback, a constant computed on the
+<a href=#1018 id=1018 data-nosnippet>1018</a>/// foreign side — is refused before `surface` is asked, so nothing here is
+<a href=#1019 id=1019 data-nosnippet>1019</a>/// ever absent. An entity the binding defined itself is here like any other:
+<a href=#1020 id=1020 data-nosnippet>1020</a>/// a helper's stated signature arrives as [`SourceItem::Function`], an opaque
+<a href=#1021 id=1021 data-nosnippet>1021</a>/// type declared over one the source never exported as [`SourceItem::Extern`].
+<a href=#1022 id=1022 data-nosnippet>1022</a>///
+<a href=#1023 id=1023 data-nosnippet>1023</a>/// [`Flat`]: prebindgen_flat::flat::Flat
+<a href=#1024 id=1024 data-nosnippet>1024</a>/// [`Element`]: prebindgen_flat::flat::Element
+<a href=#1025 id=1025 data-nosnippet>1025</a></span><span class="attr">#[derive(Clone, Copy)]
+<a href=#1026 id=1026 data-nosnippet>1026</a></span><span class="kw">pub enum </span>SourceItem&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#1027 id=1027 data-nosnippet>1027</a>    <span class="doccomment">/// A captured free function, the item behind a `fn:` declaration.
+<a href=#1028 id=1028 data-nosnippet>1028</a>    ///
+<a href=#1029 id=1029 data-nosnippet>1029</a>    /// The target reads its signature — [`Function::params`] and
+<a href=#1030 id=1030 data-nosnippet>1030</a>    /// [`Function::ret`] — to spell the foreign declaration, and pairs each
+<a href=#1031 id=1031 data-nosnippet>1031</a>    /// parameter with the already-planned conversion the registry hands over
+<a href=#1032 id=1032 data-nosnippet>1032</a>    /// in [`ResolvedValues::inputs`], in the same order. The call itself is
+<a href=#1033 id=1033 data-nosnippet>1033</a>    /// not the target's business: the registry places it when it assembles
+<a href=#1034 id=1034 data-nosnippet>1034</a>    /// the wrapper, from the [`SiteDescriptor`] it asked [`Target::boundary`]
+<a href=#1035 id=1035 data-nosnippet>1035</a>    /// about.
+<a href=#1036 id=1036 data-nosnippet>1036</a>    </span>Function(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Function),
+<a href=#1037 id=1037 data-nosnippet>1037</a>    <span class="doccomment">/// A captured struct with fields the model can inspect, the usual item
+<a href=#1038 id=1038 data-nosnippet>1038</a>    /// behind a `type:` declaration.
+<a href=#1039 id=1039 data-nosnippet>1039</a>    ///
+<a href=#1040 id=1040 data-nosnippet>1040</a>    /// A target declaring one — a `repr(C)` mirror, a Kotlin `data class` —
+<a href=#1041 id=1041 data-nosnippet>1041</a>    /// re-declares its fields: [`Struct::fields`], with the `#[cfg]`
+<a href=#1042 id=1042 data-nosnippet>1042</a>    /// condition of each in [`SurfaceRequest::field_conditions`]. A struct
+<a href=#1043 id=1043 data-nosnippet>1043</a>    /// the binding declared to be carried whole crosses as a handle instead,
+<a href=#1044 id=1044 data-nosnippet>1044</a>    /// and its fields go unread; the target learns that from its own
+<a href=#1045 id=1045 data-nosnippet>1045</a>    /// configuration, not from this variant. A tuple struct is not this
+<a href=#1046 id=1046 data-nosnippet>1046</a>    /// variant at all: its fields are not modelled, and the model declares it
+<a href=#1047 id=1047 data-nosnippet>1047</a>    /// as [`SourceItem::Extern`].
+<a href=#1048 id=1048 data-nosnippet>1048</a>    </span>Struct(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Struct),
+<a href=#1049 id=1049 data-nosnippet>1049</a>    <span class="doccomment">/// A captured declaration with nothing behind it — a marked type alias
+<a href=#1050 id=1050 data-nosnippet>1050</a>    /// such as `pub type Ledger = crate::ledger::Ledger;`, or a tuple struct —
+<a href=#1051 id=1051 data-nosnippet>1051</a>    /// which the source model calls an extern.
+<a href=#1052 id=1052 data-nosnippet>1052</a>    ///
+<a href=#1053 id=1053 data-nosnippet>1053</a>    /// It has no parts to convert through, so a value of it crosses whole: as
+<a href=#1054 id=1054 data-nosnippet>1054</a>    /// an opaque handle, represented by a carrier for the address and a
+<a href=#1055 id=1055 data-nosnippet>1055</a>    /// release for it (see [`ReprSpec::release`]). [`Extern::target`]
+<a href=#1056 id=1056 data-nosnippet>1056</a>    /// says what the alias pointed at, as text, for a target that wants to
+<a href=#1057 id=1057 data-nosnippet>1057</a>    /// recognise one; the model does not classify it. A target with no handle
+<a href=#1058 id=1058 data-nosnippet>1058</a>    /// representation refuses this variant, and one that declared this type to
+<a href=#1059 id=1059 data-nosnippet>1059</a>    /// be read through its fields finds no struct relation to select at all.
+<a href=#1060 id=1060 data-nosnippet>1060</a>    </span>Extern(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Extern),
+<a href=#1061 id=1061 data-nosnippet>1061</a>}
+<a href=#1062 id=1062 data-nosnippet>1062</a>
+<a href=#1063 id=1063 data-nosnippet>1063</a><span class="comment">// ---------------------------------------------------------------------------
+<a href=#1064 id=1064 data-nosnippet>1064</a>// The interface
+<a href=#1065 id=1065 data-nosnippet>1065</a>// ---------------------------------------------------------------------------
+<a href=#1066 id=1066 data-nosnippet>1066</a>
+<a href=#1067 id=1067 data-nosnippet>1067</a></span><span class="doccomment">/// The language adapter, as the engine sees it.
+<a href=#1068 id=1068 data-nosnippet>1068</a>///
+<a href=#1069 id=1069 data-nosnippet>1069</a>/// Every method answers a local question about one value, one call or one
+<a href=#1070 id=1070 data-nosnippet>1070</a>/// declaration. None of them walks a type, allocates a name, or decides control
+<a href=#1071 id=1071 data-nosnippet>1071</a>/// flow: those are the registry's, which is why a second field, a nested struct
+<a href=#1072 id=1072 data-nosnippet>1072</a>/// or a third target costs an adapter nothing new.
+<a href=#1073 id=1073 data-nosnippet>1073</a>///
+<a href=#1074 id=1074 data-nosnippet>1074</a>/// # Where the settings live
+<a href=#1075 id=1075 data-nosnippet>1075</a>///
+<a href=#1076 id=1076 data-nosnippet>1076</a>/// Here. The registry stores no configuration of its own and knows no
+<a href=#1077 id=1077 data-nosnippet>1077</a>/// precedence rule: it does not hold a table of the binding's choices, and it
+<a href=#1078 id=1078 data-nosnippet>1078</a>/// cannot say whether one recorded for a parameter outranks one recorded for a
+<a href=#1079 id=1079 data-nosnippet>1079</a>/// type. An adapter keeps its `build.rs` storage — the same storage its v1
+<a href=#1080 id=1080 data-nosnippet>1080</a>/// route reads — and answers each question below out of it, addressed by
+<a href=#1081 id=1081 data-nosnippet>1081</a>/// [`SelectionQuery::position`] for a value and by the [`Declaration`] for an
+<a href=#1082 id=1082 data-nosnippet>1082</a>/// output.
+<a href=#1083 id=1083 data-nosnippet>1083</a>///
+<a href=#1084 id=1084 data-nosnippet>1084</a>/// What the registry does own is *identity*: [`Target::select`] returns a
+<a href=#1085 id=1085 data-nosnippet>1085</a>/// [`Selection`] whose `conversion` key stands for the settings the adapter
+<a href=#1086 id=1086 data-nosnippet>1086</a>/// just applied, and the registry reuses one conversion for every value whose
+<a href=#1087 id=1087 data-nosnippet>1087</a>/// crossing, relation, children and key all match. Hence the one rule an
+<a href=#1088 id=1088 data-nosnippet>1088</a>/// adapter owes it, [`Selection`]'s: equal keys are interchangeable
+<a href=#1089 id=1089 data-nosnippet>1089</a>/// conversions, and settings that generate differently get different keys.
+<a href=#1090 id=1090 data-nosnippet>1090</a>/// A lookup that silently fell back to a default where the binding asked for
+<a href=#1091 id=1091 data-nosnippet>1091</a>/// something the adapter cannot do yet would break it in the other direction —
+<a href=#1092 id=1092 data-nosnippet>1092</a>/// the answer must be a reported [`Unsupported`], not the default.
+<a href=#1093 id=1093 data-nosnippet>1093</a></span><span class="kw">pub trait </span>Target {
+<a href=#1094 id=1094 data-nosnippet>1094</a>    <span class="doccomment">/// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
+<a href=#1095 id=1095 data-nosnippet>1095</a>    /// adapter, so nothing has to carry it alongside the requests.
+<a href=#1096 id=1096 data-nosnippet>1096</a>    </span><span class="kw">const </span>NAME: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+<a href=#1097 id=1097 data-nosnippet>1097</a>
+<a href=#1098 id=1098 data-nosnippet>1098</a>    <span class="doccomment">/// What the adapter calls one way of converting a value.
+<a href=#1099 id=1099 data-nosnippet>1099</a>    ///
+<a href=#1100 id=1100 data-nosnippet>1100</a>    /// The registry never looks inside it: it compares keys to decide which
+<a href=#1101 id=1101 data-nosnippet>1101</a>    /// values share a conversion ([`Selection`]), and to notice a type whose
+<a href=#1102 id=1102 data-nosnippet>1102</a>    /// conversion needs its own. The obligations that come with minting one
+<a href=#1103 id=1103 data-nosnippet>1103</a>    /// are [`Selection`]'s.
+<a href=#1104 id=1104 data-nosnippet>1104</a>    ///
+<a href=#1105 id=1105 data-nosnippet>1105</a>    /// An adapter whose settings are plain data can use those directly; one
+<a href=#1106 id=1106 data-nosnippet>1106</a>    /// holding something incomparable — a naming closure, say, which cannot be
+<a href=#1107 id=1107 data-nosnippet>1107</a>    /// compared to another closure — interns it and uses the index.
+<a href=#1108 id=1108 data-nosnippet>1108</a>    </span><span class="kw">type </span>ConversionKey: Clone + Eq + std::hash::Hash;
+<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="doccomment">/// The adapter's own rendering data, retained in the plans and read back by
+<a href=#1110 id=1110 data-nosnippet>1110</a>    /// [`Target::render_operation`] and by the adapter's foreign writer.
+<a href=#1111 id=1111 data-nosnippet>1111</a>    ///
+<a href=#1112 id=1112 data-nosnippet>1112</a>    /// `Clone` because one described operation is applied wherever it is
+<a href=#1113 id=1113 data-nosnippet>1113</a>    /// needed: the description is registered once per use site, and the
+<a href=#1114 id=1114 data-nosnippet>1114</a>    /// alternative is an adapter allocating its own identities for the registry
+<a href=#1115 id=1115 data-nosnippet>1115</a>    /// to trust.
+<a href=#1116 id=1116 data-nosnippet>1116</a>    </span><span class="kw">type </span>Payload: Clone;
+<a href=#1117 id=1117 data-nosnippet>1117</a>
+<a href=#1118 id=1118 data-nosnippet>1118</a>    <span class="doccomment">/// Choose the relation this value is read through, and name the conversion
+<a href=#1119 id=1119 data-nosnippet>1119</a>    /// that makes it.
+<a href=#1120 id=1120 data-nosnippet>1120</a>    ///
+<a href=#1121 id=1121 data-nosnippet>1121</a>    /// This is the one call that sees a [`Position`], and so the only place a
+<a href=#1122 id=1122 data-nosnippet>1122</a>    /// per-site choice can take effect: it does so by coming back as a
+<a href=#1123 id=1123 data-nosnippet>1123</a>    /// different [`Selection::conversion`].
+<a href=#1124 id=1124 data-nosnippet>1124</a>    </span><span class="kw">fn </span>select(<span class="kw-2">&amp;</span><span class="self">self</span>, query: <span class="kw-2">&amp;</span>SelectionQuery&lt;<span class="lifetime">'_</span>&gt;) -&gt; TargetSupport&lt;Selection&lt;<span class="self">Self</span>::ConversionKey&gt;&gt;;
+<a href=#1125 id=1125 data-nosnippet>1125</a>
+<a href=#1126 id=1126 data-nosnippet>1126</a>    <span class="doccomment">/// Describe what carries this value and how its parts are accessed, for
+<a href=#1127 id=1127 data-nosnippet>1127</a>    /// the conversion [`Target::select`] named.
+<a href=#1128 id=1128 data-nosnippet>1128</a>    </span><span class="kw">fn </span>represent(
+<a href=#1129 id=1129 data-nosnippet>1129</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1130 id=1130 data-nosnippet>1130</a>        shape: <span class="kw-2">&amp;</span>ResolvedShape&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1131 id=1131 data-nosnippet>1131</a>        children: <span class="kw-2">&amp;</span>[ChildValue&lt;<span class="lifetime">'_</span>&gt;],
+<a href=#1132 id=1132 data-nosnippet>1132</a>        conversion: <span class="kw-2">&amp;</span><span class="self">Self</span>::ConversionKey,
+<a href=#1133 id=1133 data-nosnippet>1133</a>    ) -&gt; TargetSupport&lt;ReprSpec&lt;<span class="self">Self</span>::Payload&gt;&gt;;
+<a href=#1134 id=1134 data-nosnippet>1134</a>
+<a href=#1135 id=1135 data-nosnippet>1135</a>    <span class="doccomment">/// Describe the wrapper that will export this source function: its
+<a href=#1136 id=1136 data-nosnippet>1136</a>    /// interface, and its routes for the failures its conversions can raise.
+<a href=#1137 id=1137 data-nosnippet>1137</a>    ///
+<a href=#1138 id=1138 data-nosnippet>1138</a>    /// What the binding asked for this export — its symbol above all — the
+<a href=#1139 id=1139 data-nosnippet>1139</a>    /// adapter reads from its own storage under [`SiteDescriptor::declaration`].
+<a href=#1140 id=1140 data-nosnippet>1140</a>    </span><span class="kw">fn </span>boundary(
+<a href=#1141 id=1141 data-nosnippet>1141</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1142 id=1142 data-nosnippet>1142</a>        site: <span class="kw-2">&amp;</span>SiteDescriptor&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1143 id=1143 data-nosnippet>1143</a>        values: <span class="kw-2">&amp;</span>ResolvedValues&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>::Payload&gt;,
+<a href=#1144 id=1144 data-nosnippet>1144</a>    ) -&gt; TargetSupport&lt;BoundarySpec&lt;<span class="self">Self</span>::Payload&gt;&gt;;
+<a href=#1145 id=1145 data-nosnippet>1145</a>
+<a href=#1146 id=1146 data-nosnippet>1146</a>    <span class="doccomment">/// Describe one public declaration and what it requires, from what the
+<a href=#1147 id=1147 data-nosnippet>1147</a>    /// binding recorded under [`SurfaceRequest::declaration`].
+<a href=#1148 id=1148 data-nosnippet>1148</a>    </span><span class="kw">fn </span>surface(
+<a href=#1149 id=1149 data-nosnippet>1149</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1150 id=1150 data-nosnippet>1150</a>        request: <span class="kw-2">&amp;</span>SurfaceRequest&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1151 id=1151 data-nosnippet>1151</a>        values: <span class="kw-2">&amp;</span>ResolvedValues&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>::Payload&gt;,
+<a href=#1152 id=1152 data-nosnippet>1152</a>    ) -&gt; TargetSupport&lt;SurfaceSpec&lt;<span class="self">Self</span>::Payload&gt;&gt;;
+<a href=#1153 id=1153 data-nosnippet>1153</a>
+<a href=#1154 id=1154 data-nosnippet>1154</a>    <span class="doccomment">/// Render one of this target's operations as a single Rust expression.
+<a href=#1155 id=1155 data-nosnippet>1155</a>    ///
+<a href=#1156 id=1156 data-nosnippet>1156</a>    /// One expression and nothing around it: no `let`, no `match`, no return.
+<a href=#1157 id=1157 data-nosnippet>1157</a>    /// The operands arrive already named by the writer, in the order the
+<a href=#1158 id=1158 data-nosnippet>1158</a>    /// operation's specification lists them.
+<a href=#1159 id=1159 data-nosnippet>1159</a>    </span><span class="kw">fn </span>render_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: <span class="kw-2">&amp;</span><span class="self">Self</span>::Payload, operands: <span class="kw-2">&amp;</span>[syn::Ident]) -&gt; TokenStream;
+<a href=#1160 id=1160 data-nosnippet>1160</a>
+<a href=#1161 id=1161 data-nosnippet>1161</a>    <span class="doccomment">/// Say, for the report, what this declaration is: the adapter's own
+<a href=#1162 id=1162 data-nosnippet>1162</a>    /// declarator word and where the thing lands in the foreign language.
+<a href=#1163 id=1163 data-nosnippet>1163</a>    ///
+<a href=#1164 id=1164 data-nosnippet>1164</a>    /// Read from the same storage [`Target::boundary`] and [`Target::surface`]
+<a href=#1165 id=1165 data-nosnippet>1165</a>    /// read, under the same [`Declaration`], so the report cannot say one
+<a href=#1166 id=1166 data-nosnippet>1166</a>    /// thing and the generated code another. Asked of every requested output,
+<a href=#1167 id=1167 data-nosnippet>1167</a>    /// including one that was skipped — the report says what a declaration was
+<a href=#1168 id=1168 data-nosnippet>1168</a>    /// *for*, not only what became of it.
+<a href=#1169 id=1169 data-nosnippet>1169</a>    </span><span class="kw">fn </span>describe(<span class="kw-2">&amp;</span><span class="self">self</span>, declaration: <span class="kw-2">&amp;</span>Declaration) -&gt; Described;
+<a href=#1170 id=1170 data-nosnippet>1170</a>}
+<a href=#1171 id=1171 data-nosnippet>1171</a>
+<a href=#1172 id=1172 data-nosnippet>1172</a><span class="doccomment">/// How a report names one declaration on the foreign side — see
+<a href=#1173 id=1173 data-nosnippet>1173</a>/// [`Target::describe`].
+<a href=#1174 id=1174 data-nosnippet>1174</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
+<a href=#1175 id=1175 data-nosnippet>1175</a></span><span class="kw">pub struct </span>Described {
+<a href=#1176 id=1176 data-nosnippet>1176</a>    <span class="doccomment">/// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
+<a href=#1177 id=1177 data-nosnippet>1177</a>    /// — the adapter's own word, printed back verbatim. Finer than the prefix
+<a href=#1178 id=1178 data-nosnippet>1178</a>    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
+<a href=#1179 id=1179 data-nosnippet>1179</a>    /// a `type`.
+<a href=#1180 id=1180 data-nosnippet>1180</a>    </span><span class="kw">pub </span>representation: String,
+<a href=#1181 id=1181 data-nosnippet>1181</a>    <span class="doccomment">/// Where it lands in the target language, spelled the way that language
+<a href=#1182 id=1182 data-nosnippet>1182</a>    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
+<a href=#1183 id=1183 data-nosnippet>1183</a>    </span><span class="kw">pub </span>placement: String,
+<a href=#1184 id=1184 data-nosnippet>1184</a>}
+<a href=#1185 id=1185 data-nosnippet>1185</a>
+<a href=#1186 id=1186 data-nosnippet>1186</a><span class="kw">impl </span>Described {
+<a href=#1187 id=1187 data-nosnippet>1187</a>    <span class="kw">pub fn </span>new(representation: <span class="kw">impl </span>Into&lt;String&gt;, placement: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="self">Self </span>{
+<a href=#1188 id=1188 data-nosnippet>1188</a>        Described {
+<a href=#1189 id=1189 data-nosnippet>1189</a>            representation: representation.into(),
+<a href=#1190 id=1190 data-nosnippet>1190</a>            placement: placement.into(),
+<a href=#1191 id=1191 data-nosnippet>1191</a>        }
+<a href=#1192 id=1192 data-nosnippet>1192</a>    }
+<a href=#1193 id=1193 data-nosnippet>1193</a>}
 </code></pre></div></section></main></body></html>
