@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Declaration"],"type":["CapturedName"]};
+window.SIDEBAR_ITEMS = {"enum":["Declaration"],"type":["CapturedName","LocalName"]};
