@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Declaration","EntityName"]};
+window.SIDEBAR_ITEMS = {"enum":["Declaration"]};

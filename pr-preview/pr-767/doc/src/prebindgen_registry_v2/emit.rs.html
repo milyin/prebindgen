@@ -52,11 +52,11 @@
 <a href=#52 id=52 data-nosnippet>52</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(flat: <span class="kw-2">&amp;</span>Flat, default: syn::Path) -&gt; <span class="self">Self </span>{
 <a href=#53 id=53 data-nosnippet>53</a>        <span class="kw">let </span>modules = flat
 <a href=#54 id=54 data-nosnippet>54</a>            .elements()
-<a href=#55 id=55 data-nosnippet>55</a>            .filter_map(<span class="kw">crate</span>::entity::Entity::of)
-<a href=#56 id=56 data-nosnippet>56</a>            .filter(|entity| flat.is_binding_local(entity.name()))
-<a href=#57 id=57 data-nosnippet>57</a>            .filter_map(|entity| {
-<a href=#58 id=58 data-nosnippet>58</a>                <span class="kw">let </span>module = entity.crate_name()<span class="question-mark">?</span>;
-<a href=#59 id=59 data-nosnippet>59</a>                <span class="prelude-val">Some</span>((entity.name().to_string(), syn::parse_str(module).ok()<span class="question-mark">?</span>))
+<a href=#55 id=55 data-nosnippet>55</a>            .filter_map(|element| <span class="prelude-val">Some</span>((element.name()<span class="question-mark">?</span>, element)))
+<a href=#56 id=56 data-nosnippet>56</a>            .filter(|(name, <span class="kw">_</span>)| flat.is_binding_local(<span class="kw-2">*</span>name))
+<a href=#57 id=57 data-nosnippet>57</a>            .filter_map(|(name, element)| {
+<a href=#58 id=58 data-nosnippet>58</a>                <span class="kw">let </span>module = element.location().crate_name.as_deref()<span class="question-mark">?</span>;
+<a href=#59 id=59 data-nosnippet>59</a>                <span class="prelude-val">Some</span>((name.to_string(), syn::parse_str(module).ok()<span class="question-mark">?</span>))
 <a href=#60 id=60 data-nosnippet>60</a>            })
 <a href=#61 id=61 data-nosnippet>61</a>            .collect();
 <a href=#62 id=62 data-nosnippet>62</a>        Reach { modules, default }
