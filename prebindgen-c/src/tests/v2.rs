@@ -481,3 +481,40 @@ fn a_conditional_value_refuses_the_enum() {
     assert_eq!(declaration.to_string(), "type:Operation");
     assert_eq!(skip.capability.as_str(), "unsupported.c.conditional_value");
 }
+
+/// A `#[non_exhaustive]` enum is refused.
+///
+/// Rust requires a wildcard arm wherever another crate matches such an enum,
+/// and a binding crate is always another crate — so a match naming every value
+/// the source declares today is still E0004 there. Going out of Rust there is
+/// nothing for that arm to produce, so the enum is refused rather than carried
+/// with an answer invented for it.
+#[test]
+fn a_non_exhaustive_enum_is_refused() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            #[non_exhaustive]
+            pub enum Operation {
+                Add,
+                Mul = 7,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.c.non_exhaustive_enum"
+    );
+}

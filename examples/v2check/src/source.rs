@@ -27,6 +27,38 @@ pub fn ledger_close(ledger: Ledger) -> i64 {
     ledger.total
 }
 
+/// A fieldless enum, and one whose values carry the delimiters of a
+/// constructor without carrying anything through them.
+///
+/// `Mul` numbers itself and `Add` takes the number before it, so a mirror has
+/// to read both from the model rather than counting. `Twice()` and `Halve {}`
+/// are fieldless too — the model says so — and every mention of them in
+/// generated Rust has to keep its delimiters, which is what rustc checks
+/// here by compiling this crate against what was generated from it.
+pub enum Operation {
+    Add,
+    Mul = 7,
+}
+
+pub fn operation_flip(op: Operation) -> Operation {
+    match op {
+        Operation::Add => Operation::Mul,
+        Operation::Mul => Operation::Add,
+    }
+}
+
+pub enum Adjust {
+    Twice(),
+    Halve {},
+}
+
+pub fn adjust_invert(adjust: Adjust) -> Adjust {
+    match adjust {
+        Adjust::Twice() => Adjust::Halve {},
+        Adjust::Halve {} => Adjust::Twice(),
+    }
+}
+
 /// A struct with a positional field, and one with a scalar neither adapter
 /// carries: both are here so that a target refusing them is visible in the
 /// report rather than only in a comment.

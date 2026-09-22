@@ -442,6 +442,20 @@ pub struct Enum {
 }
 
 impl Enum {
+    /// Whether this enum was written `#[non_exhaustive]`.
+    ///
+    /// Such an enum may gain values without a breaking change, so Rust
+    /// requires a wildcard arm wherever another crate matches it — which
+    /// every generated binding is. A consumer that matches one value at a
+    /// time refuses it rather than emitting a match that does not compile.
+    pub fn is_non_exhaustive(&self) -> bool {
+        self.origin
+            .syntax
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("non_exhaustive"))
+    }
+
     /// Whether any value of this enum was written under a `#[cfg]`.
     ///
     /// Such an enum cannot be mirrored from [`Self::discriminant_values`]:

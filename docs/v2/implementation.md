@@ -296,16 +296,20 @@ establish the behavior of the resulting foreign interface.
    alternative carrying a field makes a sum, which the model calls a variant
    and which has no lowering.
 
-   Three shapes are refused rather than mirrored, by one check both targets
+   Four shapes are refused rather than mirrored, by one check both targets
    share. A number the model could not evaluate — a `const`, arithmetic — is
    not a number to mirror. A value written under a `#[cfg]` breaks the
    numbering, because the model counts every value as present, and would put
-   an entry in the mirror for a variant the source crate compiled out. And a
-   number outside the carrier's range is refused where the carrier is narrower
-   than the model's `i64`, which is JNI's `Int`. What is *not* refused is a
-   fieldless value written `Add()` or `Mul {}`: those are not unit variants,
-   so every mention of them carries its delimiters, which the model's own
-   speller supplies from the shape it captured.
+   an entry in the mirror for a variant the source crate compiled out. A
+   `#[non_exhaustive]` enum cannot be matched from another crate without an
+   arm for a value the binding does not know, and going out of Rust there is
+   nothing for that arm to produce. And a number outside the carrier's range
+   is refused where the carrier is narrower than the model's `i64`, which is
+   JNI's `Int`. What is *not* refused is a fieldless value written `Add()` or
+   `Mul {}`: those are not unit variants, so every mention of them carries its
+   delimiters, which the model's own speller supplies from the shape it
+   captured — and `examples/v2check` declares one of each, so rustc compiles
+   the generated matches against the source crate they name.
 
 ### What it does not settle
 
