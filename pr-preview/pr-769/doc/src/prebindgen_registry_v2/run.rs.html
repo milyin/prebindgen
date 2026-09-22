@@ -133,7 +133,7 @@
 <a href=#133 id=133 data-nosnippet>133</a>    }
 <a href=#134 id=134 data-nosnippet>134</a>}
 <a href=#135 id=135 data-nosnippet>135</a>
-<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// Check declarations against the model before anything is planned.
+<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// Check the binding's outputs against the model before anything is planned.
 <a href=#137 id=137 data-nosnippet>137</a>///
 <a href=#138 id=138 data-nosnippet>138</a>/// A declaration is a statement of intent, so a declared item the source never
 <a href=#139 id=139 data-nosnippet>139</a>/// captured is an error and not a capability question — the same rule v1 holds.
@@ -143,29 +143,37 @@
 <a href=#143 id=143 data-nosnippet>143</a>/// nullary function. Looking a function up among the constants reported a typo
 <a href=#144 id=144 data-nosnippet>144</a>/// that was not there; looking it up in the whole namespace let a
 <a href=#145 id=145 data-nosnippet>145</a>/// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
-<a href=#146 id=146 data-nosnippet>146</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>check_declarations(declared: <span class="kw-2">&amp;</span>[Declaration], flat: <span class="kw-2">&amp;</span>Flat) -&gt; <span class="prelude-ty">Result</span>&lt;(), EngineError&gt; {
-<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">let </span>missing: Vec&lt;<span class="kw">_</span>&gt; = declared
-<a href=#148 id=148 data-nosnippet>148</a>        .iter()
-<a href=#149 id=149 data-nosnippet>149</a>        .filter(|declaration| declaration.missing_from(flat))
-<a href=#150 id=150 data-nosnippet>150</a>        .cloned()
-<a href=#151 id=151 data-nosnippet>151</a>        .collect();
-<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">if </span>!missing.is_empty() {
-<a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(EngineError::DeclaredNotFound { entries: missing });
-<a href=#154 id=154 data-nosnippet>154</a>    }
-<a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a>    <span class="comment">// One id, one declaration: the report is read by id, and a repeat would leave
-<a href=#157 id=157 data-nosnippet>157</a>    // one of the two entries unaccounted for.
-<a href=#158 id=158 data-nosnippet>158</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>seen = std::collections::HashSet::new();
-<a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">let </span><span class="kw-2">mut </span>repeated: Vec&lt;<span class="kw">_</span>&gt; = declared
-<a href=#160 id=160 data-nosnippet>160</a>        .iter()
-<a href=#161 id=161 data-nosnippet>161</a>        .filter(|declaration| !seen.insert(<span class="kw-2">*</span>declaration))
-<a href=#162 id=162 data-nosnippet>162</a>        .cloned()
-<a href=#163 id=163 data-nosnippet>163</a>        .collect();
-<a href=#164 id=164 data-nosnippet>164</a>    repeated.sort();
-<a href=#165 id=165 data-nosnippet>165</a>    repeated.dedup();
-<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">if </span>!repeated.is_empty() {
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(EngineError::DuplicateDeclaration { entries: repeated });
-<a href=#168 id=168 data-nosnippet>168</a>    }
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="prelude-val">Ok</span>(())
-<a href=#170 id=170 data-nosnippet>170</a>}
+<a href=#146 id=146 data-nosnippet>146</a>///
+<a href=#147 id=147 data-nosnippet>147</a>/// An output is the declaration *and* what the target recorded for it, so one
+<a href=#148 id=148 data-nosnippet>148</a>/// entity declared twice is two outputs and is allowed; the same entity
+<a href=#149 id=149 data-nosnippet>149</a>/// declared twice as the same thing is the binding saying one thing twice, and
+<a href=#150 id=150 data-nosnippet>150</a>/// is refused — the two would be one foreign declaration emitted from two
+<a href=#151 id=151 data-nosnippet>151</a>/// plans.
+<a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>check_declarations&lt;K: Clone + Eq + std::hash::Hash&gt;(
+<a href=#153 id=153 data-nosnippet>153</a>    declared: <span class="kw-2">&amp;</span>[(Declaration, K)],
+<a href=#154 id=154 data-nosnippet>154</a>    flat: <span class="kw-2">&amp;</span>Flat,
+<a href=#155 id=155 data-nosnippet>155</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), EngineError&gt; {
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">let </span>missing: Vec&lt;<span class="kw">_</span>&gt; = declared
+<a href=#157 id=157 data-nosnippet>157</a>        .iter()
+<a href=#158 id=158 data-nosnippet>158</a>        .map(|(declaration, <span class="kw">_</span>)| declaration)
+<a href=#159 id=159 data-nosnippet>159</a>        .filter(|declaration| declaration.missing_from(flat))
+<a href=#160 id=160 data-nosnippet>160</a>        .cloned()
+<a href=#161 id=161 data-nosnippet>161</a>        .collect();
+<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">if </span>!missing.is_empty() {
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(EngineError::DeclaredNotFound { entries: missing });
+<a href=#164 id=164 data-nosnippet>164</a>    }
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span><span class="kw-2">mut </span>seen = std::collections::HashSet::new();
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">let </span><span class="kw-2">mut </span>repeated: Vec&lt;<span class="kw">_</span>&gt; = declared
+<a href=#168 id=168 data-nosnippet>168</a>        .iter()
+<a href=#169 id=169 data-nosnippet>169</a>        .filter(|output| !seen.insert(<span class="kw-2">*</span>output))
+<a href=#170 id=170 data-nosnippet>170</a>        .map(|(declaration, <span class="kw">_</span>)| declaration.clone())
+<a href=#171 id=171 data-nosnippet>171</a>        .collect();
+<a href=#172 id=172 data-nosnippet>172</a>    repeated.sort();
+<a href=#173 id=173 data-nosnippet>173</a>    repeated.dedup();
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">if </span>!repeated.is_empty() {
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(EngineError::DuplicateDeclaration { entries: repeated });
+<a href=#176 id=176 data-nosnippet>176</a>    }
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="prelude-val">Ok</span>(())
+<a href=#178 id=178 data-nosnippet>178</a>}
 </code></pre></div></section></main></body></html>

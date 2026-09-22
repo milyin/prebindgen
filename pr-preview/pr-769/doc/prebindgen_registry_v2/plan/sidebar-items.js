@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["FunctionPlan","NodeId","ValuePlan"]};
+window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["FunctionPlan","NodeId","OutputId","ValuePlan"]};
