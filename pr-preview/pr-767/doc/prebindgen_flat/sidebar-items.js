@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Conditioned"],"fn":["close_up"],"mod":["flat","pipeline","shape","types_util"],"trait":["RustEmitter"]};
