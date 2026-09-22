@@ -387,10 +387,10 @@ chain from capture to planning, in internal pseudocode rather than user
 `build.rs` code:
 
 **Implemented.** This is today's call path: `CbindgenBuilder::build()` under v2
-reads its own declaration storage once, turns it into the declaration list
-*and* the C target that holds what each declaration is, and hands both to the
-engine. The JNI frontend does the same with its declarations and the JNI
-target. Nothing of v1
+reads its own declaration storage once, turns it into a list pairing each
+declaration with what the binding declared it as, *and* the C target that
+answers about values of a type, and hands both to the engine. The JNI frontend
+does the same with its declarations and the JNI target. Nothing of v1
 runs on this route — no `declare_into`, no resolution, no assembly — and the
 frontend's part is naming: which C name a type or a symbol gets is its manglers
 applied, the same answer v1 gives.
@@ -405,10 +405,10 @@ let generation = generate(source_model, &target, declarations,
 ```
 
 Both halves are built in one pass over the builder's storage, sorted so that a
-run over unchanged input emits the same file. Stating them together is what
-keeps them in step: a declaration cannot be planned without the target knowing
-what it is, and asking for an output the target recorded nothing about is
-invalid input rather than a silent default. A declarator the target has no
+run over unchanged input emits the same file. Stating a declaration together
+with its choice is what keeps them in step: a declaration cannot be written
+down without saying what it is, so there is no output the target recorded
+nothing about. A declarator the target has no
 lowering for — an enum, a tagged union, a callback signature — still becomes a
 request,
 recorded as the declarator it came from, so the target refuses it by name, and

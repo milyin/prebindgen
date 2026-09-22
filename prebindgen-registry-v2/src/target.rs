@@ -944,8 +944,11 @@ impl<P> ResolvedValues<'_, P> {
 /// this type and says which source function the wrapper exports: the
 /// declaration that requested the export, and the function itself. `values`
 /// is the [`ResolvedValues`] the wrapper converts. What the binding asked for
-/// — the exported symbol, where the public declaration lands — the target
-/// looks up in its own storage, by [`SiteDescriptor::declaration`].
+/// — the exported symbol, where the public declaration lands — arrives as
+/// [`SiteDescriptor::declared`], the choice recorded with this output.
+/// [`SiteDescriptor::declaration`] says which entity is exported, and is not
+/// what a target reads its configuration by: one entity may be declared more
+/// than once, and the two exports differ in nothing else.
 ///
 /// What a target reads from the descriptor: the declaration, for the names in
 /// its refusals and errors; the source function's parameter list, for the
@@ -1055,8 +1058,9 @@ impl<K> SurfaceRequest<'_, K> {
 ///
 /// The variant is a fact about the source, not about the representation: a
 /// struct declared to C as an opaque pointer still arrives as
-/// [`SourceItem::Struct`], and how the target carries it is in the target's
-/// own configuration, under [`SurfaceRequest::declaration`]. Read that first.
+/// [`SourceItem::Struct`], and how the target carries it is
+/// [`SurfaceRequest::declared`], the choice recorded with this output. Read
+/// that first.
 /// A declaration that names no entity — a callback, a constant computed on the
 /// foreign side — is refused before `surface` is asked, so nothing here is
 /// ever absent. An entity the binding defined itself is here like any other:
