@@ -405,8 +405,8 @@ pub enum StandardOp {
 
 /// The values of a fieldless enum a target may mirror, or why it may not.
 ///
-/// Three things stop a mirror, and they stop every target alike, so the check
-/// lives here rather than once per adapter:
+/// What stops a mirror stops every target alike, so the check lives here
+/// rather than once per adapter:
 ///
 /// * the type is not a fieldless enum at all, which is the binding declaring
 ///   one thing as another;
@@ -424,7 +424,9 @@ pub enum StandardOp {
 ///   *value* cannot be constructed from outside at all, and its pattern needs
 ///   a `..`; that holds for a unit value too, whose constructor is private
 ///   outside the crate that declared it. Preserving delimiters does not make
-///   such a value constructible, so the enum is refused.
+///   such a value constructible, so the enum is refused;
+/// * the enum has no values, and an enumeration of nothing is not one a
+///   target can declare.
 ///
 /// `language` is the adapter's own name, for the capability code: a refusal
 /// reads `unsupported.c.enum_discriminant`, and the next target's reads its
