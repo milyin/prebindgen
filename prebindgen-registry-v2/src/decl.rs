@@ -3,9 +3,9 @@
 //! A frontend turns its own declaration storage into these — one [`Declaration`]
 //! per thing the user asked for, inside the
 //! [`BindingRequests`](crate::BindingRequests) it hands the engine. The
-//! declaration is what the report accounts for; the request carries the
-//! target's configuration for it, and that policy is also where the foreign
-//! name and the declarator word the report prints come from.
+//! declaration is what the report accounts for, and what the target looks its
+//! own configuration up by — the request carries none: the foreign name and
+//! the declarator word the report prints come from that lookup.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
@@ -13,20 +13,32 @@ use serde::Serialize;
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
 ///
-/// A name alone says neither: `Sample` may be a captured type, a type key the
-/// binding coined for something the source never exported, or the name of a
-/// Kotlin constant built from an expression. The variant says which, and it
-/// says it once — what the target gets and where it comes from (a captured
-/// item, looked up in the model, or the binding itself,
-/// which [`Self::is_binding_local`] answers) both follow from the variant
-/// instead of being stated beside it, so they cannot disagree and a pair that
-/// means nothing (a callback backed by a captured constant, a function the
-/// binding both defines and selects out of the source) cannot be written
-/// down.
+/// A name alone says neither: `Foo` may be a type given a representation or a
+/// wire mapping declared for it. The variant says which, and it says it once
+/// — what the target gets and which entity, if any, it is planned from both
+/// follow from the variant instead of being stated beside it, so they cannot
+/// disagree and a pair that means nothing (a callback backed by a captured
+/// constant) cannot be written down. What a declaration does *not* say is how
+/// the target shows the entity: a function exposed as a Kotlin `val` read
+/// through it is still [`Declaration::Function`], and the `val` is the
+/// target's choice, recorded under that declaration.
+///
+/// An **entity** is one real item of the API — a type, a function or a
+/// constant — and the three variants that name one are the registry's whole
+/// judgment of which elements those are: the model holds a guard and an
+/// unsupported item beside them and ranks none of it. Where an entity came
+/// from is not part of this either. A `#[prebindgen]` function and one the
+/// binding defines itself are both a [`Declaration::Function`]; the model
+/// holds both, and only its [`Origin`](prebindgen_flat::flat::Origin) tells
+/// them apart. Three declarations name no entity: a callback signature and a
+/// constant the binding computes on the foreign side, because nothing in Rust
+/// backs them; and a conversion, which is the binding's own wire mapping
+/// *about* a type — `convert!(Option<Payload>)` — and requires no item of that
+/// name in the model.
 ///
 /// [`generate`](crate::generate) routes on this: each planner is reached by its
-/// own variants and is handed the captured item they name, rather than a kind
-/// to decode and a name to look up.
+/// own variants and is handed the entity they name, rather than a kind to
+/// decode and a name to look up.
 ///
 /// It is also the declaration's identity — what an outcome is keyed by, what a
 /// [`Position`](crate::target::Position) is rooted at, what a target's
@@ -41,76 +53,68 @@ use serde::Serialize;
 /// reads in id order.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
-    /// A captured `#[prebindgen]` function, exported as a foreign function.
+    /// A function, exported through a wrapper that calls it — as a foreign
+    /// function, or as whatever else the target chooses to show a call as: a
+    /// Kotlin `val` over `constant!(X).fun(fun!(f))` is this, with the `val`
+    /// the target's business.
     Function(syn::Ident),
-    /// A foreign function the binding defines itself — `fun!(crate::x).sig(..)`
-    /// in the JNI frontend. Nothing in the captured source names it.
-    LocalFunction(String),
-    /// A captured `#[prebindgen]` constant, exposed as a foreign constant.
+    /// A constant, exposed as a foreign constant.
     Const(syn::Ident),
-    /// A foreign constant read by calling a captured nullary function —
-    /// `constant!(X).fun(fun!(f))`. The target renders a constant; the engine
-    /// plans the function behind it.
-    ConstFromFunction(syn::Ident),
-    /// A foreign constant the binding computes rather than reads —
-    /// `constant!(X).expr(..)`. No captured item holds its value.
-    LocalConst(String),
-    /// A captured `#[prebindgen]` type, given a foreign representation.
+    /// A type, given a foreign representation.
     Type(TypeKey),
-    /// A type the binding gives a representation although the source never
-    /// exported it — `String` crossing as an opaque handle.
-    LocalType(TypeKey),
-    /// A callback signature the binding exports as a foreign callable. No
-    /// captured item names one, so the signature is the name it goes by.
-    Callback(String),
-    /// A declared conversion between a Rust type and its wire form, defined by
-    /// the binding.
+    /// A declared conversion between a type and its wire form, defined by the
+    /// binding.
     Conversion(TypeKey),
+    /// A callback signature the binding exports as a foreign callable. No
+    /// entity backs one, so the signature is the name it goes by.
+    Callback(String),
+    /// A foreign constant the binding computes rather than reads —
+    /// `constant!(X).expr(..)`. No entity holds its value.
+    ComputedConst(String),
 }
 
 impl Declaration {
-    /// Whether this declares a type — captured or the binding's own.
+    /// Whether this declares a type.
     pub fn is_type(&self) -> bool {
-        matches!(self, Declaration::Type(_) | Declaration::LocalType(_))
+        matches!(self, Declaration::Type(_))
     }
 
-    /// The captured element this declaration names, if the model holds it.
+    /// The name the model indexes the entity this declaration names under —
+    /// `None` for a callback, a computed constant and a conversion.
     ///
-    /// Captured items live in one flat namespace holding functions, types and
-    /// constants, so the name alone finds any element; the variant is what says
-    /// whether the element found is the one the declaration meant. A constant
-    /// read through a function is looked up among the functions, which is what
-    /// separates [`Self::ConstFromFunction`] from [`Self::Const`]. A
-    /// binding-local declaration names no captured item and so finds none — which
-    /// is not the same as a missing one, and [`Self::missing_from`] is the
-    /// question to ask about presence.
+    /// A type key may carry arguments the item does not — `ptr_class!(
+    /// Publisher<'static>)` means the item `Publisher` — so the item's name is
+    /// the key's last segment without them. A key that is not a path at all
+    /// names no item, and is looked up as it is spelled, to be found missing.
+    pub fn entity_name(&self) -> Option<String> {
+        match self {
+            Declaration::Function(ident) | Declaration::Const(ident) => Some(ident.to_string()),
+            Declaration::Type(key) => {
+                Some(key.short_name().unwrap_or_else(|| key.as_str().to_string()))
+            }
+            Declaration::Conversion(_)
+            | Declaration::Callback(_)
+            | Declaration::ComputedConst(_) => None,
+        }
+    }
+
+    /// The element this declaration names, if the model holds it.
+    ///
+    /// Entities live in one flat namespace holding functions, types and
+    /// constants, so the name alone finds any element; the variant is what
+    /// says whether the element found is the one the declaration meant. A
+    /// declaration naming no entity finds none — which is not the same as a
+    /// missing one, and [`Self::missing_from`] is the question to ask about
+    /// presence.
     pub(crate) fn captured<'f>(&self, flat: &'f Flat) -> Option<&'f Element> {
-        let element = flat.element(&self.name())?;
+        let element = flat.element(&self.entity_name()?)?;
         matches!(
             (self, element),
-            (
-                Declaration::Function(_) | Declaration::ConstFromFunction(_),
-                Element::Function(_)
-            ) | (Declaration::Type(_), Element::Type(_))
+            (Declaration::Function(_), Element::Function(_))
                 | (Declaration::Const(_), Element::Constant(_))
+                | (Declaration::Type(_), Element::Type(_))
         )
         .then_some(element)
-    }
-
-    /// Whether the binding defines this itself: a callback signature, a
-    /// binding-local conversion helper, a function or constant of its own, or a
-    /// type the target represents although the source never exported it
-    /// (`String` as an opaque handle). Such a declaration requires nothing of the
-    /// model.
-    pub fn is_binding_local(&self) -> bool {
-        matches!(
-            self,
-            Declaration::LocalFunction(_)
-                | Declaration::LocalConst(_)
-                | Declaration::LocalType(_)
-                | Declaration::Callback(_)
-                | Declaration::Conversion(_)
-        )
     }
 
     /// Whether the model lacks what this declaration must name.
@@ -118,54 +122,47 @@ impl Declaration {
     /// Naming the wrong kind — `.fun(fun!(x))` where the source captured
     /// `const x` — counts as missing: it is an error in the binding, and the
     /// engine fails the run over it instead of reporting a skip. False for a
-    /// binding-local declaration.
+    /// declaration that names no entity.
     pub(crate) fn missing_from(&self, flat: &Flat) -> bool {
-        !self.is_binding_local() && self.captured(flat).is_none()
+        self.entity_name().is_some() && self.captured(flat).is_none()
     }
 
     /// The word a refusal uses for what this declaration must name.
     pub(crate) fn describe_captured(&self) -> &'static str {
         match self {
-            Declaration::Function(_) | Declaration::ConstFromFunction(_) => "function",
+            Declaration::Function(_) => "function",
             Declaration::Const(_) => "constant",
             Declaration::Type(_) => "type",
-            _ => "binding-local item",
+            Declaration::Conversion(_)
+            | Declaration::Callback(_)
+            | Declaration::ComputedConst(_) => "item",
         }
     }
 
     /// The name it goes by — the part of the printed form after the prefix,
-    /// and what a captured item is looked up by.
+    /// and what an entity is looked up by.
     pub(crate) fn name(&self) -> String {
         match self {
-            Declaration::Function(ident)
-            | Declaration::Const(ident)
-            | Declaration::ConstFromFunction(ident) => ident.to_string(),
-            Declaration::Type(key) | Declaration::LocalType(key) | Declaration::Conversion(key) => {
-                key.as_str().to_string()
-            }
-            Declaration::LocalFunction(name)
-            | Declaration::LocalConst(name)
-            | Declaration::Callback(name) => name.clone(),
+            Declaration::Function(ident) | Declaration::Const(ident) => ident.to_string(),
+            Declaration::Type(key) | Declaration::Conversion(key) => key.as_str().to_string(),
+            Declaration::Callback(name) | Declaration::ComputedConst(name) => name.clone(),
         }
     }
 }
 
 impl Ord for Declaration {
-    /// As they print. A captured and a binding-local declaration of one kind and
-    /// name print alike and are still distinct, so the variant breaks that
-    /// tie, and `Ord` agrees with `Eq`.
+    /// As they print. Two declarations of one name can print alike and still
+    /// be distinct — a captured `const X` and a computed `X` are both
+    /// `const:X` — so the variant breaks that tie, and `Ord` agrees with `Eq`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         fn variant(declaration: &Declaration) -> u8 {
             match declaration {
                 Declaration::Function(_) => 0,
-                Declaration::LocalFunction(_) => 1,
-                Declaration::Const(_) => 2,
-                Declaration::ConstFromFunction(_) => 3,
-                Declaration::LocalConst(_) => 4,
-                Declaration::Type(_) => 5,
-                Declaration::LocalType(_) => 6,
-                Declaration::Callback(_) => 7,
-                Declaration::Conversion(_) => 8,
+                Declaration::Const(_) => 1,
+                Declaration::Type(_) => 2,
+                Declaration::Conversion(_) => 3,
+                Declaration::Callback(_) => 4,
+                Declaration::ComputedConst(_) => 5,
             }
         }
         self.to_string()
@@ -181,24 +178,19 @@ impl PartialOrd for Declaration {
 }
 
 impl std::fmt::Display for Declaration {
-    /// `<what the target gets>:<name>`. The prefix is the foreign side's word —
-    /// a function the binding defines and a captured one are both a `fn` —
-    /// and it is what keeps the declarations' several naming spaces apart: `type:Foo`
-    /// and `conversion:Foo` are two declarations about one Rust type, and
-    /// `const:f` and `fn:f` are the `val` read through `f` and `f` itself.
+    /// `<what the target gets>:<name>`. The prefix is the foreign side's word,
+    /// and it is what keeps the declarations' several naming spaces apart:
+    /// `type:Foo` and `conversion:Foo` are two declarations about one Rust
+    /// type.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = self.name();
-        match self {
-            Declaration::Function(_) | Declaration::LocalFunction(_) => write!(f, "fn:{name}"),
-            Declaration::Const(_)
-            | Declaration::ConstFromFunction(_)
-            | Declaration::LocalConst(_) => {
-                write!(f, "const:{name}")
-            }
-            Declaration::Type(_) | Declaration::LocalType(_) => write!(f, "type:{name}"),
-            Declaration::Callback(_) => write!(f, "callback:{name}"),
-            Declaration::Conversion(_) => write!(f, "conversion:{name}"),
-        }
+        let prefix = match self {
+            Declaration::Function(_) => "fn",
+            Declaration::Const(_) | Declaration::ComputedConst(_) => "const",
+            Declaration::Type(_) => "type",
+            Declaration::Conversion(_) => "conversion",
+            Declaration::Callback(_) => "callback",
+        };
+        write!(f, "{prefix}:{}", self.name())
     }
 }
 

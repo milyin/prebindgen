@@ -331,39 +331,51 @@ across every item kind, and the index behind a view stays private to Flat.
 ### Building and retaining a model
 
 A **snapshot** is one completed, immutable set of source structs and lookup
-indices. A **local helper** is a Rust function whose signature the binding
-frontend declares instead of obtaining it from annotated-source captures. The
-frontend supplies that signature and its source module so Flat can describe the
-helper alongside captured functions. Both inputs enter a mutable builder.
-Building checks the complete set and publishes a snapshot. All views from that
-snapshot retain shared ownership of its storage.
+indices. Its items have two provenances and one shape. A `#[prebindgen]` item
+is one the source captured. An item the binding defines itself is one the
+binding stated: a helper function with the signature `fun!(crate::x).sig(..)`
+declares, or a type the source never exported that the binding represents as
+a handle. Both enter the same mutable builder and come out as the same kind of
+element, differing in origin alone; building checks the complete set and
+publishes a snapshot. All views from that snapshot retain shared ownership of
+its storage.
 
 ```rust
 impl FlatBuilder {
-    // Existing capture ingestion also belongs on this builder.
-    pub fn add_local_function(
-        &mut self,
-        signature: LocalFunctionInput,
-    ) -> Result<(), ModelError>;
-
-    pub fn build(self) -> Result<Flat, ModelError>;
+    pub fn items(self, items: impl IntoIterator<Item = (syn::Item, SourceLocation)>) -> Self;
+    pub fn local_function(self, sig: syn::Signature, module: syn::Path) -> Self;
+    pub fn local_type(self, name: syn::Ident) -> Self;
+    pub fn build(self) -> Result<Flat, ParseError>;
 }
 ```
 
-`LocalFunctionInput` contains the helper's declared signature, source-module
-qualification and available diagnostic location. Flat lowers the signature with
-the same grammar as captured functions. Input parsing may consume Rust syntax;
-inspection after lowering uses the typed model. Adding local helpers must check
-name collisions and preserve the distinction between captured source modules
-and helper-module qualification.
+A local function is lowered with the same grammar as a captured one, from the
+signature the binding states; `module` is where generated code reaches it —
+`crate::helpers` for a helper at `crate::helpers::x` — and its origin records
+that as its crate stamp, since for a captured item the stamp means the same
+thing. A name the source already captured is a duplicate, and the build
+refuses it: the generated call must not be a coin toss between the two. A
+local type becomes an extern — a type whose contents the model does not see,
+which is exactly what it is — reached at the binding's crate root; when the
+source captured a type of that name, that one is what the binding meant, and
+the local declaration steps aside.
 
-This is also a change from today, where a helper is added to a model that has
-already been built. Making the builder the only way in is what lets the published
-snapshot be complete: everything the model will ever contain is there when the
-first view is handed out.
+Each element carries its **provenance** — `Captured` or `Binding` — as a fact
+of its own, so nothing that removes or appends an element has a boundary to
+keep. The model answers with it where a consumer needs the distinction:
+`Flat::captured` iterates the captured elements alone, which is what a report
+counts as the API it was generated against; `Flat::provenance` answers for one
+name; and the source-module list is frozen from the captured stream alone, so
+a binding-local item never changes which module an unqualified reference
+resolves against. Everything else —
+lookup by name, the typed accessors, planning — sees one namespace. What the
+model does *not* do is rank its elements: a guard and an unsupported item are
+held beside the functions and types, and which of them a binding may name is
+the [registry's judgment](03-requests.md#identifying-requests-value-positions-and-reusable-conversions),
+not the model's.
 
-The frontend registers all helpers before creating registry requests containing
-views. Registering a helper after publication requires building another
+The frontend registers its own items before building, so the snapshot is
+complete when the first view is handed out. Registering a helper after publication requires building another
 snapshot. That new snapshot has a different identity; previously issued views
 continue to describe their original snapshot.
 

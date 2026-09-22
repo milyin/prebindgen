@@ -271,6 +271,22 @@ pub use self::{
 #[derive(Debug, Default, Clone)]
 pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
+    /// Items the binding defines itself, lowered after the captured ones:
+    /// elements like any other, with an origin that says so. See
+    /// [`Self::local_function`] and [`Self::local_type`].
+    locals: Vec<(syn::Item, SourceLocation)>,
+}
+
+/// The location of an item the binding defines itself: no file, since the
+/// build script states it rather than the proc-macro capturing it, and the
+/// crate stamp is the module generated code reaches the item through — which
+/// is what [`SourceLocation::crate_name`] means for a captured item too.
+fn binding_location(module: &syn::Path) -> SourceLocation {
+    use quote::ToTokens;
+    SourceLocation {
+        crate_name: Some(module.to_token_stream().to_string().replace(' ', "")),
+        ..SourceLocation::default()
+    }
 }
 
 impl FlatBuilder {
@@ -344,6 +360,46 @@ impl FlatBuilder {
         self
     }
 
+    /// A function the binding defines itself, with the signature it states.
+    ///
+    /// It becomes a [`Function`] in the model like a captured one — the same
+    /// element, whose origin says the binding — so a declaration can name it
+    /// and a wrapper can call it. `module` is where generated code reaches it:
+    /// `crate::helpers` for a helper at `crate::helpers::x`. The body is never
+    /// read; only the signature is.
+    ///
+    /// A name the source already captured is an error at [`Self::build`]: the
+    /// generated call would resolve to one of the two, and it must not be a
+    /// coin toss.
+    pub fn local_function(mut self, sig: syn::Signature, module: syn::Path) -> Self {
+        let item: syn::ItemFn = syn::parse_quote! {
+            #sig {
+                unimplemented!()
+            }
+        };
+        self.locals
+            .push((syn::Item::Fn(item), binding_location(&module)));
+        self
+    }
+
+    /// A type the binding represents although the source never exported it —
+    /// `String` crossing as an opaque handle.
+    ///
+    /// It becomes an [`Extern`] in the model — a type whose contents this
+    /// model does not see, which is exactly what it is — reached at the
+    /// binding's crate root. When the source *did* capture a type of this
+    /// name, that one is what the binding meant, and this is a no-op: a
+    /// binding declares `ptr_type!(Ledger)` the same way whether or not the
+    /// source exported `Ledger`.
+    pub fn local_type(mut self, name: syn::Ident) -> Self {
+        let item: syn::ItemType = syn::parse_quote!(pub type #name = #name;);
+        self.locals.push((
+            syn::Item::Type(item),
+            binding_location(&syn::parse_quote!(crate)),
+        ));
+        self
+    }
+
     /// Parse everything collected so far into the model.
     ///
     /// **Transactional**: an `Err` yields no model at all, so a refused stream
@@ -367,8 +423,13 @@ impl FlatBuilder {
         // The consequence is deliberate and stated on `Origin`: a slice
         // is the spelling generation must EMIT, which is the normalized one —
         // the flat namespace is what the generated crate can actually name.
+        // The binding's own items are normalized by the same table and take
+        // no part in building it: a helper's `source::Stamp` has to become
+        // the `Stamp` the captured struct is indexed as, and a local module
+        // stamp must not become a source module.
         let normalization = crate::flat::spelling::Normalization::from_items(&items);
-        for (item, _) in &mut items {
+        let mut locals = self.locals;
+        for (item, _) in items.iter_mut().chain(locals.iter_mut()) {
             crate::flat::spelling::normalize_item_types(item, &normalization);
         }
 
@@ -386,11 +447,27 @@ impl FlatBuilder {
             _ => None,
         }));
 
-        // Pass 2: lower, checking the flat namespace as we go.
-        let mut elements: Vec<Element> = Vec::with_capacity(items.len());
+        // Pass 2: lower, checking the flat namespace as we go. The binding's
+        // own items come after the captured ones, so a local type the source
+        // also captured can step aside for the captured one, and so the
+        // captured items keep the positions source order gave them.
+        let tagged = items
+            .into_iter()
+            .map(|item| (Provenance::Captured, item))
+            .chain(locals.into_iter().map(|item| (Provenance::Binding, item)));
+        let mut elements: Vec<(Provenance, Element)> = Vec::new();
         let mut seen: Vec<(syn::Ident, SourceLocation)> = Vec::new();
-        for (item, loc) in items {
+        for (provenance, (item, loc)) in tagged {
+            let is_local_type =
+                provenance == Provenance::Binding && matches!(item, syn::Item::Type(_));
             let element = lower_item(item, loc, &consts);
+            if is_local_type
+                && element
+                    .name()
+                    .is_some_and(|name| seen.iter().any(|(n, _)| n == name))
+            {
+                continue;
+            }
             if let Some(name) = element.name() {
                 if let Some((first_name, first)) = seen.iter().find(|(n, _)| n == name) {
                     return Err(ParseError::DuplicateName(Box::new(DuplicateName {
@@ -403,7 +480,7 @@ impl FlatBuilder {
                 }
                 seen.push((name.clone(), element.location().clone()));
             }
-            elements.push(element);
+            elements.push((provenance, element));
         }
 
         // Pass 3: resolve references, now that every declaration is in hand.
@@ -414,11 +491,14 @@ impl FlatBuilder {
         let by_name = elements
             .iter()
             .enumerate()
-            .filter_map(|(i, e)| e.name().map(|n| (n.to_string(), i)))
+            .filter_map(|(i, (_, e))| e.name().map(|n| (n.to_string(), i)))
             .collect();
         // Frozen here, from the captured stream alone. See the field's docs.
         let mut source_modules: Vec<String> = Vec::new();
-        for element in &elements {
+        for (_, element) in elements
+            .iter()
+            .filter(|(provenance, _)| *provenance == Provenance::Captured)
+        {
             if let Some(crate_name) = element.location().crate_name.as_ref() {
                 let module = crate_name.replace('-', "_");
                 if !source_modules.contains(&module) {
@@ -437,6 +517,21 @@ impl FlatBuilder {
         }
         Ok(flat)
     }
+}
+
+/// Where an element came from.
+///
+/// Not a kind: a captured function and one the binding stated are both a
+/// [`Function`], and everything that reads the model sees one namespace. What
+/// this answers is who put the item there — which a report counts by, and
+/// which decides the module generated code reaches the item through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Provenance {
+    /// A `#[prebindgen]` item the proc-macro captured from a source crate.
+    Captured,
+    /// An item the binding's build script stated: a helper with a signature,
+    /// or a type it represents although no source exported one.
+    Binding,
 }
 
 /// The flat API: every `#[prebindgen]` item from every ingested source, parsed,
@@ -468,8 +563,10 @@ impl FlatBuilder {
 /// answer identically and neither can drift.
 #[derive(Clone, Debug, Default)]
 pub struct Flat {
-    /// Source order, so iteration reports items as the sources were fed.
-    elements: Vec<Element>,
+    /// Source order, so iteration reports items as the sources were fed. The
+    /// captured ones first, then the binding's own — and each says which it
+    /// is, so nothing that removes or appends one has a boundary to keep.
+    elements: Vec<(Provenance, Element)>,
     /// Module name of every **captured** source, in first-seen order (crate
     /// names, dashes normalized to underscores). The first doubles as the
     /// default module for a reference with no recorded origin.
@@ -582,12 +679,36 @@ impl<T: ?Sized + Name> Name for &T {
 impl Flat {
     /// Start collecting what to parse.
     pub fn builder() -> FlatBuilder {
-        FlatBuilder { items: Vec::new() }
+        FlatBuilder {
+            items: Vec::new(),
+            locals: Vec::new(),
+        }
     }
 
-    /// Every element, in the order the sources were fed.
+    /// Every element, in the order the sources were fed: the captured ones,
+    /// then the binding's own.
     pub fn elements(&self) -> impl Iterator<Item = &Element> {
-        self.elements.iter()
+        self.elements.iter().map(|(_, element)| element)
+    }
+
+    /// The elements the source captured — what a report counts as the API it
+    /// was generated against, which the binding's own items are not part of.
+    pub fn captured(&self) -> impl Iterator<Item = &Element> {
+        self.elements
+            .iter()
+            .filter(|(provenance, _)| *provenance == Provenance::Captured)
+            .map(|(_, element)| element)
+    }
+
+    /// Where the item with this name came from, if the model holds one.
+    pub fn provenance<N: Name + ?Sized>(&self, name: &N) -> Option<Provenance> {
+        let index = *self.by_name.get(name.as_name().as_ref())?;
+        Some(self.elements[index].0)
+    }
+
+    /// Whether the item with this name is one the binding defined itself.
+    pub fn is_binding_local<N: Name + ?Sized>(&self, name: &N) -> bool {
+        self.provenance(name) == Some(Provenance::Binding)
     }
 
     /// The element with this name, whatever kind it is — including an
@@ -596,6 +717,7 @@ impl Flat {
     pub fn element<N: Name + ?Sized>(&self, name: &N) -> Option<&Element> {
         self.elements
             .get(*self.by_name.get(name.as_name().as_ref())?)
+            .map(|(_, element)| element)
     }
 
     pub fn function<N: Name + ?Sized>(&self, name: &N) -> Option<&Function> {
@@ -625,21 +747,21 @@ impl Flat {
     }
 
     pub fn functions(&self) -> impl Iterator<Item = &Function> {
-        self.elements.iter().filter_map(|e| match e {
+        self.elements().filter_map(|e| match e {
             Element::Function(f) => Some(f),
             _ => None,
         })
     }
 
     pub fn types(&self) -> impl Iterator<Item = &Type> {
-        self.elements.iter().filter_map(|e| match e {
+        self.elements().filter_map(|e| match e {
             Element::Type(t) => Some(t),
             _ => None,
         })
     }
 
     pub fn constants(&self) -> impl Iterator<Item = &Constant> {
-        self.elements.iter().filter_map(|e| match e {
+        self.elements().filter_map(|e| match e {
             Element::Constant(c) => Some(c),
             _ => None,
         })
@@ -696,7 +818,7 @@ impl Flat {
                 .filter(|name| !gone.contains(*name))
                 .cloned()
                 .collect();
-            let next = self.elements.iter().find_map(|element| {
+            let next = self.elements().find_map(|element| {
                 let name = element.name()?.to_string();
                 if gone.contains(&name) {
                     return None;
@@ -715,7 +837,7 @@ impl Flat {
                 None => break,
             }
         }
-        self.elements.retain(|element| {
+        self.elements.retain(|(_, element)| {
             !element
                 .name()
                 .is_some_and(|name| gone.contains(&name.to_string()))
@@ -724,7 +846,7 @@ impl Flat {
             .elements
             .iter()
             .enumerate()
-            .filter_map(|(index, element)| Some((element.name()?.to_string(), index)))
+            .filter_map(|(index, (_, element))| Some((element.name()?.to_string(), index)))
             .collect();
         // Both indexes, or the second answers for a type the first no longer
         // declares: `Flat::type_ref` says `None` means the API does not mention
@@ -749,7 +871,7 @@ impl Flat {
     /// Not part of the flat API — see [`Guard`] — but ingested with it, and a
     /// consumer that re-emits the source must re-emit these too.
     pub fn guards(&self) -> impl Iterator<Item = &Guard> {
-        self.elements.iter().filter_map(|e| match e {
+        self.elements().filter_map(|e| match e {
             Element::Guard(g) => Some(g),
             _ => None,
         })
@@ -808,6 +930,29 @@ impl Flat {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());
         }
+        self.lower_fresh(ty)
+    }
+
+    /// This module's reading of the type a key names — `Publisher<'static>`
+    /// as a binding declared it, arguments included.
+    ///
+    /// The index answers when any element mentions the type. When none does
+    /// — a declared type no signature uses — the key's canonical spelling is
+    /// read back, which is this module's own rendering and the one place
+    /// reading it is not a consumer deriving structure from key text.
+    pub fn reading_of(&self, key: &TypeKey) -> Result<TypeRef, UnsupportedType> {
+        if let Some(indexed) = self.by_type.get(key.as_str()) {
+            return Ok(indexed.clone());
+        }
+        let ty: syn::Type = syn::parse_str(key.as_str()).map_err(|_| UnsupportedType {
+            offending: key.as_str().to_string(),
+            reason: UnsupportedTypeReason::UnsupportedForm,
+        })?;
+        self.lower_fresh(&ty)
+    }
+
+    /// Lower a type no element mentions, against this module's constants.
+    fn lower_fresh(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
         // Rebuilt rather than kept, for the reason `lower_signature` gives: a
         // stored index would be a second copy of what `constants()` says.
         let consts = ConstIndex::new(self.constants().map(|c| {
@@ -826,7 +971,7 @@ impl Flat {
     /// Index every type the element at `pos` writes. Idempotent per key: the
     /// first mention in element order wins.
     fn index_types_of(&mut self, pos: usize) {
-        let refs: Vec<TypeRef> = element_type_refs(&self.elements[pos])
+        let refs: Vec<TypeRef> = element_type_refs(&self.elements[pos].1)
             .into_iter()
             .flat_map(TypeRef::walk)
             .cloned()
@@ -845,7 +990,7 @@ impl Flat {
     /// these fails, and reports all of them. See the [module docs](self) on where
     /// acceptance is enforced.
     pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
-        self.elements.iter().filter_map(|e| match e {
+        self.elements().filter_map(|e| match e {
             Element::Unsupported(u) => Some(u),
             _ => None,
         })
@@ -900,7 +1045,8 @@ impl Flat {
             ..SourceLocation::default()
         });
         self.by_name.insert(f.name.to_string(), self.elements.len());
-        self.elements.push(Element::Function(f));
+        self.elements
+            .push((Provenance::Binding, Element::Function(f)));
         self.index_types_of(self.elements.len() - 1);
     }
 
@@ -935,10 +1081,10 @@ impl Flat {
 /// So this runs to a fixed point: each round drops the declarations it refused,
 /// and stops when a round refuses nothing. Chains of any length collapse, in
 /// either declaration order, because the set only ever shrinks.
-fn resolve_references(elements: &mut [Element]) {
+fn resolve_references(elements: &mut [(Provenance, Element)]) {
     let mut declared: std::collections::HashSet<String> = elements
         .iter()
-        .filter_map(|e| match e {
+        .filter_map(|(_, e)| match e {
             Element::Type(t) => Some(t.name().to_string()),
             _ => None,
         })
@@ -946,7 +1092,7 @@ fn resolve_references(elements: &mut [Element]) {
 
     loop {
         let mut refused = Vec::new();
-        for (i, element) in elements.iter().enumerate() {
+        for (i, (_, element)) in elements.iter().enumerate() {
             if let Some(unresolved) = first_unresolved(element, &declared) {
                 refused.push((i, unresolved));
             }
@@ -957,10 +1103,10 @@ fn resolve_references(elements: &mut [Element]) {
         for (i, unresolved) in refused {
             // A refused type stops being a declaration, which is what lets the
             // next round see its dependents as unresolved.
-            if let Element::Type(t) = &elements[i] {
+            if let Element::Type(t) = &elements[i].1 {
                 declared.remove(&t.name().to_string());
             }
-            let element = &mut elements[i];
+            let element = &mut elements[i].1;
             let name = element.name().cloned();
             let origin = Origin::new(
                 element.as_syn(),

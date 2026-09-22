@@ -94,7 +94,7 @@ opaque handle. Its `SiteDescriptor` names the handle type's declaration and no
 callee, its one wrapper parameter carries what the handle's consuming
 conversion reads, and its body applies the release operation that conversion's
 [representation](05-represent.md#represent-and-compose-values) declared, then delivers nothing. The target answers `boundary`
-for it under the type's [policy](03-requests.md#what-policy-means) — a symbol for C, an `external` method for Kotlin —
+for it from what the binding [recorded for that type](03-requests.md#what-a-choice-records) — a symbol for C, an `external` method for Kotlin —
 and the registry assembles and checks it exactly as it does a call, minus the
 call. [The handle path][typedef_boundary] shows one.
 
@@ -162,7 +162,7 @@ terminal action; the target contributes only the operation that reports. A
 category a conversion can raise and the boundary does not list makes the function
 unsupported.
 
-For a source `Result`, `OutputPlacement::Branches` maps the error value to its configured destination, while the domain failure route specifies how that path terminates. Both describe one consistent boundary [policy](03-requests.md#what-policy-means). Conversion failures can also happen before the source call or while encoding its result; those use their binding/runtime routes. Failure while encoding a domain error must itself have a defined route.
+For a source `Result`, `OutputPlacement::Branches` maps the error value to its configured destination, while the domain failure route specifies how that path terminates. Both describe one consistent [boundary convention](03-requests.md#what-a-choice-records). Conversion failures can also happen before the source call or while encoding its result; those use their binding/runtime routes. Failure while encoding a domain error must itself have a defined route.
 
 The complete design calls for this flow; choosing source `Result` branches and
 finishing explicit resource scopes are future steps:

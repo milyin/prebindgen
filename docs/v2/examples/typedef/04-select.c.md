@@ -8,20 +8,23 @@ Owner: the registry; the C adapter selects from the offered [relations](../../st
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    policy: opaque_ptr Ledger
-Crossing { source: Ledger, direction: OutOfRust }   policy: opaque_ptr Ledger
+Crossing { source: Ledger, direction: IntoRust }
+Crossing { source: Ledger, direction: OutOfRust }
 offered:  [ atomic ]
+
+held by the CTarget, not passed in:
+choice:   opaque_ptr Ledger
 ```
 
 ## Result
 
 ```text
-atomic
+atomic, conversion CChoice::OpaquePtr { c_name: "Ledger", release: "ledger_drop" }
 ```
 
 for both. An `opaque_ptr` is a pointer to a value C never looks into, so the C
 adapter wants the value whole and answers `atomic` — off the
-[policy](../../stages/03-requests.md#what-policy-means), before it knows
+[choice](../../stages/03-requests.md#what-a-choice-records), before it knows
 whether the type has fields. For an extern the answer is also the only one on
 offer.
 
@@ -29,7 +32,7 @@ offer.
 
 - Declared as `data_type!` instead, the same extern would be refused here:
   the adapter would ask for the struct relation and find none offered. That
-  refusal is `unsupported.c.no_relation`, and it is the adapter's, not the
+  refusal is `unsupported.c.not_a_struct`, and it is the adapter's, not the
   registry's.
 - Declared as `ptr_type!`, a struct with private fields would get `atomic` too,
   and the registry would plan it as one whole value with no parts, its fields

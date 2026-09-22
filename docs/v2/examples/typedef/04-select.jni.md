@@ -8,20 +8,23 @@ Owner: the registry; the JNI adapter selects from the offered [relations](../../
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    policy: ptr_class example.Ledger
-Crossing { source: Ledger, direction: OutOfRust }   policy: ptr_class example.Ledger
+Crossing { source: Ledger, direction: IntoRust }
+Crossing { source: Ledger, direction: OutOfRust }
 offered:  [ atomic ]
+
+held by the JniTarget, not passed in:
+choice:   ptr_class example.Ledger
 ```
 
 ## Result
 
 ```text
-atomic
+atomic, conversion JniChoice::PtrClass { class: "example.Ledger", .. }
 ```
 
 for both. A `ptr_class` holds an address, not properties, so the JNI adapter
 wants the value whole and answers `atomic` off the
-[policy](../../stages/03-requests.md#what-policy-means) — the same answer for
+[choice](../../stages/03-requests.md#what-a-choice-records) — the same answer for
 the same reason as C's, which is what makes the selection stage
 target-independent in practice: the adapters differ at the next stage, in what
 the address is carried as.
@@ -29,7 +32,7 @@ the address is carried as.
 ## Checks
 
 - Declared as `data_class!` instead, the extern would be refused here with
-  `unsupported.jni.no_relation`: no struct relation is offered for a type with
+  `unsupported.jni.not_a_struct`: no struct relation is offered for a type with
   no fields.
 - Under `ptr_class` the adapter has committed to describing a `jlong`
   [carrier](../../stages/05-represent.md#describing-target-values-and-operations)

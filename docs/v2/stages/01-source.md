@@ -384,13 +384,14 @@ with `.source_module(...)` for a different dependency name or module arrangement
 The current JNI V2 route instead uses the first source module's crate name.
 
 Captures are not the only input to the source model. A binding crate can also
-declare a **local helper**: a Rust function that the binding crate itself
-provides, that generated code may call, and that no capture describes — for
-example a `fn stamp_from_millis(millis: i64) -> Stamp` written in the binding
-crate to build a source value that has no public constructor. The frontend
-declares the helper's signature, and from the next stage on it is inspected like
-any captured function. Helpers are mentioned here because the source model is
-built from both inputs, not from the captures alone.
+state an item of its own: a Rust function it provides, that generated code may
+call, and that no capture describes — for example a
+`fn stamp_from_millis(millis: i64) -> Stamp` written in the binding crate to
+build a source value that has no public constructor — or a type the source
+never exported that the binding represents as a handle. The frontend states
+the function's signature and where it is, and from the next stage on either is
+an item of the model like any captured one. They are mentioned here because
+the source model is built from both inputs, not from the captures alone.
 
 Unreadable capture data is a build error: for example, malformed JSON/Rust text,
 an invalid capture-directory layout, or an incompatible description file. This

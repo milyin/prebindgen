@@ -36,7 +36,8 @@ plan in the engine's dependency graph. It records the type, direction, selected
 relation, child conversions, target representation and instructions. Two
 functions taking an owned `Stamp` in the same way can share a node. A borrow
 such as `&Stamp` needs a different node, as does a use with different field
-conversions or target [policy](03-requests.md#what-policy-means).
+conversions or a different
+[conversion key](03-requests.md#finding-an-existing-conversion-plan).
 
 ## Node identity and the plan graph
 
@@ -45,7 +46,7 @@ requires more than matching the Rust type. Building `Stamp` from two fields is
 different from calling a constructor with one integer. Even two field-based
 conversions differ if they convert `secs` differently. The cache key therefore
 includes the selected relation, the
-policy for this value, and the completed
+conversion key the target returned for this value, and the completed
 child plans. This is why the cache is consulted on the way up and not on the way
 down: the recursion resolves the children before it has that full key. Two
 positions that resolve to the same key get the same node.
@@ -78,7 +79,7 @@ node. Planning `stamp_sum` produces four edges over three nodes:
 ```
 
 Both fields converge on one node, applied twice: same type, same direction, same
-relation, same policy, so the same plan. The two `i64` nodes do not merge,
+relation, same conversion key, so the same plan. The two `i64` nodes do not merge,
 because direction is part of a node's identity — reading an integer out of a
 foreign argument and handing one back are different operations.
 
@@ -180,8 +181,8 @@ language implementation, such as a JVM property descriptor or a target
 operation description. The adapter supplies payload values; the registry stores
 those values in the plans and retains the required values in the completed
 `Generation`. Language-provided rendering code reads the retained payloads.
-Policy requests a representation; payload records the chosen implementation
-details after planning. Language implementations can use separate payload types
+The conversion key names the settings that asked for a representation; payload
+records the chosen implementation details after planning. Language implementations can use separate payload types
 for primitives, representations and foreign declarations.
 
 ### The operation specification and its uses

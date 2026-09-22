@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use prebindgen_flat::flat::Flat;
 
-use crate::{decl::Declaration, outcome::EngineError, report::Report};
+use crate::{decl::Declaration, outcome::EngineError, report::Report, target::PlanningError};
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
@@ -143,11 +143,27 @@ impl<P> Generation<P> {
 /// nullary function. Looking a function up among the constants reported a typo
 /// that was not there; looking it up in the whole namespace let a
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
-pub(crate) fn check_declarations(declared: &[Declaration], flat: &Flat) -> Result<(), EngineError> {
-    let missing: Vec<_> = declared
+pub(crate) fn check_declarations(
+    exposed: &[&Declaration],
+    ignored: &[&Declaration],
+    flat: &Flat,
+) -> Result<(), EngineError> {
+    // An ignore leaves an item alone, so it has to name one: a callback or a
+    // computed constant is nothing in the source, and a frontend that wrote
+    // such an ignore is contradicting itself.
+    if let Some(declaration) = ignored
+        .iter()
+        .find(|declaration| declaration.entity_name().is_none())
+    {
+        return Err(EngineError::Planning(PlanningError::InvalidInput(format!(
+            "`{declaration}` is ignored, and names no entity to leave alone"
+        ))));
+    }
+
+    let missing: Vec<_> = exposed
         .iter()
         .filter(|declaration| declaration.missing_from(flat))
-        .cloned()
+        .map(|declaration| (*declaration).clone())
         .collect();
     if !missing.is_empty() {
         return Err(EngineError::DeclaredNotFound { entries: missing });
@@ -156,8 +172,10 @@ pub(crate) fn check_declarations(declared: &[Declaration], flat: &Flat) -> Resul
     // One id, one declaration: the report is read by id, and a repeat would leave
     // one of the two entries unaccounted for.
     let mut seen = std::collections::HashSet::new();
-    let mut repeated: Vec<_> = declared
+    let mut repeated: Vec<_> = exposed
         .iter()
+        .chain(ignored)
+        .copied()
         .filter(|declaration| !seen.insert(*declaration))
         .cloned()
         .collect();

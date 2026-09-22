@@ -159,7 +159,7 @@ pub struct Part {
 }
 
 impl Part {
-    /// How a diagnostic and a policy lookup address this part.
+    /// How a diagnostic and a target's configuration address this part.
     pub fn label(&self) -> String {
         match &self.name {
             Some(name) => name.clone(),
@@ -761,7 +761,8 @@ pub struct SurfaceSpec<P> {
 // What the registry hands a target
 // ---------------------------------------------------------------------------
 
-/// Where a conversion sits, for policy lookup and for diagnostics.
+/// Where a conversion sits: what a target looks a per-site choice up by, and
+/// what a diagnostic prints.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Position {
     /// The requested output this conversion is reached from.
@@ -795,9 +796,14 @@ impl Position {
     }
 }
 
-/// What `select` is given: the value, the relations available for it, and the
-/// choices recorded for this position.
-pub struct SelectionQuery<'a, Policy> {
+/// What `select` is given: the value, where it sits, and the relations
+/// available for it.
+///
+/// No configuration comes with it. Which settings apply to this value is the
+/// target's own lookup, over its own storage, from the type in
+/// [`Crossing::ty`] and the [`Position`] — which is how a choice recorded for
+/// one parameter of one function differs from the type's default.
+pub struct SelectionQuery<'a> {
     pub crossing: &'a Crossing,
     pub position: &'a Position,
     /// The relations registered for this type: the implicit one, plus any the
@@ -808,7 +814,26 @@ pub struct SelectionQuery<'a, Policy> {
     /// second kind — a declared constructor — since with one candidate there is
     /// nothing to pin.
     pub candidates: &'a [(RelationId, Relation)],
-    pub policy: &'a Policy,
+}
+
+/// What `select` answers: how this value is read, and which conversion that
+/// makes it.
+///
+/// The `conversion` key is the target's own name for the settings it just
+/// applied. The registry never looks inside it; it compares keys, and two
+/// values whose crossing, relation, children and key are all equal share one
+/// conversion. So a key has one obligation, stated in #766: **equal keys mean
+/// interchangeable conversions** — same layout, same operations, same
+/// failures, same release. A target that minted a fresh key per visit would
+/// share nothing and would defeat cycle detection; one that returned an equal
+/// key for two settings that generate differently would silently give the
+/// second value the first one's conversion.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Selection<K> {
+    /// One of the [`SelectionQuery::candidates`], by identity.
+    pub relation: RelationId,
+    /// What the target decided this value converts by.
+    pub conversion: K,
 }
 
 /// What `represent` is given: the selected relation, resolved against the
@@ -816,10 +841,11 @@ pub struct SelectionQuery<'a, Policy> {
 ///
 /// No position, deliberately. A representation is reused wherever a conversion
 /// with the same identity is needed, and that identity is the crossing, the
-/// relation, the effective policy and the children — a target that could answer
-/// differently for two positions would have its second answer silently
-/// bypassed. Varying by position is what a policy recorded at that position is
-/// for.
+/// relation, the [`Selection::conversion`] key and the children — a target
+/// that could answer differently for two positions would have its second
+/// answer silently bypassed. Varying by position is done in
+/// [`Target::select`], which does see one: it returns a different key, and a
+/// different key is a different conversion.
 pub struct ResolvedShape<'a> {
     pub crossing: &'a Crossing,
     pub relation: &'a Relation,
@@ -869,30 +895,32 @@ impl<P> ResolvedValues<'_, P> {
 /// The first argument of [`Target::boundary`]: which wrapper the call is about.
 ///
 /// For every wrapper it builds, the registry calls
-/// `target.boundary(&site, &values, &policy)` once, and the target returns
+/// `target.boundary(&site, &values)` once, and the target returns
 /// the wrapper's shape — symbol, calling convention, parameters,
 /// failure routes — as a [`BoundarySpec`], wrapped in [`TargetSupport`]: a
 /// spec, a reason the target cannot shape this one, or an error. `site` is
 /// this type and says which source function the wrapper exports: the
 /// declaration that requested the export, and the function itself. `values`
-/// is the [`ResolvedValues`] the wrapper converts, `policy` the binding's
-/// configuration for it.
+/// is the [`ResolvedValues`] the wrapper converts. What the binding asked for
+/// — the exported symbol, where the public declaration lands — the target
+/// looks up in its own storage, by [`SiteDescriptor::declaration`].
 ///
 /// What a target reads from the descriptor: the declaration, for the names in
 /// its refusals and errors; the source function's parameter list, for the
 /// names the wrapper signature keeps; and whether a source function is there
 /// at all. A descriptor with none says the wrapper is a handle's release —
-/// it takes the handle back and drops it (see [`ReprSpec::release`]) — which
-/// the target shapes under the handle *type's* policy rather than a
-/// function's.
+/// it takes the handle back and drops it (see [`ReprSpec::release`]) — and
+/// its declaration is the handle *type's*, so the target shapes it from what
+/// it recorded for that type rather than for a function.
 ///
 /// Named after the specification's *site*, a value's position in an exported
 /// function: the boundary places each such position on a wrapper parameter or
 /// the return, and this identifies the function the positions belong to.
 pub struct SiteDescriptor<'a> {
     /// The export this wrapper is for. For a release, the handle type's own
-    /// declaration. The exported symbol is not read from here; the frontend
-    /// settled it in the policy.
+    /// declaration — and what the target looks its configuration for this
+    /// wrapper up by. The exported symbol is not spelled here; the frontend
+    /// settled it when it recorded the declaration.
     pub declaration: &'a Declaration,
     /// The source function the wrapper calls once, or `None` for a release.
     ///
@@ -905,13 +933,16 @@ pub struct SiteDescriptor<'a> {
 }
 
 /// What `surface` is given: the requested public declaration.
-pub struct SurfaceRequest<'a, Policy> {
+///
+/// [`Self::declaration`] is what the target looks its own configuration for
+/// this output up by — which class or C name it was declared under, which
+/// declarator it came from.
+pub struct SurfaceRequest<'a> {
     pub declaration: &'a Declaration,
-    pub policy: &'a Policy,
     pub item: SourceItem<'a>,
 }
 
-impl<Policy> SurfaceRequest<'_, Policy> {
+impl SurfaceRequest<'_> {
     /// The `#[cfg]` conditions the captured item behind this request was
     /// written under, spelled as the source wrote them — empty in the ordinary
     /// case.
@@ -981,15 +1012,16 @@ impl<Policy> SurfaceRequest<'_, Policy> {
 ///
 /// The variant is a fact about the source, not about the representation: a
 /// struct declared to C as an opaque pointer still arrives as
-/// [`SourceItem::Struct`], and how the target carries it is in
-/// [`SurfaceRequest::policy`]. Read the policy first. A declaration the
-/// binding defines itself ([`Declaration::is_binding_local`]) names no captured
-/// item and is refused before `surface` is asked, so nothing here is ever
-/// absent.
+/// [`SourceItem::Struct`], and how the target carries it is in the target's
+/// own configuration, under [`SurfaceRequest::declaration`]. Read that first.
+/// A declaration that names no entity — a callback, a constant computed on the
+/// foreign side — is refused before `surface` is asked, so nothing here is
+/// ever absent. An entity the binding defined itself is here like any other:
+/// a helper's stated signature arrives as [`SourceItem::Function`], an opaque
+/// type declared over one the source never exported as [`SourceItem::Extern`].
 ///
 /// [`Flat`]: prebindgen_flat::flat::Flat
 /// [`Element`]: prebindgen_flat::flat::Element
-/// [`Declaration::is_binding_local`]: crate::decl::Declaration::is_binding_local
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
     /// A captured free function, the item behind a `fn:` declaration.
@@ -1008,22 +1040,23 @@ pub enum SourceItem<'a> {
     /// A target declaring one — a `repr(C)` mirror, a Kotlin `data class` —
     /// re-declares its fields: [`Struct::fields`], with the `#[cfg]`
     /// condition of each in [`SurfaceRequest::field_conditions`]. A struct
-    /// under a policy that carries it whole crosses as a handle instead, and
-    /// its fields go unread; the target learns that from the policy, not from
-    /// this variant. A tuple struct is not this variant at all: its fields
-    /// are not modelled, and the model declares it as [`SourceItem::Extern`].
+    /// the binding declared to be carried whole crosses as a handle instead,
+    /// and its fields go unread; the target learns that from its own
+    /// configuration, not from this variant. A tuple struct is not this
+    /// variant at all: its fields are not modelled, and the model declares it
+    /// as [`SourceItem::Extern`].
     Struct(&'a Struct),
     /// A captured declaration with nothing behind it — a marked type alias
     /// such as `pub type Ledger = crate::ledger::Ledger;`, or a tuple struct —
     /// which the source model calls an extern.
     ///
     /// It has no parts to convert through, so a value of it crosses whole: as
-    /// an opaque handle, under a policy that names a carrier for the address
-    /// and a release for it (see [`ReprSpec::release`]). [`Extern::target`]
+    /// an opaque handle, represented by a carrier for the address and a
+    /// release for it (see [`ReprSpec::release`]). [`Extern::target`]
     /// says what the alias pointed at, as text, for a target that wants to
     /// recognise one; the model does not classify it. A target with no handle
-    /// representation refuses this variant, and a data policy on it finds no
-    /// struct relation to select at all.
+    /// representation refuses this variant, and one that declared this type to
+    /// be read through its fields finds no struct relation to select at all.
     Extern(&'a Extern),
 }
 
@@ -1037,10 +1070,42 @@ pub enum SourceItem<'a> {
 /// declaration. None of them walks a type, allocates a name, or decides control
 /// flow: those are the registry's, which is why a second field, a nested struct
 /// or a third target costs an adapter nothing new.
+///
+/// # Where the settings live
+///
+/// Here. The registry stores no configuration of its own and knows no
+/// precedence rule: it does not hold a table of the binding's choices, and it
+/// cannot say whether one recorded for a parameter outranks one recorded for a
+/// type. An adapter keeps its `build.rs` storage — the same storage its v1
+/// route reads — and answers each question below out of it, addressed by
+/// [`SelectionQuery::position`] for a value and by the [`Declaration`] for an
+/// output.
+///
+/// What the registry does own is *identity*: [`Target::select`] returns a
+/// [`Selection`] whose `conversion` key stands for the settings the adapter
+/// just applied, and the registry reuses one conversion for every value whose
+/// crossing, relation, children and key all match. Hence the one rule an
+/// adapter owes it, [`Selection`]'s: equal keys are interchangeable
+/// conversions, and settings that generate differently get different keys.
+/// A lookup that silently fell back to a default where the binding asked for
+/// something the adapter cannot do yet would break it in the other direction —
+/// the answer must be a reported [`Unsupported`], not the default.
 pub trait Target {
-    /// The choices the frontend recorded, in whatever shape this language's
-    /// configuration takes. The engine carries it and hands it back.
-    type Policy;
+    /// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
+    /// adapter, so nothing has to carry it alongside the requests.
+    const NAME: &'static str;
+
+    /// What the adapter calls one way of converting a value.
+    ///
+    /// The registry never looks inside it: it compares keys to decide which
+    /// values share a conversion ([`Selection`]), and to notice a type whose
+    /// conversion needs its own. The obligations that come with minting one
+    /// are [`Selection`]'s.
+    ///
+    /// An adapter whose settings are plain data can use those directly; one
+    /// holding something incomparable — a naming closure, say, which cannot be
+    /// compared to another closure — interns it and uses the index.
+    type ConversionKey: Clone + Eq + std::hash::Hash;
     /// The adapter's own rendering data, retained in the plans and read back by
     /// [`Target::render_operation`] and by the adapter's foreign writer.
     ///
@@ -1050,30 +1115,39 @@ pub trait Target {
     /// to trust.
     type Payload: Clone;
 
-    /// Choose the relation for this value from the ones available.
-    fn select(&self, query: &SelectionQuery<'_, Self::Policy>) -> TargetSupport<RelationId>;
+    /// Choose the relation this value is read through, and name the conversion
+    /// that makes it.
+    ///
+    /// This is the one call that sees a [`Position`], and so the only place a
+    /// per-site choice can take effect: it does so by coming back as a
+    /// different [`Selection::conversion`].
+    fn select(&self, query: &SelectionQuery<'_>) -> TargetSupport<Selection<Self::ConversionKey>>;
 
-    /// Describe what carries this value and how its parts are accessed.
+    /// Describe what carries this value and how its parts are accessed, for
+    /// the conversion [`Target::select`] named.
     fn represent(
         &self,
         shape: &ResolvedShape<'_>,
         children: &[ChildValue<'_>],
-        policy: &Self::Policy,
+        conversion: &Self::ConversionKey,
     ) -> TargetSupport<ReprSpec<Self::Payload>>;
 
     /// Describe the wrapper that will export this source function: its
     /// interface, and its routes for the failures its conversions can raise.
+    ///
+    /// What the binding asked for this export — its symbol above all — the
+    /// adapter reads from its own storage under [`SiteDescriptor::declaration`].
     fn boundary(
         &self,
         site: &SiteDescriptor<'_>,
         values: &ResolvedValues<'_, Self::Payload>,
-        policy: &Self::Policy,
     ) -> TargetSupport<BoundarySpec<Self::Payload>>;
 
-    /// Describe one public declaration and what it requires.
+    /// Describe one public declaration and what it requires, from what the
+    /// binding recorded under [`SurfaceRequest::declaration`].
     fn surface(
         &self,
-        request: &SurfaceRequest<'_, Self::Policy>,
+        request: &SurfaceRequest<'_>,
         values: &ResolvedValues<'_, Self::Payload>,
     ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
 
@@ -1084,11 +1158,15 @@ pub trait Target {
     /// operation's specification lists them.
     fn render_operation(&self, payload: &Self::Payload, operands: &[syn::Ident]) -> TokenStream;
 
-    /// Say, for the report, what a declaration under this policy is: the
-    /// adapter's own declarator word and where the thing lands in the foreign
-    /// language. Read from the policy that drives generation, so the report
-    /// cannot say one thing and the generated code another.
-    fn describe(&self, policy: &Self::Policy) -> Described;
+    /// Say, for the report, what this declaration is: the adapter's own
+    /// declarator word and where the thing lands in the foreign language.
+    ///
+    /// Read from the same storage [`Target::boundary`] and [`Target::surface`]
+    /// read, under the same [`Declaration`], so the report cannot say one
+    /// thing and the generated code another. Asked of every requested output,
+    /// including one that was skipped — the report says what a declaration was
+    /// *for*, not only what became of it.
+    fn describe(&self, declaration: &Declaration) -> Described;
 }
 
 /// How a report names one declaration on the foreign side — see

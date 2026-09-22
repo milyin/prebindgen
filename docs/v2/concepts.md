@@ -82,17 +82,26 @@ source function at multiple placements in one run would need a richer identity;
 current V2 rejects a declaration stated twice.
 See [Record binding requests](stages/03-requests.md#record-binding-requests).
 
-### Policy
+### Choice
 
-The language-specific choices attached to a declaration or a value. For
-example, a C policy can say that `Stamp` uses a by-value struct, while a JNI
-policy names the Kotlin class that will carry it. The registry passes this
-data back to the adapter when it needs a language-specific decision; the shared
-planner does not interpret every C or Kotlin option itself.
+One language-specific decision the binding recorded about a declaration or a
+value, held by the frontend that recorded it and by the target that frontend
+builds. For example, C records that `Stamp` crosses as a by-value struct, while
+JNI records the Kotlin class that will carry it. The registry stores none of
+them and knows no precedence among them: it asks the target whenever it needs a
+language-specific decision, and the target resolves what applies from its own
+storage. The shared planner never interprets a C or Kotlin option.
+See [What a choice records](stages/03-requests.md#what-a-choice-records).
 
-Policies have identities. Reusing the same identity can allow plan sharing;
-two separately recorded policies are not merged just because their contents
-look equal. See [What policy means](stages/03-requests.md#what-policy-means).
+### Conversion key
+
+The adapter's own name for one way of converting a value, returned from
+`select` beside the relation. The registry never looks inside it; it compares
+keys, and two values whose crossing, relation, children and key all match share
+one plan. So a key means one thing: *equal keys are interchangeable
+conversions*. Settings that generate differently must produce different keys,
+and a fresh key per visit would share nothing and defeat cycle detection. See
+[Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
 
 ### Root
 
@@ -142,8 +151,8 @@ The exact source type paired with its direction of travel. The argument makes
 the crossing `Stamp` into Rust; the result makes the crossing `i64` out of
 Rust. Direction matters: constructing a Rust struct is not the same operation
 as taking a returned struct apart. The crossing identifies the problem, but
-the selected relation, policy and child plans are also needed to identify a
-reusable solution. See [Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
+the selected relation, conversion key and child plans are also needed to
+identify a reusable solution. See [Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
 
 ### Relation
 
@@ -195,7 +204,7 @@ See [Represent and compose values](stages/05-represent.md#represent-and-compose-
 ### Node
 
 A completed conversion plan stored for reuse. Its identity includes the
-crossing, selected relation, policy identity and child-plan identities. Those
+crossing, selected relation, conversion key and child-plan identities. Those
 details explain why “same Rust type” is not enough for sharing: two structs
 whose fields need different conversions need different plans too. In the
 example, both `i64` fields can reuse one input node, applied once per field.

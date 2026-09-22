@@ -22,86 +22,86 @@ use crate::{
         AbiSpec, ChildValue, Crossing, Direction, FailureCategory, FailureRoute, Layout,
         OperandRole, OutputPlacement, ParamRole, Part, PlanningError, PrimitiveFailure,
         PrimitiveId, PrimitiveSpec, Protocol, Relation, RelationId, ResolvedShape, ResolvedValues,
-        SelectionQuery, SiteDescriptor, SourceItem, StructRelation, SurfaceRequest, SurfaceSpec,
-        Target, TargetAttempt, Unsupported,
+        Selection, SelectionQuery, SiteDescriptor, SourceItem, StructRelation, SurfaceRequest,
+        SurfaceSpec, Target, TargetAttempt, Unsupported,
     },
 };
 
-/// A configuration entry the target interprets. Valid inside one request set.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PolicyId(pub usize);
-
-/// One requested output.
+/// One entry of a [`BindingRequests`] work list: something the binding said
+/// about one item.
+///
+/// Both dispositions name a declaration, and the report accounts for both,
+/// so they are one list rather than two: an id can then appear once, which is
+/// what the report's "one id, one row" rests on. Exposing something and
+/// ignoring it is a contradiction the engine catches for that reason, rather
+/// than emitting two rows for it. An ignore must name an entity — what is
+/// left alone is an item — and one that names none is refused as
+/// contradictory input before anything is planned.
 #[derive(Clone, Debug)]
-pub struct OutputRequest {
-    /// What was declared, and the run's key for it.
-    pub declaration: Declaration,
-    /// The target's configuration for this output.
-    pub policy: PolicyId,
+pub enum Request {
+    /// Expose this declaration. The target is asked what it is, and the
+    /// registry plans it.
+    Expose(Declaration),
+    /// Leave this entity alone. Nothing is planned and nothing is generated;
+    /// the report carries it so that a decision and a gap read differently.
+    Ignore(Declaration),
 }
 
-/// What a frontend hands the engine: what to expose, and the choices that
-/// apply.
+/// What a frontend hands the engine: what to expose, and what to leave alone.
+///
+/// Nothing about *how* anything crosses is here. A binding's choices — which
+/// C name a type gets, which Kotlin class, which parameter is expanded — stay
+/// in the frontend's own storage and are answered where the registry asks, in
+/// [`Target`]. What this carries is the work list, one [`Request`] per entry,
+/// so the registry can plan each, decide what survives, and account for every
+/// one of them in the report.
 ///
 /// Users never write this; a frontend builds it from its own recorded calls,
 /// which is what lets two languages share everything after this point.
-pub struct BindingRequests<Policy> {
-    /// The target this binding generates for — `"c"`, `"jni"`.
-    pub target: &'static str,
+pub struct BindingRequests {
+    /// The crate whose build script is generating, for the report.
+    pub declaring_crate: String,
     /// The module generated code reaches the source items through.
     pub source_module: syn::Path,
-    pub outputs: Vec<OutputRequest>,
-    /// Configurations referenced by [`PolicyId`].
-    pub policies: Vec<Policy>,
-    /// The configuration for a value nothing more specific covers.
-    pub default_policy: PolicyId,
-    /// Per-source-type defaults: `Stamp` crosses this way wherever it appears.
-    pub type_policies: BTreeMap<String, PolicyId>,
-    /// Per-site overrides: this parameter, or the result, of this declared
-    /// source function crosses differently from the type's default. Keyed by
-    /// declaration and the site's path, `param 0` or `return`.
-    pub site_policies: BTreeMap<(Declaration, String), PolicyId>,
-    /// Declarations the user asked to leave alone.
-    pub ignored: Vec<Declaration>,
+    /// What the binding said, in the order it said it.
+    pub requests: Vec<Request>,
 }
 
-impl<Policy> BindingRequests<Policy> {
-    /// A request set with one policy, which every value uses unless something
-    /// more specific is recorded.
-    pub fn new(target: &'static str, source_module: syn::Path, default: Policy) -> Self {
+impl BindingRequests {
+    pub fn new(declaring_crate: impl Into<String>, source_module: syn::Path) -> Self {
         BindingRequests {
-            target,
+            declaring_crate: declaring_crate.into(),
             source_module,
-            outputs: Vec::new(),
-            policies: vec![default],
-            default_policy: PolicyId(0),
-            type_policies: BTreeMap::new(),
-            site_policies: BTreeMap::new(),
-            ignored: Vec::new(),
+            requests: Vec::new(),
         }
     }
 
-    /// Record a configuration and get its identity.
-    ///
-    /// Two values share a conversion only when they share the entry, never
-    /// because two entries look alike — a policy can hold a closure, and two
-    /// closures cannot be compared.
-    pub fn policy(&mut self, policy: Policy) -> PolicyId {
-        self.policies.push(policy);
-        PolicyId(self.policies.len() - 1)
-    }
-
     /// Ask for one declaration to be exposed.
-    pub fn output(&mut self, declaration: Declaration, policy: PolicyId) -> &mut Self {
-        self.outputs.push(OutputRequest {
-            declaration,
-            policy,
-        });
+    pub fn expose(&mut self, declaration: Declaration) -> &mut Self {
+        self.requests.push(Request::Expose(declaration));
         self
     }
 
-    pub(crate) fn get(&self, id: PolicyId) -> &Policy {
-        &self.policies[id.0]
+    /// Ask for one entity to be left alone.
+    pub fn ignore(&mut self, declaration: Declaration) -> &mut Self {
+        self.requests.push(Request::Ignore(declaration));
+        self
+    }
+
+    /// The declarations to plan, and the ones only the report hears about.
+    ///
+    /// Split once, here, so that nothing downstream can plan an ignore by
+    /// forgetting to filter for it.
+    fn split(&self) -> (Vec<&Declaration>, Vec<&Declaration>) {
+        let mut exposed = Vec::new();
+        let mut ignored = Vec::new();
+        for request in &self.requests {
+            match request {
+                Request::Expose(declaration) => exposed.push(declaration),
+                Request::Ignore(declaration) => ignored.push(declaration),
+            }
+        }
+        (exposed, ignored)
     }
 }
 
@@ -147,26 +147,32 @@ pub struct FunctionPlan<P> {
 ///
 /// Deliberately coarser than [`NodeKey`]: what makes a cycle is a type reaching
 /// its own conversion, which its children cannot be known before.
+///
+/// It is the target's [`Target::ConversionKey`] that stands for the settings
+/// here, which is why a target must not mint a fresh key per visit: two visits
+/// to the same conversion would then look like two conversions, and a cycle
+/// would recurse instead of being refused.
 #[derive(Clone, PartialEq, Eq, Hash)]
-struct ResolvingKey {
+struct ResolvingKey<K> {
     ty: prebindgen_flat::TypeKey,
     direction: Direction,
     relation: RelationId,
-    policy: PolicyId,
+    conversion: K,
 }
 
 /// What makes two conversions the same conversion.
 ///
 /// The children are part of it. A choice recorded for a field is looked up at
-/// that field's position, so two structs with the same policy whose fields were
-/// configured differently resolve to different children — and must not share a
-/// node, or the second use would silently inherit the first one's conversion.
+/// that field's position, so two structs whose own conversion key is equal but
+/// whose fields were configured differently resolve to different children —
+/// and must not share a node, or the second use would silently inherit the
+/// first one's conversion.
 #[derive(PartialEq, Eq, Hash)]
-struct NodeKey {
+struct NodeKey<K> {
     ty: prebindgen_flat::TypeKey,
     direction: Direction,
     relation: RelationId,
-    policy: PolicyId,
+    conversion: K,
     children: Vec<NodeId>,
 }
 
@@ -201,12 +207,11 @@ impl Refusal {
 struct Run<'a, T: Target> {
     flat: &'a Flat,
     target: &'a T,
-    requests: &'a BindingRequests<T::Policy>,
     relations: Vec<Relation>,
     primitives: Vec<PrimitiveSpec<T::Payload>>,
     nodes: Vec<ValuePlan<T::Payload>>,
-    cache: HashMap<NodeKey, NodeId>,
-    resolving: std::collections::HashSet<ResolvingKey>,
+    cache: HashMap<NodeKey<T::ConversionKey>, NodeId>,
+    resolving: std::collections::HashSet<ResolvingKey<T::ConversionKey>>,
     /// The relations offered for a type, registered the first time it is
     /// planned. A relation's identity is part of a conversion's identity, so
     /// registering a fresh one per visit would give every value its own node
@@ -215,11 +220,10 @@ struct Run<'a, T: Target> {
 }
 
 impl<'a, T: Target> Run<'a, T> {
-    fn new(flat: &'a Flat, target: &'a T, requests: &'a BindingRequests<T::Policy>) -> Self {
+    fn new(flat: &'a Flat, target: &'a T) -> Self {
         Run {
             flat,
             target,
-            requests,
             relations: Vec::new(),
             primitives: Vec::new(),
             nodes: Vec::new(),
@@ -227,25 +231,6 @@ impl<'a, T: Target> Run<'a, T> {
             resolving: std::collections::HashSet::new(),
             offered: HashMap::new(),
         }
-    }
-
-    /// The configuration for a value at this position: the site override, then
-    /// the type default, then the request set's default.
-    fn effective_policy(&self, position: &crate::target::Position, ty: &TypeRef) -> PolicyId {
-        let requests = self.requests;
-        let site = position.path.join(".");
-        if let Some(policy) = requests
-            .site_policies
-            .get(&(position.declaration.clone(), site))
-        {
-            return *policy;
-        }
-        if let Some(name) = type_name(ty) {
-            if let Some(policy) = requests.type_policies.get(&name) {
-                return *policy;
-            }
-        }
-        requests.default_policy
     }
 
     /// Register an operation, and hand back the identity instructions name it
@@ -308,22 +293,25 @@ impl<'a, T: Target> Run<'a, T> {
         position: &crate::target::Position,
     ) -> Result<Planned, PlanningError> {
         let target = self.target;
-        let requests = self.requests;
-        let policy_id = self.effective_policy(position, &crossing.ty);
 
         let candidates = match self.candidates(&crossing.ty) {
             Ok(candidates) => candidates,
             Err(reason) => return Ok(Planned::refused(reason, position)),
         };
 
+        // Everything the target needs to apply its own settings: the value,
+        // and where it sits. What comes back says both how to read it and
+        // which conversion that makes.
         let query = SelectionQuery {
             crossing: &crossing,
             position,
             candidates: &candidates,
-            policy: requests.get(policy_id),
         };
-        let relation_id = match target.select(&query)? {
-            TargetAttempt::Ready(relation) => relation,
+        let Selection {
+            relation: relation_id,
+            conversion,
+        } = match target.select(&query)? {
+            TargetAttempt::Ready(selection) => selection,
             TargetAttempt::Unsupported(reason) => return Ok(Planned::refused(reason, position)),
         };
         let relation = match candidates
@@ -347,7 +335,7 @@ impl<'a, T: Target> Run<'a, T> {
             ty: crossing.ty.key(),
             direction: crossing.direction,
             relation: relation_id,
-            policy: policy_id,
+            conversion: conversion.clone(),
         };
         if !self.resolving.insert(resolving.clone()) {
             return Ok(Planned::refused(
@@ -362,7 +350,7 @@ impl<'a, T: Target> Run<'a, T> {
                 position,
             ));
         }
-        let planned = self.plan_relation(&crossing, position, relation_id, &relation, policy_id);
+        let planned = self.plan_relation(&crossing, position, relation_id, &relation, conversion);
         self.resolving.remove(&resolving);
         planned
     }
@@ -375,16 +363,15 @@ impl<'a, T: Target> Run<'a, T> {
         position: &crate::target::Position,
         relation_id: RelationId,
         relation: &Relation,
-        policy_id: PolicyId,
+        conversion: T::ConversionKey,
     ) -> Result<Planned, PlanningError> {
         let target = self.target;
-        let requests = self.requests;
         let parts = relation.parts().to_vec();
 
         // Children are planned before this conversion's identity is known,
         // because a choice recorded for one of them makes this a different
-        // conversion: two values with the same policy whose fields disagree
-        // must not share a node.
+        // conversion: two values whose own conversion key is equal but whose
+        // fields disagree must not share a node.
         let mut children = Vec::new();
         for part in &parts {
             let child = Crossing {
@@ -405,7 +392,7 @@ impl<'a, T: Target> Run<'a, T> {
             ty: crossing.ty.key(),
             direction: crossing.direction,
             relation: relation_id,
-            policy: policy_id,
+            conversion: conversion.clone(),
             children: children.clone(),
         };
         if let Some(id) = self.cache.get(&key) {
@@ -429,7 +416,7 @@ impl<'a, T: Target> Run<'a, T> {
                 layout: &self.nodes[id.0].repr.layout,
             })
             .collect();
-        let repr = match target.represent(&shape, &child_values, requests.get(policy_id))? {
+        let repr = match target.represent(&shape, &child_values, &conversion)? {
             TargetAttempt::Ready(repr) => repr,
             TargetAttempt::Unsupported(reason) => return Ok(Planned::refused(reason, position)),
         };
@@ -696,14 +683,6 @@ fn same_member(left: &syn::Member, right: &syn::Member) -> bool {
     left.to_token_stream().to_string() == right.to_token_stream().to_string()
 }
 
-/// The name of a nominal type, for a policy lookup.
-fn type_name(ty: &TypeRef) -> Option<String> {
-    match ty.kind() {
-        TypeKind::Named { id, .. } => Some(id.name.clone()),
-        _ => None,
-    }
-}
-
 /// Plan `requests` over `flat` with `target`, and render what survives.
 ///
 /// Every requested output leaves this with an outcome. A capability the engine
@@ -712,24 +691,22 @@ fn type_name(ty: &TypeRef) -> Option<String> {
 pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
-    requests: BindingRequests<T::Policy>,
-    declaring_crate: impl Into<String>,
+    requests: BindingRequests,
 ) -> Result<Generation<T::Payload>, EngineError> {
-    let declared: Vec<Declaration> = requests
-        .outputs
-        .iter()
-        .map(|output| output.declaration.clone())
-        .collect();
-    check_declarations(&declared, &flat)?;
+    let (exposed, ignored) = requests.split();
+    // Duplicates are checked over both dispositions, so declaring a thing and
+    // ignoring it is caught here rather than printed as two rows for one id.
+    // Existence is asked of the exposed only: an ignore says "if this is here,
+    // leave it alone", and a binding may reasonably ignore an item its source
+    // crate compiles out under a feature.
+    check_declarations(&exposed, &ignored, &flat)?;
 
-    let mut run = Run::new(&flat, target, &requests);
+    let mut run = Run::new(&flat, target);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
     let mut surfaces: Vec<SurfaceSpec<T::Payload>> = Vec::new();
     let mut outcomes: BTreeMap<Declaration, Outcome> = BTreeMap::new();
 
-    for output in &requests.outputs {
-        let declaration = &output.declaration;
-        let policy = requests.get(output.policy);
+    for &declaration in &exposed {
         let root = crate::target::Position::root(declaration.clone());
         // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it. Each
@@ -737,39 +714,30 @@ pub fn generate<T: Target>(
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Declaration::Type(_) | Declaration::LocalType(_) => {
-                plan_type(&mut run, declaration, policy).map_err(EngineError::Planning)?
+            Declaration::Type(_) => {
+                plan_type(&mut run, declaration).map_err(EngineError::Planning)?
             }
-            // Two surfaces built the same way: a Kotlin `val` read through a
-            // nullary function is planned as that function, and the target
-            // renders the constant.
-            Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
+            // Whether the function was captured or is the binding's own makes
+            // no difference here: the model holds both, and the writer reaches
+            // each through its own origin. Nor does what the target shows the
+            // call as — a `fun`, or a `val` read through it — which is the
+            // target's choice under this one declaration.
+            Declaration::Function(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
-                plan_function(&mut run, declaration, function, policy)
-                    .map_err(EngineError::Planning)?
+                plan_function(&mut run, declaration, function).map_err(EngineError::Planning)?
             }
-            // A declaration the binding defines itself names no captured item,
-            // so there is nothing to plan from: its signature or its value is
-            // the binding's own, and reading one is a capability this engine
-            // does not have.
-            Declaration::LocalFunction(name) => Err(Refusal::at(
+            // A constant computed on the foreign side has no value in Rust to
+            // plan from; what it has is a foreign expression the target alone
+            // can render, and asking the target for that is a capability this
+            // engine does not have.
+            Declaration::ComputedConst(name) => Err(Refusal::at(
                 Unsupported::new(
-                    "unsupported.fn.binding_local",
+                    "unsupported.const.computed",
                     format!(
-                        "`{name}` is defined by the binding, not captured from the source, so \
-                         there is no captured item to plan from"
-                    ),
-                ),
-                &root,
-            )),
-            Declaration::LocalConst(name) => Err(Refusal::at(
-                Unsupported::new(
-                    "unsupported.const.binding_local",
-                    format!(
-                        "`{name}` is defined by the binding, not captured from the source, so \
-                         there is no captured item to plan from"
+                        "`{name}` is computed by the binding on the foreign side, and the v2 \
+                         engine has no way to place a foreign expression yet"
                     ),
                 ),
                 &root,
@@ -826,12 +794,12 @@ pub fn generate<T: Target>(
     // Which declaration represents which type. A target names a requirement by
     // type, because that is what the model told it about a value; matching the
     // type to the declaration covering it is the engine's side of that.
-    let declared_types: BTreeMap<String, &Declaration> = requests
-        .outputs
+    let declared_types: BTreeMap<String, &Declaration> = exposed
         .iter()
-        .map(|output| &output.declaration)
         .filter(|declaration| declaration.is_type())
-        .map(|declaration| (declaration.name(), declaration))
+        // Keyed by the item's name, which is what a requirement names: a
+        // declaration's key may carry arguments the item does not.
+        .filter_map(|declaration| Some((declaration.entity_name()?, *declaration)))
         .collect();
 
     // A public declaration can require another one. Propagate until a pass
@@ -881,22 +849,22 @@ pub fn generate<T: Target>(
     functions.retain(|function| emitted(&function.declaration));
     surfaces.retain(|surface| emitted(&surface.declaration));
 
-    let mut entries: Vec<Entry> = requests
-        .outputs
+    let mut entries: Vec<Entry> = exposed
         .iter()
-        .map(|output| Entry {
-            declaration: output.declaration.clone(),
-            described: target.describe(requests.get(output.policy)),
+        .map(|declaration| Entry {
+            declaration: (*declaration).clone(),
+            described: target.describe(declaration),
             outcome: outcomes
-                .get(&output.declaration)
+                .get(*declaration)
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
-        // An ignore is a decision the binding made about a captured item, so
-        // it has no policy and lands nowhere; the id's prefix (`fn:`, `type:`,
-        // `const:`) already says what was left alone.
-        .chain(requests.ignored.iter().map(|declaration| Entry {
-            declaration: declaration.clone(),
+        // An ignore is a decision the binding made about a captured item: it
+        // is not an output, so the target is never asked to describe it, and
+        // it lands nowhere. The id's prefix (`fn:`, `type:`, `const:`) already
+        // says what was left alone.
+        .chain(ignored.iter().map(|declaration| Entry {
+            declaration: (*declaration).clone(),
             described: crate::target::Described::new("ignore", ""),
             outcome: Outcome::Ignored,
         }))
@@ -905,12 +873,12 @@ pub fn generate<T: Target>(
 
     let report = Report {
         pipeline: PIPELINE,
-        target: requests.target,
+        target: T::NAME,
         schema_version: SCHEMA_VERSION,
         source_identity: SourceIdentity {
-            declaring_crate: declaring_crate.into(),
+            declaring_crate: requests.declaring_crate.clone(),
             sources: flat.source_modules().to_vec(),
-            captured_items: flat.elements().count(),
+            captured_items: flat.captured().count(),
         },
         declarations: entries,
     };
@@ -934,10 +902,10 @@ pub fn generate<T: Target>(
         }
     };
     for surface in &surfaces {
-        // Rust a target contributes for its own public declaration of a
-        // captured item — the `repr(C)` mirror of a struct — exists only where
-        // that item does, by the rule a wrapper follows. A declaration the
-        // binding defines itself has no captured item and no condition.
+        // Rust a target contributes for its own public declaration of an
+        // entity — the `repr(C)` mirror of a struct — exists only where that
+        // entity does, by the rule a wrapper follows. A declaration naming no
+        // entity has no item and no condition.
         let conditions = surface
             .declaration
             .captured(&flat)
@@ -972,14 +940,8 @@ pub fn generate<T: Target>(
         }
     }
 
-    let rust = crate::emit::render(
-        &flat,
-        target,
-        &requests.source_module,
-        &artifacts,
-        &primitives,
-        &functions,
-    );
+    let reach = crate::emit::Reach::new(&flat, requests.source_module.clone());
+    let rust = crate::emit::render(&flat, target, &reach, &artifacts, &primitives, &functions);
 
     Ok(Generation::new(
         flat, report, nodes, functions, surfaces, primitives, rust,
@@ -999,7 +961,6 @@ fn plan_function<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
     function: &Function,
-    policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let root = crate::target::Position::root(declaration.clone());
 
@@ -1059,7 +1020,7 @@ fn plan_function<T: Target>(
         declaration,
         function: Some(function),
     };
-    let boundary = match run.target.boundary(&site, &values, policy)? {
+    let boundary = match run.target.boundary(&site, &values)? {
         TargetAttempt::Ready(boundary) => boundary,
         TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
     };
@@ -1086,7 +1047,6 @@ fn plan_function<T: Target>(
     let surface = match run.target.surface(
         &SurfaceRequest {
             declaration,
-            policy,
             item: SourceItem::Function(function),
         },
         &values,
@@ -1139,7 +1099,7 @@ fn assemble<T: Target>(
             &crate::target::Position::root(declaration.clone()),
         )))
     };
-    // A symbol reaches generated Rust as a function name, so a policy that
+    // A symbol reaches generated Rust as a function name, so a target that
     // supplies something else is contradictory input rather than a name the
     // writer has to escape.
     if syn::parse_str::<syn::Ident>(&boundary.abi.symbol).is_err() {
@@ -1383,8 +1343,8 @@ fn assemble<T: Target>(
 /// obligation for, the conversion handing one out and the release freeing it.
 ///
 /// Whether a type is a handle is the target's answer, not the item's kind: a
-/// struct under an opaque policy is carried whole as an address, exactly as a
-/// declared alias is, and an alias a target carries by value would be no
+/// struct the binding declared opaque is carried whole as an address, exactly
+/// as a declared alias is, and an alias a target carries by value would be no
 /// handle. What says "handle" is the into-Rust representation naming a
 /// release; the registry then requires the out-of-Rust direction too — a
 /// handle is a promise that what a function returns can be given back — and
@@ -1392,40 +1352,32 @@ fn assemble<T: Target>(
 fn plan_type<T: Target>(
     run: &mut Run<'_, T>,
     declaration: &Declaration,
-    policy: &T::Policy,
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
     let root = crate::target::Position::root(declaration.clone());
-    // A declared type need not be a captured item — a target may represent
-    // `String` without the source exporting one — so this lookup, unlike a
-    // function's, can find nothing.
-    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(&declaration.name()) {
-        Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
-        Some(Type::Extern(opaque)) => {
-            // A declaration answers what reading names it; an extern keeps
-            // none, so the model is asked to read its own name.
-            let name = &opaque.name;
-            match flat.classify(&syn::parse_quote!(#name)) {
-                Ok(ty) => (ty, SourceItem::Extern(opaque)),
-                Err(error) => {
-                    return Err(PlanningError::InternalInvariant(format!(
-                        "`{name}` is declared and does not classify as a reference to \
-                             itself: {error}"
-                    )))
-                }
-            }
-        }
+    // The model holds every declared type — a captured one, or one the
+    // binding declared over a type the source never exported, which entered
+    // the model as an extern — and the declarations were checked against it
+    // before planning, so this lookup finds one.
+    let Declaration::Type(key) = declaration else {
+        return Err(PlanningError::InternalInvariant(format!(
+            "`{declaration}` was routed to the type planner"
+        )));
+    };
+    let name = declaration
+        .entity_name()
+        .expect("a type declaration names an entity");
+    // The item is looked up by its name, and the type is read from the key
+    // as the binding declared it: `ptr_class!(Publisher<'static>)` names the
+    // item `Publisher` and means values of `Publisher<'static>`, which is
+    // what the target recorded its choice under.
+    let item = match flat.declared_type(&name) {
+        Some(Type::Struct(strukt)) => SourceItem::Struct(strukt),
+        Some(Type::Extern(opaque)) => SourceItem::Extern(opaque),
         None => {
-            return Ok(Err(Refusal::at(
-                Unsupported::new(
-                    "unsupported.type.undeclared",
-                    format!(
-                        "`{}` is exposed as a type the source did not capture; v2 \
-                             represents captured types only",
-                        declaration.name()
-                    ),
-                ),
-                &root,
+            return Err(PlanningError::InternalInvariant(format!(
+                "`{}` was checked against the model and is not in it",
+                name
             )))
         }
         Some(Type::Enum(_) | Type::Variant(_)) => {
@@ -1434,7 +1386,22 @@ fn plan_type<T: Target>(
                     "unsupported.type.enum",
                     format!(
                         "`{}` is an enum, which v2 has no representation for yet",
-                        declaration.name()
+                        name
+                    ),
+                ),
+                &root,
+            )))
+        }
+    };
+    let ty = match flat.reading_of(key) {
+        Ok(ty) => ty,
+        Err(error) => {
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.type.key",
+                    format!(
+                        "`{}` is declared over a type this model cannot read: {error}",
+                        key.as_str()
                     ),
                 ),
                 &root,
@@ -1477,7 +1444,7 @@ fn plan_type<T: Target>(
             declaration,
             function: None,
         };
-        let boundary = match run.target.boundary(&site, &values, policy)? {
+        let boundary = match run.target.boundary(&site, &values)? {
             TargetAttempt::Ready(boundary) => boundary,
             TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
         };
@@ -1518,14 +1485,10 @@ fn plan_type<T: Target>(
         inputs: vec![&run.nodes[taken.0]],
         output: given.map(|id| &run.nodes[id.0]),
     };
-    let surface = match run.target.surface(
-        &SurfaceRequest {
-            declaration,
-            policy,
-            item,
-        },
-        &values,
-    )? {
+    let surface = match run
+        .target
+        .surface(&SurfaceRequest { declaration, item }, &values)?
+    {
         TargetAttempt::Ready(surface) => surface,
         TargetAttempt::Unsupported(reason) => return Ok(Err(Refusal::at(reason, &root))),
     };

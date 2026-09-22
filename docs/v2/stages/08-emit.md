@@ -206,7 +206,7 @@ adapter contributes `repr(C)`, the extern calling convention, the exported symbo
 and member identities; its member reads render through a common Rust operation,
 so C ships no field-read renderer of its own. The JNI adapter contributes the JNI
 symbol and calling convention, the environment and receiver parameters, the [carrier](05-represent.md#describing-target-values-and-operations)
-types, the getter descriptors and the error [policy](03-requests.md#what-policy-means) — and a renderer for the JNI
+types, the getter descriptors and the error [convention](03-requests.md#what-a-choice-records) — and a renderer for the JNI
 operations, which produces one expression per operation and nothing around it.
 
 The public declarations follow the same division: the JNI adapter renders them
@@ -224,7 +224,7 @@ concrete contributions stay separate throughout planning and writing:
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
 | Requested public API | Explicit C type name `Stamp`; default function name `stamp_sum` | `example.Stamp`, `example.stampSum` | Language frontend records user choices. |
-| Target [representation](05-represent.md#represent-and-compose-values) | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from policy and direct child descriptors. |
+| Target [representation](05-represent.md#represent-and-compose-values) | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from its own storage and the direct child descriptors. |
 | `PrimitiveSpec.implementation` | Common `StandardOp::ReadMember` plus member identity | `JniPayload::Getter` plus getter name and descriptor | Adapter selects operation; registry retains it. |
 | One primitive's rendered operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
 | A handle's operations | `Box::into_raw(Box::new(v3)) as *mut Ledger`; `NonNull::new(ledger as *mut source::Ledger)…` | The same, cast to and from `jlong` | Common Rust operation renderer: these spell a source type, which only the registry may. |

@@ -161,7 +161,7 @@ struct SurfaceSpec<Payload> {
 }
 ```
 
-`Requirement` is a typed reference to a dependency that must succeed. It is the resolved obligation derived from an output request's semantic promises or actual usage. `members` describes association; a member that is essential to a promised interface must also be a requirement.
+`Requirement` is a typed reference to a dependency that must succeed. Today it is derived from what a declaration's signature uses — the public type a value crosses as — and the sketch extends it to what a declaration promises. `members` describes association; a member that is essential to a promised interface must also be a requirement.
 
 The full design requires the following dependency behavior. Struct/caller
 propagation is implemented; interface and method promises extend that rule:
@@ -203,7 +203,7 @@ struct Registry {
 struct GenerationRun<'a, T: Target> {
     registry: &'a Registry, // Source facts used throughout this generate call.
     target: &'a T,         // Read-only target decision/operation provider.
-    requests: BindingRequests<T::Policy>, // Complete translated requests and configuration.
+    requests: BindingRequests,            // The declarations to plan, and the ignores.
     nodes: NodeArena<T::Payload>,       // Conversion attempts and completed value plans.
     functions: FunctionArena<T::Payload>, // Candidate complete wrapper plans.
     surfaces: SurfaceArena<T::Payload>, // Candidate public declaration descriptions.
@@ -220,9 +220,10 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend creates BindingRequests internally and calls generate
- -> registry validates/imports source references, policies and requests
- -> for each requested value: select its source relation
+ -> v2 frontend creates BindingRequests and its target internally, and calls generate
+ -> registry validates/imports source references and requests
+ -> for each requested value: target selects its source relation and names
+    the conversion its own settings make
  -> registry resolves the selected source operation's children
  -> target describes the requested value's representation
  -> registry composes value instructions and contracts

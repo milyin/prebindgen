@@ -12,16 +12,20 @@ Crossing { source: Stamp, direction: IntoRust  }    // for Param(0)
 Crossing { source: i64,   direction: OutOfRust }    // for Return
 ```
 
-with, for each, the [policy](../../stages/03-requests.md#what-policy-means)
-the frontend recorded for that type and position.
+and, for each, the position it sits at. The
+[choice](../../stages/03-requests.md#what-a-choice-records) recorded for that type
+and position is not passed in: the target holds it, and looks it up.
 
 ## Result
 
 The function needs two [conversions](../../stages/04-select.md#select-conversion-relations):
 foreign argument to Rust `Stamp`, and Rust result to foreign integer. For each,
 the registry offers the target the [relations](../../stages/04-select.md#what-a-relation-is)
-registered for the type and asks it to choose one; then it descends into that
-relation's parts and asks again. What comes back up is a selection tree:
+registered for the type and asks it to choose one. The target answers with the
+relation *and* a [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
+standing for the choice it applied; the registry then descends into that
+relation's parts and asks again. What comes back up is a selection tree, each
+entry carrying a key the later stages compare:
 
 ```text
    Param(0) --> Stamp, IntoRust
@@ -42,16 +46,22 @@ relation here, and what it would choose instead.
 
 The `Stamp` subtree is the struct's own selection,
 [made on its own path][struct_select]; this function refers to it, as does
-anything else taking an owned `Stamp` under the same policy.
+anything else taking an owned `Stamp` under the same choice.
 
 ## Checks
 
 - Selection happens before any part is inspected: the target chooses
-  `Stamp.fields` from the type and the policy, and only then does the registry
-  read the struct's fields. A target that chose `atomic` would leave them
-  unread.
+  `Stamp.fields` from the type and the choice it holds for it, and only then
+  does the registry read the struct's fields. A target that chose `atomic`
+  would leave them unread.
 - A scalar offers one relation. The target does not get to invent a second;
   `select` must return one of the ids it was offered.
+- The key returned with the relation is what makes the two `i64` leaves one
+  conversion rather than two: the same
+  [crossing](../../stages/03-requests.md#finding-an-existing-conversion-plan),
+  the same relation, an equal key. A target that minted a fresh key per call
+  would plan each of them separately and would not detect the recursion the
+  last check names.
 - If any part's conversion is unsupported — a field of a type nothing can carry
   yet — the `Stamp` conversion is unsupported, and so is this function, with
   that cause. Nothing partial is recorded.

@@ -11,7 +11,7 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
 node(output) : produces jlong, failures {}
 
-policy (JNI function): example.JNINative.stampSum, extern "system",
+JniTarget, under `fn:stamp_sum`: example.JNINative.stampSum, extern "system",
                        input one object, output jlong,
                        Runtime -> report to the JVM, then return a default
 ```
@@ -76,7 +76,7 @@ if reporting failed.
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success
   path. The route exists because the input [node](../../stages/05-represent.md#represent-and-compose-values) [declares that
-  failure][fn_represent_jni]; a category the [policy](../../stages/03-requests.md#what-policy-means) leaves unrouted would skip the
+  failure][fn_represent_jni]; a category the [choice](../../stages/03-requests.md#what-a-choice-records) leaves unrouted would skip the
   function.
 
 [fn]: README.md

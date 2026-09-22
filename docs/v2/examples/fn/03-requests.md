@@ -24,27 +24,28 @@ function exists and asking to export it are separate inputs.
 
 ## Result
 
-The request associates the source function with a public declaration and the
-adapter's function settings. This sketch names the two positions whose values
-need [conversion](../../stages/04-select.md#select-conversion-relations): the first parameter and the return value.
+The request names the public declaration; the adapter's function settings stay
+with the adapter, under that same name. This sketch names the two positions
+whose values need [conversion](../../stages/04-select.md#select-conversion-relations): the first parameter and the return value.
 The block uses design notation, not exact current fields. Current
-`OutputRequest` contains a `Declaration` — here
-`Declaration::Function(stamp_sum)` — and a `PolicyId`; the engine uses
+`OutputRequest` contains a `Declaration` and nothing else — here
+`Declaration::Function(stamp_sum)`; the engine uses
 `Position { declaration, path }` rather than the proposed `SiteId` below.
 
 ```text
 OutputRequest {
     id:     DeclarationId("fn:stamp_sum"),
     source: SourceItemId(crate::source::stamp_sum),
-    policy: PolicyId(this target's function policy),
 }
 
 sites:
     SiteId { owner: <that DeclarationId>, path: Param(0) }   // the owned Stamp
     SiteId { owner: <that DeclarationId>, path: Return }     // the i64
 
-site_policies: {}             // no position-specific overrides
-type_policies: { Stamp -> <the struct's policy> }
+in the target, not the request set:
+    output    <this DeclarationId> -> what this target recorded for stamp_sum
+    per site  none                 -> no position-specific overrides
+    per type  Stamp                -> <the struct's choice>
 ```
 
 The struct's [representation](../../stages/05-represent.md#represent-and-compose-values) is not decided here: it comes from
@@ -55,7 +56,7 @@ converted.
 
 - Current ids combine the kind and Rust name. Requesting two placements of the
   same function is not yet supported; the stage chapter describes that extension.
-- A frontend setting V2 cannot translate becomes a request under a [policy](../../stages/03-requests.md#what-policy-means)
+- A frontend setting V2 cannot translate becomes a request under a [choice](../../stages/03-requests.md#what-a-choice-records)
   that reports the missing capability. It must not disappear silently.
 - Nothing here claims the function can be generated.
 

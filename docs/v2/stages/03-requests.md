@@ -4,11 +4,13 @@
 
 # Record binding requests
 
-The implemented frontends translate user configuration into `BindingRequests`,
-the engine's input. This chapter first explains that translation, then describes
-the request identities and [conversion](04-select.md#select-conversion-relations)-sharing rules. Some later types are design
-sketches: in particular, owned Flat views and placement-specific declaration ids
-are not implemented. Each frontend defines its own policy type.
+The implemented frontends translate user configuration into two things: the
+`BindingRequests` naming what to generate, and their own `Target`, which holds
+what each of those declarations *is*. This chapter first explains that
+translation, then describes the request identities and
+[conversion](04-select.md#select-conversion-relations)-sharing rules. Some later
+types are design sketches: in particular, owned Flat views and
+placement-specific declaration ids are not implemented.
 
 The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
@@ -103,7 +105,7 @@ record its spelling. A function declaration must name a captured function, and
 one that does not is an error when the requests meet the model; a class
 declaration need not name a captured type at all — a target may represent
 `String` without the source exporting one — so `data_class!(Absent)` is a
-reported skip (`unsupported.type.not_a_struct`) rather than an error.
+reported skip (`unsupported.jni.not_a_struct`) rather than an error.
 
 The adapter also chooses how conversion failures reach the caller. For example,
 reading a JVM property can fail before the Rust function runs. The adapter
@@ -117,12 +119,15 @@ configuration**, and `.build()` is where the frontend turns it into
 that structure; frontends do, which is why the two builders above can be as
 different as their languages while everything after this stage is shared.
 
-A request set separates the desired output from choices about its implementation.
-An **output request** asks for a function, type or other public declaration.
-A **target policy** stores the language-specific choices that apply, such as
-using a C struct or a JVM object to carry a `Stamp`. The engine passes policy
-back to the corresponding adapter when it needs a representation decision.
-The engine does not need to understand every C or JNI configuration option.
+A request set separates the desired output from choices about its
+implementation. An **output request** asks for a function, type or other public
+declaration, and that is *all* it carries: the declaration's identity. The
+language-specific choices that apply to it — a C struct or a JVM object to
+carry a `Stamp`, which header name, which `Java_…` symbol — stay in the
+frontend's own storage, which is the same object the registry later asks its
+questions of as the `Target`. The engine therefore does not need to understand
+any C or JNI configuration option, and has no table of them to keep in step
+with the frontend's.
 
 This stage also fixes the names by which everything is addressed afterwards. A
 **declaration** is one requested output, identified by a `DeclarationId` —
@@ -136,13 +141,16 @@ parts together are the **positions** a conversion can be planned at. Overrides
 attach to sites and parts, and so do diagnostics, which is why a skipped binding
 can later say *which* parameter of *which* exported function was the problem.
 
-The engine looks for an override at the declaration's value path, then a
-policy for the type, then the run's default. A value path can identify a nested
-field, such as `param 0.field secs`. The selected entry is the conversion's
-**effective policy**, which affects whether a plan can be reused. Current
-frontend translation does not populate the engine's site-policy table; engine
-tests exercise it directly. The separate part-rule table shown later is a
-design extension.
+Precedence between those choices is the frontend's, not the engine's: a target
+looks for an override at the value's path, then a choice for the type, then its
+own default. A value path can identify a nested field, such as
+`param 0.field secs`, and the engine supplies it as the `Position` handed to
+[`Target::select`](04-select.md#how-the-registry-asks-a-target-for-decisions).
+What comes back is a **conversion key**, which affects whether a plan can be
+reused. The two implemented frontends have no per-site declarator today, so
+both answer from the type alone; the engine's own test target exercises the
+full precedence. The separate part-rule table shown later is a design
+extension.
 
 Recording a request claims nothing about feasibility; whether a well-formed
 request can actually be generated is not known until the next stage tries.
@@ -194,7 +202,7 @@ common Rust writer belongs to the engine.
 <tbody>
 <tr>
 <td>Language frontend</td>
-<td>Provide the public language-specific Rust API and pass the recorded choices to the registry as binding requests.</td>
+<td>Provide the public language-specific Rust API; pass the registry what to expose and what to leave alone, and keep the recorded choices, answering the registry's questions about them as its target.</td>
 <td>Expose <code>Stamp</code> as a C data struct and <code>normalize</code> as a C function.</td>
 <td>Expose <code>Stamp</code> as a Kotlin data class in a specified package and place <code>normalize</code> in the requested API.</td>
 </tr>
@@ -225,9 +233,12 @@ common Rust writer belongs to the engine.
 
 The implementation divides the registry's data between two structures:
 
-- **The generation operation**, `generate(flat, target, requests, crate)`, is a
-  free function that starts a fresh run. `target` implements the adapter
-  interface; `requests` contains the frontend's choices. Current V2 selects
+- **The generation operation**, `generate(flat, target, requests)`, is a free
+  function that starts a fresh run. Three arguments, three kinds of thing: the
+  source model, the language, and what this binding asks of it. `requests` is
+  the work list — what to expose and what to leave alone; `target` implements
+  the adapter interface and holds the frontend's choices, which is where every
+  question about them goes. Current V2 selects
   atomic conversions or struct-field construction. Constructors, accessors
   and other helper [relations](04-select.md#what-a-relation-is) described by the design are future extensions.
 - **The run**, private `Run` state in `plan.rs`, keeps requests, offered
@@ -237,19 +248,27 @@ The implementation divides the registry's data between two structures:
 
 A binding crate normally builds one configured frontend. The frontend calls `generate` once for all requests. `Flat` supplies source facts; the registry plans conversions using the run's working state.
 
-## Binding requests and target policy
+## Binding requests and target choices
 
 The common [`prebindgen-flat` library](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/lib.rs) supplies Rust source facts through `Flat`. Users call the C or JNI frontend's API to choose the generated interface: for example, exposing `Stamp` as a C data struct or a Kotlin class. The configured frontend creates `BindingRequests` and calls the registry.
 
 A declaration or setting recorded by the frontend is a **configuration entry**. A frontend call exposing a function records an output request; an argument override records the requested representation choice. The frontend also preserves naming hooks, ignored items and unsupported settings. Recording a request does not establish that the registry can generate it.
 
-### What policy means
+### What a choice records
 
-A **target policy** records the target-specific choices applicable to a request or a particular value conversion. It is configuration data. It does not contain a recursive conversion algorithm or a finished wrapper.
+A **choice** is one target-specific decision the binding recorded about a
+request or about a particular value conversion — that `Stamp` crosses as a C
+struct passed by value, under the name `Stamp`. It is configuration data. It
+does not contain a recursive conversion algorithm or a finished wrapper.
 
-Examples include JNI object versus separate-argument input, C struct versus handle, and function error handling or public placement.
+It belongs to the frontend that recorded it, and to the target that frontend
+builds. The registry holds no table of them and knows no precedence among them: it
+asks the target, and the target resolves what applies from its own storage.
 
-An illustrative portion of JNI policy could be:
+Examples include JNI object versus separate-argument input, C struct versus
+handle, and function error handling or public placement.
+
+An illustrative portion of what JNI records for one value could be:
 
 ```rust
 // Illustrative choices, not a replacement for the existing builder/macro API.
@@ -258,12 +277,12 @@ enum JniStructInput {
     ObjectProperties,  // JNI receives an object and reads its properties.
 }
 
-struct JniValuePolicy {
+struct JniValueChoice {
     record_input: JniStructInput, // How this struct reaches the wrapper.
 }
 ```
 
-The C policy for the same value is a different shape entirely, because the
+What C records for the same value is a different shape entirely, because the
 choices are different — there is no environment, no object, and no property to
 read:
 
@@ -274,18 +293,18 @@ enum CStructShape {
     OpaquePtr,   // A pointer to a Rust-owned value, with a typed drop.
 }
 
-struct CValuePolicy {
+struct CValueChoice {
     shape: CStructShape, // How this struct crosses the C boundary.
     c_name: String,      // Its name in the generated header.
 }
 ```
 
-Neither policy type is known to the registry: `Policy` is a generic parameter,
-and each frontend fills it with whatever its own adapter will later have to
-interpret. That is what lets one engine serve two languages whose choices have
-nothing in common.
+Neither type is known to the registry at all — not as a generic parameter, not
+as a table entry. Each frontend stores its own and interprets it in its own
+`Target`. That is what lets one engine serve two languages whose choices have
+nothing in common, without the engine naming either.
 
-Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [relation](04-select.md#what-a-relation-is) — a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument; where the contrast with the target side matters, the chapters call one a *source relation*. The adapter interprets the policy when describing the target representation and its property/argument operations.
+Neither choice lists `Stamp`'s fields or explains how to construct it. The registry obtains those facts through a [relation](04-select.md#what-a-relation-is) — a link inside the source domain from a Rust type to the values it is built from or read into, such as its fields or a helper's argument; where the contrast with the target side matters, the chapters call one a *source relation*. The adapter reads its own storage when describing the target representation and its property/argument operations.
 
 Three concepts stay separate throughout the design:
 
@@ -295,37 +314,48 @@ Three concepts stay separate throughout the design:
 | Target representation | What values carry it, and how are those values accessed? | One C struct, two JNI integer arguments, or a JVM object. |
 | Boundary delivery | Where do the converted values go at an exported call? | The wrapper's return, caller-provided output parameters, or a declared result callback. |
 
-Policy guides the selection of these descriptions. The registry turns the descriptions into an executable plan.
+The binding's choices guide the selection of these descriptions. The registry turns the descriptions into an executable plan.
 
 ### The registry API called by the frontend
 
-The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and target policy for a particular type, parameter, result or child value. `BindingRequests` collects these requests and rules together with their policies and the information needed to report unsupported or ignored entries. As a design sketch — the built structure has `type_policies` and `site_policies` in place of `conversion_rules`, and no `unsupported` list, since a frontend states what it cannot lower as a request under a refusing policy:
+The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and a way of converting for a particular type, parameter, result or child value. The two live in different places, which is the whole of this chapter's boundary:
 
 ```rust
-struct BindingRequests<Policy> {
-    outputs: Vec<OutputRequest>,    // Explicit output requests; defined below.
-    conversion_rules: ConversionRules, // Source-operation selections and applicability.
-    policies: PolicyTable<Policy>,// Target configurations referenced by PolicyId.
-    unsupported: Vec<UnsupportedRequest>, // Requests the frontend cannot yet fully translate.
-    ignored: Vec<DeclarationId>,  // Explicit user opt-outs retained for reporting.
+// What the frontend hands the registry.
+struct BindingRequests {
+    declaring_crate: String,      // The crate generating, for the report.
+    source_module: Path,          // How generated Rust reaches the source items.
+    requests: Vec<Request>,       // Expose this, or leave that alone; defined below.
+}
+
+// What the frontend keeps and answers the registry's questions from —
+// `CbindgenBuilder` and the `CTarget` it builds, schematically.
+struct FrontendStorage {
+    conversion_rules: ConversionRules,     // Per-type, per-position and default choices.
+    declared: Map<DeclarationId, CChoice>, // What each requested output is.
+    // …plus the naming hooks, which are closures and go nowhere.
 }
 ```
 
-`Policy` is supplied by the language implementation. C and JNI therefore use
-the same generic request structure with different configuration types. In the
-sketch, `PolicyTable` stores entries addressed by `PolicyId`. The implementation
-uses a `Vec`, also records a target label, source-module path and default policy
-id, and stores ignored entries as `Declaration`s. This sketch
-explains the responsibilities; `prebindgen-registry-v2/src/plan.rs` defines the
-exact current fields.
+The registry meets a conversion rule one value at a time, as the conversion key
+the target returns from `select`; it never sees the table. A setting the
+frontend cannot lower needs no list of its own either — it becomes an ordinary
+output request that the target then refuses by name, so the report accounts for
+it like anything else.
 
-The registry plans `outputs`, applies `conversion_rules`, reports `unsupported`/`ignored` entries, and asks the adapter to interpret `policies`.
+Neither structure is generic. C and JNI use the same `BindingRequests`, and
+differ only in the `Target` they pass beside it — which is also where the
+report's name for the language comes from, as `Target::NAME`, since an adapter
+knows what it is. These sketches explain the responsibilities;
+`prebindgen-registry-v2/src/plan.rs` defines the exact current fields.
 
-Suppose the user configures the JNI frontend to accept `Stamp` as two integer arguments by default, then overrides the `Stamp` parameter of function `f` to accept a JVM object. The registry uses the explicit object choice for `f`. Function `g`, which has no override, keeps the two-argument default. The settings selected for a particular conversion are its **effective policy**. A choice recorded for a particular field or constructor argument is also applied where that child is converted, following the frontend API's documented override rules.
+The registry plans what is to be exposed, reports what is left alone, and asks the adapter for every choice that applies.
 
-Identical type, construction and representation choices can share a converter; the object override needs a different converter.
+Suppose the user configures the JNI frontend to accept `Stamp` as two integer arguments by default, then overrides the `Stamp` parameter of function `f` to accept a JVM object. The JNI target resolves that override when the registry asks it to select a relation for `f`'s parameter 0, and returns a different conversion key than it does for function `g`, which has no override. A choice recorded for a particular field or constructor argument is applied the same way, where that child is converted, following the frontend API's documented override rules.
 
-`UnsupportedRequest` retains request identity, location and reason when a frontend cannot honor a setting. The registry reports and propagates that failure.
+Identical type, construction and representation choices produce an equal key and can share a converter; the object override produces a different key and needs a different converter.
+
+A setting the frontend cannot honor needs no record of its own: the declaration it applies to is requested like any other, and the target refuses it by name when the registry asks. Identity, location and reason then reach the report through the ordinary [skip](07-retain.md#retain-supported-output), and propagate as one.
 
 The engine's one entry point (signature only):
 
@@ -333,38 +363,41 @@ The engine's one entry point (signature only):
 pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
-    requests: BindingRequests<T::Policy>,
-    declaring_crate: impl Into<String>,
+    requests: BindingRequests,
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [policy and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target, consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [conversion-key and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target — which is also where every choice the binding recorded lives — consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
 `build.rs` code:
 
 **Implemented.** This is today's call path: `CbindgenBuilder::build()` under v2
-reads its own declaration storage once, turns it into a request set, and hands
-that to the engine with the C target. The JNI frontend does the same with its
-declarations and the JNI target. Nothing of v1 runs on this route — no
-`declare_into`, no resolution, no assembly — and the frontend's part is
-naming: which C name a type or a symbol gets is its manglers applied, the same
-answer v1 gives.
+reads its own declaration storage once, turns it into a request set *and* the
+C target that holds what each request is, and hands both to the engine. The JNI
+frontend does the same with its declarations and the JNI target. Nothing of v1
+runs on this route — no `declare_into`, no resolution, no assembly — and the
+frontend's part is naming: which C name a type or a symbol gets is its manglers
+applied, the same answer v1 gives.
 
 ```rust
 let source_model = self.sources.clone().build()?;   // stage 2: the snapshot
 
-let requests = self.requests(source_module);        // this stage
-let generation = generate(source_model, &CTarget, requests, declaring_crate)?;
+let (target, requests) = self.binding(source_module);  // this stage
+let generation = generate(source_model, &target, requests)?;
                                                      // stages 4 to 6
 ```
 
-The request set is built in one pass over the builder's storage, sorted so that
-a run over unchanged input emits the same file. A declarator the target has no
-lowering for — an opaque handle, an enum, a callback — still becomes a request,
-under a policy that says which declarator it came from, so the target refuses it
-by name, and the skip carries the capability it waits for.
+Both halves are built in one pass over the builder's storage, sorted so that a
+run over unchanged input emits the same file. Stating them together is what
+keeps them in step: a declaration cannot be planned without the target knowing
+what it is, and asking for an output the target recorded nothing about is
+invalid input rather than a silent default. A declarator the target has no
+lowering for — an enum, a tagged union, a callback signature — still becomes a
+request,
+recorded as the declarator it came from, so the target refuses it by name, and
+the skip carries the capability it waits for.
 
 The frontend and registry can both inspect
 [source items](01-source.md#capture-source-items) through `prebindgen-flat`
@@ -375,8 +408,8 @@ planning. The registry supplies no separate source-inspection API to the fronten
 
 Request construction must lose no recorded frontend choice. Today it carries the
 choices this increment lowers — names, the class a type is declared as, the
-ignore rules — and turns the settings it does not lower into a **refusal** of
-what they apply to: a per-function `expand_param`/`expand_return`/
+ignore rules — in the target it builds, and turns the settings it does not
+lower into a **refusal** of what they apply to: a per-function `expand_param`/`expand_return`/
 `split_on_param` refuses the function; a type-level boundary declaration refuses
 every function with a parameter or result of that type, declared class or bare
 scalar alike, and leaves the class itself; a declarator the target does not
@@ -385,17 +418,23 @@ of the one a setting asked for is not honoring the declaration; the skip names
 the setting the declaration waits on. Settings that have no effect within this
 increment are carried without refusing: a C function's
 `abort_on_conversion_error` says what a fallible input does, and no conversion
-here can fail. Local helpers and declared conversion operations are
-refused the same way (`unsupported.fn.binding_local`,
-`unsupported.conversion.not_implemented`) until they are registered as typed
-source descriptions. Naming closures remain owned configuration objects,
-applied where the requests are built; nothing is serialized.
+here can fail. A helper the binding defines with `fun!(crate::x).sig(..)`, and
+an opaque type it declares although the source never exported it, enter the
+model as entities of their own before anything is planned — see
+[what an entity is](02-flat.md#build-and-inspect-the-source-model) — so a
+declaration names them as it names a captured item. A constant the binding
+computes on the foreign side and a declared conversion are refused
+(`unsupported.const.computed`, `unsupported.conversion.not_implemented`).
+Naming closures remain owned configuration objects, applied where the requests
+are built; nothing is serialized.
 
 ## Identifying requests, value positions and reusable conversions
 
 Names ending in `Id` identify particular records, but they do not all have the
-same lifetime or construction rules. `PolicyId`, `RelationId` and `NodeId`
-identify entries used within a generation run. A `Declaration` is instead its
+same lifetime or construction rules. `RelationId` and `NodeId` identify entries
+used within a generation run; a **conversion key** plays the same role for the
+settings a target applied, except that the target mints it and the registry
+only compares it. A `Declaration` is instead its
 own identity — a stable value naming the kind the target gets and the Rust
 item, printed as `fn:stamp_sum`; reports and tests can use it across runs.
 (`DeclarationId` below is this chapter's name for that role.) The proposed `SiteId`
@@ -408,17 +447,72 @@ function or a reusable conversion.
 To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conversion, the call to `normalize` itself and an output conversion. The request to expose `normalize` is the starting point, called a **root**. The conversions required to implement that request are its **dependencies**. A request to expose a public type is also a root, even if no function uses that type.
 
 ```rust
-struct OutputRequest {
-    id: DeclarationId,    // This declaration, e.g. normalize at one Kotlin placement.
-    source: SourceItemId, // The Rust function/type/constant or registered local helper.
-    policy: PolicyId,     // Entry in BindingRequests.policies configuring this output.
-    requirements: Vec<SemanticRequirement>, // Promises that must hold for this output.
+enum Request {
+    Expose(DeclarationId), // Plan this and generate it.
+    Ignore(DeclarationId), // Plan nothing; the report carries it as a decision.
 }
 ```
 
-`DeclarationId` identifies the declaration; `SourceItemId` identifies the source item behind it — the two sides of the pipeline, named apart so that neither borrows the model's word `Element` for the other. Exposing one Rust function at two foreign placements gives two declaration identities — **not yet**: the engine's `Declaration` is the kind and the Rust name, so one source item has one declaration, and a second placement of it cannot be requested. `SemanticRequirement` records promises such as implementing an interface or preserving an ownership/error-handling convention. Required helpers do not automatically become public exports.
+An **entity** is one real item of the API: a type, a function or a constant,
+with its whole description. The model holds more than that — a guard, an
+unsupported item — and does not rank what it holds; that a binding can name
+exactly these three kinds, and nothing else, is the registry's judgment, and
+the three variants of `Declaration` that name an entity are where it states
+it. Where an entity came from is not a kind: a captured item and one the
+binding stated are the same entity, and differ in origin alone.
 
-The implemented request carries a `Declaration` in place of those two ids: one value that is its own identity and says both which of the five kinds the target gets and which captured item, if any, the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a Kotlin `val` read through a nullary function, `LocalType(key)` for a type the target represents although the source never exported it, and so on for the nine ways a binding can name something. `generate` matches on it, so each planner is reached by the variants it can plan and is handed the captured item they name.
+An ignore names an entity and says nothing about how the target would get it.
+A callback or a constant computed on the foreign side cannot be ignored —
+nothing in the model backs them, so there is nothing to leave alone — and an
+ignore naming one is refused as contradictory input before anything is
+planned.
+
+One list rather than two, because the report has one row per declaration and
+both dispositions produce one. An id that appeared under both would be two
+rows for one declaration, so saying both about one declaration is refused
+where the duplicate check already runs. Existence is a separate question, and
+it is asked only of what is to be exposed: an ignore means "if this is here,
+leave it alone", which a binding may reasonably say about an item its source
+crate compiles out under a feature.
+
+A requested output is that identity and nothing else. What the declaration *is*
+— its symbol, its placement, the declarator it came from — the target looks up
+under it when the registry asks for a boundary, a public declaration or a
+report line. What it *depends on* is the target's answer too, at
+[`surface`](04-select.md#how-the-registry-asks-a-target-for-decisions):
+`SurfaceSpec.requires` names the public types a declaration is unusable
+without — a wrapper taking an aggregate needs the type declared as well — and
+[retention](07-retain.md#retain-supported-output) resolves each name to the
+declaration covering it. Requiring a type does not export it: a type nothing
+requested is not emitted because something needed it, and whatever needed it is
+skipped instead.
+
+A `DeclarationId` is a `Declaration`: one value that is its own identity and
+says both which of the kinds the target gets and which entity, if any, the
+engine plans it from:
+
+```rust
+enum Declaration {
+    Function(Ident),        // a function, exported through a wrapper that calls it
+    Const(Ident),           // a constant, exposed as a foreign constant
+    Type(TypeKey),          // a type, given a foreign representation
+    Conversion(TypeKey),    // a wire mapping the binding defines for a type
+    Callback(String),       // a callback signature the binding exports
+    ComputedConst(String),  // a constant the binding computes on the foreign side
+}
+```
+
+Where an entity came from is not part of this. A `#[prebindgen]` function and
+a helper the binding defines are both a `Function`, because the model holds
+both and only an entity's origin tells them apart; the same goes for a
+captured type and an opaque one the binding declares over a type the source
+never exported. Nor is how the target shows the entity: a Kotlin `val` read
+through a nullary function, `constant!(X).fun(fun!(f))`, is `Function(f)`, and
+the `val` is the target's choice recorded under that declaration. A callback
+and a computed constant name no entity at all. `generate` matches on the
+whole, so each planner is reached by the variants it can plan and is handed
+the entity they name. One entity has one declaration of each kind, so a
+request that names the same declaration twice is refused.
 
 ### A value's position in an exported function
 
@@ -471,15 +565,15 @@ struct Crossing {
 }
 ```
 
-A reusable conversion plan is a [node](05-represent.md#represent-and-compose-values). The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, selected relation and effective policy. The key includes the children, so it identifies a whole subgraph rather than a single value: equal subgraphs become one node, which is what makes the result a graph with sharing instead of a tree of repeated plans. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
+A reusable conversion plan is a [node](05-represent.md#represent-and-compose-values). The registry finds nodes using a private `NodeKey`, derived internally from the accepted `Crossing`, the selected relation and the conversion key the target returned with it. The key includes the children, so it identifies a whole subgraph rather than a single value: equal subgraphs become one node, which is what makes the result a graph with sharing instead of a tree of repeated plans. No frontend/adapter conversion-planning API accepts `TypeKey` or `NodeKey`, or a caller-supplied type/key pair.
 
 ```rust
 // Private to the registry's conversion cache module; not a public request type.
-struct NodeKey {
+struct NodeKey<ConversionKey> {
     source: TypeKey,       // Derived internally from crossing.source.key().
     direction: Direction, // Copied from that crossing.
     relation: RelationId, // Validated selected relation.
-    policy: PolicyId,     // Effective settings recorded for this value.
+    conversion: ConversionKey, // The target's name for the settings it applied.
     children: Vec<NodeId>,// The conversions its parts resolved to.
 }
 ```
@@ -488,17 +582,39 @@ The private cache operation accepts the validated crossing and selection, derive
 
 The existing structural reading `TypeRef` has no `Eq`/`Hash`; its `key()` returns `prebindgen_flat::TypeKey`, which supplies both. `key()` preserves references/mutability, wrappers, generic arguments, array extents and lifetime spelling. Flat normalizes parentheses and known equivalent paths, such as `std::vec::Vec<T>` and `Vec<T>`, without equating arbitrary aliases. `stripped_key()` removes outer `Box`/`Cow` wrappers for declaration lookup: `Box<Stamp>` finds the `Stamp` declaration. The proposed `TypeView::key()` delegates to its retained reading. The conversion cache uses that key to retain wrappers. Plans retain the view for model-aware inspection and emission; key text cannot recreate a view.
 
-`policy` identifies the choices for the whole value. `children` identifies the
-conversions selected for its fields or other parts. Both affect reuse. If two
-functions accept `Stamp` but one applies a different conversion to `secs`, their
-struct conversions must differ too. Omitting the child identities from the
+`conversion` identifies the choices for the whole value. `children` identifies
+the conversions selected for its fields or other parts. Both affect reuse. If
+two functions accept `Stamp` but one applies a different conversion to `secs`,
+their struct conversions must differ too. Omitting the child identities from the
 cache key would incorrectly reuse the first function's field behavior.
 
-For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override changes the policy; a rule on one of their `secs` fields changes that child, and therefore the struct's conversion; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
+For example, two owned `Stamp` inputs with the same two-integer JNI representation and field construction can share a node. An object-input override makes the target answer with a different conversion key; a rule on one of their `secs` fields changes that child, and therefore the struct's conversion; a return conversion changes direction. `Stamp`, `&Stamp` and `Option<&Stamp>` remain distinct.
 
 Model membership follows the [snapshot contract](02-flat.md#private-storage-and-model-consistency). Flat publishes immutable source data after helper registration; its views preserve that snapshot through field and parameter navigation. Registry operations that accept a view check it against their own model before planning, rather than relying on the caller to check first. Flat owns these checks and private view construction. A valid view from another snapshot is rejected even when its key text matches. The registry accepts no detached reading or independently supplied model/type pair as a substitute for a view.
 
-Keys are local to one `Flat` model; Flat owns normalization. `NodeId` identifies a retained plan, and registry-issued node references must be validated within their generation context. Function sites retain separate overrides and diagnostic paths. Naming hooks are closures, and two closures cannot be compared, so two policies that contain them are distinct unless the frontend deliberately gives them the same `PolicyId`. Sharing a conversion between two configured values therefore requires sharing the policy entry, not writing an equal-looking one. Outcomes are keyed by source and configuration identities that do not vary between runs over unchanged inputs, so two builds of the same crate decide the same things.
+Keys are local to one `Flat` model; Flat owns normalization. `NodeId`
+identifies a retained plan, and registry-issued node references must be
+validated within their generation context. Function sites retain separate
+overrides and diagnostic paths.
+
+A **conversion key** is the target's own name for one way of converting a
+value, returned from `select` beside the relation and compared — never read —
+by the registry. It carries one obligation, and it is the target's:
+*equal keys mean interchangeable conversions* — same layout, same operations,
+same failures, same release — and settings that would generate differently must
+produce different keys. The registry checks neither, because it cannot look
+inside the key; what it does with equal keys is share one node, and what it
+does with a key already being resolved is refuse the conversion as recursive. A
+target that minted a fresh key on every visit would therefore share nothing and
+would recurse where it should refuse. Both implemented targets key on plain
+data, so two values the binding declared the same way are converted the same
+way. A target whose settings held something incomparable — a naming closure,
+which cannot be compared to another closure — interns it and keys on the
+index.
+
+Outcomes are keyed by source and configuration identities that do not vary
+between runs over unchanged inputs, so two builds of the same crate decide the
+same things.
 
 ## Elements at this stage
 

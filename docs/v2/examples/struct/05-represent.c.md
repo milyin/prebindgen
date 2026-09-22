@@ -10,7 +10,7 @@ Owner: the registry; the C adapter describes the aggregate and its member reads
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-policy:   data_struct named Stamp, passed by value
+conversion: data_struct named Stamp, passed by value
 ```
 
 ## Result

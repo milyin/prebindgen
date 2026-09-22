@@ -9,34 +9,37 @@ Owner: the registry; the JNI adapter selects from the offered [relations](../../
 
 ```text
 Crossing { source: Stamp, direction: IntoRust }
-policy:   DataClass { class: "example.Stamp" }
+position: wherever this Stamp sits
 offered:  [ Stamp.fields, atomic ]
+
+held by the JniTarget, not passed in:
+choice:   DataClass { class: "example.Stamp" }
 ```
 
 ## Result
 
 ```text
-Stamp.fields
+Stamp.fields, conversion JniChoice::DataClass { class: "example.Stamp" }
 ```
 
 and, for each part the registry then plans:
 
 ```text
-secs:  i64, IntoRust   policy: jlong carrier   offered: [ atomic ]   -> atomic
-nanos: i64, IntoRust   policy: jlong carrier   offered: [ atomic ]   -> atomic
+secs:  i64, IntoRust   choice: jlong carrier   offered: [ atomic ]   -> atomic
+nanos: i64, IntoRust   choice: jlong carrier   offered: [ atomic ]   -> atomic
 ```
 
-A `DataClass` [policy](../../stages/03-requests.md#what-policy-means) says the Kotlin side holds `Stamp` as a data class whose
+A `DataClass` [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
 properties mirror the fields, so the JNI adapter answers with the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
 Rust `Stamp` is made of reading one property per field. The answer follows from
-the policy alone. The adapter
+the choice alone. The adapter
 has not yet derived a getter name or a descriptor; those belong to the
 [representation](../../stages/05-represent.md#represent-and-compose-values), and the representation is asked for only after the parts are
 planned.
 
-A pointer-class policy — the struct kept in Rust and handed to Kotlin as an
+A pointer-class choice — the struct kept in Rust and handed to Kotlin as an
 opaque `jlong` handle — would make the same adapter answer `atomic`, and no
 property would ever be read.
 

@@ -30,7 +30,7 @@ default snake-case name. The following summarizes the intended representation;
 the planner obtains the member types from Flat in the next stage.
 
 ```text
-policy (C struct):
+recorded in the CTarget, under `type:Stamp` (C struct):
     representation: data_struct
     c_name:         "Stamp"                       // this example's name; the default base is `stamp`
     members:        secs: int64_t, nanos: int64_t // declaration order
@@ -42,7 +42,7 @@ policy (C struct):
 - `data_type!` selects a by-value aggregate
   [representation](../../stages/05-represent.md#represent-and-compose-values), rather
   than an opaque pointer handle or value-opaque type. A different declarator
-  records a different [policy](../../stages/03-requests.md#what-policy-means)
+  records a different [choice](../../stages/03-requests.md#what-a-choice-records)
   and would produce a different [conversion](../../stages/04-select.md#select-conversion-relations)
   [node](../../stages/05-represent.md#represent-and-compose-values) if supported.
   This increment does not implement those opaque alternatives.

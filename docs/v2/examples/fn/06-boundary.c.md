@@ -11,7 +11,7 @@ Owner: the registry, on the C adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures {}
 node(output) : produces c_i64, failures {}
 
-policy (C function): symbol "stamp_sum", extern "C",
+CTarget, under `fn:stamp_sum`: symbol "stamp_sum", extern "C",
                      input by value, output through the wrapper's return
 ```
 
@@ -42,16 +42,17 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
 ## Checks
 
 - One aggregate in, one integer out: no synthetic parameters, no out-parameter.
-  The symbol and calling convention come from the recorded
-  [policy](../../stages/03-requests.md#what-policy-means),
-  [as the request cell shows][fn_requests_c].
+  The symbol and calling convention come from the
+  [choice](../../stages/03-requests.md#what-a-choice-records) the `CTarget` holds
+  for this declaration, [as the request cell shows][fn_requests_c]; the
+  registry supplies the declaration and nothing about it.
 - An out-parameter form would require an additional delivery implementation;
   the current V2 increment supports only a wrapper return or no value.
 - No route is declared because both
   [nodes](../../stages/05-represent.md#represent-and-compose-values) are infallible,
   [as planned][fn_represent_c]. A later change that makes an input
   [conversion](../../stages/04-select.md#select-conversion-relations) fallible must skip this function until
-  the C policy says where that failure goes.
+  the C choice says where that failure goes.
 
 [fn]: README.md
 [fn_boundary]: 06-boundary.md

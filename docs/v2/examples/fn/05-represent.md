@@ -63,13 +63,14 @@ each leaf is complete, made them one node.
 The input node is the struct's own conversion,
 [planned on its own path][struct_represent]; this function refers to it, and so
 does anything else taking an owned `Stamp` under the same
-[policy](../../stages/03-requests.md#what-policy-means). Their `NodeId`s are
+[choice](../../stages/03-requests.md#what-a-choice-records). Their `NodeId`s are
 what [the boundary][fn_boundary] assembles.
 
 ## Checks
 
 - Reuse depends on type, direction, [relation](../../stages/04-select.md#what-a-relation-is),
-  effective policy and child conversions. A second owned `Stamp` input with
+  [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
+  and child conversions. A second owned `Stamp` input with
   the same choices can reuse this plan. C and JNI run separate generation jobs.
 - The cache is checked after the children exist, not before: the key includes
   them.

@@ -314,7 +314,7 @@ def check_vocabulary(pages, manifest, root):
         spaced = pattern.replace(" ", r"\s+")
         word = re.compile(r"\b(?:" + spaced + r")\b", re.I)
         # Strong emphasis is `**` or `__`. On the defining page the term may sit
-        # inside a longer bold phrase (`**target policy**`); elsewhere only the
+        # inside a longer bold phrase (`**target choice**`); elsewhere only the
         # bare term set in bold is a redefinition — `**conversion rule**` is
         # another term.
         # `\b` treats `_` as a word character, so the edges are spelled out.

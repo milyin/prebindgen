@@ -8,8 +8,8 @@ Owner: the registry; the JNI adapter states the [carrier](../../stages/05-repres
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    relation: atomic   policy: ptr_class example.Ledger
-Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   policy: ptr_class example.Ledger
+Crossing { source: Ledger, direction: IntoRust }    relation: atomic   conversion: ptr_class example.Ledger
+Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   conversion: ptr_class example.Ledger
 ```
 
 ## Result
@@ -57,7 +57,7 @@ runtime failure. The one failure is the binding one, and
 
 - A `jlong` is not a `JObject`: a handle is a declared class carried as a
   scalar, and [the Kotlin declaration][typedef_emit_jni] is read off the
-  [policy](../../stages/03-requests.md#what-policy-means) — `ptr_class` rather than `data_class` — not off the source type.
+  [choice](../../stages/03-requests.md#what-a-choice-records) — `ptr_class` rather than `data_class` — not off the source type.
 - A zero `Long` from Kotlin is the null address, and the message it produces
   names the type, so the exception says which handle was closed or never
   opened.
