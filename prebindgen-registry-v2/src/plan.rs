@@ -45,7 +45,8 @@ pub struct ValuePlan<P> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
-/// Which of the binding's outputs is being planned.
+/// Which of the binding's outputs is being planned: an index into the
+/// `(declaration, choice)` pairs [`generate`] was given.
 ///
 /// An output is a declaration *and* what the target recorded for it, and the
 /// pair is what tells two of them apart: one entity declared twice — `Stamp`
@@ -55,14 +56,6 @@ pub struct NodeId(pub(crate) usize);
 /// means is the target's business.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutputId(pub(crate) usize);
-
-/// One thing the binding asked for, as the engine holds it.
-struct Output<K> {
-    declaration: Declaration,
-    /// What the target recorded for it, handed back with every question the
-    /// engine asks about this output.
-    choice: K,
-}
 
 /// A complete wrapper: the exported function, as planned.
 ///
@@ -150,7 +143,7 @@ struct Run<'a, T: Target> {
     /// What the binding asked for. A conversion is planned under one of these,
     /// and the target is handed that output's choice with every question about
     /// it.
-    outputs: &'a [Output<T::ConversionKey>],
+    outputs: &'a [(Declaration, T::ConversionKey)],
     relations: Vec<Relation>,
     primitives: Vec<PrimitiveSpec<T::Payload>>,
     nodes: Vec<ValuePlan<T::Payload>>,
@@ -167,7 +160,7 @@ struct Run<'a, T: Target> {
 }
 
 impl<'a, T: Target> Run<'a, T> {
-    fn new(flat: &'a Flat, target: &'a T, outputs: &'a [Output<T::ConversionKey>]) -> Self {
+    fn new(flat: &'a Flat, target: &'a T, outputs: &'a [(Declaration, T::ConversionKey)]) -> Self {
         Run {
             flat,
             target,
@@ -254,7 +247,7 @@ impl<'a, T: Target> Run<'a, T> {
         let query = SelectionQuery {
             crossing: &crossing,
             position,
-            declared: &self.outputs[position.output.0].choice,
+            declared: &self.outputs[position.output.0].1,
             candidates: &candidates,
         };
         let Selection {
@@ -646,22 +639,15 @@ pub fn generate<T: Target>(
     source_module: syn::Path,
 ) -> Result<Generation<T::Payload>, EngineError> {
     check_declarations(&declarations, &flat)?;
-    let exposed: Vec<Output<T::ConversionKey>> = declarations
-        .into_iter()
-        .map(|(declaration, choice)| Output {
-            declaration,
-            choice,
-        })
-        .collect();
+    let exposed = declarations;
 
     let mut run = Run::new(&flat, target, &exposed);
     let mut functions: Vec<(OutputId, FunctionPlan<T::Payload>)> = Vec::new();
     let mut surfaces: Vec<(OutputId, SurfaceSpec<T::Payload>)> = Vec::new();
     let mut outcomes: BTreeMap<OutputId, Outcome> = BTreeMap::new();
 
-    for (index, output) in exposed.iter().enumerate() {
+    for (index, (declaration, choice)) in exposed.iter().enumerate() {
         let id = OutputId(index);
-        let declaration = &output.declaration;
         let root = crate::target::Position::root(id, declaration.clone());
         // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it. Each
@@ -669,8 +655,9 @@ pub fn generate<T: Target>(
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Declaration::Type(_) => plan_type(&mut run, id, declaration, &output.choice)
-                .map_err(EngineError::Planning)?,
+            Declaration::Type(_) => {
+                plan_type(&mut run, id, declaration, choice).map_err(EngineError::Planning)?
+            }
             // Whether the function was captured or is the binding's own makes
             // no difference here: the model holds both, and the writer reaches
             // each through its own origin. Nor does what the target shows the
@@ -680,7 +667,7 @@ pub fn generate<T: Target>(
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
-                plan_function(&mut run, id, declaration, &output.choice, function)
+                plan_function(&mut run, id, declaration, choice, function)
                     .map_err(EngineError::Planning)?
             }
             // A constant computed on the foreign side has no value in Rust to
@@ -757,8 +744,8 @@ pub fn generate<T: Target>(
     let by_name: BTreeMap<String, Vec<OutputId>> = exposed
         .iter()
         .enumerate()
-        .filter(|(_, output)| output.declaration.is_type())
-        .filter_map(|(index, output)| Some((output.declaration.entity_name()?, OutputId(index))))
+        .filter(|(_, (declaration, _))| declaration.is_type())
+        .filter_map(|(index, (declaration, _))| Some((declaration.entity_name()?, OutputId(index))))
         .fold(BTreeMap::new(), |mut all, (name, id)| {
             all.entry(name).or_default().push(id);
             all
@@ -778,7 +765,7 @@ pub fn generate<T: Target>(
                 let key = &run.keys[node.0];
                 declared
                     .iter()
-                    .find(|id| exposed[id.0].choice == *key)
+                    .find(|id| exposed[id.0].1 == *key)
                     .or(match declared {
                         [only] => Some(only),
                         _ => None,
@@ -818,7 +805,7 @@ pub fn generate<T: Target>(
                     },
                     Err(skip) => skip,
                 };
-                let mut path = vec![exposed[id.0].declaration.to_string()];
+                let mut path = vec![exposed[id.0].0.to_string()];
                 path.extend(cause.dependency_path.iter().cloned());
                 outcomes.insert(
                     *id,
@@ -848,10 +835,12 @@ pub fn generate<T: Target>(
     let skipped: Vec<(Declaration, Skip)> = exposed
         .iter()
         .enumerate()
-        .filter_map(|(index, output)| match outcomes.get(&OutputId(index)) {
-            Some(Outcome::Skipped(skip)) => Some((output.declaration.clone(), skip.clone())),
-            _ => None,
-        })
+        .filter_map(
+            |(index, (declaration, _))| match outcomes.get(&OutputId(index)) {
+                Some(Outcome::Skipped(skip)) => Some((declaration.clone(), skip.clone())),
+                _ => None,
+            },
+        )
         .collect();
 
     // Planning is over: the working state hands over its tables, and the model
