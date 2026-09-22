@@ -948,9 +948,14 @@ pub fn generate<T: Target>(
 ///
 /// An entity declared once keeps the id it has always had — `fn:stamp_sum`.
 /// Declared several times, each output is that plus the foreign placement the
-/// target describes it by, which is what tells the rows apart; two outputs the
-/// target places identically fall back to their order in the list, so the ids
-/// are unique whatever a target answers.
+/// target describes it by, which is what tells the rows apart.
+///
+/// A placement is a string the target chooses, so nothing about it is
+/// guaranteed: two outputs may be placed identically, and a placement may
+/// itself end in the `#n` this uses to separate those. Every id is therefore
+/// taken from what is still free — the candidate, then `#2`, `#3`, … until
+/// one is — so that ids are unique whatever a target answers, and an output
+/// whose id was taken is still named by where it is placed.
 fn outputs<T: Target>(
     target: &T,
     declarations: Vec<(Declaration, T::ConversionKey)>,
@@ -967,18 +972,25 @@ fn outputs<T: Target>(
     for (declaration, _, _) in &described {
         *count.entry(declaration).or_default() += 1;
     }
-    let mut ids: Vec<String> = described
+    let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let ids: Vec<String> = described
         .iter()
-        .map(|(declaration, _, described)| match count[declaration] {
-            1 => declaration.to_string(),
-            _ => format!("{declaration}@{}", described.placement),
+        .map(|(declaration, _, described)| {
+            let candidate = match count[declaration] {
+                1 => declaration.to_string(),
+                _ => format!("{declaration}@{}", described.placement),
+            };
+            let id = match taken.contains(&candidate) {
+                false => candidate,
+                true => (2..)
+                    .map(|n| format!("{candidate}#{n}"))
+                    .find(|id| !taken.contains(id))
+                    .expect("an unbounded sequence has a free id"),
+            };
+            taken.insert(id.clone());
+            id
         })
         .collect();
-    for index in 0..ids.len() {
-        if ids[..index].contains(&ids[index]) {
-            ids[index] = format!("{}#{index}", ids[index]);
-        }
-    }
     described
         .drain(..)
         .zip(ids)

@@ -1116,13 +1116,26 @@ pub enum SourceItem<'a> {
 ///
 /// # Where the settings live
 ///
-/// Here. The registry stores no configuration of its own and knows no
-/// precedence rule: it does not hold a table of the binding's choices, and it
-/// cannot say whether one recorded for a parameter outranks one recorded for a
-/// type. An adapter keeps its `build.rs` storage — the same storage its v1
-/// route reads — and answers each question below out of it, addressed by
-/// [`SelectionQuery::position`] for a value and by the [`Declaration`] for an
-/// output.
+/// Here, with one exception. The registry knows no precedence rule — it cannot
+/// say whether a choice recorded for a parameter outranks one recorded for a
+/// type — so an adapter keeps its `build.rs` storage, the same storage its v1
+/// route reads, and answers each question below out of it, addressed by
+/// [`SelectionQuery::position`] for a value.
+///
+/// The exception is what the binding declared each *output* as. That choice
+/// travels with the output: the frontend hands
+/// [`generate`](crate::generate) each [`Declaration`] paired with it, and the
+/// engine hands it back with every question about that output —
+/// [`SelectionQuery::declared`], [`SiteDescriptor::declared`],
+/// [`SurfaceRequest::declared`], and `declared` at [`Target::describe`]. An
+/// adapter must answer from that rather than from a table of its own keyed by
+/// [`Declaration`], because one entity may be declared more than once —
+/// `Stamp` as a data class and as a handle — and such a table would hold one
+/// of the two. Its own per-type and per-site defaults are a different
+/// question, about values of a type wherever they turn up, and stay where they
+/// are: a declared type's own crossing, which
+/// [`Position::is_declared_type`] identifies, is the one place the two meet,
+/// and is answered from the output's choice.
 ///
 /// What the registry does own is *identity*: [`Target::select`] returns a
 /// [`Selection`] whose `conversion` key stands for the settings the adapter
@@ -1181,8 +1194,9 @@ pub trait Target {
     /// Describe the wrapper that will export this source function: its
     /// interface, and its routes for the failures its conversions can raise.
     ///
-    /// What the binding asked for this export — its symbol above all — the
-    /// adapter reads from its own storage under [`SiteDescriptor::declaration`].
+    /// What the binding asked for this export — its symbol above all — arrives
+    /// as [`SiteDescriptor::declared`]; [`SiteDescriptor::declaration`] says
+    /// which entity is exported.
     fn boundary(
         &self,
         site: &SiteDescriptor<'_, Self::ConversionKey>,
@@ -1190,7 +1204,7 @@ pub trait Target {
     ) -> TargetSupport<BoundarySpec<Self::Payload>>;
 
     /// Describe one public declaration and what it requires, from what the
-    /// binding recorded under [`SurfaceRequest::declaration`].
+    /// binding recorded for this output — [`SurfaceRequest::declared`].
     fn surface(
         &self,
         request: &SurfaceRequest<'_, Self::ConversionKey>,

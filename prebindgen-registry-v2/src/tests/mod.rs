@@ -18,15 +18,46 @@ use crate::{
 
 /// A target that carries nothing: every value is refused at selection, so a
 /// run over it exercises the accounting and nothing else.
+///
+/// What it was told an output is, standing in for a real target's choice.
+///
+/// The two halves are separate on purpose: the engine tells two declarations
+/// of one entity apart by the whole choice, while the report names each row
+/// by where the target says it is placed — and a target may place two
+/// different choices identically.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct Declared {
+    id: u32,
+    placement: String,
+}
+
+impl Declared {
+    /// An output whose placement no test reads.
+    fn any() -> Self {
+        Declared {
+            id: 0,
+            placement: String::new(),
+        }
+    }
+
+    /// One placed where the report will name it.
+    fn placed(id: u32, placement: &str) -> Self {
+        Declared {
+            id,
+            placement: placement.to_string(),
+        }
+    }
+}
+
 struct Nothing;
 
 impl Target for Nothing {
     const NAME: &'static str = "test";
 
-    type ConversionKey = ();
+    type ConversionKey = Declared;
     type Payload = ();
 
-    fn select(&self, query: &SelectionQuery<'_, ()>) -> TargetSupport<Selection<()>> {
+    fn select(&self, query: &SelectionQuery<'_, Declared>) -> TargetSupport<Selection<Declared>> {
         Ok(TargetAttempt::Unsupported(Unsupported::new(
             "unsupported.nothing.carrier",
             format!("`{}` is carried by no target here", query.crossing.ty.key()),
@@ -37,14 +68,14 @@ impl Target for Nothing {
         &self,
         _: &ResolvedShape<'_>,
         _: &[ChildValue<'_>],
-        _: &(),
+        _: &Declared,
     ) -> TargetSupport<ReprSpec<()>> {
         unreachable!("nothing is selected")
     }
 
     fn boundary(
         &self,
-        _: &SiteDescriptor<'_, ()>,
+        _: &SiteDescriptor<'_, Declared>,
         _: &ResolvedValues<'_, ()>,
     ) -> TargetSupport<BoundarySpec<()>> {
         unreachable!("nothing is selected")
@@ -52,7 +83,7 @@ impl Target for Nothing {
 
     fn surface(
         &self,
-        _: &SurfaceRequest<'_, ()>,
+        _: &SurfaceRequest<'_, Declared>,
         _: &ResolvedValues<'_, ()>,
     ) -> TargetSupport<SurfaceSpec<()>> {
         unreachable!("nothing is selected")
@@ -62,14 +93,14 @@ impl Target for Nothing {
         unreachable!("nothing is selected")
     }
 
-    fn describe(&self, _: &Declaration, _: &()) -> Described {
-        Described::new("declared", "c_")
+    fn describe(&self, _: &Declaration, declared: &Declared) -> Described {
+        Described::new("declared", &declared.placement)
     }
 }
 
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
-    declared: Vec<(Declaration, ())>,
+    declared: Vec<(Declaration, Declared)>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -137,8 +168,8 @@ fn declared_type(name: &str) -> Declaration {
 fn every_declaration_is_skipped_and_accounted_for() {
     let stated = Stated {
         declared: vec![
-            ((captured_fn("handle_new")), ()),
-            ((declared_type("Handle")), ()),
+            (captured_fn("handle_new"), Declared::any()),
+            (declared_type("Handle"), Declared::any()),
         ],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -161,7 +192,7 @@ fn every_declaration_is_skipped_and_accounted_for() {
 #[test]
 fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
-        declared: vec![((captured_fn("handle_neu")), ())],
+        declared: vec![(captured_fn("handle_neu"), Declared::any())],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a typo is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
@@ -173,7 +204,10 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![((Declaration::Callback("impl Fn(i64)".to_string())), ())],
+        declared: vec![(
+            Declaration::Callback("impl Fn(i64)".to_string()),
+            Declared::any(),
+        )],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     assert_eq!(generation.report().counts().skipped, 1);
@@ -183,8 +217,8 @@ fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
 fn one_id_may_name_only_one_declaration() {
     let stated = Stated {
         declared: vec![
-            ((captured_fn("handle_new")), ()),
-            ((captured_fn("handle_new")), ()),
+            (captured_fn("handle_new"), Declared::any()),
+            (captured_fn("handle_new"), Declared::any()),
         ],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a repeat is refused");
@@ -200,8 +234,8 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // wrong as declaring a name nothing captured.
     let stated = Stated {
         declared: vec![(
-            (Declaration::Const(syn::parse_str("handle_new").expect("an ident"))),
-            (),
+            Declaration::Const(syn::parse_str("handle_new").expect("an ident")),
+            Declared::any(),
         )],
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
@@ -220,9 +254,9 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
 fn skips_are_grouped_by_capability_code() {
     let stated = Stated {
         declared: vec![
-            ((captured_fn("handle_new")), ()),
-            ((captured_fn("handle_value")), ()),
-            ((declared_type("Handle")), ()),
+            (captured_fn("handle_new"), Declared::any()),
+            (captured_fn("handle_value"), Declared::any()),
+            (declared_type("Handle"), Declared::any()),
         ],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -247,5 +281,37 @@ fn an_entry_serializes_flat() {
     assert_eq!(
         serde_json::to_string(&entry).expect("an entry is plain data"),
         r#"{"id":"fn:z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
+    );
+}
+
+/// A report id is unique however a target places its outputs.
+///
+/// A placement is a string the target chooses: two outputs of one entity may
+/// carry the same one, and one of them may itself end in the `#n` the engine
+/// appends to separate them. Each id is taken from what is still free, so no
+/// arrangement of placements can leave two rows sharing an id — which is what
+/// a build script reading the report, or a capability-selected test section,
+/// identifies an output by.
+#[test]
+fn every_report_id_is_unique_whatever_the_target_places() {
+    let stated = Stated {
+        declared: vec![
+            (captured_fn("handle_new"), Declared::placed(1, "x#2")),
+            (captured_fn("handle_new"), Declared::placed(2, "x")),
+            (captured_fn("handle_new"), Declared::placed(3, "x")),
+        ],
+    };
+    let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
+    let ids: Vec<&str> = generation
+        .report()
+        .declarations
+        .iter()
+        .map(|entry| entry.id())
+        .collect();
+    assert_eq!(
+        ids,
+        ["fn:handle_new@x", "fn:handle_new@x#2", "fn:handle_new@x#3"],
+        "{:?}",
+        generation.report()
     );
 }

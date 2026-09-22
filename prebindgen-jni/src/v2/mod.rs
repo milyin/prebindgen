@@ -3,18 +3,21 @@
 //! [`Declarations`] keeps accumulating exactly as it does for v1 — same
 //! `package!`/`ptr_class!`/`fun!` surface, same `set_*` settings, same
 //! name-mangle closures — and this module is the only thing that reads them
-//! for the other engine: it turns that storage into a [`JniTarget`], which is
-//! what the binding declared and what answers the registry's questions about
-//! it, plus the list of [`Declaration`]s naming what to plan. An ignore is a
-//! v1 decision about v1's undeclared-item warnings, which v2 does not emit,
-//! so none reaches the engine. [`generate`] hands back a [`Generation`] the
-//! frontend writes out — the Rust through the engine's writer, the Kotlin
-//! through its own writer in `kotlin.rs`.
+//! for the other engine: it turns that storage into a list of
+//! [`Declaration`]s, each paired with the [`JniChoice`] saying what the
+//! binding declared it as, and a [`JniTarget`] that answers about values of a
+//! type wherever they turn up. An ignore is a v1 decision about v1's
+//! undeclared-item warnings, which v2 does not emit, so none reaches the
+//! engine. [`generate`] hands back a [`Generation`] the frontend writes out —
+//! the Rust through the engine's writer, the Kotlin through its own writer in
+//! `kotlin.rs`.
 //!
-//! The declarations are a work list and nothing more. What a declaration *is* —
-//! its Kotlin class or package function, its native method, its `Java_…`
-//! symbol, and which setting on it v2 does not honour yet — stays in the
-//! target, which is where the registry asks for it (#766).
+//! What a declaration *is* — its Kotlin class or package function, its native
+//! method, its `Java_…` symbol, and which setting on it v2 does not honour
+//! yet — is the choice beside it, which the engine hands back with every
+//! question about that output. The declaration itself names the entity and
+//! nothing more, so one function placed twice is two outputs of one
+//! declaration rather than one setting overwriting the other.
 //!
 //! Nothing of v1 runs on this route. Kotlin names, packages and `Java_…`
 //! symbols come from this adapter's settings applied to the declarations,

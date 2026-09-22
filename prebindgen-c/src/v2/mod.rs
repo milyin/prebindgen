@@ -3,15 +3,16 @@
 //! [`CbindgenBuilder`] keeps accumulating declarations exactly as it does for
 //! v1 — same builder, same modifiers, same manglers — and this module is the
 //! only thing that reads them for the other engine: it turns that storage into
-//! a [`CTarget`], which is what the binding declared and what answers the
-//! registry's questions about it, plus the list of [`Declaration`]s naming
-//! what to plan. An ignore is a v1 decision about v1's undeclared-item
-//! warnings, which v2 does not emit, so none reaches the engine.
-//! [`generate`] hands back a [`Generation`] the frontend writes out.
+//! a list of [`Declaration`]s, each paired with the [`CChoice`] saying what
+//! the binding declared it as, and a [`CTarget`] that answers about values of
+//! a type wherever they turn up. An ignore is a v1 decision about v1's
+//! undeclared-item warnings, which v2 does not emit, so none reaches the
+//! engine. [`generate`] hands back a [`Generation`] the frontend writes out.
 //!
-//! The declarations are a work list and nothing more. What a declaration *is* —
-//! its C name, which declarator produced it, which destructor frees it —
-//! stays in the target, which is where the registry asks for it (#766).
+//! What a declaration *is* — its C name, which declarator produced it, which
+//! destructor frees it — is the choice beside it, which the engine hands back
+//! with every question about that output. The declaration itself names the
+//! entity and nothing more.
 //!
 //! Nothing of v1 runs on this route. The engine reads the same sources and the
 //! same declarations and owns everything after that; the frontend's part is
