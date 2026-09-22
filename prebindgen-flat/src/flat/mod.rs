@@ -930,6 +930,29 @@ impl Flat {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());
         }
+        self.lower_fresh(ty)
+    }
+
+    /// This module's reading of the type a key names — `Publisher<'static>`
+    /// as a binding declared it, arguments included.
+    ///
+    /// The index answers when any element mentions the type. When none does
+    /// — a declared type no signature uses — the key's canonical spelling is
+    /// read back, which is this module's own rendering and the one place
+    /// reading it is not a consumer deriving structure from key text.
+    pub fn reading_of(&self, key: &TypeKey) -> Result<TypeRef, UnsupportedType> {
+        if let Some(indexed) = self.by_type.get(key.as_str()) {
+            return Ok(indexed.clone());
+        }
+        let ty: syn::Type = syn::parse_str(key.as_str()).map_err(|_| UnsupportedType {
+            offending: key.as_str().to_string(),
+            reason: UnsupportedTypeReason::UnsupportedForm,
+        })?;
+        self.lower_fresh(&ty)
+    }
+
+    /// Lower a type no element mentions, against this module's constants.
+    fn lower_fresh(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
         // Rebuilt rather than kept, for the reason `lower_signature` gives: a
         // stored index would be a second copy of what `constants()` says.
         let consts = ConstIndex::new(self.constants().map(|c| {

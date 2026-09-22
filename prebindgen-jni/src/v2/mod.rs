@@ -115,9 +115,6 @@ impl Declarations {
         // A second entry for the helper itself would give one id to two
         // declarations.
         let fun_declaration = |ident: &syn::Ident| Declaration::Function(ident.clone());
-        // The same helper behind a `constant!(X).fun(..)`: the target renders a
-        // `val`, and what the engine plans is the function it reads.
-        let const_declaration = |ident: &syn::Ident| Declaration::ConstFromFunction(ident.clone());
 
         // Declared classes. A data class is the one representation v2 lowers;
         // the per-type entry makes every value of the type cross that way,
@@ -209,12 +206,12 @@ impl Declarations {
                     JniChoice::unimplemented("constant", placed(entry)),
                 );
             }
-            // A `constant!(X).fun(..)` is a Kotlin `val` backed by a nullary
-            // captured **function**, so its target kind and its source kind
-            // differ — and a binding-local one names no captured item at all.
+            // A `constant!(X).fun(..)` is a Kotlin `val` read through a nullary
+            // function: the declaration is the function's, and the `val` is
+            // what this target chooses to show the call as.
             for entry in &config.constant_functions {
                 declare(
-                    const_declaration(&entry.rust_ident),
+                    fun_declaration(&entry.rust_ident),
                     JniChoice::unimplemented("constant_fun", placed(entry)),
                 );
             }

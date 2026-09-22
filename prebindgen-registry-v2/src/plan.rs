@@ -719,12 +719,12 @@ pub fn generate<T: Target>(
             Declaration::Type(_) => {
                 plan_type(&mut run, declaration).map_err(EngineError::Planning)?
             }
-            // Two surfaces built the same way: a Kotlin `val` read through a
-            // nullary function is planned as that function, and the target
-            // renders the constant. Whether the function was captured or is
-            // the binding's own makes no difference here: the model holds
-            // both, and the writer reaches each through its own origin.
-            Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
+            // Whether the function was captured or is the binding's own makes
+            // no difference here: the model holds both, and the writer reaches
+            // each through its own origin. Nor does what the target shows the
+            // call as — a `fun`, or a `val` read through it — which is the
+            // target's choice under this one declaration.
+            Declaration::Function(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
@@ -1361,26 +1361,22 @@ fn plan_type<T: Target>(
     // binding declared over a type the source never exported, which entered
     // the model as an extern — and the declarations were checked against it
     // before planning, so this lookup finds one.
+    let Declaration::Type(key) = declaration else {
+        return Err(PlanningError::InternalInvariant(format!(
+            "`{declaration}` was routed to the type planner"
+        )));
+    };
     let name = declaration
         .entity()
         .expect("a type declaration names an entity")
         .name();
-    let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(&name) {
-        Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
-        Some(Type::Extern(opaque)) => {
-            // A declaration answers what reading names it; an extern keeps
-            // none, so the model is asked to read its own name.
-            let name = &opaque.name;
-            match flat.classify(&syn::parse_quote!(#name)) {
-                Ok(ty) => (ty, SourceItem::Extern(opaque)),
-                Err(error) => {
-                    return Err(PlanningError::InternalInvariant(format!(
-                        "`{name}` is declared and does not classify as a reference to \
-                             itself: {error}"
-                    )))
-                }
-            }
-        }
+    // The item is looked up by its name, and the type is read from the key
+    // as the binding declared it: `ptr_class!(Publisher<'static>)` names the
+    // item `Publisher` and means values of `Publisher<'static>`, which is
+    // what the target recorded its choice under.
+    let item = match flat.declared_type(&name) {
+        Some(Type::Struct(strukt)) => SourceItem::Struct(strukt),
+        Some(Type::Extern(opaque)) => SourceItem::Extern(opaque),
         None => {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` was checked against the model and is not in it",
@@ -1394,6 +1390,21 @@ fn plan_type<T: Target>(
                     format!(
                         "`{}` is an enum, which v2 has no representation for yet",
                         name
+                    ),
+                ),
+                &root,
+            )))
+        }
+    };
+    let ty = match flat.reading_of(key) {
+        Ok(ty) => ty,
+        Err(error) => {
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.type.key",
+                    format!(
+                        "`{}` is declared over a type this model cannot read: {error}",
+                        key.as_str()
                     ),
                 ),
                 &root,

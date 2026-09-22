@@ -385,11 +385,47 @@ fn a_class_over_a_type_the_source_never_exported_is_a_skip_not_an_error() {
     assert_eq!(skip.capability.as_str(), "unsupported.jni.not_a_struct");
 }
 
-/// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary
-/// **function**. The captured item is a function, and looking `f` up among the
-/// constants reported a typo that was not there.
+/// A declared key may carry arguments the item does not, and the class is
+/// planned over the type as declared: `ptr_class!(String<'static>)` — a
+/// lifetime on a type the source never exported — names the item `String`,
+/// and its handle and release are over `String<'static>`, which is where
+/// the frontend recorded the choice.
 #[test]
-fn a_function_backed_constant_resolves_against_the_function() {
+fn a_ptr_class_over_a_key_with_arguments_is_planned_as_declared() {
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(fixture_items())
+        .package(crate::package!("thing").class(crate::ptr_class!(Wrapper<'static>)))
+        .build_with(Pipeline::V2)
+        .expect("a parameterized key names its item");
+    let report = generated.report().expect("v2 produces a report");
+    let entry = report
+        .declarations
+        .iter()
+        .find(|entry| entry.declaration.to_string() == "type:Wrapper < 'static >")
+        .unwrap_or_else(|| panic!("no entry: {report:?}"));
+    assert_eq!(
+        entry.outcome,
+        prebindgen_registry_v2::Outcome::Emitted,
+        "{report:?}"
+    );
+
+    let dir = unique_test_dir("jnigen_v2_parameterized_key");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    assert!(rust.contains("as *mut crate::Wrapper<'static>"), "{rust}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary
+/// function. The declaration is the function's — the `val` is what this target
+/// shows the call as — so it resolves against the captured function and is
+/// planned as one.
+#[test]
+fn a_function_backed_constant_is_the_functions_declaration() {
     let generated = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .items(fixture_items())
@@ -408,11 +444,12 @@ fn a_function_backed_constant_resolves_against_the_function() {
         .iter()
         .find(|entry| entry.representation() == "constant_fun")
         .expect("the constant is accounted for");
-    assert_eq!(constant.declaration.to_string(), "const:z_thing_describe");
-    // The target gets a `val`; the source must hold a function.
+    // The declaration is the function's; that the target shows the call as a
+    // `val` is its own choice, which the report's representation column says.
+    assert_eq!(constant.declaration.to_string(), "fn:z_thing_describe");
     assert!(matches!(
         &constant.declaration,
-        Declaration::ConstFromFunction(ident) if ident == "z_thing_describe"
+        Declaration::Function(ident) if ident == "z_thing_describe"
     ));
     // And it is planned from that function: what stops this one is the value
     // its parameter crosses as, reported against the parameter, rather than
@@ -420,7 +457,7 @@ fn a_function_backed_constant_resolves_against_the_function() {
     let Outcome::Skipped(skip) = &constant.outcome else {
         panic!("the backing function takes a handle the JNI target has no carrier for");
     };
-    assert_eq!(skip.dependency_path, ["const:z_thing_describe", "param 0"]);
+    assert_eq!(skip.dependency_path, ["fn:z_thing_describe", "param 0"]);
 }
 
 /// The `Stamp` fixture the edge-case tests below build on: a struct of two

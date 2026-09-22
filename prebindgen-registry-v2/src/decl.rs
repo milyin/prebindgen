@@ -64,13 +64,15 @@ impl From<EntityName> for Declaration {
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
 ///
-/// A name alone says neither: `f` may be a function exported as itself or a
-/// Kotlin `val` read through it, and `Foo` a type given a representation or a
+/// A name alone says neither: `Foo` may be a type given a representation or a
 /// wire mapping declared for it. The variant says which, and it says it once
 /// — what the target gets and which entity, if any, it is planned from both
 /// follow from the variant instead of being stated beside it, so they cannot
 /// disagree and a pair that means nothing (a callback backed by a captured
-/// constant) cannot be written down.
+/// constant) cannot be written down. What a declaration does *not* say is how
+/// the target shows the entity: a function exposed as a Kotlin `val` read
+/// through it is still [`Declaration::Function`], and the `val` is the
+/// target's choice, recorded under that declaration.
 ///
 /// Where an entity came from is not part of this. A `#[prebindgen]` function
 /// and one the binding defines itself are both a [`Declaration::Function`];
@@ -98,12 +100,11 @@ impl From<EntityName> for Declaration {
 /// reads in id order.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
-    /// A function, exported as a foreign function.
+    /// A function, exported through a wrapper that calls it — as a foreign
+    /// function, or as whatever else the target chooses to show a call as: a
+    /// Kotlin `val` over `constant!(X).fun(fun!(f))` is this, with the `val`
+    /// the target's business.
     Function(syn::Ident),
-    /// A foreign constant read by calling a nullary function —
-    /// `constant!(X).fun(fun!(f))`. The target renders a constant; the engine
-    /// plans the function behind it.
-    ConstFromFunction(syn::Ident),
     /// A constant, exposed as a foreign constant.
     Const(syn::Ident),
     /// A type, given a foreign representation.
@@ -125,17 +126,11 @@ impl Declaration {
         matches!(self, Declaration::Type(_))
     }
 
-    /// The entity this declaration names, if it names one.
-    ///
-    /// Not always the declaration's own kind: a constant read through a
-    /// function names a function, which is what separates
-    /// [`Self::ConstFromFunction`] from [`Self::Const`]. `None` for a callback,
-    /// a computed constant and a conversion.
+    /// The entity this declaration names, if it names one — `None` for a
+    /// callback, a computed constant and a conversion.
     pub fn entity(&self) -> Option<EntityName> {
         match self {
-            Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
-                Some(EntityName::Function(ident.clone()))
-            }
+            Declaration::Function(ident) => Some(EntityName::Function(ident.clone())),
             Declaration::Const(ident) => Some(EntityName::Constant(ident.clone())),
             Declaration::Type(key) => Some(EntityName::Type(key.clone())),
             Declaration::Conversion(_)
@@ -182,9 +177,7 @@ impl Declaration {
     /// and what an entity is looked up by.
     pub(crate) fn name(&self) -> String {
         match self {
-            Declaration::Function(ident)
-            | Declaration::ConstFromFunction(ident)
-            | Declaration::Const(ident) => ident.to_string(),
+            Declaration::Function(ident) | Declaration::Const(ident) => ident.to_string(),
             Declaration::Type(key) | Declaration::Conversion(key) => key.as_str().to_string(),
             Declaration::Callback(name) | Declaration::ComputedConst(name) => name.clone(),
         }
@@ -192,19 +185,18 @@ impl Declaration {
 }
 
 impl Ord for Declaration {
-    /// As they print. Two declarations of one name print alike and are still
-    /// distinct — `const:f` read through `f` and a captured `const f` — so the
-    /// variant breaks that tie, and `Ord` agrees with `Eq`.
+    /// As they print. Two declarations of one name can print alike and still
+    /// be distinct — a captured `const X` and a computed `X` are both
+    /// `const:X` — so the variant breaks that tie, and `Ord` agrees with `Eq`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         fn variant(declaration: &Declaration) -> u8 {
             match declaration {
                 Declaration::Function(_) => 0,
-                Declaration::ConstFromFunction(_) => 1,
-                Declaration::Const(_) => 2,
-                Declaration::Type(_) => 3,
-                Declaration::Conversion(_) => 4,
-                Declaration::Callback(_) => 5,
-                Declaration::ComputedConst(_) => 6,
+                Declaration::Const(_) => 1,
+                Declaration::Type(_) => 2,
+                Declaration::Conversion(_) => 3,
+                Declaration::Callback(_) => 4,
+                Declaration::ComputedConst(_) => 5,
             }
         }
         self.to_string()
@@ -223,14 +215,11 @@ impl std::fmt::Display for Declaration {
     /// `<what the target gets>:<name>`. The prefix is the foreign side's word,
     /// and it is what keeps the declarations' several naming spaces apart:
     /// `type:Foo` and `conversion:Foo` are two declarations about one Rust
-    /// type, and `const:f` and `fn:f` are the `val` read through `f` and `f`
-    /// itself.
+    /// type.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prefix = match self {
             Declaration::Function(_) => "fn",
-            Declaration::ConstFromFunction(_)
-            | Declaration::Const(_)
-            | Declaration::ComputedConst(_) => "const",
+            Declaration::Const(_) | Declaration::ComputedConst(_) => "const",
             Declaration::Type(_) => "type",
             Declaration::Conversion(_) => "conversion",
             Declaration::Callback(_) => "callback",

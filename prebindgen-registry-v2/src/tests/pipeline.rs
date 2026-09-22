@@ -217,12 +217,10 @@ impl Mini {
         if let Some(choice) = self.sites.get(&site) {
             return choice.clone();
         }
-        if let TypeKind::Named { id, .. } = ty.kind() {
-            if let Some(choice) = self.types.get(&id.name) {
-                return choice.clone();
-            }
-        }
-        Choice::Scalar
+        self.types
+            .get(ty.key().as_str())
+            .cloned()
+            .unwrap_or(Choice::Scalar)
     }
 
     /// What the binding declared this output as.
@@ -624,7 +622,8 @@ impl Binding {
     /// How every value of this source type crosses — without asking for the
     /// type itself to be declared.
     fn crossing(&mut self, name: &str, choice: Choice) -> &mut Self {
-        self.target.types.insert(name.to_string(), choice);
+        let key = prebindgen_flat::TypeKey::parse(name).expect("a test names a type");
+        self.target.types.insert(key.as_str().to_string(), choice);
         self
     }
 
@@ -886,11 +885,9 @@ fn a_local_function_names_captured_types_as_the_source_spells_them() {
 #[test]
 fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
     let mut binding = binding();
-    binding.declare(
-        Declaration::Type(prebindgen_flat::TypeKey::parse("Token<'static>").unwrap()),
-        Choice::Handle,
-    );
-    binding.crossing("Token", Choice::Handle);
+    // The item is `Token`; the choice is recorded under the key as declared,
+    // and the type's own planning has to find it there.
+    binding.declare_type("Token<'static>", Choice::Handle);
     binding.declare(
         Declaration::Conversion(prebindgen_flat::TypeKey::parse("Option<Stamp>").unwrap()),
         Choice::Scalar,
@@ -903,6 +900,11 @@ fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
         ),
         "{:?}",
         generation.report()
+    );
+    assert!(
+        generation.rust().contains("as *mut source::Token<'static>"),
+        "the release is over the type as declared:\n{}",
+        generation.rust()
     );
     let Outcome::Skipped(skip) = outcome(&generation, "conversion:Option < Stamp >") else {
         panic!("a conversion is a capability the engine lacks, not a missing item");

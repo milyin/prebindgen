@@ -135,11 +135,6 @@ fn ignored_fn(name: &str) -> EntityName {
     EntityName::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
-/// A Kotlin `val` read through that function.
-fn constant_fn(name: &str) -> Declaration {
-    Declaration::ConstFromFunction(syn::parse_str(name).expect("a test names an ident"))
-}
-
 /// A type, by name.
 fn declared_type(name: &str) -> Declaration {
     Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
@@ -201,14 +196,6 @@ fn one_id_may_name_only_one_declaration() {
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a repeat is refused");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
     assert!(error.to_string().contains("fn:handle_new"), "{error}");
-
-    // The same name under two target kinds is two declarations, and legal: the
-    // captured function may back both a callable and a `val`.
-    let stated = Stated {
-        declared: vec![(captured_fn("handle_new")), (constant_fn("handle_new"))],
-        ignored: Vec::new(),
-    };
-    plan(&stated, sources(), "fixture-crate").expect("two kinds, two ids");
 }
 
 /// Exposing a declaration and ignoring it says two things about one id, and
@@ -260,15 +247,6 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
             .contains("no captured constant `handle_new`"),
         "the refusal names the kind it looked for: {error}"
     );
-
-    // And a constant-shaped output backed by a captured function resolves,
-    // because the origin says which kind to look for.
-    let stated = Stated {
-        declared: vec![(constant_fn("handle_new"))],
-        ignored: Vec::new(),
-    };
-    let generation = plan(&stated, sources(), "fixture-crate").expect("a function-backed constant");
-    assert_eq!(generation.report().counts().skipped, 1);
 }
 
 /// The report groups by cause, so one missing capability is stated once with
@@ -297,12 +275,12 @@ fn skips_are_grouped_by_capability_code() {
 #[test]
 fn an_entry_serializes_flat() {
     let entry = crate::report::Entry {
-        declaration: constant_fn("z_thing_describe"),
+        declaration: captured_fn("z_thing_describe"),
         described: Described::new("constant_fun", "example.DESCRIBE"),
         outcome: Outcome::Emitted,
     };
     assert_eq!(
         serde_json::to_string(&entry).expect("an entry is plain data"),
-        r#"{"id":"const:z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
+        r#"{"id":"fn:z_thing_describe","placement":"example.DESCRIBE","representation":"constant_fun","outcome":"emitted"}"#
     );
 }

@@ -497,13 +497,12 @@ engine plans it from:
 
 ```rust
 enum Declaration {
-    Function(Ident),           // a function, exported as a foreign function
-    ConstFromFunction(Ident),  // a Kotlin `val` read through a nullary function
-    Const(Ident),              // a constant, exposed as a foreign constant
-    Type(TypeKey),             // a type, given a foreign representation
-    Conversion(TypeKey),       // a wire mapping the binding defines for a type
-    Callback(String),          // a callback signature the binding exports
-    ComputedConst(String),     // a constant the binding computes on the foreign side
+    Function(Ident),        // a function, exported through a wrapper that calls it
+    Const(Ident),           // a constant, exposed as a foreign constant
+    Type(TypeKey),          // a type, given a foreign representation
+    Conversion(TypeKey),    // a wire mapping the binding defines for a type
+    Callback(String),       // a callback signature the binding exports
+    ComputedConst(String),  // a constant the binding computes on the foreign side
 }
 ```
 
@@ -511,12 +510,13 @@ Where an entity came from is not part of this. A `#[prebindgen]` function and
 a helper the binding defines are both a `Function`, because the model holds
 both and only an entity's origin tells them apart; the same goes for a
 captured type and an opaque one the binding declares over a type the source
-never exported. `ConstFromFunction` is the one declaration whose kind on the
-target side differs from the entity's; a callback and a computed constant name
-no entity at all. `generate` matches on the whole, so each planner is reached
-by the variants it can plan and is handed the entity they name. One entity has
-one declaration of each kind, so a request that names the same declaration
-twice is refused.
+never exported. Nor is how the target shows the entity: a Kotlin `val` read
+through a nullary function, `constant!(X).fun(fun!(f))`, is `Function(f)`, and
+the `val` is the target's choice recorded under that declaration. A callback
+and a computed constant name no entity at all. `generate` matches on the
+whole, so each planner is reached by the variants it can plan and is handed
+the entity they name. One entity has one declaration of each kind, so a
+request that names the same declaration twice is refused.
 
 ### A value's position in an exported function
 
