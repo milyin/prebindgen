@@ -81,9 +81,12 @@ C and JNI produce separate target modules from the same Rust items.
 The Kotlin consumer is responsible for loading the dynamic library.
 
 `examples/v2check` provides a runnable generation fixture based on this source,
-with additional cases for rejection and field-order checks. It parses its source
-file and feeds `.items(...)` directly to the frontends; it does not exercise
-the annotation/capture stage. The capture records in the appendix illustrate
+with additional cases for rejection and field-order checks. It parses the
+`v2check-source` crate's file and feeds `.items(...)` directly to the
+frontends; it does not exercise the annotation/capture stage. That source is a
+crate of its own, which `v2check` also links, so the generated code is compiled
+across the boundary every real binding has — some Rust is refused only there,
+and a fixture inside one crate would accept it. The capture records in the appendix illustrate
 that stage separately. Its JNI checks compile Rust and inspect Kotlin text;
 they do not execute a JVM call.
 

@@ -2,25 +2,19 @@
 //! checks it against the specification pages that describe it.
 //!
 //! Two things happen here that a unit test cannot do. `cargo build` compiles
-//! the generated wrappers against the real source module and the real `jni`
-//! crate, so an emission that is well-formed text but not valid Rust fails.
+//! the generated wrappers against the real source *crate* and the real `jni`
+//! crate, so an emission that is well-formed text but not valid Rust — or
+//! valid only inside the crate that declared the items — fails.
 //! And `cargo test` calls the generated C entry point, so the wrapper is
 //! executed rather than only read.
 
 // Generator findings belong to the generator, not to this file.
 #![allow(clippy::all)]
 
-// The module the generated code reaches the source items through — `source::`
-// in every generated path, which is `build.rs`'s `source_module`.
-pub mod source;
-
-/// What `source::Ledger` is an alias of: a type the source crate never marks,
-/// which is the reason the alias exists.
-pub(crate) mod ledger {
-    pub struct Ledger {
-        pub total: i64,
-    }
-}
+// What the generated code reaches the source items through — `source::` in
+// every generated path, which is `build.rs`'s `source_module`. A separate
+// crate, as a real binding's source is, so what the generated Rust may say
+// about it is what a binding may say.
 
 // The two generated files, at the crate root so `source::` resolves from them.
 include!(env!("V2CHECK_C"));
@@ -235,7 +229,7 @@ mod tests {
     /// property to promise.
     #[test]
     fn each_target_left_out_only_what_it_cannot_carry() {
-        for (target, left_out) in [("c", 3), ("jni", 5)] {
+        for (target, left_out) in [("c", 5), ("jni", 7)] {
             let skipped = skipped(target);
             assert_eq!(
                 skipped.lines().filter(|line| !line.is_empty()).count(),
@@ -266,6 +260,14 @@ mod tests {
             ("jni", "type:Marker", "unsupported.jni.empty_class"),
             ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
             ("jni", "type:Sample", "unsupported.jni.conditional_field"),
+            // Refused across a real crate boundary, which is what this
+            // crate's source being a crate of its own is for: a binding may
+            // not match a non-exhaustive enum without an arm for a value it
+            // does not know, nor name a non-exhaustive value at all.
+            ("c", "type:Sweep", "unsupported.c.non_exhaustive_enum"),
+            ("c", "type:Detent", "unsupported.c.non_exhaustive_enum"),
+            ("jni", "type:Sweep", "unsupported.jni.non_exhaustive_enum"),
+            ("jni", "type:Detent", "unsupported.jni.non_exhaustive_enum"),
             (
                 "jni",
                 "fn:sample_total",
@@ -310,13 +312,11 @@ mod tests {
             ..Default::default()
         };
         let text = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("src")
-                .join("source.rs"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../v2check-source/src/lib.rs"),
         )
-        .expect("read src/source.rs");
+        .expect("read the source crate");
         let items: Vec<(syn::Item, prebindgen::SourceLocation)> = syn::parse_file(&text)
-            .expect("src/source.rs parses")
+            .expect("the source crate parses")
             .items
             .into_iter()
             .map(|item| (item, location.clone()))

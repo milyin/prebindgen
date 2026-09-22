@@ -308,8 +308,9 @@ establish the behavior of the resulting foreign interface.
    JNI's `Int`. What is *not* refused is a fieldless value written `Add()` or
    `Mul {}`: those are not unit variants, so every mention of them carries its
    delimiters, which the model's own speller supplies from the shape it
-   captured — and `examples/v2check` declares one of each, so rustc compiles
-   the generated matches against the source crate they name.
+   captured. `examples/v2check` declares one of each and one of every refusal,
+   and the crate it parses is a crate it links, so rustc compiles the
+   generated matches across the boundary the refusals are about.
 
 ### What it does not settle
 

@@ -9,8 +9,11 @@ publish = false
 name = "v2check"
 
 [dependencies]
+# The source crate the generated code calls into, renamed to the qualifier
+# every generated path uses.
+source = { package = "v2check-source", path = "../v2check-source" }
 # What the generated JNI wrapper calls at run time. The C wrapper calls nothing
-# but the source module.
+# but the source crate.
 jni = "0.21.1"
 
 [dev-dependencies]

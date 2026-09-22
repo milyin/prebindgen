@@ -412,12 +412,15 @@ pub enum StandardOp {
 ///   present, so a conditional value followed by an implicit one gives
 ///   numbers the compiled enum disagrees with, and a mirror entry for an
 ///   absent value names a variant that is not there;
-/// * the enum is `#[non_exhaustive]`. Rust requires a wildcard arm wherever
-///   another crate matches such an enum, and a binding crate is always
-///   another crate. Going out of Rust there is nothing for that arm to
-///   produce — the target has a value for each value it knows, and none for
-///   one it does not — so the enum is refused rather than carried with an
-///   answer invented for it.
+/// * the enum, or any of its values, is `#[non_exhaustive]`. Both put a value
+///   out of another crate's reach, and a binding crate is always another
+///   crate. A non-exhaustive enum needs a wildcard arm, and going out of Rust
+///   there is nothing for that arm to produce — the target has a value for
+///   each value it knows, and none for one it does not. A non-exhaustive
+///   *value* cannot be constructed from outside at all, and its pattern needs
+///   a `..`; that holds for a unit value too, whose constructor is private
+///   outside the crate that declared it. Preserving delimiters does not make
+///   such a value constructible, so the enum is refused.
 ///
 /// `language` is the adapter's own name, for the capability code: a refusal
 /// reads `unsupported.c.enum_discriminant`, and the next target's reads its
@@ -446,8 +449,8 @@ pub fn mirrored_enum<'a>(
         return Err(Unsupported::new(
             format!("unsupported.{language}.non_exhaustive_enum"),
             format!(
-                "`{declared_as}` is `#[non_exhaustive]`, so a binding crate cannot match \
-                 its values without an arm for one it does not know"
+                "`{declared_as}` is `#[non_exhaustive]`, or one of its values is, and a \
+                 binding crate cannot name such a value"
             ),
         ));
     }

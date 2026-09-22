@@ -442,18 +442,25 @@ pub struct Enum {
 }
 
 impl Enum {
-    /// Whether this enum was written `#[non_exhaustive]`.
+    /// Whether this enum, or any of its values, was written
+    /// `#[non_exhaustive]`.
     ///
-    /// Such an enum may gain values without a breaking change, so Rust
-    /// requires a wildcard arm wherever another crate matches it — which
-    /// every generated binding is. A consumer that matches one value at a
-    /// time refuses it rather than emitting a match that does not compile.
+    /// Both put a value of the enum out of another crate's reach, which
+    /// every generated binding is, and each does it its own way. A
+    /// non-exhaustive *enum* may gain values, so Rust requires a wildcard arm
+    /// to match it. A non-exhaustive *value* may gain fields, so that value
+    /// cannot be constructed from outside at all and its pattern needs a
+    /// `..` — a unit value included, whose constructor is private outside the
+    /// crate that declared it.
+    ///
+    /// A consumer that names one value at a time refuses such an enum rather
+    /// than emitting what does not compile.
     pub fn is_non_exhaustive(&self) -> bool {
-        self.origin
-            .syntax
-            .attrs
-            .iter()
-            .any(|attr| attr.path().is_ident("non_exhaustive"))
+        non_exhaustive(&self.origin.syntax.attrs)
+            || self
+                .values
+                .iter()
+                .any(|value| non_exhaustive(&value.origin.syntax.attrs))
     }
 
     /// Whether any value of this enum was written under a `#[cfg]`.
@@ -696,6 +703,12 @@ pub struct Unsupported {
 /// conditions from several items can tell one condition from another. Rust
 /// conjoins repeated `#[cfg]`s on one item, so that caller re-applies them side
 /// by side and never has to know what any of them says.
+fn non_exhaustive(attrs: &[syn::Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("non_exhaustive"))
+}
+
 fn conditions_from(attrs: &[syn::Attribute]) -> Vec<proc_macro2::TokenStream> {
     use quote::ToTokens;
     attrs
