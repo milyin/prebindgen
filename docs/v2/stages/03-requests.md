@@ -4,10 +4,11 @@
 
 # Record binding requests
 
-The implemented frontends translate user configuration into two things: the
-list of `Declaration`s naming what to generate, and their own `Target`, which
-holds what each of those declarations *is*. This chapter first explains that
-translation, then describes the request identities and
+The implemented frontends translate user configuration into two things: a list
+pairing each `Declaration` with what the binding declared it as, and their own
+`Target`, which answers about values of a type wherever they turn up. This
+chapter first explains that translation, then describes the request identities
+and
 [conversion](04-select.md#select-conversion-relations)-sharing rules. Some later
 types are design sketches: in particular, owned Flat views and
 placement-specific declaration ids are not implemented.
@@ -114,20 +115,26 @@ supplies a reporting convention, rather than a per-function setting. The
 [wrapper](06-boundary.md#assemble-the-wrapper-boundary)'s error path.
 
 Each such call records a choice. Together they are the **binding
-configuration**, and `.build()` is where the frontend turns it into the
-declaration list — the input the registry actually consumes. Users never write
-that list; frontends do, which is why the two builders above can be as
+configuration**, and `.build()` is where the frontend turns it into the list
+of declarations and their choices — the input the registry actually consumes.
+Users never write that list; frontends do, which is why the two builders above can be as
 different as their languages while everything after this stage is shared.
 
-The declaration list separates the desired output from choices about its
-implementation. An **output request** asks for a function, type or other public
-declaration, and that is *all* it carries: the declaration's identity. The
-language-specific choices that apply to it — a C struct or a JVM object to
-carry a `Stamp`, which header name, which `Java_…` symbol — stay in the
-frontend's own storage, which is the same object the registry later asks its
-questions of as the `Target`. The engine therefore does not need to understand
-any C or JNI configuration option, and has no table of them to keep in step
-with the frontend's.
+An **output request** asks for a function, type or other public declaration,
+and carries two things: the declaration's identity, and the one
+language-specific choice that says what this output *is* — a C struct or a JVM
+object to carry a `Stamp`, which header name, which `Java_…` symbol. The
+engine keeps that choice with the output and hands it back with every question
+it asks about it, without understanding any of it: it compares one choice to
+another and never reads one. Carrying it is what lets a binding declare one
+entity twice, since a table the engine looked the choice up in by declaration
+would hold one of the two.
+
+Every other language-specific choice — which way values of a type cross
+wherever they appear, what a setting on one parameter of one function
+overrides — stays in the frontend's own storage, which is the same object the
+registry later asks its questions of as the `Target`. The engine holds no
+table of those and knows no precedence among them.
 
 This stage also fixes the names by which everything is addressed afterwards. A
 **declaration** is one requested output, identified by an `OutputId` standing
@@ -242,7 +249,8 @@ The implementation divides the registry's data between two structures:
   question about them goes. Current V2 selects
   atomic conversions or struct-field construction. Constructors, accessors
   and other helper [relations](04-select.md#what-a-relation-is) described by the design are future extensions.
-- **The run**, private `Run` state in `plan.rs`, keeps requests, offered
+- **The run**, private `Run` state in `plan.rs`, keeps the outputs — each
+  declaration with the choice recorded for it — the offered
   relations, conversion plans, the cache and cycle-detection marks. `generate`
   accumulates declaration outcomes and checks public dependencies. It returns
   a completed **`Generation`** or a generation error.
@@ -251,7 +259,7 @@ A binding crate normally builds one configured frontend. The frontend calls `gen
 
 ## Binding requests and target choices
 
-The common [`prebindgen-flat` library](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/lib.rs) supplies Rust source facts through `Flat`. Users call the C or JNI frontend's API to choose the generated interface: for example, exposing `Stamp` as a C data struct or a Kotlin class. The configured frontend builds the declaration list and calls the registry.
+The common [`prebindgen-flat` library](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/lib.rs) supplies Rust source facts through `Flat`. Users call the C or JNI frontend's API to choose the generated interface: for example, exposing `Stamp` as a C data struct or a Kotlin class. The configured frontend pairs each declaration with what it declared it as, and calls the registry.
 
 A declaration or setting recorded by the frontend is a **configuration entry**. A frontend call exposing a function records an output request; an argument override records the requested representation choice. The frontend also preserves naming hooks and unsupported settings. An ignore is not an entry: it tells V1 not to warn that an item is undeclared, and V2 issues no such warning, so the frontend hands the engine no ignores and the ignored item stays in the model like any other undeclared item. Recording a request does not establish that the registry can generate it.
 
@@ -262,9 +270,14 @@ request or about a particular value conversion — that `Stamp` crosses as a C
 struct passed by value, under the name `Stamp`. It is configuration data. It
 does not contain a recursive conversion algorithm or a finished wrapper.
 
-It belongs to the frontend that recorded it, and to the target that frontend
-builds. The registry holds no table of them and knows no precedence among them: it
-asks the target, and the target resolves what applies from its own storage.
+Where it lives depends on what it is about. A choice about one output — what
+that declaration is on the foreign side — is handed to the registry with the
+declaration and comes back with every question about that output, which is
+what lets one entity be declared twice. A choice about values of a type, or
+about one position inside one declaration, belongs to the frontend that
+recorded it and to the target that frontend builds: the registry holds no
+table of those and knows no precedence among them, it asks the target, and the
+target resolves what applies from its own storage.
 
 Examples include JNI object versus separate-argument input, C struct versus
 handle, and function error handling or public placement.
@@ -408,10 +421,11 @@ their requested source names and kinds, discovers required fields and plans
 conversions. Proposed helper relations will also need argument validation and
 planning. The registry supplies no separate source-inspection API to the frontend.
 
-Request construction must lose no recorded frontend choice. Today it carries the
-choices this increment lowers — names, the class a type is declared as — in
-the target it builds, and turns the settings it does not
-lower into a **refusal** of what they apply to: a per-function `expand_param`/`expand_return`/
+Request construction must lose no recorded frontend choice. Today it carries
+the choices this increment lowers — names, the class a type is declared as —
+beside the declaration they were recorded for, or in the target it builds for
+the ones that are about a type's values rather than about one output, and
+turns the settings it does not lower into a **refusal** of what they apply to: a per-function `expand_param`/`expand_return`/
 `split_on_param` refuses the function; a type-level boundary declaration refuses
 every function with a parameter or result of that type, declared class or bare
 scalar alike, and leaves the class itself; a declarator the target does not
@@ -457,10 +471,11 @@ the three variants of `Declaration` that name an entity are where it states
 it. Where an entity came from is not a kind: a captured item and one the
 binding stated are the same entity, and differ in origin alone.
 
-A requested output is that identity and nothing else. What the declaration *is*
-— its symbol, its placement, the declarator it came from — the target looks up
-under it when the registry asks for a boundary, a public declaration or a
-report line. What it *depends on* is the target's answer too, at
+A declaration is that identity and nothing else. What the declaration *is* —
+its symbol, its placement, the declarator it came from — is the choice
+recorded beside it, which the registry hands the target back when it asks for
+a boundary, a public declaration or a report line. What it *depends on* is the
+target's answer too, at
 [`surface`](04-select.md#how-the-registry-asks-a-target-for-decisions):
 `SurfaceSpec.requires` names the public types a declaration is unusable
 without — a wrapper taking an aggregate needs the type declared as well — and
