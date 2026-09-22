@@ -296,21 +296,32 @@ establish the behavior of the resulting foreign interface.
    alternative carrying a field makes a sum, which the model calls a variant
    and which has no lowering.
 
-   Four shapes are refused rather than mirrored, by one check both targets
+   Some shapes are refused rather than mirrored, by one check both targets
    share. A number the model could not evaluate — a `const`, arithmetic — is
    not a number to mirror. A value written under a `#[cfg]` breaks the
    numbering, because the model counts every value as present, and would put
-   an entry in the mirror for a variant the source crate compiled out. A
-   `#[non_exhaustive]` enum cannot be matched from another crate without an
-   arm for a value the binding does not know, and going out of Rust there is
-   nothing for that arm to produce. And a number outside the carrier's range
-   is refused where the carrier is narrower than the model's `i64`, which is
-   JNI's `Int`. What is *not* refused is a fieldless value written `Add()` or
-   `Mul {}`: those are not unit variants, so every mention of them carries its
+   an entry in the mirror for a variant the source crate compiled out. An
+   enum with no values has nothing to mirror at all. A number outside the
+   carrier's range is refused where the carrier is narrower than the model's
+   `i64`, which is JNI's `Int`. And `#[non_exhaustive]` is refused wherever it
+   sits: on the enum, which another crate cannot match without an arm for a
+   value it does not know — and going out of Rust there is nothing for that
+   arm to produce — or on a value, which another crate cannot name at all, a
+   unit value included, whose constructor is private outside the crate that
+   declared it.
+
+   What is *not* refused is a fieldless value written `Add()` or `Mul {}`:
+   those are not unit variants, so every mention of them carries its
    delimiters, which the model's own speller supplies from the shape it
-   captured. `examples/v2check` declares one of each and one of every refusal,
-   and the crate it parses is a crate it links, so rustc compiles the
-   generated matches across the boundary the refusals are about.
+   captured.
+
+   `examples/v2check` parses a crate it also links, so rustc compiles the
+   generated matches across the boundary. That is what the accepted shapes
+   need, and what `#[non_exhaustive]` is about in either position, so those
+   are the shapes it declares: an enum with explicit and implicit numbers, one
+   whose values are constructors, and one refusal for each place the attribute
+   can sit. The remaining refusals produce nothing to compile, and a unit test
+   is where each is checked.
 
 ### What it does not settle
 
