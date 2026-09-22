@@ -127,7 +127,9 @@ fn sources() -> FlatBuilder {
 
 /// A captured function's origin, by name.
 fn captured_fn(name: &str) -> Declaration {
-    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
+    Declaration::Captured(Entity::Function(
+        syn::parse_str(name).expect("a test names an ident"),
+    ))
 }
 
 /// A captured function to leave alone, by name.
@@ -142,7 +144,9 @@ fn constant_fn(name: &str) -> Declaration {
 
 /// A type the binding represents, whether or not the source captured it.
 fn local_type(name: &str) -> Declaration {
-    Declaration::LocalType(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+    Declaration::Local(Entity::Type(
+        prebindgen_flat::TypeKey::parse(name).expect("a test names a type"),
+    ))
 }
 
 #[test]
@@ -249,7 +253,11 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as
     // wrong as declaring a name nothing captured.
     let stated = Stated {
-        declared: vec![(Declaration::Const(syn::parse_str("handle_new").expect("an ident")))],
+        declared: vec![
+            (Declaration::Captured(Entity::Constant(
+                syn::parse_str("handle_new").expect("an ident"),
+            ))),
+        ],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");

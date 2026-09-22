@@ -68,7 +68,7 @@ impl CbindgenBuilder {
         // wherever it appears.
         for key in sorted(self.data.keys()) {
             declare(
-                Declaration::LocalType(key.clone()),
+                Declaration::Local(Entity::Type(key.clone())),
                 CChoice::DataStruct {
                     c_name: self.c_type_name(key),
                 },
@@ -79,7 +79,7 @@ impl CbindgenBuilder {
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
             declare(
-                Declaration::LocalType(key.clone()),
+                Declaration::Local(Entity::Type(key.clone())),
                 CChoice::OpaquePtr {
                     c_name: self.c_type_name(key),
                     release: self.destructor_symbol(key).to_string(),
@@ -97,7 +97,7 @@ impl CbindgenBuilder {
         ] {
             for key in keys {
                 declare(
-                    Declaration::LocalType(key.clone()),
+                    Declaration::Local(Entity::Type(key.clone())),
                     CChoice::Unimplemented {
                         declarator,
                         c_name: self.c_type_name(key),
@@ -133,7 +133,7 @@ impl CbindgenBuilder {
         // Exported functions — the one kind that must name a captured item.
         for ident in sorted(self.functions.keys()) {
             declare(
-                Declaration::Function(ident.clone()),
+                Declaration::Captured(Entity::Function(ident.clone())),
                 CChoice::Function {
                     symbol: self.fn_symbol(ident).to_string(),
                 },

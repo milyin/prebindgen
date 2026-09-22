@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use prebindgen_flat::{
-    flat::{Flat, Function, Type, TypeKind, TypeRef},
+    flat::{Entity, Flat, Function, Type, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 
@@ -719,13 +719,14 @@ pub fn generate<T: Target>(
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Declaration::Type(_) | Declaration::LocalType(_) => {
+            Declaration::Captured(Entity::Type(_)) | Declaration::Local(Entity::Type(_)) => {
                 plan_type(&mut run, declaration).map_err(EngineError::Planning)?
             }
             // Two surfaces built the same way: a Kotlin `val` read through a
             // nullary function is planned as that function, and the target
             // renders the constant.
-            Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
+            Declaration::Captured(Entity::Function(ident))
+            | Declaration::ConstFromFunction(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
@@ -735,7 +736,7 @@ pub fn generate<T: Target>(
             // so there is nothing to plan from: its signature or its value is
             // the binding's own, and reading one is a capability this engine
             // does not have.
-            Declaration::LocalFunction(name) => Err(Refusal::at(
+            Declaration::Local(Entity::Function(name)) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.fn.binding_local",
                     format!(
@@ -745,7 +746,7 @@ pub fn generate<T: Target>(
                 ),
                 &root,
             )),
-            Declaration::LocalConst(name) => Err(Refusal::at(
+            Declaration::Local(Entity::Constant(name)) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.binding_local",
                     format!(
@@ -758,7 +759,7 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            Declaration::Const(_) => Err(Refusal::at(
+            Declaration::Captured(Entity::Constant(_)) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.not_implemented",
                     "the v2 engine has no const lowering yet",

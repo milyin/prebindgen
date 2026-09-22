@@ -482,13 +482,26 @@ skipped instead.
 
 A `DeclarationId` is a `Declaration`: one value that is its own identity and
 says both which of the kinds the target gets and which captured item, if any,
-the engine plans it from — `Function(ident)`, `ConstFromFunction(ident)` for a
-Kotlin `val` read through a nullary function, `LocalType(key)` for a type the
-target represents although the source never exported it, and so on for the nine
-ways a binding can name something. `generate` matches on it, so each planner is
-reached by the variants it can plan and is handed the captured item they name.
-One source item has one declaration, so a request that names the same
-declaration twice is refused.
+the engine plans it from. The kinds the source captures are Flat's three, and
+the two variants that name one carry it as an `Entity`:
+
+```rust
+enum Declaration {
+    Captured(Entity<TypeKey, Ident, Ident>),  // a captured item, exposed as itself
+    ConstFromFunction(Ident),   // a Kotlin `val` read through a captured nullary function
+    Local(Entity<TypeKey, String, String>),   // the binding's own type, function or constant
+    Callback(String),           // a callback signature the binding exports
+    Conversion(TypeKey),        // a wire mapping the binding defines for a type
+}
+```
+
+`Captured` is the same `CapturedName` an ignore carries, so exposing an item
+and ignoring it meet as one identity. `ConstFromFunction` is the one
+declaration whose kind on the target side differs from its kind in the source;
+a callback and a conversion have no source kind at all. `generate` matches on
+the whole, so each planner is reached by the variants it can plan and is
+handed the captured item they name. One source item has one declaration, so a
+request that names the same declaration twice is refused.
 
 ### A value's position in an exported function
 

@@ -16,20 +16,16 @@ use serde::Serialize;
 /// Less than a [`Declaration`], deliberately. An ignore names such an item and
 /// says nothing about how the target would get it, so it cannot be a
 /// callback, a conversion or anything the binding coined — those are not
-/// captured, and there is nothing in the source to leave alone.
+/// captured, and there is nothing in the source to leave alone. A declaration
+/// that exposes a captured item as itself *is* one of these, under
+/// [`Declaration::Captured`].
 pub type CapturedName = Entity<TypeKey, syn::Ident, syn::Ident>;
 
-impl From<CapturedName> for Declaration {
-    /// The declaration that exposes the same captured item, which is what a
-    /// report row and a duplicate check compare an ignore by.
-    fn from(name: CapturedName) -> Self {
-        match name {
-            Entity::Type(key) => Declaration::Type(key),
-            Entity::Function(ident) => Declaration::Function(ident),
-            Entity::Constant(ident) => Declaration::Const(ident),
-        }
-    }
-}
+/// An item the binding defines itself, by name: a function or constant of its
+/// own (a path or a Kotlin name, so a string), or a type the target
+/// represents although the source never exported it (`String` as an opaque
+/// handle, so a type key).
+pub type LocalName = Entity<TypeKey, String, String>;
 
 /// One thing a binding asked for: what the target gets, named by what the
 /// Rust source calls it, and what the engine plans it from.
@@ -44,6 +40,14 @@ impl From<CapturedName> for Declaration {
 /// means nothing (a callback backed by a captured constant, a function the
 /// binding both defines and selects out of the source) cannot be written
 /// down.
+///
+/// The three kinds the source captures — a type, a function, a constant — are
+/// Flat's [`Entity`], and the two variants that name one of them carry it as
+/// such: [`Self::Captured`] is a [`CapturedName`], the item exposed as itself,
+/// and [`Self::Local`] a [`LocalName`], the binding's own item of that kind.
+/// [`Self::ConstFromFunction`] is the one declaration whose kind on the
+/// target side differs from its kind in the source; a callback and a
+/// conversion have no source kind at all.
 ///
 /// [`generate`](crate::generate) routes on this: each planner is reached by its
 /// own variants and is handed the captured item they name, rather than a kind
@@ -62,25 +66,20 @@ impl From<CapturedName> for Declaration {
 /// reads in id order.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
-    /// A captured `#[prebindgen]` function, exported as a foreign function.
-    Function(syn::Ident),
-    /// A foreign function the binding defines itself — `fun!(crate::x).sig(..)`
-    /// in the JNI frontend. Nothing in the captured source names it.
-    LocalFunction(String),
-    /// A captured `#[prebindgen]` constant, exposed as a foreign constant.
-    Const(syn::Ident),
+    /// A captured `#[prebindgen]` item, exposed as what it is: a type given a
+    /// foreign representation, a function exported as a foreign function, a
+    /// constant exposed as a foreign constant.
+    Captured(CapturedName),
     /// A foreign constant read by calling a captured nullary function —
     /// `constant!(X).fun(fun!(f))`. The target renders a constant; the engine
     /// plans the function behind it.
     ConstFromFunction(syn::Ident),
-    /// A foreign constant the binding computes rather than reads —
-    /// `constant!(X).expr(..)`. No captured item holds its value.
-    LocalConst(String),
-    /// A captured `#[prebindgen]` type, given a foreign representation.
-    Type(TypeKey),
-    /// A type the binding gives a representation although the source never
-    /// exported it — `String` crossing as an opaque handle.
-    LocalType(TypeKey),
+    /// An item the binding defines itself, exposed as what it is: a foreign
+    /// function over `fun!(crate::x).sig(..)`, a foreign constant the binding
+    /// computes with `constant!(X).expr(..)`, or a type the target represents
+    /// although the source never exported it. Nothing in the captured source
+    /// names one.
+    Local(LocalName),
     /// A callback signature the binding exports as a foreign callable. No
     /// captured item names one, so the signature is the name it goes by.
     Callback(String),
@@ -89,32 +88,34 @@ pub enum Declaration {
     Conversion(TypeKey),
 }
 
+impl From<CapturedName> for Declaration {
+    /// The declaration that exposes a captured item as itself — what a report
+    /// row and a duplicate check compare an ignore by.
+    fn from(name: CapturedName) -> Self {
+        Declaration::Captured(name)
+    }
+}
+
 impl Declaration {
     /// Whether this declares a type — captured or the binding's own.
     pub fn is_type(&self) -> bool {
-        matches!(self, Declaration::Type(_) | Declaration::LocalType(_))
+        matches!(
+            self,
+            Declaration::Captured(Entity::Type(_)) | Declaration::Local(Entity::Type(_))
+        )
     }
 
     /// The kind of captured item this declaration must name, if it names one.
     ///
     /// Not always the declaration's own kind: a constant read through a
     /// function names a function, which is what separates
-    /// [`Self::ConstFromFunction`] from [`Self::Const`]. `None` for what the
-    /// binding defines itself — a callback signature, a conversion helper, a
-    /// function or constant of its own, or a type the target represents
-    /// although the source never exported it (`String` as an opaque handle).
+    /// [`Self::ConstFromFunction`] from a captured constant. `None` for what
+    /// the binding defines itself.
     pub(crate) fn captured_kind(&self) -> Option<EntityKind> {
         match self {
-            Declaration::Function(_) | Declaration::ConstFromFunction(_) => {
-                Some(EntityKind::Function)
-            }
-            Declaration::Const(_) => Some(EntityKind::Constant),
-            Declaration::Type(_) => Some(EntityKind::Type),
-            Declaration::LocalFunction(_)
-            | Declaration::LocalConst(_)
-            | Declaration::LocalType(_)
-            | Declaration::Callback(_)
-            | Declaration::Conversion(_) => None,
+            Declaration::Captured(name) => Some(name.kind()),
+            Declaration::ConstFromFunction(_) => Some(EntityKind::Function),
+            Declaration::Local(_) | Declaration::Callback(_) | Declaration::Conversion(_) => None,
         }
     }
 
@@ -161,18 +162,27 @@ impl Declaration {
         }
     }
 
+    /// The kind the target gets, as the printed prefix spells it — `None` for
+    /// a callback and a conversion, which print under words of their own.
+    fn target_kind(&self) -> Option<EntityKind> {
+        match self {
+            Declaration::Captured(name) => Some(name.kind()),
+            Declaration::Local(name) => Some(name.kind()),
+            Declaration::ConstFromFunction(_) => Some(EntityKind::Constant),
+            Declaration::Callback(_) | Declaration::Conversion(_) => None,
+        }
+    }
+
     /// The name it goes by — the part of the printed form after the prefix,
     /// and what a captured item is looked up by.
     pub(crate) fn name(&self) -> String {
         match self {
-            Declaration::Function(ident)
-            | Declaration::Const(ident)
+            Declaration::Captured(Entity::Function(ident) | Entity::Constant(ident))
             | Declaration::ConstFromFunction(ident) => ident.to_string(),
-            Declaration::Type(key) | Declaration::LocalType(key) | Declaration::Conversion(key) => {
-                key.as_str().to_string()
-            }
-            Declaration::LocalFunction(name)
-            | Declaration::LocalConst(name)
+            Declaration::Captured(Entity::Type(key))
+            | Declaration::Local(Entity::Type(key))
+            | Declaration::Conversion(key) => key.as_str().to_string(),
+            Declaration::Local(Entity::Function(name) | Entity::Constant(name))
             | Declaration::Callback(name) => name.clone(),
         }
     }
@@ -185,15 +195,11 @@ impl Ord for Declaration {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         fn variant(declaration: &Declaration) -> u8 {
             match declaration {
-                Declaration::Function(_) => 0,
-                Declaration::LocalFunction(_) => 1,
-                Declaration::Const(_) => 2,
-                Declaration::ConstFromFunction(_) => 3,
-                Declaration::LocalConst(_) => 4,
-                Declaration::Type(_) => 5,
-                Declaration::LocalType(_) => 6,
-                Declaration::Callback(_) => 7,
-                Declaration::Conversion(_) => 8,
+                Declaration::Captured(_) => 0,
+                Declaration::ConstFromFunction(_) => 1,
+                Declaration::Local(_) => 2,
+                Declaration::Callback(_) => 3,
+                Declaration::Conversion(_) => 4,
             }
         }
         self.to_string()
@@ -215,18 +221,14 @@ impl std::fmt::Display for Declaration {
     /// and `conversion:Foo` are two declarations about one Rust type, and
     /// `const:f` and `fn:f` are the `val` read through `f` and `f` itself.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = self.name();
-        match self {
-            Declaration::Function(_) | Declaration::LocalFunction(_) => write!(f, "fn:{name}"),
-            Declaration::Const(_)
-            | Declaration::ConstFromFunction(_)
-            | Declaration::LocalConst(_) => {
-                write!(f, "const:{name}")
-            }
-            Declaration::Type(_) | Declaration::LocalType(_) => write!(f, "type:{name}"),
-            Declaration::Callback(_) => write!(f, "callback:{name}"),
-            Declaration::Conversion(_) => write!(f, "conversion:{name}"),
-        }
+        let prefix = match (self.target_kind(), self) {
+            (Some(EntityKind::Function), _) => "fn",
+            (Some(EntityKind::Constant), _) => "const",
+            (Some(EntityKind::Type), _) => "type",
+            (None, Declaration::Callback(_)) => "callback",
+            (None, _) => "conversion",
+        };
+        write!(f, "{prefix}:{}", self.name())
     }
 }
 

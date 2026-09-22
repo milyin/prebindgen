@@ -90,13 +90,13 @@ impl Declarations {
         // give one id to two declarations.
         let is_local = |ident: &syn::Ident| self.local_fns.iter().any(|(local, ..)| local == ident);
         let fun_declaration = |ident: &syn::Ident| match is_local(ident) {
-            true => Declaration::LocalFunction(ident.to_string()),
-            false => Declaration::Function(ident.clone()),
+            true => Declaration::Local(Entity::Function(ident.to_string())),
+            false => Declaration::Captured(Entity::Function(ident.clone())),
         };
         // The same helper behind a `constant!(X).fun(..)`: the target renders a
         // `val`, and what the engine plans is the function it reads.
         let const_declaration = |ident: &syn::Ident| match is_local(ident) {
-            true => Declaration::LocalConst(ident.to_string()),
+            true => Declaration::Local(Entity::Constant(ident.to_string())),
             false => Declaration::ConstFromFunction(ident.clone()),
         };
 
@@ -110,7 +110,7 @@ impl Declarations {
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
             declare(
-                Declaration::LocalType(key.clone()),
+                Declaration::Local(Entity::Type(key.clone())),
                 match config.kind {
                     crate::jni::DeclaredKind::Data => JniChoice::DataClass {
                         class: placement.clone(),
@@ -186,7 +186,7 @@ impl Declarations {
             // A `constant!(X)` names the `#[prebindgen]` const it reads.
             for entry in &config.constants {
                 declare(
-                    Declaration::Const(entry.rust_ident.clone()),
+                    Declaration::Captured(Entity::Constant(entry.rust_ident.clone())),
                     JniChoice::unimplemented("constant", placed(entry)),
                 );
             }
@@ -202,7 +202,7 @@ impl Declarations {
             // A `constant!(X).expr(..)` has no Rust item behind it at all.
             for decl in &config.constant_exprs {
                 declare(
-                    Declaration::LocalConst(decl.kotlin_name.clone()),
+                    Declaration::Local(Entity::Constant(decl.kotlin_name.clone())),
                     JniChoice::unimplemented(
                         "constant_expr",
                         format!("{package}.{}", decl.kotlin_name),

@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
+use prebindgen_registry::flat::{Entity, ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
     FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
@@ -195,7 +195,9 @@ impl JniTarget {
     /// `ptr_class!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
     pub(crate) fn declare(&mut self, declaration: Declaration, choice: JniChoice) {
-        if let Declaration::LocalType(key) | Declaration::Type(key) = &declaration {
+        if let Declaration::Local(Entity::Type(key)) | Declaration::Captured(Entity::Type(key)) =
+            &declaration
+        {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
         self.outputs.insert(declaration, choice);

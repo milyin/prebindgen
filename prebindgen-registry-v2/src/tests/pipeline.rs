@@ -672,11 +672,15 @@ fn binding() -> Binding {
 }
 
 fn ty(name: &str) -> Declaration {
-    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+    Declaration::Captured(Entity::Type(
+        prebindgen_flat::TypeKey::parse(name).expect("a test names a type"),
+    ))
 }
 
 fn function(name: &str) -> Declaration {
-    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
+    Declaration::Captured(Entity::Function(
+        syn::parse_str(name).expect("a test names an ident"),
+    ))
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {

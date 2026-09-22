@@ -51,7 +51,7 @@ pub enum Element {
 /// to leave alone — states that shape with this rather than repeating the
 /// arms, and can meet the model's instance through [`Element::entity`] and
 /// compare kinds with [`Entity::kind`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Entity<T, F, C> {
     Type(T),
     Function(F),
