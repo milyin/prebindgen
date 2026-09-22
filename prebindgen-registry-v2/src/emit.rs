@@ -34,11 +34,45 @@ pub(crate) struct Writer;
 
 impl RustEmitter for Writer {}
 
+/// How generated code names each entity: the module it is reached through.
+///
+/// A captured item is reached through the source module the frontend
+/// configured for the run. An item the binding defines itself is reached
+/// where the binding said it is — `crate::helpers::x` — which its origin
+/// records as its crate stamp, since for a binding-local item that is what
+/// the stamp means. One value carries both so the writer asks one question.
+pub(crate) struct Reach {
+    /// Name → module, for every entity that is not reached through the
+    /// default. The shape [`RustEmitter::emit_source_type`] takes.
+    modules: HashMap<String, syn::Path>,
+    default: syn::Path,
+}
+
+impl Reach {
+    pub(crate) fn new(flat: &Flat, default: syn::Path) -> Self {
+        let modules = flat
+            .elements()
+            .filter_map(|element| element.entity())
+            .filter(|entity| flat.is_binding_local(entity.name()))
+            .filter_map(|entity| {
+                let module = entity.location().crate_name.as_ref()?;
+                Some((entity.name().to_string(), syn::parse_str(module).ok()?))
+            })
+            .collect();
+        Reach { modules, default }
+    }
+
+    /// The module the entity with this name is reached through.
+    fn of(&self, name: &str) -> &syn::Path {
+        self.modules.get(name).unwrap_or(&self.default)
+    }
+}
+
 /// The whole generated Rust file, as text.
 pub(crate) fn render<T: Target>(
     flat: &Flat,
     target: &T,
-    source_module: &syn::Path,
+    reach: &Reach,
     artifacts: &[Artifact],
     primitives: &[PrimitiveSpec<T::Payload>],
     functions: &[FunctionPlan<T::Payload>],
@@ -53,7 +87,7 @@ pub(crate) fn render<T: Target>(
     let artifacts = artifacts.iter().map(|artifact| &artifact.rust);
     let wrappers = functions
         .iter()
-        .map(|function| wrapper(flat, target, source_module, primitives, function));
+        .map(|function| wrapper(flat, target, reach, primitives, function));
     let tokens = quote! {
         #(#guards)*
         #(#artifacts)*
@@ -72,7 +106,7 @@ pub(crate) fn render<T: Target>(
 fn wrapper<T: Target>(
     flat: &Flat,
     target: &T,
-    source_module: &syn::Path,
+    reach: &Reach,
     primitives: &[PrimitiveSpec<T::Payload>],
     function: &FunctionPlan<T::Payload>,
 ) -> TokenStream {
@@ -178,7 +212,7 @@ fn wrapper<T: Target>(
                     .iter()
                     .map(|operand| operand_name(&names, function, operand))
                     .collect();
-                let expression = operation(target, source_module, primitive, &operand_names);
+                let expression = operation(target, reach, primitive, &operand_names);
                 let statement = match (&primitive.failure, result) {
                     (PrimitiveFailure::Infallible, Some(result)) => {
                         let name = local(&mut names, &mut taken, *result);
@@ -187,8 +221,7 @@ fn wrapper<T: Target>(
                     (PrimitiveFailure::Infallible, None) => quote!(#expression;),
                     (PrimitiveFailure::Fallible { category, .. }, Some(result)) => {
                         let name = local(&mut names, &mut taken, *result);
-                        let route =
-                            failure_arm(target, source_module, function, *category, &error_binding);
+                        let route = failure_arm(target, reach, function, *category, &error_binding);
                         let ok = &ok_binding;
                         let error = error_pattern(function, *category, &error_binding);
                         quote! {
@@ -199,8 +232,7 @@ fn wrapper<T: Target>(
                         }
                     }
                     (PrimitiveFailure::Fallible { category, .. }, None) => {
-                        let route =
-                            failure_arm(target, source_module, function, *category, &error_binding);
+                        let route = failure_arm(target, reach, function, *category, &error_binding);
                         let error = error_pattern(function, *category, &error_binding);
                         quote! {
                             if let Err(#error) = #expression { #route }
@@ -218,7 +250,8 @@ fn wrapper<T: Target>(
                     .struct_type(name.as_str())
                     .expect("a construction names a struct the model declares");
                 let ident = &item.name;
-                let head = quote!(#source_module::#ident);
+                let module = reach.of(&ident.to_string());
+                let head = quote!(#module::#ident);
                 // An initializer carries its own field's condition: the value
                 // it names was bound by a statement under the same one, so a
                 // field the source does not have is neither read nor filled in.
@@ -248,9 +281,10 @@ fn wrapper<T: Target>(
                 args,
                 result,
             } => {
+                let module = reach.of(callee);
                 let callee = format_ident!("{callee}");
                 let args: Vec<syn::Ident> = args.iter().map(|value| names[value].clone()).collect();
-                let call = quote!(#source_module::#callee(#(#args),*));
+                let call = quote!(#module::#callee(#(#args),*));
                 // A source function returning nothing produces no value, and a
                 // `let` over it would name one nobody can use.
                 let statement = match result {
@@ -300,13 +334,13 @@ fn wrapper<T: Target>(
 /// its own.
 fn operation<T: Target>(
     target: &T,
-    source_module: &syn::Path,
+    reach: &Reach,
     primitive: &PrimitiveSpec<T::Payload>,
     operands: &[syn::Ident],
 ) -> TokenStream {
     // The handle operations spell a source type, which is what makes them the
     // registry's: an adapter has no way to, and no business doing it.
-    let source_type = |ty| Writer.emit_source_type(ty, &HashMap::new(), source_module);
+    let source_type = |ty| Writer.emit_source_type(ty, &reach.modules, &reach.default);
     match &primitive.implementation {
         Operation::Standard(StandardOp::Identity) => {
             let value = &operands[0];
@@ -364,7 +398,7 @@ fn error_pattern<P>(
 /// operation for it, then terminate.
 fn failure_arm<T: Target>(
     target: &T,
-    source_module: &syn::Path,
+    reach: &Reach,
     function: &FunctionPlan<T::Payload>,
     category: FailureCategory,
     error: &syn::Ident,
@@ -388,7 +422,7 @@ fn failure_arm<T: Target>(
                 }
             })
             .collect();
-        let expression = operation(target, source_module, report, &operands);
+        let expression = operation(target, reach, report, &operands);
         let on_failure = terminal(&route.on_report_failure);
         match report.failure {
             PrimitiveFailure::Infallible => quote!(#expression;),

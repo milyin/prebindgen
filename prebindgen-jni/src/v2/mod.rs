@@ -21,8 +21,9 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry::flat::Entity;
-use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
+use prebindgen_registry_v2::{
+    generate, BindingRequests, Declaration, EngineError, EntityName, Generation,
+};
 pub use target::{JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
@@ -34,6 +35,28 @@ impl Declarations {
         sources: prebindgen_registry::flat::FlatBuilder,
         declaring_crate: impl Into<String>,
     ) -> Result<Generation<JniPayload>, EngineError> {
+        // What the binding defines itself enters the model as entities: a
+        // helper with the signature `fun!(crate::x).sig(..)` stated, reached
+        // where its path says; an opaque class the source never exported,
+        // reached at the binding's root. A captured item of the same name is
+        // what a class meant, and an error for a function, as under v1.
+        let mut sources = sources;
+        for (ident, path, sig) in &self.local_fns {
+            let mut sig = sig.clone();
+            sig.ident = ident.clone();
+            let prefix = prebindgen_registry::decl::local_path_prefix(path);
+            let module: syn::Path = syn::parse_str(&prefix).unwrap_or_else(|_| {
+                panic!("binding-local fn `{ident}` is declared at an unparseable path `{prefix}`")
+            });
+            sources = sources.local_function(sig, module);
+        }
+        for key in sorted(self.types.keys()) {
+            if matches!(self.types[key].kind, crate::jni::DeclaredKind::Ptr(_)) {
+                if let Some(name) = key.ident() {
+                    sources = sources.local_type(name);
+                }
+            }
+        }
         let flat = sources.build()?;
         // The module generated code reaches the source through: the first
         // source's own crate, as v1 resolves it.
@@ -84,21 +107,14 @@ impl Declarations {
         };
 
         // A binding-local fn — `fun!(crate::x).sig(..)` — is declared like any
-        // other, as a class member or as a package function, but the binding
-        // defines it, so the source never captured it. It is stated where it is
-        // bound and nowhere else: a second entry for the helper itself would
-        // give one id to two declarations.
-        let is_local = |ident: &syn::Ident| self.local_fns.iter().any(|(local, ..)| local == ident);
-        let fun_declaration = |ident: &syn::Ident| match is_local(ident) {
-            true => Declaration::Local(Entity::Function(ident.to_string())),
-            false => Declaration::Captured(Entity::Function(ident.clone())),
-        };
+        // other, as a class member or as a package function: it is an entity
+        // in the model now, and is stated where it is bound and nowhere else.
+        // A second entry for the helper itself would give one id to two
+        // declarations.
+        let fun_declaration = |ident: &syn::Ident| Declaration::Function(ident.clone());
         // The same helper behind a `constant!(X).fun(..)`: the target renders a
         // `val`, and what the engine plans is the function it reads.
-        let const_declaration = |ident: &syn::Ident| match is_local(ident) {
-            true => Declaration::Local(Entity::Constant(ident.to_string())),
-            false => Declaration::ConstFromFunction(ident.clone()),
-        };
+        let const_declaration = |ident: &syn::Ident| Declaration::ConstFromFunction(ident.clone());
 
         // Declared classes. A data class is the one representation v2 lowers;
         // the per-type entry makes every value of the type cross that way,
@@ -110,7 +126,7 @@ impl Declarations {
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
             declare(
-                Declaration::Local(Entity::Type(key.clone())),
+                Declaration::Type(key.clone()),
                 match config.kind {
                     crate::jni::DeclaredKind::Data => JniChoice::DataClass {
                         class: placement.clone(),
@@ -186,7 +202,7 @@ impl Declarations {
             // A `constant!(X)` names the `#[prebindgen]` const it reads.
             for entry in &config.constants {
                 declare(
-                    Declaration::Captured(Entity::Constant(entry.rust_ident.clone())),
+                    Declaration::Const(entry.rust_ident.clone()),
                     JniChoice::unimplemented("constant", placed(entry)),
                 );
             }
@@ -202,7 +218,7 @@ impl Declarations {
             // A `constant!(X).expr(..)` has no Rust item behind it at all.
             for decl in &config.constant_exprs {
                 declare(
-                    Declaration::Local(Entity::Constant(decl.kotlin_name.clone())),
+                    Declaration::ComputedConst(decl.kotlin_name.clone()),
                     JniChoice::unimplemented(
                         "constant_expr",
                         format!("{package}.{}", decl.kotlin_name),
@@ -232,13 +248,13 @@ impl Declarations {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_fns) {
-            requests.ignore(Entity::Function(ident.clone()));
+            requests.ignore(EntityName::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_class_types) {
-            requests.ignore(Entity::Type(key.clone()));
+            requests.ignore(EntityName::Type(key.clone()));
         }
         for ident in sorted(&self.ignored_const_idents) {
-            requests.ignore(Entity::Constant(ident.clone()));
+            requests.ignore(EntityName::Constant(ident.clone()));
         }
         (target, requests)
     }

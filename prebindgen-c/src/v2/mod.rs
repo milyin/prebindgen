@@ -20,8 +20,9 @@
 
 mod target;
 
-use prebindgen_registry::flat::Entity;
-use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
+use prebindgen_registry_v2::{
+    generate, BindingRequests, Declaration, EngineError, EntityName, Generation,
+};
 pub use target::{CChoice, CPayload, CTarget};
 
 use crate::CbindgenBuilder;
@@ -32,7 +33,16 @@ impl CbindgenBuilder {
         &self,
         declaring_crate: impl Into<String>,
     ) -> Result<Generation<CPayload>, EngineError> {
-        let flat = self.sources.clone().build()?;
+        // An opaque type the source never exported — `String` as a handle — is
+        // an entity the binding defines: the model gets one, and steps aside
+        // where the source captured a type of that name.
+        let mut sources = self.sources.clone();
+        for key in sorted(self.opaque.keys()) {
+            if let Some(name) = key.ident() {
+                sources = sources.local_type(name);
+            }
+        }
+        let flat = sources.build()?;
         // The module generated code reaches the source through: the one the
         // build script set, else the first source's own crate.
         let source_module = self.source_module.clone().unwrap_or_else(|| {
@@ -68,7 +78,7 @@ impl CbindgenBuilder {
         // wherever it appears.
         for key in sorted(self.data.keys()) {
             declare(
-                Declaration::Local(Entity::Type(key.clone())),
+                Declaration::Type(key.clone()),
                 CChoice::DataStruct {
                     c_name: self.c_type_name(key),
                 },
@@ -79,7 +89,7 @@ impl CbindgenBuilder {
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
             declare(
-                Declaration::Local(Entity::Type(key.clone())),
+                Declaration::Type(key.clone()),
                 CChoice::OpaquePtr {
                     c_name: self.c_type_name(key),
                     release: self.destructor_symbol(key).to_string(),
@@ -97,7 +107,7 @@ impl CbindgenBuilder {
         ] {
             for key in keys {
                 declare(
-                    Declaration::Local(Entity::Type(key.clone())),
+                    Declaration::Type(key.clone()),
                     CChoice::Unimplemented {
                         declarator,
                         c_name: self.c_type_name(key),
@@ -133,7 +143,7 @@ impl CbindgenBuilder {
         // Exported functions — the one kind that must name a captured item.
         for ident in sorted(self.functions.keys()) {
             declare(
-                Declaration::Captured(Entity::Function(ident.clone())),
+                Declaration::Function(ident.clone()),
                 CChoice::Function {
                     symbol: self.fn_symbol(ident).to_string(),
                 },
@@ -144,10 +154,10 @@ impl CbindgenBuilder {
         // captured item the binding declined to expose, and they are not
         // outputs, so the target is never asked about one.
         for ident in sorted(&self.ignored_functions) {
-            requests.ignore(Entity::Function(ident.clone()));
+            requests.ignore(EntityName::Function(ident.clone()));
         }
         for key in sorted(&self.ignored_types) {
-            requests.ignore(Entity::Type(key.clone()));
+            requests.ignore(EntityName::Type(key.clone()));
         }
         (target, requests)
     }

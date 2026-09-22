@@ -418,11 +418,15 @@ of the one a setting asked for is not honoring the declaration; the skip names
 the setting the declaration waits on. Settings that have no effect within this
 increment are carried without refusing: a C function's
 `abort_on_conversion_error` says what a fallible input does, and no conversion
-here can fail. Local helpers and declared conversion operations are
-refused the same way (`unsupported.fn.binding_local`,
-`unsupported.conversion.not_implemented`) until they are registered as typed
-source descriptions. Naming closures remain owned configuration objects,
-applied where the requests are built; nothing is serialized.
+here can fail. A helper the binding defines with `fun!(crate::x).sig(..)`, and
+an opaque type it declares although the source never exported it, enter the
+model as entities of their own before anything is planned — see
+[what an entity is](02-flat.md#build-and-inspect-the-source-model) — so a
+declaration names them as it names a captured item. A constant the binding
+computes on the foreign side and a declared conversion are refused
+(`unsupported.const.computed`, `unsupported.conversion.not_implemented`).
+Naming closures remain owned configuration objects, applied where the requests
+are built; nothing is serialized.
 
 ## Identifying requests, value positions and reusable conversions
 
@@ -445,20 +449,19 @@ To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`
 ```rust
 enum Request {
     Expose(DeclarationId), // Plan this and generate it.
-    Ignore(CapturedName),  // Plan nothing; the report carries it as a decision.
+    Ignore(EntityName),    // Plan nothing; the report carries it as a decision.
 }
 
-// A captured item by name: the kind the source captures it as, and what it is
-// called there. Flat's three kinds, stated once as `Entity<T, F, C>`.
-type CapturedName = Entity<TypeKey, Ident, Ident>;
+// An entity by name: which of the model's three kinds, and what it is called.
+enum EntityName { Type(TypeKey), Function(Ident), Constant(Ident) }
 ```
 
-An ignore carries less than a declaration, deliberately. It names a captured
-item and says nothing about how the target would get it, so a callback, a
-conversion or anything the binding coined cannot be ignored — those are not
-captured, and there is nothing in the source to leave alone. What a report row
-and a duplicate check compare an ignore by is the declaration that would have
-exposed the same item.
+An ignore carries less than a declaration, deliberately. It names an entity
+and says nothing about how the target would get it, so a callback or a
+constant computed on the foreign side cannot be ignored — nothing in the model
+backs them, so there is nothing to leave alone. What a report row and a
+duplicate check compare an ignore by is the declaration that would have
+exposed the same entity.
 
 One list rather than two, because the report has one row per declaration and
 both dispositions produce one. An id that appeared under both would be two
@@ -481,27 +484,31 @@ requested is not emitted because something needed it, and whatever needed it is
 skipped instead.
 
 A `DeclarationId` is a `Declaration`: one value that is its own identity and
-says both which of the kinds the target gets and which captured item, if any,
-the engine plans it from. The kinds the source captures are Flat's three, and
-the two variants that name one carry it as an `Entity`:
+says both which of the kinds the target gets and which entity, if any, the
+engine plans it from:
 
 ```rust
 enum Declaration {
-    Captured(Entity<TypeKey, Ident, Ident>),  // a captured item, exposed as itself
-    ConstFromFunction(Ident),   // a Kotlin `val` read through a captured nullary function
-    Local(Entity<TypeKey, String, String>),   // the binding's own type, function or constant
-    Callback(String),           // a callback signature the binding exports
-    Conversion(TypeKey),        // a wire mapping the binding defines for a type
+    Function(Ident),           // a function, exported as a foreign function
+    ConstFromFunction(Ident),  // a Kotlin `val` read through a nullary function
+    Const(Ident),              // a constant, exposed as a foreign constant
+    Type(TypeKey),             // a type, given a foreign representation
+    Conversion(TypeKey),       // a wire mapping the binding defines for a type
+    Callback(String),          // a callback signature the binding exports
+    ComputedConst(String),     // a constant the binding computes on the foreign side
 }
 ```
 
-`Captured` is the same `CapturedName` an ignore carries, so exposing an item
-and ignoring it meet as one identity. `ConstFromFunction` is the one
-declaration whose kind on the target side differs from its kind in the source;
-a callback and a conversion have no source kind at all. `generate` matches on
-the whole, so each planner is reached by the variants it can plan and is
-handed the captured item they name. One source item has one declaration, so a
-request that names the same declaration twice is refused.
+Where an entity came from is not part of this. A `#[prebindgen]` function and
+a helper the binding defines are both a `Function`, because the model holds
+both and only an entity's origin tells them apart; the same goes for a
+captured type and an opaque one the binding declares over a type the source
+never exported. `ConstFromFunction` is the one declaration whose kind on the
+target side differs from the entity's; a callback and a computed constant name
+no entity at all. `generate` matches on the whole, so each planner is reached
+by the variants it can plan and is handed the entity they name. One entity has
+one declaration of each kind, so a request that names the same declaration
+twice is refused.
 
 ### A value's position in an exported function
 

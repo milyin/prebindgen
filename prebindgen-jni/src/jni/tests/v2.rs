@@ -291,11 +291,12 @@ fn the_ordinary_writers_run_under_v2() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A binding-local fn is declared like any other, at a class member and at a
-/// package function, and neither requires a captured item. Both were refused as
-/// missing declarations before, while v1 built them.
+/// A binding-local fn is an entity the binding stated, and is declared like
+/// any other — at a class member and at a package function. One with a
+/// signature the engine can carry is generated, calling the helper where its
+/// path says it is.
 #[test]
-fn a_binding_local_fn_is_placed_without_being_captured() {
+fn a_binding_local_fn_is_an_entity_and_is_generated() {
     let generated = JniGenBuilder::new()
         .set_package_prefix("io.test.jni")
         .items(fixture_items())
@@ -324,6 +325,29 @@ fn a_binding_local_fn_is_placed_without_being_captured() {
         .map(|entry| entry.declaration.to_string())
         .collect();
     assert_eq!(ids, ["fn:local_size", "fn:local_tag", "type:ZThing"]);
+
+    // `local_tag` takes nothing and returns an `i64`: a wrapper the engine can
+    // build, over a call to where the binding put the helper.
+    let outcome = |id: &str| {
+        &report
+            .declarations
+            .iter()
+            .find(|entry| entry.declaration.to_string() == id)
+            .expect("reported")
+            .outcome
+    };
+    assert_eq!(
+        *outcome("fn:local_tag"),
+        prebindgen_registry_v2::Outcome::Emitted
+    );
+    let dir = unique_test_dir("jnigen_v2_local_fn");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    assert!(rust.contains("crate::local_tag()"), "{rust}");
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// `constant!(X).fun(fun!(f))` surfaces a Kotlin `val` backed by a nullary

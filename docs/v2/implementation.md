@@ -332,7 +332,7 @@ this list says what the increment left open and why.
   built: the engine plans over today's borrowed `Flat` API and its frozen result
   owns the model, so a plan cannot outlive it and a view from another snapshot
   cannot be offered. That is enough for one model per run, and it is exactly what
-  local helpers and cross-snapshot planning will break.
+  cross-snapshot planning will break.
 - **Node retention** keeps every conversion the run planned rather than only
   those a retained output reaches. Nodes are referenced by nothing after
   inlining, so this costs memory and no correctness; pruning them needs the

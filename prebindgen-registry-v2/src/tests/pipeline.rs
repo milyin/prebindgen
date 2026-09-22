@@ -8,10 +8,10 @@
 
 use std::collections::BTreeMap;
 
-use prebindgen_flat::flat::{Entity, Flat, ScalarKind, TypeKind, TypeRef};
+use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind, TypeRef};
 
 use crate::{
-    decl::{CapturedName, Declaration},
+    decl::{Declaration, EntityName},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -605,7 +605,7 @@ impl Target for Mini {
 struct Binding {
     target: Mini,
     outputs: Vec<Declaration>,
-    ignored: Vec<CapturedName>,
+    ignored: Vec<EntityName>,
 }
 
 impl Binding {
@@ -644,7 +644,7 @@ impl Binding {
         self
     }
 
-    fn ignore(&mut self, name: CapturedName) -> &mut Self {
+    fn ignore(&mut self, name: EntityName) -> &mut Self {
         self.ignored.push(name);
         self
     }
@@ -672,15 +672,11 @@ fn binding() -> Binding {
 }
 
 fn ty(name: &str) -> Declaration {
-    Declaration::Captured(Entity::Type(
-        prebindgen_flat::TypeKey::parse(name).expect("a test names a type"),
-    ))
+    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
 fn function(name: &str) -> Declaration {
-    Declaration::Captured(Entity::Function(
-        syn::parse_str(name).expect("a test names an ident"),
-    ))
+    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
 fn outcome<'a, P>(generation: &'a crate::run::Generation<P>, id: &str) -> &'a Outcome {
@@ -770,6 +766,64 @@ fn an_unsupported_field_skips_its_struct_and_its_callers() {
     // Nothing partial is emitted: no wrapper for the skipped function.
     assert_eq!(generation.functions().len(), 1);
     assert!(!generation.rust().contains("label_len"));
+}
+
+/// An item the binding defines itself is an entity like a captured one, and
+/// the writer reaches it where the binding said it is.
+///
+/// The same `Mini` target, the same declarations: what differs is that the
+/// model was told about `stamp_zero` by the binding, with a signature and a
+/// path, rather than by a capture. The wrapper it gets is called through that
+/// path, and a type the binding declared over one the source never exported
+/// is a handle like any captured alias.
+#[test]
+fn an_entity_the_binding_defines_is_planned_and_reached_where_it_says() {
+    let location = prebindgen::SourceLocation {
+        crate_name: Some("fixture".to_string()),
+        ..Default::default()
+    };
+    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![(
+        syn::parse_quote!(
+            pub fn token_use(token: Token) -> i64 {
+                unimplemented!()
+            }
+        ),
+        location,
+    )];
+    let flat = Flat::builder()
+        .items(items)
+        .local_function(
+            syn::parse_quote!(fn stamp_zero() -> i64),
+            syn::parse_quote!(crate::helpers),
+        )
+        // `Token` is what the source function takes and never exported; the
+        // binding gives it a handle representation.
+        .local_type(syn::parse_quote!(Token))
+        .build()
+        .expect("the fixture builds a model");
+    assert!(flat.is_binding_local("stamp_zero"));
+    assert!(flat.is_binding_local("Token"));
+    assert_eq!(flat.captured().count(), 1);
+
+    let mut binding = binding();
+    binding.declare_type("Token", Choice::Handle);
+    binding.declare_fn("token_use", exported("token_use", Routes::Reported));
+    binding.declare_fn("stamp_zero", exported("stamp_zero", Routes::None));
+
+    let generation = binding.generate(flat).expect("plans");
+    assert_eq!(
+        generation.report().counts().emitted,
+        3,
+        "{:?}",
+        generation.report()
+    );
+    // The report counts the API it was generated against, which the
+    // binding's own items are not part of.
+    assert_eq!(generation.report().source_identity.captured_items, 1);
+    let rust = generation.rust();
+    assert!(rust.contains("crate::helpers::stamp_zero()"), "{rust}");
+    assert!(rust.contains("source::token_use("), "{rust}");
+    assert!(rust.contains("as *mut crate::Token"), "{rust}");
 }
 
 /// A type whose conversion needs its own is refused, rather than recursed on
@@ -925,7 +979,7 @@ fn a_declaration_naming_nothing_is_an_error() {
 fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
     let mut binding = binding();
     binding.declare_type("Stamp", Choice::Struct);
-    binding.ignore(Entity::Function(syn::parse_quote!(stamp_max)));
+    binding.ignore(EntityName::Function(syn::parse_quote!(stamp_max)));
 
     let generation = binding.generate(model()).expect("plans");
     let counts = generation.report().counts();

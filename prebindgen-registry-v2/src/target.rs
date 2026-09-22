@@ -1014,13 +1014,14 @@ impl SurfaceRequest<'_> {
 /// struct declared to C as an opaque pointer still arrives as
 /// [`SourceItem::Struct`], and how the target carries it is in the target's
 /// own configuration, under [`SurfaceRequest::declaration`]. Read that first.
-/// A declaration the binding defines itself
-/// ([`Declaration::is_binding_local`]) names no captured item and is refused
-/// before `surface` is asked, so nothing here is ever absent.
+/// A declaration that names no entity — a callback, a constant computed on the
+/// foreign side — is refused before `surface` is asked, so nothing here is
+/// ever absent. An entity the binding defined itself is here like any other:
+/// a helper's stated signature arrives as [`SourceItem::Function`], an opaque
+/// type declared over one the source never exported as [`SourceItem::Extern`].
 ///
 /// [`Flat`]: prebindgen_flat::flat::Flat
 /// [`Element`]: prebindgen_flat::flat::Element
-/// [`Declaration::is_binding_local`]: crate::decl::Declaration::is_binding_local
 #[derive(Clone, Copy)]
 pub enum SourceItem<'a> {
     /// A captured free function, the item behind a `fn:` declaration.

@@ -2,10 +2,10 @@
 
 mod pipeline;
 
-use prebindgen_flat::flat::{Entity, FlatBuilder};
+use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    decl::{CapturedName, Declaration},
+    decl::{Declaration, EntityName},
     outcome::{EngineError, Outcome},
     plan::{generate, BindingRequests},
     run::Generation,
@@ -70,7 +70,7 @@ impl Target for Nothing {
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
     declared: Vec<Declaration>,
-    ignored: Vec<CapturedName>,
+    ignored: Vec<EntityName>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -125,34 +125,30 @@ fn sources() -> FlatBuilder {
     prebindgen_flat::Flat::builder().items(items)
 }
 
-/// A captured function's origin, by name.
+/// A function, by name.
 fn captured_fn(name: &str) -> Declaration {
-    Declaration::Captured(Entity::Function(
-        syn::parse_str(name).expect("a test names an ident"),
-    ))
+    Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
-/// A captured function to leave alone, by name.
-fn ignored_fn(name: &str) -> CapturedName {
-    Entity::Function(syn::parse_str(name).expect("a test names an ident"))
+/// A function to leave alone, by name.
+fn ignored_fn(name: &str) -> EntityName {
+    EntityName::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
-/// A Kotlin `val` read through that captured function.
+/// A Kotlin `val` read through that function.
 fn constant_fn(name: &str) -> Declaration {
     Declaration::ConstFromFunction(syn::parse_str(name).expect("a test names an ident"))
 }
 
-/// A type the binding represents, whether or not the source captured it.
-fn local_type(name: &str) -> Declaration {
-    Declaration::Local(Entity::Type(
-        prebindgen_flat::TypeKey::parse(name).expect("a test names a type"),
-    ))
+/// A type, by name.
+fn declared_type(name: &str) -> Declaration {
+    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
 #[test]
 fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
     let stated = Stated {
-        declared: vec![(captured_fn("handle_new")), (local_type("Handle"))],
+        declared: vec![(captured_fn("handle_new")), (declared_type("Handle"))],
         ignored: vec![ignored_fn("handle_value")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
@@ -253,11 +249,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // `handle_new` is a captured function, so declaring it as a constant is as
     // wrong as declaring a name nothing captured.
     let stated = Stated {
-        declared: vec![
-            (Declaration::Captured(Entity::Constant(
-                syn::parse_str("handle_new").expect("an ident"),
-            ))),
-        ],
+        declared: vec![(Declaration::Const(syn::parse_str("handle_new").expect("an ident")))],
         ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
@@ -287,7 +279,7 @@ fn skips_are_grouped_by_capability_code() {
         declared: vec![
             (captured_fn("handle_new")),
             (captured_fn("handle_value")),
-            (local_type("Handle")),
+            (declared_type("Handle")),
         ],
         ignored: Vec::new(),
     };

@@ -271,6 +271,22 @@ pub use self::{
 #[derive(Debug, Default, Clone)]
 pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
+    /// Items the binding defines itself, lowered after the captured ones:
+    /// entities like any other, with an origin that says so. See
+    /// [`Self::local_function`] and [`Self::local_type`].
+    locals: Vec<(syn::Item, SourceLocation)>,
+}
+
+/// The location of an item the binding defines itself: no file, since the
+/// build script states it rather than the proc-macro capturing it, and the
+/// crate stamp is the module generated code reaches the item through — which
+/// is what [`SourceLocation::crate_name`] means for a captured item too.
+fn binding_location(module: &syn::Path) -> SourceLocation {
+    use quote::ToTokens;
+    SourceLocation {
+        crate_name: Some(module.to_token_stream().to_string().replace(' ', "")),
+        ..SourceLocation::default()
+    }
 }
 
 impl FlatBuilder {
@@ -344,6 +360,46 @@ impl FlatBuilder {
         self
     }
 
+    /// A function the binding defines itself, with the signature it states.
+    ///
+    /// It becomes a [`Function`] in the model like a captured one — the same
+    /// entity, whose origin says the binding — so a declaration can name it
+    /// and a wrapper can call it. `module` is where generated code reaches it:
+    /// `crate::helpers` for a helper at `crate::helpers::x`. The body is never
+    /// read; only the signature is.
+    ///
+    /// A name the source already captured is an error at [`Self::build`]: the
+    /// generated call would resolve to one of the two, and it must not be a
+    /// coin toss.
+    pub fn local_function(mut self, sig: syn::Signature, module: syn::Path) -> Self {
+        let item: syn::ItemFn = syn::parse_quote! {
+            #sig {
+                unimplemented!()
+            }
+        };
+        self.locals
+            .push((syn::Item::Fn(item), binding_location(&module)));
+        self
+    }
+
+    /// A type the binding represents although the source never exported it —
+    /// `String` crossing as an opaque handle.
+    ///
+    /// It becomes an [`Extern`] in the model — a type whose contents this
+    /// model does not see, which is exactly what it is — reached at the
+    /// binding's crate root. When the source *did* capture a type of this
+    /// name, that one is what the binding meant, and this is a no-op: a
+    /// binding declares `ptr_type!(Ledger)` the same way whether or not the
+    /// source exported `Ledger`.
+    pub fn local_type(mut self, name: syn::Ident) -> Self {
+        let item: syn::ItemType = syn::parse_quote!(pub type #name = #name;);
+        self.locals.push((
+            syn::Item::Type(item),
+            binding_location(&syn::parse_quote!(crate)),
+        ));
+        self
+    }
+
     /// Parse everything collected so far into the model.
     ///
     /// **Transactional**: an `Err` yields no model at all, so a refused stream
@@ -386,11 +442,23 @@ impl FlatBuilder {
             _ => None,
         }));
 
-        // Pass 2: lower, checking the flat namespace as we go.
-        let mut elements: Vec<Element> = Vec::with_capacity(items.len());
+        // Pass 2: lower, checking the flat namespace as we go. The binding's
+        // own items come after the captured ones, so a local type the source
+        // also captured can step aside for the captured one, and so the
+        // captured items keep the positions source order gave them.
+        let captured = items.len();
+        let mut elements: Vec<Element> = Vec::with_capacity(captured + self.locals.len());
         let mut seen: Vec<(syn::Ident, SourceLocation)> = Vec::new();
-        for (item, loc) in items {
+        for (item, loc) in items.into_iter().chain(self.locals) {
+            let is_local_type = elements.len() >= captured && matches!(item, syn::Item::Type(_));
             let element = lower_item(item, loc, &consts);
+            if is_local_type
+                && element
+                    .name()
+                    .is_some_and(|name| seen.iter().any(|(n, _)| n == name))
+            {
+                continue;
+            }
             if let Some(name) = element.name() {
                 if let Some((first_name, first)) = seen.iter().find(|(n, _)| n == name) {
                     return Err(ParseError::DuplicateName(Box::new(DuplicateName {
@@ -418,7 +486,7 @@ impl FlatBuilder {
             .collect();
         // Frozen here, from the captured stream alone. See the field's docs.
         let mut source_modules: Vec<String> = Vec::new();
-        for element in &elements {
+        for element in &elements[..captured] {
             if let Some(crate_name) = element.location().crate_name.as_ref() {
                 let module = crate_name.replace('-', "_");
                 if !source_modules.contains(&module) {
@@ -428,6 +496,7 @@ impl FlatBuilder {
         }
         let mut flat = Flat {
             elements,
+            captured,
             by_name,
             source_modules,
             by_type: std::collections::HashMap::new(),
@@ -468,8 +537,13 @@ impl FlatBuilder {
 /// answer identically and neither can drift.
 #[derive(Clone, Debug, Default)]
 pub struct Flat {
-    /// Source order, so iteration reports items as the sources were fed.
+    /// Source order, so iteration reports items as the sources were fed. The
+    /// captured ones first, then the binding's own.
     elements: Vec<Element>,
+    /// How many of [`Self::elements`] the source captured; the rest are the
+    /// binding's own, added through [`FlatBuilder::local_function`] and
+    /// [`FlatBuilder::local_type`].
+    captured: usize,
     /// Module name of every **captured** source, in first-seen order (crate
     /// names, dashes normalized to underscores). The first doubles as the
     /// default module for a reference with no recorded origin.
@@ -582,12 +656,35 @@ impl<T: ?Sized + Name> Name for &T {
 impl Flat {
     /// Start collecting what to parse.
     pub fn builder() -> FlatBuilder {
-        FlatBuilder { items: Vec::new() }
+        FlatBuilder {
+            items: Vec::new(),
+            locals: Vec::new(),
+        }
     }
 
-    /// Every element, in the order the sources were fed.
+    /// Every element, in the order the sources were fed: the captured ones,
+    /// then the binding's own.
     pub fn elements(&self) -> impl Iterator<Item = &Element> {
         self.elements.iter()
+    }
+
+    /// The elements the source captured — what a report counts as the API it
+    /// was generated against, which the binding's own items are not part of.
+    pub fn captured(&self) -> impl Iterator<Item = &Element> {
+        self.elements[..self.captured].iter()
+    }
+
+    /// The entity with this name, if the model holds one: captured, or the
+    /// binding's own.
+    pub fn entity<N: Name + ?Sized>(&self, name: &N) -> Option<Entity<'_>> {
+        self.element(name)?.entity()
+    }
+
+    /// Whether the entity with this name is one the binding defined itself.
+    pub fn is_binding_local<N: Name + ?Sized>(&self, name: &N) -> bool {
+        self.by_name
+            .get(name.as_name().as_ref())
+            .is_some_and(|&index| index >= self.captured)
     }
 
     /// The element with this name, whatever kind it is — including an

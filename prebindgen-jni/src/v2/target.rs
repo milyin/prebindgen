@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use prebindgen_registry::flat::{Entity, ScalarKind, TypeKind, TypeRef};
+use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
     FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
@@ -195,9 +195,7 @@ impl JniTarget {
     /// `ptr_class!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
     pub(crate) fn declare(&mut self, declaration: Declaration, choice: JniChoice) {
-        if let Declaration::Local(Entity::Type(key)) | Declaration::Captured(Entity::Type(key)) =
-            &declaration
-        {
+        if let Declaration::Type(key) = &declaration {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
         self.outputs.insert(declaration, choice);
@@ -214,10 +212,13 @@ impl JniTarget {
     /// key for that one value, and the registry plans it as a second
     /// conversion.
     fn conversion(&self, ty: &TypeRef) -> JniChoice {
-        match named(ty) {
-            Some(name) => self.types.get(&name).cloned().unwrap_or(JniChoice::Scalar),
-            None => JniChoice::Scalar,
-        }
+        // By the type's key, which is what the declaration was recorded by:
+        // `String` is a kind of its own to the model, not a named type, and
+        // `ptr_class!(String)` has to find it all the same.
+        self.types
+            .get(ty.key().as_str())
+            .cloned()
+            .unwrap_or(JniChoice::Scalar)
     }
 
     /// What the binding declared this output as.

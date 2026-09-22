@@ -8,13 +8,13 @@
 use std::collections::{BTreeMap, HashMap};
 
 use prebindgen_flat::{
-    flat::{Entity, Flat, Function, Type, TypeKind, TypeRef},
+    flat::{Flat, Function, Type, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 
 use crate::{
     body::{BodyBuilder, Instr, NodeBody, Operand, ValueId},
-    decl::{CapturedName, Declaration},
+    decl::{Declaration, EntityName},
     outcome::{EngineError, Outcome, Skip},
     report::{sort_entries, Entry, Report, SourceIdentity, SCHEMA_VERSION},
     run::{check_declarations, Generation, PIPELINE},
@@ -31,23 +31,20 @@ use crate::{
 /// about one item.
 ///
 /// The two dispositions accept different things. An expose takes any
-/// [`Declaration`] — a captured item, or one the binding defines itself. An
-/// ignore takes only a [`CapturedName`]: nothing binding-local is in the
-/// source to leave alone. The report accounts for both, so they are one list
-/// rather than two: an id can then appear once, which is what the report's
-/// "one id, one row" rests on. Exposing something and ignoring it is a
-/// contradiction the engine catches for that reason, rather than emitting two
-/// rows for it.
+/// [`Declaration`], including the two that name no entity. An ignore takes an
+/// [`EntityName`]: what is left alone is an item, and only an item can be. The
+/// report accounts for both, so they are one list rather than two: an id can
+/// then appear once, which is what the report's "one id, one row" rests on.
+/// Exposing something and ignoring it is a contradiction the engine catches
+/// for that reason, rather than emitting two rows for it.
 #[derive(Clone, Debug)]
 pub enum Request {
-    /// Expose this declaration, captured or binding-local. The target is
-    /// asked what it is, and the registry plans it.
+    /// Expose this declaration. The target is asked what it is, and the
+    /// registry plans it.
     Expose(Declaration),
-    /// Leave this captured item alone. Nothing is planned and nothing is
-    /// generated; the report carries it so that a decision and a gap read
-    /// differently. A name and a kind are all an ignore has to say, so that is
-    /// all it can carry.
-    Ignore(CapturedName),
+    /// Leave this entity alone. Nothing is planned and nothing is generated;
+    /// the report carries it so that a decision and a gap read differently.
+    Ignore(EntityName),
 }
 
 /// What a frontend hands the engine: what to expose, and what to leave alone.
@@ -85,8 +82,8 @@ impl BindingRequests {
         self
     }
 
-    /// Ask for one captured item to be left alone.
-    pub fn ignore(&mut self, name: CapturedName) -> &mut Self {
+    /// Ask for one entity to be left alone.
+    pub fn ignore(&mut self, name: EntityName) -> &mut Self {
         self.requests.push(Request::Ignore(name));
         self
     }
@@ -719,39 +716,30 @@ pub fn generate<T: Target>(
         // they name; nothing below reads a field back to work out what it was
         // asked for.
         let planned = match declaration {
-            Declaration::Captured(Entity::Type(_)) | Declaration::Local(Entity::Type(_)) => {
+            Declaration::Type(_) => {
                 plan_type(&mut run, declaration).map_err(EngineError::Planning)?
             }
             // Two surfaces built the same way: a Kotlin `val` read through a
             // nullary function is planned as that function, and the target
-            // renders the constant.
-            Declaration::Captured(Entity::Function(ident))
-            | Declaration::ConstFromFunction(ident) => {
+            // renders the constant. Whether the function was captured or is
+            // the binding's own makes no difference here: the model holds
+            // both, and the writer reaches each through its own origin.
+            Declaration::Function(ident) | Declaration::ConstFromFunction(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .expect("declarations are checked against the model before planning");
                 plan_function(&mut run, declaration, function).map_err(EngineError::Planning)?
             }
-            // A declaration the binding defines itself names no captured item,
-            // so there is nothing to plan from: its signature or its value is
-            // the binding's own, and reading one is a capability this engine
-            // does not have.
-            Declaration::Local(Entity::Function(name)) => Err(Refusal::at(
+            // A constant computed on the foreign side has no value in Rust to
+            // plan from; what it has is a foreign expression the target alone
+            // can render, and asking the target for that is a capability this
+            // engine does not have.
+            Declaration::ComputedConst(name) => Err(Refusal::at(
                 Unsupported::new(
-                    "unsupported.fn.binding_local",
+                    "unsupported.const.computed",
                     format!(
-                        "`{name}` is defined by the binding, not captured from the source, so \
-                         there is no captured item to plan from"
-                    ),
-                ),
-                &root,
-            )),
-            Declaration::Local(Entity::Constant(name)) => Err(Refusal::at(
-                Unsupported::new(
-                    "unsupported.const.binding_local",
-                    format!(
-                        "`{name}` is defined by the binding, not captured from the source, so \
-                         there is no captured item to plan from"
+                        "`{name}` is computed by the binding on the foreign side, and the v2 \
+                         engine has no way to place a foreign expression yet"
                     ),
                 ),
                 &root,
@@ -759,7 +747,7 @@ pub fn generate<T: Target>(
             // One code per kind rather than one for the whole engine: the
             // report is how the next capability is chosen, and "everything is
             // unsupported" chooses nothing.
-            Declaration::Captured(Entity::Constant(_)) => Err(Refusal::at(
+            Declaration::Const(_) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.const.not_implemented",
                     "the v2 engine has no const lowering yet",
@@ -890,7 +878,7 @@ pub fn generate<T: Target>(
         source_identity: SourceIdentity {
             declaring_crate: requests.declaring_crate.clone(),
             sources: flat.source_modules().to_vec(),
-            captured_items: flat.elements().count(),
+            captured_items: flat.captured().count(),
         },
         declarations: entries,
     };
@@ -914,10 +902,10 @@ pub fn generate<T: Target>(
         }
     };
     for surface in &surfaces {
-        // Rust a target contributes for its own public declaration of a
-        // captured item — the `repr(C)` mirror of a struct — exists only where
-        // that item does, by the rule a wrapper follows. A declaration the
-        // binding defines itself has no captured item and no condition.
+        // Rust a target contributes for its own public declaration of an
+        // entity — the `repr(C)` mirror of a struct — exists only where that
+        // entity does, by the rule a wrapper follows. A declaration naming no
+        // entity has no item and no condition.
         let conditions = surface
             .declaration
             .captured(&flat)
@@ -952,14 +940,8 @@ pub fn generate<T: Target>(
         }
     }
 
-    let rust = crate::emit::render(
-        &flat,
-        target,
-        &requests.source_module,
-        &artifacts,
-        &primitives,
-        &functions,
-    );
+    let reach = crate::emit::Reach::new(&flat, requests.source_module.clone());
+    let rust = crate::emit::render(&flat, target, &reach, &artifacts, &primitives, &functions);
 
     Ok(Generation::new(
         flat, report, nodes, functions, surfaces, primitives, rust,
@@ -1373,9 +1355,10 @@ fn plan_type<T: Target>(
 ) -> Result<Result<Emitted<T::Payload>, Refusal>, PlanningError> {
     let flat = run.flat;
     let root = crate::target::Position::root(declaration.clone());
-    // A declared type need not be a captured item — a target may represent
-    // `String` without the source exporting one — so this lookup, unlike a
-    // function's, can find nothing.
+    // The model holds every declared type — a captured one, or one the
+    // binding declared over a type the source never exported, which entered
+    // the model as an extern — and the declarations were checked against it
+    // before planning, so this lookup finds one.
     let (ty, item): (TypeRef, SourceItem<'_>) = match flat.declared_type(&declaration.name()) {
         Some(Type::Struct(strukt)) => (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
         Some(Type::Extern(opaque)) => {
@@ -1393,16 +1376,9 @@ fn plan_type<T: Target>(
             }
         }
         None => {
-            return Ok(Err(Refusal::at(
-                Unsupported::new(
-                    "unsupported.type.undeclared",
-                    format!(
-                        "`{}` is exposed as a type the source did not capture; v2 \
-                             represents captured types only",
-                        declaration.name()
-                    ),
-                ),
-                &root,
+            return Err(PlanningError::InternalInvariant(format!(
+                "`{}` was checked against the model and is not in it",
+                declaration.name()
             )))
         }
         Some(Type::Enum(_) | Type::Variant(_)) => {

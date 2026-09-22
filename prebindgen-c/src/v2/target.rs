@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use prebindgen_registry::flat::{Entity, ScalarKind, TypeKind, TypeRef};
+use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
     AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Described, Direction,
     FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement,
@@ -79,9 +79,7 @@ impl CTarget {
     /// `ptr_type!` in the binding, so its public declaration and the crossing
     /// of its values cannot disagree.
     pub(crate) fn declare(&mut self, declaration: Declaration, choice: CChoice) {
-        if let Declaration::Local(Entity::Type(key)) | Declaration::Captured(Entity::Type(key)) =
-            &declaration
-        {
+        if let Declaration::Type(key) = &declaration {
             self.types.insert(key.as_str().to_string(), choice.clone());
         }
         self.outputs.insert(declaration, choice);
@@ -93,14 +91,15 @@ impl CTarget {
     /// The position goes unread. C has no per-site declarator — `data_type!`
     /// and `ptr_type!` are stated about a type, not about one parameter of one
     /// function — so every value of a type crosses the same way, and the key
-    /// this yields depends on the type alone.
+    /// this yields depends on the type alone. Looked up by the type's key,
+    /// which is what the declaration was recorded by: `String` is a kind of
+    /// its own to the model, not a named type, and `ptr_type!(String)` has to
+    /// find it all the same.
     fn conversion(&self, ty: &TypeRef) -> CChoice {
-        match ty.kind() {
-            TypeKind::Named { id, .. } => {
-                self.types.get(&id.name).cloned().unwrap_or(CChoice::Scalar)
-            }
-            _ => CChoice::Scalar,
-        }
+        self.types
+            .get(ty.key().as_str())
+            .cloned()
+            .unwrap_or(CChoice::Scalar)
     }
 
     /// What the binding declared this output as.
