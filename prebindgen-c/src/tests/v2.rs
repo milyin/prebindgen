@@ -5,7 +5,6 @@
 //! `PREBINDGEN_PIPELINE` happens to hold in the runner's environment.
 
 use prebindgen_registry::pipeline::Pipeline;
-use prebindgen_registry_v2::Outcome;
 
 use super::*;
 use crate::test_util::unique_test_dir;
@@ -80,7 +79,6 @@ fn every_declared_element_is_accounted_for() {
         ids,
         [
             "callback:impl Fn(f64)",
-            "fn:calculator_internal",
             "fn:calculator_new",
             "type:Calculator",
             "type:Operation",
@@ -103,7 +101,6 @@ fn every_declared_element_is_accounted_for() {
     // read — and the function returning it.
     assert_eq!(counts.emitted, 2);
     assert_eq!(counts.skipped, 2);
-    assert_eq!(counts.ignored, 1, "an ignore is a decision, not a gap");
 }
 
 /// An unimplemented capability is a skip with a code and a path — never a
@@ -216,17 +213,21 @@ fn a_data_struct_and_a_function_over_it_are_emitted() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// An ignore keeps its meaning under v2 and is counted apart from the gaps.
+/// An ignore silences v1's undeclared-item warning and nothing else: under
+/// v2 the item is not declared, so it has no report row, and it stays in the
+/// model, where a declared item may still depend on it.
 #[test]
-fn an_ignore_is_classified_separately() {
+fn an_ignore_does_not_reach_the_engine() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let report = generated.report().expect("v2 produces a report");
-    let ignored = report
-        .declarations
-        .iter()
-        .find(|entry| entry.declaration.to_string() == "fn:calculator_internal")
-        .expect("the ignore is accounted for");
-    assert_eq!(ignored.outcome, Outcome::Ignored);
+    assert!(
+        !report
+            .declarations
+            .iter()
+            .any(|entry| entry.declaration.to_string() == "fn:calculator_internal"),
+        "{report:?}"
+    );
+    assert_eq!(report.source_identity.captured_items, 4, "{report:?}");
 }
 
 /// A declared function the source never captured is a build error under v2 as

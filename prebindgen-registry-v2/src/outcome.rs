@@ -78,8 +78,6 @@ pub enum Outcome {
     /// Not generated: a capability is missing, here or in something this
     /// declaration needs.
     Skipped(Skip),
-    /// The binding asked for it to be left alone.
-    Ignored,
 }
 
 impl Outcome {
@@ -87,7 +85,7 @@ impl Outcome {
     pub fn skip(&self) -> Option<&Skip> {
         match self {
             Outcome::Skipped(skip) => Some(skip),
-            Outcome::Emitted | Outcome::Ignored => None,
+            Outcome::Emitted => None,
         }
     }
 }

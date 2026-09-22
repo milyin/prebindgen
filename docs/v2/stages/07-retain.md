@@ -48,9 +48,7 @@ data struct to lose a field silently, or permit V2 to replace an unsupported
 data representation with a handle.
 
 Every declaration finishes with exactly one **outcome**. *Emitted* means its
-requirements succeeded and it can be generated. *Ignored* means the user
-explicitly excluded it; that is a configuration decision, not a gap in support.
-*Skipped* means the request needs support V2 does not yet provide — an outcome
+requirements succeeded and it can be generated. *Skipped* means the request needs support V2 does not yet provide — an outcome
 that exists only while V2 is being brought up to V1's coverage, as
 [the next section](#unsupported-requests-and-public-api-dependencies) sets
 out.
@@ -122,7 +120,6 @@ struct Cause {
 enum ElementOutcome {
     Emitted { artifacts: Vec<ArtifactId> }, // Complete retained output for the request.
     Skipped { causes: Vec<CauseId> },       // Requested output omitted with explicit reasons.
-    Ignored,    // Explicitly excluded by the consumer.
     Unselected, // Present in source but not selected by this configuration.
 }
 ```
@@ -212,7 +209,7 @@ struct Registry {
 struct GenerationRun<'a, T: Target> {
     registry: &'a Registry, // Source facts used throughout this generate call.
     target: &'a T,         // Read-only target decision/operation provider.
-    requests: BindingRequests,            // The declarations to plan, and the ignores.
+    declarations: Vec<Declaration>,       // The declarations to plan.
     nodes: NodeArena<T::Payload>,       // Conversion attempts and completed value plans.
     functions: FunctionArena<T::Payload>, // Candidate complete wrapper plans.
     surfaces: SurfaceArena<T::Payload>, // Candidate public declaration descriptions.
@@ -229,8 +226,8 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend creates BindingRequests and its target internally, and calls generate
- -> registry validates/imports source references and requests
+ -> v2 frontend builds its declaration list and its target internally, and calls generate
+ -> registry validates/imports source references and declarations
  -> for each requested value: target selects its source relation and names
     the conversion its own settings make
  -> registry resolves the selected source operation's children

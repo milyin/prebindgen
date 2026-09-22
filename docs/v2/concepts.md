@@ -240,8 +240,8 @@ See [Assemble the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-b
 
 ### Outcome
 
-The final status of one declaration on a completed run: emitted, skipped or
-explicitly ignored. [The report](report.md) lists them so a missing function
+The final status of one declaration on a completed run: emitted or skipped.
+[The report](report.md) lists them so a missing function
 does not have to be diagnosed by inspecting generated code alone. An emitted
 declaration passed generation; it still needs compilation and runtime testing.
 A generation error, such as contradictory configuration, returns no completed

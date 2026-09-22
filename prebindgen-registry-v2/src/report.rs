@@ -105,7 +105,6 @@ impl Report {
             match entry.outcome {
                 Outcome::Emitted => counts.emitted += 1,
                 Outcome::Skipped(_) => counts.skipped += 1,
-                Outcome::Ignored => counts.ignored += 1,
             }
         }
         counts
@@ -131,8 +130,8 @@ impl Report {
     pub fn summary(&self) -> String {
         let counts = self.counts();
         format!(
-            "{}: {} emitted, {} skipped, {} ignored ({} target)",
-            self.pipeline, counts.emitted, counts.skipped, counts.ignored, self.target
+            "{}: {} emitted, {} skipped ({} target)",
+            self.pipeline, counts.emitted, counts.skipped, self.target
         )
     }
 
@@ -164,8 +163,8 @@ impl Report {
         );
         let _ = writeln!(
             out,
-            "| emitted | skipped | ignored |\n| ---: | ---: | ---: |\n| {} | {} | {} |\n",
-            counts.emitted, counts.skipped, counts.ignored
+            "| emitted | skipped |\n| ---: | ---: |\n| {} | {} |\n",
+            counts.emitted, counts.skipped
         );
 
         let _ = writeln!(out, "## Skipped, by cause\n");
@@ -200,7 +199,6 @@ impl Report {
         for entry in &self.declarations {
             let outcome = match &entry.outcome {
                 Outcome::Emitted => "emitted".to_string(),
-                Outcome::Ignored => "ignored".to_string(),
                 Outcome::Skipped(skip) => format!("skipped: `{}`", skip.capability),
             };
             let _ = writeln!(
@@ -256,7 +254,6 @@ impl Report {
 pub struct Counts {
     pub emitted: usize,
     pub skipped: usize,
-    pub ignored: usize,
 }
 
 /// Sort key: the id, as it prints.

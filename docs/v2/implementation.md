@@ -89,7 +89,7 @@ Existing Kotlin tests can directly refer to classes absent from v2 output. Selec
 
 The initial implementation should demonstrate the architecture with both existing C and Kotlin examples:
 
-1. Construct `BindingRequests` from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
+1. Construct the declaration list from all recorded frontend choices; implement identities, diagnostic causes and request accounting. Preserve unsupported configuration entries and settings from the start.
 2. Implement one scalar function through target descriptors, registry conversion/function plans, frozen output and the normal output path: common Rust emission followed by C header generation or Kotlin emission. Execute it through both language boundaries.
 3. Add named-field structs with registry-owned field traversal, construction and decomposition. Demonstrate a C aggregate and a JNI [representation](stages/05-represent.md#represent-and-compose-values) using the same source [relation](stages/04-select.md#what-a-relation-is) algorithm.
 4. Add plain optional representations and the temporary/borrow operations required by selected existing examples. Test present/absent behavior and temporary lifetime requirements.
@@ -141,7 +141,7 @@ says. A JVM that loads the library and calls the method, which is what
 comes with the covertest work rather than here. What follows records what
 building this settled, so the chapters and the engine describe the same thing.
 
-To find the implementation, start with `generate(flat, &target, requests)`
+To find the implementation, start with `generate(flat, &target, declarations, source_module, declaring_crate)`
 in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 - `target.rs` defines the questions adapters answer and the descriptions they return.
@@ -157,7 +157,7 @@ The two targets live in the language frontends, under their `v2` feature:
 `Target` implementation of a few hundred lines — `select`, `represent`,
 `boundary`, `surface`, `render_operation` — that walks no type and names no
 temporary; and a reader of the frontend's own declaration storage that turns it
-into `BindingRequests`, one entry per declaration in a stable order, with the frontend's
+into the declaration list, one entry per declaration in a stable order, with the frontend's
 manglers already applied to every name. The JNI frontend also carries its Kotlin
 writer, over the payloads its declarations came back with. A frontend's
 `build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
@@ -347,7 +347,7 @@ this list says what the increment left open and why.
 Acceptance criteria:
 
 - [x] The design's boundaries are exercised by scalar and struct bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
-- [x] Users configure the existing language frontends; frontend internals construct `BindingRequests` for the registry, and the target that holds what each request is. `CChoice` and `JniChoice` represent implemented choices and include an `Unimplemented` case naming other declarators; each is its target's private storage and its conversion key, and the registry names neither.
+- [x] Users configure the existing language frontends; frontend internals construct the declaration list for the registry, and the target that holds what each declaration is. `CChoice` and `JniChoice` represent implemented choices and include an `Unimplemented` case naming other declarators; each is its target's private storage and its conversion key, and the registry names neither.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
 - [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.

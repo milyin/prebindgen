@@ -69,7 +69,6 @@ fn every_declared_element_is_accounted_for() {
         ids,
         [
             "fn:z_thing_describe",
-            "fn:z_thing_internal",
             "fn:z_thing_new",
             "fn:z_thing_size",
             "type:ZThing",
@@ -101,7 +100,6 @@ fn every_declared_element_is_accounted_for() {
     // the members and the borrowed-handle function are not.
     assert_eq!(counts.emitted, 1);
     assert_eq!(counts.skipped, 3);
-    assert_eq!(counts.ignored, 1);
 
     // Each skip says what the value waits on and where the walk stopped: a
     // borrowed handle is a reference, which no v2 carrier holds yet.
@@ -231,17 +229,22 @@ fn class_members_are_elements_of_their_own() {
     assert_eq!(representation("fn:z_thing_describe"), "fun");
 }
 
-/// An ignore keeps its meaning under v2 and is counted apart from the gaps.
+/// An ignore silences v1's undeclared-item warning and nothing else: under
+/// v2 the item is not declared, so it has no report row, and it stays in the
+/// model, where a declared item may still depend on it.
 #[test]
-fn an_ignore_is_classified_separately() {
+fn an_ignore_does_not_reach_the_engine() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
     let report = generated.report().expect("v2 produces a report");
-    let ignored = report
-        .declarations
-        .iter()
-        .find(|entry| entry.declaration.to_string() == "fn:z_thing_internal")
-        .expect("the ignore is accounted for");
-    assert_eq!(ignored.outcome, Outcome::Ignored);
+    assert!(
+        !report
+            .declarations
+            .iter()
+            .any(|entry| entry.declaration.to_string() == "fn:z_thing_internal"),
+        "{report:?}"
+    );
+    // Four functions and the `ZThing` they reference: the ignored one included.
+    assert_eq!(report.source_identity.captured_items, 5, "{report:?}");
 }
 
 /// Both writers work under an engine that generated nothing. A zero-output plan

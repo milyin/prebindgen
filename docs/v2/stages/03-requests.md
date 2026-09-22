@@ -5,8 +5,8 @@
 # Record binding requests
 
 The implemented frontends translate user configuration into two things: the
-`BindingRequests` naming what to generate, and their own `Target`, which holds
-what each of those declarations *is*. This chapter first explains that
+list of `Declaration`s naming what to generate, and their own `Target`, which
+holds what each of those declarations *is*. This chapter first explains that
 translation, then describes the request identities and
 [conversion](04-select.md#select-conversion-relations)-sharing rules. Some later
 types are design sketches: in particular, owned Flat views and
@@ -114,12 +114,12 @@ supplies a reporting convention, rather than a per-function setting. The
 [wrapper](06-boundary.md#assemble-the-wrapper-boundary)'s error path.
 
 Each such call records a choice. Together they are the **binding
-configuration**, and `.build()` is where the frontend turns it into
-`BindingRequests` — the input the registry actually consumes. Users never write
-that structure; frontends do, which is why the two builders above can be as
+configuration**, and `.build()` is where the frontend turns it into the
+declaration list — the input the registry actually consumes. Users never write
+that list; frontends do, which is why the two builders above can be as
 different as their languages while everything after this stage is shared.
 
-A request set separates the desired output from choices about its
+The declaration list separates the desired output from choices about its
 implementation. An **output request** asks for a function, type or other public
 declaration, and that is *all* it carries: the declaration's identity. The
 language-specific choices that apply to it — a C struct or a JVM object to
@@ -233,10 +233,11 @@ common Rust writer belongs to the engine.
 
 The implementation divides the registry's data between two structures:
 
-- **The generation operation**, `generate(flat, target, requests)`, is a free
-  function that starts a fresh run. Three arguments, three kinds of thing: the
-  source model, the language, and what this binding asks of it. `requests` is
-  the work list — what to expose and what to leave alone; `target` implements
+- **The generation operation**, `generate(flat, target, declarations,
+  source_module, declaring_crate)`, is a free function that starts a fresh run.
+  The first three arguments are three kinds of thing: the source model, the
+  language, and what this binding asks of it. `declarations` is the work list
+  — what to expose; `target` implements
   the adapter interface and holds the frontend's choices, which is where every
   question about them goes. Current V2 selects
   atomic conversions or struct-field construction. Constructors, accessors
@@ -250,9 +251,9 @@ A binding crate normally builds one configured frontend. The frontend calls `gen
 
 ## Binding requests and target choices
 
-The common [`prebindgen-flat` library](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/lib.rs) supplies Rust source facts through `Flat`. Users call the C or JNI frontend's API to choose the generated interface: for example, exposing `Stamp` as a C data struct or a Kotlin class. The configured frontend creates `BindingRequests` and calls the registry.
+The common [`prebindgen-flat` library](https://github.com/milyin/prebindgen/blob/main/prebindgen-flat/src/lib.rs) supplies Rust source facts through `Flat`. Users call the C or JNI frontend's API to choose the generated interface: for example, exposing `Stamp` as a C data struct or a Kotlin class. The configured frontend builds the declaration list and calls the registry.
 
-A declaration or setting recorded by the frontend is a **configuration entry**. A frontend call exposing a function records an output request; an argument override records the requested representation choice. The frontend also preserves naming hooks, ignored items and unsupported settings. Recording a request does not establish that the registry can generate it.
+A declaration or setting recorded by the frontend is a **configuration entry**. A frontend call exposing a function records an output request; an argument override records the requested representation choice. The frontend also preserves naming hooks and unsupported settings. An ignore is not an entry: it tells V1 not to warn that an item is undeclared, and V2 issues no such warning, so the frontend hands the engine no ignores and the ignored item stays in the model like any other undeclared item. Recording a request does not establish that the registry can generate it.
 
 ### What a choice records
 
@@ -321,12 +322,10 @@ The binding's choices guide the selection of these descriptions. The registry tu
 The registry separates what should be generated from how values should be converted. An **output request** asks for one declaration, such as a function, type or constant. A **conversion rule** selects a relation and a way of converting for a particular type, parameter, result or child value. The two live in different places, which is the whole of this chapter's boundary:
 
 ```rust
-// What the frontend hands the registry.
-struct BindingRequests {
-    declaring_crate: String,      // The crate generating, for the report.
-    source_module: Path,          // How generated Rust reaches the source items.
-    requests: Vec<Request>,       // Expose this, or leave that alone; defined below.
-}
+// What the frontend hands the registry, beside the model and the target.
+declarations: Vec<Declaration>,   // Expose each of these.
+source_module: Path,              // How generated Rust reaches the source items.
+declaring_crate: &str,            // The crate generating, for the report.
 
 // What the frontend keeps and answers the registry's questions from —
 // `CbindgenBuilder` and the `CTarget` it builds, schematically.
@@ -343,8 +342,8 @@ frontend cannot lower needs no list of its own either — it becomes an ordinary
 output request that the target then refuses by name, so the report accounts for
 it like anything else.
 
-Neither structure is generic. C and JNI use the same `BindingRequests`, and
-differ only in the `Target` they pass beside it — which is also where the
+Nothing here is generic. C and JNI hand over the same kind of declaration
+list, and differ only in the `Target` they pass beside it — which is also where the
 report's name for the language comes from, as `Target::NAME`, since an adapter
 knows what it is. These sketches explain the responsibilities;
 `prebindgen-registry-v2/src/plan.rs` defines the exact current fields.
@@ -363,20 +362,23 @@ The engine's one entry point (signature only):
 pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
-    requests: BindingRequests,
+    declarations: Vec<Declaration>,
+    source_module: syn::Path,
+    declaring_crate: &str,
 ) -> Result<Generation<T::Payload>, EngineError>;
 ```
 
-`T: Target` ties the adapter to its [conversion-key and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target — which is also where every choice the binding recorded lives — consumes the requests, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
+`T: Target` ties the adapter to its [conversion-key and rendering-payload types](04-select.md#how-the-registry-asks-a-target-for-decisions). The function takes the model, borrows the target — which is also where every choice the binding recorded lives — consumes the declarations, and builds private working state. The returned `Generation` owns the model, the retained plans and payloads. Unsupported requests are [outcomes](07-retain.md#retain-supported-output) of the run; a declaration that must name a captured item and does not, invalid input or an invariant failure return `EngineError`. Rendering and I/O follow planning.
 
 Inside the C frontend's build implementation after selecting v2 — the whole
 chain from capture to planning, in internal pseudocode rather than user
 `build.rs` code:
 
 **Implemented.** This is today's call path: `CbindgenBuilder::build()` under v2
-reads its own declaration storage once, turns it into a request set *and* the
-C target that holds what each request is, and hands both to the engine. The JNI
-frontend does the same with its declarations and the JNI target. Nothing of v1
+reads its own declaration storage once, turns it into the declaration list
+*and* the C target that holds what each declaration is, and hands both to the
+engine. The JNI frontend does the same with its declarations and the JNI
+target. Nothing of v1
 runs on this route — no `declare_into`, no resolution, no assembly — and the
 frontend's part is naming: which C name a type or a symbol gets is its manglers
 applied, the same answer v1 gives.
@@ -384,8 +386,9 @@ applied, the same answer v1 gives.
 ```rust
 let source_model = self.sources.clone().build()?;   // stage 2: the snapshot
 
-let (target, requests) = self.binding(source_module);  // this stage
-let generation = generate(source_model, &target, requests)?;
+let (target, declarations) = self.binding();         // this stage
+let generation = generate(source_model, &target, declarations,
+                          source_module, &declaring_crate)?;
                                                      // stages 4 to 6
 ```
 
@@ -407,8 +410,8 @@ conversions. Proposed helper relations will also need argument validation and
 planning. The registry supplies no separate source-inspection API to the frontend.
 
 Request construction must lose no recorded frontend choice. Today it carries the
-choices this increment lowers — names, the class a type is declared as, the
-ignore rules — in the target it builds, and turns the settings it does not
+choices this increment lowers — names, the class a type is declared as — in
+the target it builds, and turns the settings it does not
 lower into a **refusal** of what they apply to: a per-function `expand_param`/`expand_return`/
 `split_on_param` refuses the function; a type-level boundary declaration refuses
 every function with a parameter or result of that type, declared class or bare
@@ -446,13 +449,6 @@ function or a reusable conversion.
 
 To generate a wrapper for the source function `normalize(stamp: Stamp) -> Stamp`, the registry needs an input conversion, the call to `normalize` itself and an output conversion. The request to expose `normalize` is the starting point, called a **root**. The conversions required to implement that request are its **dependencies**. A request to expose a public type is also a root, even if no function uses that type.
 
-```rust
-enum Request {
-    Expose(DeclarationId), // Plan this and generate it.
-    Ignore(DeclarationId), // Plan nothing; the report carries it as a decision.
-}
-```
-
 An **entity** is one real item of the API: a type, a function or a constant,
 with its whole description. The model holds more than that — a guard, an
 unsupported item — and does not rank what it holds; that a binding can name
@@ -460,20 +456,6 @@ exactly these three kinds, and nothing else, is the registry's judgment, and
 the three variants of `Declaration` that name an entity are where it states
 it. Where an entity came from is not a kind: a captured item and one the
 binding stated are the same entity, and differ in origin alone.
-
-An ignore names an entity and says nothing about how the target would get it.
-A callback or a constant computed on the foreign side cannot be ignored —
-nothing in the model backs them, so there is nothing to leave alone — and an
-ignore naming one is refused as contradictory input before anything is
-planned.
-
-One list rather than two, because the report has one row per declaration and
-both dispositions produce one. An id that appeared under both would be two
-rows for one declaration, so saying both about one declaration is refused
-where the duplicate check already runs. Existence is a separate question, and
-it is asked only of what is to be exposed: an ignore means "if this is here,
-leave it alone", which a binding may reasonably say about an item its source
-crate compiles out under a feature.
 
 A requested output is that identity and nothing else. What the declaration *is*
 — its symbol, its placement, the declarator it came from — the target looks up

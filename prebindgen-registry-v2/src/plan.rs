@@ -1,4 +1,4 @@
-//! Planning: requests in, retained plans out.
+//! Planning: declarations in, retained plans out.
 //!
 //! One recursive walk plans the value conversions, one
 //! pass per requested output assembles the wrappers, and one fixpoint
@@ -26,84 +26,6 @@ use crate::{
         SurfaceSpec, Target, TargetAttempt, Unsupported,
     },
 };
-
-/// One entry of a [`BindingRequests`] work list: something the binding said
-/// about one item.
-///
-/// Both dispositions name a declaration, and the report accounts for both,
-/// so they are one list rather than two: an id can then appear once, which is
-/// what the report's "one id, one row" rests on. Exposing something and
-/// ignoring it is a contradiction the engine catches for that reason, rather
-/// than emitting two rows for it. An ignore must name an entity — what is
-/// left alone is an item — and one that names none is refused as
-/// contradictory input before anything is planned.
-#[derive(Clone, Debug)]
-pub enum Request {
-    /// Expose this declaration. The target is asked what it is, and the
-    /// registry plans it.
-    Expose(Declaration),
-    /// Leave this entity alone. Nothing is planned and nothing is generated;
-    /// the report carries it so that a decision and a gap read differently.
-    Ignore(Declaration),
-}
-
-/// What a frontend hands the engine: what to expose, and what to leave alone.
-///
-/// Nothing about *how* anything crosses is here. A binding's choices — which
-/// C name a type gets, which Kotlin class, which parameter is expanded — stay
-/// in the frontend's own storage and are answered where the registry asks, in
-/// [`Target`]. What this carries is the work list, one [`Request`] per entry,
-/// so the registry can plan each, decide what survives, and account for every
-/// one of them in the report.
-///
-/// Users never write this; a frontend builds it from its own recorded calls,
-/// which is what lets two languages share everything after this point.
-pub struct BindingRequests {
-    /// The crate whose build script is generating, for the report.
-    pub declaring_crate: String,
-    /// The module generated code reaches the source items through.
-    pub source_module: syn::Path,
-    /// What the binding said, in the order it said it.
-    pub requests: Vec<Request>,
-}
-
-impl BindingRequests {
-    pub fn new(declaring_crate: impl Into<String>, source_module: syn::Path) -> Self {
-        BindingRequests {
-            declaring_crate: declaring_crate.into(),
-            source_module,
-            requests: Vec::new(),
-        }
-    }
-
-    /// Ask for one declaration to be exposed.
-    pub fn expose(&mut self, declaration: Declaration) -> &mut Self {
-        self.requests.push(Request::Expose(declaration));
-        self
-    }
-
-    /// Ask for one entity to be left alone.
-    pub fn ignore(&mut self, declaration: Declaration) -> &mut Self {
-        self.requests.push(Request::Ignore(declaration));
-        self
-    }
-
-    /// The declarations to plan, and the ones only the report hears about.
-    ///
-    /// Split once, here, so that nothing downstream can plan an ignore by
-    /// forgetting to filter for it.
-    fn split(&self) -> (Vec<&Declaration>, Vec<&Declaration>) {
-        let mut exposed = Vec::new();
-        let mut ignored = Vec::new();
-        for request in &self.requests {
-            match request {
-                Request::Expose(declaration) => exposed.push(declaration),
-                Request::Ignore(declaration) => ignored.push(declaration),
-            }
-        }
-        (exposed, ignored)
-    }
-}
 
 /// A retained conversion, reusable by every value that crosses the same way.
 #[derive(Debug)]
@@ -695,7 +617,7 @@ fn same_member(left: &syn::Member, right: &syn::Member) -> bool {
     left.to_token_stream().to_string() == right.to_token_stream().to_string()
 }
 
-/// Plan `requests` over `flat` with `target`, and render what survives.
+/// Plan `declarations` over `flat` with `target`, and render what survives.
 ///
 /// Every requested output leaves this with an outcome. A capability the engine
 /// or the target has not implemented is a reported skip and the run continues;
@@ -703,15 +625,12 @@ fn same_member(left: &syn::Member, right: &syn::Member) -> bool {
 pub fn generate<T: Target>(
     flat: Flat,
     target: &T,
-    requests: BindingRequests,
+    declarations: Vec<Declaration>,
+    source_module: syn::Path,
+    declaring_crate: &str,
 ) -> Result<Generation<T::Payload>, EngineError> {
-    let (exposed, ignored) = requests.split();
-    // Duplicates are checked over both dispositions, so declaring a thing and
-    // ignoring it is caught here rather than printed as two rows for one id.
-    // Existence is asked of the exposed only: an ignore says "if this is here,
-    // leave it alone", and a binding may reasonably ignore an item its source
-    // crate compiles out under a feature.
-    check_declarations(&exposed, &ignored, &flat)?;
+    check_declarations(&declarations, &flat)?;
+    let exposed: Vec<&Declaration> = declarations.iter().collect();
 
     let mut run = Run::new(&flat, target);
     let mut functions: Vec<FunctionPlan<T::Payload>> = Vec::new();
@@ -911,15 +830,6 @@ pub fn generate<T: Target>(
                 .cloned()
                 .unwrap_or(Outcome::Emitted),
         })
-        // An ignore is a decision the binding made about a captured item: it
-        // is not an output, so the target is never asked to describe it, and
-        // it lands nowhere. The id's prefix (`fn:`, `type:`, `const:`) already
-        // says what was left alone.
-        .chain(ignored.iter().map(|declaration| Entry {
-            declaration: (*declaration).clone(),
-            described: crate::target::Described::new("ignore", ""),
-            outcome: Outcome::Ignored,
-        }))
         .collect();
     sort_entries(&mut entries);
 
@@ -928,7 +838,7 @@ pub fn generate<T: Target>(
         target: T::NAME,
         schema_version: SCHEMA_VERSION,
         source_identity: SourceIdentity {
-            declaring_crate: requests.declaring_crate.clone(),
+            declaring_crate: declaring_crate.to_string(),
             sources: flat.source_modules().to_vec(),
             captured_items: flat.captured().count(),
         },
@@ -992,7 +902,7 @@ pub fn generate<T: Target>(
         }
     }
 
-    let reach = crate::emit::Reach::new(&flat, requests.source_module.clone());
+    let reach = crate::emit::Reach::new(&flat, source_module);
     let rust = crate::emit::render(&flat, target, &reach, &artifacts, &primitives, &functions);
 
     Ok(Generation::new(

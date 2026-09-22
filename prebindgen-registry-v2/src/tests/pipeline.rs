@@ -13,7 +13,7 @@ use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind, TypeRef};
 use crate::{
     decl::Declaration,
     outcome::{EngineError, Outcome},
-    plan::{generate, BindingRequests},
+    plan::generate,
     run::Generation,
     target::{
         AbiSpec, Access, BoundarySpec, ChildValue, Described, FailureCategory, Layout, OperandSpec,
@@ -614,13 +614,11 @@ impl Target for Mini {
 ///
 /// Every test states its binding here rather than in a request set, which is
 /// what the engine no longer holds. The declarations go into [`Mini`], where
-/// the target answers from; only the list of outputs, and the ignores, reach
-/// the registry.
+/// the target answers from; only the list of outputs reaches the registry.
 #[derive(Default)]
 struct Binding {
     target: Mini,
     outputs: Vec<Declaration>,
-    ignored: Vec<Declaration>,
 }
 
 impl Binding {
@@ -660,26 +658,10 @@ impl Binding {
         self
     }
 
-    fn ignore(&mut self, declaration: Declaration) -> &mut Self {
-        self.ignored.push(declaration);
-        self
-    }
-
     /// Plan this binding over `flat`.
     fn generate(self, flat: Flat) -> Result<Generation<Payload>, EngineError> {
-        let Binding {
-            target,
-            outputs,
-            ignored,
-        } = self;
-        let mut requests = BindingRequests::new("fixture", syn::parse_quote!(source));
-        for declaration in outputs {
-            requests.expose(declaration);
-        }
-        for declaration in ignored {
-            requests.ignore(declaration);
-        }
-        generate(flat, &target, requests)
+        let Binding { target, outputs } = self;
+        generate(flat, &target, outputs, syn::parse_quote!(source), "fixture")
     }
 }
 
@@ -1215,23 +1197,6 @@ fn a_declaration_naming_nothing_is_an_error() {
 
     let error = binding.generate(model()).expect_err("refuses");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
-}
-
-/// An ignored declaration is accounted for apart from a skipped one: an ignore is a
-/// decision, not a gap.
-#[test]
-fn an_ignored_declaration_is_neither_emitted_nor_skipped() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.ignore(function("stamp_max"));
-
-    let generation = binding.generate(model()).expect("plans");
-    let counts = generation.report().counts();
-    assert_eq!((counts.emitted, counts.skipped, counts.ignored), (1, 0, 1));
-    assert!(matches!(
-        outcome(&generation, "fn:stamp_max"),
-        Outcome::Ignored
-    ));
 }
 
 /// Two runs over unchanged inputs produce the same report and the same code, so

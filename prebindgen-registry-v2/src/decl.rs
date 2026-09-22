@@ -1,11 +1,10 @@
 //! What a binding declared, in terms neither language owns.
 //!
 //! A frontend turns its own declaration storage into these — one [`Declaration`]
-//! per thing the user asked for, inside the
-//! [`BindingRequests`](crate::BindingRequests) it hands the engine. The
-//! declaration is what the report accounts for, and what the target looks its
-//! own configuration up by — the request carries none: the foreign name and
-//! the declarator word the report prints come from that lookup.
+//! per thing the user asked for, in the list it hands [`generate`](crate::generate).
+//! The declaration is what the report accounts for, and what the target looks
+//! its own configuration up by — the declaration carries none: the foreign
+//! name and the declarator word the report prints come from that lookup.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;

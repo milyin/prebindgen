@@ -17,7 +17,7 @@ failing the build as the finished engine
 A successful generation run therefore does not mean that every requested item
 exists — which is the reason this report exists at all. Each declaration's
 [outcome](stages/07-retain.md#retain-supported-output) tells you whether it was
-emitted, skipped or explicitly ignored, and a skipped entry explains why.
+emitted or skipped, and a skipped entry explains why.
 
 The report is diagnostic output, not configuration. No stage reads a saved
 report to decide what to generate, and deleting the report files does not change
@@ -32,9 +32,9 @@ report, which crate declared the binding, and which source modules and item
 count the model was built from. These fields help you recognize the run; they
 are not a content hash or proof that the files match the latest source revision.
 
-Next, read the counts of emitted, skipped and ignored declarations. *Ignored*
-means the user deliberately excluded an item. *Skipped* means the engine could
-not satisfy a request. A skip includes a stable
+Next, read the counts of emitted and skipped declarations. *Skipped* means the
+engine could not satisfy a request. An item the user deliberately excluded
+never entered the model and has no row. A skip includes a stable
 [capability](stages/07-retain.md#retain-supported-output) code, a readable
 explanation and a path to the problem. That path can identify the function
 [site](stages/03-requests.md#a-values-position-in-an-exported-function), such
@@ -48,9 +48,9 @@ extends the guide's `Stamp` example with deliberately unsupported cases:
 
 Declared by `v2check` over 8 captured item(s) from: source
 
-| emitted | skipped | ignored |
-| ---: | ---: | ---: |
-| 4 | 3 | 0 |
+| emitted | skipped |
+| ---: | ---: |
+| 4 | 3 |
 
 ## Skipped, by cause
 

@@ -7,7 +7,7 @@ use prebindgen_flat::flat::FlatBuilder;
 use crate::{
     decl::Declaration,
     outcome::{EngineError, Outcome},
-    plan::{generate, BindingRequests},
+    plan::generate,
     run::Generation,
     target::{
         BoundarySpec, ChildValue, Described, ReprSpec, ResolvedShape, ResolvedValues, Selection,
@@ -70,7 +70,6 @@ impl Target for Nothing {
 /// A binding stated directly, standing in for a facade's own storage.
 struct Stated {
     declared: Vec<Declaration>,
-    ignored: Vec<Declaration>,
 }
 
 /// Run the stated binding through the engine over [`sources`].
@@ -79,14 +78,13 @@ fn plan(
     sources: FlatBuilder,
     crate_name: &str,
 ) -> Result<Generation<()>, EngineError> {
-    let mut requests = BindingRequests::new(crate_name, syn::parse_quote!(fixture));
-    for declaration in &stated.declared {
-        requests.expose(declaration.clone());
-    }
-    for declaration in &stated.ignored {
-        requests.ignore(declaration.clone());
-    }
-    generate(sources.build()?, &Nothing, requests)
+    generate(
+        sources.build()?,
+        &Nothing,
+        stated.declared.clone(),
+        syn::parse_quote!(fixture),
+        crate_name,
+    )
 }
 
 /// Two captured functions and a captured struct, in the shape a source crate
@@ -136,34 +134,31 @@ fn declared_type(name: &str) -> Declaration {
 }
 
 #[test]
-fn every_declaration_is_skipped_and_every_ignore_is_counted_apart() {
+fn every_declaration_is_skipped_and_accounted_for() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_new")), (declared_type("Handle"))],
-        ignored: vec![captured_fn("handle_value")],
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let report = generation.report();
 
     let counts = report.counts();
-    assert_eq!((counts.emitted, counts.skipped, counts.ignored), (0, 2, 1));
+    assert_eq!((counts.emitted, counts.skipped), (0, 2));
     assert_eq!(report.source_identity.captured_items, 3);
     assert_eq!(report.source_identity.declaring_crate, "fixture-crate");
 
-    // Types sort before functions, and the ignore is an outcome like any other.
+    // Types sort before functions.
     let ids: Vec<String> = report
         .declarations
         .iter()
         .map(|entry| entry.declaration.to_string())
         .collect();
-    assert_eq!(ids, ["fn:handle_new", "fn:handle_value", "type:Handle"]);
-    assert_eq!(report.declarations[1].outcome, Outcome::Ignored);
+    assert_eq!(ids, ["fn:handle_new", "type:Handle"]);
 }
 
 #[test]
 fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_neu"))],
-        ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a typo is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
@@ -176,7 +171,6 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
         declared: vec![(Declaration::Callback("impl Fn(i64)".to_string()))],
-        ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     assert_eq!(generation.report().counts().skipped, 1);
@@ -186,64 +180,10 @@ fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
 fn one_id_may_name_only_one_declaration() {
     let stated = Stated {
         declared: vec![(captured_fn("handle_new")), (captured_fn("handle_new"))],
-        ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("a repeat is refused");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
     assert!(error.to_string().contains("fn:handle_new"), "{error}");
-}
-
-/// Exposing a declaration and ignoring it says two things about one id, and
-/// the report has one row per id — so it is refused rather than printed twice.
-///
-/// One list of requests is what makes this reachable: the duplicate check sees
-/// both dispositions, so the contradiction is caught wherever it was written.
-#[test]
-fn one_declaration_may_not_be_both_exposed_and_ignored() {
-    let stated = Stated {
-        declared: vec![captured_fn("handle_new")],
-        ignored: vec![captured_fn("handle_new")],
-    };
-    let error = plan(&stated, sources(), "fixture-crate").expect_err("a contradiction is refused");
-    assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
-    assert!(error.to_string().contains("fn:handle_new"), "{error}");
-}
-
-/// An ignore does not have to name something the model holds.
-///
-/// It says "if this is here, leave it alone". A binding may ignore an item its
-/// source crate compiles out under a feature, and that is not a typo the way a
-/// declaration naming nothing is — so existence is asked of the exposed only.
-#[test]
-fn an_ignore_names_an_item_the_model_need_not_hold() {
-    let stated = Stated {
-        declared: Vec::new(),
-        ignored: vec![captured_fn("handle_absent")],
-    };
-    let generation = plan(&stated, sources(), "fixture-crate").expect("an ignore is tolerant");
-    assert_eq!(generation.report().counts().ignored, 1);
-}
-
-/// An ignore leaves an item alone, so it has to name one: ignoring a callback
-/// — nothing in the source — is the frontend contradicting itself.
-#[test]
-fn an_ignore_that_names_no_entity_is_an_error() {
-    let stated = Stated {
-        declared: Vec::new(),
-        ignored: vec![Declaration::Callback("impl Fn(i64)".to_string())],
-    };
-    let error = plan(&stated, sources(), "fixture-crate").expect_err("nothing to leave alone");
-    assert!(
-        matches!(
-            error,
-            EngineError::Planning(crate::target::PlanningError::InvalidInput(_))
-        ),
-        "{error}"
-    );
-    assert!(
-        error.to_string().contains("callback:impl Fn(i64)"),
-        "{error}"
-    );
 }
 
 /// A declaration names one of the three captured kinds, and naming the wrong
@@ -254,7 +194,6 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     // wrong as declaring a name nothing captured.
     let stated = Stated {
         declared: vec![(Declaration::constant(syn::parse_str("handle_new").expect("an ident")))],
-        ignored: Vec::new(),
     };
     let error = plan(&stated, sources(), "fixture-crate").expect_err("wrong kind is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
@@ -276,7 +215,6 @@ fn skips_are_grouped_by_capability_code() {
             (captured_fn("handle_value")),
             (declared_type("Handle")),
         ],
-        ignored: Vec::new(),
     };
     let generation = plan(&stated, sources(), "fixture-crate").expect("v2 plans");
     let groups = generation.report().skips_by_capability();

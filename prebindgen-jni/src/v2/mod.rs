@@ -5,11 +5,13 @@
 //! name-mangle closures — and this module is the only thing that reads them
 //! for the other engine: it turns that storage into a [`JniTarget`], which is
 //! what the binding declared and what answers the registry's questions about
-//! it, plus the [`BindingRequests`] naming what to plan. [`generate`] hands
-//! back a [`Generation`] the frontend writes out — the Rust through the
-//! engine's writer, the Kotlin through its own writer in `kotlin.rs`.
+//! it, plus the list of [`Declaration`]s naming what to plan. An ignore is a
+//! v1 decision about v1's undeclared-item warnings, which v2 does not emit,
+//! so none reaches the engine. [`generate`] hands back a [`Generation`] the
+//! frontend writes out — the Rust through the engine's writer, the Kotlin
+//! through its own writer in `kotlin.rs`.
 //!
-//! The requests are a work list and nothing more. What a declaration *is* —
+//! The declarations are a work list and nothing more. What a declaration *is* —
 //! its Kotlin class or package function, its native method, its `Java_…`
 //! symbol, and which setting on it v2 does not honour yet — stays in the
 //! target, which is where the registry asks for it (#766).
@@ -21,7 +23,7 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
+use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation};
 pub use target::{JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
@@ -33,12 +35,12 @@ impl Declarations {
         sources: prebindgen_registry::flat::FlatBuilder,
         declaring_crate: impl Into<String>,
     ) -> Result<Generation<JniPayload>, EngineError> {
+        let mut sources = sources;
         // What the binding defines itself enters the model as entities: a
         // helper with the signature `fun!(crate::x).sig(..)` stated, reached
         // where its path says; an opaque class the source never exported,
         // reached at the binding's root. A captured item of the same name is
         // what a class meant, and an error for a function, as under v1.
-        let mut sources = sources;
         for (ident, path, sig) in &self.local_fns {
             let mut sig = sig.clone();
             sig.ident = ident.clone();
@@ -74,8 +76,14 @@ impl Declarations {
                 Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
             })
             .collect();
-        let (target, requests) = self.binding(&flat, classes, declaring_crate, source_module);
-        generate(flat, &target, requests)
+        let (target, declarations) = self.binding(&flat, classes);
+        generate(
+            flat,
+            &target,
+            declarations,
+            source_module,
+            &declaring_crate.into(),
+        )
     }
 
     /// Write the Kotlin side of a v2 generation under `kotlin_root`.
@@ -97,14 +105,12 @@ impl Declarations {
         &self,
         flat: &prebindgen_registry::flat::Flat,
         classes: std::collections::BTreeMap<String, (String, bool)>,
-        declaring_crate: impl Into<String>,
-        source_module: syn::Path,
-    ) -> (JniTarget, BindingRequests) {
+    ) -> (JniTarget, Vec<Declaration>) {
         let mut target = JniTarget::new(classes);
-        let mut requests = BindingRequests::new(declaring_crate, source_module);
+        let mut declarations = Vec::new();
         let mut declare = |declaration: Declaration, choice: JniChoice| {
             target.declare(declaration.clone(), choice);
-            requests.expose(declaration);
+            declarations.push(declaration);
         };
 
         // A function is declared wherever it is placed — as a class member, as
@@ -265,19 +271,7 @@ impl Declarations {
             );
         }
 
-        // Ignores are decisions, accounted apart from the gaps. They name a
-        // captured item the binding declined to expose, and they are not
-        // outputs, so the target is never asked about one.
-        for ident in sorted(&self.ignored_fns) {
-            requests.ignore(Declaration::function(ident.clone()));
-        }
-        for key in sorted(&self.ignored_class_types) {
-            requests.ignore(Declaration::declared_type(key.clone()));
-        }
-        for ident in sorted(&self.ignored_const_idents) {
-            requests.ignore(Declaration::constant(ident.clone()));
-        }
-        (target, requests)
+        (target, declarations)
     }
 }
 

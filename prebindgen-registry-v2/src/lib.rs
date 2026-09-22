@@ -12,14 +12,14 @@
 //! and never a reason to run v1 for that declaration.
 //!
 //! ```text
-//! v2: 2 emitted, 45 skipped, 4 ignored (c target)
+//! v2: 2 emitted, 45 skipped (c target)
 //! SKIP unsupported.c.opaque_ptr: fn:calculator_new, fn:calculator_apply (+18 more)
 //! ```
 //!
 //! The language frontends drive it: under `PREBINDGEN_PIPELINE=v2` a
-//! `prebindgen-c` or `prebindgen-jni` build turns its declarations into
-//! [`BindingRequests`], hands them to [`generate`] with its own [`Target`], and
-//! writes the [`Generation`] that comes back. The user's `build.rs` is the same
+//! `prebindgen-c` or `prebindgen-jni` build hands [`generate`] its
+//! declarations and its own [`Target`], and writes the [`Generation`] that
+//! comes back. The user's `build.rs` is the same
 //! under either engine.
 //!
 //! # What lives here, and what does not
@@ -54,7 +54,7 @@ mod tests;
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::Declaration;
 pub use outcome::{Capability, EngineError, Outcome, Skip};
-pub use plan::{generate, BindingRequests, FunctionPlan, NodeId, Request, ValuePlan};
+pub use plan::{generate, FunctionPlan, NodeId, ValuePlan};
 pub use report::{Counts, Report, SCHEMA_VERSION};
 pub use run::{Generation, PIPELINE};
 pub use target::{

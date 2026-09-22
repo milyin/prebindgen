@@ -4,10 +4,12 @@
 //! v1 — same builder, same modifiers, same manglers — and this module is the
 //! only thing that reads them for the other engine: it turns that storage into
 //! a [`CTarget`], which is what the binding declared and what answers the
-//! registry's questions about it, plus the [`BindingRequests`] naming what to
-//! plan. [`generate`] hands back a [`Generation`] the frontend writes out.
+//! registry's questions about it, plus the list of [`Declaration`]s naming
+//! what to plan. An ignore is a v1 decision about v1's undeclared-item
+//! warnings, which v2 does not emit, so none reaches the engine.
+//! [`generate`] hands back a [`Generation`] the frontend writes out.
 //!
-//! The requests are a work list and nothing more. What a declaration *is* —
+//! The declarations are a work list and nothing more. What a declaration *is* —
 //! its C name, which declarator produced it, which destructor frees it —
 //! stays in the target, which is where the registry asks for it (#766).
 //!
@@ -20,7 +22,7 @@
 
 mod target;
 
-use prebindgen_registry_v2::{generate, BindingRequests, Declaration, EngineError, Generation};
+use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation};
 pub use target::{CChoice, CPayload, CTarget};
 
 use crate::CbindgenBuilder;
@@ -62,8 +64,14 @@ impl CbindgenBuilder {
                 .and_then(|module| syn::parse_str(module).ok())
                 .unwrap_or_else(|| syn::parse_quote!(crate))
         });
-        let (target, requests) = self.binding(declaring_crate, source_module);
-        generate(flat, &target, requests)
+        let (target, declarations) = self.binding();
+        generate(
+            flat,
+            &target,
+            declarations,
+            source_module,
+            &declaring_crate.into(),
+        )
     }
 
     /// Everything this binding declared: what each declaration is, for the
@@ -72,16 +80,12 @@ impl CbindgenBuilder {
     /// One entry per declaration, in any order — the report sorts. Both halves
     /// are stated in the same pass, so a declaration cannot be planned without
     /// the target knowing what it is, or recorded without being asked for.
-    fn binding(
-        &self,
-        declaring_crate: impl Into<String>,
-        source_module: syn::Path,
-    ) -> (CTarget, BindingRequests) {
+    fn binding(&self) -> (CTarget, Vec<Declaration>) {
         let mut target = CTarget::default();
-        let mut requests = BindingRequests::new(declaring_crate, source_module);
+        let mut declarations = Vec::new();
         let mut declare = |declaration: Declaration, choice: CChoice| {
             target.declare(declaration.clone(), choice);
-            requests.expose(declaration);
+            declarations.push(declaration);
         };
 
         // By-value data structs: the one type representation v2 lowers. The
@@ -161,16 +165,7 @@ impl CbindgenBuilder {
             );
         }
 
-        // Ignores are decisions, accounted apart from the gaps. They name a
-        // captured item the binding declined to expose, and they are not
-        // outputs, so the target is never asked about one.
-        for ident in sorted(&self.ignored_functions) {
-            requests.ignore(Declaration::function(ident.clone()));
-        }
-        for key in sorted(&self.ignored_types) {
-            requests.ignore(Declaration::declared_type(key.clone()));
-        }
-        (target, requests)
+        (target, declarations)
     }
 }
 
