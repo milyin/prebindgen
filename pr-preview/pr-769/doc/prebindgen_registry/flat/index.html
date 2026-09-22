@@ -132,7 +132,7 @@ module does not model is a <code>union</code>, and it is diagnosed like anything
 language cannot express.</p>
 <p>The one item that <em>is</em> re-emitted verbatim is a <a href="struct.Guard.html" title="struct prebindgen_registry::flat::Guard"><code>Guard</code></a> — an anonymous
 const, which has no address and so cannot be part of an API addressed by name.
-Today these are the feature checks <a href="../../prebindgen/api/source/struct.Source.html" title="struct prebindgen::api::source::Source"><code>Source</code></a> injects on its own
+Today these are the feature checks <a href="prebindgen::Source"><code>Source</code></a> injects on its own
 behalf. Modelled rather than dropped because this module must be total over
 what it is handed, and a separate element so nothing that consumes the API has
 to remember to skip it.</p>
