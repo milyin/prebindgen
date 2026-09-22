@@ -26,7 +26,7 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation};
+use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation, PlanningError};
 pub use target::{JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
@@ -78,7 +78,7 @@ impl Declarations {
                 Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
             })
             .collect();
-        let (target, declarations) = self.binding(&flat, classes);
+        let (target, declarations) = self.binding(&flat, classes)?;
         generate(flat, &target, declarations, source_module)
     }
 
@@ -91,17 +91,22 @@ impl Declarations {
         kotlin::write(self, generation, kotlin_root)
     }
 
-    /// Everything this binding declared: what each declaration is, for the
-    /// target to answer from, and the list of them, for the engine to plan.
+    /// Everything this binding declared: each declaration paired with what
+    /// this target recorded it as, which together are what the engine plans
+    /// and accounts for.
     ///
-    /// One entry per declaration, in any order — the report sorts. Both halves
-    /// are stated in the same pass, so a declaration cannot be planned without
-    /// the target knowing what it is, or recorded without being asked for.
+    /// One entry per declaration, in any order. Stating the two halves
+    /// together is what keeps them in step: a declaration cannot be planned
+    /// without saying what it is.
+    ///
+    /// Fails when the binding contradicts itself — two declarations claiming
+    /// one native method on the harness — which is the frontend's own
+    /// validation and not a capability the engine lacks.
     fn binding(
         &self,
         flat: &prebindgen_registry::flat::Flat,
         classes: std::collections::BTreeMap<String, (String, bool)>,
-    ) -> (JniTarget, Vec<(Declaration, JniChoice)>) {
+    ) -> Result<(JniTarget, Vec<(Declaration, JniChoice)>), EngineError> {
         let mut target = JniTarget::new(classes);
         let mut declarations = Vec::new();
         // Every wrapper hangs off one harness object, so its native methods
@@ -110,13 +115,16 @@ impl Declarations {
         // compile. The binding is what decides the names, so it is told here.
         let mut natives: std::collections::HashMap<String, Declaration> =
             std::collections::HashMap::new();
+        let mut collision = None;
         let mut declare = |declaration: Declaration, choice: JniChoice| {
             if let Some(native) = choice.native() {
                 if let Some(taken) = natives.insert(native.to_string(), declaration.clone()) {
-                    panic!(
-                        "`{taken}` and `{declaration}` would both be the native method \
-                         `{native}` on the JNI harness; give one of them another Kotlin name"
-                    );
+                    collision.get_or_insert_with(|| {
+                        format!(
+                            "`{taken}` and `{declaration}` would both be the native method \
+                             `{native}` on the JNI harness; give one of them another Kotlin name"
+                        )
+                    });
                 }
             }
             target.declare(&declaration, &choice);
@@ -291,7 +299,12 @@ impl Declarations {
             );
         }
 
-        (target, declarations)
+        if let Some(collision) = collision {
+            return Err(EngineError::Planning(PlanningError::InvalidInput(
+                collision,
+            )));
+        }
+        Ok((target, declarations))
     }
 }
 
