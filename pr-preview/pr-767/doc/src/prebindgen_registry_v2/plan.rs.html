@@ -719,12 +719,12 @@
 <a href=#719 id=719 data-nosnippet>719</a>            Declaration::Type(<span class="kw">_</span>) =&gt; {
 <a href=#720 id=720 data-nosnippet>720</a>                plan_type(<span class="kw-2">&amp;mut </span>run, declaration).map_err(EngineError::Planning)<span class="question-mark">?
 <a href=#721 id=721 data-nosnippet>721</a>            </span>}
-<a href=#722 id=722 data-nosnippet>722</a>            <span class="comment">// Two surfaces built the same way: a Kotlin `val` read through a
-<a href=#723 id=723 data-nosnippet>723</a>            // nullary function is planned as that function, and the target
-<a href=#724 id=724 data-nosnippet>724</a>            // renders the constant. Whether the function was captured or is
-<a href=#725 id=725 data-nosnippet>725</a>            // the binding's own makes no difference here: the model holds
-<a href=#726 id=726 data-nosnippet>726</a>            // both, and the writer reaches each through its own origin.
-<a href=#727 id=727 data-nosnippet>727</a>            </span>Declaration::Function(ident) | Declaration::ConstFromFunction(ident) =&gt; {
+<a href=#722 id=722 data-nosnippet>722</a>            <span class="comment">// Whether the function was captured or is the binding's own makes
+<a href=#723 id=723 data-nosnippet>723</a>            // no difference here: the model holds both, and the writer reaches
+<a href=#724 id=724 data-nosnippet>724</a>            // each through its own origin. Nor does what the target shows the
+<a href=#725 id=725 data-nosnippet>725</a>            // call as — a `fun`, or a `val` read through it — which is the
+<a href=#726 id=726 data-nosnippet>726</a>            // target's choice under this one declaration.
+<a href=#727 id=727 data-nosnippet>727</a>            </span>Declaration::Function(ident) =&gt; {
 <a href=#728 id=728 data-nosnippet>728</a>                <span class="kw">let </span>function = flat
 <a href=#729 id=729 data-nosnippet>729</a>                    .function(<span class="kw-2">&amp;</span>ident.to_string())
 <a href=#730 id=730 data-nosnippet>730</a>                    .expect(<span class="string">"declarations are checked against the model before planning"</span>);
@@ -1361,133 +1361,144 @@
 <a href=#1361 id=1361 data-nosnippet>1361</a>    // binding declared over a type the source never exported, which entered
 <a href=#1362 id=1362 data-nosnippet>1362</a>    // the model as an extern — and the declarations were checked against it
 <a href=#1363 id=1363 data-nosnippet>1363</a>    // before planning, so this lookup finds one.
-<a href=#1364 id=1364 data-nosnippet>1364</a>    </span><span class="kw">let </span>name = declaration
-<a href=#1365 id=1365 data-nosnippet>1365</a>        .entity()
-<a href=#1366 id=1366 data-nosnippet>1366</a>        .expect(<span class="string">"a type declaration names an entity"</span>)
-<a href=#1367 id=1367 data-nosnippet>1367</a>        .name();
-<a href=#1368 id=1368 data-nosnippet>1368</a>    <span class="kw">let </span>(ty, item): (TypeRef, SourceItem&lt;<span class="lifetime">'_</span>&gt;) = <span class="kw">match </span>flat.declared_type(<span class="kw-2">&amp;</span>name) {
-<a href=#1369 id=1369 data-nosnippet>1369</a>        <span class="prelude-val">Some</span>(Type::Struct(strukt)) =&gt; (strukt.type_ref().clone(), SourceItem::Struct(strukt)),
-<a href=#1370 id=1370 data-nosnippet>1370</a>        <span class="prelude-val">Some</span>(Type::Extern(opaque)) =&gt; {
-<a href=#1371 id=1371 data-nosnippet>1371</a>            <span class="comment">// A declaration answers what reading names it; an extern keeps
-<a href=#1372 id=1372 data-nosnippet>1372</a>            // none, so the model is asked to read its own name.
-<a href=#1373 id=1373 data-nosnippet>1373</a>            </span><span class="kw">let </span>name = <span class="kw-2">&amp;</span>opaque.name;
-<a href=#1374 id=1374 data-nosnippet>1374</a>            <span class="kw">match </span>flat.classify(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(#name)) {
-<a href=#1375 id=1375 data-nosnippet>1375</a>                <span class="prelude-val">Ok</span>(ty) =&gt; (ty, SourceItem::Extern(opaque)),
-<a href=#1376 id=1376 data-nosnippet>1376</a>                <span class="prelude-val">Err</span>(error) =&gt; {
-<a href=#1377 id=1377 data-nosnippet>1377</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(PlanningError::InternalInvariant(<span class="macro">format!</span>(
-<a href=#1378 id=1378 data-nosnippet>1378</a>                        <span class="string">"`{name}` is declared and does not classify as a reference to \
-<a href=#1379 id=1379 data-nosnippet>1379</a>                             itself: {error}"
-<a href=#1380 id=1380 data-nosnippet>1380</a>                    </span>)))
-<a href=#1381 id=1381 data-nosnippet>1381</a>                }
-<a href=#1382 id=1382 data-nosnippet>1382</a>            }
-<a href=#1383 id=1383 data-nosnippet>1383</a>        }
-<a href=#1384 id=1384 data-nosnippet>1384</a>        <span class="prelude-val">None </span>=&gt; {
-<a href=#1385 id=1385 data-nosnippet>1385</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PlanningError::InternalInvariant(<span class="macro">format!</span>(
-<a href=#1386 id=1386 data-nosnippet>1386</a>                <span class="string">"`{}` was checked against the model and is not in it"</span>,
-<a href=#1387 id=1387 data-nosnippet>1387</a>                name
-<a href=#1388 id=1388 data-nosnippet>1388</a>            )))
-<a href=#1389 id=1389 data-nosnippet>1389</a>        }
-<a href=#1390 id=1390 data-nosnippet>1390</a>        <span class="prelude-val">Some</span>(Type::Enum(<span class="kw">_</span>) | Type::Variant(<span class="kw">_</span>)) =&gt; {
-<a href=#1391 id=1391 data-nosnippet>1391</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(
-<a href=#1392 id=1392 data-nosnippet>1392</a>                Unsupported::new(
-<a href=#1393 id=1393 data-nosnippet>1393</a>                    <span class="string">"unsupported.type.enum"</span>,
-<a href=#1394 id=1394 data-nosnippet>1394</a>                    <span class="macro">format!</span>(
-<a href=#1395 id=1395 data-nosnippet>1395</a>                        <span class="string">"`{}` is an enum, which v2 has no representation for yet"</span>,
-<a href=#1396 id=1396 data-nosnippet>1396</a>                        name
-<a href=#1397 id=1397 data-nosnippet>1397</a>                    ),
-<a href=#1398 id=1398 data-nosnippet>1398</a>                ),
-<a href=#1399 id=1399 data-nosnippet>1399</a>                <span class="kw-2">&amp;</span>root,
-<a href=#1400 id=1400 data-nosnippet>1400</a>            )))
-<a href=#1401 id=1401 data-nosnippet>1401</a>        }
-<a href=#1402 id=1402 data-nosnippet>1402</a>    };
-<a href=#1403 id=1403 data-nosnippet>1403</a>
-<a href=#1404 id=1404 data-nosnippet>1404</a>    <span class="kw">let </span>taken = <span class="kw">match </span>run.plan_value(
-<a href=#1405 id=1405 data-nosnippet>1405</a>        Crossing {
-<a href=#1406 id=1406 data-nosnippet>1406</a>            ty: ty.clone(),
-<a href=#1407 id=1407 data-nosnippet>1407</a>            direction: Direction::IntoRust,
-<a href=#1408 id=1408 data-nosnippet>1408</a>        },
-<a href=#1409 id=1409 data-nosnippet>1409</a>        <span class="kw-2">&amp;</span>root,
-<a href=#1410 id=1410 data-nosnippet>1410</a>    )<span class="question-mark">? </span>{
-<a href=#1411 id=1411 data-nosnippet>1411</a>        Planned::Ready(id) =&gt; id,
-<a href=#1412 id=1412 data-nosnippet>1412</a>        Planned::Unsupported(refusal) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(refusal)),
+<a href=#1364 id=1364 data-nosnippet>1364</a>    </span><span class="kw">let </span>Declaration::Type(key) = declaration <span class="kw">else </span>{
+<a href=#1365 id=1365 data-nosnippet>1365</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(PlanningError::InternalInvariant(<span class="macro">format!</span>(
+<a href=#1366 id=1366 data-nosnippet>1366</a>            <span class="string">"`{declaration}` was routed to the type planner"
+<a href=#1367 id=1367 data-nosnippet>1367</a>        </span>)));
+<a href=#1368 id=1368 data-nosnippet>1368</a>    };
+<a href=#1369 id=1369 data-nosnippet>1369</a>    <span class="kw">let </span>name = declaration
+<a href=#1370 id=1370 data-nosnippet>1370</a>        .entity()
+<a href=#1371 id=1371 data-nosnippet>1371</a>        .expect(<span class="string">"a type declaration names an entity"</span>)
+<a href=#1372 id=1372 data-nosnippet>1372</a>        .name();
+<a href=#1373 id=1373 data-nosnippet>1373</a>    <span class="comment">// The item is looked up by its name, and the type is read from the key
+<a href=#1374 id=1374 data-nosnippet>1374</a>    // as the binding declared it: `ptr_class!(Publisher&lt;'static&gt;)` names the
+<a href=#1375 id=1375 data-nosnippet>1375</a>    // item `Publisher` and means values of `Publisher&lt;'static&gt;`, which is
+<a href=#1376 id=1376 data-nosnippet>1376</a>    // what the target recorded its choice under.
+<a href=#1377 id=1377 data-nosnippet>1377</a>    </span><span class="kw">let </span>item = <span class="kw">match </span>flat.declared_type(<span class="kw-2">&amp;</span>name) {
+<a href=#1378 id=1378 data-nosnippet>1378</a>        <span class="prelude-val">Some</span>(Type::Struct(strukt)) =&gt; SourceItem::Struct(strukt),
+<a href=#1379 id=1379 data-nosnippet>1379</a>        <span class="prelude-val">Some</span>(Type::Extern(opaque)) =&gt; SourceItem::Extern(opaque),
+<a href=#1380 id=1380 data-nosnippet>1380</a>        <span class="prelude-val">None </span>=&gt; {
+<a href=#1381 id=1381 data-nosnippet>1381</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PlanningError::InternalInvariant(<span class="macro">format!</span>(
+<a href=#1382 id=1382 data-nosnippet>1382</a>                <span class="string">"`{}` was checked against the model and is not in it"</span>,
+<a href=#1383 id=1383 data-nosnippet>1383</a>                name
+<a href=#1384 id=1384 data-nosnippet>1384</a>            )))
+<a href=#1385 id=1385 data-nosnippet>1385</a>        }
+<a href=#1386 id=1386 data-nosnippet>1386</a>        <span class="prelude-val">Some</span>(Type::Enum(<span class="kw">_</span>) | Type::Variant(<span class="kw">_</span>)) =&gt; {
+<a href=#1387 id=1387 data-nosnippet>1387</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(
+<a href=#1388 id=1388 data-nosnippet>1388</a>                Unsupported::new(
+<a href=#1389 id=1389 data-nosnippet>1389</a>                    <span class="string">"unsupported.type.enum"</span>,
+<a href=#1390 id=1390 data-nosnippet>1390</a>                    <span class="macro">format!</span>(
+<a href=#1391 id=1391 data-nosnippet>1391</a>                        <span class="string">"`{}` is an enum, which v2 has no representation for yet"</span>,
+<a href=#1392 id=1392 data-nosnippet>1392</a>                        name
+<a href=#1393 id=1393 data-nosnippet>1393</a>                    ),
+<a href=#1394 id=1394 data-nosnippet>1394</a>                ),
+<a href=#1395 id=1395 data-nosnippet>1395</a>                <span class="kw-2">&amp;</span>root,
+<a href=#1396 id=1396 data-nosnippet>1396</a>            )))
+<a href=#1397 id=1397 data-nosnippet>1397</a>        }
+<a href=#1398 id=1398 data-nosnippet>1398</a>    };
+<a href=#1399 id=1399 data-nosnippet>1399</a>    <span class="kw">let </span>ty = <span class="kw">match </span>flat.reading_of(key) {
+<a href=#1400 id=1400 data-nosnippet>1400</a>        <span class="prelude-val">Ok</span>(ty) =&gt; ty,
+<a href=#1401 id=1401 data-nosnippet>1401</a>        <span class="prelude-val">Err</span>(error) =&gt; {
+<a href=#1402 id=1402 data-nosnippet>1402</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(
+<a href=#1403 id=1403 data-nosnippet>1403</a>                Unsupported::new(
+<a href=#1404 id=1404 data-nosnippet>1404</a>                    <span class="string">"unsupported.type.key"</span>,
+<a href=#1405 id=1405 data-nosnippet>1405</a>                    <span class="macro">format!</span>(
+<a href=#1406 id=1406 data-nosnippet>1406</a>                        <span class="string">"`{}` is declared over a type this model cannot read: {error}"</span>,
+<a href=#1407 id=1407 data-nosnippet>1407</a>                        key.as_str()
+<a href=#1408 id=1408 data-nosnippet>1408</a>                    ),
+<a href=#1409 id=1409 data-nosnippet>1409</a>                ),
+<a href=#1410 id=1410 data-nosnippet>1410</a>                <span class="kw-2">&amp;</span>root,
+<a href=#1411 id=1411 data-nosnippet>1411</a>            )))
+<a href=#1412 id=1412 data-nosnippet>1412</a>        }
 <a href=#1413 id=1413 data-nosnippet>1413</a>    };
 <a href=#1414 id=1414 data-nosnippet>1414</a>
-<a href=#1415 id=1415 data-nosnippet>1415</a>    <span class="kw">let </span><span class="kw-2">mut </span>given = <span class="prelude-val">None</span>;
-<a href=#1416 id=1416 data-nosnippet>1416</a>    <span class="kw">let </span><span class="kw-2">mut </span>release_plan = <span class="prelude-val">None</span>;
-<a href=#1417 id=1417 data-nosnippet>1417</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(release) = run.nodes[taken.<span class="number">0</span>].repr.release.clone() {
-<a href=#1418 id=1418 data-nosnippet>1418</a>        given = <span class="kw">match </span>run.plan_value(
-<a href=#1419 id=1419 data-nosnippet>1419</a>            Crossing {
-<a href=#1420 id=1420 data-nosnippet>1420</a>                ty,
-<a href=#1421 id=1421 data-nosnippet>1421</a>                direction: Direction::OutOfRust,
-<a href=#1422 id=1422 data-nosnippet>1422</a>            },
-<a href=#1423 id=1423 data-nosnippet>1423</a>            <span class="kw-2">&amp;</span>root.child(<span class="string">"out_of_rust"</span>),
-<a href=#1424 id=1424 data-nosnippet>1424</a>        )<span class="question-mark">? </span>{
-<a href=#1425 id=1425 data-nosnippet>1425</a>            Planned::Ready(id) =&gt; <span class="prelude-val">Some</span>(id),
-<a href=#1426 id=1426 data-nosnippet>1426</a>            Planned::Unsupported(refusal) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(refusal)),
-<a href=#1427 id=1427 data-nosnippet>1427</a>        };
-<a href=#1428 id=1428 data-nosnippet>1428</a>        <span class="comment">// The release is a wrapper of its own, over the same carrier the
-<a href=#1429 id=1429 data-nosnippet>1429</a>        // consuming conversion reads. Its boundary is the target's answer for
-<a href=#1430 id=1430 data-nosnippet>1430</a>        // a site with no source function.
-<a href=#1431 id=1431 data-nosnippet>1431</a>        </span><span class="kw">let </span>values = ResolvedValues {
-<a href=#1432 id=1432 data-nosnippet>1432</a>            inputs: <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>run.nodes[taken.<span class="number">0</span>]],
-<a href=#1433 id=1433 data-nosnippet>1433</a>            output: <span class="prelude-val">None</span>,
-<a href=#1434 id=1434 data-nosnippet>1434</a>        };
-<a href=#1435 id=1435 data-nosnippet>1435</a>        <span class="kw">let </span>site = SiteDescriptor {
-<a href=#1436 id=1436 data-nosnippet>1436</a>            declaration,
-<a href=#1437 id=1437 data-nosnippet>1437</a>            function: <span class="prelude-val">None</span>,
+<a href=#1415 id=1415 data-nosnippet>1415</a>    <span class="kw">let </span>taken = <span class="kw">match </span>run.plan_value(
+<a href=#1416 id=1416 data-nosnippet>1416</a>        Crossing {
+<a href=#1417 id=1417 data-nosnippet>1417</a>            ty: ty.clone(),
+<a href=#1418 id=1418 data-nosnippet>1418</a>            direction: Direction::IntoRust,
+<a href=#1419 id=1419 data-nosnippet>1419</a>        },
+<a href=#1420 id=1420 data-nosnippet>1420</a>        <span class="kw-2">&amp;</span>root,
+<a href=#1421 id=1421 data-nosnippet>1421</a>    )<span class="question-mark">? </span>{
+<a href=#1422 id=1422 data-nosnippet>1422</a>        Planned::Ready(id) =&gt; id,
+<a href=#1423 id=1423 data-nosnippet>1423</a>        Planned::Unsupported(refusal) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(refusal)),
+<a href=#1424 id=1424 data-nosnippet>1424</a>    };
+<a href=#1425 id=1425 data-nosnippet>1425</a>
+<a href=#1426 id=1426 data-nosnippet>1426</a>    <span class="kw">let </span><span class="kw-2">mut </span>given = <span class="prelude-val">None</span>;
+<a href=#1427 id=1427 data-nosnippet>1427</a>    <span class="kw">let </span><span class="kw-2">mut </span>release_plan = <span class="prelude-val">None</span>;
+<a href=#1428 id=1428 data-nosnippet>1428</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(release) = run.nodes[taken.<span class="number">0</span>].repr.release.clone() {
+<a href=#1429 id=1429 data-nosnippet>1429</a>        given = <span class="kw">match </span>run.plan_value(
+<a href=#1430 id=1430 data-nosnippet>1430</a>            Crossing {
+<a href=#1431 id=1431 data-nosnippet>1431</a>                ty,
+<a href=#1432 id=1432 data-nosnippet>1432</a>                direction: Direction::OutOfRust,
+<a href=#1433 id=1433 data-nosnippet>1433</a>            },
+<a href=#1434 id=1434 data-nosnippet>1434</a>            <span class="kw-2">&amp;</span>root.child(<span class="string">"out_of_rust"</span>),
+<a href=#1435 id=1435 data-nosnippet>1435</a>        )<span class="question-mark">? </span>{
+<a href=#1436 id=1436 data-nosnippet>1436</a>            Planned::Ready(id) =&gt; <span class="prelude-val">Some</span>(id),
+<a href=#1437 id=1437 data-nosnippet>1437</a>            Planned::Unsupported(refusal) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(refusal)),
 <a href=#1438 id=1438 data-nosnippet>1438</a>        };
-<a href=#1439 id=1439 data-nosnippet>1439</a>        <span class="kw">let </span>boundary = <span class="kw">match </span>run.target.boundary(<span class="kw-2">&amp;</span>site, <span class="kw-2">&amp;</span>values)<span class="question-mark">? </span>{
-<a href=#1440 id=1440 data-nosnippet>1440</a>            TargetAttempt::Ready(boundary) =&gt; boundary,
-<a href=#1441 id=1441 data-nosnippet>1441</a>            TargetAttempt::Unsupported(reason) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(reason, <span class="kw-2">&amp;</span>root))),
-<a href=#1442 id=1442 data-nosnippet>1442</a>        };
-<a href=#1443 id=1443 data-nosnippet>1443</a>        drop(values);
-<a href=#1444 id=1444 data-nosnippet>1444</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(category) = release.failure_category() {
-<a href=#1445 id=1445 data-nosnippet>1445</a>            <span class="kw">if </span>!boundary
-<a href=#1446 id=1446 data-nosnippet>1446</a>                .failures
-<a href=#1447 id=1447 data-nosnippet>1447</a>                .iter()
-<a href=#1448 id=1448 data-nosnippet>1448</a>                .any(|route| route.category == category)
-<a href=#1449 id=1449 data-nosnippet>1449</a>            {
-<a href=#1450 id=1450 data-nosnippet>1450</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(
-<a href=#1451 id=1451 data-nosnippet>1451</a>                    Unsupported::new(
-<a href=#1452 id=1452 data-nosnippet>1452</a>                        <span class="string">"unsupported.boundary.unrouted_failure"</span>,
-<a href=#1453 id=1453 data-nosnippet>1453</a>                        <span class="macro">format!</span>(
-<a href=#1454 id=1454 data-nosnippet>1454</a>                            <span class="string">"releasing a handle can fail with a {} error and this boundary \
-<a href=#1455 id=1455 data-nosnippet>1455</a>                             declares no route for it"</span>,
-<a href=#1456 id=1456 data-nosnippet>1456</a>                            category.as_str()
-<a href=#1457 id=1457 data-nosnippet>1457</a>                        ),
-<a href=#1458 id=1458 data-nosnippet>1458</a>                    ),
-<a href=#1459 id=1459 data-nosnippet>1459</a>                    <span class="kw-2">&amp;</span>root,
-<a href=#1460 id=1460 data-nosnippet>1460</a>                )));
-<a href=#1461 id=1461 data-nosnippet>1461</a>            }
-<a href=#1462 id=1462 data-nosnippet>1462</a>        }
-<a href=#1463 id=1463 data-nosnippet>1463</a>        release_plan = <span class="kw">match </span>assemble(
-<a href=#1464 id=1464 data-nosnippet>1464</a>            run,
-<a href=#1465 id=1465 data-nosnippet>1465</a>            declaration,
-<a href=#1466 id=1466 data-nosnippet>1466</a>            Body::Release(Box::new(release)),
-<a href=#1467 id=1467 data-nosnippet>1467</a>            <span class="kw-2">&amp;</span>[taken],
-<a href=#1468 id=1468 data-nosnippet>1468</a>            <span class="prelude-val">None</span>,
-<a href=#1469 id=1469 data-nosnippet>1469</a>            boundary,
-<a href=#1470 id=1470 data-nosnippet>1470</a>        )<span class="question-mark">? </span>{
-<a href=#1471 id=1471 data-nosnippet>1471</a>            <span class="prelude-val">Ok</span>(plan) =&gt; <span class="prelude-val">Some</span>(plan),
-<a href=#1472 id=1472 data-nosnippet>1472</a>            <span class="prelude-val">Err</span>(refusal) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(refusal)),
-<a href=#1473 id=1473 data-nosnippet>1473</a>        };
-<a href=#1474 id=1474 data-nosnippet>1474</a>    }
-<a href=#1475 id=1475 data-nosnippet>1475</a>
-<a href=#1476 id=1476 data-nosnippet>1476</a>    <span class="kw">let </span>values = ResolvedValues {
-<a href=#1477 id=1477 data-nosnippet>1477</a>        inputs: <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>run.nodes[taken.<span class="number">0</span>]],
-<a href=#1478 id=1478 data-nosnippet>1478</a>        output: given.map(|id| <span class="kw-2">&amp;</span>run.nodes[id.<span class="number">0</span>]),
-<a href=#1479 id=1479 data-nosnippet>1479</a>    };
-<a href=#1480 id=1480 data-nosnippet>1480</a>    <span class="kw">let </span>surface = <span class="kw">match </span>run
-<a href=#1481 id=1481 data-nosnippet>1481</a>        .target
-<a href=#1482 id=1482 data-nosnippet>1482</a>        .surface(<span class="kw-2">&amp;</span>SurfaceRequest { declaration, item }, <span class="kw-2">&amp;</span>values)<span class="question-mark">?
-<a href=#1483 id=1483 data-nosnippet>1483</a>    </span>{
-<a href=#1484 id=1484 data-nosnippet>1484</a>        TargetAttempt::Ready(surface) =&gt; surface,
-<a href=#1485 id=1485 data-nosnippet>1485</a>        TargetAttempt::Unsupported(reason) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(reason, <span class="kw-2">&amp;</span>root))),
-<a href=#1486 id=1486 data-nosnippet>1486</a>    };
-<a href=#1487 id=1487 data-nosnippet>1487</a>    drop(values);
-<a href=#1488 id=1488 data-nosnippet>1488</a>    <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(Emitted {
-<a href=#1489 id=1489 data-nosnippet>1489</a>        function: release_plan,
-<a href=#1490 id=1490 data-nosnippet>1490</a>        surface,
-<a href=#1491 id=1491 data-nosnippet>1491</a>    }))
-<a href=#1492 id=1492 data-nosnippet>1492</a>}
+<a href=#1439 id=1439 data-nosnippet>1439</a>        <span class="comment">// The release is a wrapper of its own, over the same carrier the
+<a href=#1440 id=1440 data-nosnippet>1440</a>        // consuming conversion reads. Its boundary is the target's answer for
+<a href=#1441 id=1441 data-nosnippet>1441</a>        // a site with no source function.
+<a href=#1442 id=1442 data-nosnippet>1442</a>        </span><span class="kw">let </span>values = ResolvedValues {
+<a href=#1443 id=1443 data-nosnippet>1443</a>            inputs: <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>run.nodes[taken.<span class="number">0</span>]],
+<a href=#1444 id=1444 data-nosnippet>1444</a>            output: <span class="prelude-val">None</span>,
+<a href=#1445 id=1445 data-nosnippet>1445</a>        };
+<a href=#1446 id=1446 data-nosnippet>1446</a>        <span class="kw">let </span>site = SiteDescriptor {
+<a href=#1447 id=1447 data-nosnippet>1447</a>            declaration,
+<a href=#1448 id=1448 data-nosnippet>1448</a>            function: <span class="prelude-val">None</span>,
+<a href=#1449 id=1449 data-nosnippet>1449</a>        };
+<a href=#1450 id=1450 data-nosnippet>1450</a>        <span class="kw">let </span>boundary = <span class="kw">match </span>run.target.boundary(<span class="kw-2">&amp;</span>site, <span class="kw-2">&amp;</span>values)<span class="question-mark">? </span>{
+<a href=#1451 id=1451 data-nosnippet>1451</a>            TargetAttempt::Ready(boundary) =&gt; boundary,
+<a href=#1452 id=1452 data-nosnippet>1452</a>            TargetAttempt::Unsupported(reason) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(reason, <span class="kw-2">&amp;</span>root))),
+<a href=#1453 id=1453 data-nosnippet>1453</a>        };
+<a href=#1454 id=1454 data-nosnippet>1454</a>        drop(values);
+<a href=#1455 id=1455 data-nosnippet>1455</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(category) = release.failure_category() {
+<a href=#1456 id=1456 data-nosnippet>1456</a>            <span class="kw">if </span>!boundary
+<a href=#1457 id=1457 data-nosnippet>1457</a>                .failures
+<a href=#1458 id=1458 data-nosnippet>1458</a>                .iter()
+<a href=#1459 id=1459 data-nosnippet>1459</a>                .any(|route| route.category == category)
+<a href=#1460 id=1460 data-nosnippet>1460</a>            {
+<a href=#1461 id=1461 data-nosnippet>1461</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(
+<a href=#1462 id=1462 data-nosnippet>1462</a>                    Unsupported::new(
+<a href=#1463 id=1463 data-nosnippet>1463</a>                        <span class="string">"unsupported.boundary.unrouted_failure"</span>,
+<a href=#1464 id=1464 data-nosnippet>1464</a>                        <span class="macro">format!</span>(
+<a href=#1465 id=1465 data-nosnippet>1465</a>                            <span class="string">"releasing a handle can fail with a {} error and this boundary \
+<a href=#1466 id=1466 data-nosnippet>1466</a>                             declares no route for it"</span>,
+<a href=#1467 id=1467 data-nosnippet>1467</a>                            category.as_str()
+<a href=#1468 id=1468 data-nosnippet>1468</a>                        ),
+<a href=#1469 id=1469 data-nosnippet>1469</a>                    ),
+<a href=#1470 id=1470 data-nosnippet>1470</a>                    <span class="kw-2">&amp;</span>root,
+<a href=#1471 id=1471 data-nosnippet>1471</a>                )));
+<a href=#1472 id=1472 data-nosnippet>1472</a>            }
+<a href=#1473 id=1473 data-nosnippet>1473</a>        }
+<a href=#1474 id=1474 data-nosnippet>1474</a>        release_plan = <span class="kw">match </span>assemble(
+<a href=#1475 id=1475 data-nosnippet>1475</a>            run,
+<a href=#1476 id=1476 data-nosnippet>1476</a>            declaration,
+<a href=#1477 id=1477 data-nosnippet>1477</a>            Body::Release(Box::new(release)),
+<a href=#1478 id=1478 data-nosnippet>1478</a>            <span class="kw-2">&amp;</span>[taken],
+<a href=#1479 id=1479 data-nosnippet>1479</a>            <span class="prelude-val">None</span>,
+<a href=#1480 id=1480 data-nosnippet>1480</a>            boundary,
+<a href=#1481 id=1481 data-nosnippet>1481</a>        )<span class="question-mark">? </span>{
+<a href=#1482 id=1482 data-nosnippet>1482</a>            <span class="prelude-val">Ok</span>(plan) =&gt; <span class="prelude-val">Some</span>(plan),
+<a href=#1483 id=1483 data-nosnippet>1483</a>            <span class="prelude-val">Err</span>(refusal) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(refusal)),
+<a href=#1484 id=1484 data-nosnippet>1484</a>        };
+<a href=#1485 id=1485 data-nosnippet>1485</a>    }
+<a href=#1486 id=1486 data-nosnippet>1486</a>
+<a href=#1487 id=1487 data-nosnippet>1487</a>    <span class="kw">let </span>values = ResolvedValues {
+<a href=#1488 id=1488 data-nosnippet>1488</a>        inputs: <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>run.nodes[taken.<span class="number">0</span>]],
+<a href=#1489 id=1489 data-nosnippet>1489</a>        output: given.map(|id| <span class="kw-2">&amp;</span>run.nodes[id.<span class="number">0</span>]),
+<a href=#1490 id=1490 data-nosnippet>1490</a>    };
+<a href=#1491 id=1491 data-nosnippet>1491</a>    <span class="kw">let </span>surface = <span class="kw">match </span>run
+<a href=#1492 id=1492 data-nosnippet>1492</a>        .target
+<a href=#1493 id=1493 data-nosnippet>1493</a>        .surface(<span class="kw-2">&amp;</span>SurfaceRequest { declaration, item }, <span class="kw-2">&amp;</span>values)<span class="question-mark">?
+<a href=#1494 id=1494 data-nosnippet>1494</a>    </span>{
+<a href=#1495 id=1495 data-nosnippet>1495</a>        TargetAttempt::Ready(surface) =&gt; surface,
+<a href=#1496 id=1496 data-nosnippet>1496</a>        TargetAttempt::Unsupported(reason) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(Refusal::at(reason, <span class="kw-2">&amp;</span>root))),
+<a href=#1497 id=1497 data-nosnippet>1497</a>    };
+<a href=#1498 id=1498 data-nosnippet>1498</a>    drop(values);
+<a href=#1499 id=1499 data-nosnippet>1499</a>    <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(Emitted {
+<a href=#1500 id=1500 data-nosnippet>1500</a>        function: release_plan,
+<a href=#1501 id=1501 data-nosnippet>1501</a>        surface,
+<a href=#1502 id=1502 data-nosnippet>1502</a>    }))
+<a href=#1503 id=1503 data-nosnippet>1503</a>}
 </code></pre></div></section></main></body></html>
