@@ -349,17 +349,21 @@ impl PrimitiveFailure {
 /// An operation the registry itself knows how to render, so a target that
 /// needs one ships no renderer for it.
 ///
-/// The three handle operations are here because they are Rust, not C or JNI:
-/// moving a source value onto the heap and back is the same for every target,
-/// and it is the one place a conversion has to spell a *source* type — which
-/// only the registry may do. What differs per target is the carrier the
-/// address is cast to, and that the target states.
+/// An operation belongs here when rendering it means naming a *source* type,
+/// which only the registry can do: it alone knows the module the generated
+/// code reaches the source items through. Moving a value onto the heap and
+/// back, and matching a source enum one value at a time, are the same Rust
+/// whichever language asked for them. What differs per target — the carrier
+/// an address is cast to, what a value is carried as — the target states, and
+/// these operations take it as given.
 #[derive(Clone, Debug)]
 pub enum StandardOp {
     /// The result *is* the operand: the carrier and the source value are one
     /// Rust value. Renders nothing at all.
     Identity,
-    /// Read a member of an aggregate carrier: `arg0.secs`.
+    /// Read one field of the struct a carrier is: `arg0.secs`, or `arg0.0`
+    /// where the field has no name. The carrier is a
+    /// [`Layout::Aggregate`], and the field has to be one it declared.
     ReadMember { member: syn::Member },
     /// Hand an owned source value to the foreign side as an address:
     /// `Box::into_raw(Box::new(v)) as <carrier>`. The foreign side owns the
@@ -1173,7 +1177,7 @@ impl<K> SurfaceRequest<'_, K> {
 /// is shape: [`Element`] has variants no declaration can resolve to (a guard,
 /// an unsupported item) and nests the type kinds one level down, so a target
 /// matching on it would carry unreachable arms and a second match. This lists
-/// exactly the kinds a resolved declaration can be — a constant and the enums
+/// exactly the kinds a resolved declaration can be — a constant and a sum
 /// will add variants — so an adapter's `match` is exhaustive over real cases
 /// and the compiler says when a kind is added.
 ///
