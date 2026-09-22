@@ -364,6 +364,35 @@ fn operation<T: Target>(
                     .ok_or_else(|| String::from(#message))
             }
         }
+        Operation::Standard(StandardOp::EnumOut { source, arms }) => {
+            let value = &operands[0];
+            let ty = source_type(source);
+            let arms = arms
+                .iter()
+                .map(|(name, carried)| quote!(#ty::#name => #carried));
+            quote!(match #value { #(#arms),* })
+        }
+        Operation::Standard(StandardOp::EnumIn {
+            source,
+            arms,
+            invalid,
+        }) => {
+            let value = &operands[0];
+            let ty = source_type(source);
+            let matched = arms.iter().map(|(pattern, name)| match invalid {
+                Some(_) => quote!(#pattern => ::core::result::Result::Ok(#ty::#name)),
+                None => quote!(#pattern => #ty::#name),
+            });
+            match invalid {
+                Some(message) => quote! {
+                    match #value {
+                        #(#matched,)*
+                        other => ::core::result::Result::Err(::std::format!(#message, other)),
+                    }
+                },
+                None => quote!(match #value { #(#matched),* }),
+            }
+        }
         Operation::Standard(StandardOp::Release { source }) => {
             let value = &operands[0];
             let ty = source_type(source);

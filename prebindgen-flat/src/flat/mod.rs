@@ -778,6 +778,17 @@ impl Flat {
         }
     }
 
+    /// The fieldless enum of this name, when the model holds one.
+    ///
+    /// `None` for every other element, an enum whose alternatives carry
+    /// values included: that is a sum, which the model calls a variant.
+    pub fn unit_enum<N: Name + ?Sized>(&self, name: &N) -> Option<&Enum> {
+        match self.declared_type(name)? {
+            Type::Enum(e) => Some(e),
+            _ => None,
+        }
+    }
+
     /// This model without the named elements, and without anything that names
     /// one of them.
     ///

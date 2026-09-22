@@ -105,12 +105,22 @@ impl CbindgenBuilder {
             );
         }
 
+        // A declared enum: C sees a `repr(C)` enum of the same values, and a
+        // value of the type crosses as one of them.
+        for key in sorted(self.enums.keys()) {
+            declare(
+                Declaration::Type(key.clone()),
+                CChoice::Enum {
+                    c_name: self.c_type_name(key),
+                },
+            );
+        }
+
         // Every other declarator is accounted for and refused by name. A
         // declared type need not be a captured item: `String` crosses as an
         // opaque handle in perftest-c and the source never exported it.
         for (keys, declarator) in [
             (sorted(self.value_opaque.keys()), "value_opaque"),
-            (sorted(self.enums.keys()), "enum_type"),
             (sorted(self.tagged_unions.keys()), "tagged_union"),
         ] {
             for key in keys {

@@ -41,6 +41,9 @@ pub enum CChoice {
     /// An opaque handle: C holds a `<c_name> *` to a Rust-owned value and
     /// frees it through the `release` symbol.
     OpaquePtr { c_name: String, release: String },
+    /// A fieldless enum: C declares an enum of the same values under this
+    /// name, and a value of the type crosses as one of them.
+    Enum { c_name: String },
     /// A source function to expose: the wrapper around it carries this symbol.
     Function { symbol: String },
     /// A declaration v1 lowers and v2 does not yet: an enum, a value-opaque
@@ -53,10 +56,11 @@ pub enum CChoice {
     },
 }
 
-/// C contributes no operation of its own: reading an aggregate member is a
-/// standard operation the registry renders, and a scalar crosses as itself.
-/// This type has no values, which is that fact stated so the compiler keeps
-/// it true.
+/// C contributes no operation of its own: reading an aggregate member, and
+/// going between a source enum and the C one declared for it, are standard
+/// operations the registry renders — it is the registry that can spell a
+/// source path. This type has no values, which is that fact stated so the
+/// compiler keeps it true.
 #[derive(Clone, Debug)]
 pub enum CPayload {}
 
@@ -141,7 +145,10 @@ impl Target for CTarget {
         // crossed as the scalar default.
         let want_struct = match &conversion {
             CChoice::DataStruct { .. } => true,
-            CChoice::Scalar | CChoice::OpaquePtr { .. } | CChoice::Function { .. } => false,
+            CChoice::Scalar
+            | CChoice::Enum { .. }
+            | CChoice::OpaquePtr { .. }
+            | CChoice::Function { .. } => false,
             CChoice::Unimplemented { declarator, .. } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
@@ -205,6 +212,65 @@ impl Target for CTarget {
                         protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
                         release: None,
                     },
+                }))
+            }
+            // A fieldless enum crosses as the C enum this target declares for
+            // it: the same values, so the match either way is exhaustive and
+            // cannot fail.
+            (Relation::Atomic, CChoice::Enum { c_name }) => {
+                let Some(unit) = shape.unit else {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.not_an_enum",
+                        format!(
+                            "`{}` is declared as a C enum, and is not a fieldless enum",
+                            shape.crossing.ty.key()
+                        ),
+                    )));
+                };
+                let ident = format_ident!("{c_name}");
+                let carrier = WireType::abi(syn::parse_quote!(#ident));
+                let ty = shape.crossing.ty.clone();
+                let values: Vec<syn::Ident> =
+                    unit.values.iter().map(|value| value.name.clone()).collect();
+                let codec = match shape.crossing.direction {
+                    Direction::OutOfRust => PrimitiveSpec {
+                        operands: vec![OperandSpec::value(
+                            OperationType::Source(ty.clone()),
+                            Access::Owned,
+                        )],
+                        result: Some(OperationType::Carrier(carrier.clone())),
+                        failure: PrimitiveFailure::Infallible,
+                        dependencies: Vec::new(),
+                        implementation: Operation::Standard(StandardOp::EnumOut {
+                            source: Box::new(ty),
+                            arms: values
+                                .iter()
+                                .map(|name| (name.clone(), syn::parse_quote!(#ident::#name)))
+                                .collect(),
+                        }),
+                    },
+                    Direction::IntoRust => PrimitiveSpec {
+                        operands: vec![OperandSpec::value(
+                            OperationType::Carrier(carrier.clone()),
+                            Access::Owned,
+                        )],
+                        result: Some(OperationType::Source(ty.clone())),
+                        failure: PrimitiveFailure::Infallible,
+                        dependencies: Vec::new(),
+                        implementation: Operation::Standard(StandardOp::EnumIn {
+                            source: Box::new(ty),
+                            arms: values
+                                .iter()
+                                .map(|name| (syn::parse_quote!(#ident::#name), name.clone()))
+                                .collect(),
+                            invalid: None,
+                        }),
+                    },
+                };
+                Ok(TargetAttempt::Ready(ReprSpec {
+                    layout: Layout::Scalar(carrier),
+                    protocol: Protocol::terminal(codec),
+                    release: None,
                 }))
             }
             (Relation::Atomic, _) => {
@@ -411,6 +477,53 @@ impl Target for CTarget {
                 rust: Vec::new(),
                 payload: None,
             })),
+            // The C enum itself: the same values under the same names, and
+            // the numbers Rust assigns, so a C caller reading the header sees
+            // what a Rust caller sees.
+            SourceItem::Enum(unit) => {
+                let CChoice::Enum { c_name } = declared else {
+                    return Err(PlanningError::InvalidInput(format!(
+                        "`{}` is exposed as an enum, and is declared as something else",
+                        unit.name
+                    )));
+                };
+                let Ok(values) = unit.discriminant_values() else {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.enum_discriminant",
+                        format!(
+                            "`{c_name}` has a value whose number the model cannot evaluate, and \
+                             a C enum is its numbers"
+                        ),
+                    )));
+                };
+                if values.is_empty() {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.c.empty_enum",
+                        format!("`{c_name}` has no values, and C has no empty enumeration"),
+                    )));
+                }
+                let ident = format_ident!("{c_name}");
+                let values = values.iter().map(|(name, number)| {
+                    let number = proc_macro2::Literal::i64_unsuffixed(*number);
+                    quote!(#name = #number)
+                });
+                Ok(TargetAttempt::Ready(SurfaceSpec {
+                    declaration: request.declaration.clone(),
+                    requires: Vec::new(),
+                    rust: vec![Artifact::new(
+                        c_name.clone(),
+                        quote! {
+                            #[repr(C)]
+                            #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+                            #[allow(non_camel_case_types)]
+                            pub enum #ident {
+                                #(#values),*
+                            }
+                        },
+                    )],
+                    payload: None,
+                }))
+            }
             SourceItem::Struct(strukt) => {
                 let CChoice::DataStruct { c_name } = declared else {
                     return Err(PlanningError::InvalidInput(format!(

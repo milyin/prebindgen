@@ -73,11 +73,11 @@ fn every_declared_element_is_accounted_for() {
         .iter()
         .map(|(declaration, _)| declaration.to_string())
         .collect();
-    assert_eq!(skipped, ["type:Operation", "callback:impl Fn(f64)"]);
+    assert_eq!(skipped, ["callback:impl Fn(f64)"]);
 
     // The handle — a struct carried whole under `opaque_ptr`, its fields never
-    // read — and the function returning it are what is left, under the names
-    // this adapter's manglers give them.
+    // read — the enum, and the function returning the handle are what is left,
+    // under the names this adapter's manglers give them.
     let dir = unique_test_dir("cbindgen_v2_accounted");
     let path = generated
         .write_rust(dir.join("bindings.rs"))
@@ -98,20 +98,13 @@ fn every_declared_element_is_accounted_for() {
 fn a_missing_capability_is_reported_per_element() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
 
-    // An enum has no fields to walk, so the registry refuses it before the
-    // target is asked; a callback has no lowering at all.
+    // A callback has no lowering at all.
     let codes: Vec<&str> = generated
         .skipped()
         .iter()
         .map(|(_, skip)| skip.capability.as_str())
         .collect();
-    assert_eq!(
-        codes,
-        [
-            "unsupported.type.enum",
-            "unsupported.callback.not_implemented"
-        ]
-    );
+    assert_eq!(codes, ["unsupported.callback.not_implemented"]);
 
     // The handle is emitted under the manglers' names — the incomplete type,
     // its destructor, and the function returning one — with the struct's
@@ -303,4 +296,80 @@ fn v1_is_unchanged_and_reachable_by_name() {
         .flat()
         .function("calculator_new")
         .is_some());
+}
+
+/// A fieldless enum crosses as the C enum this adapter declares for it: the
+/// same values under the same names, carrying the numbers Rust assigns.
+///
+/// The wrapper takes and returns that enum, and goes between it and the source
+/// type by matching one value at a time. Both matches name every value, so
+/// neither can fail and neither needs a route — and if the two types ever drift
+/// apart, the generated Rust stops compiling rather than mapping a value to the
+/// wrong one.
+#[test]
+fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub enum Operation {
+                    Add,
+                    Mul = 7,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn operation_flip(op: Operation) -> Operation {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .function(syn::parse_quote!(operation_flip))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
+
+    let dir = unique_test_dir("cbindgen_v2_enum");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let compact: String = rust.split_whitespace().collect();
+
+    // The C enum, with the numbers Rust assigns — `Mul` says 7 because the
+    // source does, and `Add` says 0 because Rust counts from there.
+    assert!(
+        compact.contains("pubenumoperation_t{Add=0,Mul=7,}"),
+        "{rust}"
+    );
+    // The wrapper's parameter and return are that enum.
+    assert!(
+        compact.contains("pubextern\"C\"fnoperation_flip(op:operation_t)->operation_t{"),
+        "{rust}"
+    );
+    // One arm per value, each way, and no default arm.
+    assert!(
+        compact.contains(
+            "matchop{operation_t::Add=>fixture::Operation::Add,\
+             operation_t::Mul=>fixture::Operation::Mul,}"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains(
+            "matchv1{fixture::Operation::Add=>operation_t::Add,\
+             fixture::Operation::Mul=>operation_t::Mul,}"
+        ),
+        "{rust}"
+    );
 }

@@ -283,6 +283,19 @@ establish the behavior of the resulting foreign interface.
    [the handle's representation cell][typedef_represent]: nothing acquires a
    resource that a later failing operation could leak.
 
+9. **A fieldless enum is its numbers.** An `enum Op { Add, Mul = 7 }` has no
+   parts, so it crosses through the atomic relation like a scalar — but the
+   value that crosses is the number Rust assigns each alternative, which the
+   model already computes. Two more standard operations spell the conversion,
+   `EnumOut` and `EnumIn`, for the reason the handle operations are standard:
+   they name the source type, and an adapter cannot spell a source path. What
+   the number is carried *as* is the adapter's: C declares an enum of the same
+   values and each direction is an exhaustive `match` that cannot fail, while
+   JNI carries a `jint` and a Kotlin `enum class`, so the direction into Rust
+   can meet a number no value names and fails as a `Binding` error. An
+   alternative carrying a field makes a sum, which the model calls a variant
+   and which has no lowering.
+
 ### What it does not settle
 
 The contracts designed for these are on [the extensions page](extensions.md);
@@ -341,6 +354,11 @@ this list says what the increment left open and why.
 - **The `Unselected` outcome** is not implemented: a captured item nobody
   declared is not accounted for at all, since the engine hears only what the
   binding asked for.
+- **A sum** — an enum whose alternatives carry values — has no representation.
+  The fieldless enum above is a named set of integers and crosses as one; a
+  sum needs a tag and one group of slots per alternative, which
+  `Layout::Slots` and `ChoiceOps` describe and nothing implements. The engine
+  refuses one with `unsupported.type.variant`.
 
 ## Acceptance and feasibility evidence
 

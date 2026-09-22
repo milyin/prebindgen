@@ -541,6 +541,14 @@ impl Extern {
     }
 }
 
+impl Enum {
+    /// The `#[cfg]` attributes this enum was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(&self.origin.syntax.attrs)
+    }
+}
+
 impl Field {
     /// The `#[cfg]` attributes this field was captured with — see
     /// [`conditions_from`].

@@ -23,8 +23,8 @@ use prebindgen_registry_v2::{
     FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
     PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, Requirement,
     ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem,
-    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-    WireType, WrapperParam,
+    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
+    Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -41,6 +41,9 @@ pub enum JniChoice {
     /// A JVM object whose properties are read, declared as this Kotlin class
     /// (fully qualified).
     DataClass { class: String },
+    /// A fieldless enum, declared as this Kotlin `enum class` (fully
+    /// qualified). A value of it crosses as the number Rust assigns it.
+    EnumClass { class: String },
     /// An opaque handle: the JVM holds the address as a `Long` inside this
     /// Kotlin class (fully qualified), and frees it through the `native`
     /// method on the harness, which the JVM looks up by `symbol`.
@@ -119,6 +122,17 @@ pub enum JniPayload {
         class: String,
         properties: Vec<(String, String)>,
     },
+    /// A Kotlin `enum class` and its values, `(SCREAMING_SNAKE name, number)`.
+    ///
+    /// Each value carries its number, and a `fromInt` companion looks one up
+    /// — which is what the generated wrapper hands over and takes back.
+    EnumClass {
+        package: String,
+        class: String,
+        values: Vec<(String, i64)>,
+        /// The conditions the source enum was written under, as written.
+        conditions: Vec<String>,
+    },
     /// A native method on the harness object, and the Kotlin function over it.
     Method {
         package: String,
@@ -138,6 +152,18 @@ pub enum JniPayload {
     },
 }
 
+/// Which kind of Kotlin class a declared type is spelled as, which is what
+/// decides how a value of it reaches the native method.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClassKind {
+    /// A data class, read through the JVM as an object.
+    Data,
+    /// A handle class, carrying a Rust address as a `Long`.
+    Handle,
+    /// An `enum class`, carrying its value's number as an `Int`.
+    Enum,
+}
+
 /// A Kotlin type as the public function spells it, and how a value of it
 /// reaches the native method.
 #[derive(Clone, Debug)]
@@ -148,13 +174,19 @@ pub enum KotlinType {
     /// A handle class. The native method takes and returns the address as a
     /// `Long`; the public function unwraps one and wraps the other.
     Handle(String),
+    /// An `enum class`. The native method takes and returns the value's own
+    /// number as an `Int`; the public function reads `.value` off one and
+    /// looks the other up with `fromInt`.
+    Enum(String),
 }
 
 impl KotlinType {
     /// What the public function declares.
     pub fn public(&self) -> &str {
         match self {
-            KotlinType::Value(kotlin) | KotlinType::Handle(kotlin) => kotlin,
+            KotlinType::Value(kotlin) | KotlinType::Handle(kotlin) | KotlinType::Enum(kotlin) => {
+                kotlin
+            }
         }
     }
 
@@ -163,6 +195,7 @@ impl KotlinType {
         match self {
             KotlinType::Value(kotlin) => kotlin,
             KotlinType::Handle(_) => "Long",
+            KotlinType::Enum(_) => "Int",
         }
     }
 }
@@ -177,17 +210,16 @@ impl KotlinType {
 /// Renaming a class in the declarations therefore moves it in the declaration
 /// and in every signature mentioning it.
 pub struct JniTarget {
-    /// Rust type key → fully qualified Kotlin class, and whether it is a
-    /// handle class rather than a data class. Spelling, for every signature
-    /// that names the type.
-    classes: BTreeMap<String, (String, bool)>,
+    /// Rust type key → fully qualified Kotlin class, and which kind of class
+    /// it is. Spelling, for every signature that names the type.
+    classes: BTreeMap<String, (String, ClassKind)>,
     /// How every value of this source type crosses, wherever it appears, by
     /// the type's canonical key.
     types: BTreeMap<String, JniChoice>,
 }
 
 impl JniTarget {
-    pub(crate) fn new(classes: BTreeMap<String, (String, bool)>) -> Self {
+    pub(crate) fn new(classes: BTreeMap<String, (String, ClassKind)>) -> Self {
         JniTarget {
             classes,
             types: BTreeMap::new(),
@@ -232,10 +264,11 @@ impl JniTarget {
     fn kotlin_type(&self, ty: &TypeRef) -> Option<KotlinType> {
         match named(ty) {
             Some(name) => {
-                let (class, handle) = self.classes.get(&name).cloned()?;
-                Some(match handle {
-                    true => KotlinType::Handle(class),
-                    false => KotlinType::Value(class),
+                let (class, kind) = self.classes.get(&name).cloned()?;
+                Some(match kind {
+                    ClassKind::Handle => KotlinType::Handle(class),
+                    ClassKind::Enum => KotlinType::Enum(class),
+                    ClassKind::Data => KotlinType::Value(class),
                 })
             }
             None => scalar_of(ty)
@@ -345,7 +378,10 @@ impl Target for JniTarget {
         // under it is planned — never quietly crossed as the scalar default.
         let want_struct = match &conversion {
             JniChoice::DataClass { .. } => true,
-            JniChoice::Scalar | JniChoice::PtrClass { .. } | JniChoice::Function { .. } => false,
+            JniChoice::Scalar
+            | JniChoice::EnumClass { .. }
+            | JniChoice::PtrClass { .. }
+            | JniChoice::Function { .. } => false,
             JniChoice::Unimplemented {
                 declarator,
                 capability,
@@ -412,6 +448,82 @@ impl Target for JniTarget {
                         protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
                         release: None,
                     },
+                }))
+            }
+            // A fieldless enum crosses as the number Rust assigns each of its
+            // values, which is what the Kotlin `enum class` carries too. Out
+            // of Rust every value names one number; into Rust the carrier is
+            // an `Int` and can hold something no value names, so that
+            // direction can fail.
+            (Relation::Atomic, JniChoice::EnumClass { class }) => {
+                let Some(unit) = shape.unit else {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.jni.not_an_enum",
+                        format!(
+                            "`{}` is declared as an enum class, and is not a fieldless enum",
+                            shape.crossing.ty.key()
+                        ),
+                    )));
+                };
+                let Ok(values) = unit.discriminant_values() else {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.jni.enum_discriminant",
+                        format!(
+                            "`{class}` has a value whose number the model cannot evaluate, and \
+                             what crosses is the numbers"
+                        ),
+                    )));
+                };
+                let carrier = WireType::abi(syn::parse_quote!(::jni::sys::jint));
+                let ty = shape.crossing.ty.clone();
+                let codec = match shape.crossing.direction {
+                    Direction::OutOfRust => PrimitiveSpec {
+                        operands: vec![OperandSpec::value(
+                            OperationType::Source(ty.clone()),
+                            Access::Owned,
+                        )],
+                        result: Some(OperationType::Carrier(carrier.clone())),
+                        failure: PrimitiveFailure::Infallible,
+                        dependencies: Vec::new(),
+                        implementation: Operation::Standard(StandardOp::EnumOut {
+                            source: Box::new(ty),
+                            arms: values
+                                .iter()
+                                .map(|(name, number)| {
+                                    let number = proc_macro2::Literal::i64_unsuffixed(*number);
+                                    ((*name).clone(), syn::parse_quote!(#number))
+                                })
+                                .collect(),
+                        }),
+                    },
+                    Direction::IntoRust => PrimitiveSpec {
+                        operands: vec![OperandSpec::value(
+                            OperationType::Carrier(carrier.clone()),
+                            Access::Owned,
+                        )],
+                        result: Some(OperationType::Source(ty.clone())),
+                        failure: PrimitiveFailure::fallible(
+                            OperationType::Carrier(WireType::internal(syn::parse_quote!(String))),
+                            FailureCategory::Binding,
+                        ),
+                        dependencies: Vec::new(),
+                        implementation: Operation::Standard(StandardOp::EnumIn {
+                            source: Box::new(ty),
+                            arms: values
+                                .iter()
+                                .map(|(name, number)| {
+                                    let number = proc_macro2::Literal::i64_unsuffixed(*number);
+                                    (syn::parse_quote!(#number), (*name).clone())
+                                })
+                                .collect(),
+                            invalid: Some(format!("`{class}` has no value numbered {{}}")),
+                        }),
+                    },
+                };
+                Ok(TargetAttempt::Ready(ReprSpec {
+                    layout: Layout::Scalar(carrier),
+                    protocol: Protocol::terminal(codec),
+                    release: None,
                 }))
             }
             (Relation::Atomic, _) => {
@@ -710,6 +822,53 @@ impl Target for JniTarget {
                 "`{}` has no fields, and is declared as something that reads them",
                 opaque.name
             ))),
+            // The `enum class` itself: the same values under Kotlin's naming,
+            // each carrying the number Rust assigns it.
+            SourceItem::Enum(unit) => {
+                let JniChoice::EnumClass { class } = declared else {
+                    return Err(PlanningError::InvalidInput(format!(
+                        "`{}` is exposed as an enum class, and is declared as something else",
+                        unit.name
+                    )));
+                };
+                let Ok(values) = unit.discriminant_values() else {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.jni.enum_discriminant",
+                        format!(
+                            "`{class}` has a value whose number the model cannot evaluate, and \
+                             what crosses is the numbers"
+                        ),
+                    )));
+                };
+                if values.is_empty() {
+                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
+                        "unsupported.jni.empty_enum",
+                        format!("`{class}` has no values, and an enum class needs one"),
+                    )));
+                }
+                let values = values
+                    .iter()
+                    .map(|(name, number)| {
+                        let screaming = crate::util::camel_to_screaming_snake(&plain(name));
+                        (kotlin_codegen::escape_kotlin_ident(&screaming), *number)
+                    })
+                    .collect();
+                let (package, class) = match class.rsplit_once('.') {
+                    Some((package, class)) => (package.to_string(), class.to_string()),
+                    None => (String::new(), class.clone()),
+                };
+                Ok(TargetAttempt::Ready(SurfaceSpec {
+                    declaration: request.declaration.clone(),
+                    requires: Vec::new(),
+                    rust: Vec::new(),
+                    payload: Some(JniPayload::EnumClass {
+                        package,
+                        class,
+                        values,
+                        conditions: request.item_conditions(),
+                    }),
+                }))
+            }
             SourceItem::Function(function) => {
                 let JniChoice::Function {
                     package,
@@ -857,7 +1016,10 @@ impl Target for JniTarget {
                 let (env, error) = (&operands[0], &operands[1]);
                 quote!(#env.throw_new("java/lang/IllegalStateException", #error))
             }
-            JniPayload::Class { .. } | JniPayload::Method { .. } | JniPayload::Handle { .. } => {
+            JniPayload::Class { .. }
+            | JniPayload::EnumClass { .. }
+            | JniPayload::Method { .. }
+            | JniPayload::Handle { .. } => {
                 unreachable!("a Kotlin declaration is not an operation")
             }
         }

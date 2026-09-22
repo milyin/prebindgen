@@ -904,3 +904,91 @@ fn a_constant_exposed_twice_is_two_outputs() {
         ]
     );
 }
+
+/// A fieldless enum crosses as the number Rust assigns each of its values, and
+/// Kotlin sees an `enum class` carrying the same numbers.
+///
+/// Out of Rust every value names a number, so that direction cannot fail. Into
+/// Rust the carrier is an `Int`, which can hold a number no value names — a
+/// caller passing one gets the binding failure the wrapper routes, not a
+/// silently wrong value.
+#[test]
+fn a_fieldless_enum_crosses_as_its_number() {
+    let loc = myflat_loc();
+    let items = declare_referenced(
+        [
+            "pub enum Priority { Low, High = 7 }",
+            "pub fn priority_raise(p: Priority) -> Priority { unimplemented!() }",
+        ]
+        .iter()
+        .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+        .collect::<Vec<_>>(),
+    );
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(
+            crate::package!()
+                .class(crate::enum_class!(Priority))
+                .fun(prebindgen_registry::fun!(priority_raise)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
+
+    let dir = unique_test_dir("jnigen_v2_enum");
+    let _ = std::fs::remove_dir_all(&dir);
+    let rust = generated
+        .write_rust(dir.join("generated_bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust).unwrap();
+    let compact: String = rust.split_whitespace().collect();
+
+    // The wrapper takes and returns the number, and matches one value at a
+    // time in both directions.
+    assert!(
+        compact.contains(
+            "priorityRaise(mutenv:jni::JNIEnv<'_>,_this:jni::objects::JObject<'_>,\
+                          p:::jni::sys::jint,)->::jni::sys::jint{"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains(
+            "matchp{0=>::core::result::Result::Ok(myflat::Priority::Low),\
+                          7=>::core::result::Result::Ok(myflat::Priority::High),"
+        ),
+        "{rust}"
+    );
+    // A number no value names is a binding failure, named for the class.
+    assert!(rust.contains("has no value numbered"), "{rust}");
+    assert!(
+        compact.contains("matchv1{myflat::Priority::Low=>0,myflat::Priority::High=>7,}"),
+        "{rust}"
+    );
+
+    let written = generated
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    let kotlin: String = written
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    for line in [
+        "public enum class Priority(val value: Int) {",
+        "LOW(0),",
+        // The last entry closes the list, because a companion follows it.
+        "HIGH(7);",
+        "public fun fromInt(value: Int): Priority = entries.first { it.value == value }",
+        // The public function speaks the enum; the harness speaks its number.
+        "public fun priorityRaise(p: Priority): Priority = \
+         Priority.fromInt(JNINative.priorityRaise(p.value))",
+        "external fun priorityRaise(p: Int): Int",
+    ] {
+        assert!(
+            kotlin.lines().any(|emitted| emitted.trim() == line),
+            "missing `{line}`:\n{kotlin}"
+        );
+    }
+}

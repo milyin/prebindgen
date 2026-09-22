@@ -47,7 +47,7 @@
 //! them, and `docs/v2/implementation.md` lists exactly what is absent.
 
 use prebindgen_flat::{
-    flat::{Extern, Function, Struct, TypeKind, TypeRef},
+    flat::{Enum, Extern, Function, Struct, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
@@ -372,6 +372,31 @@ pub enum StandardOp {
     /// Drop what [`StandardOp::IntoRaw`] handed out without converting it. A
     /// null address releases nothing, as `free(NULL)` does. Produces no value.
     Release { source: Box<TypeRef> },
+    /// Take a value of a fieldless source enum to what carries it: `match v {
+    /// source::Op::Add => <carried>, … }`, one arm per value, in declaration
+    /// order. Infallible — every value of the source type is named.
+    ///
+    /// What each value is carried *as* is the target's: another enum it
+    /// declares, the number the model assigns. What the source type is called
+    /// is the registry's, which is why this is a standard operation and not a
+    /// payload — an adapter cannot spell a source path.
+    EnumOut {
+        source: Box<TypeRef>,
+        arms: Vec<(syn::Ident, syn::Expr)>,
+    },
+    /// The reverse: a carried value back to the source enum.
+    ///
+    /// With `invalid` set the match ends in a default arm that fails with
+    /// that message, formatted with the value — the carrier can hold
+    /// something no value of the enum names, which is what an integer
+    /// carrier does. Without it the arms are exhaustive over the carrier's
+    /// own type and the operation is infallible, which is what a carrier that
+    /// is itself an enum of the same values gives.
+    EnumIn {
+        source: Box<TypeRef>,
+        arms: Vec<(syn::Pat, syn::Ident)>,
+        invalid: Option<String>,
+    },
 }
 
 /// What actually performs an operation.
@@ -894,6 +919,11 @@ pub struct ResolvedShape<'a> {
     /// The struct behind a struct relation, for a target that renders its own
     /// declaration of it.
     pub strukt: Option<&'a Struct>,
+    /// The fieldless enum this value's type names, for a target that carries
+    /// one as the number Rust assigns each of its values. `None` for every
+    /// other type, and for an enum whose alternatives carry values — a sum,
+    /// which the model calls a variant.
+    pub unit: Option<&'a Enum>,
 }
 
 /// One already-planned child, as its parent's representation sees it.
@@ -1009,6 +1039,7 @@ impl<K> SurfaceRequest<'_, K> {
             SourceItem::Extern(opaque) => {
                 crate::emit::Writer.conditions(Conditioned::Extern(opaque))
             }
+            SourceItem::Enum(unit) => crate::emit::Writer.conditions(Conditioned::Enum(unit)),
         };
         conditions
             .iter()
@@ -1034,7 +1065,7 @@ impl<K> SurfaceRequest<'_, K> {
                 .iter()
                 .map(|field| crate::emit::Writer.conditions(Conditioned::Field(field)))
                 .collect(),
-            SourceItem::Function(_) | SourceItem::Extern(_) => Vec::new(),
+            SourceItem::Function(_) | SourceItem::Extern(_) | SourceItem::Enum(_) => Vec::new(),
         }
     }
 }
@@ -1105,6 +1136,21 @@ pub enum SourceItem<'a> {
     /// representation refuses this variant, and one that declared this type to
     /// be read through its fields finds no struct relation to select at all.
     Extern(&'a Extern),
+    /// A captured enum whose alternatives carry nothing — `enum Op { Add,
+    /// Mul = 7 }` — which the model reads as a named set of integers.
+    ///
+    /// A target declaring one re-declares its values, and a value of it
+    /// crosses as the number Rust assigns:
+    /// [`Enum::discriminant_values`] pairs each name with that number, or
+    /// names the first value whose discriminant the model could not evaluate
+    /// — a `const`, arithmetic, anything but a literal. A target that needs
+    /// the numbers refuses such an enum; nothing else about the model
+    /// depends on them.
+    ///
+    /// An alternative carrying a field makes a sum rather than a set of
+    /// integers, and the model calls that a variant, which is not this
+    /// variant and has no lowering yet.
+    Enum(&'a Enum),
 }
 
 // ---------------------------------------------------------------------------
