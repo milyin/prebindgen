@@ -43,6 +43,7 @@
 pub mod body;
 pub mod decl;
 mod emit;
+pub mod entity;
 pub mod outcome;
 pub mod plan;
 pub mod report;
@@ -53,6 +54,7 @@ mod tests;
 
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::{Declaration, EntityName};
+pub use entity::{Entity, EntityKind};
 pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{generate, BindingRequests, FunctionPlan, NodeId, Request, ValuePlan};
 pub use report::{Counts, Report, SCHEMA_VERSION};

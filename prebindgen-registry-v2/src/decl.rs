@@ -7,8 +7,10 @@
 //! own configuration up by — the request carries none: the foreign name and
 //! the declarator word the report prints come from that lookup.
 
-use prebindgen_flat::flat::{Element, EntityKind, Flat, TypeKey};
+use prebindgen_flat::flat::{Element, Flat, TypeKey};
 use serde::Serialize;
+
+use crate::entity::{Entity, EntityKind};
 
 /// An entity by name: which of the three kinds, and what it is called.
 ///
@@ -145,7 +147,7 @@ impl Declaration {
     pub(crate) fn captured<'f>(&self, flat: &'f Flat) -> Option<&'f Element> {
         let wanted = self.entity()?;
         let element = flat.element(&wanted.name())?;
-        (element.entity()?.kind() == wanted.kind()).then_some(element)
+        (Entity::of(element)?.kind() == wanted.kind()).then_some(element)
     }
 
     /// Whether the model lacks what this declaration must name.

@@ -43,69 +43,7 @@ pub enum Element {
     Unsupported(Unsupported),
 }
 
-/// A real item of the flat API: a type, a function or a constant, with its
-/// whole description.
-///
-/// The three kinds a binding can name, and the only three: [`Element`] also
-/// holds a guard and an unsupported item, which are in the model and not in
-/// the API. Where an entity came from is not a kind. A `#[prebindgen]` item
-/// and one the binding defines itself — a helper function with a stated
-/// signature, a type the source never exported that the binding represents
-/// as a handle — are the same entity, and differ in their [`Origin`] alone:
-/// the location says which crate, and the module generated code reaches the
-/// item through.
-#[derive(Clone, Copy, Debug)]
-pub enum Entity<'a> {
-    Type(&'a Type),
-    Function(&'a Function),
-    Constant(&'a Constant),
-}
-
-/// Which of the three kinds, on its own.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum EntityKind {
-    Type,
-    Function,
-    Constant,
-}
-
-impl Entity<'_> {
-    pub fn kind(&self) -> EntityKind {
-        match self {
-            Entity::Type(_) => EntityKind::Type,
-            Entity::Function(_) => EntityKind::Function,
-            Entity::Constant(_) => EntityKind::Constant,
-        }
-    }
-
-    pub fn name(&self) -> &syn::Ident {
-        match self {
-            Entity::Type(t) => t.name(),
-            Entity::Function(f) => &f.name,
-            Entity::Constant(c) => &c.name,
-        }
-    }
-
-    pub fn location(&self) -> &SourceLocation {
-        match self {
-            Entity::Type(t) => t.location(),
-            Entity::Function(f) => &f.origin.location,
-            Entity::Constant(c) => &c.origin.location,
-        }
-    }
-}
-
 impl Element {
-    /// This element as an entity — `None` for a guard or an unsupported item.
-    pub fn entity(&self) -> Option<Entity<'_>> {
-        match self {
-            Element::Type(t) => Some(Entity::Type(t)),
-            Element::Function(f) => Some(Entity::Function(f)),
-            Element::Constant(c) => Some(Entity::Constant(c)),
-            Element::Guard(_) | Element::Unsupported(_) => None,
-        }
-    }
-
     /// The item's name, which is also its address: `#[prebindgen]` names live
     /// in one flat namespace across every ingested source crate.
     ///

@@ -52,10 +52,10 @@ impl Reach {
     pub(crate) fn new(flat: &Flat, default: syn::Path) -> Self {
         let modules = flat
             .elements()
-            .filter_map(|element| element.entity())
+            .filter_map(crate::entity::Entity::of)
             .filter(|entity| flat.is_binding_local(entity.name()))
             .filter_map(|entity| {
-                let module = entity.location().crate_name.as_ref()?;
+                let module = entity.crate_name()?;
                 Some((entity.name().to_string(), syn::parse_str(module).ok()?))
             })
             .collect();

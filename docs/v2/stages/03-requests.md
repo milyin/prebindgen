@@ -452,9 +452,17 @@ enum Request {
     Ignore(EntityName),    // Plan nothing; the report carries it as a decision.
 }
 
-// An entity by name: which of the model's three kinds, and what it is called.
+// An entity by name: which of the three kinds, and what it is called.
 enum EntityName { Type(TypeKey), Function(Ident), Constant(Ident) }
 ```
+
+An **entity** is one real item of the API: a type, a function or a constant,
+with its whole description. The model holds more than that — a guard, an
+unsupported item — and does not rank what it holds; that a binding can name
+exactly these three kinds, and nothing else, is the registry's judgment, and
+`Entity` is where it states it. Where an entity came from is not a kind: a
+captured item and one the binding stated are the same entity, and differ in
+origin alone.
 
 An ignore carries less than a declaration, deliberately. It names an entity
 and says nothing about how the target would get it, so a callback or a

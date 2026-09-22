@@ -390,8 +390,8 @@ call, and that no capture describes — for example a
 build a source value that has no public constructor — or a type the source
 never exported that the binding represents as a handle. The frontend states
 the function's signature and where it is, and from the next stage on either is
-an entity like any captured one. They are mentioned here because the source
-model is built from both inputs, not from the captures alone.
+an item of the model like any captured one. They are mentioned here because
+the source model is built from both inputs, not from the captures alone.
 
 Unreadable capture data is a build error: for example, malformed JSON/Rust text,
 an invalid capture-directory layout, or an incompatible description file. This

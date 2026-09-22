@@ -331,14 +331,14 @@ across every item kind, and the index behind a view stays private to Flat.
 ### Building and retaining a model
 
 A **snapshot** is one completed, immutable set of source structs and lookup
-indices. An **entity** is one real item of the API — a type, a function or a
-constant, with its whole description — and where it came from is not a kind
-but an origin. A `#[prebindgen]` item is an entity the source captured. An
-item the binding defines itself is an entity the binding stated: a helper
-function with the signature `fun!(crate::x).sig(..)` declares, or a type the
-source never exported that the binding represents as a handle. Both enter the
-same mutable builder, and building checks the complete set and publishes a
-snapshot. All views from that snapshot retain shared ownership of its storage.
+indices. Its items have two provenances and one shape. A `#[prebindgen]` item
+is one the source captured. An item the binding defines itself is one the
+binding stated: a helper function with the signature `fun!(crate::x).sig(..)`
+declares, or a type the source never exported that the binding represents as
+a handle. Both enter the same mutable builder and come out as the same kind of
+element, differing in origin alone; building checks the complete set and
+publishes a snapshot. All views from that snapshot retain shared ownership of
+its storage.
 
 ```rust
 impl FlatBuilder {
@@ -366,7 +366,11 @@ which is what a report counts as the API it was generated against;
 `Flat::is_binding_local` answers for one name; and the source-module list is
 frozen from the captured stream alone, so a binding-local item never changes
 which module an unqualified reference resolves against. Everything else —
-lookup by name, the typed accessors, planning — sees one namespace.
+lookup by name, the typed accessors, planning — sees one namespace. What the
+model does *not* do is rank its elements: a guard and an unsupported item are
+held beside the functions and types, and which of them a binding may name is
+the [registry's judgment](03-requests.md#identifying-requests-value-positions-and-reusable-conversions),
+not the model's.
 
 The frontend registers its own items before building, so the snapshot is
 complete when the first view is handed out. Registering a helper after publication requires building another

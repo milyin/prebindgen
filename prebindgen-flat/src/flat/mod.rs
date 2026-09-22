@@ -205,8 +205,8 @@ use self::{array_len::ConstIndex, ty::lower_type};
 pub use self::{
     array_len::{ArrayExtent, ArrayLenReason, ConstId, ExtentSource, UnsupportedArrayLen},
     element::{
-        Alternative, Constant, Element, Entity, EntityKind, Enum, EnumValue, Extern, Field,
-        FieldShape, Function, Guard, Param, Struct, Type, Unsupported, Variant,
+        Alternative, Constant, Element, Enum, EnumValue, Extern, Field, FieldShape, Function,
+        Guard, Param, Struct, Type, Unsupported, Variant,
     },
     key::{TypeKey, TypeKeyParseError},
     origin::Origin,
@@ -272,7 +272,7 @@ pub use self::{
 pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
     /// Items the binding defines itself, lowered after the captured ones:
-    /// entities like any other, with an origin that says so. See
+    /// elements like any other, with an origin that says so. See
     /// [`Self::local_function`] and [`Self::local_type`].
     locals: Vec<(syn::Item, SourceLocation)>,
 }
@@ -363,7 +363,7 @@ impl FlatBuilder {
     /// A function the binding defines itself, with the signature it states.
     ///
     /// It becomes a [`Function`] in the model like a captured one — the same
-    /// entity, whose origin says the binding — so a declaration can name it
+    /// element, whose origin says the binding — so a declaration can name it
     /// and a wrapper can call it. `module` is where generated code reaches it:
     /// `crate::helpers` for a helper at `crate::helpers::x`. The body is never
     /// read; only the signature is.
@@ -674,13 +674,7 @@ impl Flat {
         self.elements[..self.captured].iter()
     }
 
-    /// The entity with this name, if the model holds one: captured, or the
-    /// binding's own.
-    pub fn entity<N: Name + ?Sized>(&self, name: &N) -> Option<Entity<'_>> {
-        self.element(name)?.entity()
-    }
-
-    /// Whether the entity with this name is one the binding defined itself.
+    /// Whether the item with this name is one the binding defined itself.
     pub fn is_binding_local<N: Name + ?Sized>(&self, name: &N) -> bool {
         self.by_name
             .get(name.as_name().as_ref())
