@@ -102,4 +102,8 @@
 <a href=#102 id=102 data-nosnippet>102</a><span class="doccomment">/// Which engine a build script runs, and where each one writes — re-exported
 <a href=#103 id=103 data-nosnippet>103</a>/// so a build script names this crate for the whole binding.
 <a href=#104 id=104 data-nosnippet>104</a></span><span class="kw">pub use </span>prebindgen_registry::pipeline;
+<a href=#105 id=105 data-nosnippet>105</a><span class="doccomment">/// The v2 engine, so a build script can name what [`JniGen::skipped`] hands
+<a href=#106 id=106 data-nosnippet>106</a>/// it without depending on the engine itself.
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="attr">#[cfg(feature = <span class="string">"v2"</span>)]
+<a href=#108 id=108 data-nosnippet>108</a></span><span class="kw">pub use </span>prebindgen_registry_v2;
 </code></pre></div></section></main></body></html>

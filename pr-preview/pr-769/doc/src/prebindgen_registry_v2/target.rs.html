@@ -825,10 +825,10 @@
 <a href=#825 id=825 data-nosnippet>825</a>            &amp;&amp; (<span class="self">self</span>.path.is_empty() || <span class="self">self</span>.path.as_slice() == [<span class="string">"out_of_rust"</span>])
 <a href=#826 id=826 data-nosnippet>826</a>    }
 <a href=#827 id=827 data-nosnippet>827</a>
-<a href=#828 id=828 data-nosnippet>828</a>    <span class="doccomment">/// This position as a report's dependency path, under the report's own
-<a href=#829 id=829 data-nosnippet>829</a>    /// id for the output it is rooted at.
-<a href=#830 id=830 data-nosnippet>830</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>dependency_path(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>str) -&gt; Vec&lt;String&gt; {
-<a href=#831 id=831 data-nosnippet>831</a>        std::iter::once(id.to_string())
+<a href=#828 id=828 data-nosnippet>828</a>    <span class="doccomment">/// This position as a skip's dependency path: the declaration it is
+<a href=#829 id=829 data-nosnippet>829</a>    /// rooted at, then how the walk reached here.
+<a href=#830 id=830 data-nosnippet>830</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>dependency_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;String&gt; {
+<a href=#831 id=831 data-nosnippet>831</a>        std::iter::once(<span class="self">self</span>.declaration.to_string())
 <a href=#832 id=832 data-nosnippet>832</a>            .chain(<span class="self">self</span>.path.iter().cloned())
 <a href=#833 id=833 data-nosnippet>833</a>            .collect()
 <a href=#834 id=834 data-nosnippet>834</a>    }
@@ -1131,7 +1131,7 @@
 <a href=#1131 id=1131 data-nosnippet>1131</a>/// [`generate`](crate::generate) each [`Declaration`] paired with it, and the
 <a href=#1132 id=1132 data-nosnippet>1132</a>/// engine hands it back with every question about that output —
 <a href=#1133 id=1133 data-nosnippet>1133</a>/// [`SelectionQuery::declared`], [`SiteDescriptor::declared`],
-<a href=#1134 id=1134 data-nosnippet>1134</a>/// [`SurfaceRequest::declared`], and `declared` at [`Target::describe`]. An
+<a href=#1134 id=1134 data-nosnippet>1134</a>/// and [`SurfaceRequest::declared`]. An
 <a href=#1135 id=1135 data-nosnippet>1135</a>/// adapter must answer from that rather than from a table of its own keyed by
 <a href=#1136 id=1136 data-nosnippet>1136</a>/// [`Declaration`], because one entity may be declared more than once —
 <a href=#1137 id=1137 data-nosnippet>1137</a>/// `Stamp` as a data class and as a handle — and such a table would hold one
@@ -1221,38 +1221,5 @@
 <a href=#1221 id=1221 data-nosnippet>1221</a>    /// The operands arrive already named by the writer, in the order the
 <a href=#1222 id=1222 data-nosnippet>1222</a>    /// operation's specification lists them.
 <a href=#1223 id=1223 data-nosnippet>1223</a>    </span><span class="kw">fn </span>render_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: <span class="kw-2">&amp;</span><span class="self">Self</span>::Payload, operands: <span class="kw-2">&amp;</span>[syn::Ident]) -&gt; TokenStream;
-<a href=#1224 id=1224 data-nosnippet>1224</a>
-<a href=#1225 id=1225 data-nosnippet>1225</a>    <span class="doccomment">/// Say, for the report, what this declaration is: the adapter's own
-<a href=#1226 id=1226 data-nosnippet>1226</a>    /// declarator word and where the thing lands in the foreign language.
-<a href=#1227 id=1227 data-nosnippet>1227</a>    ///
-<a href=#1228 id=1228 data-nosnippet>1228</a>    /// Answered from the same `declared` choice [`Target::boundary`] and
-<a href=#1229 id=1229 data-nosnippet>1229</a>    /// [`Target::surface`] are given, so the report cannot say one thing and
-<a href=#1230 id=1230 data-nosnippet>1230</a>    /// the generated code another. Asked of every requested output, including
-<a href=#1231 id=1231 data-nosnippet>1231</a>    /// one that was skipped — the report says what a declaration was *for*,
-<a href=#1232 id=1232 data-nosnippet>1232</a>    /// not only what became of it.
-<a href=#1233 id=1233 data-nosnippet>1233</a>    </span><span class="kw">fn </span>describe(<span class="kw-2">&amp;</span><span class="self">self</span>, declaration: <span class="kw-2">&amp;</span>Declaration, declared: <span class="kw-2">&amp;</span><span class="self">Self</span>::ConversionKey) -&gt; Described;
-<a href=#1234 id=1234 data-nosnippet>1234</a>}
-<a href=#1235 id=1235 data-nosnippet>1235</a>
-<a href=#1236 id=1236 data-nosnippet>1236</a><span class="doccomment">/// How a report names one declaration on the foreign side — see
-<a href=#1237 id=1237 data-nosnippet>1237</a>/// [`Target::describe`].
-<a href=#1238 id=1238 data-nosnippet>1238</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
-<a href=#1239 id=1239 data-nosnippet>1239</a></span><span class="kw">pub struct </span>Described {
-<a href=#1240 id=1240 data-nosnippet>1240</a>    <span class="doccomment">/// The declarator that produced it (`opaque_ptr`, `data_class`, `fun`, …)
-<a href=#1241 id=1241 data-nosnippet>1241</a>    /// — the adapter's own word, printed back verbatim. Finer than the prefix
-<a href=#1242 id=1242 data-nosnippet>1242</a>    /// a [`Declaration`] prints with: `opaque_ptr` and `data_struct` are both
-<a href=#1243 id=1243 data-nosnippet>1243</a>    /// a `type`.
-<a href=#1244 id=1244 data-nosnippet>1244</a>    </span><span class="kw">pub </span>representation: String,
-<a href=#1245 id=1245 data-nosnippet>1245</a>    <span class="doccomment">/// Where it lands in the target language, spelled the way that language
-<a href=#1246 id=1246 data-nosnippet>1246</a>    /// spells it: `calculator_t`, `io.zenoh.jni.Session`.
-<a href=#1247 id=1247 data-nosnippet>1247</a>    </span><span class="kw">pub </span>placement: String,
-<a href=#1248 id=1248 data-nosnippet>1248</a>}
-<a href=#1249 id=1249 data-nosnippet>1249</a>
-<a href=#1250 id=1250 data-nosnippet>1250</a><span class="kw">impl </span>Described {
-<a href=#1251 id=1251 data-nosnippet>1251</a>    <span class="kw">pub fn </span>new(representation: <span class="kw">impl </span>Into&lt;String&gt;, placement: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; <span class="self">Self </span>{
-<a href=#1252 id=1252 data-nosnippet>1252</a>        Described {
-<a href=#1253 id=1253 data-nosnippet>1253</a>            representation: representation.into(),
-<a href=#1254 id=1254 data-nosnippet>1254</a>            placement: placement.into(),
-<a href=#1255 id=1255 data-nosnippet>1255</a>        }
-<a href=#1256 id=1256 data-nosnippet>1256</a>    }
-<a href=#1257 id=1257 data-nosnippet>1257</a>}
+<a href=#1224 id=1224 data-nosnippet>1224</a>}
 </code></pre></div></section></main></body></html>
