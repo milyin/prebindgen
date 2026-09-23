@@ -403,7 +403,9 @@ pub enum StandardOp {
     /// number: C's `MaybeUninit<op_t>` keeps `op_t` in the header and holds
     /// whatever `int` the caller passed, which a match on `op_t` could not
     /// see. The carrier must be exactly as large as `bits`; the target that
-    /// chose both is what asserts it.
+    /// chose both is what asserts it. The carrier must also be initialized,
+    /// which only the caller can promise, so the registry makes a wrapper
+    /// that reads one `unsafe`.
     EnumIn {
         source: Box<TypeRef>,
         values: Vec<EnumArm>,
@@ -810,6 +812,10 @@ pub struct AbiSpec {
     /// safe function cannot state. A convention that makes the caller
     /// responsible for the pointers it passes says so here, and the foreign
     /// declaration should say the same.
+    ///
+    /// The registry makes a wrapper `unsafe` on its own account when one of
+    /// its conversions reads a carrier's bits ([`StandardOp::EnumIn`] with
+    /// `bits`), whatever this says: that caller owes initialized storage.
     pub unsafety: bool,
 }
 

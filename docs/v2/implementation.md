@@ -295,11 +295,13 @@ establish the behavior of the resulting foreign interface.
    that cannot fail. Into Rust the enum arrives as `MaybeUninit` and is matched
    as the C `int` it holds, because C lets an enum variable hold any `int` and a
    Rust enum holding a number none of its values has is undefined behaviour.
-   `EnumIn` takes the integer type to read the carrier as for this. JNI carries
-   a `jint` and a Kotlin `enum class`. In both, the direction into Rust can meet
-   a number no value names and fails as a `Binding` error. An alternative
-   carrying a field makes a sum, which the model calls a variant and which has
-   no lowering.
+   `EnumIn` takes the integer type to read the carrier as for this.
+   `MaybeUninit` could also hold storage never initialized, which no match can
+   check, so a wrapper that reads a carrier's bits is `unsafe` and documents
+   that its caller owes initialized storage. JNI carries a `jint` and a Kotlin
+   `enum class`. In both, the direction into Rust can meet a number no value
+   names and fails as a `Binding` error. An alternative carrying a field makes a
+   sum, which the model calls a variant and which has no lowering.
 
    Some shapes are refused rather than mirrored, by one check both targets
    share. A number the model could not evaluate — a `const`, arithmetic — is not

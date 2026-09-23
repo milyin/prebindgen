@@ -74,12 +74,19 @@ mod tests {
     ///
     /// `MaybeUninit` is what C's `Gear` arrives in, so a number no value has
     /// is still a valid argument; the wrapper aborts on one, which a test
-    /// cannot observe.
+    /// cannot observe. Storage never initialized is not, and nothing the
+    /// wrapper does could tell — so the wrapper is `unsafe`, and a Rust caller
+    /// is the one that promises. `unused_unsafe` is denied here so that this
+    /// test stops compiling if the wrapper ever becomes safe to call.
     #[test]
+    #[deny(unused_unsafe)]
     fn the_c_enum_input_becomes_the_source_value() {
         use core::mem::MaybeUninit;
-        assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::Low)), 1);
-        assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::High)), 30);
+        // SAFETY: each argument is initialized, with a value `Gear` has.
+        unsafe {
+            assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::Low)), 1);
+            assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::High)), 30);
+        }
     }
 
     /// The header declares an enum that only ever comes in, and names it as

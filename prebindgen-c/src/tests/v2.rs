@@ -364,11 +364,15 @@ fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
         "{rust}"
     );
     // The wrapper takes and returns the enum, so the header names it both
-    // ways.
+    // ways. `MaybeUninit` could hold storage never initialized, which the
+    // wrapper cannot check, so it is `unsafe` and says what a caller owes.
     assert!(
-        compact.contains("pubextern\"C\"fnoperation_flip(op:::core::mem::MaybeUninit<operation_t>"),
+        compact.contains(
+            "pubunsafeextern\"C\"fnoperation_flip(op:::core::mem::MaybeUninit<operation_t>"
+        ),
         "{rust}"
     );
+    assert!(rust.contains("/// # Safety"), "{rust}");
     assert!(compact.contains(")->operation_t{"), "{rust}");
     // One arm per value each way; into Rust, a default arm for a number no
     // value has.

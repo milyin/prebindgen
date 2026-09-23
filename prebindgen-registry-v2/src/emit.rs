@@ -309,7 +309,28 @@ fn wrapper<T: Target>(
     let symbol = format_ident!("{}", function.abi.symbol);
     let abi = &function.abi.abi;
     let attrs = &function.abi.attrs;
-    let unsafety = function.abi.unsafety.then(|| quote!(unsafe));
+    // A carrier whose bits are read as an integer holds whatever the caller
+    // put in it. A foreign caller passes a number, which the match checks;
+    // safe Rust could pass storage never initialized, which no check can
+    // look at. So the wrapper is `unsafe`, and says what it is owed.
+    let reads_bits = function.instrs.iter().any(|step| match &step.instr {
+        Instr::Apply { primitive, .. } => matches!(
+            primitives[primitive.0].implementation,
+            Operation::Standard(StandardOp::EnumIn { bits: Some(_), .. })
+        ),
+        _ => false,
+    });
+    let unsafety = (function.abi.unsafety || reads_bits).then(|| quote!(unsafe));
+    let safety = reads_bits.then(|| {
+        quote! {
+            /// # Safety
+            ///
+            /// Every argument that carries an enum as its bits must be
+            /// initialized. The wrapper reads those bits as an integer and
+            /// refuses a number no value has, but reading storage that was
+            /// never initialized is undefined behaviour.
+        }
+    });
     let ret = function
         .abi
         .ret
@@ -320,6 +341,7 @@ fn wrapper<T: Target>(
         })
         .unwrap_or_default();
     quote! {
+        #safety
         #(#conditions)*
         #[no_mangle]
         #(#attrs)*
