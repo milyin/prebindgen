@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "04-select", "language": "c"} -->
 
 [Stage chapter](../../stages/04-select.md) · [Common cell][struct_select] · [Element path][struct]
-Owner: the registry; the C adapter selects from the offered [relations](../../stages/04-select.md#what-a-relation-is)
+Owner: the registry, from the rule the C frontend recorded for `data_struct!(Stamp)`
 
 # Struct with scalar fields — Select conversion relations — C
 
@@ -10,10 +10,8 @@ Owner: the registry; the C adapter selects from the offered [relations](../../st
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits
-offered:  [ Stamp.fields, atomic ]
-
-held by the CTarget, not passed in:
-choice:   data_struct named Stamp, passed by value
+rules:    Type(Stamp) -> Conversion { via: Fields, choice: CChoice::DataStruct { c_name: "Stamp" } }
+relations of Stamp: [ Stamp.fields, atomic ]
 ```
 
 ## Result
@@ -25,33 +23,34 @@ Stamp.fields, conversion CChoice::DataStruct { c_name: "Stamp" }
 and, for each part the registry then plans:
 
 ```text
-secs:  i64, IntoRust   choice: scalar carrier   offered: [ atomic ]   -> atomic
-nanos: i64, IntoRust   choice: scalar carrier   offered: [ atomic ]   -> atomic
+secs:  i64, IntoRust   no rule -> default_conversion: Whole, CChoice::Scalar   -> atomic
+nanos: i64, IntoRust   no rule -> default_conversion: Whole, CChoice::Scalar   -> atomic
 ```
 
 A `data_struct` is a C struct passed by value, and a by-value struct is nothing
-but its members, so the C adapter answers with the struct
+but its members, so the C frontend records its rule with `Via::Fields` when it
+reads `data_struct!(Stamp)`. The registry resolves that to the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
-Rust `Stamp` will be made of one conversion per field. The adapter reads the
-answer off the [choice](../../stages/03-requests.md#what-a-choice-records); it does
-not look at the fields, and it does not need to know how many there are.
+Rust `Stamp` will be made of one conversion per field. No C code runs at this
+stage for `Stamp`; the C target is asked only for the default of `i64`, a type
+no rule names.
 
-The alternative is real, not hypothetical: a type declared to C as an opaque
-pointer would get `atomic` from the same adapter, and the registry would then
-plan `Stamp` as one whole value with no parts, its fields untouched.
+The alternative is real, not hypothetical: `ptr_type!(Stamp)` records the same
+rule with `Via::Whole`, and the registry would then plan `Stamp` as one whole
+value with no parts, its fields untouched.
 
 ## Checks
 
-- The answer is one of the ids the registry offered; the adapter cannot return
-  a relation of its own making.
-- Under `data_struct` the adapter has committed to describing, in the next
+- The relation is resolved by the registry from the rule; the C target never
+  sees a relation id.
+- Under `data_struct` the target has committed to describing, in the next
   stage, one member of a `repr(C)` aggregate per part, in part order — the
   [member reads][struct_represent_c] that stage shows.
-- A `data_struct` choice on a struct with a field V2 cannot carry is not
-  refused here — the adapter still answers `Stamp.fields` — but at the part,
-  when that field's own selection is unsupported, and the refusal climbs back
-  to this conversion.
+- A `data_struct` rule on a struct with a field V2 cannot carry is not refused
+  here — the registry still resolves `Stamp.fields` — but at the part, when that
+  field's own conversion is unsupported, and the refusal climbs back to this
+  conversion.
 
 [struct]: README.md
 [struct_select]: 04-select.md

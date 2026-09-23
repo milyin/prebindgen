@@ -117,9 +117,10 @@ a different treatment requires an explicit conversion role.
 
 A struct relation is implicit — the registry registers it for any struct the
 source model describes. A constructor or projector relation is explicit: it
-names a function, so a frontend declaration has to say which. That declaration,
-and the rule that pins the relation at a position, is the **conversion rule**
-the chapter's `select` reads and that no build script can write yet:
+names a function, so a frontend declaration has to say which. It says so in
+the `Via` of a
+[conversion rule](stages/03-requests.md#conversion-rules), which gains one
+variant per relation:
 
 ```rust
 pub enum Relation {
@@ -130,18 +131,18 @@ pub enum Relation {
     // conversion, representation-reuse and callable descriptions.
 }
 
-struct RelationDefinition {
-    operation: Relation, // Checked role; no independently assignable subject field.
+pub enum Via {
+    Whole,
+    Fields,
+    Construct(syn::Ident), // Into Rust through this source function.
+    Project(syn::Ident),   // Out of Rust through this source function.
 }
-struct RelationId { /* private table identity and entry ID */ }
-struct Selection<ConversionKey> {
-    relation: RelationId, // Registered RelationDefinition containing the checked role.
-    conversion: ConversionKey, // The target's name for the settings it applied.
-}
-struct ConversionRules {
-    sites: Map<SiteId, Selection>, // Parameter/result overrides.
-    parts: Map<PartId, Selection>, // Field/helper-argument selections.
-    defaults: DefaultRules,       // Frontend-defined override precedence.
+
+pub enum Step {
+    Param(String),
+    Return,
+    Field(String),
+    Arg(String), // An argument of the constructor the value is built through.
 }
 ```
 
@@ -149,10 +150,14 @@ Pinning the constructor for `Stamp` is a rule recorded with the request, and it
 changes what the parts are without changing anything else:
 
 ```text
-relation:  stamp_from_millis  = Relation::Construct(over the checked function view)
-parts:     PartId { owner: stamp_from_millis, arm: None, position: Argument(0) }  // millis: i64
-rule:      the Stamp type default selects that relation instead of Stamp.fields
+rule:      Type(Stamp) -> Conversion { via: Construct(stamp_from_millis), choice: … }
+relation:  Relation::Construct, over the checked function view, registered for Stamp
+parts:     millis: i64, addressed as `….arg millis`
 ```
+
+The registry resolves `Construct(stamp_from_millis)` the way it resolves
+`Fields`: it checks the function against the type before planning, and a
+function that does not construct the type fails the build as invalid input.
 
 The registry then converts one `i64`, calls `stamp_from_millis`, and has a
 `Stamp` — one child instead of two, the same recursion, and a target that need

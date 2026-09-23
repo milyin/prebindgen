@@ -86,22 +86,25 @@ See [Record binding requests](stages/03-requests.md#record-binding-requests).
 ### Choice
 
 One language-specific decision the binding recorded about a declaration or a
-value, held by the frontend that recorded it and by the target that frontend
-builds. For example, C records that `Stamp` crosses as a by-value struct, while
-JNI records the Kotlin class that will carry it. The registry stores none of
-them and knows no precedence among them: it asks the target whenever it needs a
-language-specific decision, and the target resolves what applies from its own
-storage. The shared planner never interprets a C or Kotlin option.
+value. For example, C records that `Stamp` crosses as a by-value struct, while
+JNI records the Kotlin class that will carry it. The frontend hands every
+choice to the registry as data: a choice about an output travels with that
+output, and a choice about values travels in a conversion rule, recorded for
+every value of a type or for one position inside one output. The registry
+holds them, decides by one precedence which applies to a value, and hands the
+choice back to the target with the question it asks. The shared planner never
+interprets a C or Kotlin option.
 See [What a choice records](stages/03-requests.md#what-a-choice-records).
 
 ### Conversion key
 
-The adapter's own name for one way of converting a value, returned from
-`select` beside the relation. The registry never looks inside it; it compares
+The adapter's own name for one way of converting a value: the choice a
+conversion rule records beside the relation it reads the value through. The
+registry never looks inside it; it compares
 keys, and two values whose crossing, relation, children and key all match share
 one plan. So a key means one thing: *equal keys are interchangeable
-conversions*. Settings that generate differently must produce different keys,
-and a fresh key per visit would share nothing and defeat cycle detection. See
+conversions*. Settings that generate differently must produce different keys.
+See
 [Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
 
 ### Root
@@ -119,8 +122,8 @@ A position inside a requested function: parameter 0 of `stamp_sum`, for
 example, or its return value. A type alone cannot identify that position:
 two parameters may have the same type but require different settings.
 Position-specific overrides and diagnostic paths therefore name where a value
-is used. Current V2 represents this with a declaration id and a path; the
-separate `SiteId` type shown in the design is not implemented yet.
+is used, as the first step of a path under the output that exports the
+function: `param stamp`, or `return`.
 See [A value's position in an exported function](stages/03-requests.md#a-values-position-in-an-exported-function).
 
 ### Part

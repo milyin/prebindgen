@@ -7,7 +7,7 @@
 Status: implemented for what the three element paths need, which is a value
 carried whole — a scalar, or an opaque handle — or a struct read through its
 fields. The constructor and projector
-relations, and the rules that would pin one, are
+relations, and the `Via` values that would pin one, are
 [described but not built](../extensions.md#constructor-and-projector-relations).
 
 The examples in this chapter use one small source crate — a struct and a function
@@ -51,8 +51,9 @@ value is planned on its own.
 Three separate questions have to be answered for every conversion, and keeping
 them apart is what lets one algorithm serve both languages. Everything here
 happens while the binding is being generated, from what the build script
-configured; no part of it is decided while the binding runs. Two of the
-questions are answered by the **target**: the
+configured; no part of it is decided while the binding runs. The first
+question is answered by the registry from the rules the binding recorded; the
+second by the **target**: the
 [language adapter](../README.md#the-components) for the binding being generated
 — `prebindgen-c` or `prebindgen-jni` — in the role it plays facing the engine,
 answering for its own language item by item. The third is the registry's alone.
@@ -66,16 +67,22 @@ answering for its own language item by item. The third is the registry's alone.
   getting between them. Relations are pure source-side facts, and the registry
   is the only component that walks one.
 
-  Which relation applies is the target's answer, though, because it follows from
-  the configuration. Declared as a C struct or a Kotlin data class, `Stamp` is
-  built from its fields. Declared as an opaque handle, it is carried whole and
-  its fields are never read. So the registry lists what the source model offers
-  for the type — the fields, if the type is a struct, and the whole value in any
-  case — and the target names the one its configuration calls for. When the
-  configuration calls for something V2 has no lowering for, such as one of the C
-  declarators it does not implement yet, the target answers that instead of
-  naming a relation, and nothing that needs the value can be generated. Such a
-  request fails the build; while V2's coverage is still being completed it is
+  Which relation applies follows from the configuration. Declared as a C
+  struct or a Kotlin data class, `Stamp` is built from its fields. Declared as
+  an opaque handle, it is carried whole and its fields are never read. The
+  frontend knows which when it records the declaration, so it records the
+  relation with it: every
+  [conversion rule](03-requests.md#conversion-rules) states a `Via` — `Whole`
+  or `Fields` — beside the target's own choice. The registry finds the rule
+  that applies to this value, resolves its `Via` against the source model, and
+  walks the result. No target code runs to answer this question, except for a
+  value no rule covers, whose conversion the target states from its type
+  alone. When a rule asks for something V2 has no lowering for, such as one of
+  the C declarators it does not implement yet, the target refuses it when it is
+  asked for the value's
+  [representation](05-represent.md#represent-and-compose-values), and nothing that needs the value can
+  be generated. Such a request fails the build; while V2's coverage is still
+  being completed it is
   [reported as a skipped declaration](07-retain.md#unsupported-requests-and-public-api-dependencies)
   instead, which is a property of the transition rather than of the design.
 - **On the foreign side, what carries the value, and how is it accessed?** A
@@ -90,16 +97,16 @@ answering for its own language item by item. The third is the registry's alone.
   job, and it is identical in both languages.
 
 Put together, planning one conversion is this recursion — the registry's own
-loop, with the two target questions marked:
+loop, with the target's questions marked:
 
 ```text
 plan(type, direction, position):
-    relation, conversion = target.select(type, direction, position, candidates)
-                                                      # which way out of this type, and
-                                                      # the target's name for the settings
-                                                      # it applied — its own lookup, over
-                                                      # its own storage, by position
-                                                      # cheap: no recursion yet
+    conversion = rules.at(position)                   # a rule for this one value,
+              or rules.for_type(type)                 # else one for every value of the type,
+              or target.default_conversion(type)      # else the target's default for it
+                                                      # cheap: a lookup, no recursion yet
+    relation = the relation of type that conversion.via names
+                                                      # Whole: atomic; Fields: the struct's
     mark (type, direction, relation, conversion) as being resolved
                                                       # meeting this mark again is a cycle
 
@@ -117,7 +124,7 @@ plan(type, direction, position):
         return it                                     # the identity is complete
                                                       # only once the children are
 
-    repr = target.represent(relation, children, conversion)
+    repr = target.represent(relation, children, conversion.choice)
                # which carriers hold the value, and the operations that access them
     body = compose(relation, children, repr)
                # obtain each part, convert it, construct the Rust value — or the
@@ -133,26 +140,26 @@ and it is a real seam in the walk: everything above it happens on the way
 *down* — the first question is answered for a type before any of its parts is
 looked at — and everything below happens on the way *up*, after every part has
 been answered. This chapter is the descent. Its result is a **selection tree**:
-for every value a request needs, the type, the direction, the relation the
-target chose, and under it the same for each part, down to the scalars where
-the tree stops. [The next chapter](05-represent.md) fills that tree in from the
+for every value a request needs, the type, the direction, the relation its
+conversion names, and under it the same for each part, down to the scalars
+where the tree stops. [The next chapter](05-represent.md) fills that tree in from the
 leaves upward, with what carries each value and the instructions that move it,
 and its result is the [node](05-represent.md#represent-and-compose-values), the
 unit the later stages read.
 
-The algorithm receives the value's *position*, not just its type, and hands it
-to the target. In the design vocabulary, a `SiteId` (parameter 0 of this
-exported function) or a `PartId` (the `secs` field of this relation) is what an
-override is recorded against, so the position is what lets the target turn
-[its recorded choices](03-requests.md#what-a-choice-records) into this
-conversion's key. Positions are how overrides reach a nested child. Current
-code uses `Position { declaration, path }` instead of separate
-`SiteId`/`PartId` structs. `select` is the *only* call that sees a position,
-which is deliberate: every later question is asked about a conversion's
-identity rather than about one of the places it is used, so a choice recorded
-at a position has to take effect here, as a different key. The plan that
-results is shared by identity, so two positions whose key, relation and
-children all match get the same node.
+The algorithm receives the value's *position*, not just its type: the output
+it is reached from and the [value path](03-requests.md#conversion-rules) from
+that output's root to the value, such as `param stamp` or
+`param stamp.field secs`. The position is what a rule at one
+[site](03-requests.md#a-values-position-in-an-exported-function) or
+[part](03-requests.md#fields-constructor-arguments-and-enum-variants) is
+looked up by, so it is how an override reaches a nested child. No target
+method sees a position. The lookup is the *only* step that reads one, which is
+deliberate: every later question is asked about a conversion's identity rather
+than about one of the places it is used, so a rule recorded at a position has
+to take effect here, as a different conversion. The plan that results is
+shared by identity, so two positions whose conversion, relation and children
+all match get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no
 work of their own. A struct with a struct field simply makes `plan` call itself
@@ -309,76 +316,108 @@ build or read the value, rather than treating the field list as the only option.
 
 Flat stores no links between types — its references are names, resolved on
 lookup — so the graph is not a structure the model holds. The registry builds a
-type's outgoing edges on demand and keeps them for the run. `Run::candidates`
-registers them the first time a type is planned (the atomic relation for every
-type; the struct one when the model resolves the name to a struct) and hands the
-target the list as `(RelationId, Relation)` pairs. Registering once per type
-rather than once per visit is what makes the label stable: a fresh id on every
-visit would make every parallel edge unique, and nothing would ever share a
-node.
+type's outgoing edges on demand and keeps them for the run: the first time a
+type is planned it registers the atomic relation, and the struct relation when
+the model resolves the name to a struct. Registering once per type rather than
+once per visit is what makes a `RelationId` stable: a fresh id on every visit
+would make every parallel edge unique, and nothing would ever share a node.
+`RelationId` is private to the registry. No target sees one.
 
 The user does not register a relation for each scalar or field-based struct.
 A **struct relation** is implicit: for any struct the source model describes,
 the registry registers the relation built from its fields, so `Stamp.fields`
 exists without anyone asking for it. A **scalar** has no parts at all — an
 `i64` is not built from anything — so its relation is the atomic one, the
-whole value converted by a single operation the target supplies. A constructor
-or projector relation would be explicit — it names a function, so someone has
-to say which — and that declaration, like the rule that would pin a relation
-at a position, is
-[not built](../extensions.md#constructor-and-projector-relations): the target
-holds the [choices](03-requests.md#what-a-choice-records) recorded for a type and
-for a position, and derives its relation from those.
+whole value converted by a single operation the target supplies.
 
-The target answers `select` with a `Selection`: a `RelationId`, an index into
-that run's table under the same convention as every other `…Id` here — that is,
-it names which outgoing edge the walk takes from this type — together with the
-[conversion key](03-requests.md#finding-an-existing-conversion-plan) for the
-choice it just applied. The id rather than the value is what travels, because
-the id is what the cache key compares; the key travels beside it for the same
-reason.
+Which of a type's relations a value takes is not chosen by anyone at planning
+time. It is stated, as data, by the conversion that applies to the value:
 
-So `select` chooses from the edges leaving that type: the implicit relation,
-plus any explicit ones registered for it. Selection precedes child traversal,
-which is what lets an atomic opaque representation leave a struct's private
-fields uninspected. Child types retain wrappers, references and lifetimes;
-cloning needs an explicit operation.
+```rust
+/// How one value converts: the relation it is read through, and the target's
+/// own name for the settings that apply to it.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Conversion<K> {
+    pub via: Via,
+    pub choice: K,
+}
+
+/// Which relation of its type a value is read through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Via {
+    /// The atomic relation: the whole value, no parts.
+    Whole,
+    /// The struct relation: one part per field.
+    Fields,
+}
+```
+
+`choice` is the target's
+[conversion key](03-requests.md#finding-an-existing-conversion-plan) — for C,
+`CChoice::DataStruct { c_name: "Stamp" }`. The registry compares it and never
+reads it. `via` is the part the registry does read. Resolving it is the
+registry's job and gives the same answer for every target: `Whole` is the
+atomic relation of any type, and `Fields` is the struct relation of a type the
+model describes as a struct. `Fields` on anything else — an extern, a type the
+binding declared although the source never exported it — has no relation to
+resolve to, and the value is refused as `unsupported.type.not_a_struct`. That
+refusal is a fact about the model, so every target reports it in the same
+words.
+
+A conversion comes from one of three places, tried in this order, and the
+first one found is used whole:
+
+1. the [conversion rule](03-requests.md#conversion-rules) recorded at this
+   value's position;
+2. the conversion rule recorded for this value's type;
+3. `Target::default_conversion`, for a type no rule names.
+
+This order is the registry's, and it is the only precedence there is: both
+frontends need exactly this one, and a frontend with an override that should
+lose to a type rule has recorded it at the wrong scope. The third source is
+the one piece of the lookup that runs target code. It is asked about a type,
+never a position, so its answer cannot vary from one use of the type to
+another.
+
+Selection precedes child traversal, which is what lets an atomic opaque
+representation leave a struct's private fields uninspected. Child types retain
+wrappers, references and lifetimes; cloning needs an explicit operation.
 
 ## How the registry asks a target for decisions
 
-The target interface has four planning operations. Each answers a local question
-with a description; the registry decides when to ask it. The first, `select`,
-is this chapter's; `represent` is [the next chapter's](05-represent.md), and
-the other two belong to the stages after that. The sketch below uses the
-design's descriptor names. Current `represent` receives `ChildValue` entries
-containing a part and layout, not full validity and resource contracts. The
-same trait also has `render_operation`, used later during Rust emission.
+The target interface has four planning operations. Each asks one
+language-specific question and gets a description back; the registry decides
+when to ask. The first, `default_conversion`, is this chapter's;
+`represent` is [the next chapter's](05-represent.md), and the other two belong
+to the stages after that. The sketch below uses the design's descriptor names.
+Current `represent` receives `ChildValue` entries containing a part and
+layout, not full validity and resource contracts. The same trait also has
+`render_operation`, used later during Rust emission.
 
-The target is also where the binding's configuration lives, which is why none
-of these methods is handed any: each resolves what applies from its own
-storage, addressed by the `position` in a selection query — except for what
-the binding declared one output as, which arrives with every question about
-that output.
+None of these methods looks anything up in the binding's configuration.
+What applies to a value arrives as the `choice` of its conversion; what the
+binding declared one output as arrives with every question about that
+output. What a target keeps of its own is only what holds for the whole
+binding, such as the JNI package prefix.
 
 ```rust
 trait Target {
-    type ConversionKey: Clone + Eq + Hash; // The target's name for one way of converting.
+    type ConversionKey: Clone + Eq + Hash + Debug; // The target's name for one way of
+                                                   // converting, and for what one
+                                                   // output was declared as.
     type Payload; // Owned operation/rendering descriptions.
 
-    fn select(
+    fn default_conversion(
         &self,
-        query: SelectionQuery<'_, Self::ConversionKey>, // Source value, its position, the
-                                                        // relations offered, and what the
-                                                        // output it is reached from was
-                                                        // declared as.
-    ) -> TargetSupport<Selection<Self::ConversionKey>>; // A relation the query offered,
-                                                        // and the conversion it makes.
+        ty: &TypeRef, // A type no conversion rule names.
+    ) -> TargetSupport<Conversion<Self::ConversionKey>>; // How every value of it
+                                                         // converts, wherever it is.
 
     fn represent(
         &self,
         shape: ResolvedShape<'_>, // Selected source operation and its direct children.
         children: &[ValueDescriptor<Self::Payload>], // Completed child conversion descriptions.
-        conversion: &Self::ConversionKey, // The key `select` returned for this value.
+        choice: &Self::ConversionKey, // The choice of the conversion that applied.
     ) -> TargetSupport<ReprSpec<Self::Payload>>;
 
     fn boundary(
@@ -395,19 +434,24 @@ trait Target {
         values: &ResolvedValues<Self::Payload>, // Values needed to describe that public API.
     ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
 }
-
-struct Selection<K> {
-    relation: RelationId, // One of the candidates the query offered.
-    conversion: K,        // What the target decided this value converts by.
-}
 ```
 
-`Selection::conversion` is the identity the registry reuses plans by, so it
+Both implemented targets answer `default_conversion` the same way today:
+`Conversion { via: Via::Whole, choice: Scalar }`, whatever the type, and
+`represent` then refuses a type it has no carrier for. The method exists for
+what a rule cannot name in advance: a scalar kind, and later a generic
+pattern such as `Vec<T>` or `Option<T>`, whose instances a binding never lists.
+A naming closure the frontend holds may run inside it, since what comes back is
+plain data.
+
+The conversion's `choice` is the identity the registry reuses plans by, so it
 carries one rule: equal keys mean interchangeable conversions. Two values whose
 [crossing](03-requests.md#finding-an-existing-conversion-plan), relation,
 children and key all match get one node, and a key already being resolved is a
 cycle. Settings that generate differently must therefore produce different
-keys, and a target must not mint a fresh key per visit.
+keys. The rules are recorded before planning starts, so a key is minted once
+per rule rather than once per visit, and the second half of that obligation
+holds by construction.
 [Record binding requests](03-requests.md#finding-an-existing-conversion-plan)
 states the rule in full.
 
@@ -425,23 +469,23 @@ The method inputs and results serve different stages:
 
 | Method | Information available | Target's answer | Registry's next job |
 | --- | --- | --- | --- |
-| `select` | Exact source type/direction, the value's position, local source facts and the relations offered | The relation chosen for *this* value, and the conversion key its own settings make it | Inspect that relation's parts and recursively resolve their conversions. |
+| `default_conversion` | An exact source type that no rule names | The `Via` and choice every value of that type converts by | Resolve the `Via` to a relation, then recursively resolve its parts. |
 | `represent` | `ResolvedShape`: source operation with model-derived child types; `ValueDescriptor`s: completed child layouts and contracts | Representation layout and target operations | Compose the complete value conversion. |
 | `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete wrapper. |
 | `surface` | `SurfaceRequest`: the declaration, the captured item behind it and its promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |
 
-A selection speaks for one value. It cannot declare a choice for a child,
-because a child is planned by a recursion that asks the target again, and two
-ways to say the same thing would need a precedence rule; a choice for a child is
-a conversion rule recorded at the child's position instead.
+A conversion speaks for one value. It cannot state a choice for a child,
+because a child is looked up again at its own position, and two ways to say
+the same thing would need a second precedence rule; a choice for a child is a
+conversion rule recorded at the child's position instead.
 
-`select` is on this interface, even though a relation is a source-side
-description, because the choice among the available relations depends on how the
-target intends to carry the value: a representation that hands out an opaque
-handle wants the atomic relation, not the fields. The target chooses; it does not
-invent. It picks from the relations registered for that type, and where the
-configuration pinned one, it either honours that choice or reports why it cannot.
-Walking whatever it picked remains the registry's work.
+The relation is data rather than a target's answer because the frontend
+already knows it when it records the rule: `data_struct!` means fields,
+`ptr_type!` means the whole value. Asking the target again at planning time
+would restate the same fact through code the registry cannot inspect, and
+could not be checked before planning. The target still decides what it can
+*carry*: a rule whose relation the target cannot represent is refused at
+`represent`, as any other missing capability is.
 
 These views are read-only. The adapter can inspect direct child descriptors but
 cannot invoke the registry's recursive compiler or modify the registry's plan
