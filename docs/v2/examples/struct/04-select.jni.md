@@ -10,47 +10,45 @@ Owner: the registry, from the rule the JNI frontend recorded for `data_class!(St
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits
-rules:    Type(Stamp) -> Conversion { via: Fields, choice: JniChoice::DataClass { class: "example.Stamp" } }
+rules:    Type(Stamp) -> Product { via: Fields, carrier: stamp_obj, read: JniOp::Getter (env, runtime failure), build: JniOp::NewObject }
+          Type(i64)   -> Terminal { carrier: jlong carrier, identity both ways }
+carriers: stamp_obj = Jvm { descriptor: "Lexample/Stamp;", kotlin: "example.Stamp" }
+          jlong carrier, Jvm { descriptor: "J", kotlin: "Long" }
 relations of Stamp: [ Stamp.fields, atomic ]
 ```
 
 ## Result
 
 ```text
-Stamp.fields, conversion JniChoice::DataClass { class: "example.Stamp" }
+Stamp.fields, carried in stamp_obj
+secs:  i64, IntoRust   Type(i64) rule -> atomic
+nanos: i64, IntoRust   Type(i64) rule -> atomic
 ```
 
-and, for each part the registry then plans:
-
-```text
-secs:  i64, IntoRust   Default rule: Whole, JniChoice::Scalar   -> atomic
-nanos: i64, IntoRust   Default rule: Whole, JniChoice::Scalar   -> atomic
-```
-
-A `DataClass` [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
-properties mirror the fields, so the JNI frontend records its rule with
-`Via::Fields`, and the registry resolves that to the struct
+A data class [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
+properties mirror the fields, so the JNI frontend records a `Product` through
+`Via::Fields` over a `JObject` [carrier](../../stages/05-represent.md#describing-target-values-and-operations) whose metadata names `example.Stamp`.
+The registry resolves that to the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
-Rust `Stamp` is made of reading one property per field. Nothing has derived a
-getter name or a descriptor yet; those belong to the
-[representation](../../stages/05-represent.md#represent-and-compose-values), and the representation is asked for only after the parts are
-planned.
+Rust `Stamp` is made of reading one property per field. No getter name or
+descriptor exists yet; the JNI writer derives both when the registry feeds it
+the part and the part's `jlong` carrier, at
+[composition][struct_represent_jni].
 
 `ptr_class!(Stamp)` — the struct kept in Rust and handed to Kotlin as an
-opaque `jlong` handle — records the same rule with `Via::Whole`, and no
-property would ever be read.
+opaque `jlong` handle — records a `Terminal` over a `jlong` carrier instead,
+and no property would ever be read.
 
 ## Checks
 
 - The relation is resolved by the registry from the rule; the JNI target never
   sees a relation id.
-- Under `DataClass` the target has committed to one property read per part in
-  the next stage, and since a property read is a JVM call, it has also
-  committed this conversion to being fallible — a fact
-  [the getters][struct_represent_jni] make explicit and the boundary routes.
-- The scalar parts take the binding's `Default` rule, `Whole`: a `jlong` is
-  one JNI value.
+- The rule's `read` is fallible in the runtime category, since a property read
+  is a JVM call, so this conversion is fallible — known now, before anything
+  is written, and routed by the boundary.
+- The scalar parts take the `i64` rule from JNI's scalar table: a `Terminal`
+  over `jlong`, one JNI value.
 
 [struct]: README.md
 [struct_select]: 04-select.md

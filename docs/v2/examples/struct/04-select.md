@@ -10,7 +10,8 @@ Owner: the registry, from the binding's rules · Previous: [Record binding reque
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits           // what a rule at a position is looked up by
-rules:    Type(Stamp) -> Conversion { via: Fields, choice: <what this target recorded> }
+rules:    Type(Stamp) -> Product { via: Fields, carrier: <this target's Stamp carrier>, read, build }
+          Type(i64)   -> Terminal { carrier: <this target's i64 carrier>, identity }
 relations of Stamp: [ Stamp.fields, atomic ] // registered by the registry from Flat
 ```
 
@@ -18,10 +19,9 @@ relations of Stamp: [ Stamp.fields, atomic ] // registered by the registry from 
 
 ```text
 Stamp, IntoRust
-  relation: Stamp.fields                // what the rule's `Fields` resolves to,
-  conversion: <what this target recorded for Stamp>   // with the rule's choice
-  +-- part 0  secs:  i64, IntoRust  ->  atomic   // the Default rule
-  +-- part 1  nanos: i64, IntoRust  ->  atomic
+  representation: the Type(Stamp) rule's     // relation Stamp.fields
+  +-- part 0  secs:  i64, IntoRust  ->  the Type(i64) rule's   // relation atomic
+  +-- part 1  nanos: i64, IntoRust  ->  the Type(i64) rule's
 ```
 
 The registry registers the struct's two [relations](../../stages/04-select.md#what-a-relation-is)
@@ -31,21 +31,19 @@ the first time `Stamp` is planned: the atomic one every type has, and
 the struct [choices](../../stages/03-requests.md#what-a-choice-records) these
 pages use — a C `data_struct`, a Kotlin data class — that rule says `Fields`,
 which resolves to `Stamp.fields`, and only then does the registry read the
-relation's parts and plan each. Nothing records a rule for `i64`, so each part
-takes the binding's `Default` rule: `Whole`, the atomic relation, with
-nothing under it, and the tree ends there.
+relation's parts and plan each. Each part takes the `i64` rule from the
+adapter's scalar table: a `Terminal`, the atomic relation, with nothing under
+it, and the tree ends there.
 
 Selection is the whole of this stage for a struct, and the registry does all
-of it. No
+of it without calling the target. Nothing has been written, but everything a
+writer will need is now known: the
+[conversion](../../stages/04-select.md#select-conversion-relations) is made of
+two field conversions, in declaration order, and the
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
-has been named and no read described; what is settled is that the
-[conversion](../../stages/04-select.md#select-conversion-relations) will be
-made of two field conversions, in declaration order, each of them an `i64`
-converted whole. The rule's choice is the
-[conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
-— which is what later stages compare, and never read. The
+of `Stamp` has two members, each carried as the `i64` rule says. The
 [C][struct_select_c] and [Kotlin/JNI][struct_select_jni] pages show each
-frontend's rule.
+frontend's rules.
 
 ## Checks
 
@@ -53,8 +51,7 @@ frontend's rule.
   not the fields; a rule saying `Whole` — an opaque handle — would leave
   private and unsupported fields uninspected.
 - Parts come from the selected relation, so a constructor relation, when it
-  exists, would give one `millis` argument instead of two fields. The current
-  engine resolves `Whole` and `Fields` only.
+  exists, would give one `millis` argument instead of two fields.
 - Part order is declaration order, and the next stage's reads are paired with
   parts in that order.
 - An unsupported part makes this conversion unsupported, which propagates to

@@ -118,7 +118,7 @@ a different treatment requires an explicit conversion role.
 A struct relation is implicit — the registry registers it for any struct the
 source model describes. A constructor or projector relation is explicit: it
 names a function, so a frontend declaration has to say which. It says so in
-the `Via` of a
+the `Via` of a `Product` representation in a
 [conversion rule](stages/03-requests.md#conversion-rules), which gains one
 variant per relation:
 
@@ -132,7 +132,6 @@ pub enum Relation {
 }
 
 pub enum Via {
-    Whole,
     Fields,
     Construct(syn::Ident), // Into Rust through this source function.
     Project(syn::Ident),   // Out of Rust through this source function.
@@ -150,7 +149,7 @@ Pinning the constructor for `Stamp` is a rule recorded with the request, and it
 changes what the parts are without changing anything else:
 
 ```text
-rule:      Type(Stamp) -> Conversion { via: Construct(stamp_from_millis), choice: … }
+rule:      Type(Stamp) -> Product { via: Construct(stamp_from_millis), carrier, read, build }
 relation:  Relation::Construct, over the checked function view, registered for Stamp
 parts:     millis: i64, addressed as `….arg millis`
 ```
@@ -158,6 +157,9 @@ parts:     millis: i64, addressed as `….arg millis`
 The registry resolves `Construct(stamp_from_millis)` the way it resolves
 `Fields`: it checks the function against the type before planning, and a
 function that does not construct the type fails the build as invalid input.
+The [carrier](stages/05-represent.md#describing-target-values-and-operations)'s
+members are then the constructor's arguments, so its writer
+is fed one `millis` member instead of `secs` and `nanos`.
 
 The registry then converts one `i64`, calls `stamp_from_millis`, and has a
 `Stamp` — one child instead of two, the same recursion, and a target that need
@@ -404,22 +406,67 @@ defaults. Nested optionals must preserve distinct states such as `None` and
 `Some(None)`; if the selected encoding cannot do that, the combination is
 unsupported.
 
+## Generic types
+
+Extends [conversion rules](stages/03-requests.md#conversion-rules). Needed by
+the sequence-field path.
+
+A `Type` rule names one type, and a binding cannot list every instance of
+`Vec<T>` it will meet. Generic types need a scope that matches a pattern, and
+a representation whose parts are the type's arguments. Both stay data, so
+planning still calls no target code:
+
+```rust
+pub enum Scope {
+    Type(TypeKey),
+    At(OutputId, ValuePath),
+    /// Every instance of a generic type: `Vec<_>`, `Option<_>`.
+    Pattern(TypePattern),
+}
+
+pub enum Via {
+    Fields,
+    /// A sequence: one part, the element, converted once per element.
+    Elements,
+}
+
+pub struct WireType<M> {
+    pub rust: syn::Type,
+    pub abi: bool,
+    pub meta: M,
+    /// For a carrier a pattern rule uses: filled in per instance from the
+    /// element's carrier — `JObjectArray` of `Lexample/Stamp;`.
+    pub element: Option<ElementSlot>,
+}
+```
+
+A JNI binding records `Pattern(Vec<_>)` as a `Product` through
+`Via::Elements` over a `jobjectArray` carrier, with `JniOp::ArrayGet` to read
+an element and `JniOp::ArrayBuild` to build the array. Planning a
+`Vec<Stamp>` finds that rule, looks `Stamp` up by the ordinary rules as its
+one part, and instantiates the carrier with the element's: an array whose
+descriptor is `[Lexample/Stamp;`. The registry then feeds `ArrayGet` the
+array operand, the index and the element's carrier, and the JNI writer
+writes the `GetObjectArrayElement` call. `Vec<u8>` is a different case:
+carried whole as a `jbyteArray`, it is a `Type(Vec<u8>)` rule, and a `Type`
+rule outranks a pattern.
+
+The open design question is the precedence between patterns that overlap —
+`Vec<_>` and `Vec<Option<_>>` — which a single order of scopes does not
+settle. Requiring the frontend to record non-overlapping patterns, and
+refusing a binding that does not, is the smallest answer.
+
 ## Requesting further conversions
 
-Extends [how the registry asks a target for decisions](stages/04-select.md#how-the-registry-asks-a-target-for-decisions).
+Extends [what the target writes](stages/04-select.md#what-the-target-writes).
 
-Source-conversion dependencies come from the selected relation's children, and
-target operations list generated helpers. Current public dependencies are
-`Requirement`s in `SurfaceSpec.requires`, each resolved to a `Declaration`. The more general design will need an
-explicit request mechanism if a target requires additional conversions beyond
-those; that mechanism is not implemented. Rendering must not discover new
-conversions.
-
-Descriptions returned by a target can contain new primitive, layout or helper
-definitions with references local to that description. The registry validates and registers the
-definitions and assigns its own table IDs. Existing descriptors can reference
-IDs the registry already supplied. The target does not allocate entries in
-registry-owned tables itself.
+A value's conversions come from its representation's relation and the rules
+for its parts, and a writer's needs are its helpers. A target that needs a
+conversion beyond those — a helper that takes a value the plan has no reason
+to convert — states it in the binding, as another carrier and rule, so it is
+planned and checked like any other. It is never requested while writing: a
+writer that discovered a conversion would be a decision the plan could not
+see, and planning would stop being a function of the model and the binding.
 
 ## The full value contract
 

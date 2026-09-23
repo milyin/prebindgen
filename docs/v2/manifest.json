@@ -290,9 +290,9 @@
       "link_first_mention": false
     },
     {
-      "term": "conversion key",
-      "match": "conversion keys?",
-      "defined": "stages/03-requests.md#finding-an-existing-conversion-plan"
+      "term": "conversion rule",
+      "match": "conversion rules?",
+      "defined": "stages/03-requests.md#conversion-rules"
     },
     {
       "term": "root",

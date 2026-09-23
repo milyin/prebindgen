@@ -51,12 +51,13 @@ value is planned on its own.
 Three separate questions have to be answered for every conversion, and keeping
 them apart is what lets one algorithm serve both languages. Everything here
 happens while the binding is being generated, from what the build script
-configured; no part of it is decided while the binding runs. The first
-question is answered by the registry from the rules the binding recorded; the
-second by the **target**: the
-[language adapter](../README.md#the-components) for the binding being generated
-— `prebindgen-c` or `prebindgen-jni` — in the role it plays facing the engine,
-answering for its own language item by item. The third is the registry's alone.
+configured; no part of it is decided while the binding runs. The binding
+answered the first two when it was built, in the rules its frontend recorded,
+and the registry looks the answers up. The third is the registry's alone. The
+**target** — the [language adapter](../README.md#the-components) for the
+binding being generated, `prebindgen-c` or `prebindgen-jni`, in the role it
+plays facing the engine — answers none of them: it writes the code once they
+are answered.
 
 - **On the Rust side, what is this value made of?** A `Stamp` is made of its two
   fields, so obtaining one means obtaining two `i64`s and constructing
@@ -71,41 +72,40 @@ answering for its own language item by item. The third is the registry's alone.
   struct or a Kotlin data class, `Stamp` is built from its fields. Declared as
   an opaque handle, it is carried whole and its fields are never read. The
   frontend knows which when it records the declaration, so it records the
-  relation with it: every
-  [conversion rule](03-requests.md#conversion-rules) states a `Via` — `Whole`
-  or `Fields` — beside the target's own choice. The registry finds the rule
-  that applies to this value, resolves its `Via` against the source model, and
-  walks the result. No target code runs to answer this question. When a rule asks for something V2 has no lowering for, such as one of
-  the C declarators it does not implement yet, the target refuses it when it is
-  asked for the value's
-  [representation](05-represent.md#represent-and-compose-values), and nothing that needs the value can
-  be generated. Such a request fails the build; while V2's coverage is still
-  being completed it is
+  relation with it: the
+  [conversion rule](03-requests.md#conversion-rules) for `Stamp` holds a
+  `Product` [representation](05-represent.md#represent-and-compose-values)
+  through `Via::Fields`, or a `Terminal` one, which is the atomic relation.
+  The registry finds the rule that applies to this value, resolves the
+  relation against the source model, and walks the result. When a rule asks
+  for something V2 has no lowering for, such as one of the C declarators it
+  does not implement yet, its representation is `Unsupported` with the
+  reason, and nothing that needs the value can be generated. Such a request
+  fails the build; while V2's coverage is still being completed it is
   [reported as a skipped declaration](07-retain.md#unsupported-requests-and-public-api-dependencies)
   instead, which is a property of the transition rather than of the design.
 - **On the foreign side, what carries the value, and how is it accessed?** A
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
-  through JNI. This answer is a
-  [representation](05-represent.md#represent-and-compose-values), and only the
-  target can give it: nothing in the registry knows what a C struct or a JVM
-  object is.
+  through JNI. This answer is the rest of the same representation: the
+  [carrier](05-represent.md#describing-target-values-and-operations), and the
+  operations that read and build it. The frontend states it, because only the
+  language's own crate knows what a C struct or a JVM object is; the registry
+  holds it, types it and orders it without needing to know.
 - **How are the pieces put together?** Read each part, convert it, construct the
   Rust value, in that order, stopping if a step fails. This is the registry's
   job, and it is identical in both languages.
 
 Put together, planning one conversion is this recursion — the registry's own
-loop, with the target's question marked:
+loop, which calls no target code:
 
 ```text
 plan(type, direction, position):
-    conversion = rules.at(position)                   # a rule for this one value,
-              or rules.for_type(type)                 # else one for every value of the type,
-              or rules.default                        # else the binding's default
-                                                      # cheap: a lookup, no recursion yet
-    relation = the relation of type that conversion.via names
-                                                      # Whole: atomic; Fields: the struct's
-    mark (type, direction, relation, conversion) as being resolved
+    repr = rules.at(position)                         # a rule for this one value,
+        or rules.for_type(type)                       # else one for every value of the type,
+        or refuse: unsupported.conversion.no_rule     # cheap: a lookup, no recursion yet
+    relation = the relation of type that repr names   # Terminal: atomic; Product: its Via
+    mark (type, direction, repr) as being resolved
                                                       # meeting this mark again is a cycle
 
     parts    = the source model's parts of that relation
@@ -118,15 +118,14 @@ plan(type, direction, position):
 
     ---- everything above is this chapter; everything below is the next ----
 
-    if a node exists for (type, direction, relation, conversion, children):
+    if a node exists for (type, direction, repr, children):
         return it                                     # the identity is complete
                                                       # only once the children are
 
-    repr = target.represent(relation, children, conversion.choice)
-               # which carriers hold the value, and the operations that access them
     body = compose(relation, children, repr)
                # obtain each part, convert it, construct the Rust value — or the
-               # reverse, when the direction is out of Rust
+               # reverse, when the direction is out of Rust — typing each of
+               # repr's operations from the carriers the children resolved to
 
     record the node and return it
 ```
@@ -135,15 +134,16 @@ The algorithm is a depth-first walk that starts at a requested type, takes one
 outgoing relation per type it reaches, and builds its answer on the way back
 up. The line across the middle is the seam between this chapter and the next,
 and it is a real seam in the walk: everything above it happens on the way
-*down* — the first question is answered for a type before any of its parts is
-looked at — and everything below happens on the way *up*, after every part has
-been answered. This chapter is the descent. Its result is a **selection tree**:
-for every value a request needs, the type, the direction, the relation its
-conversion names, and under it the same for each part, down to the scalars
-where the tree stops. [The next chapter](05-represent.md) fills that tree in from the
-leaves upward, with what carries each value and the instructions that move it,
-and its result is the [node](05-represent.md#represent-and-compose-values), the
-unit the later stages read.
+*down* — a type's rule is found before any of its parts is looked at — and
+everything below happens on the way *up*, after every part has been answered.
+This chapter is the descent. Its result is a **selection tree**: for every
+value a request needs, the type, the direction, the representation that
+applies and the relation it names, and under it the same for each part, down
+to the scalars where the tree stops. [The next chapter](05-represent.md) fills
+that tree in from the leaves upward, with the instructions that move each
+value, and its result is the
+[node](05-represent.md#represent-and-compose-values), the unit the later
+stages read.
 
 The algorithm receives the value's *position*, not just its type: the output
 it is reached from and the [value path](03-requests.md#conversion-rules) from
@@ -156,8 +156,8 @@ method sees a position. The lookup is the *only* step that reads one, which is
 deliberate: every later question is asked about a conversion's identity rather
 than about one of the places it is used, so a rule recorded at a position has
 to take effect here, as a different conversion. The plan that results is
-shared by identity, so two positions whose conversion, relation and children
-all match get the same node.
+shared by identity, so two positions whose representation and children
+match get the same node.
 
 For `Stamp` the recursion is one level deep: two `i64` children that need no
 work of their own. A struct with a struct field simply makes `plan` call itself
@@ -172,11 +172,12 @@ point. Planning `stamp_sum` selects this:
    Return   --> i64, out of Rust, relation atomic
 ```
 
-Nothing here says how a `Stamp` arrives or how `secs` is read; that is the next
-chapter's question. What it does say is settled before that question is asked:
-`Stamp` will be built from two fields and not from a handle or a constructor
-argument, so the representation the target is asked for next is a
-representation of *two members*, and an `i64` is a leaf.
+The tree does not yet say which instructions read `secs` or build `Stamp`;
+putting them together is the next chapter's work. What it does settle is
+that `Stamp` will be built from two fields and not from a handle or a
+constructor argument, that each field's carrier is the `i64` rule's, and that
+an `i64` is a leaf. The `Stamp` carrier's members are therefore known before
+anything is written: two, each carried as its field's rule says.
 
 ### Refusal and cycles
 
@@ -329,162 +330,152 @@ exists without anyone asking for it. A **scalar** has no parts at all — an
 whole value converted by a single operation the target supplies.
 
 Which of a type's relations a value takes is not chosen by anyone at planning
-time. It is stated, as data, by the conversion that applies to the value:
+time. The representation that applies to the value states it:
 
 ```rust
-/// How one value converts: the relation it is read through, and the target's
-/// own name for the settings that apply to it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Conversion<K> {
-    pub via: Via,
-    pub choice: K,
-}
-
-/// Which relation of its type a value is read through.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// Which relation of its type a `Product` representation reads a value through.
 pub enum Via {
-    /// The atomic relation: the whole value, no parts.
-    Whole,
     /// The struct relation: one part per field.
     Fields,
 }
 ```
 
-`choice` is the target's
-[conversion key](03-requests.md#finding-an-existing-conversion-plan) — for C,
-`CChoice::DataStruct { c_name: "Stamp" }`. The registry compares it and never
-reads it. `via` is the part the registry does read. Resolving it is the
-registry's job and gives the same answer for every target: `Whole` is the
-atomic relation of any type, and `Fields` is the struct relation of a type the
-model describes as a struct. `Fields` on anything else — an extern, a type the
-binding declared although the source never exported it — has no relation to
-resolve to, and the value is refused as `unsupported.type.not_a_struct`. That
-refusal is a fact about the model, so every target reports it in the same
-words.
+A `Terminal` representation is the atomic relation of any type. A `Product`
+through `Via::Fields` is the struct relation of a type the model describes as
+a struct. `Fields` on anything else — an extern, a type the binding declared
+although the source never exported it — has no relation to resolve to, and
+the value is refused as `unsupported.type.not_a_struct`. That refusal is a
+fact about the model, so every target reports it in the same words.
 
-A conversion comes from the most specific
+The representation comes from the most specific
 [conversion rule](03-requests.md#conversion-rules) that covers the value, and
 that rule is used whole:
 
 1. the rule recorded at this value's position;
-2. the rule recorded for this value's type;
-3. the binding's default rule.
+2. the rule recorded for this value's type.
 
 This order is the registry's, and it is the only precedence there is: both
 frontends need exactly this one, and a frontend with an override that should
-lose to a type rule has recorded it at the wrong scope. A value no rule
-covers — a binding that recorded no default — is refused as
-`unsupported.conversion.no_rule`. The lookup runs no target code, so
-selection is a pure function of the model and the binding.
+lose to a type rule has recorded it at the wrong scope. A value neither
+covers is refused as `unsupported.conversion.no_rule`. The lookup runs no
+target code, so selection is a pure function of the model and the binding.
 
 Selection precedes child traversal, which is what lets an atomic opaque
 representation leave a struct's private fields uninspected. Child types retain
 wrappers, references and lifetimes; cloning needs an explicit operation.
 
-## How the registry asks a target for decisions
+## What the target writes
 
-The target interface has three planning operations. Each asks one
-language-specific question and gets a description back; the registry decides
-when to ask. None of them is this chapter's, since selection asks the target
-nothing: `represent` is [the next chapter's](05-represent.md), and the other
-two belong to the stages after that. The sketch below uses the design's descriptor names.
-Current `represent` receives `ChildValue` entries containing a part and
-layout, not full validity and resource contracts. The same trait also has
-`render_operation`, used later during Rust emission.
-
-None of these methods looks anything up in the binding's configuration.
-What applies to a value arrives as the `choice` of its conversion; what the
-binding declared one output as arrives with every question about that
-output. What a target keeps of its own is only what holds for the whole
-binding, such as the JNI package prefix.
+The target knows how to write its language, and nothing else. The registry
+decides what to write: which carriers a wrapper takes, which operations run in
+which order, which declarations a public API needs. It then calls the target
+with everything a piece of text needs already worked out — a **feed**. A
+writer cannot refuse and cannot change the plan: whatever could make a value
+unsupported was decided when the binding was built, and the plan is complete
+before the first writer runs.
 
 ```rust
-trait Target {
-    type ConversionKey: Clone + Eq + Hash + Debug; // The target's name for one way of
-                                                   // converting, and for what one
-                                                   // output was declared as.
-    type Payload; // Owned operation/rendering descriptions.
+pub trait Target: Sized {
+    const NAME: &'static str;
 
-    fn represent(
-        &self,
-        shape: ResolvedShape<'_>, // Selected source operation and its direct children.
-        children: &[ValueDescriptor<Self::Payload>], // Completed child conversion descriptions.
-        choice: &Self::ConversionKey, // The choice of the conversion that applied.
-    ) -> TargetSupport<ReprSpec<Self::Payload>>;
+    /// What a carrier tells the writers beyond its Rust type.
+    /// C: its C name. JNI: its JVM descriptor and Kotlin type.
+    type CarrierMeta: Clone + Eq + Hash + Debug;
+    /// The target's own operations. C: none. JNI: a getter call, an object
+    /// construction, a throw.
+    type Op: Clone + Eq + Hash + Debug;
+    /// What only the foreign writer reads. C: nothing. JNI: a Kotlin name and package.
+    type OutputMeta: Clone + Eq + Hash + Debug;
 
-    fn boundary(
-        &self,
-        site: &SiteDescriptor<'_, Self::ConversionKey>, // Exported call's signature, boundary
-                                                        // roles, declaration and its choice.
-        values: &ResolvedValues<Self::Payload>, // Its resolved input/output values.
-    ) -> TargetSupport<BoundarySpec<Self::Payload>>;
+    /// One of the target's operations, as one Rust expression.
+    fn write_operation(&self, op: &Self::Op, feed: &OperationFeed<'_, Self>) -> Written<syn::Expr>;
 
-    fn surface(
-        &self,
-        request: &SurfaceRequest<'_, Self::ConversionKey>, // Public declaration, its choice,
-                                                           // source item and promises.
-        values: &ResolvedValues<Self::Payload>, // Values needed to describe that public API.
-    ) -> TargetSupport<SurfaceSpec<Self::Payload>>;
+    /// The Rust declaration a carrier needs, if it needs one: a `repr(C)`
+    /// struct or enum mirror, an incomplete type behind a pointer. `None` for a
+    /// type Rust already has, such as `i64` or `JObject`.
+    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Option<Written<TokenStream>>;
+
+    /// The foreign declarations, in the target's own language. C writes none:
+    /// cbindgen derives the header from the Rust.
+    fn write_foreign(&self, feed: &ForeignFeed<'_, Self>) -> Vec<ForeignFile> {
+        Vec::new()
+    }
+}
+
+/// What a writer produced, and the helpers it needs emitted once beside it.
+pub struct Written<X> {
+    pub text: X,
+    pub helpers: Vec<Artifact>,
+}
+
+pub struct OperationFeed<'a, T: Target> {
+    /// The operands, already named, each with the carrier or source type it holds.
+    pub operands: &'a [(syn::Ident, Fed<'a, T>)],
+    /// What the expression must produce.
+    pub result: Option<Fed<'a, T>>,
+    /// For an operation applied per part, such as a `Product`'s `read`: which part.
+    pub part: Option<&'a Part>,
+}
+
+pub enum Fed<'a, T: Target> {
+    Source(&'a TypeRef),
+    Carrier(&'a WireType<T::CarrierMeta>),
+}
+
+pub struct CarrierFeed<'a, T: Target> {
+    pub carrier: &'a WireType<T::CarrierMeta>,
+    /// For the carrier of a `Product`: each part, with the carrier it resolved to.
+    pub members: &'a [(&'a Part, &'a WireType<T::CarrierMeta>)],
+    /// For a carrier mirroring a fieldless enum: that enum, from the model.
+    pub unit: Option<&'a Enum>,
 }
 ```
 
-Both frontends record the same default:
-`Conversion { via: Via::Whole, choice: Scalar }`. What differs between the
-types it covers is what carries each — a `jlong` for an `i64`, nothing at all
-for a struct nobody declared — and that is `represent`'s answer, which sees
-the type. A generic type such as `Vec<T>` needs a default whose `Via` depends
-on the type's shape, which one default cannot state; that arrives as a scope
-of its own, matching a pattern, when sequences do.
+The JNI getter shows the split. The binding stated
+`read: Operation::target(JniOp::Getter)` for `Stamp`; `JniOp::Getter` carries
+no name and no type. To read `secs`, the registry calls `write_operation`
+with the object operand and its `example/Stamp` carrier, the `env` context, the
+part `secs`, and the result carrier the `i64` rule resolved to — a `jlong`
+whose metadata says `J`. The JNI writer turns the part's name into `getSecs`
+by the Kotlin convention and the result's descriptor into `()J`, and
+writes `env.call_method(&arg0, "getSecs", "()J", &[])?.j()?`. Nothing in the
+feed was decided by the writer, and nothing the writer produced changes what
+the registry planned.
 
-The conversion's `choice` is the identity the registry reuses plans by, so it
-carries one rule: equal keys mean interchangeable conversions. Two values whose
-[crossing](03-requests.md#finding-an-existing-conversion-plan), relation,
-children and key all match get one node, and a key already being resolved is a
-cycle. Settings that generate differently must therefore produce different
-keys. The rules are recorded before planning starts, so a key is minted once
-per rule rather than once per visit, and the second half of that obligation
-holds by construction.
-[Record binding requests](03-requests.md#finding-an-existing-conversion-plan)
-states the rule in full.
+C writes even less. Every C operation is a standard one the registry writes
+itself — a member read, a struct literal, a pointer cast — so C's `Op` has no
+values and `write_operation` is never called. What C writes is carriers: fed
+the `Stamp` carrier and its two members, each with its resolved `i64`
+carrier, it writes `#[repr(C)] pub struct Stamp { pub secs: i64, pub nanos: i64 }`,
+which cbindgen then turns into the header's declaration.
 
-Every method answers with `TargetSupport<Answer>`, which is one of three things:
-a ready description, a specific unsupported reason, or a fatal planning error
-(defined with the other support
-[outcomes](07-retain.md#retain-supported-output)). Two of the answers are
-specified in later chapters, because they are about later stages:
-[`BoundarySpec`](06-boundary.md#assembling-an-exported-function) describes
-where wrapper arguments and results go, and
-[`SurfaceSpec`](07-retain.md#dependencies-of-public-declarations) describes a
-public foreign declaration and what it requires.
+What each stage feeds:
 
-The method inputs and results serve different stages:
+| Stage | The registry decides | The target writes |
+| --- | --- | --- |
+| Selection (this chapter) | Which representation, relation and carrier each value has | Nothing |
+| [Composition](05-represent.md) | Which operations run in what order, and each operand's and result's carrier | Each target operation, as an expression |
+| [The wrapper](06-boundary.md) | The wrapper's parameters and return from the function form and the resolved carriers, and a route per failure category | Nothing: the registry writes the `extern` function itself |
+| [Retention](07-retain.md) | Which declarations a retained output requires: the declarations of the carriers its wrappers use | Each required carrier's declaration |
+| [Emission](08-emit.md) | The retained outputs with their metadata, and each one's resolved carriers | The foreign declarations |
 
-| Method | Information available | Target's answer | Registry's next job |
-| --- | --- | --- | --- |
-| `represent` | `ResolvedShape`: source operation with model-derived child types; `ValueDescriptor`s: completed child layouts and contracts | Representation layout and target operations | Compose the complete value conversion. |
-| `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete wrapper. |
-| `surface` | `SurfaceRequest`: the declaration, the captured item behind it and its promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |
+The `CarrierMeta` a writer reads is the one thing in the plan the registry
+does not understand, and it needs no promise about it: the registry compares
+metadata for equality, because two carriers of one Rust type — two `JObject`s
+of different classes — are different carriers, and it never interprets it.
 
 A conversion speaks for one value. It cannot state a choice for a child,
 because a child is looked up again at its own position, and two ways to say
 the same thing would need a second precedence rule; a choice for a child is a
 conversion rule recorded at the child's position instead.
 
-The relation is data rather than a target's answer because the frontend
-already knows it when it records the rule: `data_struct!` means fields,
-`ptr_type!` means the whole value. Asking the target again at planning time
-would restate the same fact through code the registry cannot inspect, and
-could not be checked before planning. The target still decides what it can
-*carry*: a rule whose relation the target cannot represent is refused at
-`represent`, as any other missing capability is.
-
-These views are read-only. The adapter can inspect direct child descriptors but
-cannot invoke the registry's recursive compiler or modify the registry's plan
-tables. Relations and representations that recur — a struct read through its
-members, a scalar carried unchanged — should be available to an adapter as
-ready-made descriptions it names rather than builds, so that a new target's
-first version is a handful of choices rather than a library. A target that
-needs a conversion the selected relation's children do not give it has
+These feeds are read-only views over the completed plan. A writer cannot
+invoke the registry's recursive compiler or modify the plan tables. Common
+representations — a struct read through its members, a scalar carried
+unchanged — are built from standard operations the registry writes itself,
+so a new target's first version is a table of carriers and rules rather than
+a library. A target that needs a conversion the selected relation's children
+do not give it has
 [no way to ask for one yet](../extensions.md#requesting-further-conversions).
 
 ## Responsibility boundary with Flat
@@ -499,7 +490,7 @@ direction and exact type.
 | Struct shape and typed fields | Recursive field conversions and value construction/decomposition. |
 | `Result` child types | Whether a selected constructor treats `Ok` as construction success and routes `Err` as failure. |
 | Exact reference/wrapper structure and source access facts | Temporary lifetimes, borrow use and ownership in the generated conversion. |
-| Stable snapshot association and normalized type keys | Conversion-cache identity including direction, selected relation and the target's conversion key. |
+| Stable snapshot association and normalized type keys | Conversion-cache identity including direction and the representation that applied. |
 | Source locations and unsupported-item descriptions | Binding-specific dependency paths and skipped-output reports. |
 
 The registry and language frontends use Flat independently. Flat makes no
