@@ -23,8 +23,8 @@ Stamp.fields, conversion CChoice::DataStruct { c_name: "Stamp" }
 and, for each part the registry then plans:
 
 ```text
-secs:  i64, IntoRust   no rule -> default_conversion: Whole, CChoice::Scalar   -> atomic
-nanos: i64, IntoRust   no rule -> default_conversion: Whole, CChoice::Scalar   -> atomic
+secs:  i64, IntoRust   Default rule: Whole, CChoice::Scalar   -> atomic
+nanos: i64, IntoRust   Default rule: Whole, CChoice::Scalar   -> atomic
 ```
 
 A `data_struct` is a C struct passed by value, and a by-value struct is nothing
@@ -33,8 +33,7 @@ reads `data_struct!(Stamp)`. The registry resolves that to the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
 Rust `Stamp` will be made of one conversion per field. No C code runs at this
-stage for `Stamp`; the C target is asked only for the default of `i64`, a type
-no rule names.
+stage: the fields' `i64`s take the `Default` rule the C frontend recorded.
 
 The alternative is real, not hypothetical: `ptr_type!(Stamp)` records the same
 rule with `Via::Whole`, and the registry would then plan `Stamp` as one whole

@@ -75,9 +75,7 @@ answering for its own language item by item. The third is the registry's alone.
   [conversion rule](03-requests.md#conversion-rules) states a `Via` — `Whole`
   or `Fields` — beside the target's own choice. The registry finds the rule
   that applies to this value, resolves its `Via` against the source model, and
-  walks the result. No target code runs to answer this question, except for a
-  value no rule covers, whose conversion the target states from its type
-  alone. When a rule asks for something V2 has no lowering for, such as one of
+  walks the result. No target code runs to answer this question. When a rule asks for something V2 has no lowering for, such as one of
   the C declarators it does not implement yet, the target refuses it when it is
   asked for the value's
   [representation](05-represent.md#represent-and-compose-values), and nothing that needs the value can
@@ -97,13 +95,13 @@ answering for its own language item by item. The third is the registry's alone.
   job, and it is identical in both languages.
 
 Put together, planning one conversion is this recursion — the registry's own
-loop, with the target's questions marked:
+loop, with the target's question marked:
 
 ```text
 plan(type, direction, position):
     conversion = rules.at(position)                   # a rule for this one value,
               or rules.for_type(type)                 # else one for every value of the type,
-              or target.default_conversion(type)      # else the target's default for it
+              or rules.default                        # else the binding's default
                                                       # cheap: a lookup, no recursion yet
     relation = the relation of type that conversion.via names
                                                       # Whole: atomic; Fields: the struct's
@@ -364,20 +362,20 @@ resolve to, and the value is refused as `unsupported.type.not_a_struct`. That
 refusal is a fact about the model, so every target reports it in the same
 words.
 
-A conversion comes from one of three places, tried in this order, and the
-first one found is used whole:
+A conversion comes from the most specific
+[conversion rule](03-requests.md#conversion-rules) that covers the value, and
+that rule is used whole:
 
-1. the [conversion rule](03-requests.md#conversion-rules) recorded at this
-   value's position;
-2. the conversion rule recorded for this value's type;
-3. `Target::default_conversion`, for a type no rule names.
+1. the rule recorded at this value's position;
+2. the rule recorded for this value's type;
+3. the binding's default rule.
 
 This order is the registry's, and it is the only precedence there is: both
 frontends need exactly this one, and a frontend with an override that should
-lose to a type rule has recorded it at the wrong scope. The third source is
-the one piece of the lookup that runs target code. It is asked about a type,
-never a position, so its answer cannot vary from one use of the type to
-another.
+lose to a type rule has recorded it at the wrong scope. A value no rule
+covers — a binding that recorded no default — is refused as
+`unsupported.conversion.no_rule`. The lookup runs no target code, so
+selection is a pure function of the model and the binding.
 
 Selection precedes child traversal, which is what lets an atomic opaque
 representation leave a struct's private fields uninspected. Child types retain
@@ -385,11 +383,11 @@ wrappers, references and lifetimes; cloning needs an explicit operation.
 
 ## How the registry asks a target for decisions
 
-The target interface has four planning operations. Each asks one
+The target interface has three planning operations. Each asks one
 language-specific question and gets a description back; the registry decides
-when to ask. The first, `default_conversion`, is this chapter's;
-`represent` is [the next chapter's](05-represent.md), and the other two belong
-to the stages after that. The sketch below uses the design's descriptor names.
+when to ask. None of them is this chapter's, since selection asks the target
+nothing: `represent` is [the next chapter's](05-represent.md), and the other
+two belong to the stages after that. The sketch below uses the design's descriptor names.
 Current `represent` receives `ChildValue` entries containing a part and
 layout, not full validity and resource contracts. The same trait also has
 `render_operation`, used later during Rust emission.
@@ -406,12 +404,6 @@ trait Target {
                                                    // converting, and for what one
                                                    // output was declared as.
     type Payload; // Owned operation/rendering descriptions.
-
-    fn default_conversion(
-        &self,
-        ty: &TypeRef, // A type no conversion rule names.
-    ) -> TargetSupport<Conversion<Self::ConversionKey>>; // How every value of it
-                                                         // converts, wherever it is.
 
     fn represent(
         &self,
@@ -436,13 +428,13 @@ trait Target {
 }
 ```
 
-Both implemented targets answer `default_conversion` the same way today:
-`Conversion { via: Via::Whole, choice: Scalar }`, whatever the type, and
-`represent` then refuses a type it has no carrier for. The method exists for
-what a rule cannot name in advance: a scalar kind, and later a generic
-pattern such as `Vec<T>` or `Option<T>`, whose instances a binding never lists.
-A naming closure the frontend holds may run inside it, since what comes back is
-plain data.
+Both frontends record the same default:
+`Conversion { via: Via::Whole, choice: Scalar }`. What differs between the
+types it covers is what carries each — a `jlong` for an `i64`, nothing at all
+for a struct nobody declared — and that is `represent`'s answer, which sees
+the type. A generic type such as `Vec<T>` needs a default whose `Via` depends
+on the type's shape, which one default cannot state; that arrives as a scope
+of its own, matching a pattern, when sequences do.
 
 The conversion's `choice` is the identity the registry reuses plans by, so it
 carries one rule: equal keys mean interchangeable conversions. Two values whose
@@ -469,7 +461,6 @@ The method inputs and results serve different stages:
 
 | Method | Information available | Target's answer | Registry's next job |
 | --- | --- | --- | --- |
-| `default_conversion` | An exact source type that no rule names | The `Via` and choice every value of that type converts by | Resolve the `Via` to a relation, then recursively resolve its parts. |
 | `represent` | `ResolvedShape`: source operation with model-derived child types; `ValueDescriptor`s: completed child layouts and contracts | Representation layout and target operations | Compose the complete value conversion. |
 | `boundary` | `SiteDescriptor`: call signature/roles; `ResolvedValues`: its completed value descriptions | Argument placement, result delivery and error actions | Assemble and validate the complete wrapper. |
 | `surface` | `SurfaceRequest`: the declaration, the captured item behind it and its promises; required value descriptions | Public declaration description and requirements | Check dependencies before deciding whether to emit it. |

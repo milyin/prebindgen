@@ -23,8 +23,8 @@ Stamp.fields, conversion JniChoice::DataClass { class: "example.Stamp" }
 and, for each part the registry then plans:
 
 ```text
-secs:  i64, IntoRust   no rule -> default_conversion: Whole, JniChoice::Scalar   -> atomic
-nanos: i64, IntoRust   no rule -> default_conversion: Whole, JniChoice::Scalar   -> atomic
+secs:  i64, IntoRust   Default rule: Whole, JniChoice::Scalar   -> atomic
+nanos: i64, IntoRust   Default rule: Whole, JniChoice::Scalar   -> atomic
 ```
 
 A `DataClass` [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
@@ -49,8 +49,8 @@ property would ever be read.
   the next stage, and since a property read is a JVM call, it has also
   committed this conversion to being fallible — a fact
   [the getters][struct_represent_jni] make explicit and the boundary routes.
-- The scalar parts take the target's default, `Whole`: a `jlong` is one JNI
-  value.
+- The scalar parts take the binding's `Default` rule, `Whole`: a `jlong` is
+  one JNI value.
 
 [struct]: README.md
 [struct_select]: 04-select.md

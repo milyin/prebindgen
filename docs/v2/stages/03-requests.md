@@ -153,8 +153,8 @@ attach to sites and parts, and so do diagnostics, which is why a skipped binding
 can later say *which* parameter of *which* exported function was the problem.
 
 Precedence between those choices is the engine's, and there is one: a rule
-at the value's own position, then a rule for its type, then the target's
-default for the type. A position can identify a nested field, such as
+at the value's own position, then a rule for its type, then the binding's
+default. A position can identify a nested field, such as
 `param stamp.field secs`. What a rule carries is a **conversion key**, which
 affects whether a plan can be reused. The two implemented frontends record
 type rules only, since neither has a per-site declarator that V2 lowers; the
@@ -358,8 +358,9 @@ which relation of its type a value is read through — and a choice of type `K`;
 
 ### Conversion rules
 
-A **conversion rule** is a choice recorded against a scope: every value of one
-type, or one value at one position inside one output.
+A **conversion rule** is a choice recorded against a scope: every value no
+other rule covers, every value of one type, or one value at one position
+inside one output.
 
 ```rust
 pub struct Rule<K> {
@@ -368,6 +369,8 @@ pub struct Rule<K> {
 }
 
 pub enum Scope {
+    /// Every value no other rule covers.
+    Default,
     /// Every value of this type, wherever it turns up.
     Type(TypeKey),
     /// The one value at this path inside this output. The empty path is the
@@ -399,12 +402,14 @@ reads the way a build script author thinks of the value, and a renamed
 parameter makes the rule fail validation instead of silently applying
 nowhere.
 
-When the registry plans a value it looks for a conversion in this order, and
-uses the first it finds whole:
+When the registry plans a value it uses the rule with the most specific scope
+that covers it, whole:
 
 1. the rule at `Scope::At(output, path)` for the value's own position;
 2. the rule at `Scope::Type` for the value's type key;
-3. `Target::default_conversion` for the type.
+3. the rule at `Scope::Default`.
+
+A value none of them covers is refused as `unsupported.conversion.no_rule`.
 
 Nothing is merged between them: a rule at a position replaces the type's rule
 for that value, and says nothing about the value's children, which are looked
@@ -431,14 +436,15 @@ it plans anything, and fails the build with invalid input when:
   or a field the struct does not have.
 
 The second check resolves each path the way planning will: each step's value
-has its conversion looked up by the same three-step order, and a `Field` step
+has its conversion looked up in the same order, and a `Field` step
 needs that conversion's `Via` to be `Fields`. So `param stamp.field secs` is
 valid while `Stamp` converts through its fields, and becomes invalid if a rule
 makes it an opaque handle — a rule that would otherwise sit unused under a
 value nothing reads into.
 
-A `Type` rule no planned value used is not an error: a type rule is a
-default, and a binding may declare a type no function mentions. Such rules are
+A `Type` or `Default` rule no planned value used is not an error: each is a
+default for many values, and a binding may declare a type no function
+mentions. Such rules are
 listed in `Generation::unused_rules`, which a build script may print.
 
 The binding is also printable, one line per output and per rule, with the
@@ -447,6 +453,7 @@ choice in its `Debug` form:
 ```text
 output  type:Stamp        DataStruct { c_name: "Stamp" }
 output  fn:stamp_sum      Function { symbol: "stamp_sum" }
+rule    default           whole   Scalar
 rule    type Stamp        fields  DataStruct { c_name: "Stamp" }
 ```
 
@@ -485,8 +492,16 @@ let generation = generate(source_model, &CTarget, binding, source_module)?;
                                                      // stages 4 to 6
 ```
 
-`CbindgenBuilder::binding()` reads the builder's storage once. For each
-declared type it records the output and the type's rule from the same
+`CbindgenBuilder::binding()` reads the builder's storage once. It records
+the default first — every value nothing else covers is carried whole, and
+`represent` finds the
+[carrier](05-represent.md#describing-target-values-and-operations) for its type:
+
+```rust
+binding.rule(Scope::Default, Conversion { via: Via::Whole, choice: CChoice::Scalar });
+```
+
+Then, for each declared type, it records the output and the type's rule from the same
 choice — `data_type!(Stamp)` becomes
 
 ```rust

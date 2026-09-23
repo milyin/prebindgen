@@ -20,7 +20,7 @@ relations of Stamp: [ Stamp.fields, atomic ] // registered by the registry from 
 Stamp, IntoRust
   relation: Stamp.fields                // what the rule's `Fields` resolves to,
   conversion: <what this target recorded for Stamp>   // with the rule's choice
-  +-- part 0  secs:  i64, IntoRust  ->  atomic   // no rule: the target's default
+  +-- part 0  secs:  i64, IntoRust  ->  atomic   // the Default rule
   +-- part 1  nanos: i64, IntoRust  ->  atomic
 ```
 
@@ -32,7 +32,7 @@ the struct [choices](../../stages/03-requests.md#what-a-choice-records) these
 pages use — a C `data_struct`, a Kotlin data class — that rule says `Fields`,
 which resolves to `Stamp.fields`, and only then does the registry read the
 relation's parts and plan each. Nothing records a rule for `i64`, so each part
-takes `Target::default_conversion(i64)`: `Whole`, the atomic relation, with
+takes the binding's `Default` rule: `Whole`, the atomic relation, with
 nothing under it, and the tree ends there.
 
 Selection is the whole of this stage for a struct, and the registry does all
