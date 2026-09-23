@@ -1583,7 +1583,7 @@ mod fold;
 mod kotlin_emit;
 mod overloads;
 mod param_rows;
-mod render;
+pub(crate) mod render;
 mod report;
 mod struct_plan;
 mod symbol;

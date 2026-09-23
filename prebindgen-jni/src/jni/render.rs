@@ -25,7 +25,7 @@ pub(crate) fn build_enum_class(
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree — and it is the
     // model's, which is where "same" stops needing to be maintained.
-    let entries: Vec<KtEnumEntry> = item_enum
+    let entries: Vec<(String, i64)> = item_enum
         .discriminant_values()
         .unwrap_or_else(|name| {
             panic!(
@@ -36,9 +36,9 @@ pub(crate) fn build_enum_class(
         })
         .into_iter()
         .map(|(ident, value)| {
-            KtEnumEntry::with_args(
+            (
                 mangle_kotlin_ident(&crate::util::camel_to_screaming_snake(&ident.to_string())),
-                value.to_string(),
+                value,
             )
         })
         .collect();
@@ -51,21 +51,29 @@ pub(crate) fn build_enum_class(
         .docs()
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    let mut class = KtClass::enum_(class_name)
-        .vis(KtVis::Public)
-        .kdoc(enum_kdoc)
-        .ctor_param(
-            KtCtorParam::new("value", KtType::int())
-                .val()
-                .vis(KtVis::Public),
-        );
-    for e in entries {
-        class = class.entry(e);
+    enum_class(class_name, entries).kdoc(enum_kdoc)
+}
+
+/// A Kotlin `enum class` of `entries`, each carrying its Rust number as a
+/// public `val value: Int`, and a `fromInt` companion looking one up. v1 and
+/// v2 both emit an enum class through this, so the two write one shape.
+pub(crate) fn enum_class(
+    class_name: &str,
+    entries: impl IntoIterator<Item = (String, i64)>,
+) -> KtClass {
+    let mut class = KtClass::enum_(class_name).vis(KtVis::Public).ctor_param(
+        KtCtorParam::new("value", KtType::int())
+            .val()
+            .vis(KtVis::Public),
+    );
+    for (name, number) in entries {
+        class = class.entry(KtEnumEntry::with_args(name, number.to_string()));
     }
     // `@JvmStatic` exposes `fromInt` as a real static method on the enum
     // class itself (rather than only on the `Companion` nested class). The
-    // generated struct-encoder calls it via `env.call_static_method`,
-    // which wouldn't find a companion-only method.
+    // generated struct-encoder calls it via `env.call_static_method`, which
+    // wouldn't find a companion-only method, and so does any caller outside
+    // Kotlin.
     class.companion(
         KtCompanion::new().vis(KtVis::Public).member(
             KtFun::new("fromInt")

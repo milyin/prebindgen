@@ -1,0 +1,9 @@
+[package]
+name = "v2check-source"
+version = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+publish = false
+
+[lib]
+name = "v2check_source"

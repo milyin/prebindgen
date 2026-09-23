@@ -309,7 +309,28 @@ fn wrapper<T: Target>(
     let symbol = format_ident!("{}", function.abi.symbol);
     let abi = &function.abi.abi;
     let attrs = &function.abi.attrs;
-    let unsafety = function.abi.unsafety.then(|| quote!(unsafe));
+    // A carrier whose bits are read as an integer holds whatever the caller
+    // put in it. A foreign caller passes a number, which the match checks;
+    // safe Rust could pass storage never initialized, which no check can
+    // look at. So the wrapper is `unsafe`, and says what it is owed.
+    let reads_bits = function.instrs.iter().any(|step| match &step.instr {
+        Instr::Apply { primitive, .. } => matches!(
+            primitives[primitive.0].implementation,
+            Operation::Standard(StandardOp::EnumIn { bits: Some(_), .. })
+        ),
+        _ => false,
+    });
+    let unsafety = (function.abi.unsafety || reads_bits).then(|| quote!(unsafe));
+    let safety = reads_bits.then(|| {
+        quote! {
+            /// # Safety
+            ///
+            /// Every argument that carries an enum as its bits must be
+            /// initialized. The wrapper reads those bits as an integer and
+            /// refuses a number no value has, but reading storage that was
+            /// never initialized is undefined behaviour.
+        }
+    });
     let ret = function
         .abi
         .ret
@@ -320,6 +341,7 @@ fn wrapper<T: Target>(
         })
         .unwrap_or_default();
     quote! {
+        #safety
         #(#conditions)*
         #[no_mangle]
         #(#attrs)*
@@ -364,6 +386,46 @@ fn operation<T: Target>(
                     .ok_or_else(|| String::from(#message))
             }
         }
+        Operation::Standard(StandardOp::EnumOut { source, values }) => {
+            let value = &operands[0];
+            let ty = source_type(source);
+            let arms = values.iter().map(|arm| {
+                let pattern = enum_value(&ty, arm);
+                let carried = &arm.carried;
+                quote!(#pattern => #carried)
+            });
+            quote!(match #value { #(#arms),* })
+        }
+        Operation::Standard(StandardOp::EnumIn {
+            source,
+            values,
+            invalid,
+            bits,
+        }) => {
+            let value = &operands[0];
+            let value = match bits {
+                Some(bits) => quote!(unsafe { ::core::mem::transmute_copy::<_, #bits>(&(#value)) }),
+                None => quote!(#value),
+            };
+            let ty = source_type(source);
+            let arms = values.iter().map(|arm| {
+                let carried = &arm.carried;
+                let constructed = enum_value(&ty, arm);
+                match invalid {
+                    Some(_) => quote!(#carried => ::core::result::Result::Ok(#constructed)),
+                    None => quote!(#carried => #constructed),
+                }
+            });
+            match invalid {
+                Some(message) => quote! {
+                    match #value {
+                        #(#arms,)*
+                        other => ::core::result::Result::Err(::std::format!(#message, other)),
+                    }
+                },
+                None => quote!(match #value { #(#arms),* }),
+            }
+        }
         Operation::Standard(StandardOp::Release { source }) => {
             let value = &operands[0];
             let ty = source_type(source);
@@ -374,6 +436,17 @@ fn operation<T: Target>(
         }
         Operation::Target(payload) => target.render_operation(payload, operands),
     }
+}
+
+/// One value of a fieldless enum, spelled as the source declared it.
+///
+/// A pattern and a constructor are the same text for a fieldless value, so
+/// this serves both sides of the two enum operations. `Add` stays `Add`, and
+/// `Add()` and `Mul {}` keep their delimiters — the model's speller decides,
+/// from the shape it captured.
+fn enum_value(ty: &TokenStream, arm: &crate::target::EnumArm) -> TokenStream {
+    let name = &arm.name;
+    arm.shape.spell_fieldless(quote!(#ty::#name))
 }
 
 /// The pattern a failure arm binds the error with: the name when a reporter

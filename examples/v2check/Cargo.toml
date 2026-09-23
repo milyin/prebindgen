@@ -9,11 +9,17 @@ publish = false
 name = "v2check"
 
 [dependencies]
+# The source crate the generated code calls into, renamed to the qualifier
+# every generated path uses.
+source = { package = "v2check-source", path = "../v2check-source" }
 # What the generated JNI wrapper calls at run time. The C wrapper calls nothing
-# but the source module.
+# but the source crate.
 jni = "0.21.1"
 
 [dev-dependencies]
+# One test reads the generated C binding through cbindgen, as a C consumer's
+# build does, to check what the header declares.
+cbindgen = "=0.29.4"
 # The tests compare emitted items with the ones the specification pages show,
 # which means parsing both rather than diffing text.
 syn = { workspace = true }

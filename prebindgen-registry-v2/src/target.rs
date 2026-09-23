@@ -47,7 +47,7 @@
 //! them, and `docs/v2/implementation.md` lists exactly what is absent.
 
 use prebindgen_flat::{
-    flat::{Extern, Function, Struct, TypeKind, TypeRef},
+    flat::{Enum, EnumValue, Extern, FieldShape, Function, Struct, TypeKind, TypeRef},
     Conditioned, RustEmitter,
 };
 use proc_macro2::TokenStream;
@@ -349,17 +349,21 @@ impl PrimitiveFailure {
 /// An operation the registry itself knows how to render, so a target that
 /// needs one ships no renderer for it.
 ///
-/// The three handle operations are here because they are Rust, not C or JNI:
-/// moving a source value onto the heap and back is the same for every target,
-/// and it is the one place a conversion has to spell a *source* type — which
-/// only the registry may do. What differs per target is the carrier the
-/// address is cast to, and that the target states.
+/// An operation belongs here when rendering it means naming a *source* type,
+/// which only the registry can do: it alone knows the module the generated
+/// code reaches the source items through. Moving a value onto the heap and
+/// back, and matching a source enum one value at a time, are the same Rust
+/// whichever language asked for them. What differs per target — the carrier
+/// an address is cast to, what a value is carried as — the target states, and
+/// these operations take it as given.
 #[derive(Clone, Debug)]
 pub enum StandardOp {
     /// The result *is* the operand: the carrier and the source value are one
     /// Rust value. Renders nothing at all.
     Identity,
-    /// Read a member of an aggregate carrier: `arg0.secs`.
+    /// Read one field of the struct a carrier is: `arg0.secs`, or `arg0.0`
+    /// where the field has no name. The carrier is a
+    /// [`Layout::Aggregate`], and the field has to be one it declared.
     ReadMember { member: syn::Member },
     /// Hand an owned source value to the foreign side as an address:
     /// `Box::into_raw(Box::new(v)) as <carrier>`. The foreign side owns the
@@ -372,6 +376,167 @@ pub enum StandardOp {
     /// Drop what [`StandardOp::IntoRaw`] handed out without converting it. A
     /// null address releases nothing, as `free(NULL)` does. Produces no value.
     Release { source: Box<TypeRef> },
+    /// Take a value of a fieldless source enum to what carries it: `match v {
+    /// source::Op::Add => <carried>, … }`, one arm per value, in declaration
+    /// order. Infallible — every value of the source type is named.
+    ///
+    /// What each value is carried *as* is the target's: another enum it
+    /// declares, the number the model assigns. What the source type is called
+    /// is the registry's, which is why this is a standard operation and not a
+    /// payload — an adapter cannot spell a source path.
+    EnumOut {
+        source: Box<TypeRef>,
+        values: Vec<EnumArm>,
+    },
+    /// The reverse: a carried value back to the source enum.
+    ///
+    /// With `invalid` set the match ends in a default arm that fails with
+    /// that message, formatted with the value — the carrier can hold
+    /// something no value of the enum names, which is what an integer
+    /// carrier does. Without it the arms are exhaustive over the carrier's
+    /// own type and the operation is infallible, which is what a carrier that
+    /// is itself an enum of the same values gives.
+    ///
+    /// With `bits` set the match is on the carrier's bits read as that
+    /// integer type rather than on the carrier itself. That is for a carrier
+    /// typed as a foreign enum the foreign side may have filled with any
+    /// number: C's `MaybeUninit<op_t>` keeps `op_t` in the header and holds
+    /// whatever `int` the caller passed, which a match on `op_t` could not
+    /// see. The carrier must be exactly as large as `bits`; the target that
+    /// chose both is what asserts it. The carrier must also be initialized,
+    /// which only the caller can promise, so the registry makes a wrapper
+    /// that reads one `unsafe`.
+    EnumIn {
+        source: Box<TypeRef>,
+        values: Vec<EnumArm>,
+        invalid: Option<String>,
+        bits: Option<Box<syn::Type>>,
+    },
+}
+
+/// The values of a fieldless enum a target may mirror, or why it may not.
+///
+/// What stops a mirror stops every target alike, so the check lives here
+/// rather than once per adapter:
+///
+/// * the type is not a fieldless enum at all, which is the binding declaring
+///   one thing as another;
+/// * a value's number could not be evaluated — a `const`, arithmetic,
+///   anything but a literal — and the numbers are what a mirror is made of;
+/// * a value was written under a `#[cfg]`. The model numbers every value as
+///   present, so a conditional value followed by an implicit one gives
+///   numbers the compiled enum disagrees with, and a mirror entry for an
+///   absent value names a variant that is not there;
+/// * the enum, or any of its values, is `#[non_exhaustive]`. Both put a value
+///   out of another crate's reach, and a binding crate is always another
+///   crate. A non-exhaustive enum needs a wildcard arm, and going out of Rust
+///   there is nothing for that arm to produce — the target has a value for
+///   each value it knows, and none for one it does not. A non-exhaustive
+///   *value* cannot be constructed from outside at all, and its pattern needs
+///   a `..`; that holds for a unit value too, whose constructor is private
+///   outside the crate that declared it. Preserving delimiters does not make
+///   such a value constructible, so the enum is refused;
+/// * the enum has no values, and an enumeration of nothing is not one a
+///   target can declare.
+///
+/// `language` is the adapter's own name, for the capability code: a refusal
+/// reads `unsupported.c.enum_discriminant`, and the next target's reads its
+/// own.
+pub fn mirrored_enum<'a>(
+    unit: Option<&'a Enum>,
+    declared_as: &str,
+    language: &str,
+) -> Result<&'a [EnumValue], Unsupported> {
+    let Some(unit) = unit else {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.not_an_enum"),
+            format!("`{declared_as}` is declared as an enum, and is not a fieldless enum"),
+        ));
+    };
+    if let Err(value) = unit.discriminant_values() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.enum_discriminant"),
+            format!(
+                "`{declared_as}` has a value `{value}` whose number the model cannot \
+                 evaluate, and what crosses is the numbers"
+            ),
+        ));
+    }
+    if unit.is_non_exhaustive() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.non_exhaustive_enum"),
+            format!(
+                "`{declared_as}` is `#[non_exhaustive]`, or one of its values is, and a \
+                 binding crate cannot name such a value"
+            ),
+        ));
+    }
+    if unit.has_conditional_value() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.conditional_value"),
+            format!(
+                "`{declared_as}` has a value written under a `#[cfg]`, and the numbers \
+                 count every value as present"
+            ),
+        ));
+    }
+    if unit.values.is_empty() {
+        return Err(Unsupported::new(
+            format!("unsupported.{language}.empty_enum"),
+            format!("`{declared_as}` has no values, and an enumeration needs one"),
+        ));
+    }
+    Ok(&unit.values)
+}
+
+/// [`mirrored_enum`]'s values with their numbers as an `i32`, for a target
+/// whose carrier is 32 bits: a C `int`, a JNI `jint`.
+///
+/// Everything [`mirrored_enum`] refuses, plus a number outside `i32`.
+/// `#[repr(i64)] enum P { High = 2147483648 }` is valid Rust, and a 32-bit
+/// carrier cannot hold it, so the enum is refused rather than mirrored with a
+/// number the target's side truncates or does not accept.
+pub fn mirrored_i32_enum<'a>(
+    unit: Option<&'a Enum>,
+    declared_as: &str,
+    language: &str,
+) -> Result<Vec<(&'a EnumValue, i32)>, Unsupported> {
+    mirrored_enum(unit, declared_as, language)?
+        .iter()
+        .map(|value| {
+            let number = value
+                .discriminant
+                .expect("mirrored_enum refuses an enum with a number it could not evaluate");
+            match i32::try_from(number) {
+                Ok(number) => Ok((value, number)),
+                Err(_) => Err(Unsupported::new(
+                    format!("unsupported.{language}.enum_range"),
+                    format!(
+                        "`{declared_as}` numbers `{}` {number}, which a 32-bit carrier cannot \
+                         hold",
+                        value.name
+                    ),
+                )),
+            }
+        })
+        .collect()
+}
+
+/// One value of a fieldless enum, as the two enum operations match it.
+///
+/// [`Self::shape`] is why this is not a bare name: `enum Op { Add(), Mul {} }`
+/// has no fields and is a fieldless enum to the model, but its values are
+/// spelled `Add()` and `Mul {}` in a pattern and a constructor alike. The
+/// registry renders through the model's own speller, so what it writes is
+/// what the source declared.
+#[derive(Clone, Debug)]
+pub struct EnumArm {
+    /// The value's name in the source enum.
+    pub name: syn::Ident,
+    /// Its constructor and pattern shape, from the model.
+    pub shape: FieldShape,
+    /// What it is carried as: the target's own enum value, or a number.
+    pub carried: syn::Expr,
 }
 
 /// What actually performs an operation.
@@ -647,6 +812,10 @@ pub struct AbiSpec {
     /// safe function cannot state. A convention that makes the caller
     /// responsible for the pointers it passes says so here, and the foreign
     /// declaration should say the same.
+    ///
+    /// The registry makes a wrapper `unsafe` on its own account when one of
+    /// its conversions reads a carrier's bits ([`StandardOp::EnumIn`] with
+    /// `bits`), whatever this says: that caller owes initialized storage.
     pub unsafety: bool,
 }
 
@@ -894,6 +1063,11 @@ pub struct ResolvedShape<'a> {
     /// The struct behind a struct relation, for a target that renders its own
     /// declaration of it.
     pub strukt: Option<&'a Struct>,
+    /// The fieldless enum this value's type names, for a target that carries
+    /// one as the number Rust assigns each of its values. `None` for every
+    /// other type, and for an enum whose alternatives carry values — a sum,
+    /// which the model calls a variant.
+    pub unit: Option<&'a Enum>,
 }
 
 /// One already-planned child, as its parent's representation sees it.
@@ -1009,6 +1183,7 @@ impl<K> SurfaceRequest<'_, K> {
             SourceItem::Extern(opaque) => {
                 crate::emit::Writer.conditions(Conditioned::Extern(opaque))
             }
+            SourceItem::Enum(unit) => crate::emit::Writer.conditions(Conditioned::Enum(unit)),
         };
         conditions
             .iter()
@@ -1034,7 +1209,7 @@ impl<K> SurfaceRequest<'_, K> {
                 .iter()
                 .map(|field| crate::emit::Writer.conditions(Conditioned::Field(field)))
                 .collect(),
-            SourceItem::Function(_) | SourceItem::Extern(_) => Vec::new(),
+            SourceItem::Function(_) | SourceItem::Extern(_) | SourceItem::Enum(_) => Vec::new(),
         }
     }
 }
@@ -1052,7 +1227,7 @@ impl<K> SurfaceRequest<'_, K> {
 /// is shape: [`Element`] has variants no declaration can resolve to (a guard,
 /// an unsupported item) and nests the type kinds one level down, so a target
 /// matching on it would carry unreachable arms and a second match. This lists
-/// exactly the kinds a resolved declaration can be — a constant and the enums
+/// exactly the kinds a resolved declaration can be — a constant and a sum
 /// will add variants — so an adapter's `match` is exhaustive over real cases
 /// and the compiler says when a kind is added.
 ///
@@ -1105,6 +1280,21 @@ pub enum SourceItem<'a> {
     /// representation refuses this variant, and one that declared this type to
     /// be read through its fields finds no struct relation to select at all.
     Extern(&'a Extern),
+    /// A captured enum whose alternatives carry nothing — `enum Op { Add,
+    /// Mul = 7 }` — which the model reads as a named set of integers.
+    ///
+    /// A target declaring one re-declares its values, and a value of it
+    /// crosses as the number Rust assigns:
+    /// [`Enum::discriminant_values`] pairs each name with that number, or
+    /// names the first value whose discriminant the model could not evaluate
+    /// — a `const`, arithmetic, anything but a literal. A target that needs
+    /// the numbers refuses such an enum; nothing else about the model
+    /// depends on them.
+    ///
+    /// An alternative carrying a field makes a sum rather than a set of
+    /// integers, and the model calls that a variant, which is not this
+    /// variant and has no lowering yet.
+    Enum(&'a Enum),
 }
 
 // ---------------------------------------------------------------------------

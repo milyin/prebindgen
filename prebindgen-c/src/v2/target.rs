@@ -17,12 +17,12 @@ use std::collections::BTreeMap;
 
 use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_registry_v2::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction, FailureCategory,
-    FailureRoute, Layout, OperandSpec, Operation, OperationType, OutputPlacement, ParamRole,
-    PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation, ReprSpec, Requirement,
-    ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor, SourceItem,
-    StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal,
-    Unsupported, WireType, WrapperParam,
+    mirrored_i32_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
+    EnumArm, FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType,
+    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
+    ReprSpec, Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery,
+    SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
+    TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
 };
 use quote::{format_ident, quote};
 
@@ -41,10 +41,16 @@ pub enum CChoice {
     /// An opaque handle: C holds a `<c_name> *` to a Rust-owned value and
     /// frees it through the `release` symbol.
     OpaquePtr { c_name: String, release: String },
+    /// A fieldless enum: C declares an enum of the same values under this
+    /// name, and a value of the type crosses as one of them — read, coming
+    /// into Rust, as the C `int` it holds.
+    /// The enumerators keep the Rust value names; cbindgen's `[enum]
+    /// prefix_with_name` is what keeps two enums' `Add` apart in a header.
+    Enum { c_name: String },
     /// A source function to expose: the wrapper around it carries this symbol.
     Function { symbol: String },
-    /// A declaration v1 lowers and v2 does not yet: an enum, a value-opaque
-    /// type, a tagged union. Carries the declarator's name so the refusal says
+    /// A declaration v1 lowers and v2 does not yet: a value-opaque type, a
+    /// tagged union. Carries the declarator's name so the refusal says
     /// which capability is missing, and the C name it would have had so the
     /// report can say where it was going.
     Unimplemented {
@@ -53,10 +59,11 @@ pub enum CChoice {
     },
 }
 
-/// C contributes no operation of its own: reading an aggregate member is a
-/// standard operation the registry renders, and a scalar crosses as itself.
-/// This type has no values, which is that fact stated so the compiler keeps
-/// it true.
+/// C contributes no operation of its own: reading an aggregate member, and
+/// going between a source enum and the C one declared for it, are standard
+/// operations the registry renders — it is the registry that can spell a
+/// source path. This type has no values, which is that fact stated so the
+/// compiler keeps it true.
 #[derive(Clone, Debug)]
 pub enum CPayload {}
 
@@ -141,7 +148,10 @@ impl Target for CTarget {
         // crossed as the scalar default.
         let want_struct = match &conversion {
             CChoice::DataStruct { .. } => true,
-            CChoice::Scalar | CChoice::OpaquePtr { .. } | CChoice::Function { .. } => false,
+            CChoice::Scalar
+            | CChoice::Enum { .. }
+            | CChoice::OpaquePtr { .. }
+            | CChoice::Function { .. } => false,
             CChoice::Unimplemented { declarator, .. } => {
                 return Ok(TargetAttempt::Unsupported(Unsupported::new(
                     format!("unsupported.c.{declarator}"),
@@ -205,6 +215,92 @@ impl Target for CTarget {
                         protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
                         release: None,
                     },
+                }))
+            }
+            // A fieldless enum crosses as the C enum this target declares for
+            // it, both ways, so the header names it wherever the source does.
+            // Into Rust it arrives as `MaybeUninit` of that enum and is read
+            // as the C `int` it holds: C lets an enum variable hold any `int`,
+            // and a Rust enum holding a number none of its values has is
+            // undefined behaviour before any match can look at it. So that
+            // direction matches the number, and fails on one no value has.
+            (Relation::Atomic, CChoice::Enum { c_name }) => {
+                let values = match mirrored_i32_enum(shape.unit, c_name, Self::NAME) {
+                    Ok(values) => values,
+                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
+                };
+                let ident = format_ident!("{c_name}");
+                let ty = shape.crossing.ty.clone();
+                let (carrier, codec) = match shape.crossing.direction {
+                    Direction::OutOfRust => {
+                        let carrier = WireType::abi(syn::parse_quote!(#ident));
+                        let values = values
+                            .iter()
+                            .map(|(value, _)| {
+                                let name = &value.name;
+                                EnumArm {
+                                    name: name.clone(),
+                                    shape: value.shape,
+                                    carried: syn::parse_quote!(#ident::#name),
+                                }
+                            })
+                            .collect();
+                        let codec = PrimitiveSpec {
+                            operands: vec![OperandSpec::value(
+                                OperationType::Source(ty.clone()),
+                                Access::Owned,
+                            )],
+                            result: Some(OperationType::Carrier(carrier.clone())),
+                            failure: PrimitiveFailure::Infallible,
+                            dependencies: Vec::new(),
+                            implementation: Operation::Standard(StandardOp::EnumOut {
+                                source: Box::new(ty),
+                                values,
+                            }),
+                        };
+                        (carrier, codec)
+                    }
+                    Direction::IntoRust => {
+                        let carrier =
+                            WireType::abi(syn::parse_quote!(::core::mem::MaybeUninit<#ident>));
+                        let values = values
+                            .iter()
+                            .map(|(value, number)| {
+                                let number = proc_macro2::Literal::i32_unsuffixed(*number);
+                                EnumArm {
+                                    name: value.name.clone(),
+                                    shape: value.shape,
+                                    carried: syn::parse_quote!(#number),
+                                }
+                            })
+                            .collect();
+                        let codec = PrimitiveSpec {
+                            operands: vec![OperandSpec::value(
+                                OperationType::Carrier(carrier.clone()),
+                                Access::Owned,
+                            )],
+                            result: Some(OperationType::Source(ty.clone())),
+                            failure: PrimitiveFailure::fallible(
+                                OperationType::Carrier(WireType::internal(syn::parse_quote!(
+                                    String
+                                ))),
+                                FailureCategory::Binding,
+                            ),
+                            dependencies: Vec::new(),
+                            implementation: Operation::Standard(StandardOp::EnumIn {
+                                source: Box::new(ty),
+                                values,
+                                invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
+                                bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
+                            }),
+                        };
+                        (carrier, codec)
+                    }
+                };
+                Ok(TargetAttempt::Ready(ReprSpec {
+                    layout: Layout::Scalar(carrier),
+                    protocol: Protocol::terminal(codec),
+                    release: None,
                 }))
             }
             (Relation::Atomic, _) => {
@@ -411,6 +507,62 @@ impl Target for CTarget {
                 rust: Vec::new(),
                 payload: None,
             })),
+            // The C enum itself: the same values under the same names, and
+            // the numbers Rust assigns, so a C caller reading the header sees
+            // what a Rust caller sees.
+            SourceItem::Enum(unit) => {
+                let CChoice::Enum { c_name } = declared else {
+                    return Err(PlanningError::InvalidInput(format!(
+                        "`{}` is exposed as an enum, and is declared as something else",
+                        unit.name
+                    )));
+                };
+                // The same numbers the conversion matches on, refused for the
+                // same reasons.
+                let values = match mirrored_i32_enum(Some(unit), c_name, Self::NAME) {
+                    Ok(values) => values,
+                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
+                };
+                let ident = format_ident!("{c_name}");
+                let size_message = format!("`{c_name}` is not the size of a C `int`");
+                let values = values.iter().map(|(value, number)| {
+                    let name = &value.name;
+                    let number = proc_macro2::Literal::i32_unsuffixed(*number);
+                    quote!(#name = #number)
+                });
+                Ok(TargetAttempt::Ready(SurfaceSpec {
+                    declaration: request.declaration.clone(),
+                    requires: Vec::new(),
+                    rust: vec![
+                        Artifact::new(
+                            c_name.clone(),
+                            quote! {
+                                #[repr(C)]
+                                #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+                                #[allow(non_camel_case_types)]
+                                pub enum #ident {
+                                    #(#values),*
+                                }
+                            },
+                        ),
+                        // A value coming into Rust is read as a C `int`, which is
+                        // only its bits where the two are one size — not on a
+                        // target whose C enums are narrower. An artifact of its
+                        // own, so the enum's condition reaches it too.
+                        Artifact::new(
+                            format!("{c_name} size"),
+                            quote! {
+                                const _: () = assert!(
+                                    ::core::mem::size_of::<#ident>()
+                                        == ::core::mem::size_of::<::core::ffi::c_int>(),
+                                    #size_message
+                                );
+                            },
+                        ),
+                    ],
+                    payload: None,
+                }))
+            }
             SourceItem::Struct(strukt) => {
                 let CChoice::DataStruct { c_name } = declared else {
                     return Err(PlanningError::InvalidInput(format!(

@@ -27,7 +27,7 @@ mod kotlin;
 mod target;
 
 use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation, PlanningError};
-pub use target::{JniChoice, JniPayload, JniTarget};
+pub use target::{ClassKind, JniChoice, JniPayload, JniTarget};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
 
@@ -74,8 +74,12 @@ impl Declarations {
             .types
             .iter()
             .filter_map(|(key, config)| {
-                let handle = matches!(config.kind, crate::jni::DeclaredKind::Ptr(_));
-                Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, handle)))
+                let kind = match config.kind {
+                    crate::jni::DeclaredKind::Ptr(_) => ClassKind::Handle,
+                    crate::jni::DeclaredKind::Enum(_) => ClassKind::Enum,
+                    _ => ClassKind::Data,
+                };
+                Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, kind)))
             })
             .collect();
         let (target, declarations) = self.binding(&flat, classes)?;
@@ -105,7 +109,7 @@ impl Declarations {
     fn binding(
         &self,
         flat: &prebindgen_registry::flat::Flat,
-        classes: std::collections::BTreeMap<String, (String, bool)>,
+        classes: std::collections::BTreeMap<String, (String, ClassKind)>,
     ) -> Result<(JniTarget, Vec<(Declaration, JniChoice)>), EngineError> {
         let mut target = JniTarget::new(classes);
         let mut declarations = Vec::new();
@@ -166,10 +170,24 @@ impl Declarations {
             let config = &self.types[key];
             let placement = self.kotlin_fqn(key).unwrap_or_default();
             let declarator = declarator(&config.kind);
+            // A class implementing an interface, or generating one, is
+            // refused rather than emitted without it: the binding asked for
+            // that supertype, and v2 writes none.
+            let interface = config.interface_enabled || !config.interfaces.is_empty();
             declare(
                 Declaration::Type(key.clone()),
                 match config.kind {
+                    _ if interface => JniChoice::Unimplemented {
+                        declarator,
+                        capability: "interface",
+                        placement: placement.clone(),
+                    },
                     crate::jni::DeclaredKind::Data => JniChoice::DataClass {
+                        class: placement.clone(),
+                    },
+                    // A Kotlin `enum class` of the same values: what crosses
+                    // is the number each value carries.
+                    crate::jni::DeclaredKind::Enum(_) => JniChoice::EnumClass {
                         class: placement.clone(),
                     },
                     // The release is a native method on the harness like any

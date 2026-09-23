@@ -51,11 +51,11 @@ pub use outcome::{Capability, EngineError, Outcome, Skip};
 pub use plan::{generate, FunctionPlan, NodeId, OutputId, ValuePlan};
 pub use run::{Generation, PIPELINE};
 pub use target::{
-    AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Crossing, Direction, FailureCategory,
-    FailureRoute, Layout, OperandRole, OperandSpec, Operation, OperationType, OutputPlacement,
-    ParamRole, Part, PlanningError, Position, PrimitiveFailure, PrimitiveId, PrimitiveSpec,
-    Protocol, Relation, RelationId, ReprSpec, Requirement, ResolvedShape, ResolvedValues,
-    Selection, SelectionQuery, SiteDescriptor, SourceItem, StandardOp, StructRelation,
-    SurfaceRequest, SurfaceSpec, Target, TargetAttempt, TargetSupport, Terminal, Unsupported,
-    WireType, WrapperParam,
+    mirrored_enum, mirrored_i32_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue,
+    Crossing, Direction, EnumArm, FailureCategory, FailureRoute, Layout, OperandRole, OperandSpec,
+    Operation, OperationType, OutputPlacement, ParamRole, Part, PlanningError, Position,
+    PrimitiveFailure, PrimitiveId, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec,
+    Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor,
+    SourceItem, StandardOp, StructRelation, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
+    TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
 };

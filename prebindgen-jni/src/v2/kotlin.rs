@@ -68,6 +68,30 @@ pub(super) fn write(
                 }
                 file(package, &mut files).decls.push(declaration.into());
             }
+            // A Kotlin `enum class` of the same values, each carrying the
+            // number Rust assigns it, and a `fromInt` looking one up: that
+            // number is what crosses, in both directions.
+            Some(JniPayload::EnumClass {
+                package,
+                class,
+                values,
+                conditions,
+            }) => {
+                let mut declaration = crate::jni::render::enum_class(
+                    class,
+                    values
+                        .iter()
+                        .map(|(name, number)| (name.clone(), i64::from(*number))),
+                );
+                if let Some(kdoc) = conditions_kdoc(
+                    conditions,
+                    "the functions that take or return it are what a library built without \
+                     that condition lacks",
+                ) {
+                    declaration = declaration.kdoc(kdoc);
+                }
+                file(package, &mut files).decls.push(declaration.into());
+            }
             Some(JniPayload::Method {
                 package,
                 method,
@@ -95,26 +119,16 @@ pub(super) fn write(
                 // whatever that condition says, and the symbol behind it is
                 // there only where the condition held. Saying so is all this
                 // writer can do about it.
-                if !conditions.is_empty() {
-                    // Backticks, because KDoc reads `[name]` as a reference to
-                    // a declaration: an unquoted `#[cfg(unix)]` would be an
-                    // unresolved link on every conditional function, and code
-                    // is what it is anyway.
-                    let spelled: Vec<String> = conditions
-                        .iter()
-                        .map(|condition| format!("`{condition}`"))
-                        .collect();
+                if let Some(kdoc) = conditions_kdoc(
+                    conditions,
+                    "using it against a library built without that condition raises \
+                     UnsatisfiedLinkError",
+                ) {
                     // `kdoc` replaces. Nothing carries a source item's `///`
                     // into Kotlin yet, so there is nothing to replace; whoever
                     // adds that has to join the two rather than call this
                     // second.
-                    public = public.kdoc(format!(
-                        "Present only where {} holds in the source crate.\n\nKotlin cannot \
-                         state a condition, so this function is declared either way; calling \
-                         it against a library built without that condition raises \
-                         UnsatisfiedLinkError.",
-                        spelled.join(" and ")
-                    ));
+                    public = public.kdoc(kdoc);
                 }
                 file(package, &mut files).decls.push(public.into());
             }
@@ -242,19 +256,52 @@ fn call(
         .map(|(name, ty)| match ty {
             KotlinType::Value(_) => name.clone(),
             KotlinType::Handle(_) => format!("{name}.take()"),
+            // The `enum class` carries its own number, which is what the
+            // native method takes.
+            KotlinType::Enum(_) => format!("{name}.value"),
         })
         .collect();
     let call = format!("{harness}.{native}({})", args.join(", "));
+    let wrap = |class: &String, call: &str, open: &str| {
+        let class = match class.rsplit_once('.') {
+            Some((declared_in, short)) if declared_in == package => short,
+            _ => class.as_str(),
+        };
+        format!("{class}{open}({call})")
+    };
     match ret {
         KotlinType::Value(_) => call,
-        KotlinType::Handle(class) => {
-            let class = match class.rsplit_once('.') {
-                Some((declared_in, short)) if declared_in == package => short,
-                _ => class.as_str(),
-            };
-            format!("{class}({call})")
-        }
+        KotlinType::Handle(class) => wrap(class, &call, ""),
+        // `fromInt` is the companion the enum class carries, and it is what
+        // turns the number back into a value of the enum.
+        KotlinType::Enum(class) => wrap(class, &call, ".fromInt"),
     }
+}
+
+/// What a declaration whose source item was written under `#[cfg]` says for
+/// itself, or `None` for the ordinary unconditional one.
+///
+/// Kotlin has no conditional compilation, so the declaration exists whatever
+/// the condition says. `consequence` is what a caller meets where the
+/// condition did not hold, which differs between a function, whose symbol is
+/// missing, and a class, which has none. Saying so is all this writer can do
+/// about it.
+fn conditions_kdoc(conditions: &[String], consequence: &str) -> Option<String> {
+    if conditions.is_empty() {
+        return None;
+    }
+    // Backticks, because KDoc reads `[name]` as a reference to a declaration:
+    // an unquoted `#[cfg(unix)]` would be an unresolved link on every
+    // conditional declaration, and code is what it is anyway.
+    let spelled: Vec<String> = conditions
+        .iter()
+        .map(|condition| format!("`{condition}`"))
+        .collect();
+    Some(format!(
+        "Present only where {} holds in the source crate.\n\nKotlin cannot state a \
+         condition, so this is declared either way; {consequence}.",
+        spelled.join(" and ")
+    ))
 }
 
 /// A data class property: `val name: Type`.

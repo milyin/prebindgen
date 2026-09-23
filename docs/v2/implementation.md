@@ -283,6 +283,55 @@ establish the behavior of the resulting foreign interface.
    [the handle's representation cell][typedef_represent]: nothing acquires a
    resource that a later failing operation could leak.
 
+9. **A fieldless enum is its numbers.** An `enum Op { Add, Mul = 7 }` has no
+   parts, so it crosses through the atomic relation like a scalar — but the
+   value that crosses is the number Rust assigns each alternative, which the
+   model already computes. Two more standard operations spell the conversion,
+   `EnumOut` and `EnumIn`, for the reason the handle operations are standard:
+   they name the source type, and an adapter cannot spell a source path. What
+   the number is carried *as* is the adapter's. C declares an enum of the same
+   values, and a value crosses as one of them either way, so the header names
+   the enum wherever the source does. Out of Rust that is an exhaustive `match`
+   that cannot fail. Into Rust the enum arrives as `MaybeUninit` and is matched
+   as the C `int` it holds, because C lets an enum variable hold any `int` and a
+   Rust enum holding a number none of its values has is undefined behaviour.
+   `EnumIn` takes the integer type to read the carrier as for this.
+   `MaybeUninit` could also hold storage never initialized, which no match can
+   check, so a wrapper that reads a carrier's bits is `unsafe` and documents
+   that its caller owes initialized storage. JNI carries a `jint` and a Kotlin
+   `enum class`. In both, the direction into Rust can meet a number no value
+   names and fails as a `Binding` error. An alternative carrying a field makes a
+   sum, which the model calls a variant and which has no lowering.
+
+   Some shapes are refused rather than mirrored, by one check both targets
+   share. A number the model could not evaluate — a `const`, arithmetic — is not
+   a number to mirror. A value written under a `#[cfg]` breaks the numbering,
+   because the model counts every value as present, and would put an entry in
+   the mirror for a variant the source crate compiled out. An enum with no
+   values has nothing to mirror at all. A number outside `i32` is refused,
+   because both carriers are 32 bits: a C `int` and JNI's `Int`. And
+   `#[non_exhaustive]` is refused wherever it sits: on the enum, which another
+   crate cannot match without an arm for a value it does not know — and going
+   out of Rust there is nothing for that arm to produce — or on a value, which
+   another crate cannot name at all, a unit value included, whose constructor is
+   private outside the crate that declared it.
+
+   What is *not* refused is a fieldless value written `Add()` or `Mul {}`:
+   those are not unit variants, so every mention of them carries its
+   delimiters, which the model's own speller supplies from the shape it
+   captured.
+
+   `examples/v2check` parses a crate it also links, so rustc compiles the
+   generated matches across the boundary. That is what the accepted shapes need,
+   and what `#[non_exhaustive]` is about in either position, so those are the
+   shapes it declares: an enum with explicit and implicit numbers, one whose
+   values are constructors, one only ever passed in, and one refusal for each
+   place the attribute can sit. A test runs cbindgen over the C binding, because
+   the header declares an enum only if an exported signature names it, and the
+   input-only one is named by nothing else. The remaining refusals produce
+   nothing to compile, so each is checked by a test that asks a frontend for
+   such an enum and reads the capability back.
+
 ### What it does not settle
 
 The contracts designed for these are on [the extensions page](extensions.md);
@@ -341,6 +390,11 @@ this list says what the increment left open and why.
 - **The `Unselected` outcome** is not implemented: a captured item nobody
   declared is not accounted for at all, since the engine hears only what the
   binding asked for.
+- **A sum** — an enum whose alternatives carry values — has no representation.
+  The fieldless enum above is a named set of integers and crosses as one; a
+  sum needs a tag and one group of slots per alternative, which
+  `Layout::Slots` and `ChoiceOps` describe and nothing implements. The engine
+  refuses one with `unsupported.type.variant`.
 
 ## Acceptance and feasibility evidence
 

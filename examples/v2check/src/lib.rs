@@ -2,25 +2,19 @@
 //! checks it against the specification pages that describe it.
 //!
 //! Two things happen here that a unit test cannot do. `cargo build` compiles
-//! the generated wrappers against the real source module and the real `jni`
-//! crate, so an emission that is well-formed text but not valid Rust fails.
+//! the generated wrappers against the real source *crate* and the real `jni`
+//! crate, so an emission that is well-formed text but not valid Rust — or
+//! valid only inside the crate that declared the items — fails.
 //! And `cargo test` calls the generated C entry point, so the wrapper is
 //! executed rather than only read.
 
 // Generator findings belong to the generator, not to this file.
 #![allow(clippy::all)]
 
-// The module the generated code reaches the source items through — `source::`
-// in every generated path, which is `build.rs`'s `source_module`.
-pub mod source;
-
-/// What `source::Ledger` is an alias of: a type the source crate never marks,
-/// which is the reason the alias exists.
-pub(crate) mod ledger {
-    pub struct Ledger {
-        pub total: i64,
-    }
-}
+// What the generated code reaches the source items through — `source::` in
+// every generated path, which is `build.rs`'s `source_module`. A separate
+// crate, as a real binding's source is, so what the generated Rust may say
+// about it is what a binding may say.
 
 // The two generated files, at the crate root so `source::` resolves from them.
 include!(env!("V2CHECK_C"));
@@ -73,6 +67,54 @@ mod tests {
         let ledger = crate::ledger_open(crate::Stamp { secs: 1, nanos: 2 });
         crate::ledger_drop(ledger);
         crate::ledger_drop(std::ptr::null_mut());
+    }
+
+    /// An enum comes into Rust as the number C put in it, and each number a
+    /// value has becomes that value.
+    ///
+    /// `MaybeUninit` is what C's `Gear` arrives in, so a number no value has
+    /// is still a valid argument; the wrapper aborts on one, which a test
+    /// cannot observe. Storage never initialized is not, and nothing the
+    /// wrapper does could tell — so the wrapper is `unsafe`, and a Rust caller
+    /// is the one that promises. `unused_unsafe` is denied here so that this
+    /// test stops compiling if the wrapper ever becomes safe to call.
+    #[test]
+    #[deny(unused_unsafe)]
+    fn the_c_enum_input_becomes_the_source_value() {
+        use core::mem::MaybeUninit;
+        // SAFETY: each argument is initialized, with a value `Gear` has.
+        unsafe {
+            assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::Low)), 1);
+            assert_eq!(crate::gear_rank(MaybeUninit::new(crate::Gear::High)), 30);
+        }
+    }
+
+    /// The header declares an enum that only ever comes in, and names it as
+    /// the type of the parameter that takes it.
+    ///
+    /// cbindgen emits a type only when an exported signature reaches it, and
+    /// nothing returns a `Gear`. The parameter is typed `MaybeUninit<Gear>`,
+    /// which cbindgen reads as `Gear` — so the enum and its constants are in
+    /// the header, where a C caller needs them.
+    #[test]
+    fn the_c_header_declares_an_input_only_enum() {
+        let mut header = Vec::new();
+        cbindgen::Builder::new()
+            .with_src(env!("V2CHECK_C"))
+            .with_language(cbindgen::Language::C)
+            .generate()
+            .expect("cbindgen reads the generated C binding")
+            .write(&mut header);
+        let header = String::from_utf8(header).unwrap();
+        let compact: String = header.split_whitespace().collect();
+        assert!(
+            compact.contains("typedefenumGear{Low=0,High=3,}Gear;"),
+            "{header}"
+        );
+        assert!(
+            compact.contains("int64_tgear_rank(enumGeargear);"),
+            "{header}"
+        );
     }
 
     /// A field written under a condition nothing could answer reaches every
@@ -235,7 +277,7 @@ mod tests {
     /// property to promise.
     #[test]
     fn each_target_left_out_only_what_it_cannot_carry() {
-        for (target, left_out) in [("c", 3), ("jni", 5)] {
+        for (target, left_out) in [("c", 5), ("jni", 7)] {
             let skipped = skipped(target);
             assert_eq!(
                 skipped.lines().filter(|line| !line.is_empty()).count(),
@@ -266,6 +308,14 @@ mod tests {
             ("jni", "type:Marker", "unsupported.jni.empty_class"),
             ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
             ("jni", "type:Sample", "unsupported.jni.conditional_field"),
+            // Refused across a real crate boundary, which is what this
+            // crate's source being a crate of its own is for: a binding may
+            // not match a non-exhaustive enum without an arm for a value it
+            // does not know, nor name a non-exhaustive value at all.
+            ("c", "type:Sweep", "unsupported.c.non_exhaustive_enum"),
+            ("c", "type:Detent", "unsupported.c.non_exhaustive_enum"),
+            ("jni", "type:Sweep", "unsupported.jni.non_exhaustive_enum"),
+            ("jni", "type:Detent", "unsupported.jni.non_exhaustive_enum"),
             (
                 "jni",
                 "fn:sample_total",
@@ -310,13 +360,11 @@ mod tests {
             ..Default::default()
         };
         let text = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("src")
-                .join("source.rs"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../v2check-source/src/lib.rs"),
         )
-        .expect("read src/source.rs");
+        .expect("read the source crate");
         let items: Vec<(syn::Item, prebindgen::SourceLocation)> = syn::parse_file(&text)
-            .expect("src/source.rs parses")
+            .expect("the source crate parses")
             .items
             .into_iter()
             .map(|item| (item, location.clone()))

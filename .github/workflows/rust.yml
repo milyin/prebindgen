@@ -137,8 +137,8 @@ jobs:
 
         # example -> the fewest wrappers its declarations produce today.
         floors = {
-            "covertest-kotlin": 18,
-            "example-cbindgen": 2,
+            "covertest-kotlin": 16,
+            "example-cbindgen": 3,
             "perftest-kotlin": 6,
             "perftest-c": 5,
             "emitcheck": 2,

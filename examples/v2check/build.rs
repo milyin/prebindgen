@@ -1,4 +1,5 @@
-//! Runs the v2 engine over `src/source.rs` through both real frontends, so
+//! Runs the v2 engine over the `v2check-source` crate through both real
+//! frontends, so
 //! **rustc** gets to judge what it emitted.
 //!
 //! This is `docs/v2`'s worked example, executed: the same two declarations, the
@@ -8,23 +9,28 @@
 //! planned. What lands in `OUT_DIR` is compiled by `src/lib.rs`, and the tests
 //! there check it against the specification pages themselves.
 //!
-//! Like `emitcheck`, this crate has no captured source crate: it parses one
-//! file and hands its items to the frontends' `.items(..)`, which is the entry
-//! point the unit-test fixtures use.
+//! Like `emitcheck`, this crate runs no proc-macro capture: it parses the
+//! source crate's file and hands its items to the frontends' `.items(..)`,
+//! which is the entry point the unit-test fixtures use. The crate it parses
+//! is a crate it also links, so the generated code is compiled across the
+//! boundary every real binding has.
 
 use std::path::{Path, PathBuf};
 
 use prebindgen_c::pipeline::Pipeline;
 
 /// The crate name stamped on every item, and so the qualifier the generated
-/// code calls through (`source::stamp_sum(..)`). `src/lib.rs` mounts
-/// `src/source.rs` under this name to match — as `emitcheck` does with
-/// `myflat`.
+/// code calls through (`source::stamp_sum(..)`). `Cargo.toml` renames the
+/// `v2check-source` dependency to this, so a generated path resolves to the
+/// crate the items were parsed from.
 const SOURCE_CRATE: &str = "source";
 
 fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets the manifest dir");
-    let source = PathBuf::from(&manifest_dir).join("src").join("source.rs");
+    let source = PathBuf::from(&manifest_dir)
+        .join("../v2check-source/src/lib.rs")
+        .canonicalize()
+        .expect("the source crate is a sibling of this one");
     println!("cargo:rerun-if-changed={}", source.display());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
 
@@ -53,6 +59,14 @@ fn main() {
                 .fun(prebindgen_c::fun!(stamp_delta))
                 .fun(prebindgen_c::fun!(stamp_show))
                 .fun(prebindgen_c::fun!(marker_value))
+                .enum_type(prebindgen_c::enum_type!(Operation))
+                .fun(prebindgen_c::fun!(operation_flip))
+                .enum_type(prebindgen_c::enum_type!(Adjust))
+                .fun(prebindgen_c::fun!(adjust_invert))
+                .enum_type(prebindgen_c::enum_type!(Gear))
+                .fun(prebindgen_c::fun!(gear_rank))
+                .enum_type(prebindgen_c::enum_type!(Sweep))
+                .enum_type(prebindgen_c::enum_type!(Detent))
                 .data_type(prebindgen_c::data_type!(Sample))
                 .fun(prebindgen_c::fun!(sample_total))
                 .fun(prebindgen_c::fun!(stamp_ratio))
@@ -78,6 +92,12 @@ fn main() {
                 .fun(prebindgen_registry::fun!(stamp_delta))
                 .fun(prebindgen_registry::fun!(stamp_show))
                 .fun(prebindgen_registry::fun!(marker_value))
+                .class(prebindgen_jni::enum_class!(Operation))
+                .fun(prebindgen_registry::fun!(operation_flip))
+                .class(prebindgen_jni::enum_class!(Adjust))
+                .fun(prebindgen_registry::fun!(adjust_invert))
+                .class(prebindgen_jni::enum_class!(Sweep))
+                .class(prebindgen_jni::enum_class!(Detent))
                 .class(prebindgen_jni::data_class!(Sample))
                 .fun(prebindgen_registry::fun!(sample_total))
                 .fun(prebindgen_registry::fun!(stamp_ratio))
@@ -142,9 +162,9 @@ fn items(source: &Path) -> Vec<(syn::Item, prebindgen::SourceLocation)> {
         crate_name: Some(SOURCE_CRATE.to_string()),
         ..Default::default()
     };
-    let text = std::fs::read_to_string(source).expect("read src/source.rs");
+    let text = std::fs::read_to_string(source).expect("read the source crate");
     syn::parse_file(&text)
-        .expect("src/source.rs parses")
+        .expect("the source crate parses")
         .items
         .into_iter()
         .map(|item| (item, location.clone()))

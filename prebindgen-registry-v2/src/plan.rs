@@ -346,10 +346,18 @@ impl<'a, T: Target> Run<'a, T> {
             Relation::Struct(strukt) => self.flat.struct_type(strukt.name.as_str()),
             Relation::Atomic => None,
         };
+        // A fieldless enum has no parts, so it arrives through the atomic
+        // relation like a scalar; what a target needs beyond the type is the
+        // set of values, which the model holds under the type's own name.
+        let unit = match crossing.ty.kind() {
+            TypeKind::Named { id, .. } => self.flat.unit_enum(id.name.as_str()),
+            _ => None,
+        };
         let shape = ResolvedShape {
             crossing,
             relation,
             strukt,
+            unit,
         };
         let child_values: Vec<ChildValue<'_>> = parts
             .iter()
@@ -1353,18 +1361,22 @@ fn plan_type<T: Target>(
     let item = match flat.declared_type(&name) {
         Some(Type::Struct(strukt)) => SourceItem::Struct(strukt),
         Some(Type::Extern(opaque)) => SourceItem::Extern(opaque),
+        Some(Type::Enum(unit)) => SourceItem::Enum(unit),
         None => {
             return Err(PlanningError::InternalInvariant(format!(
                 "`{}` was checked against the model and is not in it",
                 name
             )))
         }
-        Some(Type::Enum(_) | Type::Variant(_)) => {
+        // An alternative with a field makes a sum, which is a different
+        // lowering from a named set of integers and has none yet.
+        Some(Type::Variant(_)) => {
             return Ok(Err(Refusal::at(
                 Unsupported::new(
-                    "unsupported.type.enum",
+                    "unsupported.type.variant",
                     format!(
-                        "`{}` is an enum, which v2 has no representation for yet",
+                        "`{}` has alternatives that carry values, which v2 has no \
+                         representation for yet",
                         name
                     ),
                 ),

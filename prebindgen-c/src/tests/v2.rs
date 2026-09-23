@@ -73,11 +73,11 @@ fn every_declared_element_is_accounted_for() {
         .iter()
         .map(|(declaration, _)| declaration.to_string())
         .collect();
-    assert_eq!(skipped, ["type:Operation", "callback:impl Fn(f64)"]);
+    assert_eq!(skipped, ["callback:impl Fn(f64)"]);
 
     // The handle — a struct carried whole under `opaque_ptr`, its fields never
-    // read — and the function returning it are what is left, under the names
-    // this adapter's manglers give them.
+    // read — the enum, and the function returning the handle are what is left,
+    // under the names this adapter's manglers give them.
     let dir = unique_test_dir("cbindgen_v2_accounted");
     let path = generated
         .write_rust(dir.join("bindings.rs"))
@@ -98,20 +98,13 @@ fn every_declared_element_is_accounted_for() {
 fn a_missing_capability_is_reported_per_element() {
     let generated = binding().build_with(Pipeline::V2).expect("v2 plans");
 
-    // An enum has no fields to walk, so the registry refuses it before the
-    // target is asked; a callback has no lowering at all.
+    // A callback has no lowering at all.
     let codes: Vec<&str> = generated
         .skipped()
         .iter()
         .map(|(_, skip)| skip.capability.as_str())
         .collect();
-    assert_eq!(
-        codes,
-        [
-            "unsupported.type.enum",
-            "unsupported.callback.not_implemented"
-        ]
-    );
+    assert_eq!(codes, ["unsupported.callback.not_implemented"]);
 
     // The handle is emitted under the manglers' names — the incomplete type,
     // its destructor, and the function returning one — with the struct's
@@ -303,4 +296,333 @@ fn v1_is_unchanged_and_reachable_by_name() {
         .flat()
         .function("calculator_new")
         .is_some());
+}
+
+/// A fieldless enum crosses as the C enum this adapter declares for it: the
+/// same values under the same names, carrying the numbers Rust assigns.
+///
+/// The wrapper goes between the source type and the carrier by matching one
+/// value at a time. Out of Rust the match names every value and cannot fail;
+/// if the two enums ever drift apart, the generated Rust stops compiling
+/// rather than mapping a value to the wrong one. Into Rust the enum arrives
+/// as `MaybeUninit` and is matched as the C `int` it holds, because C lets an
+/// enum variable hold any `int` and a Rust enum holding a number none of its
+/// values has is undefined behaviour — so a number no value has fails
+/// instead.
+#[test]
+fn a_fieldless_enum_crosses_as_the_c_enum_declared_for_it() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub enum Operation {
+                    Add,
+                    Mul = 7,
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn operation_flip(op: Operation) -> Operation {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .function(syn::parse_quote!(operation_flip))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
+
+    let dir = unique_test_dir("cbindgen_v2_enum");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let compact: String = rust.split_whitespace().collect();
+
+    // The C enum, with the numbers Rust assigns — `Mul` says 7 because the
+    // source does, and `Add` says 0 because Rust counts from there.
+    assert!(
+        compact.contains("pubenumoperation_t{Add=0,Mul=7,}"),
+        "{rust}"
+    );
+    // Reading it as an `int` is reading its bits only where the two are one
+    // size, which the build asserts.
+    assert!(
+        compact.contains(
+            "::core::mem::size_of::<operation_t>()==::core::mem::size_of::<::core::ffi::c_int>()"
+        ),
+        "{rust}"
+    );
+    // The wrapper takes and returns the enum, so the header names it both
+    // ways. `MaybeUninit` could hold storage never initialized, which the
+    // wrapper cannot check, so it is `unsafe` and says what a caller owes.
+    assert!(
+        compact.contains(
+            "pubunsafeextern\"C\"fnoperation_flip(op:::core::mem::MaybeUninit<operation_t>"
+        ),
+        "{rust}"
+    );
+    assert!(rust.contains("/// # Safety"), "{rust}");
+    assert!(compact.contains(")->operation_t{"), "{rust}");
+    // One arm per value each way; into Rust, a default arm for a number no
+    // value has.
+    assert!(
+        compact.contains(
+            "matchunsafe{::core::mem::transmute_copy::<_,::core::ffi::c_int>(&(op))}{\
+             0=>::core::result::Result::Ok(fixture::Operation::Add),\
+             7=>::core::result::Result::Ok(fixture::Operation::Mul),\
+             other=>{::core::result::Result::Err(\
+             ::std::format!(\"`operation_t`hasnovaluenumbered{}\",other),)}}"
+        ),
+        "{rust}"
+    );
+    assert!(
+        compact.contains(
+            "matchv1{fixture::Operation::Add=>operation_t::Add,\
+             fixture::Operation::Mul=>operation_t::Mul,}"
+        ),
+        "{rust}"
+    );
+}
+
+/// A fieldless value keeps the delimiters the source wrote.
+///
+/// `enum Operation { Add(), Mul {} }` carries nothing, so the model calls it a
+/// fieldless enum — but `Add` and `Mul` are not unit variants, and a pattern
+/// or a constructor naming them without their delimiters does not compile
+/// (E0532/E0533).
+///
+/// Only the source side of the conversion is spelled that way. The C enum is
+/// this target's own declaration and its values are numbers, which is what a
+/// C enum has; a variant with a discriminant cannot carry delimiters anyway.
+#[test]
+fn a_fieldless_value_keeps_its_constructor_shape() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![
+        (
+            syn::parse_quote!(
+                pub enum Operation {
+                    Add(),
+                    Mul {},
+                }
+            ),
+            loc.clone(),
+        ),
+        (
+            syn::parse_quote!(
+                pub fn operation_flip(op: Operation) -> Operation {
+                    unimplemented!()
+                }
+            ),
+            loc,
+        ),
+    ]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .function(syn::parse_quote!(operation_flip))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    assert!(generated.skipped().is_empty(), "{:?}", generated.skipped());
+
+    let dir = unique_test_dir("cbindgen_v2_enum_shape");
+    let path = generated
+        .write_rust(dir.join("bindings.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&path).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let compact: String = rust.split_whitespace().collect();
+
+    // The mirror is numbers; every mention of the source enum keeps its
+    // delimiters, in a pattern and in a constructor alike.
+    assert!(
+        compact.contains("pubenumoperation_t{Add=0,Mul=1,}"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("0=>::core::result::Result::Ok(fixture::Operation::Add())"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("1=>::core::result::Result::Ok(fixture::Operation::Mul{})"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("fixture::Operation::Add()=>operation_t::Add"),
+        "{rust}"
+    );
+    assert!(
+        compact.contains("fixture::Operation::Mul{}=>operation_t::Mul"),
+        "{rust}"
+    );
+}
+
+/// A value written under a `#[cfg]` is refused, rather than mirrored as if it
+/// were always there.
+///
+/// The model numbers every value as present, so a conditional value followed
+/// by an implicit one gives numbers the compiled enum disagrees with — and a
+/// mirror entry for a value the source crate compiled out names a variant that
+/// does not exist, which the generated matches would then reference.
+#[test]
+fn a_conditional_value_refuses_the_enum() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub enum Operation {
+                Add,
+                #[cfg(any())]
+                Mul = 7,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.conditional_value");
+}
+
+/// A `#[non_exhaustive]` enum is refused.
+///
+/// Rust requires a wildcard arm wherever another crate matches such an enum,
+/// and a binding crate is always another crate — so a match naming every value
+/// the source declares today is still E0004 there. Going out of Rust there is
+/// nothing for that arm to produce, so the enum is refused rather than carried
+/// with an answer invented for it.
+#[test]
+fn a_non_exhaustive_enum_is_refused() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            #[non_exhaustive]
+            pub enum Operation {
+                Add,
+                Mul = 7,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(
+        skip.capability.as_str(),
+        "unsupported.c.non_exhaustive_enum"
+    );
+}
+
+/// A number the model could not evaluate refuses the enum.
+///
+/// A mirror is the numbers, and the model reads them from literals alone: an
+/// arithmetic discriminant, or one naming a `const`, ends the chain and leaves
+/// the values after it unnumbered. Emitting the mirror from what is left would
+/// renumber them behind the source's back.
+#[test]
+fn an_unevaluable_number_refuses_the_enum() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub enum Operation {
+                Add = 1 + 1,
+                Mul,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.enum_discriminant");
+}
+
+/// An enum with no values refuses too: there is nothing to mirror, and C has
+/// no empty enumeration to mirror it as.
+#[test]
+fn an_enum_with_no_values_is_refused() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            pub enum Operation {}
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.empty_enum");
+}
+
+/// A number outside a C `int` refuses the enum.
+///
+/// `#[repr(i64)]` makes `5_000_000_000` valid Rust, but the C enum and the
+/// `int` it comes back as are 32 bits, so neither could carry it.
+#[test]
+fn a_number_outside_int_is_refused() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = declare_referenced(vec![(
+        syn::parse_quote!(
+            #[repr(i64)]
+            pub enum Operation {
+                Add = 5_000_000_000,
+            }
+        ),
+        loc,
+    )]);
+    let generated = Cbindgen::builder()
+        .items(items)
+        .source_module(syn::parse_quote!(fixture))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Operation))
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    let [(declaration, skip)] = generated.skipped() else {
+        panic!("one declaration, one skip: {:?}", generated.skipped());
+    };
+    assert_eq!(declaration.to_string(), "type:Operation");
+    assert_eq!(skip.capability.as_str(), "unsupported.c.enum_range");
 }

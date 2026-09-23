@@ -442,6 +442,45 @@ pub struct Enum {
 }
 
 impl Enum {
+    /// Whether this enum, or any of its values, was written
+    /// `#[non_exhaustive]`.
+    ///
+    /// Both put a value of the enum out of another crate's reach, which
+    /// every generated binding is, and each does it its own way. A
+    /// non-exhaustive *enum* may gain values, so Rust requires a wildcard arm
+    /// to match it. A non-exhaustive *value* may gain fields, so that value
+    /// cannot be constructed from outside at all and its pattern needs a
+    /// `..` — a unit value included, whose constructor is private outside the
+    /// crate that declared it.
+    ///
+    /// A consumer that names one value at a time refuses such an enum rather
+    /// than emitting what does not compile.
+    pub fn is_non_exhaustive(&self) -> bool {
+        non_exhaustive(&self.origin.syntax.attrs)
+            || self
+                .values
+                .iter()
+                .any(|value| non_exhaustive(&value.origin.syntax.attrs))
+    }
+
+    /// Whether any value of this enum was written under a `#[cfg]`.
+    ///
+    /// Such an enum cannot be mirrored from [`Self::discriminant_values`]:
+    /// those numbers count every value as present, so the mirror and the
+    /// compiled enum disagree wherever a conditional value is followed by an
+    /// implicit one, and a mirror entry for an absent value names a variant
+    /// that is not there.
+    pub fn has_conditional_value(&self) -> bool {
+        self.values.iter().any(|value| {
+            value
+                .origin
+                .syntax
+                .attrs
+                .iter()
+                .any(|attr| attr.path().is_ident("cfg"))
+        })
+    }
+
     /// Every value paired with the number Rust assigns it, or the first value
     /// whose discriminant could not be evaluated.
     ///
@@ -541,6 +580,14 @@ impl Extern {
     }
 }
 
+impl Enum {
+    /// The `#[cfg]` attributes this enum was captured with — see
+    /// [`conditions_from`].
+    pub(super) fn conditions(&self) -> Vec<proc_macro2::TokenStream> {
+        conditions_from(&self.origin.syntax.attrs)
+    }
+}
+
 impl Field {
     /// The `#[cfg]` attributes this field was captured with — see
     /// [`conditions_from`].
@@ -628,6 +675,13 @@ pub struct Unsupported {
     pub error: Box<super::ItemError>,
     /// The item as written, so a diagnosis can quote the source.
     pub origin: Origin<syn::Item>,
+}
+
+/// Whether one of `attrs` is `#[non_exhaustive]`.
+fn non_exhaustive(attrs: &[syn::Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("non_exhaustive"))
 }
 
 /// The `#[cfg]` attributes an item was captured with, one inert token stream

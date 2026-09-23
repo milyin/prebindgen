@@ -11,6 +11,7 @@ members = [
     "prebindgen-c-runtime",
     "examples/example-cbindgen",
     "examples/example-flat",
+    "examples/v2check-source",
     "examples/perftest-flat",
     "examples/perftest-c",
     "examples/perftest-kotlin",

@@ -543,7 +543,9 @@ impl Target for Mini {
                 (Choice::StructRequiring(other), SourceItem::Struct(_)) => {
                     vec![crate::target::Requirement::type_named(other)]
                 }
-                (_, SourceItem::Struct(_) | SourceItem::Extern(_)) => Vec::new(),
+                (_, SourceItem::Struct(_) | SourceItem::Extern(_) | SourceItem::Enum(_)) => {
+                    Vec::new()
+                }
             },
             rust,
             payload: None,
