@@ -329,11 +329,27 @@ impl<T: Target> Binding<T> {
     pub fn output(&mut self, declaration: Declaration, form: OutputFormOf<T>) -> OutputId;
 }
 
+/// One of a target's few wire types — C's `I64`, `Pointer`, `Aggregate`;
+/// JNI's `Long`, `Int`, `Handle`, `Object` — stated the same way by every
+/// target.
+pub trait WireClass: Clone + Eq + Hash + Debug {
+    fn all() -> Vec<Self>;          // Every class: what accepting anything accepts.
+    fn name(&self) -> &'static str; // `pointer`, in `unsupported.c.member.pointer`.
+    fn rust(&self) -> syn::Type;    // `i64`, `jni::sys::jlong`; `_` for a declared name: `*mut _`.
+}
+
 pub struct WireType<C, M> {         // `CarrierOf<T>` is `WireType<T::WireClass, T::CarrierMeta>`.
-    pub rust: syn::Type,            // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'_>`
+    rust: syn::Type,                // The class's type, read through `rust()`.
     pub class: C,                   // Which of the adapter's few wire types it is.
     pub members: Option<Accepts<C>>, // For an aggregate, the classes its members may be.
     pub meta: M,                    // What the target's writers need to know of it.
+}
+
+impl<C: WireClass, M> WireType<C, M> {
+    /// A carrier of a class naming one exact type.
+    pub fn exact(class: C, members: Option<Accepts<C>>, meta: M) -> Self;
+    /// A carrier of a type the target declares: the class's type, `name` for `_`.
+    pub fn declared(class: C, name: Ident, members: Option<Accepts<C>>, meta: M) -> Self;
 }
 
 pub enum OutputForm<Op, C, O> {    // `OutputFormOf<T>` fills in the target's own types.
@@ -364,8 +380,13 @@ pub struct FunctionForm<Op, C> {
 }
 ```
 
+A carrier's Rust type is its class's, built by the registry from the class
+rather than restated by each carrier, so the two cannot disagree: C's
+`Pointer` is `*mut _`, and a carrier of it declared as `Ledger` is
+`*mut Ledger`. What a refusal calls a class is its `name`.
+
 `Accepts` lists the wire classes a holder may hold: an aggregate's members, a
-wrapper's parameters, its return. The registry checks each placement once the
+wrapper's parameters, its return; `Accepts::any()` is every class. The registry checks each placement once the
 plan has worked out what is placed there, and refuses the value it would put
 anywhere else. The [extensions page](../extensions.md#acceptance) gives the
 rule in full, with the limits other targets would state in it.
@@ -419,9 +440,7 @@ because writing it means naming a source type.
 For the C `Stamp`, with the frontend's own `CCarrier` as the carrier metadata:
 
 ```rust
-let i64_c = binding.carrier(WireType {
-    rust: parse_quote!(i64), class: CClass::I64, members: None, meta: CCarrier::Builtin,
-});
+let i64_c = binding.carrier(WireType::exact(CClass::I64, None, CCarrier::Builtin));
 let unchanged = Codec { carrier: i64_c, operation: Operation::standard(StandardOp::Identity) };
 let i64_whole = binding.representation(Representation::Terminal {
     into_rust: Some(unchanged.clone()),
@@ -430,12 +449,12 @@ let i64_whole = binding.representation(Representation::Terminal {
 });
 binding.rule(Scope::Type(key!(i64)), i64_whole);
 
-let stamp_c = binding.carrier(WireType {
-    rust: parse_quote!(Stamp),
-    class: CClass::Aggregate,
-    members: Some(Accepts::of([CClass::I64])), // Not yet another aggregate, a handle or an enum.
-    meta: CCarrier::Aggregate { c_name: "Stamp".into() },
-});
+let stamp_c = binding.carrier(WireType::declared(
+    CClass::Aggregate,                          // `_`: a struct the C target declares
+    format_ident!("Stamp"),
+    Some(Accepts::of([CClass::I64])),           // Not yet another aggregate, a handle or an enum.
+    CCarrier::Aggregate { c_name: "Stamp".into() },
+));
 let stamp_struct = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_c,
@@ -449,20 +468,20 @@ binding.output(Declaration::Type(key!(Stamp)),          // and the struct, expos
 and for the JNI one, with `Jvm { descriptor, kotlin }` as the metadata:
 
 ```rust
-let jlong = binding.carrier(WireType {
-    rust: parse_quote!(jni::sys::jlong), class: JniClass::Long, members: None,
-    meta: Jvm { descriptor: "J".into(), kotlin: KotlinType::Value("Long".into()) },
-});
+let jlong = binding.carrier(WireType::exact(
+    JniClass::Long,
+    None,
+    Jvm { descriptor: "J".into(), kotlin: KotlinType::Value("Long".into()) },
+));
 // i64: a Terminal over `jlong`, as C's is over `i64`.
-let stamp_obj = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'_>),
-    class: JniClass::Object,
-    members: Some(Accepts::of([JniClass::Long])), // What a getter returning a `long` reads.
-    meta: Jvm {
+let stamp_obj = binding.carrier(WireType::exact(
+    JniClass::Object,                             // every JVM object is a `JObject`
+    Some(Accepts::of([JniClass::Long])),          // What a getter returning a `long` reads.
+    Jvm {
         descriptor: "Lexample/Stamp;".into(),
         kotlin: KotlinType::Value("example.Stamp".into()),
     },
-});
+));
 let stamp_class = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_obj,
@@ -572,11 +591,12 @@ which a build script may print.
 
 The binding is also printable, one line per carrier, representation, rule
 and output, a function form's signature, acceptance and routes on the lines
-under its output, and metadata in its `Debug` form:
+under its output, wire classes by their names, and metadata in its `Debug`
+form:
 
 ```text
-carrier  c0  i64  I64  no members  Builtin
-carrier  c1  Stamp  Aggregate  members [I64]  Aggregate { c_name: "Stamp" }
+carrier  c0  i64  i64  no members  Builtin
+carrier  c1  Stamp  aggregate  members [i64]  Aggregate { c_name: "Stamp" }
 repr     r0  terminal  in: c0 Standard(Identity)  out: c0 Standard(Identity)
 repr     r1  product  c1  Fields  read: Standard(ReadMember)
 rule     type i64  r0
@@ -584,7 +604,7 @@ rule     type Stamp  r1
 output   type:Stamp  type r1  ()
 output   fn:stamp_sum  function  ()
          form  extern "C" stamp_sum  context []  inputs [stamp]
-         form  params [I64, Pointer, Aggregate, Enum]  ret [I64, Pointer, Aggregate, Enum]
+         form  params [i64, pointer, aggregate, enum, enum_bits, closure]  ret [i64, pointer, aggregate, enum, enum_bits, closure]
          form  route binding: abort
 ```
 

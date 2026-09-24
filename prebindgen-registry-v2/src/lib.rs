@@ -50,7 +50,7 @@ pub use binding::{
     Accepts, Binding, CarrierId, CarrierOf, Codec, ContextParam, Failure, FailureRoute,
     FunctionForm, FunctionFormOf, Implementation, Operation, OutputForm, OutputFormOf, OutputId,
     Report, ReprId, Representation, RepresentationOf, Scope, StandardOp, Step, ValuePath, Via,
-    WireType,
+    WireClass, WireType,
 };
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::Declaration;

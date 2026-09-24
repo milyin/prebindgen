@@ -15,7 +15,7 @@ use prebindgen_flat::{
 use crate::{
     binding::{
         Binding, CarrierId, Failure, FailureRoute, FunctionFormOf, Implementation, Operation,
-        OutputForm, OutputId, ReprId, Representation, Scope, Step, ValuePath, Via,
+        OutputForm, OutputId, ReprId, Representation, Scope, Step, ValuePath, Via, WireClass,
     },
     body::{BodyBuilder, Instr, NodeBody, Operand, Stmt, ValueId},
     decl::Declaration,
@@ -640,12 +640,13 @@ impl<'a, T: Target> Run<'a, T> {
                     if !accepts.holds(class) {
                         return Ok(Planned::refused(
                             Unsupported::new(
-                                format!("unsupported.{}.member.{}", T::NAME, spell_class(class)),
+                                format!("unsupported.{}.member.{}", T::NAME, class.name()),
                                 format!(
-                                    "member `{}` of `{}` is carried as {class:?}, which its \
+                                    "member `{}` of `{}` is carried as {}, which its \
                                      carrier does not hold",
                                     part.label(),
-                                    crossing.ty.key()
+                                    crossing.ty.key(),
+                                    class.name()
                                 ),
                             ),
                             &position.child(Step::Field(part.label())),
@@ -809,12 +810,13 @@ impl<'a, T: Target> Run<'a, T> {
             let class = &self.binding.carrier_of(self.nodes[child.0].carrier).class;
             if !accepts.holds(class) {
                 return refused(
-                    format!("unsupported.{}.arg.{}", T::NAME, spell_class(class)),
+                    format!("unsupported.{}.arg.{}", T::NAME, class.name()),
                     format!(
-                        "argument {} of `{}` is carried as {class:?}, which the callback's \
+                        "argument {} of `{}` is carried as {}, which the callback's \
                          carrier does not hold",
                         part.index,
-                        crossing.ty.key()
+                        crossing.ty.key(),
+                        class.name()
                     ),
                     &position.child(Step::Arg(part.index)),
                 );
@@ -925,11 +927,6 @@ impl<'a, T: Target> Run<'a, T> {
         });
         produced.unwrap_or(value)
     }
-}
-
-/// How a refusal spells a wire type: its `Debug` form, lower-cased.
-fn spell_class(class: &impl std::fmt::Debug) -> String {
-    format!("{class:?}").to_lowercase()
 }
 
 fn spell(ty: &syn::Type) -> String {
@@ -1556,8 +1553,8 @@ fn plan_function<T: Target>(
         if !accepts.holds(class) {
             return Ok(Err(Refusal::at(
                 Unsupported::new(
-                    format!("unsupported.{}.{holder}.{}", T::NAME, spell_class(class)),
-                    format!("a wrapper {holder} cannot be {class:?} here"),
+                    format!("unsupported.{}.{holder}.{}", T::NAME, class.name()),
+                    format!("a wrapper {holder} cannot be {} here", class.name()),
                 ),
                 &position,
             )));
@@ -1679,7 +1676,7 @@ fn assemble<T: Target>(
                 ty: run
                     .binding
                     .carrier_of(run.nodes[node.0].carrier)
-                    .rust
+                    .rust()
                     .clone(),
                 role: ParamRole::Input(index),
                 mutable: false,
@@ -1794,7 +1791,7 @@ fn assemble<T: Target>(
     let ret = output.map(|node| {
         run.binding
             .carrier_of(run.nodes[node.0].carrier)
-            .rust
+            .rust()
             .clone()
     });
     Ok(Ok(FunctionPlan {

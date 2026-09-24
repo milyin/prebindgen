@@ -10,7 +10,9 @@
 //! when that failed. The Kotlin declarations are the frontend's
 //! own writer's, in [`super::kotlin`], over the finished generation.
 
-use prebindgen_registry_v2::{Artifact, CarrierFeed, Fed, OperationFeed, Target, Written};
+use prebindgen_registry_v2::{
+    Artifact, CarrierFeed, Fed, OperationFeed, Target, WireClass, Written,
+};
 use quote::{format_ident, quote};
 
 /// The JVM wire types a binding's carriers are, which is what a data class's
@@ -27,15 +29,33 @@ pub enum JniClass {
     Object,
 }
 
-impl JniClass {
-    /// Every class: what a native method's parameter or result may be.
-    pub(crate) fn all() -> [JniClass; 4] {
-        [
+impl WireClass for JniClass {
+    fn all() -> Vec<Self> {
+        vec![
             JniClass::Long,
             JniClass::Int,
             JniClass::Handle,
             JniClass::Object,
         ]
+    }
+
+    fn name(&self) -> &'static str {
+        match self {
+            JniClass::Long => "long",
+            JniClass::Int => "int",
+            JniClass::Handle => "handle",
+            JniClass::Object => "object",
+        }
+    }
+
+    /// Every JVM carrier is a type the `jni` crate declares; a number and an
+    /// address share one, and differ in what the JVM side does with it.
+    fn rust(&self) -> syn::Type {
+        match self {
+            JniClass::Long | JniClass::Handle => syn::parse_quote!(jni::sys::jlong),
+            JniClass::Int => syn::parse_quote!(jni::sys::jint),
+            JniClass::Object => syn::parse_quote!(jni::objects::JObject<'_>),
+        }
     }
 }
 

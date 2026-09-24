@@ -31,13 +31,13 @@ for the closure struct a C caller fills in, the
 over it, the rule, and the output.
 
 ```rust
-let closure = binding.carrier(WireType {
-    rust: parse_quote!(closure_i64),
-    class: CClass::Closure,
+let closure = binding.carrier(WireType::declared(
+    CClass::Closure,                        // `_`: a struct the C target declares
+    format_ident!("closure_i64"),
     // What an argument may be: the scalar, an address, an enum.
-    members: Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
-    meta: CCarrier::Closure { c_name: "closure_i64".into() },
-});
+    Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
+    CCarrier::Closure { c_name: "closure_i64".into() },
+));
 let callback = binding.representation(Representation::Callback {
     carrier: closure,
     capture: Operation::standard(StandardOp::Identity),   // the struct itself is kept

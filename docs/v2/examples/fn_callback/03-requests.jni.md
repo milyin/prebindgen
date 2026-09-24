@@ -29,16 +29,15 @@ base package, named from its arguments — `LongCallback` here, `Long` being how
 Kotlin spells an `i64`:
 
 ```rust
-let callable = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'_>),
-    class: JniClass::Object,
+let callable = binding.carrier(WireType::exact(
+    JniClass::Object,
     // What an argument may be: a number, an enum's number, an address.
-    members: Some(Accepts::of([JniClass::Long, JniClass::Int, JniClass::Handle])),
-    meta: Jvm {
+    Some(Accepts::of([JniClass::Long, JniClass::Int, JniClass::Handle])),
+    Jvm {
         descriptor: "Lexample/LongCallback;".into(),
         kotlin: KotlinType::Callback { class: "example.LongCallback".into(), raw: None },
     },
-});
+));
 let callback = binding.representation(Representation::Callback {
     carrier: callable,
     capture: Operation::target(JniOp::CaptureCallback)

@@ -5,7 +5,7 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    binding::{Accepts, Binding, FunctionForm, OutputForm, Representation, Scope},
+    binding::{Accepts, Binding, FunctionForm, OutputForm, Representation, Scope, WireClass},
     decl::Declaration,
     outcome::EngineError,
     plan::generate,
@@ -17,10 +17,28 @@ use crate::{
 /// a run over it exercises the accounting and nothing else.
 struct Nothing;
 
+/// The classes of a target that carries nothing: there are none.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum NoClass {}
+
+impl WireClass for NoClass {
+    fn all() -> Vec<Self> {
+        Vec::new()
+    }
+
+    fn name(&self) -> &'static str {
+        match *self {}
+    }
+
+    fn rust(&self) -> syn::Type {
+        match *self {}
+    }
+}
+
 impl Target for Nothing {
     const NAME: &'static str = "test";
 
-    type WireClass = ();
+    type WireClass = NoClass;
     type CarrierMeta = ();
     type Op = ();
     /// Which output this is, standing in for a real target's placement: the

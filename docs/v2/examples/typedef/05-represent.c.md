@@ -19,12 +19,12 @@ the frontend's whole statement is three standard operations over it, recorded
 when it reads `ptr_type!(Ledger)`:
 
 ```rust
-let pointer = binding.carrier(WireType {
-    rust: parse_quote!(*mut Ledger),        // the C target's own type, not source::Ledger
-    class: CClass::Pointer,
-    members: None,
-    meta: CCarrier::Opaque { c_name: "Ledger".into() },
-});
+let pointer = binding.carrier(WireType::declared(
+    CClass::Pointer,                        // `*mut _`
+    format_ident!("Ledger"),                // so `*mut Ledger`: the C target's own type, not source::Ledger
+    None,
+    CCarrier::Opaque { c_name: "Ledger".into() },
+));
 Representation::Terminal {
     into_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::FromRaw) }),
     out_of_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::IntoRaw) }),

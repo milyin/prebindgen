@@ -588,7 +588,7 @@ fn operation<T: Target>(
     let source_type = |ty| Writer.emit_source_type(ty, &reach.modules, &reach.default);
     let carrier_type = |slot: Option<Slot>| match slot {
         Some(Slot::Carrier(carrier)) => {
-            let ty = &binding.carrier_of(carrier).rust;
+            let ty = binding.carrier_of(carrier).rust();
             quote!(#ty)
         }
         _ => source_type(&applied.subject),

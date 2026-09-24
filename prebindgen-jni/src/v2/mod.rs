@@ -118,15 +118,14 @@ impl Declarations {
 
         // The scalar this target carries so far: an `i64` is a `jlong`, and
         // the two are one Rust value.
-        let jlong = binding.carrier(WireType {
-            rust: syn::parse_quote!(jni::sys::jlong),
-            class: JniClass::Long,
-            members: None,
-            meta: Jvm {
+        let jlong = binding.carrier(WireType::exact(
+            JniClass::Long,
+            None,
+            Jvm {
                 descriptor: "J".to_string(),
                 kotlin: KotlinType::Value("Long".to_string()),
             },
-        });
+        ));
         let unchanged = Codec {
             carrier: jlong,
             operation: Operation::standard(StandardOp::Identity),
@@ -225,15 +224,14 @@ impl Declarations {
                 crate::jni::DeclaredKind::Ptr(_) => {
                     let native = self.mangle_jni_method(&format!("free{class}"));
                     claim(&native, &declaration);
-                    let address = binding.carrier(WireType {
-                        rust: syn::parse_quote!(jni::sys::jlong),
-                        class: JniClass::Handle,
-                        members: None,
-                        meta: Jvm {
+                    let address = binding.carrier(WireType::exact(
+                        JniClass::Handle,
+                        None,
+                        Jvm {
                             descriptor: "J".to_string(),
                             kotlin: KotlinType::Handle(placement.clone()),
                         },
-                    });
+                    ));
                     let representation = Representation::Terminal {
                         into_rust: Some(Codec {
                             carrier: address,
@@ -551,24 +549,23 @@ impl Declarations {
                 continue;
             }
             let callable = qualified(raw.as_deref().unwrap_or(&class));
-            let carrier = binding.carrier(WireType {
-                rust: syn::parse_quote!(jni::objects::JObject<'_>),
-                class: JniClass::Object,
+            let carrier = binding.carrier(WireType::exact(
+                JniClass::Object,
                 // What an argument may be: what a JVM method takes as a
                 // primitive — a number, an enum's number, an address.
-                members: Some(Accepts::of([
+                Some(Accepts::of([
                     JniClass::Long,
                     JniClass::Int,
                     JniClass::Handle,
                 ])),
-                meta: Jvm {
+                Jvm {
                     descriptor: format!("L{};", callable.replace('.', "/")),
                     kotlin: KotlinType::Callback {
                         class: qualified(&class),
                         raw: raw.as_deref().map(qualified),
                     },
                 },
-            });
+            ));
             let representation = binding.representation(Representation::Callback {
                 carrier,
                 capture: Operation::target(JniOp::CaptureCallback)
@@ -646,16 +643,15 @@ impl Declarations {
                 }
             }
         }
-        let object = binding.carrier(WireType {
-            rust: syn::parse_quote!(jni::objects::JObject<'_>),
-            class: JniClass::Object,
+        let object = binding.carrier(WireType::exact(
+            JniClass::Object,
             // What a property may be: what a getter returning a `long` reads.
-            members: Some(Accepts::of([JniClass::Long])),
-            meta: Jvm {
+            Some(Accepts::of([JniClass::Long])),
+            Jvm {
                 descriptor: format!("L{};", placement.replace('.', "/")),
                 kotlin: KotlinType::Value(placement.to_string()),
             },
-        });
+        ));
         Representation::Product {
             via: Via::Fields,
             carrier: object,
@@ -682,15 +678,14 @@ impl Declarations {
             Ok(values) => values,
             Err(refusal) => return (Representation::Unsupported(refusal), Vec::new()),
         };
-        let number = binding.carrier(WireType {
-            rust: syn::parse_quote!(::jni::sys::jint),
-            class: JniClass::Int,
-            members: None,
-            meta: Jvm {
+        let number = binding.carrier(WireType::exact(
+            JniClass::Int,
+            None,
+            Jvm {
                 descriptor: "I".to_string(),
                 kotlin: KotlinType::Enum(placement.to_string()),
             },
-        });
+        ));
         let arms: Vec<EnumArm> = values
             .iter()
             .map(|(value, number)| {
@@ -849,8 +844,8 @@ fn jni_form(
         ],
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::of(JniClass::all()),
-        ret: Accepts::of(JniClass::all()),
+        params: Accepts::any(),
+        ret: Accepts::any(),
     }
 }
 

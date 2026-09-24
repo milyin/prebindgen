@@ -18,12 +18,11 @@ The carrier is `jni::sys::jlong`, and the operations are the same three the
 C frontend states, over it:
 
 ```rust
-let address = binding.carrier(WireType {
-    rust: parse_quote!(jni::sys::jlong),
-    class: JniClass::Handle,                // not `Long`: an address, not a number
-    members: None,
-    meta: Jvm { descriptor: "J".into(), kotlin: KotlinType::Handle("example.Ledger".into()) },
-});
+let address = binding.carrier(WireType::exact(
+    JniClass::Handle,                       // a `jlong`, and not `Long`: an address, not a number
+    None,
+    Jvm { descriptor: "J".into(), kotlin: KotlinType::Handle("example.Ledger".into()) },
+));
 Representation::Terminal {
     into_rust: Some(Codec { carrier: address, operation: Operation::standard(StandardOp::FromRaw) }),
     out_of_rust: Some(Codec { carrier: address, operation: Operation::standard(StandardOp::IntoRaw) }),

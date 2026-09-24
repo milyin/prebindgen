@@ -11,7 +11,8 @@ use prebindgen_flat::flat::Flat;
 use crate::{
     binding::{
         Accepts, Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
-        Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireType,
+        Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireClass,
+        WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
@@ -135,6 +136,39 @@ enum Class {
     Aggregate,
     Pointer,
     Closure,
+    /// An address carried as an integer.
+    Address,
+}
+
+impl WireClass for Class {
+    fn all() -> Vec<Self> {
+        vec![
+            Class::Scalar,
+            Class::Aggregate,
+            Class::Pointer,
+            Class::Closure,
+            Class::Address,
+        ]
+    }
+
+    fn name(&self) -> &'static str {
+        match self {
+            Class::Scalar => "scalar",
+            Class::Aggregate => "aggregate",
+            Class::Pointer => "pointer",
+            Class::Closure => "closure",
+            Class::Address => "address",
+        }
+    }
+
+    fn rust(&self) -> syn::Type {
+        match self {
+            Class::Scalar => syn::parse_quote!(i64),
+            Class::Aggregate | Class::Closure => syn::parse_quote!(_),
+            Class::Pointer => syn::parse_quote!(*mut _),
+            Class::Address => syn::parse_quote!(usize),
+        }
+    }
 }
 
 /// Whether a carrier needs a declaration of its own: only a mirrored struct
@@ -187,7 +221,7 @@ impl Target for Mini {
             Op::ReportMessage => quote::quote!(report_message(#error)),
             Op::Rebase => quote::quote!(rebase(#value)),
             Op::Capture => {
-                let carried = feed.args.iter().map(|(_, carrier)| &carrier.rust);
+                let carried = feed.args.iter().map(|(_, carrier)| carrier.rust());
                 quote::quote!(capture::<(#(#carried,)*)>(#value))
             }
             Op::Invoke | Op::InvokeFallibly => {
@@ -203,11 +237,11 @@ impl Target for Mini {
         if feed.carrier.meta != Meta::Mirror {
             return Vec::new();
         }
-        let ty = &feed.carrier.rust;
+        let ty = feed.carrier.rust();
         let members = feed.members.iter().map(|(part, carrier)| {
             let name = quote::format_ident!("{}", part.label());
             let conditions = &part.conditions;
-            let member = &carrier.rust;
+            let member = carrier.rust();
             quote::quote!(#(#conditions)* pub #name: #member)
         });
         vec![quote::quote!(#[repr(C)] pub struct #ty { #(#members),* })]
@@ -270,8 +304,14 @@ fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
             Class::Aggregate,
             Class::Pointer,
             Class::Closure,
+            Class::Address,
         ]),
-        ret: Accepts::of([Class::Scalar, Class::Aggregate, Class::Pointer]),
+        ret: Accepts::of([
+            Class::Scalar,
+            Class::Aggregate,
+            Class::Pointer,
+            Class::Address,
+        ]),
     }
 }
 
@@ -330,12 +370,7 @@ struct Fixture {
 
 fn fixture() -> Fixture {
     let mut binding = Binding::new();
-    let i64_carrier = binding.carrier(WireType {
-        rust: syn::parse_quote!(i64),
-        class: Class::Scalar,
-        members: None,
-        meta: Meta::Plain,
-    });
+    let i64_carrier = binding.carrier(WireType::exact(Class::Scalar, None, Meta::Plain));
     let unchanged = Codec {
         carrier: i64_carrier,
         operation: Operation::standard(StandardOp::Identity),
@@ -359,12 +394,12 @@ impl Fixture {
     fn repr(&mut self, shape: Shape) -> ReprId {
         let aggregate = |binding: &mut Binding<Mini>, name: &str, holds: Vec<Class>, meta| {
             let ident = quote::format_ident!("{name}");
-            binding.carrier(WireType {
-                rust: syn::parse_quote!(#ident),
-                class: Class::Aggregate,
-                members: Some(Accepts::of(holds)),
+            binding.carrier(WireType::declared(
+                Class::Aggregate,
+                ident.clone(),
+                Some(Accepts::of(holds)),
                 meta,
-            })
+            ))
         };
         let holds_all = || vec![Class::Scalar, Class::Aggregate, Class::Pointer];
         let representation = match shape {
@@ -390,12 +425,12 @@ impl Fixture {
                 read: Operation::standard(StandardOp::ReadMember),
             },
             Shape::Handle => {
-                let pointer = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(*mut Raw),
-                    class: Class::Pointer,
-                    members: None,
-                    meta: Meta::Plain,
-                });
+                let pointer = self.binding.carrier(WireType::declared(
+                    Class::Pointer,
+                    quote::format_ident!("Raw"),
+                    None,
+                    Meta::Plain,
+                ));
                 Representation::Terminal {
                     into_rust: Some(Codec {
                         carrier: pointer,
@@ -409,18 +444,15 @@ impl Fixture {
                 }
             }
             Shape::SplitHandle => {
-                let pointer = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(*mut Raw),
-                    class: Class::Pointer,
-                    members: None,
-                    meta: Meta::Plain,
-                });
-                let integer = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(usize),
-                    class: Class::Scalar,
-                    members: None,
-                    meta: Meta::Plain,
-                });
+                let pointer = self.binding.carrier(WireType::declared(
+                    Class::Pointer,
+                    quote::format_ident!("Raw"),
+                    None,
+                    Meta::Plain,
+                ));
+                let integer =
+                    self.binding
+                        .carrier(WireType::exact(Class::Address, None, Meta::Plain));
                 Representation::Terminal {
                     into_rust: Some(Codec {
                         carrier: pointer,
@@ -434,12 +466,9 @@ impl Fixture {
                 }
             }
             Shape::ScalarThrough => {
-                let i64_carrier = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(i64),
-                    class: Class::Scalar,
-                    members: None,
-                    meta: Meta::Plain,
-                });
+                let i64_carrier =
+                    self.binding
+                        .carrier(WireType::exact(Class::Scalar, None, Meta::Plain));
                 let through = Codec {
                     carrier: i64_carrier,
                     operation: Operation::target(Op::Rebase),
@@ -457,12 +486,12 @@ impl Fixture {
     /// A callback representation: a closure carrier holding scalars and
     /// pointers, a capture, and an invocation that calls as `call` says.
     fn callback_repr(&mut self, call: Call) -> ReprId {
-        let carrier = self.binding.carrier(WireType {
-            rust: syn::parse_quote!(Closure),
-            class: Class::Closure,
-            members: Some(Accepts::of([Class::Scalar, Class::Pointer])),
-            meta: Meta::Plain,
-        });
+        let carrier = self.binding.carrier(WireType::declared(
+            Class::Closure,
+            quote::format_ident!("Closure"),
+            Some(Accepts::of([Class::Scalar, Class::Pointer])),
+            Meta::Plain,
+        ));
         let invoke = match call {
             Call::Infallible => Operation::target(Op::Invoke),
             Call::NeedsContext => Operation::target(Op::Invoke).context("mini.log"),
@@ -1655,8 +1684,8 @@ fn a_binding_prints_what_planning_reads() {
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let printed = fixture.build(&model()).to_string();
     for line in [
-        "carrier  c0  i64  Scalar  no members  Plain",
-        "carrier  c1  Stamp  Aggregate  members [Scalar, Aggregate, Pointer]  Plain",
+        "carrier  c0  i64  scalar  no members  Plain",
+        "carrier  c1  Stamp  aggregate  members [scalar, aggregate, pointer]  Plain",
         "repr     r1  product  c1  Fields  read: Standard(ReadMember)",
         "rule     type i64  r0",
         "rule     type Stamp  r1",
@@ -2350,12 +2379,12 @@ fn a_callback_representation_on_another_type_is_refused() {
 fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
     let mut fixture = fixture();
     fixture.declare_type("Token", Shape::Handle);
-    let scalars_only = fixture.binding.carrier(WireType {
-        rust: syn::parse_quote!(ScalarClosure),
-        class: Class::Closure,
-        members: Some(Accepts::of([Class::Scalar])),
-        meta: Meta::Plain,
-    });
+    let scalars_only = fixture.binding.carrier(WireType::declared(
+        Class::Closure,
+        quote::format_ident!("ScalarClosure"),
+        Some(Accepts::of([Class::Scalar])),
+        Meta::Plain,
+    ));
     let repr = fixture.binding.representation(Representation::Callback {
         carrier: scalars_only,
         capture: Operation::target(Op::Capture),

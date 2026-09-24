@@ -391,8 +391,9 @@ pub trait Target: Sized {
     const NAME: &'static str;
 
     /// The adapter's few wire types, which acceptance is stated in.
-    /// C: I64, Pointer, Aggregate, Enum. JNI: Long, Int, Handle, Object.
-    type WireClass: Clone + Eq + Hash + Debug;
+    /// C: I64, Pointer, Aggregate, Enum, EnumBits, Closure.
+    /// JNI: Long, Int, Handle, Object.
+    type WireClass: WireClass;
     /// What a carrier tells the writers beyond its Rust type.
     /// C: which declaration it needs, under which C name. JNI: its JVM
     /// descriptor and Kotlin type.

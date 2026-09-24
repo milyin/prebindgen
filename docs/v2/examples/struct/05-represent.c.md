@@ -20,12 +20,12 @@ is one C-compatible struct and one read, applied to each member. The C
 frontend states it when it reads `data_type!(Stamp)`:
 
 ```rust
-let stamp_c = binding.carrier(WireType {
-    rust: parse_quote!(Stamp),                     // the repr(C) Stamp
-    class: CClass::Aggregate,
-    members: Some(Accepts::of([CClass::I64])),     // what a member may be
-    meta: CCarrier::Aggregate { c_name: "Stamp".into() },
-});
+let stamp_c = binding.carrier(WireType::declared(
+    CClass::Aggregate,                             // `_`: a repr(C) struct C declares
+    format_ident!("Stamp"),                        // so this carrier is `Stamp`
+    Some(Accepts::of([CClass::I64])),              // what a member may be
+    CCarrier::Aggregate { c_name: "Stamp".into() },
+));
 Representation::Product {
     via: Via::Fields,
     carrier: stamp_c,

@@ -78,12 +78,7 @@ impl CbindgenBuilder {
 
         // The scalar this target carries so far: an `i64` is an `int64_t`, and
         // crosses unchanged.
-        let i64_c = binding.carrier(WireType {
-            rust: syn::parse_quote!(i64),
-            class: CClass::I64,
-            members: None,
-            meta: CCarrier::Builtin,
-        });
+        let i64_c = binding.carrier(WireType::exact(CClass::I64, None, CCarrier::Builtin));
         let unchanged = Codec {
             carrier: i64_c,
             operation: Operation::standard(StandardOp::Identity),
@@ -118,15 +113,14 @@ impl CbindgenBuilder {
             let representation = match self.aggregate_refusal(flat, key, &c_name) {
                 Some(refusal) => Representation::Unsupported(refusal),
                 None => {
-                    let ident = format_ident!("{c_name}");
-                    let carrier = binding.carrier(WireType {
-                        rust: syn::parse_quote!(#ident),
-                        class: CClass::Aggregate,
+                    let carrier = binding.carrier(WireType::declared(
+                        CClass::Aggregate,
+                        format_ident!("{c_name}"),
                         // What a member may be: the scalar, not yet another
                         // aggregate, a handle or an enum.
-                        members: Some(Accepts::of([CClass::I64])),
-                        meta: CCarrier::Aggregate { c_name },
-                    });
+                        Some(Accepts::of([CClass::I64])),
+                        CCarrier::Aggregate { c_name },
+                    ));
                     Representation::Product {
                         via: Via::Fields,
                         carrier,
@@ -141,13 +135,12 @@ impl CbindgenBuilder {
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
             let c_name = self.c_type_name(key);
-            let ident = format_ident!("{c_name}");
-            let pointer = binding.carrier(WireType {
-                rust: syn::parse_quote!(*mut #ident),
-                class: CClass::Pointer,
-                members: None,
-                meta: CCarrier::Opaque { c_name },
-            });
+            let pointer = binding.carrier(WireType::declared(
+                CClass::Pointer,
+                format_ident!("{c_name}"),
+                None,
+                CCarrier::Opaque { c_name },
+            ));
             let representation = Representation::Terminal {
                 into_rust: Some(Codec {
                     carrier: pointer,
@@ -182,20 +175,20 @@ impl CbindgenBuilder {
                 Err(refusal) => Representation::Unsupported(refusal),
                 Ok(values) => {
                     let ident = format_ident!("{c_name}");
-                    let enumeration = binding.carrier(WireType {
-                        rust: syn::parse_quote!(#ident),
-                        class: CClass::Enum,
-                        members: None,
-                        meta: CCarrier::Enum {
+                    let enumeration = binding.carrier(WireType::declared(
+                        CClass::Enum,
+                        ident.clone(),
+                        None,
+                        CCarrier::Enum {
                             c_name: c_name.clone(),
                         },
-                    });
-                    let storage = binding.carrier(WireType {
-                        rust: syn::parse_quote!(::core::mem::MaybeUninit<#ident>),
-                        class: CClass::Enum,
-                        members: None,
-                        meta: CCarrier::EnumBits,
-                    });
+                    ));
+                    let storage = binding.carrier(WireType::declared(
+                        CClass::EnumBits,
+                        ident.clone(),
+                        None,
+                        CCarrier::EnumBits,
+                    ));
                     let named = values
                         .iter()
                         .map(|(value, _)| {
@@ -267,16 +260,15 @@ impl CbindgenBuilder {
             let callback =
                 TypeKey::from_type(&syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static));
             let c_name = self.callback_c_name(key);
-            let ident = format_ident!("{c_name}");
-            let closure = binding.carrier(WireType {
-                rust: syn::parse_quote!(#ident),
-                class: CClass::Closure,
+            let closure = binding.carrier(WireType::declared(
+                CClass::Closure,
+                format_ident!("{c_name}"),
                 // What an argument may be: what leaves Rust in a register —
                 // the scalar, an address, an enum. A by-value aggregate leaving
                 // Rust has no construction yet.
-                members: Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
-                meta: CCarrier::Closure { c_name },
-            });
+                Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
+                CCarrier::Closure { c_name },
+            ));
             let representation = binding.representation(Representation::Callback {
                 carrier: closure,
                 capture: Operation::standard(StandardOp::Identity),
@@ -374,8 +366,8 @@ fn form(symbol: String, inputs: Vec<syn::Ident>) -> FunctionFormOf<CTarget> {
         }],
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::of(CClass::all()),
-        ret: Accepts::of(CClass::all()),
+        params: Accepts::any(),
+        ret: Accepts::any(),
     }
 }
 

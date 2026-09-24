@@ -40,7 +40,10 @@
 use prebindgen_flat::flat::{Enum, EnumValue, FieldShape, TypeRef};
 use proc_macro2::TokenStream;
 
-use crate::{binding::CarrierOf, outcome::Capability};
+use crate::{
+    binding::{CarrierOf, WireClass},
+    outcome::Capability,
+};
 
 /// Which way a value crosses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -410,10 +413,7 @@ pub trait Target: Sized {
 
     /// The adapter's few wire types, which acceptance is stated in: C's `I64`,
     /// `Pointer`, `Aggregate`; JNI's `Long`, `Int`, `Object`.
-    ///
-    /// Its `Debug` form, lower-cased, is how a refusal names one:
-    /// `unsupported.c.member.aggregate`.
-    type WireClass: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+    type WireClass: WireClass;
 
     /// What a carrier tells the writers beyond its Rust type: C's name for
     /// it, a JVM descriptor and Kotlin type.

@@ -8,7 +8,9 @@
 //! closure struct a callback arrives in — and the one operation of its own,
 //! calling through that closure.
 
-use prebindgen_registry_v2::{mirrored_i32_enum, CarrierFeed, OperationFeed, Target, Written};
+use prebindgen_registry_v2::{
+    mirrored_i32_enum, CarrierFeed, OperationFeed, Target, WireClass, Written,
+};
 use quote::{format_ident, quote};
 
 /// The C wire types a binding's carriers are, which is what a struct's members
@@ -21,23 +23,48 @@ pub enum CClass {
     Pointer,
     /// A `repr(C)` struct passed by value.
     Aggregate,
-    /// A C enum, or the storage one arrives in.
+    /// A C enum.
     Enum,
+    /// The storage a C enum arrives in: `MaybeUninit` of it, since C lets an
+    /// enum variable hold any `int`.
+    EnumBits,
     /// A closure struct: a context, a function to call with it, and one to
     /// drop it.
     Closure,
 }
 
-impl CClass {
-    /// Every class: what a wrapper parameter or return may be.
-    pub(crate) fn all() -> [CClass; 5] {
-        [
+impl WireClass for CClass {
+    fn all() -> Vec<Self> {
+        vec![
             CClass::I64,
             CClass::Pointer,
             CClass::Aggregate,
             CClass::Enum,
+            CClass::EnumBits,
             CClass::Closure,
         ]
+    }
+
+    fn name(&self) -> &'static str {
+        match self {
+            CClass::I64 => "i64",
+            CClass::Pointer => "pointer",
+            CClass::Aggregate => "aggregate",
+            CClass::Enum => "enum",
+            CClass::EnumBits => "enum_bits",
+            CClass::Closure => "closure",
+        }
+    }
+
+    /// Everything but the scalar is a type this target declares, named after
+    /// the C type it is.
+    fn rust(&self) -> syn::Type {
+        match self {
+            CClass::I64 => syn::parse_quote!(i64),
+            CClass::Pointer => syn::parse_quote!(*mut _),
+            CClass::Aggregate | CClass::Enum | CClass::Closure => syn::parse_quote!(_),
+            CClass::EnumBits => syn::parse_quote!(::core::mem::MaybeUninit<_>),
+        }
     }
 }
 
@@ -121,7 +148,7 @@ impl Target for CTarget {
             // impls, which the closure Rust builds needs.
             CCarrier::Closure { c_name } => {
                 let ident = format_ident!("{c_name}");
-                let args = feed.members.iter().map(|(_, carrier)| &carrier.rust);
+                let args = feed.members.iter().map(|(_, carrier)| carrier.rust());
                 vec![
                     // What each member means is said on the member, which is
                     // where `cbindgen` puts it in the header: a C caller never
@@ -184,7 +211,7 @@ impl Target for CTarget {
                             .as_ref()
                             .expect("a positional field is refused when the binding is built")
                     );
-                    let ty = &carrier.rust;
+                    let ty = carrier.rust();
                     // A member mirrors a field one for one, its condition
                     // included: a field the source crate may not have must not
                     // become a member the header always declares.

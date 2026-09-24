@@ -20,15 +20,14 @@ carries the object as one reference, and reads two properties out of it. The
 JNI frontend states it when it reads `data_class!(Stamp)`:
 
 ```rust
-let stamp_obj = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'_>),
-    class: JniClass::Object,
-    members: Some(Accepts::of([JniClass::Long])),  // what a getter returning a `long` reads
-    meta: Jvm {
+let stamp_obj = binding.carrier(WireType::exact(
+    JniClass::Object,                              // `jni::objects::JObject<'_>`
+    Some(Accepts::of([JniClass::Long])),           // what a getter returning a `long` reads
+    Jvm {
         descriptor: "Lexample/Stamp;".into(),
         kotlin: KotlinType::Value("example.Stamp".into()),
     },
-});
+));
 Representation::Product {
     via: Via::Fields,
     carrier: stamp_obj,

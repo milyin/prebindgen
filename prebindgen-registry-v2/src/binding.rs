@@ -9,6 +9,7 @@
 //! checked before planning, printed, and diffed.
 
 use prebindgen_flat::TypeKey;
+use syn::visit_mut::VisitMut as _;
 
 use crate::{
     decl::Declaration,
@@ -69,11 +70,36 @@ impl std::fmt::Display for ReprId {
     }
 }
 
+/// One of a target's few wire types: a kind of Rust type a value may cross
+/// the boundary in, which is what everything that holds a value — an
+/// aggregate's members, a wrapper's parameters — states its acceptance in.
+///
+/// Every target states the same three things about each of its classes, and
+/// the registry reads them the same way for every target.
+pub trait WireClass: Clone + Eq + std::hash::Hash + std::fmt::Debug {
+    /// Every class of the target: what a holder accepting anything accepts.
+    fn all() -> Vec<Self>;
+
+    /// How a refusal names it: `pointer`, in `unsupported.c.member.pointer`.
+    fn name(&self) -> &'static str;
+
+    /// The Rust type a carrier of this class is. A class naming one exact
+    /// type is written as that type — `i64`, `jni::sys::jlong`. A class whose
+    /// carriers are types the target declares itself writes `_` where the
+    /// declared type's name goes: `_` for a `repr(C)` struct, `*mut _` for a
+    /// pointer to an incomplete one. [`WireType::declared`] fills it in.
+    fn rust(&self) -> syn::Type;
+}
+
 /// A Rust type generated code may hold a value in at the boundary.
+///
+/// Its Rust type is its class's, so a carrier and its class cannot disagree:
+/// it is built with [`WireType::exact`] for a class naming one type, and with
+/// [`WireType::declared`], given the declared type's name, for one that
+/// leaves the name to the target.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WireType<C, M> {
-    /// The Rust type: `i64`, `*mut ledger_t`, `Stamp`, `JObject<'_>`.
-    pub rust: syn::Type,
+    rust: syn::Type,
     /// Which of the adapter's few wire types it is — what a holder's
     /// [`Accepts`] is stated in.
     pub class: C,
@@ -82,6 +108,79 @@ pub struct WireType<C, M> {
     pub members: Option<Accepts<C>>,
     /// What the target's writers need to know of it.
     pub meta: M,
+}
+
+impl<C: WireClass, M> WireType<C, M> {
+    /// A carrier of a class naming one exact Rust type: `i64`, a `jlong`.
+    ///
+    /// Panics if the class leaves a declared type's name to fill in: that is
+    /// the frontend calling the wrong constructor.
+    pub fn exact(class: C, members: Option<Accepts<C>>, meta: M) -> Self {
+        let rust = class.rust();
+        assert!(
+            !holds_placeholder(&rust),
+            "{class:?} carriers are types the target declares; name one with `WireType::declared`"
+        );
+        WireType {
+            rust,
+            class,
+            members,
+            meta,
+        }
+    }
+
+    /// A carrier of a class whose Rust type is one the target declares, named
+    /// `name`: the class's type with `name` in place of `_` — `*mut Ledger`
+    /// for `*mut _`.
+    ///
+    /// Panics if the class names one exact type, which has no name to fill in.
+    pub fn declared(class: C, name: syn::Ident, members: Option<Accepts<C>>, meta: M) -> Self {
+        let mut rust = class.rust();
+        assert!(
+            holds_placeholder(&rust),
+            "{class:?} carriers are one exact type; build one with `WireType::exact`"
+        );
+        Name(name).visit_type_mut(&mut rust);
+        WireType {
+            rust,
+            class,
+            members,
+            meta,
+        }
+    }
+
+    /// The Rust type: `i64`, `*mut ledger_t`, `Stamp`, `JObject<'_>`.
+    pub fn rust(&self) -> &syn::Type {
+        &self.rust
+    }
+}
+
+/// Whether a class's type leaves a declared type's name to fill in.
+fn holds_placeholder(ty: &syn::Type) -> bool {
+    struct Finds(bool);
+    impl syn::visit_mut::VisitMut for Finds {
+        fn visit_type_infer_mut(&mut self, _: &mut syn::TypeInfer) {
+            self.0 = true;
+        }
+    }
+    let mut finds = Finds(false);
+    finds.visit_type_mut(&mut ty.clone());
+    finds.0
+}
+
+/// Fills a class's `_` with the declared type's name.
+struct Name(syn::Ident);
+
+impl syn::visit_mut::VisitMut for Name {
+    fn visit_type_mut(&mut self, ty: &mut syn::Type) {
+        match ty {
+            syn::Type::Infer(_) => {
+                let name = &self.0;
+                *ty = syn::parse_quote!(#name);
+            }
+            _ => syn::visit_mut::visit_type_mut(self, ty),
+        }
+    }
 }
 
 /// Which wire types a holder may hold: an aggregate's members, a wrapper's
@@ -94,11 +193,16 @@ pub struct Accepts<C> {
     pub classes: Vec<C>,
 }
 
-impl<C: PartialEq> Accepts<C> {
+impl<C: WireClass> Accepts<C> {
     pub fn of(classes: impl IntoIterator<Item = C>) -> Self {
         Accepts {
             classes: classes.into_iter().collect(),
         }
+    }
+
+    /// Every class of the target.
+    pub fn any() -> Self {
+        Self::of(C::all())
     }
 
     pub fn holds(&self, class: &C) -> bool {
@@ -625,14 +729,14 @@ impl<T: Target> std::fmt::Display for Binding<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, carrier) in self.carriers.iter().enumerate() {
             let members = match &carrier.members {
-                Some(accepts) => format!("members {:?}", accepts.classes),
+                Some(accepts) => format!("members {}", classes(&accepts.classes)),
                 None => "no members".to_string(),
             };
             writeln!(
                 f,
-                "carrier  c{index}  {}  {:?}  {members}  {:?}",
+                "carrier  c{index}  {}  {}  {members}  {:?}",
                 tokens(&carrier.rust),
-                carrier.class,
+                carrier.class.name(),
                 carrier.meta
             )?;
         }
@@ -713,6 +817,12 @@ impl<T: Target> std::fmt::Display for Binding<T> {
     }
 }
 
+/// Classes as a refusal names them: `[i64, pointer]`.
+fn classes<C: WireClass>(classes: &[C]) -> String {
+    let names: Vec<&str> = classes.iter().map(WireClass::name).collect();
+    format!("[{}]", names.join(", "))
+}
+
 fn tokens(item: &impl quote::ToTokens) -> String {
     item.to_token_stream().to_string()
 }
@@ -743,7 +853,7 @@ fn terminal(terminal: &Terminal) -> String {
 
 /// A function form, indented under the output it belongs to: its signature on
 /// one line, its acceptance on the next, then one line per route.
-fn write_form<Op: std::fmt::Debug, C: std::fmt::Debug>(
+fn write_form<Op: std::fmt::Debug, C: WireClass>(
     f: &mut std::fmt::Formatter<'_>,
     label: &str,
     form: &FunctionForm<Op, C>,
@@ -781,8 +891,9 @@ fn write_form<Op: std::fmt::Debug, C: std::fmt::Debug>(
     )?;
     writeln!(
         f,
-        "         {label}  params {:?}  ret {:?}",
-        form.params.classes, form.ret.classes
+        "         {label}  params {}  ret {}",
+        classes(&form.params.classes),
+        classes(&form.ret.classes)
     )?;
     for one in &form.routes {
         writeln!(f, "         {label}  route {}", route(one))?;
