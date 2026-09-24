@@ -116,6 +116,11 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
                 unimplemented!()
             }
         ),
+        syn::parse_quote!(
+            pub fn each_new() -> impl Fn(i64) + Send + Sync + 'static {
+                unimplemented!()
+            }
+        ),
     ]
     .into_iter()
     .map(|item| (item, location.clone()))
@@ -279,6 +284,9 @@ enum Call {
     Routed,
     /// One that can, with no route for it.
     Unrouted,
+    /// An invocation asking for a runtime context, which nothing inside a
+    /// call supplies.
+    NeedsContext,
 }
 
 /// The callback signature `impl Fn(<args>) + Send + Sync + 'static`.
@@ -457,6 +465,7 @@ impl Fixture {
         });
         let invoke = match call {
             Call::Infallible => Operation::target(Op::Invoke),
+            Call::NeedsContext => Operation::target(Op::Invoke).context("mini.log"),
             Call::Routed | Call::Unrouted => Operation::target(Op::InvokeFallibly)
                 .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
         };
@@ -2277,4 +2286,102 @@ fn a_callback_representation_prints_what_a_call_does() {
         printed.contains("output   callback:impl Fn(i64)+Send+Sync+'static  type r1  ()"),
         "{printed}"
     );
+}
+
+/// Nothing inside a call supplies a runtime context — the wrapper that had one
+/// may have returned — so a call that needs one refuses the callback.
+#[test]
+fn a_call_needing_a_runtime_context_refuses_the_callback() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_callback("i64", Call::NeedsContext);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:stamp_each") {
+        Outcome::Skipped(skip) => assert_eq!(
+            skip.capability.as_str(),
+            "unsupported.callback.missing_context"
+        ),
+        other => panic!("stamp_each is skipped, and is {other:?}"),
+    }
+}
+
+/// A callable never leaves Rust: a function returning one is refused where
+/// its result is.
+#[test]
+fn a_callback_leaving_rust_is_refused() {
+    let mut fixture = fixture();
+    fixture.declare_callback("i64", Call::Infallible);
+    fixture.declare_fn("each_new", exported("each_new", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:each_new") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.callback.out_of_rust");
+            assert_eq!(
+                skip.dependency_path.last().map(String::as_str),
+                Some("return")
+            );
+        }
+        other => panic!("each_new is skipped, and is {other:?}"),
+    }
+}
+
+/// A callback representation on a value that is not an `impl Fn(..)` has no
+/// arguments to plan, and is refused as not a callback.
+#[test]
+fn a_callback_representation_on_another_type_is_refused() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let callback = fixture.callback_repr(Call::Infallible);
+    fixture.at("stamp_sum", vec![param("stamp")], callback);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:stamp_sum") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.type.not_a_callback")
+        }
+        other => panic!("stamp_sum is skipped, and is {other:?}"),
+    }
+}
+
+/// An argument of a wire class the callback's carrier does not hold refuses
+/// the callback at that argument.
+#[test]
+fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    let scalars_only = fixture.binding.carrier(WireType {
+        rust: syn::parse_quote!(ScalarClosure),
+        class: Class::Closure,
+        members: Some(Accepts::of([Class::Scalar])),
+        meta: Meta::Plain,
+    });
+    let repr = fixture.binding.representation(Representation::Callback {
+        carrier: scalars_only,
+        capture: Operation::target(Op::Capture),
+        invoke: Operation::target(Op::Invoke),
+        routes: Vec::new(),
+    });
+    let key = callback_key("Token, i64");
+    fixture.crossing_key(key.clone(), repr);
+    fixture.declare(
+        Declaration::Callback(key),
+        OutputForm::Type {
+            representation: repr,
+            release: None,
+            meta: (),
+        },
+    );
+    fixture.declare_fn("token_watch", exported("token_watch", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:token_watch") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.mini.arg.pointer");
+            assert_eq!(
+                skip.dependency_path.last().map(String::as_str),
+                Some("arg 0")
+            );
+        }
+        other => panic!("token_watch is skipped, and is {other:?}"),
+    }
 }

@@ -201,8 +201,10 @@ identity, while a null one arriving where it is consumed needs a route; and
 that a handle nobody can release skips the type and what takes it. For
 callbacks they check the closure the registry builds, an argument handed out
 inside each call, a call's failure taking the callback's own route, the
-refusals — an unrouted failure inside a call, an argument that cannot leave
-Rust, a callback no output declares — and a rule at `param f.arg 0`. Contradictory configuration must instead produce a generation error.
+refusals — an unrouted failure inside a call, a call needing a runtime
+context, an argument that cannot leave Rust or that the carrier does not hold,
+a callable leaving Rust, a callback representation on another type, a
+callback no output declares — and a rule at `param f.arg 0`. Contradictory configuration must instead produce a generation error.
 These tests establish planner behavior; C/JNI runtime tests are still needed to
 establish the behavior of the resulting foreign interface.
 
