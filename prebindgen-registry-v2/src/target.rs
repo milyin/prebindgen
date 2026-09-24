@@ -428,7 +428,9 @@ pub trait Target: Sized {
     /// return some.
     const RETURNS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
 
-    /// The target's own operations: a JVM getter call, a throw. C has none.
+    /// The target's own operations: what only its language has — a JVM
+    /// getter call, a throw, calling through C's closure struct, whose
+    /// members only the C target declares and knows.
     type Op: Clone + Eq + std::hash::Hash + std::fmt::Debug;
 
     /// What only the target's foreign writer reads about an output: a Kotlin

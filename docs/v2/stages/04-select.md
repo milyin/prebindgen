@@ -397,8 +397,9 @@ pub trait Target: Sized {
     /// The kinds a wrapper can take and return. Every kind by default.
     const PARAMS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
     const RETURNS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
-    /// The target's own operations. C: none. JNI: a getter call, and the two
-    /// ways a failure is reported.
+    /// The target's own operations. C: calling through a callback's closure
+    /// struct. JNI: a getter call, the two ways a failure is reported, and a
+    /// callback's capture, call and report.
     type Op: Clone + Eq + Hash + Debug;
     /// What only the foreign writer reads about an output. C: nothing. JNI: a
     /// Kotlin package and name.

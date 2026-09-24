@@ -474,8 +474,9 @@ let stamp_class = binding.representation(Representation::Product {
 binding.rule(Scope::Type(key!(Stamp)), stamp_class);
 ```
 
-The C declarations use only standard operations, so C's `Target::Op` has no
-values at all. A scalar kind is one `Type` rule: each frontend records the
+The C declarations use only standard operations. C's `Target::Op` has one
+value, `COp::Call`, which only [a callback][fn_callback]
+uses: calling through the closure struct a C caller fills in. A scalar kind is one `Type` rule: each frontend records the
 scalars its target carries — `i64`, for both so far — before the binding's
 own declarations. There is no default for a type no rule covers: a
 representation names a wire type, and one wire type cannot fit every type. A
@@ -885,3 +886,4 @@ same things.
 [fn_callback_requests]: ../examples/fn_callback/03-requests.md
 [fn_callback_requests_c]: ../examples/fn_callback/03-requests.c.md
 [fn_callback_requests_jni]: ../examples/fn_callback/03-requests.jni.md
+[fn_callback]: ../examples/fn_callback/README.md

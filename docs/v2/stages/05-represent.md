@@ -133,8 +133,11 @@ means naming a source type, which only the registry can do: the identity, a
 member read, a handle handed out, taken back or released, a fieldless enum
 matched value by value. A target's own operation is one only its language has —
 a JVM getter call, a throw — and the target writes it when the registry feeds
-it the operands. C has none: every C operation is standard, so C's `Op` type
-has no values at all.
+it the operands. Every C conversion is standard. C's one operation of its own
+is `COp::Call`, calling through the closure struct a callback arrives in: the
+struct and its `call` and `context` members are a declaration only the C
+target writes, so only the C target can write a call through it. The
+[callback path][fn_callback_represent_c] shows it.
 
 An operation's text may need a generated helper, such as the function a JNI
 failure route calls to throw. Each such unit is an **artifact**: named, and
