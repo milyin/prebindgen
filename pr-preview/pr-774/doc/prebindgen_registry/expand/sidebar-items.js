@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FoldArg","FoldShape"],"fn":["emit_fold"],"struct":["FoldBuild","FoldLeaf","FoldPlan","FoldVariant"]};

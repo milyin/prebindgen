@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Implementation","OutputForm","Representation","Scope","StandardOp","Step","Via"],"struct":["Accepts","Binding","CarrierId","Codec","ContextParam","Failure","FailureRoute","FunctionForm","Operation","OutputId","Report","ReprId","ValuePath","WireType"],"type":["CarrierOf","FunctionFormOf","OutputFormOf","RepresentationOf"]};
