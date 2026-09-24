@@ -317,21 +317,26 @@ pub struct Binding<T: Target> { /* private */ }
 
 impl<T: Target> Binding<T> {
     /// A carrier generated Rust may use.
-    pub fn carrier(&mut self, carrier: WireType<T::CarrierMeta>) -> CarrierId;
+    pub fn carrier(&mut self, carrier: WireType<T>) -> CarrierId;
     /// One way a type crosses. Declaring an equal representation again
     /// returns the same id.
     pub fn representation(&mut self, representation: Representation<T>) -> ReprId;
     /// The values `scope` covers cross as `representation`.
     pub fn rule(&mut self, scope: Scope, representation: ReprId);
+    /// How a Rust container of elements of one wire class is packed —
+    /// see [containers](../extensions.md#containers).
+    pub fn container(&mut self, container: Container<T>);
     /// Expose `declaration` in this form. The id is how a rule addresses a
     /// value inside the output.
     pub fn output(&mut self, declaration: Declaration, form: OutputForm<T>) -> OutputId;
 }
 
-pub struct WireType<M> {
-    pub rust: syn::Type, // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'local>`
-    pub abi: bool,       // Whether it may appear in a wrapper signature.
-    pub meta: M,         // What the target's writers need to know of it.
+pub struct WireType<T: Target> {
+    pub rust: syn::Type,      // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'local>`
+    pub abi: bool,            // Whether it may appear in a wrapper signature.
+    pub class: T::WireClass,  // Which of the adapter's few wire types it is.
+    pub base: String,         // Its naming base: `stamp`, `i64`.
+    pub meta: T::CarrierMeta, // What the target's writers need to know of it.
 }
 
 pub enum OutputForm<T: Target> {
@@ -352,6 +357,8 @@ pub struct FunctionForm<T: Target> {
     pub routes: Vec<FailureRoute<T>>, // Per failure category: how it is reported, how the call ends.
     pub attrs: Vec<syn::Attribute>,
     pub unsafety: bool,
+    pub flatten: Vec<Step>,           // Parameters, or the return, split into their members:
+                                      // see [multi-value layouts](../extensions.md#multi-value-layouts).
 }
 ```
 
@@ -396,7 +403,9 @@ them out when it plans the value and feeds them to the writer.
 For the C `Stamp`, with the frontend's own `CName` as the carrier metadata:
 
 ```rust
-let i64_c = binding.carrier(WireType { rust: parse_quote!(i64), abi: true, meta: CName::builtin() });
+let i64_c = binding.carrier(WireType {
+    rust: parse_quote!(i64), abi: true, class: CClass::I64, base: "i64".into(), meta: CName::builtin(),
+});
 let i64_whole = binding.representation(Representation::Terminal {
     carrier: i64_c,
     into_rust: Some(Operation::standard(StandardOp::Identity)),
@@ -405,7 +414,9 @@ let i64_whole = binding.representation(Representation::Terminal {
 });
 binding.rule(Scope::Type(key!(i64)), i64_whole);
 
-let stamp_c = binding.carrier(WireType { rust: parse_quote!(Stamp), abi: true, meta: CName::from("Stamp") });
+let stamp_c = binding.carrier(WireType {
+    rust: parse_quote!(Stamp), abi: true, class: CClass::Aggregate, base: "Stamp".into(), meta: CName::from("Stamp"),
+});
 let stamp_struct = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_c,
@@ -421,12 +432,12 @@ and for the JNI one, with `Jvm { descriptor, kotlin }` as the metadata:
 
 ```rust
 let jlong = binding.carrier(WireType {
-    rust: parse_quote!(jni::sys::jlong), abi: true,
+    rust: parse_quote!(jni::sys::jlong), abi: true, class: JniClass::Long, base: "long".into(),
     meta: Jvm { descriptor: "J".into(), kotlin: "Long".into() },
 });
 // i64: a Terminal over `jlong`, as C's is over `i64`.
 let stamp_obj = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'local>), abi: true,
+    rust: parse_quote!(jni::objects::JObject<'local>), abi: true, class: JniClass::Object, base: "stamp".into(),
     meta: Jvm { descriptor: "Lexample/Stamp;".into(), kotlin: "example.Stamp".into() },
 });
 let stamp_class = binding.representation(Representation::Product {
@@ -443,7 +454,10 @@ itself, so C's `Target::Op` has no values at all. A scalar kind is one `Type`
 rule, and the adapter crate ships the table of them — `i64`, `bool`, `u8` and
 the rest — which a frontend records before the binding's own declarations.
 There is no default for a type no rule covers: a representation names a
-carrier, and one carrier cannot fit every type. A value no rule covers is
+carrier, and one carrier cannot fit every type. A generic instance such as
+`Vec<Stamp>` needs no rule of its own: its element resolves first, and the
+adapter's [containers](../extensions.md#containers) say how elements of that
+wire type are packed. A value that neither a rule nor a container covers is
 refused as `unsupported.conversion.no_rule`, naming the type.
 
 ### Conversion rules
@@ -485,8 +499,9 @@ parameter makes the rule fail validation instead of silently applying
 nowhere.
 
 When the registry plans a value it uses the rule at the value's own position
-if there is one, and the rule for its type otherwise, whole. That is the only
-precedence. Nothing is merged between the two: a rule at a position replaces
+if there is one, and the rule for its type otherwise, whole; a container
+instance with neither takes its [container](../extensions.md#containers).
+That is the only precedence. Nothing is merged between the two: a rule at a position replaces
 the type's rule for that value, and says nothing about the value's children,
 which are looked up again at their own positions.
 
@@ -528,8 +543,8 @@ The binding is also printable, one line per carrier, representation, rule
 and output, with metadata in its `Debug` form:
 
 ```text
-carrier  c0  i64                  CName(builtin)
-carrier  c1  Stamp                CName("Stamp")
+carrier  c0  i64    I64        CName(builtin)
+carrier  c1  Stamp  Aggregate  CName("Stamp")
 repr     r0  terminal c0          identity / identity
 repr     r1  product  c1  fields  read: ReadMember  build: BuildAggregate
 rule     type i64                 r0

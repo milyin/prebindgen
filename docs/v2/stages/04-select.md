@@ -103,6 +103,9 @@ loop, which calls no target code:
 plan(type, direction, position):
     repr = rules.at(position)                         # a rule for this one value,
         or rules.for_type(type)                       # else one for every value of the type,
+        or containers.for(type)                       # else, for Vec<T> or Option<T>, the
+                                                      # container for T's wire class, once
+                                                      # T is planned
         or refuse: unsupported.conversion.no_rule     # cheap: a lookup, no recursion yet
     relation = the relation of type that repr names   # Terminal: atomic; Product: its Via
     mark (type, direction, repr) as being resolved
@@ -378,6 +381,9 @@ before the first writer runs.
 pub trait Target: Sized {
     const NAME: &'static str;
 
+    /// The adapter's few wire types, which containers are keyed by.
+    /// C: I64, …, Pointer, Aggregate. JNI: Long, Int, …, Object.
+    type WireClass: Clone + Eq + Hash + Debug;
     /// What a carrier tells the writers beyond its Rust type.
     /// C: its C name. JNI: its JVM descriptor and Kotlin type.
     type CarrierMeta: Clone + Eq + Hash + Debug;
@@ -394,6 +400,11 @@ pub trait Target: Sized {
     /// struct or enum mirror, an incomplete type behind a pointer. `None` for a
     /// type Rust already has, such as `i64` or `JObject`.
     fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Option<Written<TokenStream>>;
+
+    /// A name for something the registry built during planning — a
+    /// container instance's type, its release symbol — from its base
+    /// (`vec_stamp`), through the frontend's own manglers.
+    fn write_name(&self, role: NameRole, base: &str) -> String;
 
     /// The foreign declarations, in the target's own language. C writes none:
     /// cbindgen derives the header from the Rust.
@@ -419,13 +430,13 @@ pub struct OperationFeed<'a, T: Target> {
 
 pub enum Fed<'a, T: Target> {
     Source(&'a TypeRef),
-    Carrier(&'a WireType<T::CarrierMeta>),
+    Carrier(&'a WireType<T>),
 }
 
 pub struct CarrierFeed<'a, T: Target> {
-    pub carrier: &'a WireType<T::CarrierMeta>,
+    pub carrier: &'a WireType<T>,
     /// For the carrier of a `Product`: each part, with the carrier it resolved to.
-    pub members: &'a [(&'a Part, &'a WireType<T::CarrierMeta>)],
+    pub members: &'a [(&'a Part, &'a WireType<T>)],
     /// For a carrier mirroring a fieldless enum: that enum, from the model.
     pub unit: Option<&'a Enum>,
 }

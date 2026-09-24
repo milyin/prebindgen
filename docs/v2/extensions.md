@@ -292,169 +292,194 @@ arrange runtime cleanup. A dependency on an external runtime crate belongs in
 the target's build requirements; a generated helper wrapping that runtime call
 is an artifact.
 
-## Multi-value layouts
+## Containers
 
-Extends [target representations](stages/05-represent.md#target-representations).
-Needed by the optional-field, sequence-field and enum paths.
+Extends [conversion rules](stages/03-requests.md#conversion-rules). Needed by
+the sequence-field and optional-field paths.
 
-The engine has two layouts, one scalar [carrier](stages/05-represent.md#describing-target-values-and-operations)
-or one aggregate, and two protocols, converting the whole value or reading one
-part per part. The broader design adds an empty layout, independent slots,
-nested member layouts, id-based references and four more protocols:
+A `Type` rule names one exact type, and a binding cannot list every
+`Vec<Stamp>`, `Vec<Ledger>` or `Option<i64>` its source happens to use. What
+makes a finite answer possible is that the target side is finite: an adapter
+has a handful of wire types, and a handful of ways to pack wire values into a
+container. So a generic instance is matched one container level at a time,
+against the wire type its element *resolved to* — never against a pattern of
+Rust types.
+
+Each carrier states which of the adapter's wire types it is, as its
+`class`, and the adapter declares its containers:
 
 ```rust
-enum Layout {
-    Empty,                 // No carried values, as for a unit result.
-    Scalar(WireTypeId),     // One scalar/reference/carrier value.
-    Slots(Vec<SlotSpec>),   // Several independent ordered values.
-    Aggregate {
-        ty: WireTypeId,            // Type of the one containing struct/object carrier.
-        members: Vec<MemberLayout>,// Named/indexed members and their child layouts.
-    },
+pub struct WireType<T: Target> {
+    pub rust: syn::Type,
+    pub abi: bool,
+    pub class: T::WireClass, // JNI: Long, Int, Byte, …, Object. C: I64, …, Pointer, Aggregate.
+    pub base: String,        // Its naming base: `stamp`, `i64`.
+    pub meta: T::CarrierMeta,
 }
 
-struct SlotSpec {
-    id: SlotId,          // This value's identity within the layout.
-    wire: WireTypeId,    // Target or intermediate type of the value.
-    role: SlotRole,      // Payload, presence flag, variant selector, etc.
-    active_when: GuardId,// Condition under which its payload can be converted.
+/// The Rust containers the registry knows the relation of.
+pub enum SourceContainer { Vec, Slice, Array, Option, Box }
+
+pub struct Container<T: Target> {
+    pub source: SourceContainer,     // Which Rust container it serves.
+    pub accepts: T::WireClass,       // Which element wire type it holds.
+    pub role: String,                // Its naming role: `vec`, `opt`.
+    pub carrier: CarrierTemplate<T>, // The result's Rust type and class; its metadata
+                                     // is derived per instance from the element's.
+    pub ops: ContainerOps<T::Op>,    // A sequence: len, get, build. An optional:
+                                     // test, extract, inject.
+    pub release: Option<Operation<T::Op>>,
+    pub niche: Option<Niche>,        // What the result leaves free; see optional values.
 }
 
-enum Protocol {
-    Terminal { codec: PrimitiveId }, // Converts the whole value in one operation, with no parts.
-    Product(ProductOps),   // Project members and construct a target product.
-    Optional(OptionalOps), // Detect/extract/inject presence or absence.
-    Sequence(SequenceOps), // Read or append target sequence elements.
-    Choice(ChoiceOps),     // Inspect/write a tag and its active payload.
-    Callable(CallableOps), // Capture/invoke a target callable.
+impl<T: Target> Binding<T> {
+    pub fn container(&mut self, container: Container<T>);
 }
 ```
 
-A **slot** is one value in a multi-value representation — for a `Stamp` passed
-to JNI as two separate arguments rather than an object, the layout is two slots,
-and a function taking two such structs has four wrapper arguments in all.
-`SlotRole` states a slot's meaning, independent of its generated name. `GuardId`
-refers to an activation condition on a slot — "always," "presence is true," or
-"variant tag selects this arm" — and is unrelated to the guard items of
-[capture](stages/01-source.md). Enclosing conditions also apply. Inactive slots
-can require valid wire defaults even though their source payload must not be
-read or constructed. When one layout is used for two function arguments, its
-slot identities are qualified by each use so their ABI positions remain
-separate.
+The registry owns each container's relation, since it is a source-side fact
+and the same for every target: a `Vec<T>`, a slice or an array is one part,
+the element, converted once per element; an `Option<T>` is one part, present
+or absent. A value of a container type takes, in order:
 
-A layout stays nested for as long as nesting is meaningful: an aggregate whose
-member is itself an aggregate is described that way, and only a place that
-requires a flat list of values — a wrapper signature, where each slot becomes one
-ABI argument — flattens it, at that point, in that use. Keeping the nesting
-until then is what lets the same struct representation be an argument in one
-function and a member of another.
+1. the rule at its position;
+2. the `Type` rule for its exact type — `Type(Vec<u8>)`, say, for a byte array
+   carried whole;
+3. the container table: its element is planned first, at its own position,
+   and the registry looks up the container declared for this Rust container
+   and the element's wire class.
 
-`ProductOps` in the design describes both member reads and a target
-construction operation over converted children. The implemented form has no
-target-construction operation, which is why a struct leaving Rust is a reported
-skip. A future C output could use a struct literal, while a future
-separate-arguments JNI form would map children to argument slots. For
-sequences, variants and callbacks, adapters supply runtime operations; the
-registry supplies loops, branches and child calls.
+A missing entry refuses the value, naming the Rust container and the wire
+class: `Vec` of `Aggregate` has no container in JNI.
+
+For JNI the table is:
+
+| Rust container | Element wire class | Container | Instance carrier |
+| --- | --- | --- | --- |
+| `Vec`, slice | `Long` | `jlongArray`, read in bulk | `[J` |
+| `Vec`, slice | `Byte` | `jbyteArray`, read in bulk | `[B` |
+| `Vec`, slice | `Object` | `jobjectArray`, element by element | `[` + the element's descriptor |
+| `Option` | `Long` | a boxed `java.lang.Long` | `Ljava/lang/Long;` |
+
+and for C:
+
+| Rust container | Element wire class | Container | Instance carrier |
+| --- | --- | --- | --- |
+| `Vec`, slice | any | `{ ptr, len }` | a `repr(C)` struct per instance |
+| `Option` | a class with no niche | `{ bool present; E value }` | a `repr(C)` struct per instance |
+
+Three things follow from matching the element's wire class rather than a
+Rust pattern. Two entries cannot overlap, since each covers one container
+level and one class, so there is no precedence among them to define. An
+element that changes the container's Rust type is simply a different key:
+`Vec<i64>` becomes a `jlongArray` and `Vec<Stamp>` a `jobjectArray`. And an
+override on an element flows up by itself: a rule at `param xs.element` that
+makes `Stamp` a handle gives the element class `Long`, and the container
+follows.
+
+A container instance is a carrier the registry builds during planning, from
+the container and the element's carrier. It holds it as that pair, compared
+structurally, and feeds both to the writers: the JNI writer spells
+`[Lexample/Stamp;` from the element's descriptor, and the C writer writes the
+instance's `repr(C)` struct from its element's carrier. Planning still calls
+no target code; the instance is data the binding's declarations determine.
+
+An instance's name is composed the way a callback's closure struct is named
+today, from bases. Its base is the container's role and the element's base —
+`Vec<Stamp>` is `vec_stamp`, and nesting composes, so `Vec<Option<Stamp>>` is
+`vec_opt_stamp`. The target turns a base into a name with the frontend's own
+manglers, as it does for a declared type: `mangle_type_name` gives the C
+struct its name and `mangle_destructor` gives a `Vec` handed out of Rust its
+release symbol, `vec_stamp_drop` by default. No planning decision depends on
+a name, so the target applies the manglers when it writes, through
+`Target::write_name`, and the registry checks the names for collisions once
+they are written.
 
 ## Optional values
 
-Extends [target representations](stages/05-represent.md#target-representations).
-Demonstrated, when built, by the struct with an optional field.
+Extends [containers](#containers). Demonstrated, when built, by the struct
+with an optional field.
 
-Nothing carries an optional value yet: `Layout::Slots`, `SlotRole`, `GuardId`
-and the encodings below are names. This section says what the slot has to hold.
-
-An optional value needs both a representation of its child and a way to
-distinguish absence. Different targets can encode that distinction differently:
+An `Option<T>` is cheapest when the element's wire value has a value no real
+element ever takes — a **niche** — and absence can be that value. Whether one
+exists depends on the representation, not on the wire type alone. A `jlong`
+carrying a handle is never 0, because `Box::into_raw` never returns null; a
+`jlong` carrying an `i64` can be anything. A C `*mut ledger_t` handle is never
+null; a `JObject` a data-class conversion produces is never null. So the
+representation that produces a value declares its niche:
 
 ```rust
-enum AbsenceEncoding {
-    Presence {
-        flag: SlotId,         // Separate value indicating whether the child is present.
-        inactive: DefaultsId, // Valid wire defaults for the absent child's slots.
-    },
-    Nullable {
-        test: PrimitiveId,    // Test for absence in a nullable carrier.
-        extract: PrimitiveId, // Obtain the present child's carrier.
-        inject: PrimitiveId,  // Wrap a converted child as present.
-    },
-    Niche {
-        domain: DomainId,     // Valid child values and a reserved absence encoding.
-        test: PrimitiveId,    // Test for the reserved encoding.
-        extract: PrimitiveId, // Recover the present child's carrier.
-        inject: PrimitiveId,  // Encode a child without colliding with absence.
-    },
+pub enum Niche {
+    Null, // A null pointer or a null object reference.
+    Zero, // An integer 0.
 }
 
-struct OptionalOps {
-    encoding: AbsenceEncoding, // The selected absence/presence convention.
-    payload: LayoutId,         // Child representation when present.
-    absent: PrimitiveId,       // Produce the complete representation of absence.
+// On `Representation::Terminal` and `Representation::Product`:
+pub niche: Option<Niche>,
+```
+
+An `Option<X>` resolves from its element's representation:
+
+| The element's representation | `Option<X>` |
+| --- | --- |
+| has a niche | The element's carrier. Absent is the niche value; the test for it and the conversion each way are standard operations the registry writes. The result has no niche left. |
+| has none | The container declared for `Option` and the element's wire class: C's `{ bool present; E value }`, JNI's boxed `java.lang.Long`. The result's niche is the container's. |
+
+Nesting falls out of that. `Option<Ledger>` takes the pointer's null.
+`Option<Option<Ledger>>` finds that niche consumed and takes the flag
+container, so `None` and `Some(None)` stay distinct. In JNI,
+`Option<i64>` is a boxed `Long`, whose own niche is `null`, and an
+`Option<Option<i64>>` then needs a container for class `Object` or is
+refused.
+
+A container's `inject` writes the whole absent form, including a valid value
+for a member that is not read: C's `{ false, 0 }`. Its `extract` is only
+reached on the present path; the registry branches on `test` and converts
+the element only there.
+
+## Multi-value layouts
+
+Extends [the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-boundary).
+Needed by the sequence-field path, and by JNI's `expand_param`.
+
+Inside a plan one value is always one carrier. A C slice is one `{ ptr, len }`
+aggregate, and a `Stamp` read from a JVM object is one `JObject`, wherever
+the value sits: as a parameter, a field, or an element of another container.
+Only the wrapper boundary may split a value into several wrapper parameters,
+and the function form says which:
+
+```rust
+pub struct FunctionForm<T: Target> {
+    // … the calling convention, symbol, context parameters, routes …
+    /// The parameters, or the return, that cross as their members rather
+    /// than as one value.
+    pub flatten: Vec<Step>, // Step::Param("xs"), Step::Return
 }
 ```
 
-A **niche** is a reserved representation that cannot be a valid present child,
-such as zero for a handle whose valid values exclude zero. `DomainId` describes
-those validity facts. `DefaultsId` describes valid wire defaults, not fabricated
-Rust source values. `absent` builds the complete absent representation;
-`inactive` supplies the unused child slots for the separate-flag convention.
+A flattened value must be carried in an aggregate: a carrier with members,
+such as a `repr(C)` struct. The registry checks that before planning. At the
+boundary it replaces the one wrapper parameter with one per member, each typed
+as that member's carrier and named by the target's writer — `xs` becomes
+`xs_ptr` and `xs_len` — and binds each member directly where the plan would
+have read it out of the aggregate. A flattened return becomes one
+out-parameter per member, in a convention that has out-parameters: C does, and
+a JNI method returns one value.
 
-The registry branches on presence and invokes the child conversion only on the
-present path. It validates active inputs and supplies required inactive
-defaults. Nested optionals must preserve distinct states such as `None` and
-`Some(None)`; if the selected encoding cannot do that, the combination is
-unsupported.
+The aggregate need not be one the foreign side ever sees whole. A carrier
+declared with `abi: false` is a Rust-only intermediate, and flattening is how
+its members reach the wrapper signature. That is how JNI's `expand_param`
+fits: a rule at `param stamp` selects a `Product` over an internal aggregate
+of `Stamp`'s two parts instead of the `JObject`, and the function form
+flattens `param stamp`.
 
-## Generic types
+| Frontend setting | Declarations | Wrapper parameters |
+| --- | --- | --- |
+| C, a slice parameter | `xs: &[i64]` takes the slice container, carried in `slice_i64 { ptr, len }`; the form flattens `param xs` | `xs_ptr: *const i64, xs_len: usize` |
+| JNI, `expand_param(stamp)` | `At(f, param stamp)` selects a `Product` over an internal `{ secs: jlong, nanos: jlong }`; the form flattens `param stamp` | `secs: jlong, nanos: jlong` |
 
-Extends [conversion rules](stages/03-requests.md#conversion-rules). Needed by
-the sequence-field path.
-
-A `Type` rule names one type, and a binding cannot list every instance of
-`Vec<T>` it will meet. Generic types need a scope that matches a pattern, and
-a representation whose parts are the type's arguments. Both stay data, so
-planning still calls no target code:
-
-```rust
-pub enum Scope {
-    Type(TypeKey),
-    At(OutputId, ValuePath),
-    /// Every instance of a generic type: `Vec<_>`, `Option<_>`.
-    Pattern(TypePattern),
-}
-
-pub enum Via {
-    Fields,
-    /// A sequence: one part, the element, converted once per element.
-    Elements,
-}
-
-pub struct WireType<M> {
-    pub rust: syn::Type,
-    pub abi: bool,
-    pub meta: M,
-    /// For a carrier a pattern rule uses: filled in per instance from the
-    /// element's carrier — `JObjectArray` of `Lexample/Stamp;`.
-    pub element: Option<ElementSlot>,
-}
-```
-
-A JNI binding records `Pattern(Vec<_>)` as a `Product` through
-`Via::Elements` over a `jobjectArray` carrier, with `JniOp::ArrayGet` to read
-an element and `JniOp::ArrayBuild` to build the array. Planning a
-`Vec<Stamp>` finds that rule, looks `Stamp` up by the ordinary rules as its
-one part, and instantiates the carrier with the element's: an array whose
-descriptor is `[Lexample/Stamp;`. The registry then feeds `ArrayGet` the
-array operand, the index and the element's carrier, and the JNI writer
-writes the `GetObjectArrayElement` call. `Vec<u8>` is a different case:
-carried whole as a `jbyteArray`, it is a `Type(Vec<u8>)` rule, and a `Type`
-rule outranks a pattern.
-
-The open design question is the precedence between patterns that overlap —
-`Vec<_>` and `Vec<Option<_>>` — which a single order of scopes does not
-settle. Requiring the frontend to record non-overlapping patterns, and
-refusing a binding that does not, is the smallest answer.
+Neither the slice container nor `Stamp`'s other representations know about
+the flattening, and everywhere else the same `Stamp` is still one `JObject`.
 
 ## Requesting further conversions
 
