@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "06-boundary", "language": "jni"} -->
 
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][fn_boundary] · [Element path][fn]
-Owner: the registry, on the JNI adapter's `BoundarySpec`
+Owner: the registry, on the JNI frontend's function form
 
 # Function taking an owned struct — Assemble the wrapper boundary — Kotlin/JNI
 
@@ -11,21 +11,24 @@ Owner: the registry, on the JNI adapter's `BoundarySpec`
 node(input)  : produces an owned source Stamp, failures { Runtime: jni::errors::Error }
 node(output) : produces jlong, failures {}
 
-JniTarget, under `fn:stamp_sum`: example.JNINative.stampSum, extern "system",
-                       input one object, output jlong,
-                       Runtime -> report to the JVM, then return a default
+the form the JNI frontend recorded for `fn:stamp_sum`:
+  symbol "Java_example_JNINative_stampSum", extern "system",
+  context [mut env: JNIEnv supplies "jni.env", _this: JObject unused], inputs [stamp],
+  Runtime -> report to the JVM, then return a default
+  Binding -> throw the message, then return a default
 ```
 
 ## Result
 
 ```text
-BoundarySpec {
-    abi:      extern "system", symbol "Java_example_JNINative_stampSum",
-              synthetic operands: JNIEnv (exclusive), receiver JObject (unused),
-    inputs:   [ InputPlacement { wrapper arg `stamp` (JObject) -> node(input) } ],
-    output:   OutputPlacement::Return(node(output) -> jlong),
-    failures: { Runtime: report through report_jni_error, then return 0;
-                         if reporting fails -> abort },
+FunctionPlan {
+    abi, symbol: extern "system", "Java_example_JNINative_stampSum",
+    params:      [ mut env: JNIEnv (supplies jni.env), _this: JObject (unused),
+                   stamp: JObject -> node(input) ],
+    ret:         jlong,
+    routes:      { Runtime: report through report_jni_error, then return 0;
+                            if reporting fails -> abort,
+                   Binding: throw the message, then return 0 },
 }
 ```
 
@@ -45,7 +48,9 @@ pub extern "system" fn Java_example_JNINative_stampSum(
 ) -> jni::sys::jlong
 ```
 
-The reporting operation is a generated [artifact](../../stages/05-represent.md#individual-target-operations) this adapter contributes:
+The reporting operation's text calls a generated
+[artifact](../../stages/05-represent.md#individual-target-operations), which
+the JNI writer returns beside it:
 
 ```rust
 pub fn report_jni_error(env: &mut jni::JNIEnv<'_>, error: jni::errors::Error)
@@ -71,13 +76,13 @@ if reporting failed.
 
 - Zero is the chosen placeholder for this integer-returning method while an
   exception is pending, and Kotlin observes the exception. That route is
-  [the adapter's convention][fn_requests_jni], not a writer default.
+  [the frontend's convention][fn_requests_jni], not a writer default.
 - Reporting is never retried with the operation that just failed — one failed
   report leads to the terminal action.
 - After a failed property read, no further JNI call is made on the success
   path. The route exists because the input [node](../../stages/05-represent.md#represent-and-compose-values) [declares that
-  failure][fn_represent_jni]; a category the [choice](../../stages/03-requests.md#what-a-choice-records) leaves unrouted would skip the
-  function.
+  failure][fn_represent_jni]; a category the form leaves unrouted would skip
+  the function.
 
 [fn]: README.md
 [fn_boundary]: 06-boundary.md

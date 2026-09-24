@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "typedef", "stage": "05-represent"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Element path][typedef] · [Source crate](../../source.md)
-Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][typedef_select] · Next: [Assemble the wrapper boundary][typedef_boundary]
+Owner: the registry, from the binding's rules · Previous: [Select conversion relations][typedef_select] · Next: [Assemble the wrapper boundary][typedef_boundary]
 
 # Type alias declaring an opaque handle — Represent and compose values
 
@@ -12,7 +12,7 @@ The two [selections][typedef_select], each with nothing under it:
 ```text
 Ledger, IntoRust,  relation atomic
 Ledger, OutOfRust, relation atomic
-conversion: <what this target recorded for Ledger>   // the key select returned, both ways
+representation: the Type(Ledger) rule's — a Terminal with a codec each way and a release
 ```
 
 ## Result
@@ -24,42 +24,42 @@ per direction, and a release that rides with the first:
 node(Ledger, IntoRust) {
     relation: atomic
     children: []
-    repr:     layout   — Scalar(<the target's carrier for an address>)
-              protocol — Terminal(FromRaw)          // *Box::from_raw(v as *mut source::Ledger)
-              release  — Release                     // drop(Box::from_raw(..)); null releases nothing
+    carrier:  the target's carrier for an address
     body:     apply FromRaw to carrier -> owned source Ledger
-    contract: produces an owned source Ledger; the handle is consumed
-    failures: { Binding: String }                    // a null address
+                                                    // *Box::from_raw(v as *mut source::Ledger)
+    produces: an owned source Ledger; the handle is consumed
+    failures: { Binding: String }                   // a null address
 }
 
 node(Ledger, OutOfRust) {
     relation: atomic
     children: []
-    repr:     layout   — Scalar(<the same carrier>)
-              protocol — Terminal(IntoRaw)          // Box::into_raw(Box::new(v)) as <carrier>
+    carrier:  the same carrier
     body:     apply IntoRaw to the source value -> carrier
-    contract: produces the carrier; the foreign side owns the allocation
+                                                    // Box::into_raw(Box::new(v)) as <carrier>
+    produces: the carrier; the foreign side owns the allocation
     failures: {}
 }
+
+release: Release, on the same carrier               // drop(Box::from_raw(..)); null releases nothing
 ```
 
-With no children to wait for, the registry asks the target for each
-[representation](../../stages/05-represent.md#represent-and-compose-values)
-at once: which
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
-holds an address on its side, and which
-[primitive](../../stages/05-represent.md#represent-and-compose-values)
+With no children to wait for, the registry composes each direction straight
+from the [representation](../../stages/05-represent.md#represent-and-compose-values):
+the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+that holds an address on the target's side, and the
+[primitive](../../stages/05-represent.md#represent-and-compose-values) that
 turns a source value into one and back. All three primitives — `IntoRaw`,
-`FromRaw`, `Release` — are standard ones the registry renders itself, beside
+`FromRaw`, `Release` — are standard ones the registry writes itself, beside
 `Identity` and `ReadMember`. They are the registry's because each spells a
 *source* type, `*mut source::Ledger`, and only the registry may do that; what
-the target contributes is the carrier the address is cast to and from, and
+the frontend states is the carrier the address is cast to and from, and
 nothing else. [C][typedef_represent_c] and [Kotlin/JNI][typedef_represent_jni]
 each name theirs.
 
 A `Release` produces no value, so it is never part of a [conversion](../../stages/04-select.md#select-conversion-relations) body. It is
-stated on the into-Rust representation — the one whose carrier it takes — and
-the registry plans it as a
+stated on the representation, and applied to the into-Rust carrier; the type
+output names a form for it, and the registry plans it as a
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) of its own
 at [the next stage][typedef_boundary]. Naming a release is also what tells the
 registry the type is a handle: a representation the foreign side owes nothing
@@ -79,10 +79,8 @@ for names none.
   (`&Ledger`) breaks this argument, and is what
   [the extensions page](../../extensions.md) reserves the contract for.
 - The same two nodes serve the type's own request, `ledger_open` and
-  `ledger_close`: node identity is (type, direction, [relation](../../stages/04-select.md#what-a-relation-is),
-  [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)),
-  and the target resolves the same [choice](../../stages/03-requests.md#what-a-choice-records) — so returns an equal key — at all
-  three positions.
+  `ledger_close`: node identity is type, direction, representation and
+  children, and all three positions take the one `Ledger` representation.
 
 ## Language variants
 

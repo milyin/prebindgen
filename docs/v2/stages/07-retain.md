@@ -54,7 +54,7 @@ that exists only while V2 is being brought up to V1's coverage, as
 out.
 
 A skipped declaration carries a **capability**: a stable code naming the
-support it needs, such as `unsupported.jni.carrier`. An explanation and a path
+support it needs, such as `unsupported.conversion.no_rule`. An explanation and a path
 to the failing dependency tell the developer where planning stopped. The
 design also calls for *unselected*, to account for captured items nobody
 requested, but that fourth outcome is not implemented.
@@ -94,13 +94,9 @@ shared causes and the future `Unselected` outcome. Current error payloads and
 reports are simpler, as explained below.
 
 ```rust
-// Answer returned by a target operation; the registry owns the final accounting.
-enum TargetAttempt<Answer> {
-    Ready(Answer),                 // Complete description usable by the registry.
-    Unsupported(UnsupportedReason), // Valid request requiring an unimplemented capability.
-}
-type TargetSupport<Answer> = Result<TargetAttempt<Answer>, PlanningError>;
-
+// A missing capability is recorded in the binding by the frontend — a
+// representation or an output it cannot lower — or met by the registry while
+// it plans; the registry owns the final accounting.
 enum PlanningError {
     InvalidInput(Diagnostic),      // Malformed or contradictory configuration.
     InternalInvariant(Diagnostic),// A generator defect or violated internal contract.
@@ -143,32 +139,22 @@ contradictory configuration, panics and I/O failures are not ordinary skips.
 
 ### Dependencies of public declarations
 
-A function also needs the public type used by its parameters.
-`SurfaceSpec.requires` lists `Requirement`s, each made from a value: the
-target states which values the declaration is unusable without, and the
-engine matches each to the output covering its type. With a type declared
-once that is a lookup by name. Declared several times, the value settles it:
-its own
-[crossing](03-requests.md#finding-an-existing-conversion-plan) is planned
-under some conversion, chosen by the target at selection, and it requires the
-output declared under that same conversion — which holds
-whatever became of that output, so a value crossing as a refused one is
-skipped with its cause. A requirement stated by name alone, with no value
-behind it, resolves only while the type is declared once; over several it is
-`unsupported.requirement.ambiguous`. A requirement no declaration covers
-produces `unsupported.requirement.unrequested`. The design sketch below
-extends these requirements to interface promises and member associations.
+A function also needs the public type used by its parameters, and a type
+needs the public types of its fields. The registry works out both itself,
+from the plan: every value of a named type a function takes or returns, and
+every part of a type's own value, requires the type output exposing the
+[representation](05-represent.md#represent-and-compose-values) that value's
+[crossing](03-requests.md#finding-an-existing-conversion-plan) was planned
+with. With a type declared once that is that output, whatever became of
+it; a value crossing as a type output the frontend refused is skipped with
+that output's cause. Declared several times, the representation settles it:
+`Stamp` exposed as a struct and as a handle is two outputs, and a value
+crossing as the handle requires the second. A value of a type that no output
+exposes, or of a type declared several times none of which exposes the
+representation it crossed as, produces `unsupported.requirement.unrequested`.
 
-```rust
-struct SurfaceSpec<Payload> {
-    declaration: DeclarationId,  // Public type/function/member this description implements.
-    requires: Vec<Requirement>, // Required public types, conversions, interfaces or helpers.
-    members: Vec<DeclarationId>, // Associated declarations, such as a class's methods.
-    payload: Payload,            // Chosen target name/package/modifiers and rendering metadata.
-}
-```
-
-`Requirement` is a typed reference to a dependency that must succeed. Today it is derived from what a declaration's signature uses — the public type a value crosses as — and the sketch extends it to what a declaration promises. `members` describes association; a member that is essential to a promised interface must also be a requirement.
+Requiring a type does not export it: a type nothing requested is not emitted
+because something needed it, and whatever needed it is skipped instead.
 
 The full design requires the following dependency behavior. Struct/caller
 propagation is implemented; interface and method promises extend that rule:
@@ -181,45 +167,30 @@ propagation is implemented; interface and method promises extend that rule:
 - A shared helper is retained if any emitted output needs it.
 - An unimplemented semantic setting blocks the affected promise; it is not silently discarded.
 
-A `SurfaceSpec` describes one public declaration and its requirements. Describing it is not the same as writing it: whether that description becomes a header entry or a Kotlin class is [emission](08-emit.md)'s business, and a target without a foreign writer still produces these descriptions. An [artifact](05-represent.md#individual-target-operations) — one generated unit, as defined with [the operations that depend on them](05-represent.md#individual-target-operations) — is what actually gets emitted: one public declaration can require a foreign wrapper, a Rust extern, converter helpers and runtime helpers, each its own artifact, several of which may end up in one file. The registry keeps candidate artifacts during planning and publishes only those needed by complete supported outputs.
+Retaining a type output is not the same as writing it: its
+[carriers](05-represent.md#describing-target-values-and-operations)'
+declarations are written at [emission](08-emit.md), and whether it becomes a
+header entry or a Kotlin class is the target's business then. An
+[artifact](05-represent.md#individual-target-operations) — one generated unit,
+such as a helper an operation's text needs — is emitted only when a retained
+wrapper's operation needs it.
 
-Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks. Public dependencies may require repeated readiness evaluation until the retained set stops changing. A new public requirement discovered after value planning must still propagate before output is finalized.
+Public types referring to each other do not necessarily require an infinitely recursive conversion. Conversion-expansion cycles and public-declaration dependencies therefore need separate checks.
 
 Retention may need several passes. Suppose declaration A needs B, and B needs
 C. The engine cannot keep A merely because A's own conversion succeeded; it
 must also know the outcome of B and C. It reevaluates dependent declarations
 until the set of decisions stops changing, a process often called reaching a
 fixed point. This check is separate from recursively planning a value's fields.
-The current implementation propagates public requirements over its candidate
-declarations; the broader design also accounts for newly discovered requirements.
 
 ## Registry state, execution order and final output
 
-Generation needs three kinds of storage: the source model, mutable working
-state, and the completed result. The following design sketch calls the first
-two `Registry` and `GenerationRun`. In the implementation, `generate` uses a
-private `Run` rather than these exact public structs. It returns `Generation`,
-which owns the model and completed output. An **arena** below means a table of
-records addressed by ids, not a separate planning algorithm:
-
-```rust
-struct Registry {
-    model: Flat, // Existing source model used by generate(); source facts stay in Flat.
-}
-
-struct GenerationRun<'a, T: Target> {
-    registry: &'a Registry, // Source facts used throughout this generate call.
-    target: &'a T,         // Read-only target decision/operation provider.
-    declarations: Vec<Declaration>,       // The declarations to plan.
-    nodes: NodeArena<T::Payload>,       // Conversion attempts and completed value plans.
-    functions: FunctionArena<T::Payload>, // Candidate complete wrapper plans.
-    surfaces: SurfaceArena<T::Payload>, // Candidate public declaration descriptions.
-    artifacts: ArtifactArena<T::Payload>, // Candidate generated units and dependencies.
-    outcomes: OutcomeTable, // Per-declaration decisions and shared unsupported causes.
-}
-```
-
-`T` implements `Target`. Each `*Arena` is a registry-owned table addressed by typed IDs. `OutcomeTable` holds classifications and diagnostic causes. [Primitive](05-represent.md#represent-and-compose-values)/layout/body tables are omitted here. The registry updates these tables; adapters receive immutable descriptions.
+Generation needs three kinds of storage: the source model with the binding,
+mutable working state, and the completed result. `generate` uses a private
+`Run` for the working state — the rules by scope, the conversion
+[nodes](05-represent.md#represent-and-compose-values), the applications of
+operations, the cache and the cycle marks — and returns a
+`Generation`, which owns the model, the binding and the completed output.
 
 The pipeline is:
 
@@ -227,58 +198,55 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend builds its declaration list and its target internally, and calls generate
- -> registry validates/imports source references and declarations
- -> for each requested value: target selects its source relation and names
-    the conversion its own settings make
- -> registry resolves the selected source operation's children
- -> target describes the requested value's representation
- -> registry composes value instructions and contracts
- -> target describes boundary delivery and public declarations
- -> registry assembles functions and resolves all required dependencies
+ -> v2 frontend builds its binding — carriers, representations, rules,
+    outputs — and calls generate with its target
+ -> registry checks declarations against the model, and rules against the
+    outputs they address
+ -> for each requested value: registry finds the rule that applies and the
+    relation its representation names
+ -> registry resolves that relation's children, then composes the value's
+    instructions from the representation's operations
+ -> registry assembles each wrapper from its function form
  -> registry propagates skips and retains complete supported output
- -> common Rust writer renders the retained wrapper plans
- -> return Generation with Rust text, retained descriptions and the skips
+ -> common Rust writer renders the retained plans, calling the target's
+    writers for its operations and for its carriers' declarations
+ -> return Generation with Rust text, the binding, retained outputs and skips
  -> C: cbindgen derives headers from generated Rust
-    JNI: optional foreign-writer interface is implemented by the Kotlin writer
+    JNI: the frontend's Kotlin writer reads the retained outputs
  -> publish generated files
  -> the binding prints or publishes the skips as it chooses
 ```
 
-Selection, child resolution and representation happen together for each [node](05-represent.md#represent-and-compose-values). A complete conversion table is not required before relation choices are known. Boundary/public-declaration failures can remove candidate outputs before the result is frozen.
-
-The following is the proposed storage organization. Current `Generation` owns
-Flat, vectors of value/function/surface/primitive records, the skips and the
-already-rendered Rust string. It does not contain an ordered artifact arena.
+Rule lookup, child resolution and composition happen together for each
+node. No target code runs until
+the plan is complete. Wrapper and requirement failures can remove candidate
+outputs before the result is frozen.
 
 ```rust
-struct Generation<Payload> {
-    values: FrozenArena<ValuePlan<Payload>>, // Retained reusable conversions.
-    functions: FrozenArena<FunctionPlan<Payload>>, // Retained complete wrapper functions.
-    surface: FrozenArena<SurfaceSpec<Payload>>, // Complete retained public declarations.
-    artifacts: OrderedArtifacts<Payload>, // Generated units with a validated emission order.
-    outcomes: Outcomes,     // Every declaration's outcome, with its diagnostic path.
+struct Generation<T: Target> {
+    flat: Flat,                          // The model the run planned over.
+    binding: Binding<T>,                 // What planning read.
+    skipped: Vec<(Declaration, Skip)>,   // What the binding asked for and did not get.
+    unused_rules: Vec<Scope>,            // Type rules no planned value used.
+    values: Vec<ValuePlan>,              // Planned conversions, by NodeId.
+    retained: Vec<Retained>,             // Surviving outputs, with the values planned for each.
+    functions: Vec<FunctionPlan<T::Op>>, // Retained wrappers.
+    rust: String,                        // The generated Rust.
 }
 ```
 
-Freezing retains all referenced tables (bodies, primitives, layouts, helpers) and the required `Flat` source-emission data, directly or through shared ownership. Rendering uses these retained records and language-provided rendering code. The original registry, borrowed adapter and temporary working tables need not remain alive.
-
 **Frozen** means planning is complete and consumers cannot mutate the result.
-The implemented retention loop keeps a public declaration only when its required
-declarations succeed. It retains all planned conversion nodes, including ones no
-surviving wrapper needs; the instructions have already been inlined, so this is
-extra storage rather than a dangling reference.
-
-Artifacts are currently collected and deduplicated by name before Rust rendering.
-There is no general dependency sort or forward-declaration planner. The
-`FrozenArena` and `OrderedArtifacts` structures above describe a proposed
-extension, not types the current implementation exposes.
+The retention loop keeps an output only when the outputs it requires succeed.
+It retains all planned conversion nodes, including ones no surviving wrapper
+needs; the instructions have already been inlined, so this is extra storage
+rather than a dangling reference.
 
 The common Rust writer renders before `Generation` is returned;
-`Generation::write_rust` writes the stored text. The JNI writer reads retained
-public descriptions for Kotlin. The C build passes generated Rust to `cbindgen`
-for headers. Writers must not introduce a newly discovered dependency or reverse
-a support decision. Files should be published only after output generation succeeds.
+`Generation::write_rust` writes the stored text. The JNI Kotlin writer reads
+the retained outputs, their metadata and the carriers their values resolved
+to. The C build passes generated Rust to `cbindgen` for headers. Writers must
+not introduce a newly discovered dependency or reverse a support decision.
+Files should be published only after output generation succeeds.
 
 What a binding makes of a skip — a cargo warning, a file beside the generated
 code, a test's expectation — is the frontend's business, and separate from the

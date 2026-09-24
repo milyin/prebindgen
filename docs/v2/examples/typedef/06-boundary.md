@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "typedef", "stage": "06-boundary"} -->
 
 [Stage chapter](../../stages/06-boundary.md) · [Element path][typedef] · [Source crate](../../source.md)
-Owner: the registry, on the target's boundary description · Previous: [Represent and compose values][typedef_represent] · Next: [Retain supported output][typedef_retain]
+Owner: the registry, on the release form the binding stated · Previous: [Represent and compose values][typedef_represent] · Next: [Retain supported output][typedef_retain]
 
 # Type alias declaring an opaque handle — Assemble the wrapper boundary
 
@@ -25,11 +25,11 @@ source: none
 ```text
 FunctionPlan {
     declaration: public Ledger in this target,          // the type's own, not a function's
-    inputs:      [ node(taken) ],
-    output:      none,
-    boundary:    BoundarySpec { … },                    // per target, below
-    body:        apply the release to the wrapper parameter
-                 -> deliver nothing
+    symbol, abi: from the type output's release form    // per target, below
+    params:      the form's context parameters, then the form's one input,
+                 typed as node(taken)'s carrier
+    ret:         none
+    instrs:      apply the release to the wrapper parameter
 }
 ```
 
@@ -37,28 +37,28 @@ The registry assembles the release
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) with the
 code that assembles an exported function, with one difference: there is no
 call, so the input is applied to the release operation instead of being
-converted and passed on. The boundary is the target's answer to a
-`SiteDescriptor` whose source function is absent and whose declaration is the
-*type's*, so the target resolves the type's
-[choice](../../stages/03-requests.md#what-a-choice-records) rather than a
-function's. The registry checks it as it checks any other: the wrapper parameter must carry what the
-release reads, and any failure the release could raise must have a route.
+converted and passed on. The form is the one the binding stated on the type's
+output, beside its representation, rather than a function's. The registry
+checks it as it checks any other: the form names exactly one input, and any
+failure the release could raise must have a route.
 
 The [conversions](../../stages/04-select.md#select-conversion-relations) of
 `ledger_open` and `ledger_close` meet their own boundaries in those functions'
 plans. A handle parameter is placed as any input is, and a handle return is
 delivered as any scalar result is; what this path adds to them is a failure
-category, `Binding`, that the boundary must route.
+category, `Binding`, that their forms must route.
 
 ## Checks
 
-- A release is infallible, so its boundary needs no route; a release described
-  as fallible would need one, and the type would be skipped without it.
+- A release is infallible, so its wrapper needs no route; a release described
+  as fallible would need one, and the type would be skipped without it. The
+  `Binding` failure of `node(taken)` belongs to taking the handle, which the
+  release wrapper does not do.
 - The plan is retained under the type's identity, so it survives exactly when
   the type does, and a report never lists it as a function the user asked for.
-- A boundary that cannot place a release — a target with no destructor
-  convention — refuses the type here, and everything requiring the type with
-  it.
+- A representation with a release and a type output with no release form
+  refuses the type with `unsupported.type.no_release`, and everything
+  requiring the type with it.
 
 ## Language variants
 

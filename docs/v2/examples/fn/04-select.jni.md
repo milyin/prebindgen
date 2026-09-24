@@ -1,53 +1,48 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "04-select", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-select.md) · [Common cell][fn_select] · [Element path][fn]
-Owner: the registry, on the JNI adapter's selections
+Owner: the registry, from the rules the JNI frontend recorded
 
 # Function taking an owned struct — Select conversion relations — Kotlin/JNI
 
 ## Input
 
-The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan) and the [relations](../../stages/04-select.md#what-a-relation-is) the registry offers, beside the JNI [choice](../../stages/03-requests.md#what-a-choice-records) the `JniTarget` holds for each — which
-the registry does not pass in and cannot read:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), and the rules the JNI frontend recorded for their types:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   offered: [ Stamp.fields, atomic ]
-                                                    JniTarget: DataClass { class: "example.Stamp" }
-Crossing { source: i64,   direction: OutOfRust }   offered: [ atomic ]
-                                                    JniTarget: jlong carrier
+Crossing { source: Stamp, direction: IntoRust  }   Type(Stamp) -> Product through Fields, a `JObject` of `example.Stamp`
+Crossing { source: i64,   direction: OutOfRust }   Type(i64)   -> Terminal over `jlong`, identity both ways
 ```
 
 ## Result
 
 ```text
-Param(0)  Stamp, IntoRust   -> Stamp.fields
-  secs    i64,   IntoRust   -> atomic
-  nanos   i64,   IntoRust   -> atomic
-Return    i64,   OutOfRust  -> atomic
+param stamp   Stamp, IntoRust   -> Stamp.fields, carried in a `JObject`
+  field secs  i64,   IntoRust   -> atomic,       carried in `jlong`
+  field nanos i64,   IntoRust   -> atomic,       carried in `jlong`
+return        i64,   OutOfRust  -> atomic,       carried in `jlong`
 ```
 
-The JNI adapter selects `Stamp.fields` because the struct is declared as a
-data class: a Kotlin `Stamp` object exposes its fields as properties, and the
-[conversion](../../stages/04-select.md#select-conversion-relations) into a
-Rust `Stamp` is made of reading each of them. The same choice family has a
-different answer for a type declared as a pointer class — an opaque handle in a
-`jlong` — which would select `atomic` and leave the fields unread. As in C, the
-adapter answers from the choice it looked up for this position, before the
-registry has shown it any field. It returns that choice beside the relation, as
-this value's [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan): `JniChoice` is plain data, so two values declared
-the same way get equal keys and share one conversion.
+`Stamp` is read through its fields because the build script declared it with
+`data_class!`: a Kotlin `Stamp` object exposes its fields as properties, and
+the [conversion](../../stages/04-select.md#select-conversion-relations) into a
+Rust `Stamp` is made of reading each of them. `ptr_class!` would record a
+`Terminal` over a `jlong` address instead, which would leave the fields
+unread. As in C, the rule decides the
+[relation](../../stages/04-select.md#what-a-relation-is) before the registry
+has read any field, and no JNI code runs to decide it.
 
-The scalars select `atomic`; the JNI choice for an `i64` is a `jlong`
+The scalars take the `i64` rule: a `Terminal` over a `jlong`
 [carrier](../../stages/05-represent.md#describing-target-values-and-operations),
 one JNI scalar type, which needs no parts.
 
 ## Checks
 
-- The answer is one of the offered ids; the adapter chooses, it does not
-  invent.
-- The `DataClass` choice commits the adapter to a property read per part in the
-  next stage, and property reads are JNI calls that can fail — a consequence
-  chosen here and paid for [there][fn_represent_jni].
+- The relation is resolved by the registry from the rule.
+- The `JObject` carrier holds only `Long` members — what a getter returning a
+  `long` reads — and both fields resolve to one. The rule's `read` is a getter,
+  a JVM call that can fail — a consequence stated here and paid for
+  [there][fn_represent_jni].
 - The selection for `Stamp` is the same one [the struct's JNI page][struct_select_jni]
   shows; this function's parameter reuses it.
 

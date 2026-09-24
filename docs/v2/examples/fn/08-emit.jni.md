@@ -8,12 +8,14 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 ## Input
 
 ```text
-FunctionPlan(exported stamp_sum) frozen, with
-    boundary: extern "system", symbol "Java_example_JNINative_stampSum",
-              (JNIEnv, receiver JObject, JObject) -> jlong,
-              Runtime -> report_jni_error then return 0, reporting failure -> abort
-    node(input):  object carrier, property getters "getSecs" / "getNanos"
-    node(output): Scalar(jlong), identity
+FunctionPlan(fn:stamp_sum) frozen, with
+    abi, symbol:  extern "system", "Java_example_JNINative_stampSum"
+    params:       [ mut env: JNIEnv, _this: JObject, stamp: JObject ],  ret: jlong
+    routes:       Runtime -> ReportError then return 0, reporting failure -> abort
+    node(input):  Product over the example.Stamp object, Getter per part
+    node(output): Terminal over jlong, Identity
+Retained(fn:stamp_sum), with its metadata: Function example.stampSum,
+    native JNINative.stampSum
 ```
 
 ## Result
@@ -36,7 +38,8 @@ internal object JNINative {
 ```
 
 The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) the JVM binds that method to (`kotlin.rs`), after the
-reporting helper the adapter contributes once per file:
+reporting helper the JNI writer returns with the `ReportError` text, written
+once per file:
 
 ```rust
 pub fn report_jni_error(

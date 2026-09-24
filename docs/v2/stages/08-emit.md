@@ -32,8 +32,8 @@ renders them: the locals, their order, the branches on failure, the construction
 of the source value, the call, the return. It also allocates the [wrapper](06-boundary.md#assemble-the-wrapper-boundary)'s temporaries — `v0`, `v1`, … — from the plan, so
 two operations rendered into the same wrapper cannot collide over a name. The
 wrapper's *parameters* are the exception, and deliberately so: they are named in
-the boundary description, because a target that requires an environment operand
-has to be able to say what that operand is called in the signature it dictated.
+the function form, because a convention that requires an environment operand
+has to be able to say what that operand is called in the signature it states.
 
 It also states the wrapper's own condition. Some
 [source items](01-source.md#capture-source-items) arrive still carrying a
@@ -126,9 +126,11 @@ the source call. Central allocation gives each temporary a distinct name.
 
 The call to `report_jni_error` needs a helper definition elsewhere in the module.
 That definition is a generated [artifact](05-represent.md#individual-target-operations).
-The JNI adapter supplies the helper; the
-[primitive](05-represent.md#represent-and-compose-values) that calls it declares the
-dependency. The common writer emits the call in the planned error branch.
+The JNI writer returns it beside the text of the reporting
+[primitive](05-represent.md#represent-and-compose-values) that calls it, and the
+common writer emits it once, before the wrappers, and the call in the planned
+error branch. A binding whose operations never report a runtime failure never
+writes the call, and so never emits the helper.
 
 The C wrapper for the same function is the same shape with the branches gone,
 because its member reads cannot fail:
@@ -166,10 +168,12 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 ```
 
 Everything the registry retained is emitted into that file: the wrappers, the
-type declarations the target needed, and any generated helper an operation
-depended on. Current generation collects and deduplicates the supporting Rust
-items, then emits them before wrappers; it has no general artifact-dependency
-sort. Ahead of all of them go the model's guards — the
+declarations the retained types'
+[carriers](05-represent.md#describing-target-values-and-operations) need, and
+any generated helper an
+operation's text needed. The declarations come first, in the order the types
+were declared, then the helpers, each once, then the wrappers; there is no
+general dependency sort. Ahead of all of them go the model's guards — the
 [feature assertions](01-source.md#capture-source-items) the capture reader
 injected, which belong to no declaration and are emitted whatever this run
 retained. The C build then runs `cbindgen` over the crate to
@@ -202,49 +206,49 @@ the order of operations, the branches on failure, the source construction, the
 source call, and the return. Local names are allocated centrally from plan
 identities, so no target invents a variable name and no two operations collide.
 
-A target contributes fragments and declarations, never control flow. The C
-adapter contributes `repr(C)`, the extern calling convention, the exported symbol
-and member identities; its member reads render through a common Rust operation,
-so C ships no field-read renderer of its own. The JNI adapter contributes the JNI
-symbol and calling convention, the environment and receiver parameters, the [carrier](05-represent.md#describing-target-values-and-operations)
-types, the getter descriptors and the error [convention](03-requests.md#what-a-choice-records) — and a renderer for the JNI
-operations, which produces one expression per operation and nothing around it.
+A target contributes fragments and declarations, never control flow, and
+decides nothing while it writes. The C frontend states the extern calling
+convention, the exported symbols and the carriers; its member
+reads are standard operations the registry writes, so what the C target writes
+is only its carriers' declarations — the `repr(C)` struct, the incomplete type
+behind a handle, the enum mirror. The JNI frontend states the JNI symbols and
+calling convention, the environment and receiver parameters, the carriers and
+the error [convention](03-requests.md#what-a-choice-records); the JNI target
+writes the JNI operations, one expression per operation and nothing around it.
 
-The public declarations follow the same division: the JNI adapter renders them
-from retained descriptions derived from the same source fields and naming
-configuration as its JNI operations. C declarations are expressed as
-generated Rust and left to `cbindgen`.
+The public declarations follow the same division: the JNI frontend's Kotlin
+writer renders them from the retained outputs, their metadata and the carriers
+their values resolved to. C declarations are expressed as generated Rust and
+left to `cbindgen`.
 
 ## From description to generated code
 
-The operation payload is only one field of `PrimitiveSpec`. The other fields
-let the registry validate where and how that operation can be used. These
-concrete contributions stay separate throughout planning and writing:
+These concrete contributions stay separate throughout planning and writing:
 
 | Contribution | C aggregate | Kotlin/JNI object | Component responsible |
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
 | Requested public API | Explicit C type name `Stamp`; default function name `stamp_sum` | `example.Stamp`, `example.stampSum` | Language frontend records user choices. |
-| Target [representation](05-represent.md#represent-and-compose-values) | `repr(C)` struct with members | JVM object, getters and JNI integer carriers | Target adapter describes it from its own storage and the direct child descriptors. |
-| `PrimitiveSpec.implementation` | Common `StandardOp::ReadMember` plus member identity | `JniPayload::Getter` plus getter name and descriptor | Adapter selects operation; registry retains it. |
-| One primitive's rendered operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust operation renderer for C; JNI operation renderer for the getter. |
+| Target [representation](05-represent.md#represent-and-compose-values) | A `Product` over a `repr(C)` `Stamp` carrier | A `Product` over a `JObject` carrier, read by getters | Language frontend states it in the binding. |
+| The read of one part | `StandardOp::ReadMember` | `JniOp::Getter` | Language frontend states it; registry applies it once per part. |
+| One primitive's written operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust writer for C's standard read; the JNI target's writer for the getter, fed the part and its carrier. |
 | A handle's operations | `Box::into_raw(Box::new(v3)) as *mut Ledger`; `NonNull::new(ledger as *mut source::Ledger)…` | The same, cast to and from `jlong` | Common Rust operation renderer: these spell a source type, which only the registry may. |
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
 | Source construction and call | `source::Stamp { ... }`, then `stamp_sum` | Same source instructions | Registry plans; common Rust writer renders. |
 | Error-reporting operation | Not needed by these field reads | Runtime helper using `exception_check` and `throw_new` | JNI supplies operation; registry places it and handles its failure. |
 | Public foreign source | Header derived from Rust | Kotlin classes and `external` declarations | `cbindgen` for C; JNI's Kotlin writer for Kotlin. |
 
-For the input struct, the registry asks the selected [relation](04-select.md#what-a-relation-is) for its fields,
-resolves the child [conversions](04-select.md#select-conversion-relations), and asks the target for a representation using
-those child descriptions. The target returns the member/getter mappings and
-primitive specifications. The registry registers their definitions, creates
-applications with concrete operand identities, composes the wrapper and freezes
-the result. Writers then render that result without discovering new conversions.
+For the input struct, the registry reads the fields of the
+[relation](04-select.md#what-a-relation-is) the rule named, resolves the child
+[conversions](04-select.md#select-conversion-relations), and applies the
+representation's `read` once per part. It registers each application with what
+its writer will be fed, composes the wrapper and freezes the result. Writers
+then render that result without discovering new conversions.
 
 Adding a third supported field makes the registry visit another source child
-and apply the same composition algorithm. The target describes one more member
-or getter through its existing local representation interface. The target does
-not need another handwritten struct converter or wrapper-assembly algorithm.
+and apply the same composition algorithm. The binding states nothing new, and
+the target writes one more member or getter from what it is fed. Neither needs
+another handwritten struct converter or wrapper-assembly algorithm.
 
 The rendered output of each contribution above appears in the element paths: the
 [C wrapper and header][fn_emit_c], the [Kotlin object and JNI wrapper][fn_emit_jni],

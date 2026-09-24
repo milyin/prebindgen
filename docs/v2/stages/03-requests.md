@@ -316,56 +316,59 @@ is only [the writers](04-select.md#what-the-target-writes).
 pub struct Binding<T: Target> { /* private */ }
 
 impl<T: Target> Binding<T> {
-    /// A carrier generated Rust may use.
-    pub fn carrier(&mut self, carrier: WireType<T>) -> CarrierId;
+    /// A carrier generated Rust may use. Declaring an equal carrier again
+    /// returns the same id.
+    pub fn carrier(&mut self, carrier: CarrierOf<T>) -> CarrierId;
     /// One way a type crosses. Declaring an equal representation again
     /// returns the same id.
-    pub fn representation(&mut self, representation: Representation<T>) -> ReprId;
+    pub fn representation(&mut self, representation: RepresentationOf<T>) -> ReprId;
     /// The values `scope` covers cross as `representation`.
     pub fn rule(&mut self, scope: Scope, representation: ReprId);
-    /// How a Rust container of elements of one wire class is packed —
-    /// see [containers](../extensions.md#containers).
-    pub fn container(&mut self, container: Container<T>);
     /// Expose `declaration` in this form. The id is how a rule addresses a
     /// value inside the output.
-    pub fn output(&mut self, declaration: Declaration, form: OutputForm<T>) -> OutputId;
+    pub fn output(&mut self, declaration: Declaration, form: OutputFormOf<T>) -> OutputId;
 }
 
-pub struct WireType<T: Target> {
-    pub rust: syn::Type,      // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'local>`
-    pub class: T::WireClass,  // Which of the adapter's few wire types it is.
-    pub base: String,         // Its naming base: `stamp`, `i64`.
-    pub members: Option<Accepts<T>>, // For an aggregate, the classes its members may be:
-                                     // see [acceptance](../extensions.md#acceptance).
-    pub meta: T::CarrierMeta, // What the target's writers need to know of it.
+pub struct WireType<C, M> {         // `CarrierOf<T>` is `WireType<T::WireClass, T::CarrierMeta>`.
+    pub rust: syn::Type,            // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'_>`
+    pub class: C,                   // Which of the adapter's few wire types it is.
+    pub members: Option<Accepts<C>>, // For an aggregate, the classes its members may be.
+    pub meta: M,                    // What the target's writers need to know of it.
 }
 
-pub enum OutputForm<T: Target> {
+pub enum OutputForm<Op, C, O> {    // `OutputFormOf<T>` fills in the target's own types.
     /// One representation of a type, exposed: its carriers' Rust
     /// declarations, and its foreign declaration. It is also the rule at
     /// this output's root.
-    Type { representation: ReprId, meta: T::OutputMeta },
+    Type {
+        representation: ReprId,
+        release: Option<FunctionForm<Op, C>>, // The wrapper releasing a handed-out value.
+        meta: O,
+    },
     /// A function, exported through a wrapper of this form.
-    Function { form: FunctionForm<T>, meta: T::OutputMeta },
+    Function { form: FunctionForm<Op, C>, meta: O },
     /// A declarator the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
 
-pub struct FunctionForm<T: Target> {
-    pub abi: String,                  // "C", "system"
-    pub symbol: String,               // stamp_sum, Java_example_JNINative_stampSum
-    pub context: Vec<ContextParam>,   // Parameters no source parameter feeds: `env: JNIEnv`.
-    pub routes: Vec<FailureRoute<T>>, // Per failure category: how it is reported, how the call ends.
+pub struct FunctionForm<Op, C> {
+    pub abi: String,                   // "C", "system"
+    pub symbol: String,                // stamp_sum, Java_example_JNINative_stampSum
+    pub context: Vec<ContextParam>,    // Parameters no source parameter feeds: `env: JNIEnv`.
+    pub inputs: Vec<syn::Ident>,       // The names of the parameters that carry the inputs.
+    pub routes: Vec<FailureRoute<Op>>, // Per failure category: how it is reported, how the call ends.
     pub attrs: Vec<syn::Attribute>,
     pub unsafety: bool,
-    pub flatten: Vec<Step>,           // Parameters, or the return, split into their members:
-                                      // see [multi-value layouts](../extensions.md#multi-value-layouts).
-    pub members_out: MembersOut<T>,   // How a split return reaches the caller: C's out-parameters,
-                                      // or JNI's caller-supplied callback.
-    pub params: Accepts<T>,           // The classes a wrapper parameter may be,
-    pub ret: Accepts<T>,              // and the wrapper's return.
+    pub params: Accepts<C>,            // The classes a wrapper parameter may be,
+    pub ret: Accepts<C>,               // and the wrapper's return.
 }
 ```
+
+`Accepts` lists the wire classes a holder may hold: an aggregate's members, a
+wrapper's parameters, its return. The registry checks each placement once the
+plan has worked out what is placed there, and refuses the value it would put
+anywhere else. The [extensions page](../extensions.md#acceptance) gives the
+rule in full, with the limits other targets would state in it.
 
 A representation is one way a type crosses. A type may have several — `Stamp`
 as a C struct and as a handle — and each is declared once and referred to by
@@ -373,102 +376,111 @@ its `ReprId`, from rules and from outputs alike. It is the answer a target
 used to give when asked, stated in advance instead:
 
 ```rust
-pub enum Representation<T: Target> {
-    /// The whole value, one operation each way: a scalar, an opaque handle.
+pub enum Representation<Op> {
+    /// The whole value, one operation each way: a scalar, a handle, a
+    /// fieldless enum. Each direction has a carrier of its own: a C enum
+    /// arrives as `MaybeUninit` of itself.
     Terminal {
-        carrier: CarrierId,
-        into_rust: Option<Operation<T::Op>>,  // None: never crosses into Rust.
-        out_of_rust: Option<Operation<T::Op>>,
-        release: Option<Operation<T::Op>>,    // How the foreign side gives a held value back.
+        into_rust: Option<Codec<Op>>,   // None: never crosses into Rust.
+        out_of_rust: Option<Codec<Op>>,
+        release: Option<Operation<Op>>, // How the foreign side gives a held value back.
     },
-    /// The parts of a relation, carried together in one carrier.
+    /// The parts of a relation, carried together in one carrier, into Rust.
     Product {
-        via: Via,                          // Which relation: Fields.
-        carrier: CarrierId,                // The aggregate or object holding the parts.
-        read: Operation<T::Op>,            // One part out of the carrier, applied per part.
-        build: Option<Operation<T::Op>>,   // The carrier from its parts, out of Rust.
+        via: Via,              // Which relation: Fields.
+        carrier: CarrierId,    // The aggregate or object holding the parts.
+        read: Operation<Op>,   // One part out of the carrier, applied per part.
     },
-    /// One of several representations of this same type, and a tag saying
-    /// which: see [choices](../extensions.md#choices).
-    Choice { tag: CarrierId, arms: Vec<ReprId>, carrier: CarrierId },
     /// A representation the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
 
+pub struct Codec<Op> {
+    pub carrier: CarrierId,
+    pub operation: Operation<Op>,
+}
+
 pub struct Operation<Op> {
     pub implementation: Implementation<Op>, // Standard(StandardOp) or Target(Op)
-    pub context: Vec<String>,               // Runtime contexts it needs, by name: "env".
+    pub context: Vec<String>,               // Runtime contexts it needs, by name: "jni.env".
     pub failure: Option<Failure>,           // Its failure category and error type, if it can fail.
 }
 ```
 
 An operation states no operand or result types. Its place in the
-representation fixes them: a `Terminal`'s `into_rust` takes the carrier and
-produces the source type, a `Product`'s `read` takes the carrier and produces
-the part's carrier, whatever carrier that part resolves to. The registry works
-them out when it plans the value and feeds them to the writer.
+representation fixes them: a `Terminal`'s `into_rust` codec takes its carrier
+and produces the source type, a `Product`'s `read` takes the carrier and
+produces the part's carrier, whatever carrier that part resolves to. The
+registry works them out when it plans the value and feeds them to the writer.
+A standard operation — a member read, a handle taken back or released, a
+fieldless enum matched value by value — is one the registry writes itself,
+because writing it means naming a source type.
 
-For the C `Stamp`, with the frontend's own `CName` as the carrier metadata:
+For the C `Stamp`, with the frontend's own `CCarrier` as the carrier metadata:
 
 ```rust
 let i64_c = binding.carrier(WireType {
-    rust: parse_quote!(i64), class: CClass::I64, base: "i64".into(), members: None, meta: CName::builtin(),
+    rust: parse_quote!(i64), class: CClass::I64, members: None, meta: CCarrier::Builtin,
 });
+let unchanged = Codec { carrier: i64_c, operation: Operation::standard(StandardOp::Identity) };
 let i64_whole = binding.representation(Representation::Terminal {
-    carrier: i64_c,
-    into_rust: Some(Operation::standard(StandardOp::Identity)),
-    out_of_rust: Some(Operation::standard(StandardOp::Identity)),
+    into_rust: Some(unchanged.clone()),
+    out_of_rust: Some(unchanged),
     release: None,
 });
 binding.rule(Scope::Type(key!(i64)), i64_whole);
 
 let stamp_c = binding.carrier(WireType {
-    rust: parse_quote!(Stamp), class: CClass::Aggregate, base: "Stamp".into(),
-    members: Some(C_MEMBERS.clone()), // Scalars, pointers and enums; not yet another aggregate.
-    meta: CName::from("Stamp"),
+    rust: parse_quote!(Stamp),
+    class: CClass::Aggregate,
+    members: Some(Accepts::of([CClass::I64])), // Not yet another aggregate, a handle or an enum.
+    meta: CCarrier::Aggregate { c_name: "Stamp".into() },
 });
 let stamp_struct = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_c,
     read: Operation::standard(StandardOp::ReadMember),
-    build: Some(Operation::standard(StandardOp::BuildAggregate)),
 });
 binding.rule(Scope::Type(key!(Stamp)), stamp_struct);   // every Stamp value
 binding.output(Declaration::Type(key!(Stamp)),          // and the struct, exposed
-               OutputForm::Type { representation: stamp_struct, meta: () });
+               OutputForm::Type { representation: stamp_struct, release: None, meta: () });
 ```
 
 and for the JNI one, with `Jvm { descriptor, kotlin }` as the metadata:
 
 ```rust
 let jlong = binding.carrier(WireType {
-    rust: parse_quote!(jni::sys::jlong), class: JniClass::Long, base: "long".into(), members: None,
-    meta: Jvm { descriptor: "J".into(), kotlin: "Long".into() },
+    rust: parse_quote!(jni::sys::jlong), class: JniClass::Long, members: None,
+    meta: Jvm { descriptor: "J".into(), kotlin: KotlinType::Value("Long".into()) },
 });
 // i64: a Terminal over `jlong`, as C's is over `i64`.
 let stamp_obj = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'local>), class: JniClass::Object, base: "stamp".into(), members: None,
-    meta: Jvm { descriptor: "Lexample/Stamp;".into(), kotlin: "example.Stamp".into() },
+    rust: parse_quote!(jni::objects::JObject<'_>),
+    class: JniClass::Object,
+    members: Some(Accepts::of([JniClass::Long])), // What a getter returning a `long` reads.
+    meta: Jvm {
+        descriptor: "Lexample/Stamp;".into(),
+        kotlin: KotlinType::Value("example.Stamp".into()),
+    },
 });
 let stamp_class = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_obj,
-    read: Operation::target(JniOp::Getter).context("env").fails(FailureCategory::Runtime),
-    build: Some(Operation::target(JniOp::NewObject).context("env").fails(FailureCategory::Runtime)),
+    read: Operation::target(JniOp::Getter)
+        .context("jni.env")
+        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
 });
 binding.rule(Scope::Type(key!(Stamp)), stamp_class);
 ```
 
-The C declarations use only standard operations, which the registry writes
-itself, so C's `Target::Op` has no values at all. A scalar kind is one `Type`
-rule, and the adapter crate ships the table of them — `i64`, `bool`, `u8` and
-the rest — which a frontend records before the binding's own declarations.
-There is no default for a type no rule covers: a representation names a
-carrier, and one carrier cannot fit every type. A generic instance such as
-`Vec<Stamp>` needs no rule of its own: its element resolves first, and the
-adapter's [containers](../extensions.md#containers) say how elements of that
-wire type are packed. A value that neither a rule nor a container covers is
-refused as `unsupported.conversion.no_rule`, naming the type.
+The C declarations use only standard operations, so C's `Target::Op` has no
+values at all. A scalar kind is one `Type` rule: each frontend records the
+scalars its target carries — `i64`, for both so far — before the binding's
+own declarations. There is no default for a type no rule covers: a
+representation names a carrier, and one carrier cannot fit every type. A
+value no rule covers is refused as `unsupported.conversion.no_rule`, naming
+the type. How a generic instance such as `Vec<Stamp>` would cross without a
+rule of its own is [designed](../extensions.md#containers), and not built.
 
 ### Conversion rules
 
@@ -509,9 +521,8 @@ parameter makes the rule fail validation instead of silently applying
 nowhere.
 
 When the registry plans a value it uses the rule at the value's own position
-if there is one, and the rule for its type otherwise, whole; a container
-instance with neither takes its [container](../extensions.md#containers).
-That is the only precedence. Nothing is merged between the two: a rule at a position replaces
+if there is one, and the rule for its type otherwise, whole. That is the only
+precedence. Nothing is merged between the two: a rule at a position replaces
 the type's rule for that value, and says nothing about the value's children,
 which are looked up again at their own positions.
 
@@ -529,9 +540,10 @@ The registry checks the binding against the model before it plans anything,
 and fails the build with invalid input when:
 
 - two rules have the same scope, which is the binding saying two things about
-  one value;
-- a rule or an output names a representation the binding did not declare,
-  or a representation names a carrier it did not declare;
+  one value — a rule at a type output's own root among them, since the
+  output's representation already is that rule;
+- a function form names a symbol that is not a Rust identifier, or restates
+  the linkage the writer owns with `#[no_mangle]` or `#[export_name]`;
 - a rule at `At(output, path)` names a position the output does not have: a
   parameter the function does not take, a `return` on a function returning
   nothing, a field of a value whose representation is not read through
@@ -550,8 +562,8 @@ resolve to, so the registry checks that during planning instead, and a
 failure there is a refusal, not invalid input: see
 [acceptance](../extensions.md#acceptance).
 
-A `Type` rule no planned value used is not an error: the adapter's scalar
-table covers kinds a binding may never mention, and a binding may declare a
+A `Type` rule no planned value used is not an error: a frontend's scalar
+rules cover kinds a binding may never mention, and a binding may declare a
 type no function uses. Such rules are listed in `Generation::unused_rules`,
 which a build script may print.
 
@@ -559,14 +571,14 @@ The binding is also printable, one line per carrier, representation, rule
 and output, with metadata in its `Debug` form:
 
 ```text
-carrier  c0  i64    I64        CName(builtin)
-carrier  c1  Stamp  Aggregate  CName("Stamp")
-repr     r0  terminal c0          identity / identity
-repr     r1  product  c1  fields  read: ReadMember  build: BuildAggregate
-rule     type i64                 r0
-rule     type Stamp               r1
-output   type:Stamp               type r1
-output   fn:stamp_sum             function "C" stamp_sum
+carrier  c0  i64  I64  Builtin
+carrier  c1  Stamp  Aggregate  Aggregate { c_name: "Stamp" }
+repr     r0  terminal  in: c0 Standard(Identity)  out: c0 Standard(Identity)
+repr     r1  product  c1  Fields  read: Standard(ReadMember)
+rule     type i64  r0
+rule     type Stamp  r1
+output   type:Stamp  type r1  ()
+output   fn:stamp_sum  function "C" stamp_sum  ()
 ```
 
 That text is the whole of what planning reads, which makes it the thing to
@@ -613,14 +625,17 @@ release — and for each function an output with its
 function form. The JNI frontend does the same with its declarations. A check
 that needs the source model runs here too: a C enum numbering a value
 outside `i32` is recorded as `Representation::Unsupported`, with the reason,
-rather than refused later. `CTarget` holds nothing; the JNI target holds the
-settings that shape how it writes, such as the package prefix.
+rather than refused later. Neither target holds anything: every choice it
+writes from arrives with what it is asked to write. What JNI knows of the whole
+binding — the package prefix, the harness object's name — is its Kotlin
+writer's, which reads the finished generation.
 
 A declarator the target has no lowering for — a tagged union, a callback
-signature — still becomes an output, recorded as `OutputForm::Unsupported`,
-and a type's rule names a `Representation::Unsupported`. It is refused by the declarator's name before
-anything under it is planned, and the skip carries the capability it waits
-for.
+signature — still becomes an output. A type's is exposed as, and ruled by, a
+`Representation::Unsupported`, so a value of it is refused too; anything
+else's is recorded as `OutputForm::Unsupported`. It is refused by the
+declarator's name before anything under it is planned, and the skip carries
+the capability it waits for.
 
 The frontend and registry can both inspect
 [source items](01-source.md#capture-source-items) through `prebindgen-flat`

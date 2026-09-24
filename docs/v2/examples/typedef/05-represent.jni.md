@@ -1,29 +1,34 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "05-represent", "language": "jni"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Common cell][typedef_represent] · [Element path][typedef]
-Owner: the registry; the JNI adapter states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+Owner: the registry; the JNI frontend states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
 
 # Type alias declaring an opaque handle — Represent and compose values — Kotlin/JNI
 
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    relation: atomic   conversion: ptr_class example.Ledger
-Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   conversion: ptr_class example.Ledger
+Crossing { source: Ledger, direction: IntoRust }    relation: atomic   the Type(Ledger) rule
+Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   the Type(Ledger) rule
 ```
 
 ## Result
 
-The carrier is `jni::sys::jlong`, and the descriptions are the same three the
-C adapter gives, over it:
+The carrier is `jni::sys::jlong`, and the operations are the same three the
+C frontend states, over it:
 
-```text
-node(Ledger, IntoRust)   ReprSpec { layout: Scalar(jlong),
-                                    protocol: Terminal(from_raw(jlong -> Ledger)),
-                                    release: Some(release(jlong)) }
-node(Ledger, OutOfRust)  ReprSpec { layout: Scalar(jlong),
-                                    protocol: Terminal(into_raw(Ledger -> jlong)),
-                                    release: None }
+```rust
+let address = binding.carrier(WireType {
+    rust: parse_quote!(jni::sys::jlong),
+    class: JniClass::Handle,                // not `Long`: an address, not a number
+    members: None,
+    meta: Jvm { descriptor: "J".into(), kotlin: KotlinType::Handle("example.Ledger".into()) },
+});
+Representation::Terminal {
+    into_rust: Some(Codec { carrier: address, operation: Operation::standard(StandardOp::FromRaw) }),
+    out_of_rust: Some(Codec { carrier: address, operation: Operation::standard(StandardOp::IntoRaw) }),
+    release: Some(Operation::standard(StandardOp::Release)),
+}
 ```
 
 Applied to the
@@ -56,8 +61,9 @@ runtime failure. The one failure is the binding one, and
 ## Checks
 
 - A `jlong` is not a `JObject`: a handle is a declared class carried as a
-  scalar, and [the Kotlin declaration][typedef_emit_jni] is read off the
-  [choice](../../stages/03-requests.md#what-a-choice-records) — `ptr_class` rather than `data_class` — not off the source type.
+  scalar, and [the Kotlin declaration][typedef_emit_jni] is read off the output's
+  metadata and the carrier's — a handle class rather than a data class — not
+  off the source type.
 - A zero `Long` from Kotlin is the null address, and the message it produces
   names the type, so the exception says which handle was closed or never
   opened.

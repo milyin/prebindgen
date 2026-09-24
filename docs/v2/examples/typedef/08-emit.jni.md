@@ -8,13 +8,12 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 ## Input
 
 ```text
-SurfaceSpec(public Ledger) frozen, with
-    payload: ptr_class example.Ledger,
-             release JNINative.freeLedger(ptr: Long)
+Retained(type:Ledger), read by the Kotlin writer, with
+    metadata: PtrClass example.Ledger, native JNINative.freeLedger
 FunctionPlan(release of Ledger) frozen, with
-    boundary: extern "system", symbol "Java_example_JNINative_freeLedger",
-              (JNIEnv, receiver JObject, jlong) -> nothing
-    body:     Release(ptr)
+    abi, symbol: extern "system", "Java_example_JNINative_freeLedger"
+    params:      [ _env: JNIEnv, _this: JObject, ptr: jlong ], no return
+    instrs:      Release(ptr)
 ```
 
 ## Result

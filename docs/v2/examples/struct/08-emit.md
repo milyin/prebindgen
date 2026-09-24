@@ -7,12 +7,12 @@ Owner: the common Rust writer, then `cbindgen` or the Kotlin writer · Previous:
 
 ## Input
 
-The frozen public declaration for this struct:
+The retained output for this struct:
 
 ```text
-SurfaceSpec { declaration: "type:Stamp",
-              rust: <C aggregate artifact, or empty for JNI>,
-              payload: <None for C, class metadata for JNI> }
+Retained { output: type:Stamp, output_value: node(Stamp, IntoRust) }
+  carrier:  the one node(Stamp, IntoRust) resolved to, with its members
+  metadata: <none for C, the data class for JNI>
 ```
 
 ## Result

@@ -8,14 +8,16 @@ Owner: the common Rust writer, then `cbindgen`
 ## Input
 
 ```text
-SurfaceSpec(public Stamp) frozen, with
-    rust: [the repr(C) Stamp declaration, with secs: i64 and nanos: i64]
-    payload: None
+Retained(type:Stamp), whose root node's carrier is fed to the C writer:
+    CarrierFeed { carrier: Stamp (Aggregate, c_name "Stamp"),
+                  members: [ secs: i64, nanos: i64 ] }
 ```
 
 ## Result
 
-In the generated C Rust module (`c.rs`):
+What the C writer returns for that
+[carrier](../../stages/05-represent.md#describing-target-values-and-operations), in the generated C Rust module
+(`c.rs`):
 
 ```rust
 #[repr(C)]

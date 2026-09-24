@@ -11,13 +11,15 @@ Planning has already produced the input and result
 [conversions](../../stages/04-select.md#select-conversion-relations) and a
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) plan. A
 missing conversion would have skipped the function before this point. Retention
-now checks the public declaration that the function's signature requires:
+now checks the public declaration that the function's signature requires. The
+registry derives that requirement from the values it planned — the parameter
+`stamp` is a `Stamp`, and one output declares `Stamp` — rather than reading it
+from the binding:
 
 ```text
-candidate: FunctionPlan(exported stamp_sum)
-candidate: SurfaceSpec(exported stamp_sum)
+candidate: output fn:stamp_sum, with its FunctionPlan
 
-SurfaceSpec.requires: [ DeclarationId("type:Stamp") ]
+requires:  output type:Stamp      // the value at `param stamp` is a Stamp
 ```
 
 ## Result

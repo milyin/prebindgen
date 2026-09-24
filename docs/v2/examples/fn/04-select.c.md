@@ -1,58 +1,52 @@
 <!-- spec: {"kind": "variant", "example": "fn", "stage": "04-select", "language": "c"} -->
 
 [Stage chapter](../../stages/04-select.md) · [Common cell][fn_select] · [Element path][fn]
-Owner: the registry, on the C adapter's selections
+Owner: the registry, from the rules the C frontend recorded
 
 # Function taking an owned struct — Select conversion relations — C
 
 ## Input
 
-The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan) and the [relations](../../stages/04-select.md#what-a-relation-is) the registry offers, beside the C [choice](../../stages/03-requests.md#what-a-choice-records) the `CTarget` holds for each — which
-the registry does not pass in and cannot read:
+The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), and the rules the C frontend recorded for their types:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   offered: [ Stamp.fields, atomic ]
-                                                    CTarget: data_struct named Stamp, by value
-Crossing { source: i64,   direction: OutOfRust }   offered: [ atomic ]
-                                                    CTarget: scalar carrier
+Crossing { source: Stamp, direction: IntoRust  }   Type(Stamp) -> Product through Fields, carrier `Stamp`
+Crossing { source: i64,   direction: OutOfRust }   Type(i64)   -> Terminal over `i64`, identity both ways
 ```
 
 ## Result
 
 ```text
-Param(0)  Stamp, IntoRust   -> Stamp.fields, conversion CChoice::DataStruct { c_name: "Stamp" }
-  secs    i64,   IntoRust   -> atomic,       conversion CChoice::Scalar
-  nanos   i64,   IntoRust   -> atomic,       conversion CChoice::Scalar
-Return    i64,   OutOfRust  -> atomic,       conversion CChoice::Scalar
+param stamp   Stamp, IntoRust   -> Stamp.fields, carried in `Stamp`
+  field secs  i64,   IntoRust   -> atomic,       carried in `i64`
+  field nanos i64,   IntoRust   -> atomic,       carried in `i64`
+return        i64,   OutOfRust  -> atomic,       carried in `i64`
 ```
 
-The C adapter selects `Stamp.fields` because the struct is declared as a
-`data_struct`: a C struct passed by value is made of its members, so the
+`Stamp` is read through its fields because the build script declared it with
+`data_type!`, which the C frontend records as a `Product` through `Fields`: a C
+struct passed by value is made of its members, so the
 [conversion](../../stages/04-select.md#select-conversion-relations) has to be
-made of the field conversions. Had the build script declared `Stamp` as an
-opaque pointer type instead, the same query would answer `atomic` — the whole
-value carried behind a pointer, its fields never read — and the registry would
-descend no further. The adapter answers from the choice it looked up for this
-position; it has not seen the fields and does not need to.
+made of the field conversions. Had it declared `Stamp` with `ptr_type!`, the
+rule would name a `Terminal` over a pointer, and the registry would plan the
+whole value behind a pointer, its fields never read. No C code runs to decide
+either: the [relation](../../stages/04-select.md#what-a-relation-is) is the
+rule's.
 
-The two `i64` positions are answered the same way, `atomic`, and the return
-position likewise: a scalar has one relation and the C choice for it is a
-scalar [carrier](../../stages/05-represent.md#describing-target-values-and-operations).
-
-`CChoice` is both what the C frontend recorded and this target's
-[conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan):
-it is plain data, so the three scalar answers above are equal, and the registry
-plans one `i64` conversion per direction rather than one per position.
+The three `i64` positions take the one rule the C frontend records for every
+`i64`: a `Terminal` over the `i64`
+[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
+which crosses unchanged. One [representation](../../stages/05-represent.md#represent-and-compose-values), so the registry plans one `i64`
+conversion per direction rather than one per position.
 
 ## Checks
 
-- The answer is one of the offered ids. `Stamp.fields` is the struct relation
-  the registry registered from Flat's field list; the adapter did not construct
-  it.
-- The `data_struct` choice commits the adapter to a member per part in the next
-  stage. A choice V2 cannot lower yet — one of the C declarators it does not
-  implement — is answered as unsupported here, and the function is
-  [skipped with that cause][fn_retain] rather than planned around.
+- The relation is resolved by the registry from the rule; `Stamp.fields` is
+  the struct relation it worked out from Flat's field list.
+- The `Stamp` carrier holds only `I64` members, and both fields resolve to one,
+  so the aggregate accepts them. A field of a type no rule covers, or one
+  carried as anything else, is refused where the member is, and the function
+  is [skipped with that cause][fn_retain] rather than planned around.
 - The selection for `Stamp` is the same one [the struct's C page][struct_select_c]
   shows; this function does not choose differently for its own parameter.
 

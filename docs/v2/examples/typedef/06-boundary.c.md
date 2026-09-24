@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "06-boundary", "language": "c"} -->
 
 [Stage chapter](../../stages/06-boundary.md) · [Common cell][typedef_boundary] · [Element path][typedef]
-Owner: the registry, on the C adapter's `BoundarySpec`
+Owner: the registry, on the C frontend's release form
 
 # Type alias declaring an opaque handle — Assemble the wrapper boundary — C
 
@@ -10,34 +10,33 @@ Owner: the registry, on the C adapter's `BoundarySpec`
 ```text
 node(taken) : carrier *mut Ledger, release infallible
 
-CTarget, under `type:Ledger`: release symbol "ledger_drop", extern "C"
-                   Binding -> abort
+the release form the C frontend recorded on `type:Ledger`'s output:
+  symbol "ledger_drop", extern "C", no context parameters, inputs [this_],
+  Binding -> abort
 ```
 
 ## Result
 
 ```text
-BoundarySpec {
-    abi:      extern "C", symbol "ledger_drop",
-    inputs:   [ InputPlacement { wrapper arg this_ (*mut Ledger) -> node(taken) } ],
-    output:   OutputPlacement::Void,
-    failures: { Binding: no report, abort },
+FunctionPlan {
+    abi, symbol: extern "C", "ledger_drop",
+    params:      [ this_: *mut Ledger -> node(taken) ],
+    ret:         none,
+    routes:      [ Binding -> abort ],
 }
 ```
 
-Fixing the signature that [emission][typedef_emit_c] renders:
+This plan fixes the signature that [emission][typedef_emit_c] renders:
 
 ```rust
 #[no_mangle]
 pub extern "C" fn ledger_drop(this_: *mut Ledger)
 ```
 
-The adapter answers a boundary with no source function by looking the type's
-[choice](../../stages/03-requests.md#what-a-choice-records) up under the
-declaration it is given, reading the release symbol out of it, and naming the
-one parameter `this_`, as v1's destructors do. The same choice fixes the
-boundaries of the two functions reaching the handle, which are ordinary
-function boundaries with the binding route added:
+The C frontend names the release from the type, as v1's destructors are
+named, and its one input `this_`, as v1's destructors do. The two functions
+reaching the handle have ordinary function forms, whose one route now has a
+failure to take:
 
 ```rust
 #[no_mangle]
@@ -48,12 +47,10 @@ pub extern "C" fn ledger_close(ledger: *mut Ledger) -> i64
 
 ## Checks
 
-- A function choice at a release boundary, or a handle choice at a function's,
-  is contradictory input and fails the build.
 - The binding route has no reporting operation: C has no exception, and a
   function returning `int64_t` has no slot for a message. It terminates by
   aborting, which is v1's `.panic()` convention. A `Result` out-parameter would
-  be a different `OutputPlacement`, chosen by choice.
+  need a delivery this increment does not implement.
 - `ledger_drop(NULL)` does not take the route: the release is infallible and a
   null address releases nothing. Only a *consuming*
   [conversion](../../stages/04-select.md#select-conversion-relations) —

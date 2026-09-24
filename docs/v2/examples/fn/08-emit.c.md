@@ -8,10 +8,11 @@ Owner: the common Rust writer, then `cbindgen`
 ## Input
 
 ```text
-FunctionPlan(exported stamp_sum) frozen, with
-    boundary: extern "C", symbol "stamp_sum", arg 0 by value, return int64_t
-    node(input):  Aggregate { ty: Stamp, members: [secs, nanos] }, member reads
-    node(output): Scalar(c_i64), identity
+FunctionPlan(fn:stamp_sum) frozen, with
+    abi, symbol:  extern "C", "stamp_sum"
+    params:       [ stamp: Stamp ],  ret: i64
+    node(input):  Product over the Stamp aggregate, ReadMember per part
+    node(output): Terminal over i64, Identity
 ```
 
 ## Result

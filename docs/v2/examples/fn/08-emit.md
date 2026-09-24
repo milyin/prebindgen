@@ -10,15 +10,16 @@ Owner: the common Rust writer, plus each target's writer · Previous: [Retain su
 The frozen plan for this function:
 
 ```text
-FunctionPlan { source: crate::source::stamp_sum,
-               inputs: [ node(input) ], output: Single(node(output)),
-               boundary: <symbol, convention, placements, failure routes>,
-               body: <instructions> }
+FunctionPlan { declaration: fn:stamp_sum,
+               abi, symbol, params, ret, routes: <from the form and the carriers>,
+               instrs: <convert the input, call source::stamp_sum, convert the result>,
+               result: <the converted result> }
 ```
 
-The summary also depends on each
-[node](../../stages/05-represent.md#represent-and-compose-values)'s operations and the
-adapter's retained rendering data, such as getter names. **Frozen** means
+The instructions refer to each
+[node](../../stages/05-represent.md#represent-and-compose-values)'s operations.
+The registry writes a standard operation itself and hands a target operation
+to the target's writer with its operands, such as the part a getter reads. **Frozen** means
 support decisions are finished; emission cannot add another [conversion](../../stages/04-select.md#select-conversion-relations). In
 current V2, the common writer renders Rust before `generate` returns, and
 `Generation` stores that text alongside the descriptions used for Kotlin output.
@@ -31,12 +32,12 @@ each instruction has one owner:
 
 | Instruction | Rendered by | C | Kotlin/JNI |
 | --- | --- | --- | --- |
-| read the first member | common operation for C; adapter expression for JNI | `stamp.secs` | `env.call_method(&stamp, "getSecs", "()J", &[])…` |
+| read the first member | registry for C (`ReadMember`); JNI writer (`Getter`) | `stamp.secs` | `env.call_method(&stamp, "getSecs", "()J", &[])…` |
 | bind it to a local | registry | `let v0 = …;` | `let v0 = match … { … };` |
-| read the second member | common operation for C; adapter expression for JNI | `stamp.nanos` | `env.call_method(&stamp, "getNanos", "()J", &[])…` |
+| read the second member | registry for C (`ReadMember`); JNI writer (`Getter`) | `stamp.nanos` | `env.call_method(&stamp, "getNanos", "()J", &[])…` |
 | construct the struct | registry | `source::Stamp { secs: v0, nanos: v1 }` | same |
 | call the source once | registry | `source::stamp_sum(v2)` | same |
-| deliver the result | common writer, following the boundary plan | `v3` returned | `v3` returned as `jlong` |
+| deliver the result | registry, following the plan's result | `v3` returned | `v3` returned as `jlong` |
 
 Read the table from top to bottom as one call. The input arrives in the target's
 form, two integers are obtained, the source struct is built, and the source

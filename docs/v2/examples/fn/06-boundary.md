@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "06-boundary"} -->
 
 [Stage chapter](../../stages/06-boundary.md) · [Element path][fn] · [Source crate](../../source.md)
-Owner: the registry, on the target's boundary description · Previous: [Represent and compose values][fn_represent] · Next: [Retain supported output][fn_retain]
+Owner: the registry, on the function form the binding stated · Previous: [Represent and compose values][fn_represent] · Next: [Retain supported output][fn_retain]
 
 # Function taking an owned struct — Assemble the wrapper boundary
 
@@ -19,20 +19,21 @@ source: pub fn stamp_sum(stamp: Stamp) -> i64
 ## Result
 
 The registry now combines those reusable [conversions](../../stages/04-select.md#select-conversion-relations) with this specific source
-call. The following is a conceptual summary, not the exact Rust fields of
-`FunctionPlan`. The boundary supplies the target's symbol, calling convention
-and destinations; the body records the order in which generated code operates.
+call. The function form the binding recorded for `fn:stamp_sum` supplies the
+symbol, the calling convention, any parameter the convention adds and a route
+per failure category; the plan records the parameters and the order in which
+generated code operates.
 
 ```text
 FunctionPlan {
-    source:   CalleeId(crate::source::stamp_sum),
-    inputs:   [ node(input) ],                    // in source parameter order
-    output:   FunctionOutput::Single(node(output)),
-    boundary: BoundarySpec { … },                 // per target, below
-    body:     convert the input
-              -> call the source function once
-              -> convert the result
-              -> deliver through the configured destination
+    symbol, abi:  from the form                   // per target, below
+    params:       the form's context parameters, then one per source parameter,
+                  each typed as its conversion's carrier
+    ret:          the output conversion's carrier
+    instrs:       convert the input
+                  -> call the source function once
+                  -> convert the result
+    result:       the converted result, returned
 }
 ```
 
@@ -42,11 +43,11 @@ FunctionPlan {
   succeeded.
 - Every failure the input node declares needs a route here; a category with no
   route is an unsupported boundary, not a default.
-- An unsupported destination skips the function. Its ABI is never quietly
-  changed to make it fit.
-- `Single` in this sketch means one ordinary result. A future `Result` example
-  will need separate success/error conversions and delivery; that branching
-  behavior is not implemented in this increment.
+- A value of a wire type the form's parameters or return do not hold skips the
+  function. Its ABI is never quietly changed to make it fit.
+- There is one ordinary result. A future `Result` example will need separate
+  success/error conversions and delivery; that branching behavior is not
+  implemented in this increment.
 
 ## Language variants
 

@@ -231,8 +231,9 @@ See [Represent and compose values](stages/05-represent.md#represent-and-compose-
 
 ### Artifact
 
-A generated Rust unit needed by an operation or public declaration. The JNI
-error-reporting helper and the C-compatible `Stamp` type are examples. Giving
+A generated Rust unit an operation needs beside its own text. The JNI
+error-reporting helper is an example; the C-compatible `Stamp` type is not
+one, since it is a carrier's declaration, written once per carrier. Giving
 each unit a name lets the engine collect dependencies and avoid emitting the
 same helper repeatedly. This is a build-time dependency, not a runtime resource
 that needs cleanup. Some design sketches use the word more broadly for
@@ -265,8 +266,8 @@ instead. See [Retain supported output](stages/07-retain.md#retain-supported-outp
 ### Capability
 
 The category of missing support that prevents a declaration from being emitted.
-The stable code `unsupported.jni.carrier`, for example, identifies a value that
-the JNI target cannot carry yet. The accompanying explanation and path identify
+The stable code `unsupported.conversion.no_rule`, for example, identifies a
+value that no rule of the binding covers. The accompanying explanation and path identify
 the particular type and position. Several skipped declarations can share a
 code, helping a developer see which missing feature would unblock the most
 requests — and, while V2 is being completed, which gap to close next. See [Retain supported output](stages/07-retain.md#retain-supported-output).

@@ -10,31 +10,35 @@ Owner: the registry · Previous: [Represent and compose values][struct_represent
 The candidates this struct produced, and what they require:
 
 ```text
-candidate: SurfaceSpec(public Stamp)
+candidate: output type:Stamp, with node(Stamp, IntoRust) at its root
 
-requires:  node(Stamp, IntoRust)     // the struct conversion
+planned:   node(Stamp, IntoRust)     // the struct conversion
            node(i64, IntoRust)       // one cached child node used by both fields
+requires:  nothing                   // an i64 names no type another output declares
 ```
 
 ## Result
 
 Because both field [conversions](../../stages/04-select.md#select-conversion-relations) succeed, the public struct can be retained.
-The following summarizes that dependency relationship rather than showing the
-actual `SurfaceSpec` fields: current public requirements refer to declaration
-ids, while conversion dependencies are checked during planning.
+Conversion dependencies are checked during planning; retention checks only the
+public declarations the planned values name.
 
 ```text
-SurfaceSpec {
-    declaration: DeclarationId("type:Stamp"),
-    requires: [], // no other public declarations for these scalar fields
-    rust:     [ repr(C) aggregate artifact ] for C, [] for JNI,
-    payload:  None for C, Kotlin class metadata for JNI,
+Retained {
+    output:       type:Stamp,
+    declaration:  public Stamp,
+    output_value: node(Stamp, IntoRust),
 }
 
 outcome(public Stamp) = Emitted
-
-output: type declaration, followed by any generated wrappers
 ```
+
+What the retained output becomes is the target's to write: the
+[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+its root [node](../../stages/05-represent.md#represent-and-compose-values)
+resolved to — the `repr(C)` aggregate for C, a `JObject` for JNI —
+is fed to the target's carrier writer at emission, and the Kotlin writer reads
+the output's metadata, the `example.Stamp` data class.
 
 ## Checks
 
