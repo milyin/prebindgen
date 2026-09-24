@@ -118,6 +118,15 @@ class SpecStructure(unittest.TestCase):
                   "[struct_retain]: 07-retain.md", "")
         self.rejects("contents list")
 
+    def test_sub_variant_contents_are_its_own(self):
+        # `fn_callback_retain` starts with `fn_`, and is still not the
+        # function path's to list: each element's contents are its own pages.
+        self.edit("examples/fn_callback/README.md",
+                  "7. [Retain supported output][fn_callback_retain]\n", "")
+        self.edit("examples/fn_callback/README.md",
+                  "[fn_callback_retain]: 07-retain.md", "")
+        self.rejects("examples/fn_callback/README.md: contents list")
+
     def test_missing_neighbor_link(self):
         self.edit("examples/fn/04-select.md",
                   "Previous: [Record binding requests][fn_requests] · ", "")

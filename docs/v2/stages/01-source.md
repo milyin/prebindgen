@@ -404,7 +404,9 @@ be diagnosed in context.
 - [Function taking an owned struct][fn_source]
 - [Struct with scalar fields][struct_source]
 - [Type alias declaring an opaque handle][typedef_source]
+- [Function taking a callback][fn_callback_source]
 
 [fn_source]: ../examples/fn/01-source.md
 [struct_source]: ../examples/struct/01-source.md
 [typedef_source]: ../examples/typedef/01-source.md
+[fn_callback_source]: ../examples/fn_callback/01-source.md

@@ -225,7 +225,7 @@ fragment each one writes.
 
 ## Target representations
 
-A representation is one of three shapes, each stated once and referred to by
+A representation is one of four shapes, each stated once and referred to by
 id from every rule and output that uses it:
 
 ```rust
@@ -239,6 +239,13 @@ enum Representation<Op> {
     },
     // The parts of a relation, carried together in one carrier, into Rust.
     Product { via: Via, carrier: CarrierId, read: Operation<Op> },
+    // A foreign callable, into Rust as the closure the registry builds.
+    Callback {
+        carrier: CarrierId,               // What the callable arrives in.
+        capture: Operation<Op>,           // Applied once, where it enters Rust.
+        invoke: Operation<Op>,            // Applied on every call.
+        routes: Vec<FailureRoute<Op>>,    // What a failure inside a call does.
+    },
     // A representation the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
@@ -274,8 +281,30 @@ direction too. The three operations a handle is made of — `IntoRaw`, `FromRaw`
 the address is cast to is the representation's, and
 [the handle path][typedef_represent] shows both targets doing exactly that.
 
-Empty and multi-value layouts, and the optional, sequence, choice and callable
-shapes, are [described but not built](../extensions.md).
+A `Callback` carries an `impl Fn(..)` parameter into Rust. The relation it
+names is the callback's arguments, and each argument crosses the other way:
+Rust hands it to the callable, so it leaves Rust by the rule for its own type.
+`capture` runs once, on the carrier the callable arrived in — for a JVM
+object, it takes a global reference and looks the method up — and what it
+produces is moved into the closure the registry builds. `invoke` runs on every
+call, with that and each argument's carrier. A C caller's closure struct
+needs no capture at all: an identity capture moves the carrier itself into the
+closure. The callback's carrier states which wire types an argument may be, as
+an aggregate does for its members, and an argument resolving to anything else
+refuses the callback with `unsupported.<target>.arg.<class>`, at that
+argument. A callable never leaves Rust: a callback that would is refused with
+`unsupported.callback.out_of_rust`.
+
+A failure inside a call cannot reach the wrapper that received the callable:
+the wrapper has returned, or is inside the source function that called. So a
+callback states its own `routes`, which have the shape of a function form's
+and terminate the call rather than the wrapper, and
+[the boundary](06-boundary.md#assembling-an-exported-function) routes only
+what `capture` raises. [The callback path][fn_callback_represent] shows both
+targets.
+
+Empty and multi-value layouts, and the optional, sequence and choice shapes,
+are [described but not built](../extensions.md).
 
 ## The conversion plans the registry builds
 
@@ -306,7 +335,7 @@ everything a retained conversion needs.
 
 The body is structured instructions, and the common writer renders them as
 Rust, allocating temporary names centrally from identities. The instructions
-are three, and every value in them is an identity rather than a name:
+are four, and every value in them is an identity rather than a name:
 
 ```rust
 enum Instr {
@@ -317,6 +346,15 @@ enum Instr {
     Construct { name: String, parts: Vec<ValueId>, result: ValueId },
     // Call the source function, once.
     Call { function: String, args: Vec<ValueId>, result: Option<ValueId> },
+    // Build a callback's closure: `move |params| { instrs }`, taking
+    // `captured` with it; a failure inside takes the callback's routes.
+    Closure {
+        representation: ReprId,
+        captured: ValueId,
+        params: Vec<(ValueId, TypeRef)>,
+        instrs: Vec<Stmt>,
+        result: ValueId,
+    },
 }
 
 enum Operand {
@@ -339,7 +377,10 @@ a variable its caller happens to have.
 
 For the struct, composition is: apply the `read` to the carrier once per part,
 in part order; use each child's template on what the read produced; construct
-the source struct from the results. The registry generates all child calls and
+the source struct from the results. For a callback, it is: apply `capture` to
+the carrier; then, inside a closure over the arguments' source types, use each
+argument's template on its parameter and apply `invoke` to what `capture`
+produced and the results. The registry generates all child calls and
 source traversal. For the owned values this increment produces, ordinary Rust
 temporaries rely on Rust destruction at scope exit. A borrowed input such as
 `&Stamp`, and any value that holds a handle, need the
@@ -348,7 +389,8 @@ the registry can schedule the temporary, the cleanup and their order.
 
 ## What is not settled here
 
-The scalar, owned-struct, handle and fieldless-enum cases are implemented, and
+The scalar, owned-struct, handle, fieldless-enum and callback cases are
+implemented, and
 [the first increment](../implementation.md#the-first-increment-as-built) records
 what building them settled — the instruction set, the standard operations — and
 what it left open. The largest open items belong to this chapter, and
@@ -366,6 +408,7 @@ resource-bearing value.
 - [Function taking an owned struct][fn_represent] · [C][fn_represent_c] · [Kotlin/JNI][fn_represent_jni]
 - [Struct with scalar fields][struct_represent] · [C][struct_represent_c] · [Kotlin/JNI][struct_represent_jni]
 - [Type alias declaring an opaque handle][typedef_represent] · [C][typedef_represent_c] · [Kotlin/JNI][typedef_represent_jni]
+- [Function taking a callback][fn_callback_represent] · [C][fn_callback_represent_c] · [Kotlin/JNI][fn_callback_represent_jni]
 
 [fn_represent]: ../examples/fn/05-represent.md
 [fn_represent_c]: ../examples/fn/05-represent.c.md
@@ -376,3 +419,6 @@ resource-bearing value.
 [typedef_represent]: ../examples/typedef/05-represent.md
 [typedef_represent_c]: ../examples/typedef/05-represent.c.md
 [typedef_represent_jni]: ../examples/typedef/05-represent.jni.md
+[fn_callback_represent]: ../examples/fn_callback/05-represent.md
+[fn_callback_represent_c]: ../examples/fn_callback/05-represent.c.md
+[fn_callback_represent_jni]: ../examples/fn_callback/05-represent.jni.md

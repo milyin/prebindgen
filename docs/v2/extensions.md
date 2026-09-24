@@ -175,13 +175,6 @@ cannot be generated. That is different from a rule that contradicts the source,
 such as naming a constructor for a type it does not construct, which is invalid
 input and fails the build.
 
-Future callback planning must reverse direction for callback arguments. Rust
-receives the callable as input, but later supplies values to the foreign
-callback as output. Those values make the opposite
-[crossing](stages/03-requests.md#finding-an-existing-conversion-plan). The
-direction follows from the callback's role, not from the user specifying an
-independent direction for each argument.
-
 ## Validity of results
 
 Extends [the operation contract](stages/05-represent.md#failure-of-an-operation).
@@ -244,7 +237,8 @@ returns owes nothing to the object it came from —
 ## Runtime resources
 
 Extends [the operation contract](stages/05-represent.md#failure-of-an-operation).
-Needed by a borrowed handle, an optional handle, and a retained callback.
+Needed by a borrowed handle, an optional handle, and a handle a callback
+hands out.
 
 A described operation carries its failure and its generated dependencies, and
 nothing about resources. The one resource the engine hands across a boundary
@@ -254,11 +248,16 @@ is the last operation of a wrapper that returns the
 [carrier](stages/05-represent.md#describing-target-values-and-operations),
 taking back moves
 the value into an ordinary owned local that Rust drops on every path, and
-releasing is a wrapper of its own that converts nothing. Every other operation
-acquires nothing. The first operation that breaks that shape — a borrowed
-handle whose referent must stay alive across the source call, a handle inside
-an optional, a callback that retains a JVM reference — cannot be written
-without this.
+releasing is a wrapper of its own that converts nothing. A callback's capture
+is safe for the same reason: what it acquires — a JVM global reference, a C
+caller's context — is an owned value inside the closure, released when Rust
+drops the closure. Every other operation acquires nothing. The first
+operation that breaks that shape — a borrowed handle whose referent must stay
+alive across the source call, a handle inside an optional — cannot be written
+without this. One case already crosses it: a handle a callback's call hands
+out, before the call fails. The call cannot tell whether the foreign side
+received it, and the [transfer row](#runtime-resources) below is what would
+say; today that handle is not taken back.
 
 `ResourceContract` describes obligations introduced or discharged by an
 operation, such as releasing a retained handle. It is separate from validity: a
@@ -281,8 +280,8 @@ them:
 The adapter supplies runtime acquire/release operations. The registry tracks
 those effects and schedules calls on success and failure paths. A primitive may
 clean up a temporary allocation entirely inside its own implementation, provided
-no ownership obligation escapes either execution path. Borrowed handles,
-callbacks and escaping allocations remain unsupported until their effects can
+no ownership obligation escapes either execution path. Borrowed handles and
+escaping allocations remain unsupported until their effects can
 be represented and validated — that is, until the table above can be filled in for them and
 the registry can check what it says.
 
@@ -602,7 +601,7 @@ pub struct Accepts<T: Target> {
 | a container | `Container::accepts` | its elements |
 | a choice | its carrier, an aggregate | the tag and each arm's members |
 | a function form | `FunctionForm::params`, `FunctionForm::ret` | wrapper parameters, the return |
-| a callback, when callbacks are built | its form | its arguments and its result |
+| a callback's carrier | `WireType::members` | its arguments |
 
 The registry checks on the way up the planning walk, once a
 [node](stages/05-represent.md#represent-and-compose-values)'s children have
@@ -693,8 +692,8 @@ function boundary decides their eventual handling.
 
 `ConversionBodyId` points to structured instructions for locals, field access,
 variant matching, source construction and calls, primitive applications,
-conditions, and later loops or callback invocation — the three instructions the
-chapter shows, grown to cover the protocols above. A projector binds its
+conditions, and later loops — the four instructions the chapter shows, grown
+to cover the protocols above. A projector binds its
 intermediate result once. Optional and variant branches convert only active
 children.
 
@@ -702,7 +701,7 @@ Access follows the exact source type and operation. Generating `&Stamp` input
 may require constructing an owned temporary and borrowing it for the duration of
 the source call. Supporting the two scalar fields alone does not implement that
 borrow; the conversion contract must preserve the temporary's validity through
-its uses. As handles and callbacks are added, the registry will schedule
+its uses. As resource-bearing values are added, the registry will schedule
 resource scopes and cleanup on success and failure paths; adapters provide the
 actual retain, free and runtime operations.
 

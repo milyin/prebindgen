@@ -5,8 +5,9 @@
 # Assemble the wrapper boundary
 
 Status: implemented. Delivery is a wrapper return or nothing: out-parameters,
-`Result` branches and callbacks the caller passes in are variants the engine
-does not have yet.
+`Result` branches and a result handed to a callback the caller passes in are
+variants the engine does not have yet. A callback taken as a parameter is an
+input like any other.
 
 The examples in this chapter use one small source crate — a struct and a function
 over it, marked for binding generation:
@@ -175,6 +176,17 @@ that operations ask for — an operation's `jni.env` finds the parameter that
 supplies it, and one that needs a context no parameter supplies is skipped,
 with the reason.
 
+A parameter that takes a callback is placed like any input: its conversion
+captures the callable and builds the closure the source function receives.
+What the wrapper routes is what capturing can raise — a JNI global reference
+that could not be taken, say. A failure inside a later call of the closure
+never reaches the wrapper, which may have returned by then; it takes a route
+the callback's representation states, and a call has no runtime context to
+report with. Planning refuses a callback whose calls can fail in a category
+its own routes do not cover, as `unsupported.callback.unrouted_failure`, and
+one whose calls, or whose reporters, need a runtime context, as
+`unsupported.callback.missing_context`.
+
 The error categories distinguish source-domain, binding-conversion and runtime
 failures. A route may run a reporting operation, then either return an
 expression or abort. Throwing a JVM exception is the reporting operation in
@@ -204,6 +216,7 @@ skips the function; changing its ABI is not a substitute for support.
 
 - [Function taking an owned struct][fn_boundary] · [C][fn_boundary_c] · [Kotlin/JNI][fn_boundary_jni]
 - [Type alias declaring an opaque handle][typedef_boundary] · [C][typedef_boundary_c] · [Kotlin/JNI][typedef_boundary_jni]
+- [Function taking a callback][fn_callback_boundary] · [C][fn_callback_boundary_c] · [Kotlin/JNI][fn_callback_boundary_jni]
 
 The struct path has no cell here: [its conversion][struct_represent] is reached
 through the function that uses it.
@@ -215,3 +228,6 @@ through the function that uses it.
 [typedef_boundary]: ../examples/typedef/06-boundary.md
 [typedef_boundary_c]: ../examples/typedef/06-boundary.c.md
 [typedef_boundary_jni]: ../examples/typedef/06-boundary.jni.md
+[fn_callback_boundary]: ../examples/fn_callback/06-boundary.md
+[fn_callback_boundary_c]: ../examples/fn_callback/06-boundary.c.md
+[fn_callback_boundary_jni]: ../examples/fn_callback/06-boundary.jni.md

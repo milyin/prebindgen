@@ -25,7 +25,7 @@ Cbindgen::builder()
 ## Result
 
 ```text
-recorded in the CTarget, under `type:Ledger` (C handle):
+recorded in the binding by the C frontend, under `type:Ledger` (C handle):
     representation: opaque_ptr
     c_name:         "Ledger"          // the incomplete C type; the frontend's default is `ledger`
     carrier:        Ledger *          // the address of a Rust-owned value

@@ -203,18 +203,22 @@ full, including the parts elided above.
 
 The common Rust writer owns the shape of the generated Rust: the `let` bindings,
 the order of operations, the branches on failure, the source construction, the
-source call, and the return. Local names are allocated centrally from plan
+source call, the closure a callback enters Rust as, and the return. Inside that
+closure it renders statements as it does in the wrapper, with the callback's
+routes in place of the form's. Local names are allocated centrally from plan
 identities, so no target invents a variable name and no two operations collide.
 
 A target contributes fragments and declarations, never control flow, and
 decides nothing while it writes. The C frontend states the extern calling
 convention, the exported symbols and the carriers; its member
 reads are standard operations the registry writes, so what the C target writes
-is only its carriers' declarations — the `repr(C)` struct, the incomplete type
-behind a handle, the enum mirror. The JNI frontend states the JNI symbols and
+is its carriers' declarations — the `repr(C)` struct, the incomplete type
+behind a handle, the enum mirror, the closure struct a callback arrives in —
+and the one operation of its own, calling through that closure. The JNI frontend states the JNI symbols and
 calling convention, the environment and receiver parameters, the carriers and
 the error [convention](03-requests.md#what-a-choice-records); the JNI target
-writes the JNI operations, one expression per operation and nothing around it.
+writes the JNI operations — a getter, a report, a callback's capture and call —
+one expression per operation and nothing around it.
 
 The public declarations follow the same division: the JNI frontend's Kotlin
 writer renders them from the retained outputs, their metadata and the carriers
@@ -254,13 +258,16 @@ The rendered output of each contribution above appears in the element paths: the
 [C wrapper and header][fn_emit_c], the [Kotlin object and JNI wrapper][fn_emit_jni],
 the [C aggregate][struct_emit_c], the [Kotlin data class][struct_emit_jni], and
 the handle's [incomplete C type and release][typedef_emit_c] and
-[Kotlin class and release][typedef_emit_jni].
+[Kotlin class and release][typedef_emit_jni], and the callback's
+[C closure struct and wrapper][fn_callback_emit_c] and
+[Kotlin `fun interface` and wrapper][fn_callback_emit_jni].
 
 ## Elements at this stage
 
 - [Function taking an owned struct][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
 - [Struct with scalar fields][struct_emit] · [C][struct_emit_c] · [Kotlin/JNI][struct_emit_jni]
 - [Type alias declaring an opaque handle][typedef_emit] · [C][typedef_emit_c] · [Kotlin/JNI][typedef_emit_jni]
+- [Function taking a callback][fn_callback_emit] · [C][fn_callback_emit_c] · [Kotlin/JNI][fn_callback_emit_jni]
 
 [fn_emit]: ../examples/fn/08-emit.md
 [fn_emit_c]: ../examples/fn/08-emit.c.md
@@ -271,3 +278,6 @@ the handle's [incomplete C type and release][typedef_emit_c] and
 [typedef_emit]: ../examples/typedef/08-emit.md
 [typedef_emit_c]: ../examples/typedef/08-emit.c.md
 [typedef_emit_jni]: ../examples/typedef/08-emit.jni.md
+[fn_callback_emit]: ../examples/fn_callback/08-emit.md
+[fn_callback_emit_c]: ../examples/fn_callback/08-emit.c.md
+[fn_callback_emit_jni]: ../examples/fn_callback/08-emit.jni.md

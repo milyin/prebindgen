@@ -6,9 +6,10 @@
 
 The appendix follows one small Rust library through the generator. This page
 defines that library so that every example starts from the same input. It has
-five items: a struct named `Stamp`, a function named `stamp_sum` that accepts
-the struct, a type alias named `Ledger`, and two functions, `ledger_open` and
-`ledger_close`, that hand a `Ledger` out and take one back. `Stamp` has named
+six items: a struct named `Stamp`, a function named `stamp_sum` that accepts
+the struct, a type alias named `Ledger`, two functions, `ledger_open` and
+`ledger_close`, that hand a `Ledger` out and take one back, and a function
+named `stamp_each` that calls back with each field of a `Stamp`. `Stamp` has named
 fields the generator can inspect; a tuple struct would not, and the source
 model declares one as an opaque type instead.
 
@@ -39,6 +40,11 @@ pub fn ledger_open(stamp: Stamp) -> Ledger {
 pub fn ledger_close(ledger: Ledger) -> i64 {
     ledger.total
 }
+
+pub fn stamp_each(stamp: Stamp, each: impl Fn(i64) + Send + Sync + 'static) {
+    each(stamp.secs);
+    each(stamp.nanos);
+}
 ```
 
 The capture examples show these items with a `#[prebindgen]` annotation.
@@ -50,9 +56,9 @@ the example defined behavior even if the addition overflows.
 its field is private to the crate — and the alias is how it gets a name in the
 flat API without exposing that.
 
-The binding configuration asks for three public types and functions as roots:
-the type `Stamp`, the function `stamp_sum`, and the handle `Ledger` with the
-two functions over it. These explicit requests are called roots, because the
+The binding configuration asks for these public types and functions as roots:
+the type `Stamp`, the function `stamp_sum`, the handle `Ledger` with the two
+functions over it, and `stamp_each` with — for C — the callback it takes. These explicit requests are called roots, because the
 generator starts with them and discovers the supporting conversions they need.
 
 For C, the configuration chooses a struct passed by value and explicitly names
@@ -69,9 +75,14 @@ properties through getter methods. `Ledger` becomes a class holding the address
 as a `Long`, freed through an `external` method on the harness object. Both
 targets then call the same Rust functions.
 
-The example does not involve a borrow, a callback, or an extra constructor
-function. Those features need their own examples before the appendix can
-specify their behavior.
+`stamp_each` takes a callback: code the caller passes, which Rust calls once
+per field. For C that is a closure struct the binding declares, of a context
+and the functions to call with it and to free it; for Kotlin, a `fun interface`
+named `LongCallback` a caller implements with a lambda.
+
+The example does not involve a borrow or an extra constructor function. Those
+features need their own examples before the appendix can specify their
+behavior.
 
 The emitted examples call the source module as `source::`. In a real binding,
 C uses a configured `.source_module(...)` path or the source crate name.

@@ -185,6 +185,27 @@ mod tests {
         );
     }
 
+    /// The header declares the closure struct a C caller fills in, with the
+    /// argument's C type first in `call`, and the function taking one by value.
+    #[test]
+    fn the_c_header_declares_the_closure_struct() {
+        let mut header = Vec::new();
+        cbindgen::Builder::new()
+            .with_src(env!("V2CHECK_C"))
+            .with_language(cbindgen::Language::C)
+            .generate()
+            .expect("cbindgen reads the generated C binding")
+            .write(&mut header);
+        let header = String::from_utf8(header).unwrap();
+        let compact: String = header.split_whitespace().collect();
+        for expected in [
+            "typedefstructclosure_i64{void*context;void(*call)(int64_t,void*);void(*drop)(void*);}closure_i64;",
+            "voidstamp_each(structStampstamp,structclosure_i64each);",
+        ] {
+            assert!(compact.contains(expected), "missing `{expected}` in:\n{header}");
+        }
+    }
+
     /// A field written under a condition nothing could answer reaches every
     /// place the generated C binding's Rust names that field.
     ///
@@ -257,6 +278,8 @@ mod tests {
             ("examples/fn/08-emit.jni.md", &jni),
             ("examples/typedef/08-emit.c.md", &c),
             ("examples/typedef/08-emit.jni.md", &jni),
+            ("examples/fn_callback/08-emit.c.md", &c),
+            ("examples/fn_callback/08-emit.jni.md", &jni),
         ] {
             let expected = fences(page, "rust");
             let generated = items(generated);
@@ -284,6 +307,7 @@ mod tests {
             "examples/struct/08-emit.jni.md",
             "examples/fn/08-emit.jni.md",
             "examples/typedef/08-emit.jni.md",
+            "examples/fn_callback/08-emit.jni.md",
         ] {
             let mut next = 0;
             for line in fences(page, "kotlin").lines() {
@@ -326,6 +350,13 @@ mod tests {
             "external fun ledgerOpen(stamp: Stamp): Long",
             "public fun ledgerOpen(stamp: Stamp): Ledger = Ledger(JNINative.ledgerOpen(stamp))",
             "public fun ledgerClose(ledger: Ledger): Long = JNINative.ledgerClose(ledger.take())",
+            "external fun stampEach(stamp: Stamp, each: LongCallback)",
+            "public fun stampEach(stamp: Stamp, each: LongCallback) = JNINative.stampEach(stamp, each)",
+            // A callback over a handle and an enum: the native method takes the
+            // raw interface, and the public function adapts to it.
+            "external fun ledgerWatch(stamp: Stamp, watch: LedgerOperationCallbackRaw)",
+            "public fun ledgerWatch(stamp: Stamp, watch: LedgerOperationCallback) = JNINative.ledgerWatch(stamp, watch.asRaw())",
+            "internal fun LedgerOperationCallback.asRaw(): LedgerOperationCallbackRaw = LedgerOperationCallbackRaw { ledger, operation -> run(Ledger(ledger), Operation.fromInt(operation)) }",
         ] {
             assert_eq!(
                 emitted.iter().filter(|line| **line == method).count(),

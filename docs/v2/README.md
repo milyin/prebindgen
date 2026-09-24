@@ -231,6 +231,7 @@ paths are added.
 - [Function taking an owned struct][fn] — `stamp_sum(Stamp) -> i64`
 - [Struct with scalar fields][struct] — `Stamp { secs: i64, nanos: i64 }`
 - [Type alias declaring an opaque handle][typedef] — `type Ledger = crate::ledger::Ledger`
+- [Function taking a callback][fn_callback] — `stamp_each(Stamp, impl Fn(i64))`
 
 An **element kind** is a kind of [source item](stages/01-source.md#capture-source-items) — a function, a struct, an enum —
 as this appendix organizes it. (Inside the pipeline the word is not used: the
@@ -238,13 +239,13 @@ chapters say *source item* for what the model captured and *declaration* for
 what the binding asked to expose, a `Declaration` printed as `fn:stamp_sum`. Current ids do not distinguish two foreign placements of the
 same source item.) Element kinds form a tree: a kind at the root, more specific
 variants below it, each becoming its own path when its behavior differs from its
-parent's. Three paths are specified today; the rest name the id they will use
+parent's. Four paths are specified today; the rest name the id they will use
 when they are written.
 
 ```text
 fn                      specified   function taking an owned struct, returning a scalar
   fn_fallible           deferred    function returning Result
-  fn_callback           deferred    function taking a callback
+  fn_callback           specified   function taking a callback
   fn_borrowed_param     deferred    function taking a borrowed parameter
   fn_complex_return     deferred    function returning a non-scalar value
 struct                  specified   struct with scalar fields
@@ -257,8 +258,8 @@ const                   deferred    exported constant
 ```
 
 Deferring a path is a statement about this appendix, not about the architecture:
-the chapters already specify optional values, sequences, variants, callbacks and
-error routing in general terms. A deferred path is missing its worked example, and
+the chapters already specify optional values, sequences, variants and error
+routing in general terms. A deferred path is missing its worked example, and
 writing one may well expose a gap in the general contract — that is what the
 appendix is for.
 
@@ -310,3 +311,4 @@ compiler.
 [fn]: examples/fn/README.md
 [struct]: examples/struct/README.md
 [typedef]: examples/typedef/README.md
+[fn_callback]: examples/fn_callback/README.md

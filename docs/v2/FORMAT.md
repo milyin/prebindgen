@@ -74,10 +74,9 @@ The stage slugs are `source`, `flat`, `requests`, `select`, `represent`, `bounda
 and `emit`; the language ids are `c` and `jni`. So `fn` is the function path,
 `fn_select` is the function at relation selection, and `fn_select_c` is its C
 variant. A sub-variant extends the element id and keeps the same suffixes:
-`fn_callback`, `fn_callback_select_jni`. These ids are reserved for future paths;
-the validator's current element-index check must be extended before an example
-id containing underscores can be added. The existing examples use `fn` and
-`struct`.
+`fn_callback`, `fn_callback_select_jni`. An id does not say which element's it
+is — `fn_callback_select` starts with `fn_` — so the validator takes an
+element's pages from its directory, not from the prefix of their ids.
 
 An element id names a structural kind — function, struct, enum, constant, and
 the variants of those — never the names the source crate happens to use. `Stamp`

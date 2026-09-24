@@ -25,7 +25,7 @@ JniGen::builder()
 ## Result
 
 ```text
-recorded in the JniTarget, under `type:Ledger` (JNI handle):
+recorded in the binding by the JNI frontend, under `type:Ledger` (JNI handle):
     representation: ptr_class
     kotlin:         example.Ledger                          // the class holding the address
     carrier:        jlong                                   // 64 bits on every platform

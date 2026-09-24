@@ -31,8 +31,9 @@ that the C member reads do not need.
 
 Deliberately not covered: a `Result` return, a borrowed parameter, a callback
 argument and a non-scalar result. Each is a sub-variant of this path
-(`fn_fallible`, `fn_borrowed_param`, `fn_callback`, `fn_complex_return`) and gets
-its own cells when it is specified.
+(`fn_fallible`, `fn_borrowed_param`, `fn_callback`, `fn_complex_return`); the
+callback has [its own path][fn_callback], and the others get their cells when
+they are specified.
 
 1. [Capture source items][fn_source]
 2. [Build and inspect the source model][fn_flat]
@@ -44,6 +45,7 @@ its own cells when it is specified.
 8. [Emit bindings][fn_emit] · [C][fn_emit_c] · [Kotlin/JNI][fn_emit_jni]
 
 [struct]: ../struct/README.md
+[fn_callback]: ../fn_callback/README.md
 [fn_source]: 01-source.md
 [fn_flat]: 02-flat.md
 [fn_requests]: 03-requests.md

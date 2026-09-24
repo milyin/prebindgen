@@ -131,7 +131,7 @@ A capability involving JNI is complete only when the existing Kotlin covertest e
 ## The first increment, as built
 
 The planning half of steps 2 and 3 above is implemented in
-`prebindgen-registry-v2`, over the three element paths this document specifies:
+`prebindgen-registry-v2`, over the four element paths this document specifies:
 all are planned, assembled and emitted, for both targets. What step 2 also asks
 for — executing the binding through both language boundaries — is met on the C
 side and not on the JNI side, where the evidence is that the generated Rust
@@ -181,7 +181,9 @@ and the engine cannot drift apart quietly, and read the Kotlin in order and
 without duplicates. One test calls the generated C entry point, on a function
 whose result changes if the two fields arrive in the wrong order — addition
 would not notice. Another opens a handle, closes it and reads the total back,
-releases a second one unread, and releases a null. The existing examples are further evidence: unchanged, built
+releases a second one unread, and releases a null. Two more pass a C closure
+struct in: one counts the calls, their order and the `drop`, and one takes back
+the handle and reads the enum a callback receives. The existing examples are further evidence: unchanged, built
 with `PREBINDGEN_PIPELINE=v2`, every one of their declarations reaches the engine
 and comes back with an outcome — the data classes and functions within this
 increment emitted, everything else skipped under the capability it waits for.
@@ -196,16 +198,21 @@ it sits; an unused type rule is listed; the binding prints as what planning
 reads. They also check that a function is skipped when an operation has no
 error route or needs a runtime context the form does not supply; that a handle is carried both ways and released under its type's
 identity, while a null one arriving where it is consumed needs a route; and
-that a handle nobody can release skips the type and what takes it. Contradictory configuration must instead produce a generation error.
+that a handle nobody can release skips the type and what takes it. For
+callbacks they check the closure the registry builds, an argument handed out
+inside each call, a call's failure taking the callback's own route, the
+refusals — an unrouted failure inside a call, an argument that cannot leave
+Rust, a callback no output declares — and a rule at `param f.arg 0`. Contradictory configuration must instead produce a generation error.
 These tests establish planner behavior; C/JNI runtime tests are still needed to
 establish the behavior of the resulting foreign interface.
 
 ### What the increment settles
 
 1. **The instruction set.** Current conversion bodies are `NodeBody` values;
-   function bodies are stored in `FunctionPlan::instrs`. Both use three kinds
+   function bodies are stored in `FunctionPlan::instrs`. Both use four kinds
    of instruction over value identities: apply a registered operation, construct
-   a source struct, and call the source function. These implement the body roles
+   a source struct, call the source function, and build a callback's closure,
+   whose own instructions use the same identities. These implement the body roles
    described with the rest of the
    [conversion plans](stages/05-represent.md#the-conversion-plans-the-registry-builds).
    A conversion's body is a template whose
@@ -340,6 +347,25 @@ establish the behavior of the resulting foreign interface.
    nothing to compile, so each is checked by a test that asks a frontend for
    such an enum and reads the capability back.
 
+10. **A callback is a closure the registry builds.** An `impl Fn(..)`
+    parameter crosses as a `Callback` representation: a carrier the callable
+    arrives in, a `capture` applied to it once, an `invoke` applied on every
+    call, and the routes a failure inside a call takes. The relation is the
+    callback's arguments, planned out of Rust through the rules for their
+    types, and the registry composes the closure from their templates and the
+    two operations — so neither target walks an argument or writes a closure.
+    A failure inside a call cannot reach the wrapper, which may have returned,
+    so the callback states its own routes and the wrapper routes only
+    `capture`'s. C lets the caller's closure struct be the capture itself; JNI
+    captures the JVM, a global reference and the `run` method, and attaches
+    each calling thread. A callback is a `callback:` output, required by the
+    functions taking it as a type is. C declares one with `callback!`; JNI
+    states one for every signature its exported functions take, as v1's
+    implicit Kotlin interfaces are. [The callback path][fn_callback] shows
+    both. The JNI side was run once in a JVM by hand — values in order, a
+    handle and an enum adapted, a call from another thread, a lambda that
+    throws — and is otherwise evidenced as the rest of JNI is.
+
 ### What it does not settle
 
 The contracts designed for these are on [the extensions page](extensions.md);
@@ -361,9 +387,10 @@ this list says what the increment left open and why.
 - **Validity and resource contracts** are absent from `Operation`. The one
   resource-bearing operation set — the owned handle — is safe without them by
   construction on the Rust side, as
-  [the extensions page](extensions.md#runtime-resources) argues; a borrowed
-  handle, an optional handle or a retained callback is what has to add them,
-  and cannot be written without them.
+  [the extensions page](extensions.md#runtime-resources) argues, and so is a
+  callback's capture, which the closure owns; a borrowed handle or an optional
+  handle is what has to add them, and cannot be written without them. A handle
+  a callback's call hands out before the call fails is not taken back.
 - **A wrapper's form** is the writer's, except what `FunctionForm` lets a
   binding state: the convention, the symbol, the parameters the convention
   adds, the names of the inputs' parameters, attributes beyond `#[no_mangle]`,
@@ -371,7 +398,14 @@ this list says what the increment left open and why.
   exported symbol — a registration table, an attribute macro — has no way to
   say so yet, and no target has asked.
 - **Delivery** is a wrapper return or nothing. Out-parameters, `Result` branches
-  and callbacks the caller passes in are deliveries the increment does not have.
+  and a result handed to a callback the caller passes in are deliveries the
+  increment does not have.
+- **A callback** takes arguments and returns nothing, and is moved into the
+  source function. A callback returning a value, one taken by reference, and
+  a Rust callable handed out to foreign code are not built; the last is
+  refused as `unsupported.callback.out_of_rust`. Nothing inside a call has a
+  runtime context, so an argument whose conversion needs one — a JNI `String`,
+  when strings are built — refuses the callback.
 - **A condition reaches the Rust side only.** V2 carries a `#[cfg]` the capture
   reader could not answer onto everything it generates in Rust for the item that
   carries it — the wrapper, the target's own declaration, and, for a field,
@@ -428,3 +462,4 @@ Future resource, recursive and runtime capabilities require implementations and 
 [typedef_represent]: examples/typedef/05-represent.md
 [fn_emit]: examples/fn/08-emit.md
 [struct]: examples/struct/README.md
+[fn_callback]: examples/fn_callback/README.md
