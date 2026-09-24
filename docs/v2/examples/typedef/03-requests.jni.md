@@ -28,7 +28,7 @@ JniGen::builder()
 recorded in the binding by the JNI frontend, under `type:Ledger` (JNI handle):
     representation: ptr_class
     kotlin:         example.Ledger                          // the class holding the address
-    carrier:        jlong                                   // 64 bits on every platform
+    wire type:        jlong                                   // 64 bits on every platform
     native:         example.JNINative.freeLedger            // the release, on the harness
     symbol:         "Java_example_JNINative_freeLedger"     // derived from that placement
     null handle:    throw IllegalStateException, then return a default
@@ -43,7 +43,7 @@ built the way theirs are.
 
 ## Checks
 
-- The [carrier](../../stages/05-represent.md#describing-target-values-and-operations) is `jlong` and not a pointer type, because JNI's wire is 64 bits
+- The [wire type](../../stages/05-represent.md#describing-target-values-and-operations) is `jlong` and not a pointer type, because JNI's wire is 64 bits
   whatever the platform's pointer is; the Kotlin side sees a `Long`.
 - A null handle is a binding failure with a message; the adapter's convention
   turns the message into an exception, distinct from the runtime failures of

@@ -24,7 +24,7 @@ There are no fields to convert, so the
 direction is one operation, and the registry supplies those operations itself,
 because moving a value onto the heap and back is Rust rather than C or Kotlin.
 The targets differ in the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 the address is spelled as — `Ledger *` in C, a `Long` on the JVM — in where a
 null handle's failure goes, and in what the foreign declaration looks like.
 

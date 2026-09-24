@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "05-represent", "language": "jni"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Common cell][typedef_represent] · [Element path][typedef]
-Owner: the registry; the JNI frontend states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+Owner: the registry; the JNI frontend states the [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 
 # Type alias declaring an opaque handle — Represent and compose values — Kotlin/JNI
 
@@ -14,18 +14,16 @@ Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   the Type(
 
 ## Result
 
-The carrier is `jni::sys::jlong`, and the operations are the same three the
+The wire type is `jni::sys::jlong`, and the operations are the same three the
 C frontend states, over it:
 
 ```rust
-let address = binding.carrier(WireType::exact(
-    JniClass::Handle,                       // a `jlong`, and not `Long`: an address, not a number
-    None,
-    Jvm { descriptor: "J".into(), kotlin: KotlinType::Handle("example.Ledger".into()) },
-));
+let address = binding.wire_type(JniWireType::Handle {
+    kotlin_class: "example.Ledger".into(),  // a `jlong`, and not `Long`: an address, not a number
+});
 Representation::Terminal {
-    into_rust: Some(Codec { carrier: address, operation: Operation::standard(StandardOp::FromRaw) }),
-    out_of_rust: Some(Codec { carrier: address, operation: Operation::standard(StandardOp::IntoRaw) }),
+    into_rust: Some(Codec { wire_type: address, operation: Operation::standard(StandardOp::FromRaw) }),
+    out_of_rust: Some(Codec { wire_type: address, operation: Operation::standard(StandardOp::IntoRaw) }),
     release: Some(Operation::standard(StandardOp::Release)),
 }
 ```
@@ -50,7 +48,7 @@ drop(::core::ptr::NonNull::new(ptr as *mut source::Ledger)
 ```
 
 The into-Rust expression is the same text as C's: an integer casts to a
-pointer as a pointer does, so one standard description serves both carriers
+pointer as a pointer does, so one standard description serves both wire types
 and the adapters differ in one line. No JNI call is made in any of the three —
 the environment is not an operand — so a handle
 [conversion](../../stages/04-select.md#select-conversion-relations) is never a
@@ -61,7 +59,7 @@ runtime failure. The one failure is the binding one, and
 
 - A `jlong` is not a `JObject`: a handle is a declared class carried as a
   scalar, and [the Kotlin declaration][typedef_emit_jni] is read off the output's
-  metadata and the carrier's — a handle class rather than a data class — not
+  metadata and the wire type's — a handle class rather than a data class — not
   off the source type.
 - A zero `Long` from Kotlin is the null address, and the message it produces
   names the type, so the exception says which handle was closed or never

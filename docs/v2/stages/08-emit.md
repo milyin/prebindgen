@@ -169,7 +169,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 Everything the registry retained is emitted into that file: the wrappers, the
 declarations the retained types'
-[carriers](05-represent.md#describing-target-values-and-operations) need, and
+[wire types](05-represent.md#describing-target-values-and-operations) need, and
 any generated helper an
 operation's text needed. The declarations come first, in the order the types
 were declared, then the helpers, each once, then the wrappers; there is no
@@ -210,18 +210,18 @@ identities, so no target invents a variable name and no two operations collide.
 
 A target contributes fragments and declarations, never control flow, and
 decides nothing while it writes. The C frontend states the extern calling
-convention, the exported symbols and the carriers; its member
+convention, the exported symbols and the wire types; its member
 reads are standard operations the registry writes, so what the C target writes
-is its carriers' declarations — the `repr(C)` struct, the incomplete type
+is its wire types' declarations — the `repr(C)` struct, the incomplete type
 behind a handle, the enum mirror, the closure struct a callback arrives in —
 and the one operation of its own, calling through that closure. The JNI frontend states the JNI symbols and
-calling convention, the environment and receiver parameters, the carriers and
+calling convention, the environment and receiver parameters, the wire types and
 the error [convention](03-requests.md#what-a-choice-records); the JNI target
 writes the JNI operations — a getter, a report, a callback's capture and call —
 one expression per operation and nothing around it.
 
 The public declarations follow the same division: the JNI frontend's Kotlin
-writer renders them from the retained outputs, their metadata and the carriers
+writer renders them from the retained outputs, their metadata and the wire types
 their values resolved to. C declarations are expressed as generated Rust and
 left to `cbindgen`.
 
@@ -233,9 +233,9 @@ These concrete contributions stay separate throughout planning and writing:
 | --- | --- | --- | --- |
 | Source facts | Two `i64` fields and `stamp_sum(Stamp) -> i64` | Same source facts | Flat |
 | Requested public API | Explicit C type name `Stamp`; default function name `stamp_sum` | `example.Stamp`, `example.stampSum` | Language frontend records user choices. |
-| Target [representation](05-represent.md#represent-and-compose-values) | A `Product` over a `repr(C)` `Stamp` carrier | A `Product` over a `JObject` carrier, read by getters | Language frontend states it in the binding. |
+| Target [representation](05-represent.md#represent-and-compose-values) | A `Product` over a `repr(C)` `Stamp` wire type | A `Product` over a `JObject` wire type, read by getters | Language frontend states it in the binding. |
 | The read of one part | `StandardOp::ReadMember` | `JniOp::Getter` | Language frontend states it; registry applies it once per part. |
-| One primitive's written operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust writer for C's standard read; the JNI target's writer for the getter, fed the part and its carrier. |
+| One primitive's written operation | `stamp.secs` | `env.call_method(...).and_then(...)` | Common Rust writer for C's standard read; the JNI target's writer for the getter, fed the part and its wire type. |
 | A handle's operations | `Box::into_raw(Box::new(v3)) as *mut Ledger`; `NonNull::new(ledger as *mut source::Ledger)…` | The same, cast to and from `jlong` | Common Rust operation renderer: these spell a source type, which only the registry may. |
 | Primitive application and result use | `let v0 = ...` | `let v0 = match ...` with error path | Registry plans instructions; common writer renders them. |
 | Source construction and call | `source::Stamp { ... }`, then `stamp_sum` | Same source instructions | Registry plans; common Rust writer renders. |

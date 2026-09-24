@@ -19,7 +19,7 @@ composes, at every position, the operations the binding stated with the
 already-finished children into the instructions that move the value. The unit
 this produces is the one every later stage reads.
 
-What the binding states for a value is its **representation**: which carriers
+What the binding states for a value is its **representation**: which wire types
 hold it on the target's side, and the operations that read or convert them —
 a C struct read member by member, a JVM object read through its getters, a
 handle taken back from its address. The frontend states it when it builds the
@@ -101,14 +101,17 @@ of the values used on the target side and the operations that access them.
 The **public surface** is the API foreign users see: C types and functions or
 Kotlin classes and methods. The **wire representation** is the set of values
 passed through the foreign calling interface, or **ABI** (application binary
-interface). A **carrier** is a Rust type holding conversion data, either on
-that boundary or temporarily inside generated Rust code. The frontend declares
-each one as a `WireType`: the Rust type — `i64`, `*mut Ledger`, a `repr(C)`
-`Stamp`, a `JObject` — which of the target's few wire types it is, for an
-aggregate which wire types its members may be, and metadata only the target's
-writers read, such as a C name or a JVM descriptor. Two carriers may share a
-Rust type and differ in metadata: a `JObject` holding an `example.Stamp` is a
-different carrier from one holding an `other.Stamp`.
+interface). A **wire type** is the type of one value on that boundary, as both
+sides see it: its Rust type — `i64`, `*mut Ledger`, a `repr(C)` `Stamp`, a
+`JObject` — and what the foreign side reads it as. Two wire types may share a
+Rust type: a `JObject` the JVM side reads as an `example.Stamp` is a different
+wire type from one it reads as an `other.Stamp`, and a `jlong` holding a
+number differs from one holding an address. Each target's wire types are its
+own enum, one variant per **wire kind** — C's `I64`, `Pointer`, `Aggregate`;
+JNI's `Long`, `Handle`, `Object` — each variant holding only what its kind
+needs, such as a C name or a Kotlin class. A kind carries no data, and is what
+a target states its capabilities in: which kinds each kind can have as its
+parts, and which kinds a [wrapper](../stages/06-boundary.md#assemble-the-wrapper-boundary) can take and return.
 
 ### Individual target operations
 
@@ -207,13 +210,13 @@ A **primitive application** is an instruction in the registry's conversion or
 function body. It names one use of an operation and the already available
 values that supply its operands. The registry registers the use with
 everything the writer will be fed — the value the operation is applied to and
-the carrier or source type it holds, what it produces, the part it serves,
+the wire type or source type it holds, what it produces, the part it serves,
 the contexts it asked for — allocates result identities, and records failure
 paths. These identities denote runtime values in a plan; they are neither
 runtime values nor generated variable names. Only the common writer chooses
 the final Rust names.
 
-The registry checks what it can: that a member's carrier is one its aggregate
+The registry checks what it can: that a member's wire type is one its aggregate
 holds, that every context an operation asks for is supplied, that a route
 reports the error type the operation raises. A target's writer is still
 responsible for writing the operation correctly. Generated Rust compilation
@@ -231,17 +234,17 @@ id from every rule and output that uses it:
 ```rust
 enum Representation<Op> {
     // The whole value, one operation each way: a scalar, a handle, a fieldless
-    // enum. Each direction has a carrier of its own.
+    // enum. Each direction has a wire type of its own.
     Terminal {
         into_rust: Option<Codec<Op>>,   // None: never crosses into Rust.
         out_of_rust: Option<Codec<Op>>,
         release: Option<Operation<Op>>, // How the foreign side gives a held value back.
     },
-    // The parts of a relation, carried together in one carrier, into Rust.
-    Product { via: Via, carrier: CarrierId, read: Operation<Op> },
+    // The parts of a relation, carried together in one wire type, into Rust.
+    Product { via: Via, wire_type: WireTypeId, read: Operation<Op> },
     // A foreign callable, into Rust as the closure the registry builds.
     Callback {
-        carrier: CarrierId,               // What the callable arrives in.
+        wire_type: WireTypeId,               // What the callable arrives in.
         capture: Operation<Op>,           // Applied once, where it enters Rust.
         invoke: Operation<Op>,            // Applied on every call.
         routes: Vec<FailureRoute<Op>>,    // What a failure inside a call does.
@@ -251,23 +254,24 @@ enum Representation<Op> {
 }
 
 struct Codec<Op> {
-    carrier: CarrierId,
+    wire_type: WireTypeId,
     operation: Operation<Op>,
 }
 ```
 
 A `Terminal` converts the whole value in one operation. Its two directions may
-use different carriers: a C enum leaves Rust as the C enum and arrives as
+use different wire types: a C enum leaves Rust as the C enum and arrives as
 `MaybeUninit` of it, since C lets an enum variable hold any `int` and a Rust
 enum holding a number none of its values has is undefined behaviour before any
 match could look at it.
 
 A `Product` reads one part per part of the selected relation, reading a struct
 on the way into Rust. It has no construction operation, so a struct leaving
-Rust is a reported skip, `unsupported.struct.out_of_rust`. Its carrier must
-have members, and states which wire types they may be: C's aggregate holds the
-scalar and nothing else yet, a JVM object's getters read a `long`. A part that
-resolves to anything else refuses the struct where the member is.
+Rust is a reported skip, `unsupported.struct.out_of_rust`. Its wire type must
+be of a kind that has parts, and the kind says which kinds they may be: a C
+aggregate's members are `i64`s and nothing else yet, a JVM object's getters
+read a `long`. A part that resolves to any other kind refuses the struct where
+the member is.
 
 `release` is what makes a representation a handle. A value the foreign side
 holds by address is one it owes back, and the release is the operation that
@@ -277,22 +281,22 @@ none. A type output exposing a representation with a release exports it as a
 wrapper of its own at [the boundary](06-boundary.md#assembling-an-exported-function),
 under the form the output names for it, and the registry plans the out-of-Rust
 direction too. The three operations a handle is made of — `IntoRaw`, `FromRaw`,
-`Release` — are standard ones, because each spells a source type; the carrier
+`Release` — are standard ones, because each spells a source type; the wire type
 the address is cast to is the representation's, and
 [the handle path][typedef_represent] shows both targets doing exactly that.
 
 A `Callback` carries an `impl Fn(..)` parameter into Rust. The relation it
 names is the callback's arguments, and each argument crosses the other way:
 Rust hands it to the callable, so it leaves Rust by the rule for its own type.
-`capture` runs once, on the carrier the callable arrived in — for a JVM
+`capture` runs once, on the wire type the callable arrived in — for a JVM
 object, it takes a global reference and looks the method up — and what it
 produces is moved into the closure the registry builds. `invoke` runs on every
-call, with that and each argument's carrier. A C caller's closure struct
-needs no capture at all: an identity capture moves the carrier itself into the
-closure. The callback's carrier states which wire types an argument may be, as
-an aggregate does for its members, and an argument resolving to anything else
-refuses the callback with `unsupported.<target>.arg.<class>`, at that
-argument. A callable never leaves Rust: a callback that would is refused with
+call, with that and each argument's wire type. A C caller's closure struct
+needs no capture at all: an identity capture moves the wire type itself into the
+closure. The kind of the callback's wire type says which kinds an argument
+may be, as an aggregate's does for its members, and an argument resolving to
+any other kind refuses the callback with `unsupported.<target>.arg.<kind>`,
+at that argument. A callable never leaves Rust: a callback that would is refused with
 `unsupported.callback.out_of_rust`.
 
 A failure inside a call cannot reach the wrapper that received the callable:
@@ -310,7 +314,7 @@ are [described but not built](../extensions.md).
 
 A finished node stores its `id`, the
 [crossing](03-requests.md#finding-an-existing-conversion-plan), the relation
-its representation named, the representation and the carrier it crosses in,
+its representation named, the representation and the wire type it crosses in,
 its `children`, a body, and the failure categories its operations can raise.
 The [full contract](../extensions.md#the-full-value-contract) adds what the
 value's permitted use and validity are; the failure categories are the part of
@@ -322,7 +326,7 @@ struct ValuePlan {
     crossing: Crossing,          // Exact source type and direction being converted.
     relation: Relation,          // The edge the walk took out of this type.
     representation: ReprId,      // The representation that applied.
-    carrier: CarrierId,          // The carrier it crosses in, in this direction.
+    wire_type: WireTypeId,          // The wire type it crosses in, in this direction.
     children: Vec<NodeId>,       // One per part of the relation, in part order.
     body: NodeBody,              // Registry-owned structured instructions.
     failures: Vec<FailureCategory>, // What the body's operations can raise.
@@ -363,22 +367,22 @@ enum Operand {
 }
 ```
 
-A conversion's body is a **template**: one value identity is its carrier — the
+A conversion's body is a **template**: one value identity is its wire type — the
 value handed in when the conversion is used — and one is its result. Using a
 conversion inlines its instructions under the caller's identities, so a
 conversion belongs to no function and is still written down once. An identity
 conversion is the degenerate template: no instructions, and the result *is* the
-carrier, which is why a scalar child renders nothing between a member read and
+wire type, which is why a scalar child renders nothing between a member read and
 the construction that uses it.
 
 An operation that needs a runtime scope names it, and the function form says
 which wrapper parameter supplies it; nothing in a written fragment can reach for
 a variable its caller happens to have.
 
-For the struct, composition is: apply the `read` to the carrier once per part,
+For the struct, composition is: apply the `read` to the wire type once per part,
 in part order; use each child's template on what the read produced; construct
 the source struct from the results. For a callback, it is: apply `capture` to
-the carrier; then, inside a closure over the arguments' source types, use each
+the wire type; then, inside a closure over the arguments' source types, use each
 argument's template on its parameter and apply `invoke` to what `capture`
 produced and the results. The registry generates all child calls and
 source traversal. For the owned values this increment produces, ordinary Rust

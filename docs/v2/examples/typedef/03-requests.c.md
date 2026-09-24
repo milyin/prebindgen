@@ -28,7 +28,7 @@ Cbindgen::builder()
 recorded in the binding by the C frontend, under `type:Ledger` (C handle):
     representation: opaque_ptr
     c_name:         "Ledger"          // the incomplete C type; the frontend's default is `ledger`
-    carrier:        Ledger *          // the address of a Rust-owned value
+    wire type:        Ledger *          // the address of a Rust-owned value
     release:        "ledger_drop"     // <base>_drop, exported beside the functions
     null handle:    abort             // C has no exception; the process stops
 ```

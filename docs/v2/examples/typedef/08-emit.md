@@ -11,7 +11,7 @@ The retained output for this alias, and its release plan:
 
 ```text
 Retained     { output: type:Ledger, output_value: node(Ledger, IntoRust) }
-               carrier: the handle carrier, metadata: <none for C, the ptr class for JNI>
+               wire type: the handle wire type, metadata: <none for C, the ptr class for JNI>
 FunctionPlan { declaration: public Ledger, symbol, params: <from the release form>,
                instrs: [ apply Release(this_) ] }
 ```
@@ -38,7 +38,7 @@ wrapper that touches the handle:
 Rendered: [C][typedef_emit_c], [Kotlin/JNI][typedef_emit_jni].
 
 Every expression that names `source::Ledger` is the registry's; the adapters
-contributed the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+contributed the [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 spelling (`*mut Ledger`, `jlong`) and the release symbol, and no Rust of their
 own beyond the incomplete C type. The release wrapper has no `let`, no call
 and no return value: one statement, then the end of the function.

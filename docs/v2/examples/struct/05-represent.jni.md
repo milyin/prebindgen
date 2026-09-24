@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "05-represent", "language": "jni"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Common cell][struct_represent] · [Element path][struct]
-Owner: the registry; the JNI frontend states the object [carrier](../../stages/05-represent.md#describing-target-values-and-operations) and its getter
+Owner: the registry; the JNI frontend states the object [wire type](../../stages/05-represent.md#describing-target-values-and-operations) and its getter
 
 # Struct with scalar fields — Represent and compose values — Kotlin/JNI
 
@@ -10,7 +10,7 @@ Owner: the registry; the JNI frontend states the object [carrier](../../stages/0
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-representation: Product { via: Fields, carrier: a `JObject` of example.Stamp, read: Getter }
+representation: Product { via: Fields, wire_type: a `JObject` of example.Stamp, read: Getter }
 ```
 
 ## Result
@@ -20,17 +20,12 @@ carries the object as one reference, and reads two properties out of it. The
 JNI frontend states it when it reads `data_class!(Stamp)`:
 
 ```rust
-let stamp_obj = binding.carrier(WireType::exact(
-    JniClass::Object,                              // `jni::objects::JObject<'_>`
-    Some(Accepts::of([JniClass::Long])),           // what a getter returning a `long` reads
-    Jvm {
-        descriptor: "Lexample/Stamp;".into(),
-        kotlin: KotlinType::Value("example.Stamp".into()),
-    },
-));
+let stamp_obj = binding.wire_type(JniWireType::Object {
+    kotlin_class: "example.Stamp".into(),          // a `JObject`, read as `Lexample/Stamp;`
+});
 Representation::Product {
     via: Via::Fields,
-    carrier: stamp_obj,
+    wire_type: stamp_obj,
     read: Operation::target(JniOp::Getter)
         .context("jni.env")                         // the JNI environment
         .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
@@ -40,7 +35,7 @@ Representation::Product {
 The getter names no property and no descriptor. The registry applies it once
 per part, and feeds the JNI writer the object operand, the environment the
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s form
-binds to `env`, the part, and the carrier the part resolved to — a `jlong`
+binds to `env`, the part, and the wire type the part resolved to — a `jlong`
 whose descriptor is `J`. The writer turns the part's name into `getSecs` by
 Kotlin's getter convention and the result's descriptor into `()J`, and writes
 one expression. `call_method` invokes the zero-argument method, and `.j()`

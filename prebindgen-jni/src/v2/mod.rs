@@ -3,7 +3,7 @@
 //! [`Declarations`] keeps accumulating exactly as it does for v1 — same
 //! `package!`/`ptr_class!`/`fun!` surface, same `set_*` settings, same
 //! name-mangle closures — and this module is the only thing that reads them
-//! for the other engine: it states the whole binding as data — the carriers the
+//! for the other engine: it states the whole binding as data — the wire types the
 //! JVM holds values in, how each type's values cross, the native method and
 //! `Java_…` symbol each wrapper gets — and hands it to the engine with a
 //! [`JniTarget`], which only writes. An ignore is a v1 decision about v1's
@@ -24,13 +24,13 @@ use prebindgen_registry::{
     TypeKey,
 };
 use prebindgen_registry_v2::{
-    field_is_conditional, generate, mirrored_i32_enum, Accepts, Binding, Codec, ContextParam,
-    Declaration, EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf,
-    Generation, Operation, OutputForm, OutputFormOf, PlanningError, Report, Representation, Scope,
-    StandardOp, Target, Terminal, Unsupported, Via, WireType,
+    field_is_conditional, generate, mirrored_i32_enum, Binding, Codec, ContextParam, Declaration,
+    EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf, Generation,
+    Operation, OutputForm, OutputFormOf, PlanningError, Report, Representation, Scope, StandardOp,
+    Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
-pub use target::{JniClass, JniOp, JniOutput, JniTarget, Jvm, KotlinType};
+pub use target::{JniOp, JniOutput, JniTarget, JniWireKind, JniWireType, KotlinType};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
 
@@ -118,16 +118,9 @@ impl Declarations {
 
         // The scalar this target carries so far: an `i64` is a `jlong`, and
         // the two are one Rust value.
-        let jlong = binding.carrier(WireType::exact(
-            JniClass::Long,
-            None,
-            Jvm {
-                descriptor: "J".to_string(),
-                kotlin: KotlinType::Value("Long".to_string()),
-            },
-        ));
+        let jlong = binding.wire_type(JniWireType::Long);
         let unchanged = Codec {
-            carrier: jlong,
+            wire_type: jlong,
             operation: Operation::standard(StandardOp::Identity),
         };
         let i64_whole = binding.representation(Representation::Terminal {
@@ -224,21 +217,16 @@ impl Declarations {
                 crate::jni::DeclaredKind::Ptr(_) => {
                     let native = self.mangle_jni_method(&format!("free{class}"));
                     claim(&native, &declaration);
-                    let address = binding.carrier(WireType::exact(
-                        JniClass::Handle,
-                        None,
-                        Jvm {
-                            descriptor: "J".to_string(),
-                            kotlin: KotlinType::Handle(placement.clone()),
-                        },
-                    ));
+                    let address = binding.wire_type(JniWireType::Handle {
+                        kotlin_class: placement.clone(),
+                    });
                     let representation = Representation::Terminal {
                         into_rust: Some(Codec {
-                            carrier: address,
+                            wire_type: address,
                             operation: Operation::standard(StandardOp::FromRaw),
                         }),
                         out_of_rust: Some(Codec {
-                            carrier: address,
+                            wire_type: address,
                             operation: Operation::standard(StandardOp::IntoRaw),
                         }),
                         release: Some(Operation::standard(StandardOp::Release)),
@@ -548,26 +536,12 @@ impl Declarations {
                 );
                 continue;
             }
-            let callable = qualified(raw.as_deref().unwrap_or(&class));
-            let carrier = binding.carrier(WireType::exact(
-                JniClass::Object,
-                // What an argument may be: what a JVM method takes as a
-                // primitive — a number, an enum's number, an address.
-                Some(Accepts::of([
-                    JniClass::Long,
-                    JniClass::Int,
-                    JniClass::Handle,
-                ])),
-                Jvm {
-                    descriptor: format!("L{};", callable.replace('.', "/")),
-                    kotlin: KotlinType::Callback {
-                        class: qualified(&class),
-                        raw: raw.as_deref().map(qualified),
-                    },
-                },
-            ));
+            let wire_type = binding.wire_type(JniWireType::Callable {
+                interface: qualified(&class),
+                raw: raw.as_deref().map(qualified),
+            });
             let representation = binding.representation(Representation::Callback {
-                carrier,
+                wire_type,
                 capture: Operation::target(JniOp::CaptureCallback)
                     .context("jni.env")
                     .fails(FailureCategory::Runtime, jni_error.clone()),
@@ -643,18 +617,12 @@ impl Declarations {
                 }
             }
         }
-        let object = binding.carrier(WireType::exact(
-            JniClass::Object,
-            // What a property may be: what a getter returning a `long` reads.
-            Some(Accepts::of([JniClass::Long])),
-            Jvm {
-                descriptor: format!("L{};", placement.replace('.', "/")),
-                kotlin: KotlinType::Value(placement.to_string()),
-            },
-        ));
+        let object = binding.wire_type(JniWireType::Object {
+            kotlin_class: placement.to_string(),
+        });
         Representation::Product {
             via: Via::Fields,
-            carrier: object,
+            wire_type: object,
             // A property read is a JVM call, which can fail, and the error is
             // the jni crate's.
             read: Operation::target(JniOp::Getter).context("jni.env").fails(
@@ -678,14 +646,9 @@ impl Declarations {
             Ok(values) => values,
             Err(refusal) => return (Representation::Unsupported(refusal), Vec::new()),
         };
-        let number = binding.carrier(WireType::exact(
-            JniClass::Int,
-            None,
-            Jvm {
-                descriptor: "I".to_string(),
-                kotlin: KotlinType::Enum(placement.to_string()),
-            },
-        ));
+        let number = binding.wire_type(JniWireType::Int {
+            kotlin_enum: placement.to_string(),
+        });
         let arms: Vec<EnumArm> = values
             .iter()
             .map(|(value, number)| {
@@ -705,12 +668,12 @@ impl Declarations {
                 (kotlin_codegen::escape_kotlin_ident(&screaming), *number)
             })
             .collect();
-        // Out of Rust every value names one number; into Rust the carrier is
+        // Out of Rust every value names one number; into Rust the wire type is
         // an `Int` and can hold something no value names, which is what a
         // caller passing one gets told, rather than a value it did not ask for.
         let representation = Representation::Terminal {
             into_rust: Some(Codec {
-                carrier: number,
+                wire_type: number,
                 operation: Operation::standard(StandardOp::EnumIn {
                     values: arms.clone(),
                     invalid: Some(format!("`{placement}` has no value numbered {{}}")),
@@ -718,7 +681,7 @@ impl Declarations {
                 }),
             }),
             out_of_rust: Some(Codec {
-                carrier: number,
+                wire_type: number,
                 operation: Operation::standard(StandardOp::EnumOut { values: arms }),
             }),
             release: None,
@@ -792,9 +755,8 @@ fn release_form(symbol: String) -> FunctionFormOf<JniTarget> {
     )
 }
 
-/// What every native method shares: `extern "system"`, any JVM wire type on
-/// either side, and a route for each failure a conversion can raise, each
-/// throwing into the JVM.
+/// What every native method shares: `extern "system"`, and a route for each
+/// failure a conversion can raise, each throwing into the JVM.
 ///
 /// Zero is not a result: it is what a native method must return while an
 /// exception is pending, and Kotlin observes the exception. A wrapper that
@@ -844,8 +806,6 @@ fn jni_form(
         ],
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::any(),
-        ret: Accepts::any(),
     }
 }
 

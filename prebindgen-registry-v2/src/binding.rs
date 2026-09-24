@@ -1,7 +1,7 @@
 //! What a frontend states before planning: the whole of what planning reads.
 //!
 //! A frontend turns its user's configuration into one [`Binding`] — the
-//! carriers generated Rust may hold a value in, the representations values
+//! wire types generated Rust may hold a value in, the representations values
 //! cross as, the rules saying which values take which representation, and the
 //! outputs to expose — and hands it to [`generate`](crate::generate) with its
 //! [`Target`]. The registry plans from the binding and the source model alone:
@@ -9,7 +9,6 @@
 //! checked before planning, printed, and diffed.
 
 use prebindgen_flat::TypeKey;
-use syn::visit_mut::VisitMut as _;
 
 use crate::{
     decl::Declaration,
@@ -30,9 +29,9 @@ impl Issuer {
     }
 }
 
-/// A carrier the binding declared, valid only in the binding that issued it.
+/// A wire type the binding declared, valid only in the binding that issued it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CarrierId {
+pub struct WireTypeId {
     issuer: Issuer,
     pub(crate) index: usize,
 }
@@ -58,9 +57,9 @@ pub struct OutputId {
     pub(crate) index: usize,
 }
 
-impl std::fmt::Display for CarrierId {
+impl std::fmt::Display for WireTypeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "c{}", self.index)
+        write!(f, "w{}", self.index)
     }
 }
 
@@ -70,157 +69,59 @@ impl std::fmt::Display for ReprId {
     }
 }
 
-/// One of a target's few wire types: a kind of Rust type a value may cross
-/// the boundary in, which is what everything that holds a value — an
-/// aggregate's members, a wrapper's parameters — states its acceptance in.
+/// What kind of wire type a value crosses in: C's `I64`, `Pointer`,
+/// `Aggregate`; JNI's `Long`, `Int`, `Handle`, `Object`.
 ///
-/// Every target states the same three things about each of its classes, and
-/// the registry reads them the same way for every target.
-pub trait WireClass: Clone + Eq + std::hash::Hash + std::fmt::Debug {
-    /// Every class of the target: what a holder accepting anything accepts.
-    fn all() -> Vec<Self>;
+/// A kind carries no data, so what a target can do with a wire type — which
+/// parts it can have, what a wrapper can take or return — is stated per kind
+/// and cannot depend on any one wire type's name or metadata.
+pub trait WireKind: Copy + Eq + std::hash::Hash + std::fmt::Debug + 'static {
+    /// Every kind of the target.
+    const ALL: &'static [Self];
 
     /// How a refusal names it: `pointer`, in `unsupported.c.member.pointer`.
     ///
     /// It is part of a capability code, which a build script may match and a
-    /// report groups skips by, so it is the class's identity in text: unique
-    /// among the classes [`all`](Self::all) returns — [`generate`](crate::generate)
-    /// refuses a target with two classes of one name — and kept stable when the
-    /// target changes, as a capability code is.
-    fn name(&self) -> &'static str;
+    /// report groups skips by, so it is the kind's identity in text: unique
+    /// among [`ALL`](Self::ALL) — [`generate`](crate::generate) refuses a
+    /// target with two kinds of one name — and kept stable when the target
+    /// changes, as a capability code is.
+    fn name(self) -> &'static str;
 
-    /// The Rust type a carrier of this class is. A class naming one exact
-    /// type is written as that type — `i64`, `jni::sys::jlong`. A class whose
-    /// carriers are types the target declares itself writes `_` where the
-    /// declared type's name goes: `_` for a `repr(C)` struct, `*mut _` for a
-    /// pointer to an incomplete one. [`WireType::declared`] fills it in.
+    /// The kinds a wire type of this kind can have as its parts — a C struct's
+    /// members, a JVM object's properties, a callback's arguments. Empty for a
+    /// kind that has no parts.
+    fn parts(self) -> &'static [Self] {
+        &[]
+    }
+}
+
+/// The type of a value on the boundary, as both sides see it: its Rust type,
+/// and what the foreign side reads it as. `i64` and a Kotlin `Long`; `*mut
+/// Ledger` and the C handle `Ledger *`; a `JObject` and an `example.Stamp`.
+///
+/// A target's wire types are its own enum, one variant per kind, each holding
+/// the data only that kind needs: C's name for a struct it declares, a Kotlin
+/// class's name. Two wire types of one Rust type differ when the foreign side
+/// reads them differently — a `jlong` holding a number and one holding an
+/// address — so equality is the whole value's.
+pub trait WireType: Clone + Eq + std::hash::Hash + std::fmt::Debug {
+    type Kind: WireKind;
+
+    fn kind(&self) -> Self::Kind;
+
+    /// The Rust type: `i64`, `*mut Ledger`, `Stamp`, `jni::objects::JObject<'_>`.
     fn rust(&self) -> syn::Type;
 }
 
-/// A Rust type generated code may hold a value in at the boundary.
-///
-/// Its Rust type is its class's, so a carrier and its class cannot disagree:
-/// it is built with [`WireType::exact`] for a class naming one type, and with
-/// [`WireType::declared`], given the declared type's name, for one that
-/// leaves the name to the target.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct WireType<C, M> {
-    rust: syn::Type,
-    /// Which of the adapter's few wire types it is — what a holder's
-    /// [`Accepts`] is stated in.
-    pub class: C,
-    /// For an aggregate, which wire types its members may be; `None` for a
-    /// carrier with no members. A `Product` needs a carrier with members.
-    pub members: Option<Accepts<C>>,
-    /// What the target's writers need to know of it.
-    pub meta: M,
-}
-
-impl<C: WireClass, M> WireType<C, M> {
-    /// A carrier of a class naming one exact Rust type: `i64`, a `jlong`.
-    ///
-    /// Panics if the class leaves a declared type's name to fill in: that is
-    /// the frontend calling the wrong constructor.
-    pub fn exact(class: C, members: Option<Accepts<C>>, meta: M) -> Self {
-        let rust = class.rust();
-        assert!(
-            !holds_placeholder(&rust),
-            "{class:?} carriers are types the target declares; name one with `WireType::declared`"
-        );
-        WireType {
-            rust,
-            class,
-            members,
-            meta,
-        }
-    }
-
-    /// A carrier of a class whose Rust type is one the target declares, named
-    /// `name`: the class's type with `name` in place of `_` — `*mut Ledger`
-    /// for `*mut _`.
-    ///
-    /// Panics if the class names one exact type, which has no name to fill in.
-    pub fn declared(class: C, name: syn::Ident, members: Option<Accepts<C>>, meta: M) -> Self {
-        let mut rust = class.rust();
-        assert!(
-            holds_placeholder(&rust),
-            "{class:?} carriers are one exact type; build one with `WireType::exact`"
-        );
-        Name(name).visit_type_mut(&mut rust);
-        WireType {
-            rust,
-            class,
-            members,
-            meta,
-        }
-    }
-
-    /// The Rust type: `i64`, `*mut ledger_t`, `Stamp`, `JObject<'_>`.
-    pub fn rust(&self) -> &syn::Type {
-        &self.rust
-    }
-}
-
-/// Whether a class's type leaves a declared type's name to fill in.
-fn holds_placeholder(ty: &syn::Type) -> bool {
-    struct Finds(bool);
-    impl syn::visit_mut::VisitMut for Finds {
-        fn visit_type_infer_mut(&mut self, _: &mut syn::TypeInfer) {
-            self.0 = true;
-        }
-    }
-    let mut finds = Finds(false);
-    finds.visit_type_mut(&mut ty.clone());
-    finds.0
-}
-
-/// Fills a class's `_` with the declared type's name.
-struct Name(syn::Ident);
-
-impl syn::visit_mut::VisitMut for Name {
-    fn visit_type_mut(&mut self, ty: &mut syn::Type) {
-        match ty {
-            syn::Type::Infer(_) => {
-                let name = &self.0;
-                *ty = syn::parse_quote!(#name);
-            }
-            _ => syn::visit_mut::visit_type_mut(self, ty),
-        }
-    }
-}
-
-/// Which wire types a holder may hold: an aggregate's members, a wrapper's
-/// parameters or its return.
-///
-/// The registry checks each placement once the plan has worked out what is
-/// placed there, and refuses the value it would put anywhere else.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Accepts<C> {
-    pub classes: Vec<C>,
-}
-
-impl<C: WireClass> Accepts<C> {
-    pub fn of(classes: impl IntoIterator<Item = C>) -> Self {
-        Accepts {
-            classes: classes.into_iter().collect(),
-        }
-    }
-
-    /// Every class of the target.
-    pub fn any() -> Self {
-        Self::of(C::all())
-    }
-
-    pub fn holds(&self, class: &C) -> bool {
-        self.classes.contains(class)
-    }
-}
+/// The kind of a target's wire types.
+pub type WireKindOf<T> = <<T as Target>::WireType as WireType>::Kind;
 
 /// How the values a conversion rule covers cross.
 ///
-/// It names its carriers and operations and states no type for either: a
-/// codec reads its carrier and produces the source type, a `read` reads the
-/// product's carrier and produces the part's, whatever carrier that part
+/// It names its wire types and operations and states no type for either: a
+/// codec reads its wire type and produces the source type, a `read` reads the
+/// product's wire type and produces the part's, whatever wire type that part
 /// resolves to. The registry works them out when it plans a value, and feeds
 /// them to the writer.
 // A binding holds a few dozen of these, each once, so the unboxed codecs cost
@@ -229,7 +130,7 @@ impl<C: WireClass> Accepts<C> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Representation<Op> {
     /// The whole value, one operation each way: a scalar, a handle, a
-    /// fieldless enum. Each direction has a carrier of its own, because some
+    /// fieldless enum. Each direction has a wire type of its own, because some
     /// values are received in a form they are not returned in — a C enum
     /// arrives as `MaybeUninit` of itself.
     Terminal {
@@ -242,12 +143,13 @@ pub enum Representation<Op> {
         /// as a wrapper of its own.
         release: Option<Operation<Op>>,
     },
-    /// The parts of a relation, carried together in one carrier, into Rust.
+    /// The parts of a relation, carried together in one wire type, into Rust.
     Product {
         via: Via,
-        /// The aggregate or object holding the parts. Must have members.
-        carrier: CarrierId,
-        /// One part out of the carrier, applied once per part.
+        /// The aggregate or object holding the parts: a wire type of a kind
+        /// that has parts.
+        wire_type: WireTypeId,
+        /// One part out of the wire type, applied once per part.
         read: Operation<Op>,
     },
     /// A foreign callable, into Rust as an `impl Fn(..)`: the registry builds
@@ -255,14 +157,14 @@ pub enum Representation<Op> {
     /// hands them to `invoke`.
     Callback {
         /// What holds the callable on the foreign side: a C closure struct, a
-        /// JVM object. Its members are the arguments' carriers.
-        carrier: CarrierId,
-        /// Applied once to the carrier, where the callable enters Rust: what
+        /// JVM object. Its parts are the arguments' wire types.
+        wire_type: WireTypeId,
+        /// Applied once to the wire type, where the callable enters Rust: what
         /// every call will need, such as a reference the JVM keeps alive. Its
         /// result is moved into the closure.
         capture: Operation<Op>,
         /// Applied on every call to what `capture` produced and the
-        /// arguments' carriers, in order. It produces nothing.
+        /// arguments' wire types, in order. It produces nothing.
         invoke: Operation<Op>,
         /// What a call does when converting an argument or invoking fails:
         /// the closure returns nothing, so no caller can take the failure.
@@ -273,11 +175,11 @@ pub enum Representation<Op> {
     Unsupported(Unsupported),
 }
 
-/// One direction of a [`Representation::Terminal`]: the carrier, and the
+/// One direction of a [`Representation::Terminal`]: the wire type, and the
 /// operation between it and the source type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Codec<Op> {
-    pub carrier: CarrierId,
+    pub wire_type: WireTypeId,
     pub operation: Operation<Op>,
 }
 
@@ -371,17 +273,17 @@ impl Failure {
 /// source type, which only the registry can do.
 ///
 /// None states a type: where it is used says which. What differs per target —
-/// the carrier an address is cast to, what a value is carried as — is the
-/// carrier's and the arms'.
+/// the wire type an address is cast to, what a value is carried as — is the
+/// wire type's and the arms'.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum StandardOp {
-    /// The result *is* the operand: the carrier and the source value are one
+    /// The result *is* the operand: the wire type and the source value are one
     /// Rust value. Renders nothing at all.
     Identity,
-    /// Read the part's member of the aggregate the carrier is: `arg0.secs`.
+    /// Read the part's member of the aggregate the wire type is: `arg0.secs`.
     ReadMember,
     /// Hand an owned source value to the foreign side as an address:
-    /// `Box::into_raw(Box::new(v)) as <carrier>`. The foreign side owns the
+    /// `Box::into_raw(Box::new(v)) as <wire type>`. The foreign side owns the
     /// allocation from here on.
     IntoRaw,
     /// Take back what [`StandardOp::IntoRaw`] handed out:
@@ -397,10 +299,10 @@ pub enum StandardOp {
     /// The reverse: a carried value back to the source enum.
     ///
     /// With `invalid` set the match ends in a default arm that fails with
-    /// that message, formatted with the value — the carrier can hold
+    /// that message, formatted with the value — the wire type can hold
     /// something no value of the enum names. With `bits` set the match is on
-    /// the carrier's bits read as that integer type: C's `MaybeUninit<op_t>`
-    /// holds whatever `int` the caller passed. The carrier must be exactly as
+    /// the wire type's bits read as that integer type: C's `MaybeUninit<op_t>`
+    /// holds whatever `int` the caller passed. The wire type must be exactly as
     /// large as `bits`, and initialized, which only the caller can promise, so
     /// the registry makes a wrapper that reads one `unsafe`.
     EnumIn {
@@ -413,7 +315,7 @@ pub enum StandardOp {
 /// How one source function is exported: everything about its wrapper that is
 /// not a planned value.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FunctionForm<Op, C> {
+pub struct FunctionForm<Op> {
     /// The `extern` string: `"C"`, `"system"`.
     pub abi: String,
     /// The symbol the wrapper is exported under.
@@ -432,10 +334,6 @@ pub struct FunctionForm<Op, C> {
     pub attrs: Vec<syn::Attribute>,
     /// Whether the wrapper is an `unsafe fn`.
     pub unsafety: bool,
-    /// The wire types a wrapper parameter may be.
-    pub params: Accepts<C>,
-    /// The wire types the wrapper may return.
-    pub ret: Accepts<C>,
 }
 
 /// A wrapper parameter the calling convention adds.
@@ -472,8 +370,8 @@ pub struct Report<Op> {
 
 /// What one output is.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum OutputForm<Op, C, O> {
-    /// One representation of a type, exposed: its carriers' Rust
+pub enum OutputForm<Op, O> {
+    /// One representation of a type, exposed: its wire types' Rust
     /// declarations, and its foreign declaration. The representation is also
     /// the rule at the output's root, so two outputs of one type each plan as
     /// declared.
@@ -481,11 +379,11 @@ pub enum OutputForm<Op, C, O> {
         representation: ReprId,
         /// The wrapper releasing a handed-out value, for a representation
         /// that has a release.
-        release: Option<FunctionForm<Op, C>>,
+        release: Option<FunctionForm<Op>>,
         meta: O,
     },
     /// A source function, exported through a wrapper of this form.
-    Function { form: FunctionForm<Op, C>, meta: O },
+    Function { form: FunctionForm<Op>, meta: O },
     /// A declarator the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
@@ -549,15 +447,12 @@ impl std::fmt::Display for Step {
     }
 }
 
-/// A carrier, as a binding for target `T` states one.
-pub type CarrierOf<T> = WireType<<T as Target>::WireClass, <T as Target>::CarrierMeta>;
 /// A representation, as a binding for target `T` states one.
 pub type RepresentationOf<T> = Representation<<T as Target>::Op>;
 /// A function form, as a binding for target `T` states one.
-pub type FunctionFormOf<T> = FunctionForm<<T as Target>::Op, <T as Target>::WireClass>;
+pub type FunctionFormOf<T> = FunctionForm<<T as Target>::Op>;
 /// An output's form, as a binding for target `T` states one.
-pub type OutputFormOf<T> =
-    OutputForm<<T as Target>::Op, <T as Target>::WireClass, <T as Target>::OutputMeta>;
+pub type OutputFormOf<T> = OutputForm<<T as Target>::Op, <T as Target>::OutputMeta>;
 
 /// Everything planning reads from a binding.
 ///
@@ -566,7 +461,7 @@ pub type OutputFormOf<T> =
 /// the id is handed over rather than as a wrong plan.
 pub struct Binding<T: Target> {
     issuer: Issuer,
-    carriers: Vec<CarrierOf<T>>,
+    wire_types: Vec<T::WireType>,
     representations: Vec<RepresentationOf<T>>,
     rules: Vec<(Scope, ReprId)>,
     outputs: Vec<(Declaration, OutputFormOf<T>)>,
@@ -576,7 +471,7 @@ impl<T: Target> Default for Binding<T> {
     fn default() -> Self {
         Binding {
             issuer: Issuer::fresh(),
-            carriers: Vec::new(),
+            wire_types: Vec::new(),
             representations: Vec::new(),
             rules: Vec::new(),
             outputs: Vec::new(),
@@ -589,17 +484,17 @@ impl<T: Target> Binding<T> {
         Self::default()
     }
 
-    /// A carrier generated Rust may use. Declaring an equal carrier again
+    /// A wire type generated Rust may use. Declaring an equal wire type again
     /// returns the same id.
-    pub fn carrier(&mut self, carrier: CarrierOf<T>) -> CarrierId {
-        let index = match self.carriers.iter().position(|known| *known == carrier) {
+    pub fn wire_type(&mut self, wire_type: T::WireType) -> WireTypeId {
+        let index = match self.wire_types.iter().position(|known| *known == wire_type) {
             Some(index) => index,
             None => {
-                self.carriers.push(carrier);
-                self.carriers.len() - 1
+                self.wire_types.push(wire_type);
+                self.wire_types.len() - 1
             }
         };
-        CarrierId {
+        WireTypeId {
             issuer: self.issuer,
             index,
         }
@@ -608,9 +503,9 @@ impl<T: Target> Binding<T> {
     /// One way a type crosses. Declaring an equal representation again
     /// returns the same id.
     ///
-    /// Panics if a carrier it names was issued by another binding.
+    /// Panics if a wire type it names was issued by another binding.
     pub fn representation(&mut self, representation: RepresentationOf<T>) -> ReprId {
-        let carriers: Vec<CarrierId> = match &representation {
+        let wire_types: Vec<WireTypeId> = match &representation {
             Representation::Terminal {
                 into_rust,
                 out_of_rust,
@@ -618,15 +513,16 @@ impl<T: Target> Binding<T> {
             } => into_rust
                 .iter()
                 .chain(out_of_rust)
-                .map(|codec| codec.carrier)
+                .map(|codec| codec.wire_type)
                 .collect(),
-            Representation::Product { carrier, .. } | Representation::Callback { carrier, .. } => {
-                vec![*carrier]
+            Representation::Product { wire_type, .. }
+            | Representation::Callback { wire_type, .. } => {
+                vec![*wire_type]
             }
             Representation::Unsupported(_) => Vec::new(),
         };
-        for carrier in carriers {
-            self.check(carrier.issuer, "carrier");
+        for wire_type in wire_types {
+            self.check(wire_type.issuer, "wire type");
         }
         let index = match self
             .representations
@@ -670,10 +566,10 @@ impl<T: Target> Binding<T> {
         self.output_id(self.outputs.len() - 1)
     }
 
-    /// The carrier `id` names. Panics if another binding issued `id`.
-    pub fn carrier_of(&self, id: CarrierId) -> &CarrierOf<T> {
-        self.check(id.issuer, "carrier");
-        &self.carriers[id.index]
+    /// The wire type `id` names. Panics if another binding issued `id`.
+    pub fn wire_type_of(&self, id: WireTypeId) -> &T::WireType {
+        self.check(id.issuer, "wire type");
+        &self.wire_types[id.index]
     }
 
     /// The representation `id` names. Panics if another binding issued `id`.
@@ -725,25 +621,21 @@ impl<T: Target> Binding<T> {
 }
 
 impl<T: Target> std::fmt::Display for Binding<T> {
-    /// One line per carrier, representation, rule and output, a function
+    /// One line per wire type, representation, rule and output, a function
     /// form's details on the lines under its output, with the target's own
     /// vocabulary in its `Debug` form. It prints every field planning reads,
     /// which makes it the diagnostic to diff when two builds of one binding
     /// generate differently. It is not a proof that two bindings are equal:
-    /// the target's classes, metadata and operations print only as much as
-    /// their `Debug` tells apart.
+    /// the target's wire types and operations print only as much as their
+    /// `Debug` tells apart.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (index, carrier) in self.carriers.iter().enumerate() {
-            let members = match &carrier.members {
-                Some(accepts) => format!("members {}", classes(&accepts.classes)),
-                None => "no members".to_string(),
-            };
+        for (index, wire_type) in self.wire_types.iter().enumerate() {
             writeln!(
                 f,
-                "carrier  c{index}  {}  {}  {members}  {:?}",
-                tokens(&carrier.rust),
-                carrier.class.name(),
-                carrier.meta
+                "wire     w{index}  {}  {}  {:?}",
+                tokens(&wire_type.rust()),
+                wire_type.kind().name(),
+                wire_type
             )?;
         }
         for (index, representation) in self.representations.iter().enumerate() {
@@ -754,7 +646,9 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                     release,
                 } => {
                     let codec = |codec: &Option<Codec<T::Op>>| match codec {
-                        Some(codec) => format!("{} {}", codec.carrier, operation(&codec.operation)),
+                        Some(codec) => {
+                            format!("{} {}", codec.wire_type, operation(&codec.operation))
+                        }
                         None => "-".to_string(),
                     };
                     format!(
@@ -767,16 +661,20 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                         }
                     )
                 }
-                Representation::Product { via, carrier, read } => {
-                    format!("product  {carrier}  {via:?}  read: {}", operation(read))
+                Representation::Product {
+                    via,
+                    wire_type,
+                    read,
+                } => {
+                    format!("product  {wire_type}  {via:?}  read: {}", operation(read))
                 }
                 Representation::Callback {
-                    carrier,
+                    wire_type,
                     capture,
                     invoke,
                     routes,
                 } => format!(
-                    "callback  {carrier}  capture: {}  invoke: {}  routes: [{}]",
+                    "callback  {wire_type}  capture: {}  invoke: {}  routes: [{}]",
                     operation(capture),
                     operation(invoke),
                     routes.iter().map(route).collect::<Vec<_>>().join("; ")
@@ -823,12 +721,6 @@ impl<T: Target> std::fmt::Display for Binding<T> {
     }
 }
 
-/// Classes as a refusal names them: `[i64, pointer]`.
-fn classes<C: WireClass>(classes: &[C]) -> String {
-    let names: Vec<&str> = classes.iter().map(WireClass::name).collect();
-    format!("[{}]", names.join(", "))
-}
-
 fn tokens(item: &impl quote::ToTokens) -> String {
     item.to_token_stream().to_string()
 }
@@ -858,11 +750,11 @@ fn terminal(terminal: &Terminal) -> String {
 }
 
 /// A function form, indented under the output it belongs to: its signature on
-/// one line, its acceptance on the next, then one line per route.
-fn write_form<Op: std::fmt::Debug, C: WireClass>(
+/// one line, then one line per route.
+fn write_form<Op: std::fmt::Debug>(
     f: &mut std::fmt::Formatter<'_>,
     label: &str,
-    form: &FunctionForm<Op, C>,
+    form: &FunctionForm<Op>,
 ) -> std::fmt::Result {
     let context: Vec<String> = form
         .context
@@ -894,12 +786,6 @@ fn write_form<Op: std::fmt::Debug, C: WireClass>(
             true => String::new(),
             false => format!("  attrs [{}]", attrs.join(" ")),
         }
-    )?;
-    writeln!(
-        f,
-        "         {label}  params {}  ret {}",
-        classes(&form.params.classes),
-        classes(&form.ret.classes)
     )?;
     for one in &form.routes {
         writeln!(f, "         {label}  route {}", route(one))?;

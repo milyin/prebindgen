@@ -33,14 +33,14 @@ unread. As in C, the rule decides the
 has read any field, and no JNI code runs to decide it.
 
 The scalars take the `i64` rule: a `Terminal` over a `jlong`
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations),
 one JNI scalar type, which needs no parts.
 
 ## Checks
 
 - The relation is resolved by the registry from the rule.
-- The `JObject` carrier holds only `Long` members — what a getter returning a
-  `long` reads — and both fields resolve to one. The rule's `read` is a getter,
+- A JVM object can have only `Long` parts — what a getter returning a `long`
+  reads — and both fields resolve to one. The rule's `read` is a getter,
   a JVM call that can fail — a consequence stated here and paid for
   [there][fn_represent_jni].
 - The selection for `Stamp` is the same one [the struct's JNI page][struct_select_jni]

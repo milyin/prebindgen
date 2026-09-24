@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "05-represent", "language": "c"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Common cell][typedef_represent] · [Element path][typedef]
-Owner: the registry; the C frontend states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+Owner: the registry; the C frontend states the [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 
 # Type alias declaring an opaque handle — Represent and compose values — C
 
@@ -14,20 +14,17 @@ Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   the Type(
 
 ## Result
 
-The carrier is a pointer to the incomplete C type the C target declares, and
+The wire type is a pointer to the incomplete C type the C target declares, and
 the frontend's whole statement is three standard operations over it, recorded
 when it reads `ptr_type!(Ledger)`:
 
 ```rust
-let pointer = binding.carrier(WireType::declared(
-    CClass::Pointer,                        // `*mut _`
-    format_ident!("Ledger"),                // so `*mut Ledger`: the C target's own type, not source::Ledger
-    None,
-    CCarrier::Opaque { c_name: "Ledger".into() },
-));
+let pointer = binding.wire_type(CWireType::Pointer {
+    name: format_ident!("Ledger"),          // `*mut Ledger`: the C target's own type, not source::Ledger
+});
 Representation::Terminal {
-    into_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::FromRaw) }),
-    out_of_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::IntoRaw) }),
+    into_rust: Some(Codec { wire_type: pointer, operation: Operation::standard(StandardOp::FromRaw) }),
+    out_of_rust: Some(Codec { wire_type: pointer, operation: Operation::standard(StandardOp::IntoRaw) }),
     release: Some(Operation::standard(StandardOp::Release)),
 }
 ```

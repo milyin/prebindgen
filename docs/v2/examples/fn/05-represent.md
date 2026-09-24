@@ -30,16 +30,16 @@ that source call between them.
 node(input)  = Crossing { Stamp, IntoRust }
                relation: Stamp.fields
                children: [ node(i64, IntoRust), node(i64, IntoRust) ] // same node twice
-               repr:     the Stamp rule's: its carrier, and a read applied per part
-               body:     obtain secs carrier -> convert
-                         obtain nanos carrier -> convert
+               repr:     the Stamp rule's: its wire type, and a read applied per part
+               body:     obtain secs wire type -> convert
+                         obtain nanos wire type -> convert
                          construct source::Stamp { secs, nanos }
 
 node(output) = Crossing { i64, OutOfRust }
                relation: atomic
                children: []
-               repr:     the i64 rule's: its carrier, converted by identity
-               body:     identity — source i64 and the target carrier are one value
+               repr:     the i64 rule's: its wire type, converted by identity
+               body:     identity — source i64 and the target wire type are one value
 ```
 
 Taken together the two plans are a small graph — three nodes, and one edge per

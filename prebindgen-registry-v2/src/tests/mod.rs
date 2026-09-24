@@ -5,29 +5,35 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    binding::{Accepts, Binding, FunctionForm, OutputForm, Representation, Scope, WireClass},
+    binding::{Binding, FunctionForm, OutputForm, Representation, Scope, WireKind, WireType},
     decl::Declaration,
     outcome::EngineError,
     plan::generate,
     run::Generation,
-    target::{CarrierFeed, OperationFeed, Target, Unsupported, Written},
+    target::{OperationFeed, Target, Unsupported, WireTypeFeed, Written},
 };
 
 /// A target that carries nothing: every value it is asked about is refused, so
 /// a run over it exercises the accounting and nothing else.
 struct Nothing;
 
-/// The classes of a target that carries nothing: there are none.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum NoClass {}
+/// The wire types of a target that carries nothing: there are none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum NoWire {}
 
-impl WireClass for NoClass {
-    fn all() -> Vec<Self> {
-        Vec::new()
+impl WireKind for NoWire {
+    const ALL: &'static [Self] = &[];
+
+    fn name(self) -> &'static str {
+        match self {}
     }
+}
 
-    fn name(&self) -> &'static str {
-        match *self {}
+impl WireType for NoWire {
+    type Kind = NoWire;
+
+    fn kind(&self) -> NoWire {
+        *self
     }
 
     fn rust(&self) -> syn::Type {
@@ -38,8 +44,7 @@ impl WireClass for NoClass {
 impl Target for Nothing {
     const NAME: &'static str = "test";
 
-    type WireClass = NoClass;
-    type CarrierMeta = ();
+    type WireType = NoWire;
     type Op = ();
     /// Which output this is, standing in for a real target's placement: the
     /// engine tells two declarations of one entity apart by their whole form.
@@ -49,7 +54,7 @@ impl Target for Nothing {
         unreachable!("nothing is planned")
     }
 
-    fn write_carrier(&self, _: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+    fn write_wire_type(&self, _: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
         unreachable!("nothing is planned")
     }
 }
@@ -110,7 +115,7 @@ struct Stated {
 fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, EngineError> {
     let mut binding: Binding<Nothing> = Binding::new();
     let refused = binding.representation(Representation::Unsupported(Unsupported::new(
-        "unsupported.nothing.carrier",
+        "unsupported.nothing.representation",
         "this target carries nothing",
     )));
     for key in ["Handle", "&Handle"] {
@@ -135,8 +140,6 @@ fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, En
                     routes: Vec::new(),
                     attrs: Vec::new(),
                     unsafety: false,
-                    params: Accepts::of([]),
-                    ret: Accepts::of([]),
                 },
                 meta: *id,
             },
@@ -250,7 +253,7 @@ fn every_skip_names_the_capability_that_stopped_it() {
         .iter()
         .map(|(_, skip)| skip.capability.as_str())
         .collect();
-    assert_eq!(codes, ["unsupported.nothing.carrier"; 3]);
+    assert_eq!(codes, ["unsupported.nothing.representation"; 3]);
 }
 
 /// One entity declared several times is several skips, in the order the

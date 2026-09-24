@@ -11,7 +11,7 @@ The frozen plan for this function:
 
 ```text
 FunctionPlan { declaration: fn:stamp_sum,
-               abi, symbol, params, ret, routes: <from the form and the carriers>,
+               abi, symbol, params, ret, routes: <from the form and the wire types>,
                instrs: <convert the input, call source::stamp_sum, convert the result>,
                result: <the converted result> }
 ```

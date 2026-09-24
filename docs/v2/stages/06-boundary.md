@@ -77,8 +77,8 @@ aborts. The form names the reporting operation, and the registry plans the
 branch and terminal action around it. V1's handler-based convention is a
 separate implementation and should not be confused with this V2 example.
 
-If a failure has no route, or a value is of a wire type the form's parameters
-do not hold, the function is skipped, with the reason recorded in its
+If a failure has no route, or a value is of a kind the target cannot pass or
+return, the function is skipped, with the reason recorded in its
 [outcome](07-retain.md#retain-supported-output). It is never quietly given a
 different ABI than the one the configuration asked for, because a caller
 compiled against the header or the Kotlin declaration would then be calling
@@ -105,7 +105,7 @@ shows one.
 What the binding states about one exported function:
 
 ```rust
-struct FunctionForm<Op, C> {
+struct FunctionForm<Op> {
     abi: String,                   // The `extern` string: "C", "system".
     symbol: String,                // The symbol the wrapper is exported under.
     context: Vec<ContextParam>,    // Parameters the convention adds, before the inputs.
@@ -113,8 +113,6 @@ struct FunctionForm<Op, C> {
     routes: Vec<FailureRoute<Op>>, // One per failure category a conversion can raise.
     attrs: Vec<syn::Attribute>,    // Attributes beyond `#[no_mangle]`.
     unsafety: bool,                // Whether the wrapper is an `unsafe fn`.
-    params: Accepts<C>,            // The wire classes a parameter may be,
-    ret: Accepts<C>,               // and the return.
 }
 
 struct ContextParam {
@@ -144,8 +142,8 @@ struct FunctionPlan<Op> {
     attrs: Vec<syn::Attribute>,
     unsafety: bool,
     params: Vec<(ValueId, WrapperParam)>,  // The context parameters, then one per input,
-                                           // each typed as its conversion's carrier.
-    ret: Option<syn::Type>,                // The result conversion's carrier, if any.
+                                           // each typed as its conversion's wire type.
+    ret: Option<syn::Type>,                // The result conversion's wire type, if any.
     routes: Vec<FailureRoute<Op>>,
     instrs: Vec<Stmt>,                     // The whole wrapper, as instructions.
     result: Option<ValueId>,               // The value the wrapper returns.
@@ -164,14 +162,15 @@ generation. Both targets built so far state no attribute and no `unsafe`; V1's
 JNI wrapper, `#[allow(..)] pub unsafe extern "C"`, is the shape that needed the
 fields. The registry makes a wrapper `unsafe` on its own account when one of
 its conversions reads a
-[carrier](05-represent.md#describing-target-values-and-operations)'s bits, as
+[wire type](05-represent.md#describing-target-values-and-operations)'s bits, as
 C's enum input does: that caller
 owes initialized storage.
 
 A wrapper parameter's type is not the binding's to state either. Each input's
-parameter is typed as the carrier its conversion resolved to, so a parameter
-and the conversion reading it cannot disagree; what the form says is which
-wire classes it may be. A context parameter supplies a named runtime context
+parameter is typed as the wire type its conversion resolved to, so a
+parameter and the conversion reading it cannot disagree. Which kinds of wire
+type a wrapper can take and return at all is not a binding's choice but a
+fact about the target, its `PARAMS` and `RETURNS`. A context parameter supplies a named runtime context
 that operations ask for — an operation's `jni.env` finds the parameter that
 supplies it, and one that needs a context no parameter supplies is skipped,
 with the reason.

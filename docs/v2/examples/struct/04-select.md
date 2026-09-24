@@ -10,8 +10,8 @@ Owner: the registry, from the binding's rules · Previous: [Record binding reque
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits           // what a rule at a position is looked up by
-rules:    Type(Stamp) -> Product { via: Fields, carrier: <this target's Stamp carrier>, read, build }
-          Type(i64)   -> Terminal { carrier: <this target's i64 carrier>, identity }
+rules:    Type(Stamp) -> Product { via: Fields, wire_type: <this target's Stamp wire type>, read, build }
+          Type(i64)   -> Terminal { wire_type: <this target's i64 wire type>, identity }
 relations of Stamp: [ Stamp.fields, atomic ] // registered by the registry from Flat
 ```
 
@@ -40,7 +40,7 @@ of it without calling the target. Nothing has been written, but everything a
 writer will need is now known: the
 [conversion](../../stages/04-select.md#select-conversion-relations) is made of
 two field conversions, in declaration order, and the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 of `Stamp` has two members, each carried as the `i64` rule says. The
 [C][struct_select_c] and [Kotlin/JNI][struct_select_jni] pages show each
 frontend's rules.

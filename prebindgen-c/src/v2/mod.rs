@@ -3,7 +3,7 @@
 //! [`CbindgenBuilder`] keeps accumulating declarations exactly as it does for
 //! v1 — same builder, same modifiers, same manglers — and this module is the
 //! only thing that reads them for the other engine: it states the whole
-//! binding as data — the carriers C holds values in, how each type's values
+//! binding as data — the wire types C holds values in, how each type's values
 //! cross, the form each exported function takes — and hands it to the engine
 //! with a [`CTarget`], which only writes. An ignore is a v1 decision about v1's
 //! undeclared-item warnings, which v2 does not emit, so none reaches the
@@ -19,12 +19,12 @@ mod target;
 
 use prebindgen_registry::{flat::Flat, TypeKey};
 use prebindgen_registry_v2::{
-    generate, mirrored_i32_enum, Accepts, Binding, Codec, Declaration, EngineError, EnumArm,
+    generate, mirrored_i32_enum, Binding, Codec, Declaration, EngineError, EnumArm,
     FailureCategory, FailureRoute, FunctionFormOf, Generation, Operation, OutputForm,
-    Representation, Scope, StandardOp, Target, Terminal, Unsupported, Via, WireType,
+    Representation, Scope, StandardOp, Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
-pub use target::{CCarrier, CClass, COp, CTarget};
+pub use target::{COp, CTarget, CWireKind, CWireType};
 
 use crate::CbindgenBuilder;
 
@@ -78,9 +78,9 @@ impl CbindgenBuilder {
 
         // The scalar this target carries so far: an `i64` is an `int64_t`, and
         // crosses unchanged.
-        let i64_c = binding.carrier(WireType::exact(CClass::I64, None, CCarrier::Builtin));
+        let i64_c = binding.wire_type(CWireType::I64);
         let unchanged = Codec {
-            carrier: i64_c,
+            wire_type: i64_c,
             operation: Operation::standard(StandardOp::Identity),
         };
         let i64_whole = binding.representation(Representation::Terminal {
@@ -113,17 +113,12 @@ impl CbindgenBuilder {
             let representation = match self.aggregate_refusal(flat, key, &c_name) {
                 Some(refusal) => Representation::Unsupported(refusal),
                 None => {
-                    let carrier = binding.carrier(WireType::declared(
-                        CClass::Aggregate,
-                        format_ident!("{c_name}"),
-                        // What a member may be: the scalar, not yet another
-                        // aggregate, a handle or an enum.
-                        Some(Accepts::of([CClass::I64])),
-                        CCarrier::Aggregate { c_name },
-                    ));
+                    let wire_type = binding.wire_type(CWireType::Aggregate {
+                        name: format_ident!("{c_name}"),
+                    });
                     Representation::Product {
                         via: Via::Fields,
-                        carrier,
+                        wire_type,
                         read: Operation::standard(StandardOp::ReadMember),
                     }
                 }
@@ -135,19 +130,16 @@ impl CbindgenBuilder {
         // the typed destructor the manglers name.
         for key in sorted(self.opaque.keys()) {
             let c_name = self.c_type_name(key);
-            let pointer = binding.carrier(WireType::declared(
-                CClass::Pointer,
-                format_ident!("{c_name}"),
-                None,
-                CCarrier::Opaque { c_name },
-            ));
+            let pointer = binding.wire_type(CWireType::Pointer {
+                name: format_ident!("{c_name}"),
+            });
             let representation = Representation::Terminal {
                 into_rust: Some(Codec {
-                    carrier: pointer,
+                    wire_type: pointer,
                     operation: Operation::standard(StandardOp::FromRaw),
                 }),
                 out_of_rust: Some(Codec {
-                    carrier: pointer,
+                    wire_type: pointer,
                     operation: Operation::standard(StandardOp::IntoRaw),
                 }),
                 release: Some(Operation::standard(StandardOp::Release)),
@@ -175,20 +167,12 @@ impl CbindgenBuilder {
                 Err(refusal) => Representation::Unsupported(refusal),
                 Ok(values) => {
                     let ident = format_ident!("{c_name}");
-                    let enumeration = binding.carrier(WireType::declared(
-                        CClass::Enum,
-                        ident.clone(),
-                        None,
-                        CCarrier::Enum {
-                            c_name: c_name.clone(),
-                        },
-                    ));
-                    let storage = binding.carrier(WireType::declared(
-                        CClass::EnumBits,
-                        ident.clone(),
-                        None,
-                        CCarrier::EnumBits,
-                    ));
+                    let enumeration = binding.wire_type(CWireType::Enum {
+                        name: ident.clone(),
+                    });
+                    let storage = binding.wire_type(CWireType::EnumBits {
+                        name: ident.clone(),
+                    });
                     let named = values
                         .iter()
                         .map(|(value, _)| {
@@ -213,7 +197,7 @@ impl CbindgenBuilder {
                         .collect();
                     Representation::Terminal {
                         into_rust: Some(Codec {
-                            carrier: storage,
+                            wire_type: storage,
                             operation: Operation::standard(StandardOp::EnumIn {
                                 values: numbered,
                                 invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
@@ -221,7 +205,7 @@ impl CbindgenBuilder {
                             }),
                         }),
                         out_of_rust: Some(Codec {
-                            carrier: enumeration,
+                            wire_type: enumeration,
                             operation: Operation::standard(StandardOp::EnumOut { values: named }),
                         }),
                         release: None,
@@ -260,17 +244,11 @@ impl CbindgenBuilder {
             let callback =
                 TypeKey::from_type(&syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static));
             let c_name = self.callback_c_name(key);
-            let closure = binding.carrier(WireType::declared(
-                CClass::Closure,
-                format_ident!("{c_name}"),
-                // What an argument may be: what leaves Rust in a register —
-                // the scalar, an address, an enum. A by-value aggregate leaving
-                // Rust has no construction yet.
-                Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
-                CCarrier::Closure { c_name },
-            ));
+            let closure = binding.wire_type(CWireType::Closure {
+                name: format_ident!("{c_name}"),
+            });
             let representation = binding.representation(Representation::Callback {
-                carrier: closure,
+                wire_type: closure,
                 capture: Operation::standard(StandardOp::Identity),
                 invoke: Operation::target(COp::Call),
                 routes: Vec::new(),
@@ -344,8 +322,8 @@ impl CbindgenBuilder {
     }
 }
 
-/// The form every C wrapper takes: `extern "C"`, no parameter the convention
-/// adds, and any C wire type on either side.
+/// The form every C wrapper takes: `extern "C"`, and no parameter the
+/// convention adds.
 ///
 /// A member read is infallible and a scalar crosses unchanged; the one thing
 /// that can fail is a handle arriving null, or an enum arriving as a number
@@ -366,8 +344,6 @@ fn form(symbol: String, inputs: Vec<syn::Ident>) -> FunctionFormOf<CTarget> {
         }],
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::any(),
-        ret: Accepts::any(),
     }
 }
 

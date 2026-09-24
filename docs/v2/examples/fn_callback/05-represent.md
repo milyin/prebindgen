@@ -13,7 +13,7 @@ already planned:
 ```text
 impl Fn(i64), IntoRust, relation callback.args
   +-- arg 0 -> node(i64, OutOfRust)    // finished: the leaf a function's i64 result uses
-representation: the callback rule's — Callback { carrier, capture, invoke, routes }
+representation: the callback rule's — Callback { wire type, capture, invoke, routes }
 ```
 
 ## Result
@@ -23,9 +23,9 @@ node(each) {
     crossing:       impl Fn(i64), IntoRust
     relation:       callback.args
     representation: the callback rule's
-    carrier:        this target's callable carrier
+    wire type:        this target's callable wire type
     children:       [ node(i64, OutOfRust) as "arg 0" ]
-    body:           apply capture to carrier -> captured
+    body:           apply capture to wire type -> captured
                     closure, taking captured, over (a0: i64) {
                         convert a0 -> wire          // the child's template
                         apply invoke to captured, wire
@@ -36,7 +36,7 @@ node(each) {
 
 The [node](../../stages/05-represent.md#represent-and-compose-values)'s body
 does two things at two different times. `capture` runs once, where the callable
-enters Rust, on the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+enters Rust, on the [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 it arrived in. The closure is what the source function receives, and its body
 runs on every call: the child's template turns the argument into its wire form,
 and `invoke` hands that to the foreign callable together with what `capture`
@@ -53,8 +53,8 @@ failures, because no wrapper is running to route it.
 
 ## Checks
 
-- Before the closure is built, the registry checks that each argument's carrier
-  is one the callable's carrier holds, that every failure a call can raise has
+- Before the closure is built, the registry checks that each argument's wire type
+  is of a kind the callable's kind can have as a part, that every failure a call can raise has
   a route of the callback's own, and that nothing in a call asks for a runtime
   context. Each failed check refuses the callback, not the call.
 - The closure's identity is the node's: a second function taking

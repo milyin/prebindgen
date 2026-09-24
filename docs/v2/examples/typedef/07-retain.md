@@ -27,7 +27,7 @@ Retained {
     output_value: node(Ledger, IntoRust),
 }
 
-outcome(public Ledger) = Emitted { artifacts: [ carrier declaration, release wrapper ] }
+outcome(public Ledger) = Emitted { artifacts: [ wire type declaration, release wrapper ] }
 
 outcome(exported ledger_open)  = Emitted    // requires public Ledger, which is
 outcome(exported ledger_close) = Emitted    // emitted — so both stand

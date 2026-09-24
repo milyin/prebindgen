@@ -10,7 +10,7 @@ Owner: the common Rust writer and the JNI adapter's Kotlin writer
 ```text
 Retained(callback:impl Fn(i64)+Send+Sync+'static), read by the Kotlin writer, with
     metadata: Callback example.LongCallback, no raw interface
-    args:     [ arg 0 through a jlong carrier of Kotlin type Long ]
+    args:     [ arg 0 through a jlong wire type of Kotlin type Long ]
 FunctionPlan(fn:stamp_each) frozen, with
     abi, symbol: extern "system", "Java_example_JNINative_stampEach"
     params:      [ mut env: JNIEnv, _this: JObject, stamp: JObject, each: JObject ], no return

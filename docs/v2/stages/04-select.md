@@ -88,7 +88,7 @@ are answered.
   by-value C struct whose members are read with ordinary field reads, or a JVM
   object whose properties are read by calling `getSecs()` and `getNanos()`
   through JNI. This answer is the rest of the same representation: the
-  [carrier](05-represent.md#describing-target-values-and-operations), and the
+  [wire type](05-represent.md#describing-target-values-and-operations), and the
   operations that read it or convert it. The frontend states it, because only the
   language's own crate knows what a C struct or a JVM object is; the registry
   holds it, types it and orders it without needing to know.
@@ -125,7 +125,7 @@ plan(type, direction, position):
     body = compose(relation, children, repr)
                # obtain each part, convert it, construct the Rust value — or the
                # reverse, when the direction is out of Rust — typing each of
-               # repr's operations from the carriers the children resolved to
+               # repr's operations from the wire types the children resolved to
 
     record the node and return it
 ```
@@ -175,8 +175,8 @@ point. Planning `stamp_sum` selects this:
 The tree does not yet say which instructions read `secs` or build `Stamp`;
 putting them together is the next chapter's work. What it does settle is
 that `Stamp` will be built from two fields and not from a handle or a
-constructor argument, that each field's carrier is the `i64` rule's, and that
-an `i64` is a leaf. The `Stamp` carrier's members are therefore known before
+constructor argument, that each field's wire type is the `i64` rule's, and that
+an `i64` is a leaf. The `Stamp` wire type's members are therefore known before
 anything is written: two, each carried as its field's rule says.
 
 ### Refusal and cycles
@@ -226,7 +226,7 @@ of getting between them. `Stamp` is related to `(secs: i64, nanos: i64)` by its
 fields; it would be related to `(millis: i64)` by `stamp_from_millis`, and to
 `StampParts` by an accessor `stamp_parts(&Stamp)`. Each of those is a relation
 of `Stamp`, and a type can stand in several at once. Nothing in a relation names
-a [carrier](05-represent.md#describing-target-values-and-operations), a wire type, a Kotlin class or a C struct: it is the answer to "how is
+a [wire type](05-represent.md#describing-target-values-and-operations), a wire type, a Kotlin class or a C struct: it is the answer to "how is
 the Rust value built or read?", and that answer is the same whichever language
 is on the other side.
 
@@ -379,7 +379,7 @@ wrappers, references and lifetimes; cloning needs an explicit operation.
 ## What the target writes
 
 The target knows how to write its language, and nothing else. The registry
-decides what to write: which carriers a wrapper takes, which operations run in
+decides what to write: which wire types a wrapper takes, which operations run in
 which order, which declarations a public API needs. It then calls the target
 with everything a piece of text needs already worked out — a **feed**. A
 writer cannot refuse and cannot change the plan: whatever could make a value
@@ -390,14 +390,13 @@ before the first writer runs.
 pub trait Target: Sized {
     const NAME: &'static str;
 
-    /// The adapter's few wire types, which acceptance is stated in.
-    /// C: I64, Pointer, Aggregate, Enum, EnumBits, Closure.
-    /// JNI: Long, Int, Handle, Object.
-    type WireClass: WireClass;
-    /// What a carrier tells the writers beyond its Rust type.
-    /// C: which declaration it needs, under which C name. JNI: its JVM
-    /// descriptor and Kotlin type.
-    type CarrierMeta: Clone + Eq + Hash + Debug;
+    /// The adapter's wire types: one variant per kind, holding what only that
+    /// kind needs. C: a declared type's name. JNI: a Kotlin class, from which
+    /// the JVM descriptor follows.
+    type WireType: WireType;
+    /// The kinds a wrapper can take and return. Every kind by default.
+    const PARAMS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
+    const RETURNS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
     /// The target's own operations. C: none. JNI: a getter call, and the two
     /// ways a failure is reported.
     type Op: Clone + Eq + Hash + Debug;
@@ -408,10 +407,10 @@ pub trait Target: Sized {
     /// One of the target's operations, as one Rust expression.
     fn write_operation(&self, op: &Self::Op, feed: &OperationFeed<'_, Self>) -> Written;
 
-    /// The Rust items a carrier needs declared: a `repr(C)` struct or enum
+    /// The Rust items a wire type needs declared: a `repr(C)` struct or enum
     /// mirror, an incomplete type behind a pointer. None for a type Rust
     /// already has, such as `i64` or `JObject`.
-    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<TokenStream>;
+    fn write_wire_type(&self, feed: &WireTypeFeed<'_, Self>) -> Vec<TokenStream>;
 }
 
 /// What a writer produced, and the helpers it needs emitted once beside it.
@@ -432,18 +431,23 @@ pub struct OperationFeed<'a, T: Target> {
     pub result: Option<Fed<'a, T>>,
     /// For an operation applied per part, such as a `Product`'s `read`: which part.
     pub part: Option<&'a Part>,
+    /// For a callback's `capture` and `invoke`: the arguments' wire types,
+    /// each named for `invoke`, which is handed them.
+    pub args: Vec<(Option<syn::Ident>, &'a T::WireType)>,
 }
 
 pub enum Fed<'a, T: Target> {
     Source(&'a TypeRef),
-    Carrier(&'a CarrierOf<T>),
+    WireType(&'a T::WireType),
+    Captured,               // What a callback's `capture` produced.
 }
 
-pub struct CarrierFeed<'a, T: Target> {
-    pub carrier: &'a CarrierOf<T>,
-    /// For the carrier of a `Product`: each part, with the carrier it resolved to.
-    pub members: Vec<(&'a Part, &'a CarrierOf<T>)>,
-    /// For a carrier of a fieldless enum's value: that enum, from the model.
+pub struct WireTypeFeed<'a, T: Target> {
+    pub wire_type: &'a T::WireType,
+    /// For the wire type of a `Product` or a `Callback`: each part, with the
+    /// wire type it resolved to.
+    pub parts: Vec<(&'a Part, &'a T::WireType)>,
+    /// For a wire type of a fieldless enum's value: that enum, from the model.
     pub unit: Option<&'a Enum>,
 }
 ```
@@ -451,19 +455,19 @@ pub struct CarrierFeed<'a, T: Target> {
 The JNI getter shows the split. The binding stated
 `read: Operation::target(JniOp::Getter)` for `Stamp`; `JniOp::Getter` carries
 no name and no type. To read `secs`, the registry calls `write_operation`
-with the object operand and its `example/Stamp` carrier, the `env` context, the
-part `secs`, and the result carrier the `i64` rule resolved to — a `jlong`
-whose metadata says `J`. The JNI writer turns the part's name into `getSecs`
+with the object operand and its `example.Stamp` wire type, the `env` context,
+the part `secs`, and the result wire type the `i64` rule resolved to —
+`JniWireType::Long`, whose descriptor is `J`. The JNI writer turns the part's name into `getSecs`
 by the Kotlin convention and the result's descriptor into `()J`, and
 writes `env.call_method(&stamp, "getSecs", "()J", &[]).and_then(|value| value.j())`.
 Nothing in the feed was decided by the writer, and nothing the writer produced
 changes what the registry planned.
 
-C writes even less. Every C operation is a standard one the registry writes
-itself — a member read, a pointer cast, a match over an enum's values — so
-C's `Op` has no values and `write_operation` is never called. What C writes
-is carriers: fed the `Stamp` carrier and its two members, each with its
-resolved `i64` carrier, it writes
+C writes even less. Every C conversion is a standard operation the registry
+writes itself — a member read, a pointer cast, a match over an enum's values —
+and C's one operation of its own is calling through a callback's closure
+struct. What C writes is mostly wire types: fed the `Stamp` wire type and its
+two parts, each with its resolved `i64` wire type, it writes
 `#[repr(C)] pub struct Stamp { pub secs: i64, pub nanos: i64 }`, which
 cbindgen then turns into the header's declaration.
 
@@ -471,21 +475,21 @@ What each stage feeds:
 
 | Stage | The registry decides | The target writes |
 | --- | --- | --- |
-| Selection (this chapter) | Which representation, relation and carrier each value has | Nothing |
-| [Composition](05-represent.md) | Which operations run in what order, and each operand's and result's carrier | Each target operation, as an expression |
-| [The wrapper](06-boundary.md) | The wrapper's parameters and return from the function form and the resolved carriers, and a route per failure category | Each reporting operation a route names |
+| Selection (this chapter) | Which representation, relation and wire type each value has | Nothing |
+| [Composition](05-represent.md) | Which operations run in what order, and each operand's and result's wire type | Each target operation, as an expression |
+| [The wrapper](06-boundary.md) | The wrapper's parameters and return from the function form and the resolved wire types, and a route per failure category | Each reporting operation a route names |
 | [Retention](07-retain.md) | Which outputs survive: those whose values' types are exposed by surviving outputs | Nothing |
-| [Emission](08-emit.md) | The carriers of every retained type output, each with its resolved members | Each carrier's declaration |
+| [Emission](08-emit.md) | The wire types of every retained type output, each with its resolved members | Each wire type's declaration |
 
 The foreign declarations are not a call the registry makes. The JNI
 frontend's Kotlin writer reads the finished generation — the retained
 outputs in order, the values planned for each, and the binding's metadata —
 and C has none to write, since cbindgen derives the header from the Rust.
 
-The `CarrierMeta` a writer reads is the one thing in the plan the registry
-does not understand, and it needs no promise about it: the registry compares
-metadata for equality, because two carriers of one Rust type — two `JObject`s
-of different classes — are different carriers, and it never interprets it.
+Of a wire type, the registry reads only its kind and its Rust type; the rest
+of what a variant holds — a C name, a Kotlin class — is the writers'. The
+registry compares whole wire types for equality, because two of one Rust type
+— two `JObject`s of different classes — are different wire types.
 
 A conversion speaks for one value. It cannot state a choice for a child,
 because a child is looked up again at its own position, and two ways to say
@@ -496,7 +500,7 @@ These feeds are read-only views over the completed plan. A writer cannot
 invoke the registry's recursive compiler or modify the plan tables. Common
 representations — a struct read through its members, a scalar carried
 unchanged — are built from standard operations the registry writes itself,
-so a new target's first version is a table of carriers and rules rather than
+so a new target's first version is a table of wire types and rules rather than
 a library. A target that needs a conversion the selected relation's children
 do not give it has
 [no way to ask for one yet](../extensions.md#requesting-further-conversions).

@@ -1,6 +1,6 @@
 //! The JNI target, as the v2 engine calls it: the operations only the JVM has.
 //!
-//! Everything a JNI binding decides — which carrier a value crosses in, which
+//! Everything a JNI binding decides — which wire type a value crosses in, which
 //! operations read it, what native method and `Java_…` symbol a wrapper gets,
 //! how a failure reaches the JVM — is stated as data by [`super`] when the
 //! binding is built, and the registry plans from that alone. What is left here
@@ -11,61 +11,131 @@
 //! own writer's, in [`super::kotlin`], over the finished generation.
 
 use prebindgen_registry_v2::{
-    Artifact, CarrierFeed, Fed, OperationFeed, Target, WireClass, Written,
+    Artifact, Fed, OperationFeed, Target, WireKind, WireType, WireTypeFeed, Written,
 };
 use quote::{format_ident, quote};
 
-/// The JVM wire types a binding's carriers are, which is what a data class's
-/// properties and a native method's parameters are allowed to be stated in.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum JniClass {
+/// The kinds of JVM wire type, which is what JNI's capabilities are stated
+/// in: what a data class can have as properties, what a callback can take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum JniWireKind {
     /// A `jlong` holding a number.
     Long,
     /// A `jint`: a fieldless enum's value.
     Int,
     /// A `jlong` holding a Rust address, inside a Kotlin handle class.
     Handle,
-    /// A JVM object reference.
+    /// A reference to a Kotlin data class instance, read through getters.
     Object,
+    /// A reference to a Kotlin `fun interface`, called through `run`.
+    Callable,
 }
 
-impl WireClass for JniClass {
-    fn all() -> Vec<Self> {
-        vec![
-            JniClass::Long,
-            JniClass::Int,
-            JniClass::Handle,
-            JniClass::Object,
-        ]
-    }
+impl WireKind for JniWireKind {
+    const ALL: &'static [Self] = &[
+        JniWireKind::Long,
+        JniWireKind::Int,
+        JniWireKind::Handle,
+        JniWireKind::Object,
+        JniWireKind::Callable,
+    ];
 
-    fn name(&self) -> &'static str {
+    fn name(self) -> &'static str {
         match self {
-            JniClass::Long => "long",
-            JniClass::Int => "int",
-            JniClass::Handle => "handle",
-            JniClass::Object => "object",
+            JniWireKind::Long => "long",
+            JniWireKind::Int => "int",
+            JniWireKind::Handle => "handle",
+            JniWireKind::Object => "object",
+            JniWireKind::Callable => "callable",
         }
     }
 
-    /// Every JVM carrier is a type the `jni` crate declares; a number and an
+    /// A data class's properties are what a getter returning a `long` reads.
+    /// A callback's arguments are what `run` takes as a JVM primitive: a
+    /// number, an enum's number, an address.
+    fn parts(self) -> &'static [Self] {
+        match self {
+            JniWireKind::Object => &[JniWireKind::Long],
+            JniWireKind::Callable => &[JniWireKind::Long, JniWireKind::Int, JniWireKind::Handle],
+            _ => &[],
+        }
+    }
+}
+
+/// A JVM wire type: its kind, and the Kotlin names the JVM side reads it as.
+/// Its descriptor and Kotlin type follow from those.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum JniWireType {
+    /// A `jlong` Kotlin reads as a `Long`.
+    Long,
+    /// A `jint` Kotlin reads as a value of this `enum class`.
+    Int { kotlin_enum: String },
+    /// A `jlong` Kotlin wraps in this handle class.
+    Handle { kotlin_class: String },
+    /// A `JObject` of this data class.
+    Object { kotlin_class: String },
+    /// A `JObject` implementing this `fun interface` — or, when an argument
+    /// is a handle or an enum, `raw`: the one over the arguments' wire forms,
+    /// which the `external` method takes.
+    Callable {
+        interface: String,
+        raw: Option<String>,
+    },
+}
+
+impl WireType for JniWireType {
+    type Kind = JniWireKind;
+
+    fn kind(&self) -> JniWireKind {
+        match self {
+            JniWireType::Long => JniWireKind::Long,
+            JniWireType::Int { .. } => JniWireKind::Int,
+            JniWireType::Handle { .. } => JniWireKind::Handle,
+            JniWireType::Object { .. } => JniWireKind::Object,
+            JniWireType::Callable { .. } => JniWireKind::Callable,
+        }
+    }
+
+    /// Every JVM wire type is a type the `jni` crate declares; a number and an
     /// address share one, and differ in what the JVM side does with it.
     fn rust(&self) -> syn::Type {
         match self {
-            JniClass::Long | JniClass::Handle => syn::parse_quote!(jni::sys::jlong),
-            JniClass::Int => syn::parse_quote!(jni::sys::jint),
-            JniClass::Object => syn::parse_quote!(jni::objects::JObject<'_>),
+            JniWireType::Long | JniWireType::Handle { .. } => syn::parse_quote!(jni::sys::jlong),
+            JniWireType::Int { .. } => syn::parse_quote!(jni::sys::jint),
+            JniWireType::Object { .. } | JniWireType::Callable { .. } => {
+                syn::parse_quote!(jni::objects::JObject<'_>)
+            }
         }
     }
 }
 
-/// What the JNI writers need to know of a carrier: how the JVM describes it,
-/// and how Kotlin spells it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Jvm {
+impl JniWireType {
     /// The JVM type descriptor: `J`, `I`, `Lexample/Stamp;`.
-    pub descriptor: String,
-    pub kotlin: KotlinType,
+    pub fn descriptor(&self) -> String {
+        match self {
+            JniWireType::Long | JniWireType::Handle { .. } => "J".to_string(),
+            JniWireType::Int { .. } => "I".to_string(),
+            JniWireType::Object { kotlin_class } => format!("L{};", kotlin_class.replace('.', "/")),
+            JniWireType::Callable { interface, raw } => {
+                format!("L{};", raw.as_ref().unwrap_or(interface).replace('.', "/"))
+            }
+        }
+    }
+
+    /// How Kotlin spells it, and how a value of it reaches the `external`
+    /// method.
+    pub fn kotlin(&self) -> KotlinType {
+        match self {
+            JniWireType::Long => KotlinType::Value("Long".to_string()),
+            JniWireType::Int { kotlin_enum } => KotlinType::Enum(kotlin_enum.clone()),
+            JniWireType::Handle { kotlin_class } => KotlinType::Handle(kotlin_class.clone()),
+            JniWireType::Object { kotlin_class } => KotlinType::Value(kotlin_class.clone()),
+            JniWireType::Callable { interface, raw } => KotlinType::Callback {
+                class: interface.clone(),
+                raw: raw.clone(),
+            },
+        }
+    }
 }
 
 /// A Kotlin type as the public function spells it, and how a value of it
@@ -179,8 +249,7 @@ pub(crate) const REPORT_ERROR: &str = "report_jni_error";
 impl Target for JniTarget {
     const NAME: &'static str = "jni";
 
-    type WireClass = JniClass;
-    type CarrierMeta = Jvm;
+    type WireType = JniWireType;
     type Op = JniOp;
     type OutputMeta = JniOutput;
 
@@ -193,11 +262,11 @@ impl Target for JniTarget {
                 let (object, _) = feed.value.as_ref().expect("a getter reads an object");
                 let part = feed.part.expect("a getter reads one property");
                 let name = getter(part.name.as_deref().map(plain).unwrap_or_default());
-                let Some(Fed::Carrier(result)) = &feed.result else {
-                    panic!("a getter produces the carrier of its property");
+                let Some(Fed::WireType(result)) = &feed.result else {
+                    panic!("a getter produces the wire type of its property");
                 };
-                let descriptor = format!("(){}", result.meta.descriptor);
-                let extract = format_ident!("{}", extractor(&result.meta.descriptor));
+                let descriptor = format!("(){}", result.descriptor());
+                let extract = format_ident!("{}", extractor(&result.descriptor()));
                 Written::new(quote! {
                     #env.call_method(&#object, #name, #descriptor, &[])
                         .and_then(|value| value.#extract())
@@ -227,7 +296,7 @@ impl Target for JniTarget {
                     "({})V",
                     feed.args
                         .iter()
-                        .map(|(_, carrier)| carrier.meta.descriptor.as_str())
+                        .map(|(_, wire_type)| wire_type.descriptor())
                         .collect::<String>()
                 );
                 Written::new(quote! {
@@ -245,8 +314,8 @@ impl Target for JniTarget {
                     .value
                     .as_ref()
                     .expect("a call is applied to the capture");
-                let args = feed.args.iter().map(|(name, carrier)| {
-                    let field = format_ident!("{}", extractor(&carrier.meta.descriptor));
+                let args = feed.args.iter().map(|(name, wire_type)| {
+                    let field = format_ident!("{}", extractor(&wire_type.descriptor()));
                     quote!(jni::sys::jvalue { #field: #name })
                 });
                 Written::new(quote! {
@@ -278,9 +347,9 @@ impl Target for JniTarget {
         }
     }
 
-    /// A JVM carrier is a type the `jni` crate already declares; the classes
+    /// A JVM wire type is a type the `jni` crate already declares; the classes
     /// they hold are Kotlin's, written by the frontend's own writer.
-    fn write_carrier(&self, _: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+    fn write_wire_type(&self, _: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
         Vec::new()
     }
 }

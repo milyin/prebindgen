@@ -10,10 +10,10 @@ Owner: the registry, from the rule the JNI frontend recorded for `data_class!(St
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits
-rules:    Type(Stamp) -> Product { via: Fields, carrier: stamp_obj, read: JniOp::Getter (env, runtime failure), build: JniOp::NewObject }
-          Type(i64)   -> Terminal { carrier: jlong carrier, identity both ways }
-carriers: stamp_obj = Jvm { descriptor: "Lexample/Stamp;", kotlin: "example.Stamp" }
-          jlong carrier, Jvm { descriptor: "J", kotlin: "Long" }
+rules:    Type(Stamp) -> Product { via: Fields, wire_type: stamp_obj, read: JniOp::Getter (env, runtime failure) }
+          Type(i64)   -> Terminal { wire_type: jlong, identity both ways }
+wire types: stamp_obj = JniWireType::Object { kotlin_class: "example.Stamp" }
+            jlong     = JniWireType::Long
 relations of Stamp: [ Stamp.fields, atomic ]
 ```
 
@@ -27,17 +27,17 @@ nanos: i64, IntoRust   Type(i64) rule -> atomic
 
 A data class [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
 properties mirror the fields, so the JNI frontend records a `Product` through
-`Via::Fields` over a `JObject` [carrier](../../stages/05-represent.md#describing-target-values-and-operations) whose metadata names `example.Stamp`.
+`Via::Fields` over a `JObject` [wire type](../../stages/05-represent.md#describing-target-values-and-operations) whose metadata names `example.Stamp`.
 The registry resolves that to the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
 Rust `Stamp` is made of reading one property per field. No getter name or
 descriptor exists yet; the JNI writer derives both when the registry feeds it
-the part and the part's `jlong` carrier, at
+the part and the part's `jlong` wire type, at
 [composition][struct_represent_jni].
 
 `ptr_class!(Stamp)` — the struct kept in Rust and handed to Kotlin as an
-opaque `jlong` handle — records a `Terminal` over a `jlong` carrier instead,
+opaque `jlong` handle — records a `Terminal` over a `jlong` wire type instead,
 and no property would ever be read.
 
 ## Checks

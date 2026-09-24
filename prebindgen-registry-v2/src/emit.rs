@@ -5,7 +5,7 @@
 //! return — and allocates every temporary from the plan, so two operations
 //! rendered into one wrapper cannot collide over a name. A target contributes
 //! one expression per operation of its own ([`Target::write_operation`]) and
-//! the declarations its carriers need ([`Target::write_carrier`]); it
+//! the declarations its wire types need ([`Target::write_wire_type`]); it
 //! contributes no control flow.
 //!
 //! Source types and struct shapes are generated through Flat's emission
@@ -19,12 +19,13 @@ use quote::{format_ident, quote};
 
 use crate::{
     binding::{
-        Binding, CarrierId, FailureRoute, Implementation, OutputForm, Representation, StandardOp,
+        Binding, FailureRoute, Implementation, OutputForm, Representation, StandardOp, WireType,
+        WireTypeId,
     },
     body::{Instr, Operand, Stmt, ValueId},
     plan::{Applied, FunctionPlan, ParamRole, Retained, Slot, ValuePlan},
     target::{
-        Artifact, CarrierFeed, FailureCategory, Fed, OperationFeed, Target, Terminal, Written,
+        Artifact, FailureCategory, Fed, OperationFeed, Target, Terminal, WireTypeFeed, Written,
     },
 };
 
@@ -90,7 +91,7 @@ pub(crate) fn render<T: Target>(
     // happily against a source crate it disagrees with. It belongs to no
     // declaration, so nothing in retention decides whether to keep it.
     let guards = flat.guards().map(|guard| Writer.guard(guard));
-    let carriers = carriers(flat, target, binding, retained, nodes);
+    let wire_types = wire_types(flat, target, binding, retained, nodes);
     // A helper an operation needs is emitted once, before the wrappers, in
     // the order the wrappers first need it.
     let mut helpers: Vec<Artifact> = Vec::new();
@@ -111,7 +112,7 @@ pub(crate) fn render<T: Target>(
     let helpers = helpers.iter().map(|helper| &helper.rust);
     let tokens = quote! {
         #(#guards)*
-        #(#carriers)*
+        #(#wire_types)*
         #(#helpers)*
         #(#wrappers)*
     };
@@ -124,20 +125,20 @@ pub(crate) fn render<T: Target>(
     }
 }
 
-/// The declarations the carriers of every retained type need, each once, in
+/// The declarations the wire types of every retained type need, each once, in
 /// the order the types were declared.
 ///
-/// A carrier's declaration exists only where the source item its type names
+/// A wire type's declaration exists only where the source item its type names
 /// does — the `repr(C)` mirror of a conditional struct is itself conditional —
 /// so every item the target writes carries that item's conditions.
-fn carriers<T: Target>(
+fn wire_types<T: Target>(
     flat: &Flat,
     target: &T,
     binding: &Binding<T>,
     retained: &[Retained],
     nodes: &[ValuePlan],
 ) -> Vec<TokenStream> {
-    let mut written: std::collections::HashSet<CarrierId> = std::collections::HashSet::new();
+    let mut written: std::collections::HashSet<WireTypeId> = std::collections::HashSet::new();
     let mut items = Vec::new();
     for values in retained {
         let OutputForm::Type { representation, .. } = binding.form_of(values.output) else {
@@ -153,7 +154,7 @@ fn carriers<T: Target>(
             .entity_name()
             .and_then(|name| flat.unit_enum(&name));
         let root = values.inputs.first().map(|root| &nodes[root.0]);
-        let used: Vec<(CarrierId, bool)> = match binding.representation_of(*representation) {
+        let used: Vec<(WireTypeId, bool)> = match binding.representation_of(*representation) {
             Representation::Terminal {
                 into_rust,
                 out_of_rust,
@@ -161,33 +162,34 @@ fn carriers<T: Target>(
             } => into_rust
                 .iter()
                 .chain(out_of_rust.iter())
-                .map(|codec| (codec.carrier, false))
+                .map(|codec| (codec.wire_type, false))
                 .collect(),
-            Representation::Product { carrier, .. } | Representation::Callback { carrier, .. } => {
-                vec![(*carrier, true)]
+            Representation::Product { wire_type, .. }
+            | Representation::Callback { wire_type, .. } => {
+                vec![(*wire_type, true)]
             }
             Representation::Unsupported(_) => Vec::new(),
         };
-        for (carrier, with_members) in used {
-            if !written.insert(carrier) {
+        for (wire_type, with_parts) in used {
+            if !written.insert(wire_type) {
                 continue;
             }
-            let members = match (with_members, root) {
+            let parts = match (with_parts, root) {
                 (true, Some(root)) => root
                     .relation
                     .parts()
                     .iter()
                     .zip(&root.children)
-                    .map(|(part, child)| (part, binding.carrier_of(nodes[child.0].carrier)))
+                    .map(|(part, child)| (part, binding.wire_type_of(nodes[child.0].wire_type)))
                     .collect(),
                 _ => Vec::new(),
             };
-            let feed = CarrierFeed {
-                carrier: binding.carrier_of(carrier),
-                members,
+            let feed = WireTypeFeed {
+                wire_type: binding.wire_type_of(wire_type),
+                parts,
                 unit,
             };
-            for item in target.write_carrier(&feed) {
+            for item in target.write_wire_type(&feed) {
                 items.push(quote!(#(#conditions)* #item));
             }
         }
@@ -254,7 +256,7 @@ fn wrapper<T: Target>(
     // review makes worth doing.
     //
     // The instructions are where a wrapper spells a source item: its signature
-    // carries carriers only, and the one operation that spells a source type —
+    // carries wire types only, and the one operation that spells a source type —
     // a handle taken back or released, cast to `*mut source::Ledger` — is a
     // standard one the registry writes, so it is found here too.
     let mut conditions = Vec::new();
@@ -313,7 +315,7 @@ fn wrapper<T: Target>(
     let symbol = format_ident!("{}", function.symbol);
     let abi = &function.abi;
     let attrs = &function.attrs;
-    // A carrier whose bits are read as an integer holds whatever the caller
+    // A wire type whose bits are read as an integer holds whatever the caller
     // put in it. A foreign caller passes a number, which the match checks;
     // safe Rust could pass storage never initialized, which no check can
     // look at. So the wrapper is `unsafe`, and says what it is owed.
@@ -586,9 +588,9 @@ fn operation<T: Target>(
     // The handle operations spell a source type, which is what makes them the
     // registry's: an adapter has no way to, and no business doing it.
     let source_type = |ty| Writer.emit_source_type(ty, &reach.modules, &reach.default);
-    let carrier_type = |slot: Option<Slot>| match slot {
-        Some(Slot::Carrier(carrier)) => {
-            let ty = binding.carrier_of(carrier).rust();
+    let wire_rust = |slot: Option<Slot>| match slot {
+        Some(Slot::WireType(wire_type)) => {
+            let ty = binding.wire_type_of(wire_type).rust();
             quote!(#ty)
         }
         _ => source_type(&applied.subject),
@@ -605,8 +607,8 @@ fn operation<T: Target>(
             quote!(#value.#member)
         }
         Implementation::Standard(StandardOp::IntoRaw) => {
-            let carrier = carrier_type(applied.result);
-            quote!(Box::into_raw(Box::new(#value)) as #carrier)
+            let wire_type = wire_rust(applied.result);
+            quote!(Box::into_raw(Box::new(#value)) as #wire_type)
         }
         Implementation::Standard(StandardOp::FromRaw) => {
             let ty = source_type(&applied.subject);
@@ -664,11 +666,11 @@ fn operation<T: Target>(
         Implementation::Target(op) => {
             let fed = |slot: Slot| match slot {
                 Slot::Source => Fed::Source(&applied.subject),
-                Slot::Carrier(carrier) => Fed::Carrier(binding.carrier_of(carrier)),
+                Slot::WireType(wire_type) => Fed::WireType(binding.wire_type_of(wire_type)),
                 Slot::Captured => Fed::Captured,
             };
             // After the value and the contexts come the arguments a callback's
-            // `invoke` is handed; its `capture` is told their carriers only.
+            // `invoke` is handed; its `capture` is told their wire types only.
             let named = &operands[1 + applied.contexts.len()..];
             let feed = OperationFeed {
                 value: Some((value.clone(), fed(applied.value))),
@@ -685,8 +687,8 @@ fn operation<T: Target>(
                     .args
                     .iter()
                     .enumerate()
-                    .map(|(index, carrier)| {
-                        (named.get(index).cloned(), binding.carrier_of(*carrier))
+                    .map(|(index, wire_type)| {
+                        (named.get(index).cloned(), binding.wire_type_of(*wire_type))
                     })
                     .collect(),
             };

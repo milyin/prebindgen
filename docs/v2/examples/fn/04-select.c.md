@@ -10,7 +10,7 @@ Owner: the registry, from the rules the C frontend recorded
 The two [crossings](../../stages/03-requests.md#finding-an-existing-conversion-plan), and the rules the C frontend recorded for their types:
 
 ```text
-Crossing { source: Stamp, direction: IntoRust  }   Type(Stamp) -> Product through Fields, carrier `Stamp`
+Crossing { source: Stamp, direction: IntoRust  }   Type(Stamp) -> Product through Fields, wire type `Stamp`
 Crossing { source: i64,   direction: OutOfRust }   Type(i64)   -> Terminal over `i64`, identity both ways
 ```
 
@@ -35,7 +35,7 @@ rule's.
 
 The three `i64` positions take the one rule the C frontend records for every
 `i64`: a `Terminal` over the `i64`
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations),
 which crosses unchanged. One [representation](../../stages/05-represent.md#represent-and-compose-values), so the registry plans one `i64`
 conversion per direction rather than one per position.
 
@@ -43,8 +43,8 @@ conversion per direction rather than one per position.
 
 - The relation is resolved by the registry from the rule; `Stamp.fields` is
   the struct relation it worked out from Flat's field list.
-- The `Stamp` carrier holds only `I64` members, and both fields resolve to one,
-  so the aggregate accepts them. A field of a type no rule covers, or one
+- A C aggregate can have only `I64` parts, and both fields resolve to one, so
+  the aggregate accepts them. A field of a type no rule covers, or one
   carried as anything else, is refused where the member is, and the function
   is [skipped with that cause][fn_retain] rather than planned around.
 - The selection for `Stamp` is the same one [the struct's C page][struct_select_c]

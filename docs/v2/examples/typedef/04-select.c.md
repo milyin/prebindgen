@@ -34,7 +34,7 @@ relation is also the only one there is.
   and the registry would plan it as one whole value with no parts, its fields
   untouched.
 - The representation names one
-  [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+  [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
   for both directions and a release, which the type's output exports as
   `ledger_drop`.
 

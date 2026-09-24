@@ -25,21 +25,17 @@ Cbindgen::builder()
 ## Result
 
 `callback!` declares the signature, and the frontend states it as data: a
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 for the closure struct a C caller fills in, the
 [representation](../../stages/05-represent.md#represent-and-compose-values)
 over it, the rule, and the output.
 
 ```rust
-let closure = binding.carrier(WireType::declared(
-    CClass::Closure,                        // `_`: a struct the C target declares
-    format_ident!("closure_i64"),
-    // What an argument may be: the scalar, an address, an enum.
-    Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
-    CCarrier::Closure { c_name: "closure_i64".into() },
-));
+let closure = binding.wire_type(CWireType::Closure {
+    name: format_ident!("closure_i64"),     // a struct the C target declares
+});
 let callback = binding.representation(Representation::Callback {
-    carrier: closure,
+    wire_type: closure,
     capture: Operation::standard(StandardOp::Identity),   // the struct itself is kept
     invoke: Operation::target(COp::Call),                 // calls its `call`
     routes: Vec::new(),                                   // nothing a call does can fail

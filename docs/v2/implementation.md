@@ -145,7 +145,7 @@ To find the implementation, start with `generate(flat, &target, binding, source_
 in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 - `binding.rs` defines what a frontend states before planning:
-  [carriers](stages/05-represent.md#describing-target-values-and-operations),
+  [wire types](stages/05-represent.md#describing-target-values-and-operations),
   representations, rules, outputs and function forms.
 - `target.rs` defines the writers an adapter implements and the feeds they are
   handed, with the vocabulary both sides share.
@@ -159,9 +159,9 @@ in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 The two targets live in the language frontends, under their `v2` feature:
 `prebindgen-c/src/v2/` and `prebindgen-jni/src/v2/`. Each is two things. A
-`Target` of two writers — `write_operation` and `write_carrier` — that decides
+`Target` of two writers — `write_operation` and `write_wire_type` — that decides
 nothing, walks no type and names no temporary; and a reader of the frontend's
-own declaration storage that turns it into the binding — carriers,
+own declaration storage that turns it into the binding — wire types,
 representations, rules and outputs, in a stable order — with the frontend's
 manglers already applied to every name. The JNI frontend also carries its Kotlin
 writer, over the outputs the generation retained. A frontend's
@@ -193,8 +193,8 @@ They check conversion sharing and rules at positions, temporary-name
 collisions, propagation from a value no rule covers to its struct and callers,
 and the requirements between outputs. They check the rules themselves: two for
 one value, or one at a position the output does not have, fail the build; a
-member or parameter of a wire type its holder does not accept is refused where
-it sits; an unused type rule is listed; the binding prints as what planning
+member or parameter of a kind its holder cannot have is refused where it
+sits; an unused type rule is listed; the binding prints as what planning
 reads. They also check that a function is skipped when an operation has no
 error route or needs a runtime context the form does not supply; that a handle is carried both ways and released under its type's
 identity, while a null one arriving where it is consumed needs a route; and
@@ -202,7 +202,7 @@ that a handle nobody can release skips the type and what takes it. For
 callbacks they check the closure the registry builds, an argument handed out
 inside each call, a call's failure taking the callback's own route, the
 refusals — an unrouted failure inside a call, a call needing a runtime
-context, an argument that cannot leave Rust or that the carrier does not hold,
+context, an argument that cannot leave Rust or that the wire type does not hold,
 a callable leaving Rust, a callback representation on another type, a
 callback no output declares — and a rule at `param f.arg 0`. Contradictory configuration must instead produce a generation error.
 These tests establish planner behavior; C/JNI runtime tests are still needed to
@@ -218,7 +218,7 @@ establish the behavior of the resulting foreign interface.
    described with the rest of the
    [conversion plans](stages/05-represent.md#the-conversion-plans-the-registry-builds).
    A conversion's body is a template whose
-   carrier is its
+   wire type is its
    input; using it inlines it under the caller's identities. Temporary names are allocated by the writer from
    definition order, never by an adapter.
 2. **Standard and target operations.** An operation's implementation is
@@ -240,10 +240,12 @@ establish the behavior of the resulting foreign interface.
    [node](stages/05-represent.md#represent-and-compose-values). Varying by
    position is what a rule at a position is for: it names a different
    representation, which is in the identity.
-4. **How a binding declares its types and generated units.** A carrier is a
-   `WireType` — the Rust type it is spelled as, which of the target's wire
-   classes it is, which classes its members may be, and metadata only the
-   writers read — declared once and named by id, as a representation is. A
+4. **How a binding declares its types and generated units.** A wire type is a
+   value of the target's own `WireType` enum — one variant per wire kind,
+   holding what only that kind needs, from which it spells its Rust type —
+   declared once and named by id, as a representation is. What a kind can
+   hold, and what a wrapper can take and return, is the target's per kind:
+   `WireKind::parts`, `Target::PARAMS` and `Target::RETURNS`. A
    generated unit is an `Artifact`: a name and the Rust it contributes, returned
    by a writer beside the text that needs it. The registry keeps one
    [artifact](stages/05-represent.md#individual-target-operations) per name and
@@ -254,10 +256,10 @@ establish the behavior of the resulting foreign interface.
    rules for one value, a rule at a position its output does not have, a form
    naming the wrong number of inputs, a symbol that is not an identifier, and a
    form restating the linkage all fail the build; a member, parameter or return
-   of a wire class its holder does not accept is refused where it sits; an
+   of a kind its holder cannot have is refused where it sits; an
    operation needing a context the form does not supply is refused; and a
    failure route must report the error type the operation raises. Wrapper
-   parameters are typed from the carriers their conversions resolved to, so a
+   parameters are typed from the wire types their conversions resolved to, so a
    parameter and the conversion reading it cannot disagree.
 5. **Feature-assertion guards.** Reading captured source injects a `const _`
    assertion comparing the source crate's features against the set the capture
@@ -288,7 +290,7 @@ establish the behavior of the resulting foreign interface.
 8. **Handles without a resource contract.** An opaque value crosses as an
    address through three more standard operations — `IntoRaw`, `FromRaw`,
    `Release` — which are the registry's because they spell a source type. The
-   frontend states the carrier the address is cast to and, on the
+   frontend states the wire type the address is cast to and, on the
    representation, that a release exists; naming one is what tells the
    registry the type is a handle, whether the item behind it is an alias or a
    struct whose fields the target never reads. The registry then requires the
@@ -312,9 +314,9 @@ establish the behavior of the resulting foreign interface.
    that cannot fail. Into Rust the enum arrives as `MaybeUninit` and is matched
    as the C `int` it holds, because C lets an enum variable hold any `int` and a
    Rust enum holding a number none of its values has is undefined behaviour.
-   `EnumIn` takes the integer type to read the carrier as for this.
+   `EnumIn` takes the integer type to read the wire type as for this.
    `MaybeUninit` could also hold storage never initialized, which no match can
-   check, so a wrapper that reads a carrier's bits is `unsafe` and documents
+   check, so a wrapper that reads a wire type's bits is `unsafe` and documents
    that its caller owes initialized storage. JNI carries a `jint` and a Kotlin
    `enum class`. In both, the direction into Rust can meet a number no value
    names and fails as a `Binding` error. An alternative carrying a field makes a
@@ -326,7 +328,7 @@ establish the behavior of the resulting foreign interface.
    because the model counts every value as present, and would put an entry in
    the mirror for a variant the source crate compiled out. An enum with no
    values has nothing to mirror at all. A number outside `i32` is refused,
-   because both carriers are 32 bits: a C `int` and JNI's `Int`. And
+   because both wire types are 32 bits: a C `int` and JNI's `Int`. And
    `#[non_exhaustive]` is refused wherever it sits: on the enum, which another
    crate cannot match without an arm for a value it does not know — and going
    out of Rust there is nothing for that arm to produce — or on a value, which
@@ -350,7 +352,7 @@ establish the behavior of the resulting foreign interface.
    such an enum and reads the capability back.
 
 10. **A callback is a closure the registry builds.** An `impl Fn(..)`
-    parameter crosses as a `Callback` representation: a carrier the callable
+    parameter crosses as a `Callback` representation: a wire type the callable
     arrives in, a `capture` applied to it once, an `invoke` applied on every
     call, and the routes a failure inside a call takes. The relation is the
     callback's arguments, planned out of Rust through the rules for their
@@ -444,7 +446,7 @@ this list says what the increment left open and why.
 Acceptance criteria:
 
 - [x] The design's boundaries are exercised by scalar and struct bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
-- [x] Users configure the existing language frontends; frontend internals construct the binding for the registry — carriers, representations, rules and outputs — with every name already mangled. A declarator a frontend does not lower is recorded as unsupported, naming it; the registry reads the binding's structure and never the target's own metadata.
+- [x] Users configure the existing language frontends; frontend internals construct the binding for the registry — wire types, representations, rules and outputs — with every name already mangled. A declarator a frontend does not lower is recorded as unsupported, naming it; the registry reads the binding's structure and never the target's own metadata.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
 - [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association.
 - [x] Targets are writers only: every representation, runtime-operation and delivery choice is stated in the binding before planning, and neither target walks a type, decides a plan or names a temporary.

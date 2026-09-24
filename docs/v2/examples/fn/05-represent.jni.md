@@ -18,14 +18,14 @@ i64,   OutOfRust, atomic                                               Terminal 
 ## Result
 
 ```text
-node(input)  carrier:    a JObject of example.Stamp, members [secs: jlong, nanos: jlong]
+node(input)  wire type:    a JObject of example.Stamp, members [secs: jlong, nanos: jlong]
              operations: the JNI getter, applied per part (see below)
              produces:   an owned source Stamp
                          failures { Runtime: jni::errors::Error }
 
-node(output) carrier:    jlong
+node(output) wire type:    jlong
              operations: none — the identity renders nothing
-             produces:   the carrier; failures {}
+             produces:   the wire type; failures {}
 ```
 
 The [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s input is an object reference. A getter call obtains each long

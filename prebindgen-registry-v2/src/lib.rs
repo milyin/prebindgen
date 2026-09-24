@@ -47,10 +47,10 @@ pub mod target;
 mod tests;
 
 pub use binding::{
-    Accepts, Binding, CarrierId, CarrierOf, Codec, ContextParam, Failure, FailureRoute,
-    FunctionForm, FunctionFormOf, Implementation, Operation, OutputForm, OutputFormOf, OutputId,
-    Report, ReprId, Representation, RepresentationOf, Scope, StandardOp, Step, ValuePath, Via,
-    WireClass, WireType,
+    Binding, Codec, ContextParam, Failure, FailureRoute, FunctionForm, FunctionFormOf,
+    Implementation, Operation, OutputForm, OutputFormOf, OutputId, Report, ReprId, Representation,
+    RepresentationOf, Scope, StandardOp, Step, ValuePath, Via, WireKind, WireKindOf, WireType,
+    WireTypeId,
 };
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::Declaration;
@@ -61,7 +61,7 @@ pub use plan::{
 };
 pub use run::{field_is_conditional, Generation, PIPELINE};
 pub use target::{
-    mirrored_enum, mirrored_i32_enum, Artifact, CarrierFeed, Crossing, Direction, EnumArm,
-    FailureCategory, Fed, OperationFeed, Part, PlanningError, Relation, StructRelation, Target,
-    Terminal, Unsupported, Written,
+    mirrored_enum, mirrored_i32_enum, Artifact, Crossing, Direction, EnumArm, FailureCategory, Fed,
+    OperationFeed, Part, PlanningError, Relation, StructRelation, Target, Terminal, Unsupported,
+    WireTypeFeed, Written,
 };

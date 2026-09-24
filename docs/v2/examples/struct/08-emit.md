@@ -11,7 +11,7 @@ The retained output for this struct:
 
 ```text
 Retained { output: type:Stamp, output_value: node(Stamp, IntoRust) }
-  carrier:  the one node(Stamp, IntoRust) resolved to, with its members
+  wire type:  the one node(Stamp, IntoRust) resolved to, with its members
   metadata: <none for C, the data class for JNI>
 ```
 

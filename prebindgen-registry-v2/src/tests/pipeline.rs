@@ -10,16 +10,15 @@ use prebindgen_flat::flat::Flat;
 
 use crate::{
     binding::{
-        Accepts, Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
-        Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireClass,
-        WireType,
+        Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf, Report,
+        ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireKind, WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::generate,
     run::Generation,
     target::{
-        CarrierFeed, FailureCategory, OperationFeed, PlanningError, Target, Terminal, Unsupported,
+        FailureCategory, OperationFeed, PlanningError, Target, Terminal, Unsupported, WireTypeFeed,
         Written,
     },
 };
@@ -129,54 +128,109 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     items
 }
 
-/// This target's wire types.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Class {
+/// This target's kinds of wire type. Beside one of each kind a real target
+/// has, it has kinds whose capabilities are narrower, which is how a test
+/// states a limit of the target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Kind {
     Scalar,
+    /// A struct holding scalars, other structs and pointers.
     Aggregate,
+    /// A struct that can hold only pointers.
+    PointerAggregate,
+    /// A struct that can hold only scalars.
+    ScalarAggregate,
+    /// A struct a wrapper cannot take as a parameter.
+    Local,
     Pointer,
+    /// A callable taking scalars and pointers.
     Closure,
+    /// A callable that can take only scalars.
+    ScalarClosure,
     /// An address carried as an integer.
     Address,
 }
 
-impl WireClass for Class {
-    fn all() -> Vec<Self> {
-        vec![
-            Class::Scalar,
-            Class::Aggregate,
-            Class::Pointer,
-            Class::Closure,
-            Class::Address,
-        ]
+impl WireKind for Kind {
+    const ALL: &'static [Self] = &[
+        Kind::Scalar,
+        Kind::Aggregate,
+        Kind::PointerAggregate,
+        Kind::ScalarAggregate,
+        Kind::Local,
+        Kind::Pointer,
+        Kind::Closure,
+        Kind::ScalarClosure,
+        Kind::Address,
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            Kind::Scalar => "scalar",
+            Kind::Aggregate => "aggregate",
+            Kind::PointerAggregate => "pointer_aggregate",
+            Kind::ScalarAggregate => "scalar_aggregate",
+            Kind::Local => "local",
+            Kind::Pointer => "pointer",
+            Kind::Closure => "closure",
+            Kind::ScalarClosure => "scalar_closure",
+            Kind::Address => "address",
+        }
     }
 
-    fn name(&self) -> &'static str {
+    fn parts(self) -> &'static [Self] {
         match self {
-            Class::Scalar => "scalar",
-            Class::Aggregate => "aggregate",
-            Class::Pointer => "pointer",
-            Class::Closure => "closure",
-            Class::Address => "address",
+            Kind::Aggregate | Kind::Local => &[Kind::Scalar, Kind::Aggregate, Kind::Pointer],
+            Kind::PointerAggregate => &[Kind::Pointer],
+            Kind::ScalarAggregate | Kind::ScalarClosure => &[Kind::Scalar],
+            Kind::Closure => &[Kind::Scalar, Kind::Pointer],
+            _ => &[],
+        }
+    }
+}
+
+/// This target's wire types. Only a mirrored struct needs a declaration of its
+/// own, so every other test's generated file holds wrappers alone.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Wire {
+    Scalar,
+    Address,
+    /// A struct of one of the aggregate kinds, named, and mirrored or not.
+    Aggregate {
+        kind: Kind,
+        name: syn::Ident,
+        mirror: bool,
+    },
+    Pointer {
+        name: syn::Ident,
+    },
+    /// A callable of one of the closure kinds.
+    Closure {
+        kind: Kind,
+        name: syn::Ident,
+    },
+}
+
+impl WireType for Wire {
+    type Kind = Kind;
+
+    fn kind(&self) -> Kind {
+        match self {
+            Wire::Scalar => Kind::Scalar,
+            Wire::Address => Kind::Address,
+            Wire::Aggregate { kind, .. } | Wire::Closure { kind, .. } => *kind,
+            Wire::Pointer { .. } => Kind::Pointer,
         }
     }
 
     fn rust(&self) -> syn::Type {
         match self {
-            Class::Scalar => syn::parse_quote!(i64),
-            Class::Aggregate | Class::Closure => syn::parse_quote!(_),
-            Class::Pointer => syn::parse_quote!(*mut _),
-            Class::Address => syn::parse_quote!(usize),
+            Wire::Scalar => syn::parse_quote!(i64),
+            Wire::Address => syn::parse_quote!(usize),
+            Wire::Aggregate { name, .. } | Wire::Closure { name, .. } => syn::parse_quote!(#name),
+            Wire::Pointer { name } => syn::parse_quote!(*mut #name),
         }
     }
-}
-
-/// Whether a carrier needs a declaration of its own: only a mirrored struct
-/// does, so every other test's generated file holds wrappers alone.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Meta {
-    Plain,
-    Mirror,
 }
 
 /// This target's own operations.
@@ -192,7 +246,7 @@ enum Op {
     /// rather than the registry's identity: the same `i64` on the wire, a
     /// different conversion.
     Rebase,
-    /// What a callback keeps from its carrier.
+    /// What a callback keeps from its wire type.
     Capture,
     /// One call of the foreign callable, which cannot fail.
     Invoke,
@@ -207,9 +261,19 @@ struct Mini;
 impl Target for Mini {
     const NAME: &'static str = "mini";
 
-    type WireClass = Class;
-    type CarrierMeta = Meta;
+    type WireType = Wire;
     type Op = Op;
+
+    const PARAMS: &'static [Kind] = &[
+        Kind::Scalar,
+        Kind::Aggregate,
+        Kind::PointerAggregate,
+        Kind::ScalarAggregate,
+        Kind::Pointer,
+        Kind::Closure,
+        Kind::ScalarClosure,
+        Kind::Address,
+    ];
     type OutputMeta = ();
 
     fn write_operation(&self, op: &Op, feed: &OperationFeed<'_, Self>) -> Written {
@@ -221,7 +285,7 @@ impl Target for Mini {
             Op::ReportMessage => quote::quote!(report_message(#error)),
             Op::Rebase => quote::quote!(rebase(#value)),
             Op::Capture => {
-                let carried = feed.args.iter().map(|(_, carrier)| carrier.rust());
+                let carried = feed.args.iter().map(|(_, wire_type)| wire_type.rust());
                 quote::quote!(capture::<(#(#carried,)*)>(#value))
             }
             Op::Invoke | Op::InvokeFallibly => {
@@ -233,15 +297,15 @@ impl Target for Mini {
 
     /// The mirror is what a real C target contributes: a struct of its own,
     /// one member per source field, each under that field's condition.
-    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
-        if feed.carrier.meta != Meta::Mirror {
+    fn write_wire_type(&self, feed: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        if !matches!(feed.wire_type, Wire::Aggregate { mirror: true, .. }) {
             return Vec::new();
         }
-        let ty = feed.carrier.rust();
-        let members = feed.members.iter().map(|(part, carrier)| {
+        let ty = feed.wire_type.rust();
+        let members = feed.parts.iter().map(|(part, wire_type)| {
             let name = quote::format_ident!("{}", part.label());
             let conditions = &part.conditions;
-            let member = carrier.rust();
+            let member = wire_type.rust();
             quote::quote!(#(#conditions)* pub #name: #member)
         });
         vec![quote::quote!(#[repr(C)] pub struct #ty { #(#members),* })]
@@ -263,7 +327,7 @@ enum Routes {
 
 /// A form exporting a function under `symbol`. Its wrapper parameters are
 /// named `arg0`, `arg1`, … unless a test names them.
-fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
+fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op> {
     let report = |op: Op, error: syn::Type, context: bool| Report {
         error,
         operation: match context {
@@ -299,19 +363,6 @@ fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
         },
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::of([
-            Class::Scalar,
-            Class::Aggregate,
-            Class::Pointer,
-            Class::Closure,
-            Class::Address,
-        ]),
-        ret: Accepts::of([
-            Class::Scalar,
-            Class::Aggregate,
-            Class::Pointer,
-            Class::Address,
-        ]),
     }
 }
 
@@ -343,13 +394,13 @@ enum Shape {
     FallibleStruct(&'static str),
     /// The same, with a declaration of its own: a mirror of the source struct.
     MirroredStruct(&'static str),
-    /// A struct whose carrier holds only the given wire types as members.
-    StructHolding(&'static str, Vec<Class>),
+    /// A struct whose wire type is of the given aggregate kind.
+    StructOf(&'static str, Kind),
     /// An opaque value carried whole as an address, released through a
     /// release of its own.
     Handle,
     /// A handle taken back as an address and handed out as an integer: two
-    /// carriers, one per direction.
+    /// wire types, one per direction.
     SplitHandle,
     /// An `i64` carried through this target's own operation.
     ScalarThrough,
@@ -370,9 +421,9 @@ struct Fixture {
 
 fn fixture() -> Fixture {
     let mut binding = Binding::new();
-    let i64_carrier = binding.carrier(WireType::exact(Class::Scalar, None, Meta::Plain));
+    let i64_wire = binding.wire_type(Wire::Scalar);
     let unchanged = Codec {
-        carrier: i64_carrier,
+        wire_type: i64_wire,
         operation: Operation::standard(StandardOp::Identity),
     };
     let scalar = binding.representation(Representation::Terminal {
@@ -392,85 +443,72 @@ fn fixture() -> Fixture {
 impl Fixture {
     /// Declare a representation.
     fn repr(&mut self, shape: Shape) -> ReprId {
-        let aggregate = |binding: &mut Binding<Mini>, name: &str, holds: Vec<Class>, meta| {
-            let ident = quote::format_ident!("{name}");
-            binding.carrier(WireType::declared(
-                Class::Aggregate,
-                ident.clone(),
-                Some(Accepts::of(holds)),
-                meta,
-            ))
+        let aggregate = |binding: &mut Binding<Mini>, name: &str, kind, mirror| {
+            binding.wire_type(Wire::Aggregate {
+                kind,
+                name: quote::format_ident!("{name}"),
+                mirror,
+            })
         };
-        let holds_all = || vec![Class::Scalar, Class::Aggregate, Class::Pointer];
         let representation = match shape {
             Shape::Struct(name) => Representation::Product {
                 via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Plain),
+                wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
                 read: Operation::standard(StandardOp::ReadMember),
             },
             Shape::FallibleStruct(name) => Representation::Product {
                 via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Plain),
+                wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
                 read: Operation::target(Op::ReadFallibly)
                     .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
             },
             Shape::MirroredStruct(name) => Representation::Product {
                 via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Mirror),
+                wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, true),
                 read: Operation::standard(StandardOp::ReadMember),
             },
-            Shape::StructHolding(name, holds) => Representation::Product {
+            Shape::StructOf(name, kind) => Representation::Product {
                 via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds, Meta::Plain),
+                wire_type: aggregate(&mut self.binding, name, kind, false),
                 read: Operation::standard(StandardOp::ReadMember),
             },
             Shape::Handle => {
-                let pointer = self.binding.carrier(WireType::declared(
-                    Class::Pointer,
-                    quote::format_ident!("Raw"),
-                    None,
-                    Meta::Plain,
-                ));
+                let pointer = self.binding.wire_type(Wire::Pointer {
+                    name: quote::format_ident!("Raw"),
+                });
                 Representation::Terminal {
                     into_rust: Some(Codec {
-                        carrier: pointer,
+                        wire_type: pointer,
                         operation: Operation::standard(StandardOp::FromRaw),
                     }),
                     out_of_rust: Some(Codec {
-                        carrier: pointer,
+                        wire_type: pointer,
                         operation: Operation::standard(StandardOp::IntoRaw),
                     }),
                     release: Some(Operation::standard(StandardOp::Release)),
                 }
             }
             Shape::SplitHandle => {
-                let pointer = self.binding.carrier(WireType::declared(
-                    Class::Pointer,
-                    quote::format_ident!("Raw"),
-                    None,
-                    Meta::Plain,
-                ));
-                let integer =
-                    self.binding
-                        .carrier(WireType::exact(Class::Address, None, Meta::Plain));
+                let pointer = self.binding.wire_type(Wire::Pointer {
+                    name: quote::format_ident!("Raw"),
+                });
+                let integer = self.binding.wire_type(Wire::Address);
                 Representation::Terminal {
                     into_rust: Some(Codec {
-                        carrier: pointer,
+                        wire_type: pointer,
                         operation: Operation::standard(StandardOp::FromRaw),
                     }),
                     out_of_rust: Some(Codec {
-                        carrier: integer,
+                        wire_type: integer,
                         operation: Operation::standard(StandardOp::IntoRaw),
                     }),
                     release: Some(Operation::standard(StandardOp::Release)),
                 }
             }
             Shape::ScalarThrough => {
-                let i64_carrier =
-                    self.binding
-                        .carrier(WireType::exact(Class::Scalar, None, Meta::Plain));
+                let i64_wire = self.binding.wire_type(Wire::Scalar);
                 let through = Codec {
-                    carrier: i64_carrier,
+                    wire_type: i64_wire,
                     operation: Operation::target(Op::Rebase),
                 };
                 Representation::Terminal {
@@ -483,15 +521,13 @@ impl Fixture {
         self.binding.representation(representation)
     }
 
-    /// A callback representation: a closure carrier holding scalars and
+    /// A callback representation: a closure wire type holding scalars and
     /// pointers, a capture, and an invocation that calls as `call` says.
     fn callback_repr(&mut self, call: Call) -> ReprId {
-        let carrier = self.binding.carrier(WireType::declared(
-            Class::Closure,
-            quote::format_ident!("Closure"),
-            Some(Accepts::of([Class::Scalar, Class::Pointer])),
-            Meta::Plain,
-        ));
+        let wire_type = self.binding.wire_type(Wire::Closure {
+            kind: Kind::Closure,
+            name: quote::format_ident!("Closure"),
+        });
         let invoke = match call {
             Call::Infallible => Operation::target(Op::Invoke),
             Call::NeedsContext => Operation::target(Op::Invoke).context("mini.log"),
@@ -511,7 +547,7 @@ impl Fixture {
             _ => Vec::new(),
         };
         self.binding.representation(Representation::Callback {
-            carrier,
+            wire_type,
             capture: Operation::target(Op::Capture),
             invoke,
             routes,
@@ -579,7 +615,7 @@ impl Fixture {
         &mut self,
         name: &str,
         repr: ReprId,
-        release: Option<FunctionForm<Op, Class>>,
+        release: Option<FunctionForm<Op>>,
     ) -> &mut Self {
         self.outputs.push((
             ty(name),
@@ -593,7 +629,7 @@ impl Fixture {
     }
 
     /// An exported source function.
-    fn declare_fn(&mut self, name: &str, form: FunctionForm<Op, Class>) -> &mut Self {
+    fn declare_fn(&mut self, name: &str, form: FunctionForm<Op>) -> &mut Self {
         self.outputs
             .push((function(name), OutputForm::Function { form, meta: () }));
         self
@@ -1614,17 +1650,17 @@ fn a_rule_at_a_position_that_does_not_exist_is_an_error() {
     );
 }
 
-/// A member whose part resolved to a wire type its carrier does not hold
+/// A member whose part resolved to a wire type its wire type does not hold
 /// refuses the struct, where the member is.
 #[test]
-fn a_member_its_carrier_does_not_hold_refuses_the_value() {
+fn a_member_its_wire_type_cannot_have_refuses_the_value() {
     let mut fixture = fixture();
-    fixture.declare_type("Stamp", Shape::StructHolding("Stamp", vec![Class::Pointer]));
+    fixture.declare_type("Stamp", Shape::StructOf("Stamp", Kind::PointerAggregate));
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "type:Stamp") else {
-        panic!("its carrier holds no scalar member");
+        panic!("a pointer aggregate cannot have a scalar member");
     };
     assert_eq!(skip.capability.as_str(), "unsupported.mini.member.scalar");
     assert_eq!(skip.dependency_path, ["type:Stamp", "field secs"]);
@@ -1637,21 +1673,19 @@ fn a_member_its_carrier_does_not_hold_refuses_the_value() {
     );
 }
 
-/// A value whose wire type a form does not hold as a parameter refuses the
+/// A value of a kind the target cannot pass to a wrapper refuses the
 /// function, where the parameter is.
 #[test]
-fn a_parameter_its_form_does_not_hold_refuses_the_function() {
+fn a_parameter_the_target_cannot_pass_refuses_the_function() {
     let mut fixture = fixture();
-    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
-    let mut form = exported("stamp_sum", Routes::None);
-    form.params = Accepts::of([Class::Scalar]);
-    fixture.declare_fn("stamp_sum", form);
+    fixture.declare_type("Stamp", Shape::StructOf("Stamp", Kind::Local));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
-        panic!("its form holds no aggregate parameter");
+        panic!("the target cannot pass a local struct");
     };
-    assert_eq!(skip.capability.as_str(), "unsupported.mini.param.aggregate");
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.param.local");
     assert_eq!(skip.dependency_path, ["fn:stamp_sum", "param stamp"]);
 }
 
@@ -1676,7 +1710,7 @@ fn a_type_rule_nothing_used_is_listed() {
 }
 
 /// The binding prints every field planning reads, one line per
-/// carrier, representation, rule and output.
+/// wire type, representation, rule and output.
 #[test]
 fn a_binding_prints_what_planning_reads() {
     let mut fixture = fixture();
@@ -1684,9 +1718,9 @@ fn a_binding_prints_what_planning_reads() {
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let printed = fixture.build(&model()).to_string();
     for line in [
-        "carrier  c0  i64  scalar  no members  Plain",
-        "carrier  c1  Stamp  aggregate  members [scalar, aggregate, pointer]  Plain",
-        "repr     r1  product  c1  Fields  read: Standard(ReadMember)",
+        "wire     w0  i64  scalar  Scalar",
+        "wire     w1  Stamp  aggregate  Aggregate { kind: Aggregate, name: Ident(Stamp), mirror: false }",
+        "repr     r1  product  w1  Fields  read: Standard(ReadMember)",
         "rule     type i64  r0",
         "rule     type Stamp  r1",
         "output   type:Stamp  type r1  ()",
@@ -1712,7 +1746,7 @@ fn bindings_that_plan_differently_print_differently() {
         print(Shape::FallibleStruct("Stamp"), Routes::None),
         print(Shape::Struct("Stamp"), Routes::Reported),
         print(
-            Shape::StructHolding("Stamp", vec![Class::Scalar]),
+            Shape::StructOf("Stamp", Kind::ScalarAggregate),
             Routes::None,
         ),
     ] {
@@ -1721,9 +1755,9 @@ fn bindings_that_plan_differently_print_differently() {
 }
 
 /// A release frees what was handed out, so its wrapper takes the out-of-Rust
-/// carrier even where the representation takes values back in through another.
+/// wire type even where the representation takes values back in through another.
 #[test]
-fn a_release_takes_the_carrier_that_was_handed_out() {
+fn a_release_takes_the_wire_type_that_was_handed_out() {
     let mut fixture = fixture();
     fixture.declare_type("Stamp", Shape::SplitHandle);
     let generation = fixture.generate(model()).expect("plans");
@@ -1958,7 +1992,7 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
 }
 
 /// An item's condition reaches the declaration the target writes for a
-/// carrier of that item, not only the wrapper.
+/// wire type of that item, not only the wrapper.
 ///
 /// A mirror emitted where the struct it mirrors is absent is a type the foreign
 /// API declares and the build does not have.
@@ -2131,7 +2165,7 @@ fn a_handle_without_a_release_skips_the_type_and_what_takes_it() {
     assert!(generation.rust().is_empty());
 }
 
-/// A callback enters Rust as a closure the registry builds: the carrier is
+/// A callback enters Rust as a closure the registry builds: the wire type is
 /// captured once, and each call converts its arguments out of Rust and hands
 /// them to the invocation.
 #[test]
@@ -2304,7 +2338,7 @@ fn a_callback_representation_prints_what_a_call_does() {
     let mut fixture = fixture();
     fixture.declare_callback("i64", Call::Routed);
     let printed = fixture.build(&model()).to_string();
-    let expected = "callback  c1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
+    let expected = "callback  w1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
                     fails runtime Error  routes: [runtime: report Error by Target(Report), if \
                     that fails abort, then return ()]";
     assert!(
@@ -2373,20 +2407,18 @@ fn a_callback_representation_on_another_type_is_refused() {
     }
 }
 
-/// An argument of a wire class the callback's carrier does not hold refuses
-/// the callback at that argument.
+/// An argument of a kind the callback's wire type cannot have as a part
+/// refuses the callback at that argument.
 #[test]
-fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
+fn an_argument_the_callable_cannot_have_refuses_the_callback() {
     let mut fixture = fixture();
     fixture.declare_type("Token", Shape::Handle);
-    let scalars_only = fixture.binding.carrier(WireType::declared(
-        Class::Closure,
-        quote::format_ident!("ScalarClosure"),
-        Some(Accepts::of([Class::Scalar])),
-        Meta::Plain,
-    ));
+    let scalars_only = fixture.binding.wire_type(Wire::Closure {
+        kind: Kind::ScalarClosure,
+        name: quote::format_ident!("ScalarClosure"),
+    });
     let repr = fixture.binding.representation(Representation::Callback {
-        carrier: scalars_only,
+        wire_type: scalars_only,
         capture: Operation::target(Op::Capture),
         invoke: Operation::target(Op::Invoke),
         routes: Vec::new(),
@@ -2415,21 +2447,27 @@ fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
     }
 }
 
-/// A class name is part of a capability code, so a target naming two classes
+/// A kind's name is part of a capability code, so a target naming two kinds
 /// alike is refused before anything is planned.
 #[test]
-fn two_classes_of_one_name_are_refused() {
-    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+fn two_kinds_of_one_name_are_refused() {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     enum Twins {
         Left,
         Right,
     }
-    impl WireClass for Twins {
-        fn all() -> Vec<Self> {
-            vec![Twins::Left, Twins::Right]
-        }
-        fn name(&self) -> &'static str {
+    impl WireKind for Twins {
+        const ALL: &'static [Self] = &[Twins::Left, Twins::Right];
+        fn name(self) -> &'static str {
             "twin"
+        }
+    }
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    struct Twin;
+    impl WireType for Twin {
+        type Kind = Twins;
+        fn kind(&self) -> Twins {
+            Twins::Left
         }
         fn rust(&self) -> syn::Type {
             syn::parse_quote!(i64)
@@ -2438,21 +2476,20 @@ fn two_classes_of_one_name_are_refused() {
     struct Twinned;
     impl Target for Twinned {
         const NAME: &'static str = "twinned";
-        type WireClass = Twins;
-        type CarrierMeta = ();
+        type WireType = Twin;
         type Op = ();
         type OutputMeta = ();
         fn write_operation(&self, _: &(), _: &OperationFeed<'_, Self>) -> Written {
             unreachable!("nothing is planned")
         }
-        fn write_carrier(&self, _: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        fn write_wire_type(&self, _: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
             unreachable!("nothing is planned")
         }
     }
     let error = generate(model(), &Twinned, Binding::new(), syn::parse_quote!(source))
-        .expect_err("two classes named `twin`");
+        .expect_err("two kinds named `twin`");
     assert!(
-        error.to_string().contains("two wire classes `twin`"),
+        error.to_string().contains("two wire kinds `twin`"),
         "{error}"
     );
 }

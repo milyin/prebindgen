@@ -23,7 +23,7 @@ param each    impl Fn(i64), IntoRust   -> callback.args, carried in `closure_i64
 ```
 
 The argument leaves Rust in the `i64`
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 it would leave in anywhere, which is what the closure struct's `call` will be
 declared to take. `param stamp` selects exactly as on
 [the function path][fn_select_c].
