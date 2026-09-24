@@ -1530,7 +1530,7 @@ fn a_type_rule_nothing_used_is_listed() {
     assert!(unused[0].contains("Point"), "{unused:?}");
 }
 
-/// The binding prints as the whole of what planning reads, one line per
+/// The binding prints every field planning reads, one line per
 /// carrier, representation, rule and output.
 #[test]
 fn a_binding_prints_what_planning_reads() {

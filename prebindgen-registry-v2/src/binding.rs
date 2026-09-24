@@ -593,8 +593,10 @@ impl<T: Target> std::fmt::Display for Binding<T> {
     /// One line per carrier, representation, rule and output, a function
     /// form's details on the lines under its output, with the target's own
     /// vocabulary in its `Debug` form. It prints every field planning reads,
-    /// so two bindings that print alike plan alike: this is what to diff when
-    /// two builds of one binding generate differently.
+    /// which makes it the diagnostic to diff when two builds of one binding
+    /// generate differently. It is not a proof that two bindings are equal:
+    /// the target's classes, metadata and operations print only as much as
+    /// their `Debug` tells apart.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, carrier) in self.carriers.iter().enumerate() {
             let members = match &carrier.members {

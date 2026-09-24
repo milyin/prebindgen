@@ -585,9 +585,10 @@ output   fn:stamp_sum  function  ()
          form  route binding: abort
 ```
 
-The text prints every field planning reads, so two bindings that print alike
-plan alike, which makes it the thing to diff when two builds of one binding
-generate differently.
+The text prints every field planning reads, which makes it the diagnostic to
+diff when two builds of one binding generate differently. It does not prove
+two bindings equal: the target's classes, metadata and operations print only
+as much as their `Debug` form tells apart.
 
 ### How the frontends build a binding
 
