@@ -184,11 +184,13 @@ A Rust type the binding allows to hold a value during conversion: a wrapper
 argument, wrapper return or intermediate value in generated Rust. In the JNI
 example, the `Stamp` object reference is one carrier and the `jlong` a getter
 returns is another. The frontend declares each one as a `WireType`: the Rust
-type, whether it is safe at the wrapper boundary, which of the adapter's few
-wire types it is, and the metadata the target's writers need — a C name, a
-JVM descriptor. Two carriers may share a
-Rust type and differ in metadata, as two `JObject`s of different classes do. An internal temporary need not itself be legal as an
-exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
+type, which of the adapter's few wire types it is, for an aggregate which
+wire types its members may be, and the metadata the target's writers need — a
+C name, a JVM descriptor. Two carriers may share a
+Rust type and differ in metadata, as two `JObject`s of different classes do.
+Where a carrier may appear is stated by what holds it: a function form lists
+the wire types its wrapper parameters may be, so an internal temporary need
+not be legal as an exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
 
 ### Representation
 

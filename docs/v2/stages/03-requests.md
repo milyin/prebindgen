@@ -333,9 +333,10 @@ impl<T: Target> Binding<T> {
 
 pub struct WireType<T: Target> {
     pub rust: syn::Type,      // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'local>`
-    pub abi: bool,            // Whether it may appear in a wrapper signature.
     pub class: T::WireClass,  // Which of the adapter's few wire types it is.
     pub base: String,         // Its naming base: `stamp`, `i64`.
+    pub members: Option<Accepts<T>>, // For an aggregate, the classes its members may be:
+                                     // see [acceptance](../extensions.md#acceptance).
     pub meta: T::CarrierMeta, // What the target's writers need to know of it.
 }
 
@@ -361,6 +362,8 @@ pub struct FunctionForm<T: Target> {
                                       // see [multi-value layouts](../extensions.md#multi-value-layouts).
     pub members_out: MembersOut<T>,   // How a split return reaches the caller: C's out-parameters,
                                       // or JNI's caller-supplied callback.
+    pub params: Accepts<T>,           // The classes a wrapper parameter may be,
+    pub ret: Accepts<T>,              // and the wrapper's return.
 }
 ```
 
@@ -409,7 +412,7 @@ For the C `Stamp`, with the frontend's own `CName` as the carrier metadata:
 
 ```rust
 let i64_c = binding.carrier(WireType {
-    rust: parse_quote!(i64), abi: true, class: CClass::I64, base: "i64".into(), meta: CName::builtin(),
+    rust: parse_quote!(i64), class: CClass::I64, base: "i64".into(), members: None, meta: CName::builtin(),
 });
 let i64_whole = binding.representation(Representation::Terminal {
     carrier: i64_c,
@@ -420,7 +423,9 @@ let i64_whole = binding.representation(Representation::Terminal {
 binding.rule(Scope::Type(key!(i64)), i64_whole);
 
 let stamp_c = binding.carrier(WireType {
-    rust: parse_quote!(Stamp), abi: true, class: CClass::Aggregate, base: "Stamp".into(), meta: CName::from("Stamp"),
+    rust: parse_quote!(Stamp), class: CClass::Aggregate, base: "Stamp".into(),
+    members: Some(C_MEMBERS.clone()), // Scalars, pointers and enums; not yet another aggregate.
+    meta: CName::from("Stamp"),
 });
 let stamp_struct = binding.representation(Representation::Product {
     via: Via::Fields,
@@ -437,12 +442,12 @@ and for the JNI one, with `Jvm { descriptor, kotlin }` as the metadata:
 
 ```rust
 let jlong = binding.carrier(WireType {
-    rust: parse_quote!(jni::sys::jlong), abi: true, class: JniClass::Long, base: "long".into(),
+    rust: parse_quote!(jni::sys::jlong), class: JniClass::Long, base: "long".into(), members: None,
     meta: Jvm { descriptor: "J".into(), kotlin: "Long".into() },
 });
 // i64: a Terminal over `jlong`, as C's is over `i64`.
 let stamp_obj = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'local>), abi: true, class: JniClass::Object, base: "stamp".into(),
+    rust: parse_quote!(jni::objects::JObject<'local>), class: JniClass::Object, base: "stamp".into(), members: None,
     meta: Jvm { descriptor: "Lexample/Stamp;".into(), kotlin: "example.Stamp".into() },
 });
 let stamp_class = binding.representation(Representation::Product {
@@ -538,6 +543,12 @@ rule's representation to be a `Product` through `Fields`. So
 `param stamp.field secs` is valid while `Stamp` crosses through its fields,
 and becomes invalid if a rule makes it an opaque handle — a rule that would
 otherwise sit unused under a value nothing reads into.
+
+Whether each wire value may sit where the plan puts it — a member in an
+aggregate, a parameter in a wrapper signature — depends on what the children
+resolve to, so the registry checks that during planning instead, and a
+failure there is a refusal, not invalid input: see
+[acceptance](../extensions.md#acceptance).
 
 A `Type` rule no planned value used is not an error: the adapter's scalar
 table covers kinds a binding may never mention, and a binding may declare a

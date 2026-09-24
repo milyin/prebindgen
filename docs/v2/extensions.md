@@ -311,9 +311,9 @@ Each carrier states which of the adapter's wire types it is, as its
 ```rust
 pub struct WireType<T: Target> {
     pub rust: syn::Type,
-    pub abi: bool,
     pub class: T::WireClass, // JNI: Long, Int, Byte, …, Object. C: I64, …, Pointer, Aggregate.
     pub base: String,        // Its naming base: `stamp`, `i64`.
+    pub members: Option<Accepts<T>>, // See acceptance.
     pub meta: T::CarrierMeta,
 }
 
@@ -322,7 +322,7 @@ pub enum SourceContainer { Vec, Slice, Array, Option, Box }
 
 pub struct Container<T: Target> {
     pub source: SourceContainer,     // Which Rust container it serves.
-    pub accepts: T::WireClass,       // Which element wire type it holds.
+    pub accepts: Accepts<T>,         // Which element wire classes it holds.
     pub role: String,                // Its naming role: `vec`, `opt`.
     pub carrier: CarrierTemplate<T>, // The result's Rust type and class; its metadata
                                      // is derived per instance from the element's.
@@ -473,9 +473,9 @@ pub enum MembersOut<T: Target> {
 ```
 
 A flattened value must be carried in an aggregate: a carrier with members,
-such as a `repr(C)` struct, or a Rust-only one declared with `abi: false`,
-which the foreign side never sees whole. The registry checks that before
-planning.
+such as a `repr(C)` struct. It may be one the foreign side never sees whole —
+a JNI function form accepts no aggregate as a parameter, so a JNI aggregate
+exists only to be flattened. The registry checks that before planning.
 
 **A flattened parameter** becomes one wrapper parameter per member, each typed
 as that member's carrier and named by the target's writer — `xs` becomes
@@ -574,6 +574,71 @@ members, flattened in turn, which reproduces v1's signature exactly:
 first arm is itself the pair `(id, schema)`. V1's `split_on_param`, which
 adds a typed Kotlin overload per arm over the same entry point, is the Kotlin
 writer's business alone and stays in the function's output metadata.
+
+## Acceptance
+
+Extends [conversion rules](stages/03-requests.md#conversion-rules) and
+[the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-boundary).
+Needed by any target that cannot hold every wire type everywhere.
+
+A target may be unable to put one wire value inside another: C's v2 target
+does not yet nest one `repr(C)` struct inside another, a JNI method cannot
+take an aggregate as a parameter, and other conventions have limits of their
+own. Whether a limit is hit depends on what a child resolved to, which can
+differ by position, so the frontend cannot check it when it builds the
+binding. No target code runs while the registry plans, so the target cannot
+check it then either. So every place that holds a wire value states, as data,
+which wire classes it can hold, and the registry checks each placement:
+
+```rust
+pub struct Accepts<T: Target> {
+    pub classes: Vec<T::WireClass>, // What may be placed here; empty is nothing.
+}
+```
+
+| Holder | Declared on | Holds |
+| --- | --- | --- |
+| an aggregate carrier | `WireType::members` | its members |
+| a container | `Container::accepts` | its elements |
+| a choice | its carrier, an aggregate | the tag and each arm's members |
+| a function form | `FunctionForm::params`, `FunctionForm::ret` | wrapper parameters, the return |
+| a callback, when callbacks are built | its form | its arguments and its result |
+
+The registry checks on the way up the planning walk, once a
+[node](stages/05-represent.md#represent-and-compose-values)'s children have
+resolved to carriers: each child's class must be in its holder's list.
+At the wrapper boundary it checks each wrapper parameter and the return
+against the function form, after flattening, so a flattened aggregate is
+judged by its members. A placement that fails refuses that node like any
+unsupported child. The refusal climbs to every output that needed the node
+and names the holder, the class and the position: "`Stamp.origin` is an
+`Aggregate`, which a C aggregate does not hold (`param stamp.field origin`
+of `stamp_sum`)", with the capability `unsupported.c.member.aggregate`.
+
+Checking per node rather than per type is what position rules need. With an
+`At` rule making `origin` a handle in one function, `Stamp` is accepted there
+and refused where `origin` is a struct, which is the right answer; a node's
+identity already includes its children, so the two never meet.
+
+The declarations of both targets:
+
+| Target | Aggregate members | Wrapper parameters and return |
+| --- | --- | --- |
+| C | every scalar class, `Pointer`, `Enum` — and `Aggregate` once nesting is built | every class |
+| JNI | every class | `Long`, `Int`, …, `Object` — no `Aggregate`, so a JNI aggregate must be flattened |
+
+Another target's limits take the same form. A .NET binding marshalling
+structs by value would leave `Object` out of its aggregates' member list, so a
+struct with a string field is refused unless a rule carries the field as a
+handle. A WebAssembly binding would accept only its four numeric classes as
+parameters, so aggregates are flattened and objects cross as handles.
+
+Acceptance is a set of wire classes per holder. It does not count — JNI's
+limit of 255 method parameters — or constrain members jointly, or measure
+size and alignment. A target that needs one of those gets more data on the
+holder, checked by the registry the same way, rather than a call into target
+code. A constraint on the values themselves, rather than their wire types,
+is a run-time check inside an operation.
 
 ## Requesting further conversions
 
