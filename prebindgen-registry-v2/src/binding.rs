@@ -81,6 +81,12 @@ pub trait WireClass: Clone + Eq + std::hash::Hash + std::fmt::Debug {
     fn all() -> Vec<Self>;
 
     /// How a refusal names it: `pointer`, in `unsupported.c.member.pointer`.
+    ///
+    /// It is part of a capability code, which a build script may match and a
+    /// report groups skips by, so it is the class's identity in text: unique
+    /// among the classes [`all`](Self::all) returns — [`generate`](crate::generate)
+    /// refuses a target with two classes of one name — and kept stable when the
+    /// target changes, as a capability code is.
     fn name(&self) -> &'static str;
 
     /// The Rust type a carrier of this class is. A class naming one exact

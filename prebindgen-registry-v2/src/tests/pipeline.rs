@@ -2414,3 +2414,45 @@ fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
         other => panic!("token_watch is skipped, and is {other:?}"),
     }
 }
+
+/// A class name is part of a capability code, so a target naming two classes
+/// alike is refused before anything is planned.
+#[test]
+fn two_classes_of_one_name_are_refused() {
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    enum Twins {
+        Left,
+        Right,
+    }
+    impl WireClass for Twins {
+        fn all() -> Vec<Self> {
+            vec![Twins::Left, Twins::Right]
+        }
+        fn name(&self) -> &'static str {
+            "twin"
+        }
+        fn rust(&self) -> syn::Type {
+            syn::parse_quote!(i64)
+        }
+    }
+    struct Twinned;
+    impl Target for Twinned {
+        const NAME: &'static str = "twinned";
+        type WireClass = Twins;
+        type CarrierMeta = ();
+        type Op = ();
+        type OutputMeta = ();
+        fn write_operation(&self, _: &(), _: &OperationFeed<'_, Self>) -> Written {
+            unreachable!("nothing is planned")
+        }
+        fn write_carrier(&self, _: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+            unreachable!("nothing is planned")
+        }
+    }
+    let error = generate(model(), &Twinned, Binding::new(), syn::parse_quote!(source))
+        .expect_err("two classes named `twin`");
+    assert!(
+        error.to_string().contains("two wire classes `twin`"),
+        "{error}"
+    );
+}

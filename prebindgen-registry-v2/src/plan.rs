@@ -1052,6 +1052,22 @@ fn check_paths<T: Target>(
     Ok(())
 }
 
+/// A class name is part of a capability code, so two classes of one target
+/// sharing one would make two refusals indistinguishable.
+fn check_class_names<T: Target>() -> Result<(), PlanningError> {
+    let mut seen: HashMap<&'static str, T::WireClass> = HashMap::new();
+    for class in T::WireClass::all() {
+        if let Some(first) = seen.insert(class.name(), class.clone()) {
+            return Err(PlanningError::InvalidInput(format!(
+                "the {} target names two wire classes `{}`: {first:?} and {class:?}",
+                T::NAME,
+                class.name()
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Plan `binding` over `flat`, and have `target` write what survives.
 ///
 /// Every requested output leaves this with an outcome. A capability the binding
@@ -1064,6 +1080,7 @@ pub fn generate<T: Target>(
     source_module: syn::Path,
 ) -> Result<Generation<T>, EngineError> {
     check_declarations(binding.outputs(), &flat)?;
+    check_class_names::<T>().map_err(EngineError::Planning)?;
     let rules = Rules::new(&binding).map_err(EngineError::Planning)?;
     check_paths(&binding, &rules, &flat).map_err(EngineError::Planning)?;
     for (declaration, form) in binding.outputs() {
