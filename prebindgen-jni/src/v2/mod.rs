@@ -19,7 +19,10 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry::{flat::Flat, TypeKey};
+use prebindgen_registry::{
+    flat::{Flat, TypeKind, TypeRef},
+    TypeKey,
+};
 use prebindgen_registry_v2::{
     field_is_conditional, generate, mirrored_i32_enum, Accepts, Binding, Codec, ContextParam,
     Declaration, EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf,
@@ -290,6 +293,8 @@ impl Declarations {
             }
         }
 
+        self.callbacks(&mut binding, flat);
+
         // Free-standing package functions and constants.
         for (subpackage, config) in &self.packages {
             let package = self.package_name(subpackage);
@@ -411,6 +416,127 @@ impl Declarations {
             )));
         }
         Ok(binding)
+    }
+
+    /// Every callback signature a package function takes, as a Kotlin `fun
+    /// interface` in the base package.
+    ///
+    /// No declarator names one: a Kotlin callback is whatever the functions
+    /// exported take, as it is in v1, and is named from its arguments as v1
+    /// names it — `LongCallback`, `LedgerOperationCallback`. The callable
+    /// arrives as a JVM object, is held through a global reference, and is
+    /// called from whatever thread Rust calls it from; a call that fails has
+    /// no caller to report to, so the failure is written out and the call
+    /// returns.
+    fn callbacks(&self, binding: &mut Binding<JniTarget>, flat: &Flat) {
+        let mut signatures: std::collections::BTreeMap<String, TypeRef> = Default::default();
+        for config in self.packages.values() {
+            for entry in &config.functions {
+                let Some(function) = flat.function(&entry.rust_ident.to_string()) else {
+                    continue;
+                };
+                for param in &function.params {
+                    if let TypeKind::Callback { .. } = param.ty.kind() {
+                        signatures
+                            .entry(param.ty.key().as_str().to_string())
+                            .or_insert_with(|| param.ty.clone());
+                    }
+                }
+            }
+        }
+        let package = self.package_name("");
+        let qualified = |class: &str| match package.is_empty() {
+            true => class.to_string(),
+            false => format!("{package}.{class}"),
+        };
+        let jni_error: syn::Type = syn::parse_quote!(jni::errors::Error);
+        for ty in signatures.into_values() {
+            let TypeKind::Callback { args } = ty.kind() else {
+                continue;
+            };
+            // Each argument by the Kotlin name its type goes by, and whether
+            // the callable takes it in another form than the public interface
+            // shows: a handle as its address, an enum as its number.
+            let named: Vec<(String, bool)> = args
+                .iter()
+                .map(|arg| {
+                    let key = arg.key();
+                    let adapted = matches!(
+                        self.types.get(&key).map(|config| &config.kind),
+                        Some(crate::jni::DeclaredKind::Ptr(_) | crate::jni::DeclaredKind::Enum(_))
+                    );
+                    let short = match self.kotlin_fqn(&key) {
+                        Some(fqn) => fqn.rsplit('.').next().unwrap_or_default().to_string(),
+                        None if key.as_str() == "i64" => "Long".to_string(),
+                        None => key.short_name().unwrap_or_else(|| key.as_str().to_string()),
+                    };
+                    (short, adapted)
+                })
+                .collect();
+            let class = match named.is_empty() {
+                true => "VoidCallback".to_string(),
+                false => format!(
+                    "{}Callback",
+                    named
+                        .iter()
+                        .map(|(short, _)| short.as_str())
+                        .collect::<String>()
+                ),
+            };
+            let raw = named
+                .iter()
+                .any(|(_, adapted)| *adapted)
+                .then(|| format!("{class}Raw"));
+            let callable = qualified(raw.as_deref().unwrap_or(&class));
+            let carrier = binding.carrier(WireType {
+                rust: syn::parse_quote!(jni::objects::JObject<'_>),
+                class: JniClass::Object,
+                // What an argument may be: what a JVM method takes as a
+                // primitive — a number, an enum's number, an address.
+                members: Some(Accepts::of([
+                    JniClass::Long,
+                    JniClass::Int,
+                    JniClass::Handle,
+                ])),
+                meta: Jvm {
+                    descriptor: format!("L{};", callable.replace('.', "/")),
+                    kotlin: KotlinType::Callback {
+                        class: qualified(&class),
+                        raw: raw.as_deref().map(qualified),
+                    },
+                },
+            });
+            let representation = binding.representation(Representation::Callback {
+                carrier,
+                capture: Operation::target(JniOp::CaptureCallback)
+                    .context("jni.env")
+                    .fails(FailureCategory::Runtime, jni_error.clone()),
+                invoke: Operation::target(JniOp::CallCallback)
+                    .fails(FailureCategory::Runtime, jni_error.clone()),
+                routes: vec![FailureRoute {
+                    category: FailureCategory::Runtime,
+                    report: Some(Report {
+                        error: jni_error.clone(),
+                        operation: Operation::target(JniOp::ReportCallbackError),
+                    }),
+                    on_report_failure: Terminal::Abort,
+                    terminate: Terminal::Return(syn::parse_quote!(())),
+                }],
+            });
+            binding.rule(Scope::Type(ty.key()), representation);
+            binding.output(
+                Declaration::Callback(ty.key()),
+                OutputForm::Type {
+                    representation,
+                    release: None,
+                    meta: JniOutput::Callback {
+                        package: package.clone(),
+                        class,
+                        raw,
+                    },
+                },
+            );
+        }
     }
 
     /// A data class: a JVM object whose properties are read, one per field —

@@ -60,6 +60,9 @@ pub enum Slot {
     Source,
     /// A carrier the binding declared.
     Carrier(CarrierId),
+    /// What a callback's `capture` produced, which only the target knows the
+    /// type of.
+    Captured,
 }
 
 /// One use of an operation, with everything its writer will be fed.
@@ -76,6 +79,10 @@ pub struct Applied<Op> {
     pub result: Option<Slot>,
     /// The part it is applied to, for a per-part read.
     pub part: Option<Part>,
+    /// For a callback's `capture` and `invoke`, the arguments' carriers, in
+    /// order; `invoke` is handed their values as operands after the
+    /// contexts.
+    pub args: Vec<CarrierId>,
     pub failure: Option<Failure>,
 }
 
@@ -333,6 +340,19 @@ impl<'a, T: Target> Run<'a, T> {
             return Ok(offered.clone());
         }
         let mut relations = vec![Relation::Atomic];
+        if let TypeKind::Callback { args } = ty.kind() {
+            relations.push(Relation::Callback(
+                args.iter()
+                    .enumerate()
+                    .map(|(index, arg)| Part {
+                        name: None,
+                        index,
+                        ty: arg.clone(),
+                        conditions: Vec::new(),
+                    })
+                    .collect(),
+            ));
+        }
         if let TypeKind::Named { id, .. } = ty.kind() {
             match self.flat.resolve(id) {
                 Some(Type::Struct(strukt)) => relations.push(Relation::Struct(StructRelation {
@@ -397,6 +417,43 @@ impl<'a, T: Target> Run<'a, T> {
                 return Ok(Planned::refused(reason.clone(), position))
             }
             Representation::Terminal { .. } => Relation::Atomic,
+            Representation::Callback { .. } => {
+                // Rust receives a callable; handing one of its own out would
+                // need a foreign closure built around a Rust one, which no
+                // target states yet.
+                if crossing.direction == Direction::OutOfRust {
+                    return Ok(Planned::refused(
+                        Unsupported::new(
+                            "unsupported.callback.out_of_rust",
+                            format!(
+                                "`{}` leaves Rust as a callable; v2 builds callables only \
+                                 into Rust",
+                                crossing.ty.key()
+                            ),
+                        ),
+                        position,
+                    ));
+                }
+                match relations
+                    .iter()
+                    .find(|relation| matches!(relation, Relation::Callback(_)))
+                {
+                    Some(found) => found.clone(),
+                    None => {
+                        return Ok(Planned::refused(
+                            Unsupported::new(
+                                "unsupported.type.not_a_callback",
+                                format!(
+                                    "`{}` is represented as a callback, and is not an \
+                                     `impl Fn(..)`",
+                                    crossing.ty.key()
+                                ),
+                            ),
+                            position,
+                        ))
+                    }
+                }
+            }
             Representation::Product {
                 via: Via::Fields, ..
             } => {
@@ -475,13 +532,19 @@ impl<'a, T: Target> Run<'a, T> {
         // Children are planned before this conversion's identity is known,
         // because a rule recorded for one of them makes this a different
         // conversion.
+        // A callback's arguments cross the other way: Rust hands them to the
+        // callable it received.
+        let (direction, step): (Direction, fn(&Part) -> Step) = match relation {
+            Relation::Callback(_) => (crossing.direction.reversed(), |part| Step::Arg(part.index)),
+            _ => (crossing.direction, |part| Step::Field(part.label())),
+        };
         let mut children = Vec::new();
         for part in &parts {
             let child = Crossing {
                 ty: part.ty.clone(),
-                direction: crossing.direction,
+                direction,
             };
-            match self.plan_value(child, &position.child(Step::Field(part.label())))? {
+            match self.plan_value(child, &position.child(step(part)))? {
                 Planned::Ready(id) => children.push(id),
                 // One unsupported part makes the whole conversion unsupported.
                 // Nothing partial is recorded: a struct missing a field is a
@@ -544,6 +607,7 @@ impl<'a, T: Target> Run<'a, T> {
                     (value, input),
                     Some(result),
                     None,
+                    &[],
                 );
                 (codec.carrier, produced)
             }
@@ -551,7 +615,7 @@ impl<'a, T: Target> Run<'a, T> {
                 let (carrier, read) = (*carrier, read.clone());
                 let strukt = match relation {
                     Relation::Struct(strukt) => strukt.name.clone(),
-                    Relation::Atomic => {
+                    Relation::Atomic | Relation::Callback(_) => {
                         return Err(PlanningError::InternalInvariant(
                             "a product representation needs a relation with parts".to_string(),
                         ))
@@ -602,6 +666,7 @@ impl<'a, T: Target> Run<'a, T> {
                         (Slot::Carrier(carrier), input),
                         Some(Slot::Carrier(self.nodes[child.0].carrier)),
                         Some(part.clone()),
+                        &[],
                     );
                     let child_body = self.nodes[child.0].body.clone();
                     converted.push(child_body.inline(obtained, &mut body));
@@ -611,6 +676,74 @@ impl<'a, T: Target> Run<'a, T> {
                 body.push(Instr::Construct {
                     name: strukt,
                     parts: converted,
+                    result,
+                });
+                (carrier, result)
+            }
+            Representation::Callback {
+                carrier,
+                capture,
+                invoke,
+                routes,
+            } => {
+                let (carrier, capture, invoke, routes) =
+                    (*carrier, capture.clone(), invoke.clone(), routes.clone());
+                if let Some(refusal) = self.check_callback(
+                    crossing, position, carrier, &parts, &children, &invoke, &routes,
+                )? {
+                    return Ok(Planned::Unsupported(refusal));
+                }
+                // What a call raises stays inside the closure, which routes
+                // it; the wrapper sees only what capturing can raise.
+                failures = capture.failure.iter().map(|f| f.category).collect();
+                // Capturing runs before any call, and is told what the calls
+                // will carry.
+                let arg_carriers: Vec<(CarrierId, Option<ValueId>)> = children
+                    .iter()
+                    .map(|child| (self.nodes[child.0].carrier, None))
+                    .collect();
+                let captured = self.apply(
+                    &mut body,
+                    &capture,
+                    &crossing.ty,
+                    (Slot::Carrier(carrier), input),
+                    Some(Slot::Captured),
+                    None,
+                    &arg_carriers,
+                );
+                // An identity capture leaves the carrier itself to be moved
+                // into the closure.
+                let captured_slot = match captured == input {
+                    true => Slot::Carrier(carrier),
+                    false => Slot::Captured,
+                };
+                let from = body.len();
+                let params: Vec<(ValueId, TypeRef)> = parts
+                    .iter()
+                    .map(|part| (body.fresh(), part.ty.clone()))
+                    .collect();
+                let mut wires = Vec::new();
+                for ((param, _), child) in params.iter().zip(&children) {
+                    let child_body = self.nodes[child.0].body.clone();
+                    let wire = child_body.inline(*param, &mut body);
+                    wires.push((self.nodes[child.0].carrier, Some(wire)));
+                }
+                self.apply(
+                    &mut body,
+                    &invoke,
+                    &crossing.ty,
+                    (captured_slot, captured),
+                    None,
+                    None,
+                    &wires,
+                );
+                let instrs = body.split_off(from);
+                let result = body.fresh();
+                body.push(Instr::Closure {
+                    representation,
+                    captured,
+                    params,
+                    instrs,
                     result,
                 });
                 (carrier, result)
@@ -643,12 +776,117 @@ impl<'a, T: Target> Run<'a, T> {
         Ok(Planned::Ready(id))
     }
 
+    /// Whether a callback can be built from what its arguments resolved to:
+    /// each argument's carrier is one the callback's carrier holds, and every
+    /// failure a call can meet has a route of the callback's own, needing no
+    /// runtime context — inside a call nothing supplies one.
+    #[allow(clippy::too_many_arguments)]
+    fn check_callback(
+        &self,
+        crossing: &Crossing,
+        position: &Position,
+        carrier: CarrierId,
+        parts: &[Part],
+        children: &[NodeId],
+        invoke: &Operation<T::Op>,
+        routes: &[FailureRoute<T::Op>],
+    ) -> Result<Option<Refusal>, PlanningError> {
+        let refused = |code: String, explanation: String, at: &Position| {
+            Ok(Some(Refusal::at(Unsupported::new(code, explanation), at)))
+        };
+        let accepts = self
+            .binding
+            .carrier_of(carrier)
+            .members
+            .clone()
+            .ok_or_else(|| {
+                PlanningError::InvalidInput(format!(
+                    "`{}` is carried in a carrier with no members",
+                    crossing.ty.key()
+                ))
+            })?;
+        for (part, child) in parts.iter().zip(children) {
+            let class = &self.binding.carrier_of(self.nodes[child.0].carrier).class;
+            if !accepts.holds(class) {
+                return refused(
+                    format!("unsupported.{}.arg.{}", T::NAME, spell_class(class)),
+                    format!(
+                        "argument {} of `{}` is carried as {class:?}, which the callback's \
+                         carrier does not hold",
+                        part.index,
+                        crossing.ty.key()
+                    ),
+                    &position.child(Step::Arg(part.index)),
+                );
+            }
+        }
+        // Every operation a call applies: the arguments' conversions, then
+        // the invocation.
+        let mut applied: Vec<(Option<&Failure>, &[String])> = Vec::new();
+        for child in children {
+            for step in &self.nodes[child.0].body.instrs {
+                if let Instr::Apply { primitive, .. } = &step.instr {
+                    let primitive = &self.primitives[primitive.0];
+                    applied.push((primitive.failure.as_ref(), &primitive.contexts));
+                }
+            }
+        }
+        applied.push((invoke.failure.as_ref(), &invoke.context));
+        let reporters = routes
+            .iter()
+            .filter_map(|route| route.report.as_ref())
+            .map(|report| (None, report.operation.context.as_slice()));
+        for (_, contexts) in applied.iter().copied().chain(reporters) {
+            if let Some(name) = contexts.first() {
+                return refused(
+                    "unsupported.callback.missing_context".to_string(),
+                    format!(
+                        "a call of `{}` needs the `{name}` runtime context, and nothing \
+                         supplies one inside a call",
+                        crossing.ty.key()
+                    ),
+                    position,
+                );
+            }
+        }
+        for failure in applied.iter().filter_map(|(failure, _)| *failure) {
+            let Some(route) = routes
+                .iter()
+                .find(|route| route.category == failure.category)
+            else {
+                return refused(
+                    "unsupported.callback.unrouted_failure".to_string(),
+                    format!(
+                        "a call of `{}` can fail with a {} error and its representation \
+                         declares no route for it",
+                        crossing.ty.key(),
+                        failure.category.as_str()
+                    ),
+                    position,
+                );
+            };
+            if let Some(report) = &route.report {
+                if spell(&report.error) != spell(&failure.error) {
+                    return Err(PlanningError::InvalidInput(format!(
+                        "the {} failure route of `{}` reports a `{}` where a call raises a `{}`",
+                        failure.category.as_str(),
+                        crossing.ty.key(),
+                        spell(&report.error),
+                        spell(&failure.error)
+                    )));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     /// Apply one operation to an already-available value, and hand back what
     /// it produced — the value itself when it produces nothing new.
     ///
     /// An infallible identity produces no instruction at all: the carrier and
     /// the converted value are one Rust value, so the conversion renders
     /// nothing and the caller keeps using the value it already had.
+    #[allow(clippy::too_many_arguments)]
     fn apply(
         &mut self,
         body: &mut BodyBuilder,
@@ -657,6 +895,7 @@ impl<'a, T: Target> Run<'a, T> {
         (slot, value): (Slot, ValueId),
         result: Option<Slot>,
         part: Option<Part>,
+        args: &[(CarrierId, Option<ValueId>)],
     ) -> ValueId {
         if matches!(
             operation.implementation,
@@ -667,6 +906,7 @@ impl<'a, T: Target> Run<'a, T> {
         }
         let mut operands = vec![Operand::Value(value)];
         operands.extend(operation.context.iter().cloned().map(Operand::Context));
+        operands.extend(args.iter().filter_map(|(_, arg)| arg.map(Operand::Value)));
         let id = self.register(Applied {
             implementation: operation.implementation.clone(),
             subject: subject.clone(),
@@ -674,6 +914,7 @@ impl<'a, T: Target> Run<'a, T> {
             contexts: operation.context.clone(),
             result,
             part,
+            args: args.iter().map(|(carrier, _)| *carrier).collect(),
             failure: operation.failure.clone(),
         });
         let produced = result.map(|_| body.fresh());
@@ -740,35 +981,53 @@ fn check_paths<T: Target>(
                     Some(Step::Return) => {
                         return Err(invalid("the function returns nothing".to_string()))
                     }
-                    Some(Step::Field(_)) | None => {
+                    Some(Step::Field(_) | Step::Arg(_)) | None => {
                         return Err(invalid(
                             "a function's values start at a parameter or its return".to_string(),
                         ))
                     }
                 }
             }
-            Declaration::Type(key) => flat
+            Declaration::Type(key) | Declaration::Callback(key) => flat
                 .reading_of(key)
                 .map_err(|error| invalid(format!("its type cannot be read: {error}")))?,
             _ => return Err(invalid("that output has no values".to_string())),
         };
         let mut walked = ValuePath(path.0[..path.0.len() - steps.len()].to_vec());
         for step in steps {
+            // The representation the value there takes decides which steps
+            // lead into it.
+            let taken = rules
+                .lookup(*output, &walked, &ty)
+                .map(|(_, representation)| binding.representation_of(representation));
+            if let Step::Arg(index) = step {
+                let args = match ty.kind() {
+                    TypeKind::Callback { args } => args,
+                    _ => return Err(invalid(format!("`{}` takes no arguments", ty.key()))),
+                };
+                if !matches!(taken, Some(Representation::Callback { .. })) {
+                    return Err(invalid(format!(
+                        "`{}` is not represented as a callback there",
+                        ty.key()
+                    )));
+                }
+                ty = args
+                    .get(*index)
+                    .cloned()
+                    .ok_or_else(|| invalid(format!("`{}` has no argument {index}", ty.key())))?;
+                walked = walked.then(step.clone());
+                continue;
+            }
             let Step::Field(label) = step else {
                 return Err(invalid(format!("`{step}` does not follow a value")));
             };
-            let through_fields = rules
-                .lookup(*output, &walked, &ty)
-                .map(|(_, representation)| {
-                    matches!(
-                        binding.representation_of(representation),
-                        Representation::Product {
-                            via: Via::Fields,
-                            ..
-                        }
-                    )
+            let through_fields = matches!(
+                taken,
+                Some(Representation::Product {
+                    via: Via::Fields,
+                    ..
                 })
-                .unwrap_or(false);
+            );
             if !through_fields {
                 return Err(invalid(format!(
                     "`{}` is not read through its fields there",
@@ -867,13 +1126,8 @@ pub fn generate<T: Target>(
                 ),
                 &root,
             )),
-            Declaration::Callback(_) => Err(Refusal::at(
-                Unsupported::new(
-                    "unsupported.callback.not_implemented",
-                    "the v2 engine has no callback lowering yet",
-                ),
-                &root,
-            )),
+            Declaration::Callback(key) => plan_callback(&mut run, id, declaration, form, key)
+                .map_err(EngineError::Planning)?,
             Declaration::Conversion(_) => Err(Refusal::at(
                 Unsupported::new(
                     "unsupported.conversion.not_implemented",
@@ -1019,23 +1273,25 @@ fn retain<T: Target>(
     retained: &[Retained],
     outcomes: &mut BTreeMap<OutputId, Outcome>,
 ) {
-    // Every type output, by the entity it names, with the representation it
-    // exposes — none for one the frontend refused, which a value of the type
-    // still requires, and so goes down with.
+    // Every type and callback output, by the name a value of it requires it
+    // under, with the representation it exposes — none for one the frontend
+    // refused, which a value of the type still requires, and so goes down
+    // with.
     let by_name: BTreeMap<String, Vec<(OutputId, Option<ReprId>)>> = binding
         .outputs()
         .iter()
         .enumerate()
-        .filter(|(_, (declaration, _))| declaration.is_type())
         .filter_map(|(index, (declaration, form))| {
             let representation = match form {
                 OutputForm::Type { representation, .. } => Some(*representation),
                 _ => None,
             };
-            Some((
-                declaration.entity_name()?,
-                (binding.output_id(index), representation),
-            ))
+            let name = match declaration {
+                Declaration::Type(_) => declaration.entity_name()?,
+                Declaration::Callback(key) => key.as_str().to_string(),
+                _ => return None,
+            };
+            Some((name, (binding.output_id(index), representation)))
         })
         .fold(BTreeMap::new(), |mut all, (name, id)| {
             all.entry(name).or_default().push(id);
@@ -1045,7 +1301,7 @@ fn retain<T: Target>(
     // behind: a function's parameters and result, a type's parts.
     let required = |values: &Retained| -> Vec<NodeId> {
         match &values.declaration {
-            Declaration::Type(_) => values
+            Declaration::Type(_) | Declaration::Callback(_) => values
                 .inputs
                 .iter()
                 .flat_map(|root| run.nodes[root.0].children.clone())
@@ -1060,10 +1316,18 @@ fn retain<T: Target>(
     };
     let resolve = |node: NodeId| -> Option<Result<OutputId, Skip>> {
         let plan = &run.nodes[node.0];
-        let TypeKind::Named { id, .. } = plan.crossing.ty.kind() else {
-            return None;
+        // A named type is required by its name, a callback by its signature;
+        // a value of any other type names nothing a binding declares.
+        let (name, shown, word) = match plan.crossing.ty.kind() {
+            TypeKind::Named { id, .. } => (id.name.clone(), id.name.clone(), "type"),
+            TypeKind::Callback { .. } => {
+                let key = plan.crossing.ty.key();
+                let shown = prebindgen_flat::close_up(key.as_str());
+                (key.as_str().to_string(), shown, "callback")
+            }
+            _ => return None,
         };
-        let declared = by_name.get(&id.name).map(Vec::as_slice).unwrap_or_default();
+        let declared = by_name.get(&name).map(Vec::as_slice).unwrap_or_default();
         // The output exposing the representation the value crossed as; failing
         // that, one the frontend refused, whose skip the value inherits.
         let found = declared
@@ -1077,19 +1341,18 @@ fn retain<T: Target>(
             .map(|(output, _)| *output);
         Some(found.ok_or_else(|| {
             let explanation = match declared {
-                [] => format!(
-                    "requires type `{}`, which this binding declares no type for",
-                    id.name
-                ),
+                [] => {
+                    format!("requires {word} `{shown}`, which this binding declares no {word} for")
+                }
                 _ => format!(
-                    "requires type `{}` as {}, which no type output of it exposes",
-                    id.name, plan.representation
+                    "requires {word} `{shown}` as {}, which no {word} output of it exposes",
+                    plan.representation
                 ),
             };
             Skip::direct(
                 "unsupported.requirement.unrequested",
                 explanation,
-                format!("type `{}`", id.name),
+                format!("{word} `{shown}`"),
             )
         }))
     };
@@ -1132,6 +1395,76 @@ fn retain<T: Target>(
 struct Emitted<Op> {
     function: Option<FunctionPlan<Op>>,
     values: Retained,
+}
+
+/// Plan a callback signature's own value: the closure its representation
+/// builds, into Rust. It exports no function, and exists so that a function
+/// taking the callback has a declaration to require — the foreign type its
+/// parameter is written as — and so the target declares the carrier once.
+fn plan_callback<T: Target>(
+    run: &mut Run<'_, T>,
+    id: OutputId,
+    declaration: &Declaration,
+    form: &crate::binding::OutputFormOf<T>,
+    key: &prebindgen_flat::TypeKey,
+) -> Result<Result<Emitted<T::Op>, Refusal>, PlanningError> {
+    let root = Position::root(id, declaration);
+    match form {
+        OutputForm::Type { release: None, .. } => {}
+        OutputForm::Type {
+            release: Some(_), ..
+        } => {
+            return Err(PlanningError::InvalidInput(format!(
+                "`{declaration}` is a callback, and a callback has nothing to release"
+            )))
+        }
+        OutputForm::Unsupported(reason) => return Ok(Err(Refusal::at(reason.clone(), &root))),
+        OutputForm::Function { .. } => {
+            return Err(PlanningError::InvalidInput(format!(
+                "`{declaration}` declares a callback, and is recorded as a function"
+            )))
+        }
+    }
+    let ty = match run.flat.reading_of(key) {
+        Ok(ty) if matches!(ty.kind(), TypeKind::Callback { .. }) => ty,
+        Ok(_) => {
+            return Err(PlanningError::InvalidInput(format!(
+                "`{declaration}` names `{}`, which is not an `impl Fn(..)`",
+                key.as_str()
+            )))
+        }
+        Err(error) => {
+            return Ok(Err(Refusal::at(
+                Unsupported::new(
+                    "unsupported.type.key",
+                    format!(
+                        "`{}` is declared over a type this model cannot read: {error}",
+                        key.as_str()
+                    ),
+                ),
+                &root,
+            )))
+        }
+    };
+    let taken = match run.plan_value(
+        Crossing {
+            ty,
+            direction: Direction::IntoRust,
+        },
+        &root,
+    )? {
+        Planned::Ready(node) => node,
+        Planned::Unsupported(refusal) => return Ok(Err(refusal)),
+    };
+    Ok(Ok(Emitted {
+        function: None,
+        values: Retained {
+            output: id,
+            declaration: declaration.clone(),
+            inputs: vec![taken],
+            output_value: None,
+        },
+    }))
 }
 
 /// Plan the wrapper that exports one source function: the conversions of its
@@ -1362,7 +1695,15 @@ fn assemble<T: Target>(
             Body::Release(release) => {
                 let subject = run.nodes[node.0].crossing.ty.clone();
                 let slot = Slot::Carrier(run.nodes[node.0].carrier);
-                run.apply(&mut body, release, &subject, (slot, carrier), None, None);
+                run.apply(
+                    &mut body,
+                    release,
+                    &subject,
+                    (slot, carrier),
+                    None,
+                    None,
+                    &[],
+                );
             }
         }
     }

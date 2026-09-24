@@ -69,6 +69,74 @@ mod tests {
         crate::ledger_drop(std::ptr::null_mut());
     }
 
+    /// A callback C passes in is called once per call the source makes, with
+    /// each argument as C receives it and the context C gave, and freed through
+    /// its `drop` once Rust is done with it.
+    #[test]
+    fn the_c_callback_calls_back_and_is_dropped() {
+        use core::ffi::c_void;
+        #[derive(Default)]
+        struct Seen {
+            values: Vec<i64>,
+            dropped: bool,
+        }
+        unsafe extern "C" fn call(value: i64, context: *mut c_void) {
+            unsafe { (*(context as *mut Seen)).values.push(value) }
+        }
+        unsafe extern "C" fn drop(context: *mut c_void) {
+            unsafe { (*(context as *mut Seen)).dropped = true }
+        }
+        let mut seen = Seen::default();
+        crate::stamp_each(
+            crate::Stamp {
+                secs: 12,
+                nanos: 34,
+            },
+            crate::closure_i64 {
+                context: &mut seen as *mut Seen as *mut c_void,
+                call: Some(call),
+                drop: Some(drop),
+            },
+        );
+        assert_eq!(seen.values, [12, 34]);
+        assert!(seen.dropped);
+    }
+
+    /// A handle a callback receives is the callable's to take back, and an
+    /// enum argument arrives as the C enum.
+    #[test]
+    fn the_c_callback_receives_a_handle_and_an_enum() {
+        use core::ffi::c_void;
+        #[derive(Default)]
+        struct Seen {
+            total: Option<i64>,
+            operation: Option<crate::Operation>,
+        }
+        unsafe extern "C" fn call(
+            ledger: *mut crate::Ledger,
+            operation: crate::Operation,
+            context: *mut c_void,
+        ) {
+            let seen = unsafe { &mut *(context as *mut Seen) };
+            seen.total = Some(crate::ledger_close(ledger));
+            seen.operation = Some(operation);
+        }
+        let mut seen = Seen::default();
+        crate::ledger_watch(
+            crate::Stamp {
+                secs: 12,
+                nanos: 34,
+            },
+            crate::closure_Ledger_Operation {
+                context: &mut seen as *mut Seen as *mut c_void,
+                call: Some(call),
+                drop: None,
+            },
+        );
+        assert_eq!(seen.total, Some(46));
+        assert_eq!(seen.operation, Some(crate::Operation::Mul));
+    }
+
     /// An enum comes into Rust as the number C put in it, and each number a
     /// value has becomes that value.
     ///
@@ -270,14 +338,16 @@ mod tests {
     /// Each target left out exactly what it cannot carry, and generated the
     /// rest.
     ///
-    /// The two differ over `Sample`, which both declare and only C emits:
+    /// Both leave out `stamp_emit` and the callback it takes, whose argument is
+    /// a struct neither can hand out of Rust. The two differ over `Sample`,
+    /// which both declare and only C emits:
     /// Kotlin cannot write a condition, so the JNI target refuses the struct
     /// rather than promise a property the library reads only sometimes. A
     /// conditional *function* is emitted by both, because a function has no
     /// property to promise.
     #[test]
     fn each_target_left_out_only_what_it_cannot_carry() {
-        for (target, left_out) in [("c", 5), ("jni", 7)] {
+        for (target, left_out) in [("c", 7), ("jni", 9)] {
             let skipped = skipped(target);
             assert_eq!(
                 skipped.lines().filter(|line| !line.is_empty()).count(),
@@ -323,6 +393,21 @@ mod tests {
                 "fn:sample_total",
                 "unsupported.jni.conditional_field",
             ),
+            // A callback handed a struct would have to build one out of Rust,
+            // which neither target can yet: the callback is refused, and the
+            // function taking it with it.
+            (
+                "c",
+                "callback:impl Fn(Stamp)+Send+Sync+'static",
+                "unsupported.struct.out_of_rust",
+            ),
+            ("c", "fn:stamp_emit", "unsupported.struct.out_of_rust"),
+            (
+                "jni",
+                "callback:impl Fn(Stamp)+Send+Sync+'static",
+                "unsupported.struct.out_of_rust",
+            ),
+            ("jni", "fn:stamp_emit", "unsupported.struct.out_of_rust"),
         ] {
             let skipped = skipped(target);
             assert!(

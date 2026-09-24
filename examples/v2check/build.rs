@@ -72,7 +72,19 @@ fn main() {
                 .fun(prebindgen_c::fun!(stamp_ratio))
                 .ptr_type(prebindgen_c::ptr_type!(Ledger))
                 .fun(prebindgen_c::fun!(ledger_open))
-                .fun(prebindgen_c::fun!(ledger_close)),
+                .fun(prebindgen_c::fun!(ledger_close))
+                .callback(prebindgen_c::callback!(
+                    impl Fn(i64) + Send + Sync + 'static
+                ))
+                .fun(prebindgen_c::fun!(stamp_each))
+                .callback(prebindgen_c::callback!(
+                    impl Fn(Ledger, Operation) + Send + Sync + 'static
+                ))
+                .fun(prebindgen_c::fun!(ledger_watch))
+                .callback(prebindgen_c::callback!(
+                    impl Fn(Stamp) + Send + Sync + 'static
+                ))
+                .fun(prebindgen_c::fun!(stamp_emit)),
         )
         .build_with(Pipeline::V2)
         .expect("the C binding plans");
@@ -103,7 +115,10 @@ fn main() {
                 .fun(prebindgen_registry::fun!(stamp_ratio))
                 .class(prebindgen_jni::ptr_class!(Ledger))
                 .fun(prebindgen_registry::fun!(ledger_open))
-                .fun(prebindgen_registry::fun!(ledger_close)),
+                .fun(prebindgen_registry::fun!(ledger_close))
+                .fun(prebindgen_registry::fun!(stamp_each))
+                .fun(prebindgen_registry::fun!(ledger_watch))
+                .fun(prebindgen_registry::fun!(stamp_emit)),
         )
         .build_with(Pipeline::V2)
         .expect("the JNI binding plans");

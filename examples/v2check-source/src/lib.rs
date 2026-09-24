@@ -121,6 +121,26 @@ pub fn marker_value(marker: Marker) -> i64 {
     7
 }
 
+/// A function that calls back once per field, in field order: a callback
+/// handed the arguments in the wrong order, or called the wrong number of
+/// times, is visible.
+pub fn stamp_each(stamp: Stamp, each: impl Fn(i64) + Send + Sync + 'static) {
+    each(stamp.secs);
+    each(stamp.nanos);
+}
+
+/// A callback handed a handle and an enum: the ledger it receives is the
+/// callable's to close or free, and the operation says which one was applied.
+pub fn ledger_watch(stamp: Stamp, watch: impl Fn(Ledger, Operation) + Send + Sync + 'static) {
+    watch(ledger_open(stamp), Operation::Mul);
+}
+
+/// A callback handed a struct, which neither target can hand out of Rust:
+/// declared so that the refusal is in the report.
+pub fn stamp_emit(stamp: Stamp, emit: impl Fn(Stamp) + Send + Sync + 'static) {
+    emit(stamp);
+}
+
 /// A function that delivers nothing, so a wrapper with no return — and,
 /// through JNI, a failure route that must terminate without a value — is
 /// compiled rather than described.

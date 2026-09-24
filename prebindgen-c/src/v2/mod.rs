@@ -255,12 +255,43 @@ impl CbindgenBuilder {
             }
         }
 
-        // Callback signatures: no captured item names one, and its C closure
-        // struct is what the target would place.
+        // Callback signatures: a C closure struct the caller fills in, moved
+        // into the closure Rust builds and called through on every call. Its
+        // arguments leave Rust as they do anywhere, and none of those
+        // conversions can fail here, so a call needs no route.
         for key in sorted(self.callbacks.keys()) {
-            let declaration = Declaration::Callback(describe_callback(key));
-            let refusal = unimplemented("callback", &declaration);
-            binding.output(declaration, OutputForm::Unsupported(refusal));
+            let args: Vec<syn::Type> = key
+                .iter()
+                .map(|arg| syn::parse_str(arg.as_str()).expect("a type key is a type"))
+                .collect();
+            let callback =
+                TypeKey::from_type(&syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static));
+            let c_name = self.callback_c_name(key);
+            let ident = format_ident!("{c_name}");
+            let closure = binding.carrier(WireType {
+                rust: syn::parse_quote!(#ident),
+                class: CClass::Closure,
+                // What an argument may be: what leaves Rust in a register —
+                // the scalar, an address, an enum. A by-value aggregate leaving
+                // Rust has no construction yet.
+                members: Some(Accepts::of([CClass::I64, CClass::Pointer, CClass::Enum])),
+                meta: CCarrier::Closure { c_name },
+            });
+            let representation = binding.representation(Representation::Callback {
+                carrier: closure,
+                capture: Operation::standard(StandardOp::Identity),
+                invoke: Operation::target(COp::Call),
+                routes: Vec::new(),
+            });
+            binding.rule(Scope::Type(callback.clone()), representation);
+            binding.output(
+                Declaration::Callback(callback),
+                OutputForm::Type {
+                    representation,
+                    release: None,
+                    meta: (),
+                },
+            );
         }
 
         // Declared conversions: the wire mapping for one Rust type, defined by
@@ -368,20 +399,6 @@ fn sorted<T: Ord>(keys: impl IntoIterator<Item = T>) -> Vec<T> {
     let mut keys: Vec<T> = keys.into_iter().collect();
     keys.sort();
     keys
-}
-
-/// A callback signature as its own name: `impl Fn(&Payload)`.
-///
-/// A canonical type key spells a generic with spaces around its brackets
-/// (`Option < Grade >`), which is right for a key and unreadable in a report, so
-/// the argument list is closed up here. The result is still derived only from
-/// the keys, and so is still stable across runs.
-fn describe_callback(key: &[prebindgen_registry::TypeKey]) -> String {
-    let args: Vec<String> = key
-        .iter()
-        .map(|k| prebindgen_registry::close_up(k.as_str()))
-        .collect();
-    format!("impl Fn({})", args.join(", "))
 }
 
 /// Print one cargo warning per capability a skip named, with the declarations

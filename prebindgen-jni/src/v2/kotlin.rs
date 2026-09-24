@@ -22,8 +22,8 @@ use std::{
 };
 
 use kotlin_codegen::{
-    write_files, KtClass, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtParam, KtProperty, KtType,
-    KtVis, WriteKotlinError,
+    write_files, KtClass, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtFunInterface, KtFunSig,
+    KtParam, KtProperty, KtType, KtVis, WriteKotlinError,
 };
 use prebindgen_registry_v2::{Declaration, Generation, NodeId, OutputForm};
 
@@ -113,6 +113,71 @@ pub(super) fn write(
                 }
                 file(package, &mut files).decls.push(declaration.into());
             }
+            // The interface a caller implements, one `run` taking every
+            // argument as the public functions spell its type. When one is a
+            // handle or an enum, the native method takes `raw` instead — the
+            // same `run` over the arguments' wire forms — and the public
+            // function adapts the one to the other with `asRaw()`.
+            JniOutput::Callback {
+                package,
+                class,
+                raw,
+            } => {
+                let root = generation.value(retained.inputs[0]);
+                let args: Vec<KotlinType> =
+                    root.children.iter().map(|child| kotlin(*child)).collect();
+                let names = arg_names(&args);
+                let run = |native: bool| {
+                    let mut run = KtFunSig::new("run").vis(KtVis::Public);
+                    for (name, ty) in names.iter().zip(&args) {
+                        let spelled = match native {
+                            true => ty.native(),
+                            false => ty.public(),
+                        };
+                        run = run.param(KtParam::new(name, KtType::cls(spelled)));
+                    }
+                    run
+                };
+                let decls = &mut file(package, &mut files).decls;
+                decls.push(
+                    KtFunInterface::new(class, run(false))
+                        .vis(KtVis::Public)
+                        .into(),
+                );
+                if let Some(raw) = raw {
+                    decls.push(
+                        KtFunInterface::new(raw, run(true))
+                            .vis(KtVis::Internal)
+                            .into(),
+                    );
+                    let adapted: Vec<String> = names
+                        .iter()
+                        .zip(&args)
+                        .map(|(name, ty)| match ty {
+                            KotlinType::Handle(class) => {
+                                format!("{}({name})", short(class, package))
+                            }
+                            KotlinType::Enum(class) => {
+                                format!("{}.fromInt({name})", short(class, package))
+                            }
+                            _ => name.clone(),
+                        })
+                        .collect();
+                    decls.push(
+                        KtFun::new("asRaw")
+                            .receiver(KtType::cls(class))
+                            .vis(KtVis::Internal)
+                            .annotation("JvmSynthetic")
+                            .returns(KtType::cls(raw))
+                            .expr_body(KtCode::new().line(format!(
+                                "{raw} {{ {} -> run({}) }}",
+                                names.join(", "),
+                                adapted.join(", ")
+                            )))
+                            .into(),
+                    );
+                }
+            }
             JniOutput::Function {
                 package,
                 method,
@@ -146,9 +211,16 @@ pub(super) fn write(
                 for (name, ty) in &params {
                     public = public.param(KtParam::new(name, KtType::cls(ty.public())));
                 }
-                public = public
-                    .returns(KtType::cls(ret.public()))
-                    .expr_body(KtCode::new().line(call(harness, native, &params, &ret, package)));
+                let mut body = KtCode::new().line(call(harness, native, &params, &ret, package));
+                // A callback is declared in the base package, and so is the
+                // `asRaw()` adapting it, which another package imports.
+                let adapts = params
+                    .iter()
+                    .any(|(_, ty)| matches!(ty, KotlinType::Callback { raw: Some(_), .. }));
+                if adapts && *package != harness_package && !harness_package.is_empty() {
+                    body = body.import(format!("{harness_package}.asRaw"));
+                }
+                public = public.returns(KtType::cls(ret.public())).expr_body(body);
                 // Kotlin has no conditional compilation, so a function whose
                 // source was written under a condition is declared here
                 // whatever that condition says, and the symbol behind it is
@@ -288,6 +360,8 @@ fn call(
             // The `enum class` carries its own number, which is what the
             // native method takes.
             KotlinType::Enum(_) => format!("{name}.value"),
+            KotlinType::Callback { raw: None, .. } => name.clone(),
+            KotlinType::Callback { raw: Some(_), .. } => format!("{name}.asRaw()"),
         })
         .collect();
     let call = format!("{harness}.{native}({})", args.join(", "));
@@ -299,12 +373,52 @@ fn call(
         format!("{class}{open}({call})")
     };
     match ret {
-        KotlinType::Value(_) => call,
+        // A callable never leaves Rust, so none is returned.
+        KotlinType::Value(_) | KotlinType::Callback { .. } => call,
         KotlinType::Handle(class) => wrap(class, &call, ""),
         // `fromInt` is the companion the enum class carries, and it is what
         // turns the number back into a value of the enum.
         KotlinType::Enum(class) => wrap(class, &call, ".fromInt"),
     }
+}
+
+/// A class as a declaration in `package` spells it: short when it is declared
+/// there, in full otherwise.
+fn short<'c>(class: &'c str, package: &str) -> &'c str {
+    match class.rsplit_once('.') {
+        Some((declared_in, short)) if declared_in == package => short,
+        _ => class,
+    }
+}
+
+/// The names of a callback's arguments: each after its type as Kotlin spells
+/// it — `ledger`, `operation` — and `value` for a number, with a position
+/// added where two would share one.
+fn arg_names(args: &[KotlinType]) -> Vec<String> {
+    let names: Vec<String> = args
+        .iter()
+        .map(|ty| match ty {
+            KotlinType::Value(class) if !class.contains('.') => "value".to_string(),
+            _ => {
+                let class = ty.public().rsplit('.').next().unwrap_or_default();
+                let mut chars = class.chars();
+                match chars.next() {
+                    Some(first) => format!("{}{}", first.to_lowercase(), chars.as_str()),
+                    None => "value".to_string(),
+                }
+            }
+        })
+        .collect();
+    names
+        .iter()
+        .enumerate()
+        .map(
+            |(index, name)| match names.iter().filter(|other| *other == name).count() {
+                1 => kotlin_ident(name),
+                _ => format!("{name}{index}"),
+            },
+        )
+        .collect()
 }
 
 /// What a declaration whose source item was written under `#[cfg]` says for
