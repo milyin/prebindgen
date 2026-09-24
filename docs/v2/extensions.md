@@ -440,13 +440,14 @@ the element only there.
 ## Multi-value layouts
 
 Extends [the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-boundary).
-Needed by the sequence-field path, and by JNI's `expand_param`.
+Needed by the sequence-field path, and by JNI's `expand_param` and
+`expand_return`.
 
 Inside a plan one value is always one carrier. A C slice is one `{ ptr, len }`
 aggregate, and a `Stamp` read from a JVM object is one `JObject`, wherever
 the value sits: as a parameter, a field, or an element of another container.
-Only the wrapper boundary may split a value into several wrapper parameters,
-and the function form says which:
+Only the wrapper boundary may split a value into several, and the function
+form says which, and how a split return reaches the caller:
 
 ```rust
 pub struct FunctionForm<T: Target> {
@@ -454,32 +455,62 @@ pub struct FunctionForm<T: Target> {
     /// The parameters, or the return, that cross as their members rather
     /// than as one value.
     pub flatten: Vec<Step>, // Step::Param("xs"), Step::Return
+    /// How the members of a flattened return reach the caller.
+    pub members_out: MembersOut<T>,
+}
+
+pub enum MembersOut<T: Target> {
+    /// One out-parameter per member. C.
+    OutParameters,
+    /// One call of a callback the caller passes in, taking every member as
+    /// an argument; the wrapper returns what the callback returns. JNI.
+    Callback {
+        param: ContextParam,        // The extra wrapper parameter: `build: JObject`.
+        invoke: Operation<T::Op>,   // The call, fed the members' carriers.
+    },
 }
 ```
 
 A flattened value must be carried in an aggregate: a carrier with members,
-such as a `repr(C)` struct. The registry checks that before planning. At the
-boundary it replaces the one wrapper parameter with one per member, each typed
+such as a `repr(C)` struct, or a Rust-only one declared with `abi: false`,
+which the foreign side never sees whole. The registry checks that before
+planning.
+
+**A flattened parameter** becomes one wrapper parameter per member, each typed
 as that member's carrier and named by the target's writer — `xs` becomes
-`xs_ptr` and `xs_len` — and binds each member directly where the plan would
-have read it out of the aggregate. A flattened return becomes one
-out-parameter per member, in a convention that has out-parameters: C does, and
-a JNI method returns one value.
+`xs_ptr` and `xs_len` — and the registry binds each member directly where the
+plan would have read it out of the aggregate.
 
-The aggregate need not be one the foreign side ever sees whole. A carrier
-declared with `abi: false` is a Rust-only intermediate, and flattening is how
-its members reach the wrapper signature. That is how JNI's `expand_param`
-fits: a rule at `param stamp` selects a `Product` over an internal aggregate
-of `Stamp`'s two parts instead of the `JObject`, and the function form
-flattens `param stamp`.
+**A flattened return** delivers its members the way `members_out` says. In C
+each member is written through an out-parameter. A JNI method returns one
+value and has no out-parameters, so the caller passes a callback instead: the
+wrapper gains one parameter holding it, computes the members, calls it once
+with all of them, and returns its result. V1's `expand_return` does exactly
+this. In its covertest example, `ledgerNew(n: Long, build: LedgerBuilder<R>): R`
+hands `build.run(…)` the members of the returned `Ledger` and returns
+whatever `run` builds. The callback's interface, `fun interface
+LedgerBuilder<out R>` with one `run` taking the members, is a foreign
+declaration the JNI writer emits from the members' carriers, and the call is
+a JNI operation the writer spells from the same feed.
 
-| Frontend setting | Declarations | Wrapper parameters |
+| Frontend setting | Declarations | At the wrapper boundary |
 | --- | --- | --- |
 | C, a slice parameter | `xs: &[i64]` takes the slice container, carried in `slice_i64 { ptr, len }`; the form flattens `param xs` | `xs_ptr: *const i64, xs_len: usize` |
-| JNI, `expand_param(stamp)` | `At(f, param stamp)` selects a `Product` over an internal `{ secs: jlong, nanos: jlong }`; the form flattens `param stamp` | `secs: jlong, nanos: jlong` |
+| C, a flattened return | the value's aggregate carrier; the form flattens `return` with `OutParameters` | one `*mut` out-parameter per member |
+| JNI, `expand_return(Ledger)` | a `Product` over a Rust-only aggregate of the parts the declared accessors read; the form flattens `return` with `Callback` | `build: JObject` in, the callback's result out |
 
-Neither the slice container nor `Stamp`'s other representations know about
-the flattening, and everywhere else the same `Stamp` is still one `JObject`.
+Neither the slice container nor a type's other representations know about
+the flattening: everywhere else a `Ledger` is still carried as its rules say.
+
+JNI's `expand_param` is the input side of the same idea, with one addition. It
+lists *variants*, each a way to build the parameter from other values — a
+constructor such as `keyexpr_new_try_from(String)`, or the value itself
+passed as a handle. One variant is a `Product` through that constructor's
+relation over a Rust-only aggregate of its arguments, flattened like any other
+parameter. Several variants are an alternative: the caller passes one
+variant's arguments and a selector saying which. That needs a representation
+that is a choice between representations at one position, which this model
+does not have yet.
 
 ## Requesting further conversions
 

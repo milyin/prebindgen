@@ -359,6 +359,8 @@ pub struct FunctionForm<T: Target> {
     pub unsafety: bool,
     pub flatten: Vec<Step>,           // Parameters, or the return, split into their members:
                                       // see [multi-value layouts](../extensions.md#multi-value-layouts).
+    pub members_out: MembersOut<T>,   // How a split return reaches the caller: C's out-parameters,
+                                      // or JNI's caller-supplied callback.
 }
 ```
 
