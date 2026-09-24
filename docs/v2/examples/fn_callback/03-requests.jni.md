@@ -82,6 +82,11 @@ out, and return from the call.
   none.
 - Two functions taking `impl Fn(i64)` share `LongCallback`; the signature is
   the identity, not the parameter.
+- A name built from short names can coincide for two signatures —
+  `Fn(FooBar, Baz)` and `Fn(Foo, BarBaz)` — or with a declared class. Every
+  callback whose name is taken twice is refused, as
+  `unsupported.jni.callback_name` naming the others, and so is every function
+  taking one: two Kotlin declarations of one name would not compile.
 - A callback whose arguments would all be refused is still stated: the refusal
   is the registry's to find and report, where the argument is.
 

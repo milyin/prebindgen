@@ -450,6 +450,7 @@ impl Declarations {
             false => format!("{package}.{class}"),
         };
         let jni_error: syn::Type = syn::parse_quote!(jni::errors::Error);
+        let mut named_callbacks = Vec::new();
         for ty in signatures.into_values() {
             let TypeKind::Callback { args } = ty.kind() else {
                 continue;
@@ -487,6 +488,68 @@ impl Declarations {
                 .iter()
                 .any(|(_, adapted)| *adapted)
                 .then(|| format!("{class}Raw"));
+            named_callbacks.push((ty, class, raw));
+        }
+        // A name built from short names is not unique — `Fn(FooBar, Baz)` and
+        // `Fn(Foo, BarBaz)`, or two `Foo`s from two packages, are both
+        // `…Callback` — and every callback lands in one package, beside the
+        // declared classes. Two declarations under one name would not compile,
+        // so every callback whose name is taken twice is refused, naming what
+        // it collides with, and a binding can see it rather than a Kotlin
+        // compiler error.
+        let mut claimed: std::collections::HashMap<String, Vec<String>> = self
+            .types
+            .keys()
+            .filter_map(|key| {
+                Some((
+                    self.kotlin_fqn(key)?,
+                    vec![format!("type:{}", key.as_str())],
+                ))
+            })
+            .collect();
+        for (ty, class, raw) in &named_callbacks {
+            for name in std::iter::once(class).chain(raw) {
+                claimed
+                    .entry(qualified(name))
+                    .or_default()
+                    .push(Declaration::Callback(ty.key()).to_string());
+            }
+        }
+        for (ty, class, raw) in named_callbacks {
+            let collision = std::iter::once(&class)
+                .chain(&raw)
+                .map(|name| qualified(name))
+                .find(|name| claimed[name].len() > 1);
+            if let Some(name) = collision {
+                let declaration = Declaration::Callback(ty.key());
+                let representation =
+                    binding.representation(Representation::Unsupported(Unsupported::new(
+                        "unsupported.jni.callback_name",
+                        format!(
+                            "`{declaration}` would be the Kotlin `{name}`, as would {}",
+                            claimed[&name]
+                                .iter()
+                                .filter(|other| **other != declaration.to_string())
+                                .map(|other| format!("`{other}`"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                    )));
+                binding.rule(Scope::Type(ty.key()), representation);
+                binding.output(
+                    declaration,
+                    OutputForm::Type {
+                        representation,
+                        release: None,
+                        meta: JniOutput::Callback {
+                            package: package.clone(),
+                            class,
+                            raw,
+                        },
+                    },
+                );
+                continue;
+            }
             let callable = qualified(raw.as_deref().unwrap_or(&class));
             let carrier = binding.carrier(WireType {
                 rust: syn::parse_quote!(jni::objects::JObject<'_>),

@@ -1057,3 +1057,52 @@ fn a_class_with_an_interface_is_refused() {
     assert_eq!(declaration.to_string(), "type:Priority");
     assert_eq!(skip.capability.as_str(), "unsupported.jni.interface");
 }
+
+/// Two callback signatures whose names would coincide are refused, both of
+/// them, rather than emitted as two Kotlin declarations of one name; a
+/// callback whose name is its own is unaffected.
+#[test]
+fn callbacks_whose_kotlin_names_coincide_are_refused() {
+    let loc = myflat_loc();
+    let sources = [
+        "pub struct FooBar { pub v: i64 }",
+        "pub struct Baz { pub v: i64 }",
+        "pub struct Foo { pub v: i64 }",
+        "pub struct BarBaz { pub v: i64 }",
+        "pub fn one(f: impl Fn(FooBar, Baz) + Send + Sync + 'static) { unimplemented!() }",
+        "pub fn two(f: impl Fn(Foo, BarBaz) + Send + Sync + 'static) { unimplemented!() }",
+        "pub fn three(f: impl Fn(i64) + Send + Sync + 'static) { unimplemented!() }",
+    ];
+    let items = declare_referenced(
+        sources
+            .iter()
+            .map(|src| (syn::parse_str::<syn::Item>(src).unwrap(), loc.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let generated = JniGenBuilder::new()
+        .set_package_prefix("io.test.jni")
+        .items(items)
+        .package(
+            crate::package!()
+                .fun(prebindgen_registry::fun!(one))
+                .fun(prebindgen_registry::fun!(two))
+                .fun(prebindgen_registry::fun!(three)),
+        )
+        .build_with(Pipeline::V2)
+        .expect("v2 plans");
+    for id in [
+        "callback:impl Fn(FooBar,Baz)+Send+Sync+'static",
+        "callback:impl Fn(Foo,BarBaz)+Send+Sync+'static",
+        "fn:one",
+        "fn:two",
+    ] {
+        let (capability, _) = skip_of(&generated, id);
+        assert_eq!(capability, "unsupported.jni.callback_name", "{id}");
+    }
+    let kotlin = kotlin_of(&generated, "io.test.jni");
+    assert!(
+        kotlin.contains("public fun interface LongCallback"),
+        "{kotlin}"
+    );
+    assert!(!kotlin.contains("FooBarBazCallback"), "{kotlin}");
+}

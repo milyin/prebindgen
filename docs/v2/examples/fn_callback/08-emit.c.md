@@ -25,10 +25,16 @@ in the generated C Rust module (`c.rs`):
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct closure_i64 {
+    /// The caller's own state, handed to `call` and to `drop`.
     pub context: *mut ::core::ffi::c_void,
+    /// Called on every call of the callback, with its arguments
+    /// and `context`, from whichever thread Rust calls it on. When
+    /// null, a call does nothing.
     pub call: ::core::option::Option<
         unsafe extern "C" fn(i64, *mut ::core::ffi::c_void),
     >,
+    /// Called once with `context` when Rust lets go of the
+    /// callback. When null, nothing frees `context`.
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
 unsafe impl ::core::marker::Send for closure_i64 {}
@@ -42,7 +48,11 @@ impl ::core::ops::Drop for closure_i64 {
 }
 ```
 
-`call` takes each argument's carrier, then the context. The two `unsafe impl`s
+`call` takes each argument's carrier, then the context. Each member says what
+it is for, and what a null one means, in its own comment — which is where
+`cbindgen` carries it into the header, since a C caller reads that and not
+this Rust. A null `call` is a callback that is told nothing: the source
+function calls it, and nothing happens, as in v1. The two `unsafe impl`s
 are the promise a C caller makes by passing one: that its context may be used
 and freed from any thread. `Drop` is how the context is freed — when Rust drops
 the closure that owns the struct, whether the source function called it
@@ -75,8 +85,20 @@ The header `cbindgen` derives from them:
 
 ```c
 typedef struct closure_i64 {
+  /**
+   * The caller's own state, handed to `call` and to `drop`.
+   */
   void *context;
+  /**
+   * Called on every call of the callback, with its arguments
+   * and `context`, from whichever thread Rust calls it on. When
+   * null, a call does nothing.
+   */
   void (*call)(int64_t, void*);
+  /**
+   * Called once with `context` when Rust lets go of the
+   * callback. When null, nothing frees `context`.
+   */
   void (*drop)(void*);
 } closure_i64;
 

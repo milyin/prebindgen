@@ -197,7 +197,24 @@ mod tests {
             .expect("cbindgen reads the generated C binding")
             .write(&mut header);
         let header = String::from_utf8(header).unwrap();
-        let compact: String = header.split_whitespace().collect();
+        // The members' comments are what a C caller reads, and are checked
+        // for what a null member means; the layout is checked without them.
+        for said in [
+            "When\n   * null, a call does nothing.",
+            "When null, nothing frees `context`.",
+        ] {
+            assert!(header.contains(said), "missing `{said}` in:\n{header}");
+        }
+        let mut uncommented = String::new();
+        let mut rest = header.as_str();
+        while let Some(start) = rest.find("/*") {
+            uncommented.push_str(&rest[..start]);
+            rest = &rest[start..][rest[start..]
+                .find("*/")
+                .map_or(rest.len() - start, |end| end + 2)..];
+        }
+        uncommented.push_str(rest);
+        let compact: String = uncommented.split_whitespace().collect();
         for expected in [
             "typedefstructclosure_i64{void*context;void(*call)(int64_t,void*);void(*drop)(void*);}closure_i64;",
             "voidstamp_each(structStampstamp,structclosure_i64each);",

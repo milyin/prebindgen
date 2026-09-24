@@ -123,14 +123,23 @@ impl Target for CTarget {
                 let ident = format_ident!("{c_name}");
                 let args = feed.members.iter().map(|(_, carrier)| &carrier.rust);
                 vec![
+                    // What each member means is said on the member, which is
+                    // where `cbindgen` puts it in the header: a C caller never
+                    // reads this Rust.
                     quote! {
                         #[repr(C)]
                         #[allow(non_camel_case_types)]
                         pub struct #ident {
+                            /// The caller's own state, handed to `call` and to `drop`.
                             pub context: *mut ::core::ffi::c_void,
+                            /// Called on every call of the callback, with its arguments
+                            /// and `context`, from whichever thread Rust calls it on. When
+                            /// null, a call does nothing.
                             pub call: ::core::option::Option<
                                 unsafe extern "C" fn(#(#args,)* *mut ::core::ffi::c_void),
                             >,
+                            /// Called once with `context` when Rust lets go of the
+                            /// callback. When null, nothing frees `context`.
                             pub drop: ::core::option::Option<
                                 unsafe extern "C" fn(*mut ::core::ffi::c_void),
                             >,
