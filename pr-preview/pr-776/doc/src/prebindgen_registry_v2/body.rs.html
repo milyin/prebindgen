@@ -154,26 +154,26 @@
 <a href=#154 id=154 data-nosnippet>154</a>
 <a href=#155 id=155 data-nosnippet>155</a><span class="doccomment">/// A planned conversion's instructions, as a template.
 <a href=#156 id=156 data-nosnippet>156</a>///
-<a href=#157 id=157 data-nosnippet>157</a>/// [`NodeBody::carrier`] is the value handed in when the conversion is used;
+<a href=#157 id=157 data-nosnippet>157</a>/// [`NodeBody::wire type`] is the value handed in when the conversion is used;
 <a href=#158 id=158 data-nosnippet>158</a>/// [`NodeBody::result`] is what it produces. An identity conversion is the
-<a href=#159 id=159 data-nosnippet>159</a>/// degenerate case — no instructions, and the result *is* the carrier — which
+<a href=#159 id=159 data-nosnippet>159</a>/// degenerate case — no instructions, and the result *is* the wire type — which
 <a href=#160 id=160 data-nosnippet>160</a>/// is what makes a scalar child render nothing.
 <a href=#161 id=161 data-nosnippet>161</a></span><span class="attr">#[derive(Clone, Debug)]
 <a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub struct </span>NodeBody {
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">pub </span>carrier: ValueId,
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">pub </span>wire_type: ValueId,
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">pub </span>instrs: Vec&lt;Stmt&gt;,
 <a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">pub </span>result: ValueId,
 <a href=#166 id=166 data-nosnippet>166</a>}
 <a href=#167 id=167 data-nosnippet>167</a>
 <a href=#168 id=168 data-nosnippet>168</a><span class="kw">impl </span>NodeBody {
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// Inline this conversion into `out`, with `carrier` supplying its input.
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="doccomment">/// Inline this conversion into `out`, with `wire type` supplying its input.
 <a href=#170 id=170 data-nosnippet>170</a>    ///
 <a href=#171 id=171 data-nosnippet>171</a>    /// Value identities are local to a template, so they are remapped as they
 <a href=#172 id=172 data-nosnippet>172</a>    /// are met: an operand must already be mapped, and a result is allocated
 <a href=#173 id=173 data-nosnippet>173</a>    /// fresh in the destination body.
-<a href=#174 id=174 data-nosnippet>174</a>    </span><span class="kw">pub fn </span>inline(<span class="kw-2">&amp;</span><span class="self">self</span>, carrier: ValueId, out: <span class="kw-2">&amp;mut </span>BodyBuilder) -&gt; ValueId {
+<a href=#174 id=174 data-nosnippet>174</a>    </span><span class="kw">pub fn </span>inline(<span class="kw-2">&amp;</span><span class="self">self</span>, wire_type: ValueId, out: <span class="kw-2">&amp;mut </span>BodyBuilder) -&gt; ValueId {
 <a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span><span class="kw-2">mut </span>map = HashMap::new();
-<a href=#176 id=176 data-nosnippet>176</a>        map.insert(<span class="self">self</span>.carrier, carrier);
+<a href=#176 id=176 data-nosnippet>176</a>        map.insert(<span class="self">self</span>.wire_type, wire_type);
 <a href=#177 id=177 data-nosnippet>177</a>        <span class="kw">for </span>step <span class="kw">in </span>remap(<span class="kw-2">&amp;</span><span class="self">self</span>.instrs, <span class="kw-2">&amp;mut </span>map, out) {
 <a href=#178 id=178 data-nosnippet>178</a>            out.instrs.push(step);
 <a href=#179 id=179 data-nosnippet>179</a>        }
