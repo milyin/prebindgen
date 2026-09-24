@@ -15,24 +15,59 @@ use crate::{
     target::{FailureCategory, Target, Terminal, Unsupported},
 };
 
-/// A carrier the binding declared, valid inside the binding that issued it.
+/// Which binding issued an id. Every [`Binding`] draws a fresh one, and each id
+/// it issues carries it, so an id handed to another binding is recognised as
+/// foreign instead of naming whatever sits at the same index there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CarrierId(pub(crate) usize);
+struct Issuer(u64);
 
-/// A representation the binding declared, valid inside the binding that
+impl Issuer {
+    fn fresh() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        Issuer(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+/// A carrier the binding declared, valid only in the binding that issued it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CarrierId {
+    issuer: Issuer,
+    pub(crate) index: usize,
+}
+
+/// A representation the binding declared, valid only in the binding that
 /// issued it. Equal representations get one id, which is what makes it a
 /// conversion's identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ReprId(pub(crate) usize);
+pub struct ReprId {
+    issuer: Issuer,
+    pub(crate) index: usize,
+}
 
-/// One of the binding's outputs: an index into the outputs it declared.
+/// One of the binding's outputs, valid only in the binding that issued it.
 ///
 /// An output is a declaration *and* the form recorded with it, and the pair is
 /// what tells two of them apart: one entity declared twice — `Stamp` as a data
 /// class and as a handle — is two outputs, each planned, accounted for and
 /// required separately.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct OutputId(pub(crate) usize);
+pub struct OutputId {
+    issuer: Issuer,
+    pub(crate) index: usize,
+}
+
+impl std::fmt::Display for CarrierId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "c{}", self.index)
+    }
+}
+
+impl std::fmt::Display for ReprId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "r{}", self.index)
+    }
+}
 
 /// A Rust type generated code may hold a value in at the boundary.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -78,6 +113,9 @@ impl<C: PartialEq> Accepts<C> {
 /// product's carrier and produces the part's, whatever carrier that part
 /// resolves to. The registry works them out when it plans a value, and feeds
 /// them to the writer.
+// A binding holds a few dozen of these, each once, so the unboxed codecs cost
+// nothing worth an indirection.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Representation<Op> {
     /// The whole value, one operation each way: a scalar, a handle, a
@@ -389,7 +427,12 @@ pub type OutputFormOf<T> =
     OutputForm<<T as Target>::Op, <T as Target>::WireClass, <T as Target>::OutputMeta>;
 
 /// Everything planning reads from a binding.
+///
+/// The ids it issues are valid only in it. Every method taking an id panics if
+/// the id was issued by another binding: that is a frontend bug, found where
+/// the id is handed over rather than as a wrong plan.
 pub struct Binding<T: Target> {
+    issuer: Issuer,
     carriers: Vec<CarrierOf<T>>,
     representations: Vec<RepresentationOf<T>>,
     rules: Vec<(Scope, ReprId)>,
@@ -399,6 +442,7 @@ pub struct Binding<T: Target> {
 impl<T: Target> Default for Binding<T> {
     fn default() -> Self {
         Binding {
+            issuer: Issuer::fresh(),
             carriers: Vec::new(),
             representations: Vec::new(),
             rules: Vec::new(),
@@ -415,77 +459,152 @@ impl<T: Target> Binding<T> {
     /// A carrier generated Rust may use. Declaring an equal carrier again
     /// returns the same id.
     pub fn carrier(&mut self, carrier: CarrierOf<T>) -> CarrierId {
-        match self.carriers.iter().position(|known| *known == carrier) {
-            Some(index) => CarrierId(index),
+        let index = match self.carriers.iter().position(|known| *known == carrier) {
+            Some(index) => index,
             None => {
                 self.carriers.push(carrier);
-                CarrierId(self.carriers.len() - 1)
+                self.carriers.len() - 1
             }
+        };
+        CarrierId {
+            issuer: self.issuer,
+            index,
         }
     }
 
     /// One way a type crosses. Declaring an equal representation again
     /// returns the same id.
+    ///
+    /// Panics if a carrier it names was issued by another binding.
     pub fn representation(&mut self, representation: RepresentationOf<T>) -> ReprId {
-        match self
+        let carriers: Vec<CarrierId> = match &representation {
+            Representation::Terminal {
+                into_rust,
+                out_of_rust,
+                ..
+            } => into_rust
+                .iter()
+                .chain(out_of_rust)
+                .map(|codec| codec.carrier)
+                .collect(),
+            Representation::Product { carrier, .. } => vec![*carrier],
+            Representation::Unsupported(_) => Vec::new(),
+        };
+        for carrier in carriers {
+            self.check(carrier.issuer, "carrier");
+        }
+        let index = match self
             .representations
             .iter()
             .position(|known| *known == representation)
         {
-            Some(index) => ReprId(index),
+            Some(index) => index,
             None => {
                 self.representations.push(representation);
-                ReprId(self.representations.len() - 1)
+                self.representations.len() - 1
             }
+        };
+        ReprId {
+            issuer: self.issuer,
+            index,
         }
     }
 
     /// The values `scope` covers cross as `representation`.
+    ///
+    /// Panics if `representation`, or the output `scope` names, was issued by
+    /// another binding.
     pub fn rule(&mut self, scope: Scope, representation: ReprId) {
+        self.check(representation.issuer, "representation");
+        if let Scope::At(output, _) = &scope {
+            self.check(output.issuer, "output");
+        }
         self.rules.push((scope, representation));
     }
 
     /// Expose `declaration` in `form`. The id is how a rule addresses a value
     /// inside the output.
+    ///
+    /// Panics if the representation a type form names was issued by another
+    /// binding.
     pub fn output(&mut self, declaration: Declaration, form: OutputFormOf<T>) -> OutputId {
+        if let OutputForm::Type { representation, .. } = &form {
+            self.check(representation.issuer, "representation");
+        }
         self.outputs.push((declaration, form));
-        OutputId(self.outputs.len() - 1)
+        self.output_id(self.outputs.len() - 1)
     }
 
+    /// The carrier `id` names. Panics if another binding issued `id`.
     pub fn carrier_of(&self, id: CarrierId) -> &CarrierOf<T> {
-        &self.carriers[id.0]
+        self.check(id.issuer, "carrier");
+        &self.carriers[id.index]
     }
 
+    /// The representation `id` names. Panics if another binding issued `id`.
     pub fn representation_of(&self, id: ReprId) -> &RepresentationOf<T> {
-        &self.representations[id.0]
+        self.check(id.issuer, "representation");
+        &self.representations[id.index]
     }
 
+    /// Every rule, in the order the frontend stated them.
     pub fn rules(&self) -> &[(Scope, ReprId)] {
         &self.rules
     }
 
+    /// Every output, in the order the frontend stated them; an output's
+    /// position here is its id's.
     pub fn outputs(&self) -> &[(Declaration, OutputFormOf<T>)] {
         &self.outputs
     }
 
-    /// The form recorded with one output.
+    /// The declaration and form recorded as one output. Panics if another
+    /// binding issued `id`.
+    pub fn output_of(&self, id: OutputId) -> &(Declaration, OutputFormOf<T>) {
+        self.check(id.issuer, "output");
+        &self.outputs[id.index]
+    }
+
+    /// The form recorded with one output. Panics if another binding issued
+    /// `id`.
     pub fn form_of(&self, id: OutputId) -> &OutputFormOf<T> {
-        &self.outputs[id.0].1
+        &self.output_of(id).1
+    }
+
+    /// The id of the output at `index` in [`outputs`](Self::outputs).
+    pub(crate) fn output_id(&self, index: usize) -> OutputId {
+        OutputId {
+            issuer: self.issuer,
+            index,
+        }
+    }
+
+    /// An id this binding issued exists in it, since nothing is ever removed:
+    /// the issuer is all there is to check.
+    fn check(&self, issuer: Issuer, kind: &str) {
+        assert!(
+            issuer == self.issuer,
+            "a {kind} id issued by another binding was handed to this one"
+        );
     }
 }
 
 impl<T: Target> std::fmt::Display for Binding<T> {
-    /// One line per carrier, representation, rule and output, with the
-    /// target's own vocabulary in its `Debug` form: the whole of what planning
-    /// reads, which is what to diff when two builds of one binding generate
-    /// differently.
+    /// One line per carrier, representation, rule and output, a function
+    /// form's details on the lines under its output, with the target's own
+    /// vocabulary in its `Debug` form. It prints every field planning reads,
+    /// so two bindings that print alike plan alike: this is what to diff when
+    /// two builds of one binding generate differently.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use quote::ToTokens;
         for (index, carrier) in self.carriers.iter().enumerate() {
+            let members = match &carrier.members {
+                Some(accepts) => format!("members {:?}", accepts.classes),
+                None => "no members".to_string(),
+            };
             writeln!(
                 f,
-                "carrier  c{index}  {}  {:?}  {:?}",
-                carrier.rust.to_token_stream(),
+                "carrier  c{index}  {}  {:?}  {members}  {:?}",
+                tokens(&carrier.rust),
                 carrier.class,
                 carrier.meta
             )?;
@@ -498,9 +617,7 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                     release,
                 } => {
                     let codec = |codec: &Option<Codec<T::Op>>| match codec {
-                        Some(codec) => {
-                            format!("c{} {:?}", codec.carrier.0, codec.operation.implementation)
-                        }
+                        Some(codec) => format!("{} {}", codec.carrier, operation(&codec.operation)),
                         None => "-".to_string(),
                     };
                     format!(
@@ -508,17 +625,16 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                         codec(into_rust),
                         codec(out_of_rust),
                         match release {
-                            Some(release) => format!("  release: {:?}", release.implementation),
+                            Some(release) => format!("  release: {}", operation(release)),
                             None => String::new(),
                         }
                     )
                 }
-                Representation::Product { via, carrier, read } => format!(
-                    "product  c{}  {via:?}  read: {:?}",
-                    carrier.0, read.implementation
-                ),
+                Representation::Product { via, carrier, read } => {
+                    format!("product  {carrier}  {via:?}  read: {}", operation(read))
+                }
                 Representation::Unsupported(reason) => {
-                    format!("unsupported  {}", reason.capability)
+                    format!("unsupported  {}: {}", reason.capability, reason.explanation)
                 }
             };
             writeln!(f, "repr     r{index}  {described}")?;
@@ -526,24 +642,126 @@ impl<T: Target> std::fmt::Display for Binding<T> {
         for (scope, representation) in &self.rules {
             let scope = match scope {
                 Scope::Type(key) => format!("type {}", key.as_str()),
-                Scope::At(output, path) => format!("at {} {path}", self.outputs[output.0].0),
+                Scope::At(output, path) => {
+                    format!("at {} {path}", self.outputs[output.index].0)
+                }
             };
-            writeln!(f, "rule     {scope}  r{}", representation.0)?;
+            writeln!(f, "rule     {scope}  {representation}")?;
         }
         for (declaration, form) in &self.outputs {
-            let described = match form {
+            match form {
                 OutputForm::Type {
                     representation,
+                    release,
                     meta,
-                    ..
-                } => format!("type r{}  {meta:?}", representation.0),
-                OutputForm::Function { form, meta } => {
-                    format!("function {:?} {}  {meta:?}", form.abi, form.symbol)
+                } => {
+                    writeln!(f, "output   {declaration}  type {representation}  {meta:?}")?;
+                    if let Some(release) = release {
+                        write_form(f, "release", release)?;
+                    }
                 }
-                OutputForm::Unsupported(reason) => format!("unsupported {}", reason.capability),
-            };
-            writeln!(f, "output   {declaration}  {described}")?;
+                OutputForm::Function { form, meta } => {
+                    writeln!(f, "output   {declaration}  function  {meta:?}")?;
+                    write_form(f, "form", form)?;
+                }
+                OutputForm::Unsupported(reason) => writeln!(
+                    f,
+                    "output   {declaration}  unsupported {}: {}",
+                    reason.capability, reason.explanation
+                )?,
+            }
         }
         Ok(())
     }
+}
+
+fn tokens(item: &impl quote::ToTokens) -> String {
+    item.to_token_stream().to_string()
+}
+
+/// An operation on one line: what it is, the contexts it needs and the failure
+/// it can raise.
+fn operation<Op: std::fmt::Debug>(operation: &Operation<Op>) -> String {
+    let mut text = format!("{:?}", operation.implementation);
+    if !operation.context.is_empty() {
+        text += &format!(" needs {}", operation.context.join(", "));
+    }
+    if let Some(failure) = &operation.failure {
+        text += &format!(
+            " fails {} {}",
+            failure.category.as_str(),
+            tokens(&*failure.error)
+        );
+    }
+    text
+}
+
+fn terminal(terminal: &Terminal) -> String {
+    match terminal {
+        Terminal::Return(value) => format!("return {}", tokens(value)),
+        Terminal::Abort => "abort".to_string(),
+    }
+}
+
+/// A function form, indented under the output it belongs to: its signature on
+/// one line, its acceptance on the next, then one line per route.
+fn write_form<Op: std::fmt::Debug, C: std::fmt::Debug>(
+    f: &mut std::fmt::Formatter<'_>,
+    label: &str,
+    form: &FunctionForm<Op, C>,
+) -> std::fmt::Result {
+    let context: Vec<String> = form
+        .context
+        .iter()
+        .map(|param| {
+            format!(
+                "{}{}: {}{}",
+                if param.mutable { "mut " } else { "" },
+                param.name,
+                tokens(&param.ty),
+                match &param.supplies {
+                    Some(name) => format!(" supplies {name}"),
+                    None => String::new(),
+                }
+            )
+        })
+        .collect();
+    let inputs: Vec<String> = form.inputs.iter().map(ToString::to_string).collect();
+    let attrs: Vec<String> = form.attrs.iter().map(tokens).collect();
+    writeln!(
+        f,
+        "         {label}  {}extern {:?} {}  context [{}]  inputs [{}]{}",
+        if form.unsafety { "unsafe " } else { "" },
+        form.abi,
+        form.symbol,
+        context.join(", "),
+        inputs.join(", "),
+        match attrs.is_empty() {
+            true => String::new(),
+            false => format!("  attrs [{}]", attrs.join(" ")),
+        }
+    )?;
+    writeln!(
+        f,
+        "         {label}  params {:?}  ret {:?}",
+        form.params.classes, form.ret.classes
+    )?;
+    for route in &form.routes {
+        let report = match &route.report {
+            Some(report) => format!(
+                "report {} by {}, if that fails {}, then ",
+                tokens(&report.error),
+                operation(&report.operation),
+                terminal(&route.on_report_failure)
+            ),
+            None => String::new(),
+        };
+        writeln!(
+            f,
+            "         {label}  route {}: {report}{}",
+            route.category.as_str(),
+            terminal(&route.terminate)
+        )?;
+    }
+    Ok(())
 }

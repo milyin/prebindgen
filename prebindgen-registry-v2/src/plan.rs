@@ -237,7 +237,7 @@ impl Rules {
         for (index, (_, form)) in binding.outputs().iter().enumerate() {
             if let OutputForm::Type { representation, .. } = form {
                 by_scope.insert(
-                    Scope::At(OutputId(index), ValuePath::root()),
+                    Scope::At(binding.output_id(index), ValuePath::root()),
                     (None, *representation),
                 );
             }
@@ -275,10 +275,10 @@ impl Rules {
 fn describe_scope<T: Target>(binding: &Binding<T>, scope: &Scope) -> String {
     match scope {
         Scope::Type(key) => format!("every `{}`", key.as_str()),
-        Scope::At(output, path) => match binding.outputs().get(output.0) {
+        Scope::At(output, path) => match binding.outputs().get(output.index) {
             Some((declaration, _)) if path.0.is_empty() => format!("`{declaration}` itself"),
             Some((declaration, _)) => format!("`{path}` of `{declaration}`"),
-            None => format!("an output this binding does not have ({})", output.0),
+            None => format!("an output this binding does not have ({})", output.index),
         },
     }
 }
@@ -718,7 +718,7 @@ fn check_paths<T: Target>(
                 describe_scope(binding, scope)
             ))
         };
-        let Some((declaration, _)) = binding.outputs().get(output.0) else {
+        let Some((declaration, _)) = binding.outputs().get(output.index) else {
             return Err(invalid("the binding has no such output".to_string()));
         };
         let mut steps = path.0.iter();
@@ -827,7 +827,7 @@ pub fn generate<T: Target>(
     let mut outcomes: BTreeMap<OutputId, Outcome> = BTreeMap::new();
 
     for (index, (declaration, form)) in binding.outputs().iter().enumerate() {
-        let id = OutputId(index);
+        let id = binding.output_id(index);
         let root = Position::root(id, declaration);
         // What is planned follows from the declaration, which says both what the
         // target asked for and what the captured source holds for it.
@@ -920,7 +920,7 @@ pub fn generate<T: Target>(
         .iter()
         .enumerate()
         .filter_map(
-            |(index, (declaration, _))| match outcomes.get(&OutputId(index)) {
+            |(index, (declaration, _))| match outcomes.get(&binding.output_id(index)) {
                 Some(Outcome::Skipped(skip)) => Some((declaration.clone(), skip.clone())),
                 _ => None,
             },
@@ -1007,9 +1007,10 @@ fn check_form<Op, C>(
 /// skipped unless that declaration survives too, until a pass changes nothing.
 ///
 /// A value of a named type requires the type output exposing the
-/// representation the value crossed as — with one type declared twice, the one
-/// its values were planned as. A type declared once is that declaration, and a
-/// value of a named type nothing declares requires what is not there. A
+/// representation the value crossed as, and no other: a foreign signature
+/// naming the type needs the declaration of that representation. A value of a
+/// type whose output the frontend refused inherits the refusal; a value no
+/// output exposes the representation of requires what is not there. A
 /// requirement does not export anything: whatever needed a missing declaration
 /// is skipped instead.
 fn retain<T: Target>(
@@ -1033,7 +1034,7 @@ fn retain<T: Target>(
             };
             Some((
                 declaration.entity_name()?,
-                (OutputId(index), representation),
+                (binding.output_id(index), representation),
             ))
         })
         .fold(BTreeMap::new(), |mut all, (name, id)| {
@@ -1063,21 +1064,31 @@ fn retain<T: Target>(
             return None;
         };
         let declared = by_name.get(&id.name).map(Vec::as_slice).unwrap_or_default();
+        // The output exposing the representation the value crossed as; failing
+        // that, one the frontend refused, whose skip the value inherits.
         let found = declared
             .iter()
             .find(|(_, representation)| *representation == Some(plan.representation))
-            .or(match declared {
-                [only] => Some(only),
-                _ => None,
+            .or_else(|| {
+                declared
+                    .iter()
+                    .find(|(_, representation)| representation.is_none())
             })
             .map(|(output, _)| *output);
         Some(found.ok_or_else(|| {
-            Skip::direct(
-                "unsupported.requirement.unrequested",
-                format!(
+            let explanation = match declared {
+                [] => format!(
                     "requires type `{}`, which this binding declares no type for",
                     id.name
                 ),
+                _ => format!(
+                    "requires type `{}` as {}, which no type output of it exposes",
+                    id.name, plan.representation
+                ),
+            };
+            Skip::direct(
+                "unsupported.requirement.unrequested",
+                explanation,
                 format!("type `{}`", id.name),
             )
         }))
@@ -1554,16 +1565,17 @@ fn plan_type<T: Target>(
     let mut given = None;
     let mut release_plan = None;
     if let Some(release) = release {
-        given = match run.plan_value(
+        let handed_out = match run.plan_value(
             Crossing {
                 ty,
                 direction: Direction::OutOfRust,
             },
             &root,
         )? {
-            Planned::Ready(id) => Some(id),
+            Planned::Ready(id) => id,
             Planned::Unsupported(refusal) => return Ok(Err(refusal)),
         };
+        given = Some(handed_out);
         let Some(release_form) = release_form else {
             return Ok(Err(Refusal::at(
                 Unsupported::new(
@@ -1576,12 +1588,14 @@ fn plan_type<T: Target>(
                 &root,
             )));
         };
+        // The release frees what a function handed out, so it takes the
+        // out-of-Rust carrier, which may differ from the one taken back in.
         release_plan = match assemble(
             run,
             id,
             declaration,
             Body::Release(release),
-            &[taken],
+            &[handed_out],
             None,
             release_form,
         )? {

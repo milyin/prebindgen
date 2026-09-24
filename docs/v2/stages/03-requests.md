@@ -568,21 +568,26 @@ type no function uses. Such rules are listed in `Generation::unused_rules`,
 which a build script may print.
 
 The binding is also printable, one line per carrier, representation, rule
-and output, with metadata in its `Debug` form:
+and output, a function form's signature, acceptance and routes on the lines
+under its output, and metadata in its `Debug` form:
 
 ```text
-carrier  c0  i64  I64  Builtin
-carrier  c1  Stamp  Aggregate  Aggregate { c_name: "Stamp" }
+carrier  c0  i64  I64  no members  Builtin
+carrier  c1  Stamp  Aggregate  members [I64]  Aggregate { c_name: "Stamp" }
 repr     r0  terminal  in: c0 Standard(Identity)  out: c0 Standard(Identity)
 repr     r1  product  c1  Fields  read: Standard(ReadMember)
 rule     type i64  r0
 rule     type Stamp  r1
 output   type:Stamp  type r1  ()
-output   fn:stamp_sum  function "C" stamp_sum  ()
+output   fn:stamp_sum  function  ()
+         form  extern "C" stamp_sum  context []  inputs [stamp]
+         form  params [I64, Pointer, Aggregate, Enum]  ret [I64, Pointer, Aggregate, Enum]
+         form  route binding: abort
 ```
 
-That text is the whole of what planning reads, which makes it the thing to
-diff when two builds of one binding generate differently.
+The text prints every field planning reads, so two bindings that print alike
+plan alike, which makes it the thing to diff when two builds of one binding
+generate differently.
 
 ### How the frontends build a binding
 

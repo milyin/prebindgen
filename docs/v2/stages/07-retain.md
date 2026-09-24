@@ -145,13 +145,14 @@ from the plan: every value of a named type a function takes or returns, and
 every part of a type's own value, requires the type output exposing the
 [representation](05-represent.md#represent-and-compose-values) that value's
 [crossing](03-requests.md#finding-an-existing-conversion-plan) was planned
-with. With a type declared once that is that output, whatever became of
-it; a value crossing as a type output the frontend refused is skipped with
-that output's cause. Declared several times, the representation settles it:
-`Stamp` exposed as a struct and as a handle is two outputs, and a value
-crossing as the handle requires the second. A value of a type that no output
-exposes, or of a type declared several times none of which exposes the
-representation it crossed as, produces `unsupported.requirement.unrequested`.
+with, and only that one: `Stamp` exposed as a struct and as a handle is two
+outputs, and a value crossing as the handle requires the second. A type output
+the frontend refused exposes no representation; a value of that type is
+skipped with the refused output's cause. A value of a type no output
+exposes, or exposed only as other representations, produces
+`unsupported.requirement.unrequested`: a foreign signature would otherwise
+name a type the header or the Kotlin sources declare differently, or not at
+all.
 
 Requiring a type does not export it: a type nothing requested is not emitted
 because something needed it, and whatever needed it is skipped instead.

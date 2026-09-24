@@ -11,8 +11,7 @@ use prebindgen_flat::flat::Flat;
 use crate::{
     binding::{
         Accepts, Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
-        OutputId, Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via,
-        WireType,
+        Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
@@ -250,6 +249,9 @@ enum Shape {
     /// An opaque value carried whole as an address, released through a
     /// release of its own.
     Handle,
+    /// A handle taken back as an address and handed out as an integer: two
+    /// carriers, one per direction.
+    SplitHandle,
     /// An `i64` carried through this target's own operation.
     ScalarThrough,
 }
@@ -342,6 +344,31 @@ impl Fixture {
                     }),
                     out_of_rust: Some(Codec {
                         carrier: pointer,
+                        operation: Operation::standard(StandardOp::IntoRaw),
+                    }),
+                    release: Some(Operation::standard(StandardOp::Release)),
+                }
+            }
+            Shape::SplitHandle => {
+                let pointer = self.binding.carrier(WireType {
+                    rust: syn::parse_quote!(*mut Raw),
+                    class: Class::Pointer,
+                    members: None,
+                    meta: Meta::Plain,
+                });
+                let integer = self.binding.carrier(WireType {
+                    rust: syn::parse_quote!(usize),
+                    class: Class::Scalar,
+                    members: None,
+                    meta: Meta::Plain,
+                });
+                Representation::Terminal {
+                    into_rust: Some(Codec {
+                        carrier: pointer,
+                        operation: Operation::standard(StandardOp::FromRaw),
+                    }),
+                    out_of_rust: Some(Codec {
+                        carrier: integer,
                         operation: Operation::standard(StandardOp::IntoRaw),
                     }),
                     release: Some(Operation::standard(StandardOp::Release)),
@@ -450,16 +477,7 @@ impl Fixture {
             at,
             ..
         } = self;
-        for (declaration, (path, repr)) in at
-            .iter()
-            .map(|(declaration, path, repr)| (declaration, (path, repr)))
-        {
-            let output = outputs
-                .iter()
-                .position(|(declared, _)| declared == declaration)
-                .expect("a rule at a position names a declared output");
-            rules.push((Scope::At(OutputId(output), ValuePath(path.clone())), *repr));
-        }
+        let mut ids = Vec::new();
         for (declaration, mut form) in outputs {
             if let (Declaration::Function(ident), OutputForm::Function { form, .. }) =
                 (&declaration, &mut form)
@@ -474,7 +492,14 @@ impl Fixture {
                         .collect();
                 }
             }
-            binding.output(declaration, form);
+            ids.push((declaration.clone(), binding.output(declaration, form)));
+        }
+        for (declaration, path, repr) in at {
+            let (_, output) = ids
+                .iter()
+                .find(|(declared, _)| *declared == declaration)
+                .expect("a rule at a position names a declared output");
+            rules.push((Scope::At(*output, ValuePath(path)), repr));
         }
         for (scope, repr) in rules {
             binding.rule(scope, repr);
@@ -565,10 +590,11 @@ fn a_rule_at_a_position_does_not_share_the_type_rule() {
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     fixture.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
     let fallible = fixture.repr(Shape::FallibleStruct("Stamp"));
+    fixture.expose("Stamp", fallible);
     fixture.at("stamp_max", vec![param("stamp")], fallible);
 
     let generation = fixture.generate(model()).expect("plans");
-    assert_eq!(emitted(&generation), 3);
+    assert_eq!(emitted(&generation), 4, "{:?}", generation.skipped());
     // The two `Stamp` conversions are distinct; their `i64` children still are
     // not, because nothing overrode them.
     assert_eq!(generation.values().len(), 4);
@@ -783,6 +809,35 @@ fn one_function_declared_twice_is_two_outputs() {
         .generate(model())
         .expect_err("one form, one declaration");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
+}
+
+/// A value crossing as a representation no type output exposes is skipped,
+/// even though the type is exposed another way: the foreign signature would
+/// name a type the output does not declare.
+#[test]
+fn a_value_is_skipped_when_no_output_exposes_its_representation() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let handle = fixture.repr(Shape::Handle);
+    fixture.at("stamp_max", vec![param("stamp")], handle);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
+
+    let generation = fixture.generate(model()).expect("plans");
+    assert!(matches!(
+        outcome(&generation, "fn:stamp_sum"),
+        Outcome::Emitted
+    ));
+    match outcome(&generation, "fn:stamp_max") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(
+                skip.capability.as_str(),
+                "unsupported.requirement.unrequested"
+            );
+            assert!(skip.explanation.contains("no type output"), "{skip:?}");
+        }
+        other => panic!("stamp_max is skipped, and is {other:?}"),
+    }
 }
 
 /// One type exposed as two representations, and a value requires the one it
@@ -1368,7 +1423,7 @@ fn two_rules_for_one_value_are_an_error() {
     let mut fixture = self::fixture();
     let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
     let mut binding = fixture.build(&model());
-    binding.rule(Scope::At(OutputId(0), ValuePath::root()), strukt);
+    binding.rule(Scope::At(binding.output_id(0), ValuePath::root()), strukt);
     let error = generate(model(), &Mini, binding, syn::parse_quote!(source)).expect_err("refuses");
     assert!(
         error
@@ -1484,16 +1539,67 @@ fn a_binding_prints_what_planning_reads() {
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let printed = fixture.build(&model()).to_string();
     for line in [
-        "carrier  c0  i64  Scalar  Plain",
-        "carrier  c1  Stamp  Aggregate  Plain",
+        "carrier  c0  i64  Scalar  no members  Plain",
+        "carrier  c1  Stamp  Aggregate  members [Scalar, Aggregate, Pointer]  Plain",
         "repr     r1  product  c1  Fields  read: Standard(ReadMember)",
         "rule     type i64  r0",
         "rule     type Stamp  r1",
         "output   type:Stamp  type r1  ()",
-        "output   fn:stamp_sum  function \"C\" stamp_sum  ()",
+        "output   fn:stamp_sum  function  ()",
+        "         form  extern \"C\" stamp_sum  context []  inputs [arg0]",
     ] {
         assert!(printed.contains(line), "missing `{line}` in:\n{printed}");
     }
+}
+
+/// What planning reads and the printout left out would let two bindings print
+/// alike and plan differently: a failing read, a route, what a holder accepts.
+#[test]
+fn bindings_that_plan_differently_print_differently() {
+    let print = |shape: Shape, routes: Routes| {
+        let mut fixture = fixture();
+        fixture.declare_type("Stamp", shape);
+        fixture.declare_fn("stamp_sum", exported("stamp_sum", routes));
+        fixture.build(&model()).to_string()
+    };
+    let plain = print(Shape::Struct("Stamp"), Routes::None);
+    for other in [
+        print(Shape::FallibleStruct("Stamp"), Routes::None),
+        print(Shape::Struct("Stamp"), Routes::Reported),
+        print(
+            Shape::StructHolding("Stamp", vec![Class::Scalar]),
+            Routes::None,
+        ),
+    ] {
+        assert_ne!(plain, other);
+    }
+}
+
+/// A release frees what was handed out, so its wrapper takes the out-of-Rust
+/// carrier even where the representation takes values back in through another.
+#[test]
+fn a_release_takes_the_carrier_that_was_handed_out() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::SplitHandle);
+    let generation = fixture.generate(model()).expect("plans");
+    let rust = generation.rust();
+    assert!(
+        rust.contains("pub extern \"C\" fn Stamp_free(arg0: usize)"),
+        "{rust}"
+    );
+}
+
+/// An id is valid only in the binding that issued it, and handing one to
+/// another binding fails where it is handed over, whether or not the same
+/// index exists there.
+#[test]
+#[should_panic(expected = "a representation id issued by another binding")]
+fn an_id_from_another_binding_is_refused() {
+    let mut other = fixture();
+    let foreign = other.repr(Shape::Struct("Stamp"));
+    let mut fixture = fixture();
+    fixture.repr(Shape::Struct("Stamp"));
+    fixture.binding.rule(Scope::Type(key("Stamp")), foreign);
 }
 
 /// A guard the capture reader injected reaches the generated file, whatever
