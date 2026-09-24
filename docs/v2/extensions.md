@@ -410,8 +410,9 @@ representation that produces a value declares its niche:
 
 ```rust
 pub enum Niche {
-    Null, // A null pointer or a null object reference.
-    Zero, // An integer 0.
+    Null,         // A null pointer or a null object reference.
+    Zero,         // An integer 0.
+    Integer(i64), // Another integer, such as a tag no arm of a choice uses.
 }
 
 // On `Representation::Terminal` and `Representation::Product`:
@@ -502,15 +503,77 @@ a JNI operation the writer spells from the same feed.
 Neither the slice container nor a type's other representations know about
 the flattening: everywhere else a `Ledger` is still carried as its rules say.
 
-JNI's `expand_param` is the input side of the same idea, with one addition. It
-lists *variants*, each a way to build the parameter from other values — a
-constructor such as `keyexpr_new_try_from(String)`, or the value itself
-passed as a handle. One variant is a `Product` through that constructor's
-relation over a Rust-only aggregate of its arguments, flattened like any other
-parameter. Several variants are an alternative: the caller passes one
-variant's arguments and a selector saying which. That needs a representation
-that is a choice between representations at one position, which this model
-does not have yet.
+JNI's `expand_param` is the input side of the same idea. With one variant —
+one way to build the parameter, such as `zbytes_new_from_vec(Vec<u8>)` — it is
+a `Product` through that constructor's relation over a Rust-only aggregate of
+its arguments, flattened like any other parameter. With several it is a
+[choice](#choices).
+
+## Choices
+
+Extends [conversion rules](stages/03-requests.md#conversion-rules). Needed by
+JNI's multi-variant `expand_param`, and by the enum-with-payload path.
+
+Some values cross in one of several forms, and which one is only known at run
+time. zenoh-flat-jni has two: a `KeyExpr` parameter is built from a `String`
+through `keyexpr_new_try_from` *or* passed as an existing handle, and an
+`Encoding` from its `(id, schema)` through `encoding_new_from_id` *or* as a
+handle. The SDKs over it choose per value, not per call: their `KeyExpr`
+is string-backed until it is declared and handle-backed after, and one
+`session.put` passes whichever it holds. Fixing the form per call would not do —
+26 of zenoh-flat-jni's 211 JNI entry points take such a parameter and 5 take
+two, so one entry point per combination is 62 instead of 26, each call
+in both SDKs branching on the value's state. Forcing one form costs what
+zenoh-flat-jni's `build.rs` documents choosing both for: a Rust-owned handle
+allocated per message, or a declared key expression's wire optimisation.
+
+A Rust enum with payloads crosses the same way in the other direction:
+`RecoveryMode` and `InstrumentationTimestamp` are sealed classes in
+zenoh-flat-jni, delivered as whichever variant the value is. So a choice is
+one more representation, not a parameter feature:
+
+```rust
+pub enum Representation<T: Target> {
+    // … Terminal, Product, Unsupported …
+    /// One of several representations of the same type, and a tag saying which.
+    Choice {
+        tag: CarrierId,     // The tag's carrier: a `jint`, a C `int`.
+        arms: Vec<ReprId>,  // Each arm is a representation of this same type.
+        carrier: CarrierId, // An aggregate: the tag, then one member per arm.
+    },
+}
+```
+
+Each arm is an ordinary representation of the value's own type, so an arm is
+whatever a representation can be:
+
+| Arm | Its representation | Direction |
+| --- | --- | --- |
+| built through a constructor, `keyexpr_new_try_from(String)` | a `Product` through `Via::Construct(keyexpr_new_try_from)` | into Rust only |
+| the value itself, as a handle | the type's handle `Terminal` | both |
+| one variant of a Rust enum, `RecoveryMode::Heartbeat` | a `Product` through `Via::Variant(Heartbeat)`, its fields as parts | both |
+
+`Via::Variant` is the registry's relation for one variant of an enum, as
+`Via::Fields` is for a struct. The registry checks the arms before planning:
+each is a representation of the choice's type, and a choice with an arm that
+only builds cannot cross out of Rust. Into Rust it matches on the tag and
+plans the chosen arm; out of Rust it matches on the value's variant and
+writes that arm's tag and members.
+
+The carrier holds the tag and every arm's members, and only the chosen arm's
+are read. An arm not chosen holds its wire type's null or zero, which the
+registry writes and never reads. A choice's niche is any tag no arm uses, so
+an `Option<KeyExpr>` needs no container: its absent value is tag −1, which is
+the `encodingSel = -1` the SDKs pass for "no encoding" today. That is the
+`Integer` niche above.
+
+Flattened at the boundary the carrier becomes the tag and each arm's
+members, flattened in turn, which reproduces v1's signature exactly:
+`keyExprSel, keyExpr0, keyExpr1` for a `KeyExpr`, and
+`encodingSel, encoding00, encoding01, encoding1` for an `Encoding`, whose
+first arm is itself the pair `(id, schema)`. V1's `split_on_param`, which
+adds a typed Kotlin overload per arm over the same entry point, is the Kotlin
+writer's business alone and stays in the function's output metadata.
 
 ## Requesting further conversions
 

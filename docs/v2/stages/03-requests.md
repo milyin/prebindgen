@@ -385,6 +385,9 @@ pub enum Representation<T: Target> {
         read: Operation<T::Op>,            // One part out of the carrier, applied per part.
         build: Option<Operation<T::Op>>,   // The carrier from its parts, out of Rust.
     },
+    /// One of several representations of this same type, and a tag saying
+    /// which: see [choices](../extensions.md#choices).
+    Choice { tag: CarrierId, arms: Vec<ReprId>, carrier: CarrierId },
     /// A representation the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
