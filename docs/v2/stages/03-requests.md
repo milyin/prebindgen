@@ -318,8 +318,11 @@ pub struct Binding<T: Target> { /* private */ }
 impl<T: Target> Binding<T> {
     /// A carrier generated Rust may use.
     pub fn carrier(&mut self, carrier: WireType<T::CarrierMeta>) -> CarrierId;
-    /// How the values `scope` covers are represented.
-    pub fn rule(&mut self, scope: Scope, representation: Representation<T>);
+    /// One way a type crosses. Declaring an equal representation again
+    /// returns the same id.
+    pub fn representation(&mut self, representation: Representation<T>) -> ReprId;
+    /// The values `scope` covers cross as `representation`.
+    pub fn rule(&mut self, scope: Scope, representation: ReprId);
     /// Expose `declaration` in this form. The id is how a rule addresses a
     /// value inside the output.
     pub fn output(&mut self, declaration: Declaration, form: OutputForm<T>) -> OutputId;
@@ -332,10 +335,10 @@ pub struct WireType<M> {
 }
 
 pub enum OutputForm<T: Target> {
-    /// A type: its carriers' Rust declarations, and its foreign declaration.
-    /// `representation` is how the declared value itself crosses — the
-    /// rule at this output's root.
-    Type { representation: Representation<T>, meta: T::OutputMeta },
+    /// One representation of a type, exposed: its carriers' Rust
+    /// declarations, and its foreign declaration. It is also the rule at
+    /// this output's root.
+    Type { representation: ReprId, meta: T::OutputMeta },
     /// A function, exported through a wrapper of this form.
     Function { form: FunctionForm<T>, meta: T::OutputMeta },
     /// A declarator the target does not lower, refused by name.
@@ -352,8 +355,10 @@ pub struct FunctionForm<T: Target> {
 }
 ```
 
-A representation says how the values of one scope cross. It is the answer a
-target used to give when asked, stated in advance instead:
+A representation is one way a type crosses. A type may have several — `Stamp`
+as a C struct and as a handle — and each is declared once and referred to by
+its `ReprId`, from rules and from outputs alike. It is the answer a target
+used to give when asked, stated in advance instead:
 
 ```rust
 pub enum Representation<T: Target> {
@@ -392,23 +397,24 @@ For the C `Stamp`, with the frontend's own `CName` as the carrier metadata:
 
 ```rust
 let i64_c = binding.carrier(WireType { rust: parse_quote!(i64), abi: true, meta: CName::builtin() });
-binding.rule(Scope::Type(key!(i64)), Representation::Terminal {
+let i64_whole = binding.representation(Representation::Terminal {
     carrier: i64_c,
     into_rust: Some(Operation::standard(StandardOp::Identity)),
     out_of_rust: Some(Operation::standard(StandardOp::Identity)),
     release: None,
 });
+binding.rule(Scope::Type(key!(i64)), i64_whole);
 
 let stamp_c = binding.carrier(WireType { rust: parse_quote!(Stamp), abi: true, meta: CName::from("Stamp") });
-let stamp = Representation::Product {
+let stamp_struct = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_c,
     read: Operation::standard(StandardOp::ReadMember),
     build: Some(Operation::standard(StandardOp::BuildAggregate)),
-};
-binding.rule(Scope::Type(key!(Stamp)), stamp.clone());   // every Stamp value
-binding.output(Declaration::Type(key!(Stamp)),           // and the declaration itself
-               OutputForm::Type { representation: stamp, meta: () });
+});
+binding.rule(Scope::Type(key!(Stamp)), stamp_struct);   // every Stamp value
+binding.output(Declaration::Type(key!(Stamp)),          // and the struct, exposed
+               OutputForm::Type { representation: stamp_struct, meta: () });
 ```
 
 and for the JNI one, with `Jvm { descriptor, kotlin }` as the metadata:
@@ -423,12 +429,13 @@ let stamp_obj = binding.carrier(WireType {
     rust: parse_quote!(jni::objects::JObject<'local>), abi: true,
     meta: Jvm { descriptor: "Lexample/Stamp;".into(), kotlin: "example.Stamp".into() },
 });
-binding.rule(Scope::Type(key!(Stamp)), Representation::Product {
+let stamp_class = binding.representation(Representation::Product {
     via: Via::Fields,
     carrier: stamp_obj,
     read: Operation::target(JniOp::Getter).context("env").fails(FailureCategory::Runtime),
     build: Some(Operation::target(JniOp::NewObject).context("env").fails(FailureCategory::Runtime)),
 });
+binding.rule(Scope::Type(key!(Stamp)), stamp_class);
 ```
 
 The C declarations use only standard operations, which the registry writes
@@ -441,7 +448,7 @@ refused as `unsupported.conversion.no_rule`, naming the type.
 
 ### Conversion rules
 
-A **conversion rule** is a representation recorded against a scope: every
+A **conversion rule** names the representation of the values in a scope: every
 value of one type, or one value at one position inside one output.
 
 ```rust
@@ -498,7 +505,8 @@ and fails the build with invalid input when:
 
 - two rules have the same scope, which is the binding saying two things about
   one value;
-- a representation names a carrier the binding did not declare;
+- a rule or an output names a representation the binding did not declare,
+  or a representation names a carrier it did not declare;
 - a rule at `At(output, path)` names a position the output does not have: a
   parameter the function does not take, a `return` on a function returning
   nothing, a field of a value whose representation is not read through
@@ -516,15 +524,17 @@ table covers kinds a binding may never mention, and a binding may declare a
 type no function uses. Such rules are listed in `Generation::unused_rules`,
 which a build script may print.
 
-The binding is also printable, one line per carrier, rule and output, with
-metadata in its `Debug` form:
+The binding is also printable, one line per carrier, representation, rule
+and output, with metadata in its `Debug` form:
 
 ```text
 carrier  c0  i64                  CName(builtin)
 carrier  c1  Stamp                CName("Stamp")
-rule     type i64                 terminal c0  identity / identity
-rule     type Stamp               product  c1  fields  read: ReadMember  build: BuildAggregate
-output   type:Stamp               type
+repr     r0  terminal c0          identity / identity
+repr     r1  product  c1  fields  read: ReadMember  build: BuildAggregate
+rule     type i64                 r0
+rule     type Stamp               r1
+output   type:Stamp               type r1
 output   fn:stamp_sum             function "C" stamp_sum
 ```
 
@@ -566,7 +576,7 @@ let generation = generate(source_model, &CTarget, binding, source_module)?;
 `CbindgenBuilder::binding()` reads the builder's storage once, sorted so that
 a run over unchanged input emits the same file. It records the scalar table,
 then for each declared type a carrier, a representation, the `Type` rule
-and the output carrying that representation — `data_type!` a `Product`
+and the output naming that representation — `data_type!` a `Product`
 through `Fields`, `ptr_type!` a `Terminal` over a `*mut` carrier with a
 release — and for each function an output with its
 function form. The JNI frontend does the same with its declarations. A check
@@ -577,7 +587,7 @@ settings that shape how it writes, such as the package prefix.
 
 A declarator the target has no lowering for — a tagged union, a callback
 signature — still becomes an output, recorded as `OutputForm::Unsupported`,
-and a type's rule carries `Representation::Unsupported`. It is refused by the declarator's name before
+and a type's rule names a `Representation::Unsupported`. It is refused by the declarator's name before
 anything under it is planned, and the skip carries the capability it waits
 for.
 
@@ -690,13 +700,24 @@ Kotlin placement, a C symbol — which the engine does not speak, so a binding
 that needs its diagnostics to tell them apart says so in its own terms, from
 the choices it recorded.
 
-Two declarations of one type each plan as declared. A type output states
-the representation of its own value, which is the rule at its root,
-`At(output, [])`, and outranks the type's rule there and nowhere else. The
-binding records at most one `Type` rule for the type, the way its values
-cross everywhere else. So `Stamp` declared as a C struct and as a handle is
-two outputs with two root representations, and one `Type` rule saying which
-of the two a `Stamp` parameter gets. A binding that records two `Type` rules
+Two declarations of one type are two representations of it, each exposed.
+A type output names the representation it exposes, which is the rule at its
+root, `At(output, [])`, and outranks the type's rule there and nowhere else.
+So `Stamp` declared as a C struct and as a handle is two representations,
+two outputs each naming one, and at most one `Type` rule saying which of the
+two a `Stamp` parameter gets:
+
+```rust
+let stamp_struct = binding.representation(/* Product over the `Stamp` carrier */);
+let stamp_handle = binding.representation(/* Terminal over `*mut stamp_t`, with a release */);
+binding.rule(Scope::Type(key!(Stamp)), stamp_struct);
+binding.output(Declaration::Type(key!(Stamp)), OutputForm::Type { representation: stamp_struct, meta: () });
+binding.output(Declaration::Type(key!(Stamp)), OutputForm::Type { representation: stamp_handle, meta: () });
+```
+
+The two outputs differ by the representation they name, so they are two
+outputs rather than one stated twice; exposing one representation twice is
+the duplicate. A binding that records two `Type` rules
 for one type fails the
 [checks](#what-the-registry-checks-before-planning) instead of having one
 silently win. Which declaration a *value* requires is then settled at
@@ -742,10 +763,10 @@ A reusable conversion plan is a [node](05-represent.md#represent-and-compose-val
 
 ```rust
 // Private to the registry's conversion cache module; not a public request type.
-struct NodeKey<T: Target> {
+struct NodeKey {
     source: TypeKey,       // Derived internally from crossing.source.key().
     direction: Direction, // Copied from that crossing.
-    representation: Representation<T>, // Carrier, operations and relation, compared by value.
+    representation: ReprId, // Carrier, operations and relation: equal ids are equal content.
     children: Vec<NodeId>,// The conversions its parts resolved to.
 }
 ```
@@ -771,7 +792,9 @@ overrides and diagnostic paths.
 
 Two values share a node exactly when their crossings, representations and
 children are equal, and the registry can check every part of that itself:
-carriers are compared by id, operations and metadata by value. Nothing rests
+representations are compared by id, and the binding gives two equal
+representations one id — comparing their carriers by id, and operations and
+metadata by value. Nothing rests
 on a promise from the target that two opaque keys mean the same thing.
 Representations are recorded before planning, so equal settings are equal
 data. A naming closure runs when the frontend records a carrier or a rule,

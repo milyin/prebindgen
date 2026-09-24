@@ -196,8 +196,9 @@ which relation they are read through, and the operations that read and build
 the carrier. C uses a `repr(C)` struct whose members can be read directly.
 JNI uses a JVM object whose properties are read by getter calls. Both can serve
 the same source-side struct relation, but need different access operations.
-The frontend states the representation when it records the rule; the
-registry combines its operations with the children's conversions. See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
+A type may have several — `Stamp` as a C struct and as a handle — so the
+frontend declares each once, and a conversion rule or an exposed type names
+it. The registry combines its operations with the children's conversions. See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
 
 ### Primitive
 
