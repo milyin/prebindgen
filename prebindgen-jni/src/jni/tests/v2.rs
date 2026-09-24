@@ -82,15 +82,14 @@ fn every_declared_element_is_accounted_for() {
             ),
             (
                 "fn:z_thing_size".to_string(),
-                "unsupported.jni.carrier",
-                "fn:z_thing_size -> param 0".to_string()
+                "unsupported.conversion.no_rule",
+                "fn:z_thing_size -> param t".to_string()
             ),
             (
-                // A borrowed handle is a reference, which no v2 carrier holds
-                // yet.
+                // A borrowed handle is a reference, which no rule covers yet.
                 "fn:z_thing_describe".to_string(),
-                "unsupported.jni.carrier",
-                "fn:z_thing_describe -> param 0".to_string()
+                "unsupported.conversion.no_rule",
+                "fn:z_thing_describe -> param t".to_string()
             ),
         ]
     );
@@ -221,10 +220,16 @@ fn class_members_are_elements_of_their_own() {
     // The class itself is emitted; each member waits on its own declarator.
     assert_eq!(capability("type:ZThing"), "");
     assert_eq!(capability("fn:z_thing_new"), "unsupported.jni.constructor");
-    // Both take a borrowed handle, which no v2 carrier holds yet — the method
-    // and the package function alike, each refused on its own.
-    assert_eq!(capability("fn:z_thing_size"), "unsupported.jni.carrier");
-    assert_eq!(capability("fn:z_thing_describe"), "unsupported.jni.carrier");
+    // Both take a borrowed handle, which no rule covers yet — the method and
+    // the package function alike, each refused on its own.
+    assert_eq!(
+        capability("fn:z_thing_size"),
+        "unsupported.conversion.no_rule"
+    );
+    assert_eq!(
+        capability("fn:z_thing_describe"),
+        "unsupported.conversion.no_rule"
+    );
 }
 
 /// An ignore silences v1's undeclared-item warning and nothing else: under v2
@@ -358,7 +363,7 @@ fn a_class_over_a_type_the_source_never_exported_is_a_skip_not_an_error() {
         panic!("one skip: {:?}", generated.skipped());
     };
     assert_eq!(declaration.to_string(), "type:Absent");
-    assert_eq!(skip.capability.as_str(), "unsupported.jni.not_a_struct");
+    assert_eq!(skip.capability.as_str(), "unsupported.type.not_a_struct");
 }
 
 /// A declared key may carry arguments the item does not, and the class is
@@ -416,8 +421,14 @@ fn a_function_placed_twice_is_two_outputs() {
     assert_eq!(
         skipped,
         [
-            ("fn:z_thing_describe".to_string(), "unsupported.jni.carrier"),
-            ("fn:z_thing_describe".to_string(), "unsupported.jni.carrier"),
+            (
+                "fn:z_thing_describe".to_string(),
+                "unsupported.conversion.no_rule"
+            ),
+            (
+                "fn:z_thing_describe".to_string(),
+                "unsupported.conversion.no_rule"
+            ),
         ],
         "one function, two placements, two skips"
     );
@@ -453,7 +464,7 @@ fn a_function_backed_constant_is_the_functions_declaration() {
     // And it is planned from that function: what stops it is the value its
     // parameter crosses as, blamed on the parameter, rather than the engine
     // turning away everything declared as a constant.
-    assert_eq!(skip.dependency_path, ["fn:z_thing_describe", "param 0"]);
+    assert_eq!(skip.dependency_path, ["fn:z_thing_describe", "param t"]);
 }
 
 /// The `Stamp` fixture the edge-case tests below build on: a struct of two

@@ -290,10 +290,12 @@ mod tests {
     /// Every declaration a target could not generate is left out with the
     /// capability that would unblock it.
     ///
-    /// Each is declared deliberately: a struct whose field has no carrier, a
+    /// Each is declared deliberately: a struct whose field no rule covers, a
     /// tuple struct — which the model declares opaque, so an aggregate finds no
     /// fields to read it through — one with no fields at all, and — for JNI
-    /// only — `Sample`, whose field is written under a condition.
+    /// only — `Sample`, whose field is written under a condition. The first two
+    /// are refused by the registry, in the same words for both targets; the
+    /// others by the frontend, when it builds the binding.
     /// An adapter that quietly emitted any of them would produce an empty
     /// `repr(C)` aggregate crossing an `extern "C"` boundary, a Kotlin data
     /// class with no properties, or a data class promising a property the
@@ -301,10 +303,10 @@ mod tests {
     #[test]
     fn what_neither_target_can_carry_is_reported_rather_than_emitted() {
         for (target, declaration, capability) in [
-            ("c", "type:Pair", "unsupported.c.not_a_struct"),
+            ("c", "type:Pair", "unsupported.type.not_a_struct"),
             ("c", "type:Marker", "unsupported.c.empty_aggregate"),
             ("c", "fn:marker_value", "unsupported.c.empty_aggregate"),
-            ("jni", "type:Reading", "unsupported.jni.carrier"),
+            ("jni", "type:Reading", "unsupported.conversion.no_rule"),
             ("jni", "type:Marker", "unsupported.jni.empty_class"),
             ("jni", "fn:marker_value", "unsupported.jni.empty_class"),
             ("jni", "type:Sample", "unsupported.jni.conditional_field"),

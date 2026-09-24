@@ -8,7 +8,7 @@
 //! writer, from definition order, which is why two operations rendered into one
 //! wrapper cannot collide.
 
-use crate::target::PrimitiveId;
+use crate::plan::PrimitiveId;
 
 /// One runtime value inside one body. Not a variable name: the writer chooses
 /// those.
@@ -58,14 +58,14 @@ pub enum Instr {
 /// reads them — they are the tokens the source wrote, conjoined by Rust when
 /// there is more than one.
 #[derive(Clone, Debug)]
-pub struct Step {
+pub struct Stmt {
     pub instr: Instr,
     pub conditions: Vec<proc_macro2::TokenStream>,
 }
 
-impl Step {
+impl Stmt {
     fn new(instr: Instr) -> Self {
-        Step {
+        Stmt {
             instr,
             conditions: Vec::new(),
         }
@@ -76,7 +76,7 @@ impl Step {
 #[derive(Debug, Default)]
 pub struct BodyBuilder {
     next: u32,
-    instrs: Vec<Step>,
+    instrs: Vec<Stmt>,
 }
 
 impl BodyBuilder {
@@ -92,14 +92,14 @@ impl BodyBuilder {
     }
 
     pub fn push(&mut self, instr: Instr) {
-        self.instrs.push(Step::new(instr));
+        self.instrs.push(Stmt::new(instr));
     }
 
-    pub fn instrs(&self) -> &[Step] {
+    pub fn instrs(&self) -> &[Stmt] {
         &self.instrs
     }
 
-    pub fn into_instrs(self) -> Vec<Step> {
+    pub fn into_instrs(self) -> Vec<Stmt> {
         self.instrs
     }
 
@@ -137,7 +137,7 @@ impl BodyBuilder {
 #[derive(Clone, Debug)]
 pub struct NodeBody {
     pub carrier: ValueId,
-    pub instrs: Vec<Step>,
+    pub instrs: Vec<Stmt>,
     pub result: ValueId,
 }
 

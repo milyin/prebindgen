@@ -35,6 +35,7 @@
 //! `PREBINDGEN_PIPELINE=v2`, resolved once at `.build()` — see
 //! [`prebindgen_flat::pipeline`].
 
+pub mod binding;
 pub mod body;
 pub mod decl;
 mod emit;
@@ -45,17 +46,22 @@ pub mod target;
 #[cfg(test)]
 mod tests;
 
+pub use binding::{
+    Accepts, Binding, CarrierId, CarrierOf, Codec, ContextParam, Failure, FailureRoute,
+    FunctionForm, FunctionFormOf, Implementation, Operation, OutputForm, OutputFormOf, OutputId,
+    Report, ReprId, Representation, RepresentationOf, Scope, StandardOp, Step, ValuePath, Via,
+    WireType,
+};
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::Declaration;
 pub use outcome::{Capability, EngineError, Outcome, Skip};
-pub use plan::{generate, FunctionPlan, NodeId, OutputId, ValuePlan};
-pub use run::{Generation, PIPELINE};
+pub use plan::{
+    generate, Applied, FunctionPlan, NodeId, ParamRole, PrimitiveId, Retained, Slot, ValuePlan,
+    WrapperParam,
+};
+pub use run::{field_is_conditional, Generation, PIPELINE};
 pub use target::{
-    mirrored_enum, mirrored_i32_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue,
-    Crossing, Direction, EnumArm, FailureCategory, FailureRoute, Layout, OperandRole, OperandSpec,
-    Operation, OperationType, OutputPlacement, ParamRole, Part, PlanningError, Position,
-    PrimitiveFailure, PrimitiveId, PrimitiveSpec, Protocol, Relation, RelationId, ReprSpec,
-    Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery, SiteDescriptor,
-    SourceItem, StandardOp, StructRelation, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
-    TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
+    mirrored_enum, mirrored_i32_enum, Artifact, CarrierFeed, Crossing, Direction, EnumArm,
+    FailureCategory, Fed, OperationFeed, Part, PlanningError, Relation, StructRelation, Target,
+    Terminal, Unsupported, Written,
 };

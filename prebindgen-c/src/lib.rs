@@ -337,7 +337,7 @@ pub(crate) enum Engine {
     V1(Box<prebindgen_registry::Registry>),
     /// The v2 engine's finished run — see `prebindgen-registry-v2`.
     #[cfg(feature = "v2")]
-    V2(Box<prebindgen_registry_v2::Generation<v2::CPayload>>),
+    V2(Box<prebindgen_registry_v2::Generation<v2::CTarget>>),
 }
 
 // Opaque — exists so `Result<Cbindgen, _>::expect_err` works in tests.

@@ -1,31 +1,32 @@
-//! What the engine decides, over a target that answers in one line.
+//! What the engine decides, over a target that writes in one line.
 //!
 //! The adapter here is deliberately not a language: it exists to make the
-//! engine's own contracts observable — which conversions are shared, what a
-//! missing capability takes down with it, what happens when a boundary leaves a
-//! declared failure unrouted. The two real adapters, and the generated code
-//! rustc compiles, live in `examples/v2check`.
+//! engine's own contracts observable — which conversions are shared, which
+//! rule a value takes, what a missing capability takes down with it, what
+//! happens when a form leaves a declared failure unrouted. The two real
+//! adapters, and the generated code rustc compiles, live in `examples/v2check`.
 
-use std::collections::BTreeMap;
-
-use prebindgen_flat::flat::{Flat, ScalarKind, TypeKind, TypeRef};
+use prebindgen_flat::flat::Flat;
 
 use crate::{
+    binding::{
+        Accepts, Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
+        OutputId, Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via,
+        WireType,
+    },
     decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::generate,
     run::Generation,
     target::{
-        AbiSpec, Access, BoundarySpec, ChildValue, FailureCategory, Layout, OperandSpec, Operation,
-        OperationType, OutputPlacement, ParamRole, PlanningError, Position, PrimitiveFailure,
-        PrimitiveSpec, Protocol, Relation, ReprSpec, ResolvedShape, ResolvedValues, Selection,
-        SelectionQuery, SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec,
-        Target, TargetAttempt, TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
+        CarrierFeed, FailureCategory, OperationFeed, PlanningError, Target, Terminal, Unsupported,
+        Written,
     },
 };
 
-/// Two structs and three functions, one of which has a field nothing can carry;
-/// an opaque type, and the two functions that hand one out and take it back.
+/// Three structs and four functions over them, one struct with a field
+/// nothing carries, one holding another; an opaque type, and the two functions
+/// that hand one out and take it back.
 fn model() -> Flat {
     Flat::builder()
         .items(model_items())
@@ -58,6 +59,12 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
             }
         ),
         syn::parse_quote!(
+            pub struct Wrap {
+                pub stamp: Stamp,
+                pub id: i64,
+            }
+        ),
+        syn::parse_quote!(
             pub fn stamp_sum(stamp: Stamp) -> i64 {
                 unimplemented!()
             }
@@ -74,6 +81,11 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
         ),
         syn::parse_quote!(
             pub fn stamp_pick(stamp: Stamp, fallback: i64) -> i64 {
+                unimplemented!()
+            }
+        ),
+        syn::parse_quote!(
+            pub fn wrap_sum(wrap: Wrap) -> i64 {
                 unimplemented!()
             }
         ),
@@ -97,562 +109,413 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     items
 }
 
-/// What this target was told about one value or one function.
-///
-/// Also its [`Target::ConversionKey`]: these are plain data, so two values the
-/// binding configured the same way are converted the same way, which is
-/// exactly what the key has to mean. An adapter whose settings held something
-/// incomparable would intern them and key on the index instead.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-enum Choice {
-    #[default]
+/// This target's wire types.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Class {
     Scalar,
-    /// A scalar carried as itself, through an operation of this target's own
-    /// rather than the registry's identity: the same `i64` on the wire, a
-    /// different conversion. What makes "two supported children" observable
-    /// without one of them failing.
-    ScalarThrough,
-    /// A struct read through its members.
-    Struct,
-    /// The same, with member reads that can fail — which is what makes a
-    /// boundary's failure routes observable.
-    FallibleStruct,
-    /// A struct that converts, and whose public declaration this target
-    /// refuses — which is what drives the retention loop rather than value
-    /// planning.
-    StructWithoutSurface,
-    /// A struct whose public declaration requires another declaration's, so a
-    /// refusal has to travel two edges.
-    StructRequiring(String),
-    /// An opaque type carried whole as an address, released through
-    /// `<name>_free`.
-    Handle,
-    /// The same, for a target with no way to place a release — which is what
-    /// makes the type, and everything taking it, unsupported.
-    HandleWithoutRelease,
-    Function {
-        symbol: String,
-        routes: Routes,
-        /// Names for the wrapper parameters, in order. Empty means `arg0`,
-        /// `arg1`, … — the well-behaved case that hides a name collision.
-        param_names: Vec<String>,
-        /// Attributes the wrapper carries and whether it is `unsafe`: the part
-        /// of its form a target may state.
-        attrs: Vec<syn::Attribute>,
-        unsafety: bool,
-    },
-    /// A boundary that passes its first parameter as a carrier its conversion
-    /// does not read — an adapter defect the registry has to catch rather than
-    /// emit.
-    FunctionWithWrongInput,
-    /// A struct whose public declaration is Rust the target contributes: a
-    /// mirror of the source struct, one member per field. Only this choice
-    /// produces an artifact, so every other test's generated file is unchanged.
-    StructWithMirror,
+    Aggregate,
+    Pointer,
 }
 
-/// What a boundary does about failures.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// Whether a carrier needs a declaration of its own: only a mirrored struct
+/// does, so every other test's generated file holds wrappers alone.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Meta {
+    Plain,
+    Mirror,
+}
+
+/// This target's own operations.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Op {
+    /// A member read that can fail — which is what makes a form's failure
+    /// routes observable.
+    ReadFallibly,
+    Report,
+    /// The binding-failure reporter, which is handed a `String`.
+    ReportMessage,
+    /// A scalar carried as itself, through an operation of this target's own
+    /// rather than the registry's identity: the same `i64` on the wire, a
+    /// different conversion.
+    Rebase,
+}
+
+/// The miniature target: a writer for each of its operations, and a mirror
+/// for a struct that asks for one.
+struct Mini;
+
+impl Target for Mini {
+    const NAME: &'static str = "mini";
+
+    type WireClass = Class;
+    type CarrierMeta = Meta;
+    type Op = Op;
+    type OutputMeta = ();
+
+    fn write_operation(&self, op: &Op, feed: &OperationFeed<'_, Self>) -> Written {
+        let value = feed.value.as_ref().map(|(value, _)| value);
+        let error = feed.error.as_ref();
+        Written::new(match op {
+            Op::ReadFallibly => quote::quote!(read(#value)),
+            Op::Report => quote::quote!(report(#error)),
+            Op::ReportMessage => quote::quote!(report_message(#error)),
+            Op::Rebase => quote::quote!(rebase(#value)),
+        })
+    }
+
+    /// The mirror is what a real C target contributes: a struct of its own,
+    /// one member per source field, each under that field's condition.
+    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        if feed.carrier.meta != Meta::Mirror {
+            return Vec::new();
+        }
+        let ty = &feed.carrier.rust;
+        let members = feed.members.iter().map(|(part, carrier)| {
+            let name = quote::format_ident!("{}", part.label());
+            let conditions = &part.conditions;
+            let member = &carrier.rust;
+            quote::quote!(#(#conditions)* pub #name: #member)
+        });
+        vec![quote::quote!(#[repr(C)] pub struct #ty { #(#members),* })]
+    }
+}
+
+/// What a form does about failures.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Routes {
     /// None declared, which skips any function whose conversions can fail.
     None,
     /// One route per category a conversion here can raise, each reporting
     /// through an operation that needs no context.
     Reported,
-    /// One route whose reporting operation needs a runtime context the
-    /// boundary does not supply.
+    /// One route whose reporting operation needs a runtime context the form
+    /// does not supply.
     ReporterNeedsContext,
 }
 
-fn exported(symbol: &str, routes: Routes) -> Choice {
-    Choice::Function {
+/// A form exporting a function under `symbol`. Its wrapper parameters are
+/// named `arg0`, `arg1`, … unless a test names them.
+fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
+    let report = |op: Op, error: syn::Type, context: bool| Report {
+        error,
+        operation: match context {
+            true => Operation::target(op).context("mini.log"),
+            false => Operation::target(op),
+        },
+    };
+    FunctionForm {
+        abi: "C".to_string(),
         symbol: symbol.to_string(),
-        routes,
-        param_names: Vec::new(),
+        context: Vec::new(),
+        inputs: Vec::new(),
+        routes: match routes {
+            Routes::None => Vec::new(),
+            Routes::Reported | Routes::ReporterNeedsContext => vec![
+                FailureRoute {
+                    category: FailureCategory::Binding,
+                    report: Some(report(Op::ReportMessage, syn::parse_quote!(String), false)),
+                    on_report_failure: Terminal::Abort,
+                    terminate: Terminal::Return(syn::parse_quote!(0)),
+                },
+                FailureRoute {
+                    category: FailureCategory::Runtime,
+                    report: Some(report(
+                        Op::Report,
+                        syn::parse_quote!(Error),
+                        routes == Routes::ReporterNeedsContext,
+                    )),
+                    on_report_failure: Terminal::Abort,
+                    terminate: Terminal::Return(syn::parse_quote!(0)),
+                },
+            ],
+        },
         attrs: Vec::new(),
         unsafety: false,
+        params: Accepts::of([Class::Scalar, Class::Aggregate, Class::Pointer]),
+        ret: Accepts::of([Class::Scalar, Class::Aggregate, Class::Pointer]),
     }
 }
 
-#[derive(Clone, Debug)]
-enum Payload {
-    ReadFallibly,
-    Report,
-    /// The binding-failure reporter, which is handed a `String`.
-    ReportMessage,
-    /// The operation a [`Choice::ScalarThrough`] value crosses by.
-    Rebase,
+/// A representation, by what a test needs of it.
+#[derive(Clone)]
+enum Shape {
+    /// A struct read member by member.
+    Struct(&'static str),
+    /// The same, with member reads that can fail.
+    FallibleStruct(&'static str),
+    /// The same, with a declaration of its own: a mirror of the source struct.
+    MirroredStruct(&'static str),
+    /// A struct whose carrier holds only the given wire types as members.
+    StructHolding(&'static str, Vec<Class>),
+    /// An opaque value carried whole as an address, released through a
+    /// release of its own.
+    Handle,
+    /// An `i64` carried through this target's own operation.
+    ScalarThrough,
 }
 
-/// The miniature target, and the binding storage it answers from.
+/// A miniature frontend: what the binding declares, stated as a binding.
 ///
-/// Everything the engine used to hold for an adapter — a default, a choice per
-/// source type, an override per site, and what each requested output was
-/// declared as — lives here, because #766 is exactly that move. The two real
-/// adapters keep the same four kinds of entry in their own builders; this is
-/// the smallest thing that has all four.
-#[derive(Default)]
-struct Mini {
-    /// How every value of this source type crosses, wherever it appears.
-    types: BTreeMap<String, Choice>,
-    /// How one value inside one declaration crosses instead: keyed by the
-    /// declaration and the site's path, `param 0` or `param 0.field secs`.
-    sites: BTreeMap<(Declaration, String), Choice>,
+/// Rules at a position name the function by name and are resolved to its
+/// output when the binding is built, so a test may state one before or after
+/// the function's declaration.
+struct Fixture {
+    binding: Binding<Mini>,
+    scalar: ReprId,
+    outputs: Vec<(Declaration, OutputFormOf<Mini>)>,
+    rules: Vec<(Scope, ReprId)>,
+    at: Vec<(Declaration, Vec<Step>, ReprId)>,
 }
 
-impl Mini {
-    /// The settings for a value at this position — the site override, then the
-    /// type's own, then the default — as a conversion key.
-    ///
-    /// Same precedence the engine used to apply, now a target's own business.
-    /// It is a pure function of the position and the type, so the same value
-    /// asked twice answers the same: an adapter that let this drift would hand
-    /// the registry two keys for one conversion and share nothing.
-    fn conversion(&self, position: &Position, declared: &Choice, ty: &TypeRef) -> Choice {
-        // A declared type's own crossing is planned as that declaration says.
-        if position.is_declared_type() {
-            return declared.clone();
-        }
-        let site = (position.declaration.clone(), position.path.join("."));
-        if let Some(choice) = self.sites.get(&site) {
-            return choice.clone();
-        }
-        self.types
-            .get(ty.key().as_str())
-            .cloned()
-            .unwrap_or(Choice::Scalar)
+fn fixture() -> Fixture {
+    let mut binding = Binding::new();
+    let i64_carrier = binding.carrier(WireType {
+        rust: syn::parse_quote!(i64),
+        class: Class::Scalar,
+        members: None,
+        meta: Meta::Plain,
+    });
+    let unchanged = Codec {
+        carrier: i64_carrier,
+        operation: Operation::standard(StandardOp::Identity),
+    };
+    let scalar = binding.representation(Representation::Terminal {
+        into_rust: Some(unchanged.clone()),
+        out_of_rust: Some(unchanged),
+        release: None,
+    });
+    Fixture {
+        binding,
+        scalar,
+        outputs: Vec::new(),
+        rules: vec![(Scope::Type(key("i64")), scalar)],
+        at: Vec::new(),
     }
 }
 
-impl Target for Mini {
-    const NAME: &'static str = "mini";
-
-    type ConversionKey = Choice;
-    type Payload = Payload;
-
-    fn select(&self, query: &SelectionQuery<'_, Choice>) -> TargetSupport<Selection<Choice>> {
-        let conversion = self.conversion(query.position, query.declared, &query.crossing.ty);
-        let want_struct = matches!(
-            conversion,
-            Choice::Struct
-                | Choice::FallibleStruct
-                | Choice::StructWithoutSurface
-                | Choice::StructRequiring(_)
-                | Choice::StructWithMirror
-        );
-        for (id, relation) in query.candidates {
-            match (relation, want_struct) {
-                (Relation::Struct(_), true) | (Relation::Atomic, false) => {
-                    return Ok(TargetAttempt::Ready(Selection {
-                        relation: *id,
-                        conversion,
-                    }))
+impl Fixture {
+    /// Declare a representation.
+    fn repr(&mut self, shape: Shape) -> ReprId {
+        let aggregate = |binding: &mut Binding<Mini>, name: &str, holds: Vec<Class>, meta| {
+            let ident = quote::format_ident!("{name}");
+            binding.carrier(WireType {
+                rust: syn::parse_quote!(#ident),
+                class: Class::Aggregate,
+                members: Some(Accepts::of(holds)),
+                meta,
+            })
+        };
+        let holds_all = || vec![Class::Scalar, Class::Aggregate, Class::Pointer];
+        let representation = match shape {
+            Shape::Struct(name) => Representation::Product {
+                via: Via::Fields,
+                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Plain),
+                read: Operation::standard(StandardOp::ReadMember),
+            },
+            Shape::FallibleStruct(name) => Representation::Product {
+                via: Via::Fields,
+                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Plain),
+                read: Operation::target(Op::ReadFallibly)
+                    .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
+            },
+            Shape::MirroredStruct(name) => Representation::Product {
+                via: Via::Fields,
+                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Mirror),
+                read: Operation::standard(StandardOp::ReadMember),
+            },
+            Shape::StructHolding(name, holds) => Representation::Product {
+                via: Via::Fields,
+                carrier: aggregate(&mut self.binding, name, holds, Meta::Plain),
+                read: Operation::standard(StandardOp::ReadMember),
+            },
+            Shape::Handle => {
+                let pointer = self.binding.carrier(WireType {
+                    rust: syn::parse_quote!(*mut Raw),
+                    class: Class::Pointer,
+                    members: None,
+                    meta: Meta::Plain,
+                });
+                Representation::Terminal {
+                    into_rust: Some(Codec {
+                        carrier: pointer,
+                        operation: Operation::standard(StandardOp::FromRaw),
+                    }),
+                    out_of_rust: Some(Codec {
+                        carrier: pointer,
+                        operation: Operation::standard(StandardOp::IntoRaw),
+                    }),
+                    release: Some(Operation::standard(StandardOp::Release)),
                 }
-                _ => {}
             }
-        }
-        Ok(TargetAttempt::Unsupported(Unsupported::new(
-            "unsupported.mini.no_relation",
-            "no relation for what this value was declared as",
-        )))
-    }
-
-    fn represent(
-        &self,
-        shape: &ResolvedShape<'_>,
-        children: &[ChildValue<'_>],
-        conversion: &Choice,
-    ) -> TargetSupport<ReprSpec<Payload>> {
-        match shape.relation {
-            Relation::Atomic
-                if matches!(conversion, Choice::Handle | Choice::HandleWithoutRelease) =>
-            {
-                let carrier = WireType::abi(syn::parse_quote!(*mut Raw));
-                let ty = shape.crossing.ty.clone();
-                Ok(TargetAttempt::Ready(match shape.crossing.direction {
-                    crate::target::Direction::IntoRust => ReprSpec {
-                        layout: Layout::Scalar(carrier.clone()),
-                        protocol: Protocol::terminal(PrimitiveSpec::from_raw(
-                            carrier.clone(),
-                            ty.clone(),
-                        )),
-                        release: Some(PrimitiveSpec::release(carrier, ty)),
-                    },
-                    crate::target::Direction::OutOfRust => ReprSpec {
-                        layout: Layout::Scalar(carrier.clone()),
-                        protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
-                        release: None,
-                    },
-                }))
-            }
-            Relation::Atomic => {
-                if !matches!(shape.crossing.ty.kind(), TypeKind::Scalar(ScalarKind::I64)) {
-                    // The one capability this target is missing, and the reason
-                    // `Label` cannot cross.
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.mini.carrier",
-                        format!("`{}` has no carrier here", shape.crossing.ty.key()),
-                    )));
-                }
-                let carrier = WireType::abi(syn::parse_quote!(i64));
-                let codec = match conversion {
-                    Choice::ScalarThrough => PrimitiveSpec {
-                        operands: vec![OperandSpec::value(
-                            OperationType::Carrier(carrier.clone()),
-                            Access::Owned,
-                        )],
-                        result: Some(OperationType::Carrier(carrier.clone())),
-                        failure: PrimitiveFailure::Infallible,
-                        dependencies: Vec::new(),
-                        implementation: Operation::Target(Payload::Rebase),
-                    },
-                    _ => PrimitiveSpec::identity(OperationType::Carrier(carrier.clone())),
+            Shape::ScalarThrough => {
+                let i64_carrier = self.binding.carrier(WireType {
+                    rust: syn::parse_quote!(i64),
+                    class: Class::Scalar,
+                    members: None,
+                    meta: Meta::Plain,
+                });
+                let through = Codec {
+                    carrier: i64_carrier,
+                    operation: Operation::target(Op::Rebase),
                 };
-                Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Scalar(carrier),
-                    protocol: Protocol::terminal(codec),
+                Representation::Terminal {
+                    into_rust: Some(through.clone()),
+                    out_of_rust: Some(through),
                     release: None,
-                }))
+                }
             }
-            Relation::Struct(strukt) => {
-                let ident = quote::format_ident!("{}", strukt.name);
-                let aggregate = WireType::abi(syn::parse_quote!(#ident));
-                let item = shape.strukt.expect("a struct relation carries its strukt");
-                let fallible = matches!(conversion, Choice::FallibleStruct);
-                let projections = item
-                    .fields
-                    .iter()
-                    .zip(children)
-                    .map(|(field, child)| PrimitiveSpec {
-                        operands: vec![OperandSpec::value(
-                            OperationType::Carrier(aggregate.clone()),
-                            Access::Shared,
-                        )],
-                        result: Some(OperationType::Carrier(child.layout.wire().clone())),
-                        failure: if fallible {
-                            PrimitiveFailure::fallible(
-                                OperationType::Carrier(WireType::internal(syn::parse_quote!(
-                                    Error
-                                ))),
-                                FailureCategory::Runtime,
-                            )
-                        } else {
-                            PrimitiveFailure::Infallible
-                        },
-                        dependencies: Vec::new(),
-                        implementation: if fallible {
-                            Operation::Target(Payload::ReadFallibly)
-                        } else {
-                            Operation::Standard(StandardOp::ReadMember {
-                                member: field.member(),
-                            })
-                        },
-                    })
-                    .collect();
-                Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Aggregate {
-                        ty: aggregate,
-                        members: item.fields.iter().map(|field| field.member()).collect(),
-                    },
-                    protocol: Protocol::Product { projections },
-                    release: None,
-                }))
-            }
-        }
+        };
+        self.binding.representation(representation)
     }
 
-    fn boundary(
-        &self,
-        site: &SiteDescriptor<'_, Choice>,
-        values: &ResolvedValues<'_, Payload>,
-    ) -> TargetSupport<BoundarySpec<Payload>> {
-        // What this wrapper exports is what the binding declared for it, which
-        // the site names.
-        let choice = site.declared;
-        if matches!(choice, Choice::FunctionWithWrongInput) {
-            return Ok(TargetAttempt::Ready(BoundarySpec {
-                abi: AbiSpec {
-                    abi: "C".to_string(),
-                    symbol: "wrong".to_string(),
-                    params: vec![WrapperParam {
-                        name: quote::format_ident!("arg0"),
-                        // The conversion reads a `Stamp` aggregate.
-                        ty: WireType::abi(syn::parse_quote!(i64)),
-                        role: ParamRole::Input(0),
-                        mutable: false,
-                    }],
-                    ret: values.output.map(|value| value.repr.layout.wire().clone()),
-                    attrs: Vec::new(),
-                    unsafety: false,
-                },
-                output: OutputPlacement::Return,
-                failures: Vec::new(),
-            }));
-        }
-        // A release site carries the handle type's own choice: its symbol is
-        // derived from the item's name — the key may carry arguments a symbol
-        // cannot — and a null address is not a failure it can raise.
-        let release = match (site.function, choice) {
-            (None, Choice::Handle) => Some(exported(
-                &format!(
-                    "{}_free",
-                    site.declaration
-                        .entity_name()
-                        .expect("a handle is an entity")
-                ),
-                Routes::None,
-            )),
-            (None, Choice::HandleWithoutRelease) => {
-                return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                    "unsupported.mini.no_release",
-                    "this target has nowhere to place a release",
-                )))
+    /// Every value of this type crosses as `repr` — without asking for the
+    /// type itself to be declared.
+    fn crossing(&mut self, name: &str, repr: ReprId) -> &mut Self {
+        self.rules.push((Scope::Type(key(name)), repr));
+        self
+    }
+
+    /// A declared type: how its values cross, and the output exposing that
+    /// representation. The two are one declarator in both real frontends. A
+    /// handle gets a release exported as `<name>_free`.
+    fn declare_type(&mut self, name: &str, shape: Shape) -> ReprId {
+        let repr = self.repr(shape);
+        self.crossing(name, repr);
+        self.expose(name, repr);
+        repr
+    }
+
+    /// An output exposing `repr` of the type `name`, with a release when the
+    /// representation has one.
+    fn expose(&mut self, name: &str, repr: ReprId) -> &mut Self {
+        let release = match self.binding.representation_of(repr) {
+            Representation::Terminal {
+                release: Some(_), ..
+            } => {
+                let item = key(name).short_name().expect("a named type");
+                let mut release = exported(&format!("{item}_free"), Routes::None);
+                release.inputs = vec![quote::format_ident!("arg0")];
+                Some(release)
             }
             _ => None,
         };
-        let Choice::Function {
-            symbol,
-            routes,
-            param_names,
-            attrs,
-            unsafety,
-        } = release.as_ref().unwrap_or(choice)
-        else {
-            return Err(PlanningError::InvalidInput(format!(
-                "`{}` is declared as a value, not as a function to export",
-                site.declaration.name()
-            )));
-        };
-        Ok(TargetAttempt::Ready(BoundarySpec {
-            abi: AbiSpec {
-                abi: "C".to_string(),
-                symbol: symbol.clone(),
-                params: values
-                    .inputs
-                    .iter()
-                    .enumerate()
-                    .map(|(index, value)| WrapperParam {
-                        name: match param_names.get(index) {
-                            Some(name) => quote::format_ident!("{name}"),
-                            None => quote::format_ident!("arg{index}"),
-                        },
-                        ty: value.repr.layout.wire().clone(),
-                        role: ParamRole::Input(index),
-                        mutable: false,
-                    })
-                    .collect(),
-                ret: values.output.map(|value| value.repr.layout.wire().clone()),
-                attrs: attrs.clone(),
-                unsafety: *unsafety,
-            },
-            output: match values.output {
-                Some(_) => OutputPlacement::Return,
-                None => OutputPlacement::Void,
-            },
-            failures: if *routes == Routes::None {
-                Vec::new()
-            } else {
-                vec![
-                    crate::target::FailureRoute {
-                        category: FailureCategory::Binding,
-                        report: Some(PrimitiveSpec {
-                            operands: vec![OperandSpec::error(OperationType::Carrier(
-                                WireType::internal(syn::parse_quote!(String)),
-                            ))],
-                            result: None,
-                            failure: PrimitiveFailure::Infallible,
-                            dependencies: Vec::new(),
-                            implementation: Operation::Target(Payload::ReportMessage),
-                        }),
-                        on_report_failure: Terminal::Abort,
-                        terminate: Terminal::Return(syn::parse_quote!(0)),
-                    },
-                    crate::target::FailureRoute {
-                        category: FailureCategory::Runtime,
-                        report: Some(PrimitiveSpec {
-                            operands: {
-                                let mut operands =
-                                    vec![OperandSpec::error(OperationType::Carrier(
-                                        WireType::internal(syn::parse_quote!(Error)),
-                                    ))];
-                                if *routes == Routes::ReporterNeedsContext {
-                                    operands.push(OperandSpec::context(
-                                        "mini.log",
-                                        OperationType::Carrier(WireType::internal(
-                                            syn::parse_quote!(Log),
-                                        )),
-                                        Access::Exclusive,
-                                    ));
-                                }
-                                operands
-                            },
-                            result: None,
-                            failure: PrimitiveFailure::Infallible,
-                            dependencies: Vec::new(),
-                            implementation: Operation::Target(Payload::Report),
-                        }),
-                        on_report_failure: Terminal::Abort,
-                        terminate: Terminal::Return(syn::parse_quote!(0)),
-                    },
-                ]
-            },
-        }))
+        self.expose_with(name, repr, release)
     }
 
-    fn surface(
-        &self,
-        request: &SurfaceRequest<'_, Choice>,
-        values: &ResolvedValues<'_, Payload>,
-    ) -> TargetSupport<SurfaceSpec<Payload>> {
-        let choice = request.declared;
-        let requires = values
-            .inputs
-            .iter()
-            .filter_map(|value| crate::target::Requirement::of(value))
-            .collect();
-        if matches!(
-            (choice, request.item),
-            (Choice::StructWithoutSurface, SourceItem::Struct(_))
-        ) {
-            return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                "unsupported.mini.no_public_struct",
-                "this struct converts, and has no public declaration here",
-            )));
-        }
-        // The mirror is what a real C target contributes: a struct of its own,
-        // one member per source field, each under that field's condition.
-        let rust = match (choice, request.item) {
-            (Choice::StructWithMirror, SourceItem::Struct(strukt)) => {
-                let ident = &strukt.name;
-                let conditions = request.field_conditions();
-                let members = strukt.fields.iter().zip(&conditions).map(|(field, under)| {
-                    let name = field.name.as_ref().expect("the fixture names its fields");
-                    quote::quote!(#(#under)* pub #name: i64)
-                });
-                vec![crate::target::Artifact::new(
-                    strukt.name.to_string(),
-                    quote::quote!(#[repr(C)] pub struct #ident { #(#members),* }),
-                )]
-            }
-            _ => Vec::new(),
-        };
-        Ok(TargetAttempt::Ready(SurfaceSpec {
-            declaration: request.declaration.clone(),
-            requires: match (choice, request.item) {
-                (_, SourceItem::Function(_)) => requires,
-                (Choice::StructRequiring(other), SourceItem::Struct(_)) => {
-                    vec![crate::target::Requirement::type_named(other)]
-                }
-                (_, SourceItem::Struct(_) | SourceItem::Extern(_) | SourceItem::Enum(_)) => {
-                    Vec::new()
-                }
+    /// The same, with the release form stated.
+    fn expose_with(
+        &mut self,
+        name: &str,
+        repr: ReprId,
+        release: Option<FunctionForm<Op, Class>>,
+    ) -> &mut Self {
+        self.outputs.push((
+            ty(name),
+            OutputForm::Type {
+                representation: repr,
+                release,
+                meta: (),
             },
-            rust,
-            payload: None,
-        }))
-    }
-
-    fn render_operation(
-        &self,
-        payload: &Payload,
-        operands: &[syn::Ident],
-    ) -> proc_macro2::TokenStream {
-        match payload {
-            Payload::ReadFallibly => {
-                let value = &operands[0];
-                quote::quote!(read(#value))
-            }
-            Payload::Report => {
-                let error = &operands[0];
-                quote::quote!(report(#error))
-            }
-            Payload::ReportMessage => {
-                let error = &operands[0];
-                quote::quote!(report_message(#error))
-            }
-            Payload::Rebase => {
-                let value = &operands[0];
-                quote::quote!(rebase(#value))
-            }
-        }
-    }
-}
-
-/// A miniature frontend: what the binding declared, and the work list it hands
-/// the engine.
-///
-/// Every test states its binding here. A declared value crossing goes into
-/// [`Mini`], which answers about values of a type wherever they turn up; what
-/// each output *is* travels with the output itself.
-#[derive(Default)]
-struct Binding {
-    target: Mini,
-    outputs: Vec<(Declaration, Choice)>,
-}
-
-impl Binding {
-    /// How every value of this source type crosses — without asking for the
-    /// type itself to be declared.
-    fn crossing(&mut self, name: &str, choice: Choice) -> &mut Self {
-        let key = prebindgen_flat::TypeKey::parse(name).expect("a test names a type");
-        self.target.types.insert(key.as_str().to_string(), choice);
+        ));
         self
-    }
-
-    /// A declared type: how its values cross, and what its public declaration
-    /// is. The two are one declarator in both real frontends.
-    fn declare_type(&mut self, name: &str, choice: Choice) -> &mut Self {
-        self.crossing(name, choice.clone());
-        self.declare(ty(name), choice)
     }
 
     /// An exported source function.
-    fn declare_fn(&mut self, name: &str, choice: Choice) -> &mut Self {
-        self.declare(function(name), choice)
+    fn declare_fn(&mut self, name: &str, form: FunctionForm<Op, Class>) -> &mut Self {
+        self.outputs
+            .push((function(name), OutputForm::Function { form, meta: () }));
+        self
     }
 
     /// One requested output, as the binding declared it.
-    fn declare(&mut self, declaration: Declaration, choice: Choice) -> &mut Self {
-        self.outputs.push((declaration, choice));
+    fn declare(&mut self, declaration: Declaration, form: OutputFormOf<Mini>) -> &mut Self {
+        self.outputs.push((declaration, form));
         self
     }
 
-    /// How one value inside one declaration crosses, overriding its type's
-    /// own: `("stamp_max", "param 0")`, `("stamp_max", "param 0.field secs")`.
-    fn at_site(&mut self, function_name: &str, path: &str, choice: Choice) -> &mut Self {
-        self.target
-            .sites
-            .insert((function(function_name), path.to_string()), choice);
+    /// How one value inside one function crosses, overriding its type's rule:
+    /// `("stamp_max", [param stamp])`, `("stamp_max", [param stamp, field secs])`.
+    fn at(&mut self, function_name: &str, path: Vec<Step>, repr: ReprId) -> &mut Self {
+        self.at.push((function(function_name), path, repr));
         self
+    }
+
+    /// The binding, with wrapper parameters named `argN` where a test named
+    /// none, and each rule at a position resolved to the output it names.
+    fn build(self, flat: &Flat) -> Binding<Mini> {
+        let Fixture {
+            mut binding,
+            outputs,
+            mut rules,
+            at,
+            ..
+        } = self;
+        for (declaration, (path, repr)) in at
+            .iter()
+            .map(|(declaration, path, repr)| (declaration, (path, repr)))
+        {
+            let output = outputs
+                .iter()
+                .position(|(declared, _)| declared == declaration)
+                .expect("a rule at a position names a declared output");
+            rules.push((Scope::At(OutputId(output), ValuePath(path.clone())), *repr));
+        }
+        for (declaration, mut form) in outputs {
+            if let (Declaration::Function(ident), OutputForm::Function { form, .. }) =
+                (&declaration, &mut form)
+            {
+                if form.inputs.is_empty() {
+                    let params = flat
+                        .function(&ident.to_string())
+                        .map(|function| function.params.len())
+                        .unwrap_or_default();
+                    form.inputs = (0..params)
+                        .map(|index| quote::format_ident!("arg{index}"))
+                        .collect();
+                }
+            }
+            binding.output(declaration, form);
+        }
+        for (scope, repr) in rules {
+            binding.rule(scope, repr);
+        }
+        binding
     }
 
     /// Plan this binding over `flat`.
-    fn generate(self, flat: Flat) -> Result<Generation<Payload>, EngineError> {
-        let Binding { target, outputs } = self;
-        generate(flat, &target, outputs, syn::parse_quote!(source))
+    fn generate(self, flat: Flat) -> Result<Generation<Mini>, EngineError> {
+        let binding = self.build(&flat);
+        generate(flat, &Mini, binding, syn::parse_quote!(source))
     }
 }
 
-fn binding() -> Binding {
-    Binding::default()
+fn key(name: &str) -> prebindgen_flat::TypeKey {
+    prebindgen_flat::TypeKey::parse(name).expect("a test names a type")
 }
 
 fn ty(name: &str) -> Declaration {
-    Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
+    Declaration::Type(key(name))
 }
 
 fn function(name: &str) -> Declaration {
     Declaration::Function(syn::parse_str(name).expect("a test names an ident"))
 }
 
+fn param(name: &str) -> Step {
+    Step::Param(name.to_string())
+}
+
+fn field(name: &str) -> Step {
+    Step::Field(name.to_string())
+}
+
 /// What became of the declaration that prints as `id`.
 ///
-/// Skipped when the run left it out, emitted when it produced a public
-/// declaration, and a panic when the binding never asked for it — so a typo
-/// in a test cannot read as success. An entity declared twice has two outputs
-/// under one printed name; a test that declares one twice counts the skips
-/// instead of naming them.
-fn outcome<P>(generation: &crate::run::Generation<P>, id: &str) -> Outcome {
+/// Skipped when the run left it out, emitted when it survived, and a panic
+/// when the binding never asked for it — so a typo in a test cannot read as
+/// success. An entity declared twice has two outputs under one printed name; a
+/// test that declares one twice counts the skips instead of naming them.
+fn outcome(generation: &Generation<Mini>, id: &str) -> Outcome {
     if let Some((_, skip)) = generation
         .skipped()
         .iter()
@@ -662,29 +525,29 @@ fn outcome<P>(generation: &crate::run::Generation<P>, id: &str) -> Outcome {
     }
     assert!(
         generation
-            .surfaces()
+            .retained()
             .iter()
-            .any(|surface| surface.declaration.to_string() == id),
+            .any(|retained| retained.declaration.to_string() == id),
         "nothing was declared as {id}"
     );
     Outcome::Emitted
 }
 
-/// How many declarations the run generated: one public declaration each.
-fn emitted<P>(generation: &crate::run::Generation<P>) -> usize {
-    generation.surfaces().len()
+/// How many declarations the run generated.
+fn emitted(generation: &Generation<Mini>) -> usize {
+    generation.retained().len()
 }
 
 /// Two exported functions taking the same struct the same way share its
 /// conversion — and its two field conversions, and the result conversion.
 #[test]
 fn one_conversion_serves_every_value_that_crosses_the_same_way() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert_eq!(emitted(&generation), 3);
     // `Stamp` into Rust, `i64` into Rust, `i64` out of Rust. Twice over, and
     // once for the struct's own request, is still three.
@@ -692,18 +555,19 @@ fn one_conversion_serves_every_value_that_crosses_the_same_way() {
     assert_eq!(generation.functions().len(), 2);
 }
 
-/// A per-site override makes the target answer with a different conversion
-/// key, so it is a different conversion — which is the whole reason the key is
-/// part of a node's identity.
+/// A rule at a position gives that value a different representation, so it is
+/// a different conversion — which is why the representation is part of a
+/// node's identity.
 #[test]
-fn a_site_override_does_not_share_the_default_conversion() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
-    binding.at_site("stamp_max", "param 0", Choice::FallibleStruct);
+fn a_rule_at_a_position_does_not_share_the_type_rule() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
+    let fallible = fixture.repr(Shape::FallibleStruct("Stamp"));
+    fixture.at("stamp_max", vec![param("stamp")], fallible);
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert_eq!(emitted(&generation), 3);
     // The two `Stamp` conversions are distinct; their `i64` children still are
     // not, because nothing overrode them.
@@ -711,26 +575,26 @@ fn a_site_override_does_not_share_the_default_conversion() {
     let fallible = generation
         .functions()
         .iter()
-        .find(|plan| plan.abi.symbol == "stamp_max")
+        .find(|plan| plan.symbol == "stamp_max")
         .expect("stamp_max is emitted");
-    // Both routes the boundary declared travel with the plan, whether or not a
+    // Both routes the form declared travel with the plan, whether or not a
     // conversion here raises their category.
-    assert_eq!(fallible.failures.len(), 2);
+    assert_eq!(fallible.routes.len(), 2);
     assert!(generation.rust().contains("read(arg0)"));
     assert!(generation.rust().contains("report(error)"));
 }
 
-/// One unsupported field takes down its struct and everything requiring it, and
-/// leaves everything else alone.
+/// A value no rule covers is refused, and takes down its struct and everything
+/// requiring it, and leaves everything else alone.
 #[test]
-fn an_unsupported_field_skips_its_struct_and_its_callers() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_type("Label", Choice::Struct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_fn("label_len", exported("label_len", Routes::None));
+fn a_field_no_rule_covers_skips_its_struct_and_its_callers() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_type("Label", Shape::Struct("Label"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    fixture.declare_fn("label_len", exported("label_len", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert!(matches!(
         outcome(&generation, "type:Stamp"),
         Outcome::Emitted
@@ -740,14 +604,14 @@ fn an_unsupported_field_skips_its_struct_and_its_callers() {
         Outcome::Emitted
     ));
     let Outcome::Skipped(strukt) = outcome(&generation, "type:Label") else {
-        panic!("`Label` has a field nothing can carry");
+        panic!("`Label` has a field nothing covers");
     };
-    assert_eq!(strukt.capability.as_str(), "unsupported.mini.carrier");
+    assert_eq!(strukt.capability.as_str(), "unsupported.conversion.no_rule");
     let Outcome::Skipped(caller) = outcome(&generation, "fn:label_len") else {
         panic!("a function taking `Label` cannot be generated either");
     };
     // One cause, two casualties, each with its own path to it.
-    assert_eq!(caller.capability.as_str(), "unsupported.mini.carrier");
+    assert_eq!(caller.capability.as_str(), "unsupported.conversion.no_rule");
     assert_eq!(caller.dependency_path.first().unwrap(), "fn:label_len");
     // Nothing partial is emitted: no wrapper for the skipped function.
     assert_eq!(generation.functions().len(), 1);
@@ -757,11 +621,10 @@ fn an_unsupported_field_skips_its_struct_and_its_callers() {
 /// An item the binding defines itself is an entity like a captured one, and
 /// the writer reaches it where the binding said it is.
 ///
-/// The same `Mini` target, the same declarations: what differs is that the
-/// model was told about `stamp_zero` by the binding, with a signature and a
-/// path, rather than by a capture. The wrapper it gets is called through that
-/// path, and a type the binding declared over one the source never exported
-/// is a handle like any captured alias.
+/// What differs is that the model was told about `stamp_zero` by the binding,
+/// with a signature and a path, rather than by a capture. The wrapper it gets
+/// is called through that path, and a type the binding declared over one the
+/// source never exported is a handle like any captured alias.
 #[test]
 fn an_entity_the_binding_defines_is_planned_and_reached_where_it_says() {
     let location = prebindgen::SourceLocation {
@@ -791,12 +654,12 @@ fn an_entity_the_binding_defines_is_planned_and_reached_where_it_says() {
     assert!(flat.is_binding_local("Token"));
     assert_eq!(flat.captured().count(), 1);
 
-    let mut binding = binding();
-    binding.declare_type("Token", Choice::Handle);
-    binding.declare_fn("token_use", exported("token_use", Routes::Reported));
-    binding.declare_fn("stamp_zero", exported("stamp_zero", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    fixture.declare_fn("token_use", exported("token_use", Routes::Reported));
+    fixture.declare_fn("stamp_zero", exported("stamp_zero", Routes::None));
 
-    let generation = binding.generate(flat).expect("plans");
+    let generation = fixture.generate(flat).expect("plans");
     assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
     // The report counts the API it was generated against, which the
     // binding's own items are not part of.
@@ -829,10 +692,10 @@ fn a_local_function_names_captured_types_as_the_source_spells_them() {
     });
     assert_eq!(helper.params[0].ty.key().as_str(), "Stamp");
 
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_twice", exported("stamp_twice", Routes::None));
-    let generation = binding.generate(flat).expect("plans");
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_twice", exported("stamp_twice", Routes::None));
+    let generation = fixture.generate(flat).expect("plans");
     assert_eq!(emitted(&generation), 2, "{:?}", generation.skipped());
     assert!(
         generation
@@ -849,15 +712,15 @@ fn a_local_function_names_captured_types_as_the_source_spells_them() {
 /// or otherwise — so it needs nothing in the model to be requested.
 #[test]
 fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
-    let mut binding = binding();
-    // The item is `Token`; the choice is recorded under the key as declared,
+    let mut fixture = fixture();
+    // The item is `Token`; the rule is recorded under the key as declared,
     // and the type's own planning has to find it there.
-    binding.declare_type("Token<'static>", Choice::Handle);
-    binding.declare(
-        Declaration::Conversion(prebindgen_flat::TypeKey::parse("Option<Stamp>").unwrap()),
-        Choice::Scalar,
+    fixture.declare_type("Token<'static>", Shape::Handle);
+    fixture.declare(
+        Declaration::Conversion(key("Option<Stamp>")),
+        OutputForm::Unsupported(Unsupported::new("unsupported.mini.convert", "no")),
     );
-    let generation = binding.generate(model()).expect("both are valid requests");
+    let generation = fixture.generate(model()).expect("both are valid requests");
     assert!(
         matches!(
             outcome(&generation, "type:Token < 'static >"),
@@ -881,74 +744,76 @@ fn a_type_key_with_arguments_names_its_item_and_a_conversion_names_none() {
 }
 
 /// One function declared twice: each declaration is planned under its own
-/// choice and exports its own wrapper. Sharing is by conversion, as between
-/// two different functions — the `Stamp` both take crosses the same way and
-/// is planned once.
+/// form and exports its own wrapper. Sharing is by conversion, as between two
+/// different functions — the `Stamp` both take crosses the same way and is
+/// planned once.
 #[test]
 fn one_function_declared_twice_is_two_outputs() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
-    binding.declare(
-        function("stamp_sum"),
-        exported("stamp_sum_b", Routes::Reported),
-    );
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum_a", Routes::None));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum_b", Routes::Reported));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
     let mut declared: Vec<String> = generation
-        .surfaces()
+        .retained()
         .iter()
-        .map(|surface| surface.declaration.to_string())
+        .map(|retained| retained.declaration.to_string())
         .collect();
     declared.sort();
     assert_eq!(declared, ["fn:stamp_sum", "fn:stamp_sum", "type:Stamp"]);
     let symbols: Vec<&str> = generation
         .functions()
         .iter()
-        .map(|plan| plan.abi.symbol.as_str())
+        .map(|plan| plan.symbol.as_str())
         .collect();
     assert_eq!(symbols, ["stamp_sum_a", "stamp_sum_b"]);
     // `Stamp` into Rust once, `i64` each way once: the two wrappers share
     // every conversion, because nothing about the value differs.
     assert_eq!(generation.values().len(), 3);
 
-    // One entity declared twice as the same thing is the binding saying one
+    // One entity declared twice in the same form is the binding saying one
     // thing twice: two plans for one foreign declaration.
-    let mut twice = Binding::default();
-    twice.declare_type("Stamp", Choice::Struct);
-    twice.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
-    twice.declare(function("stamp_sum"), exported("stamp_sum_a", Routes::None));
+    let mut twice = self::fixture();
+    twice.declare_type("Stamp", Shape::Struct("Stamp"));
+    twice.declare_fn("stamp_sum", exported("stamp_sum_a", Routes::None));
+    twice.declare_fn("stamp_sum", exported("stamp_sum_a", Routes::None));
     let error = twice
         .generate(model())
-        .expect_err("one choice, one declaration");
+        .expect_err("one form, one declaration");
     assert!(matches!(error, EngineError::DuplicateDeclaration { .. }));
 }
 
-/// One type declared twice, and a value resolves its requirement to the
-/// declaration it crosses as.
+/// One type exposed as two representations, and a value requires the one it
+/// crosses as.
 ///
-/// `Stamp` is declared as a struct and as a handle. Values of it cross as a
-/// struct by default; `stamp_max`'s parameter is overridden to cross as a
-/// handle. Each function requires the declaration its value crosses as — so
-/// when the handle cannot be placed, `stamp_max` goes with it and `stamp_sum`
-/// does not.
+/// `Stamp` is exposed as a struct and as a handle. Values of it cross as a
+/// struct by the type's rule; `stamp_max`'s parameter crosses as a handle by a
+/// rule at its position. Each function requires the output exposing the
+/// representation its value crosses as — so when the handle cannot be placed,
+/// `stamp_max` goes with it and `stamp_sum` does not.
 #[test]
-fn a_value_requires_the_declaration_it_crosses_as() {
-    let plan = |handle: Choice| {
-        let mut binding = binding();
-        binding.declare(ty("Stamp"), Choice::Struct);
-        binding.declare(ty("Stamp"), handle.clone());
-        binding.crossing("Stamp", Choice::Struct);
-        binding.at_site("stamp_max", "param 0", handle);
-        binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-        binding.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
-        binding.generate(model()).expect("plans")
+fn a_value_requires_the_output_exposing_its_representation() {
+    let plan = |release: bool| {
+        let mut fixture = fixture();
+        let strukt = fixture.repr(Shape::Struct("Stamp"));
+        let handle = fixture.repr(Shape::Handle);
+        fixture.expose("Stamp", strukt);
+        match release {
+            true => fixture.expose("Stamp", handle),
+            false => fixture.expose_with("Stamp", handle, None),
+        };
+        fixture.crossing("Stamp", strukt);
+        fixture.at("stamp_max", vec![param("stamp")], handle);
+        fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+        fixture.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
+        fixture.generate(model()).expect("plans")
     };
 
-    // Both declarations placed: everything is emitted, and each function's
-    // requirement went to the one it crosses as.
-    let generation = plan(Choice::Handle);
+    // Both exposed: everything is emitted, and each function's requirement
+    // went to the one it crosses as.
+    let generation = plan(true);
     assert_eq!(emitted(&generation), 4, "{:?}", generation.skipped());
     let rust = generation.rust();
     assert!(
@@ -960,12 +825,9 @@ fn a_value_requires_the_declaration_it_crosses_as() {
         "{rust}"
     );
 
-    // The handle declaration refused: only the function crossing that way
-    // requires it, and only that function is skipped.
-    let generation = plan(Choice::HandleWithoutRelease);
-    // One of the two `Stamp` declarations is skipped — the handle, which has
-    // nowhere to place a release — and the other is emitted. They print the
-    // same, so what says which is that exactly one survived.
+    // The handle exposed with no release to export: only the function
+    // crossing that way requires it, and only that function is skipped.
+    let generation = plan(false);
     let skipped: Vec<(String, &str)> = generation
         .skipped()
         .iter()
@@ -976,15 +838,15 @@ fn a_value_requires_the_declaration_it_crosses_as() {
     assert_eq!(
         skipped,
         [
-            ("type:Stamp".to_string(), "unsupported.mini.no_release"),
-            ("fn:stamp_max".to_string(), "unsupported.mini.no_release"),
+            ("type:Stamp".to_string(), "unsupported.type.no_release"),
+            ("fn:stamp_max".to_string(), "unsupported.type.no_release"),
         ]
     );
     assert_eq!(
         generation
-            .surfaces()
+            .retained()
             .iter()
-            .filter(|surface| surface.declaration.to_string() == "type:Stamp")
+            .filter(|retained| retained.declaration.to_string() == "type:Stamp")
             .count(),
         1,
         "the struct declaration of `Stamp` is emitted"
@@ -993,40 +855,37 @@ fn a_value_requires_the_declaration_it_crosses_as() {
         outcome(&generation, "fn:stamp_sum"),
         Outcome::Emitted
     ));
-    // `stamp_max` went down with the declaration its parameter crosses as, and
-    // says so.
     let (_, skip) = &generation.skipped()[1];
     assert_eq!(skip.dependency_path, ["fn:stamp_max", "type:Stamp"]);
 }
 
-/// A requirement stated by name alone cannot choose between two declarations
-/// of one type.
+/// A value crossing as a representation no output of its type exposes
+/// requires what is not there, when the type has several outputs to choose
+/// from.
 #[test]
-fn a_requirement_by_name_is_ambiguous_over_two_declarations() {
-    let mut binding = binding();
-    binding.declare(ty("Stamp"), Choice::Struct);
-    binding.declare(ty("Stamp"), Choice::Handle);
-    binding.crossing("Stamp", Choice::Struct);
-    // `Point` requires `Stamp` by name, not through a value of it.
-    binding.declare_type("Point", Choice::StructRequiring("Stamp".to_string()));
+fn a_value_crossing_as_no_exposed_representation_is_skipped() {
+    let mut fixture = fixture();
+    let strukt = fixture.repr(Shape::Struct("Stamp"));
+    let handle = fixture.repr(Shape::Handle);
+    let fallible = fixture.repr(Shape::FallibleStruct("Stamp"));
+    fixture.expose("Stamp", strukt);
+    fixture.expose("Stamp", handle);
+    fixture.crossing("Stamp", strukt);
+    fixture.at("stamp_max", vec![param("stamp")], fallible);
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::Reported));
 
-    let generation = binding.generate(model()).expect("plans");
-    let Outcome::Skipped(skip) = outcome(&generation, "type:Point") else {
-        panic!("a name does not say which declaration");
+    let generation = fixture.generate(model()).expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_max") else {
+        panic!("neither output of `Stamp` exposes what its parameter crosses as");
     };
     assert_eq!(
         skip.capability.as_str(),
-        "unsupported.requirement.ambiguous"
+        "unsupported.requirement.unrequested"
     );
 }
 
 /// A type whose conversion needs its own is refused, rather than recursed on
 /// until the stack runs out.
-///
-/// The mark that catches it is keyed on the conversion the target named, so
-/// this is what holds a target to the second half of [`Selection`]'s
-/// contract: an adapter minting a fresh key per visit would make the inner
-/// `Node` look like a different conversion, and the walk would not come back.
 #[test]
 fn a_conversion_that_needs_its_own_is_refused() {
     let location = prebindgen::SourceLocation {
@@ -1054,11 +913,11 @@ fn a_conversion_that_needs_its_own_is_refused() {
         .build()
         .expect("the fixture builds a model");
 
-    let mut binding = binding();
-    binding.declare_type("Node", Choice::Struct);
-    binding.declare_fn("node_sum", exported("node_sum", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Node", Shape::Struct("Node"));
+    fixture.declare_fn("node_sum", exported("node_sum", Routes::None));
 
-    let generation = binding.generate(flat).expect("plans");
+    let generation = fixture.generate(flat).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "type:Node") else {
         panic!("reading `Node`'s fields needs a `Node` conversion");
     };
@@ -1074,16 +933,17 @@ fn a_conversion_that_needs_its_own_is_refused() {
     assert!(generation.rust().is_empty());
 }
 
-/// A public declaration that requires a type the binding never declared is
-/// skipped, not emitted against a type that will not exist.
+/// A function whose value needs a type the binding never declared is skipped,
+/// not emitted against a type that will not exist.
 #[test]
 fn a_function_needing_an_undeclared_public_type_is_skipped() {
-    let mut binding = binding();
+    let mut fixture = fixture();
     // Its values cross, and the type itself was never asked for.
-    binding.crossing("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let strukt = fixture.repr(Shape::Struct("Stamp"));
+    fixture.crossing("Stamp", strukt);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
         panic!("the aggregate it takes is not a declared public type");
     };
@@ -1094,24 +954,24 @@ fn a_function_needing_an_undeclared_public_type_is_skipped() {
     assert!(generation.rust().is_empty());
 }
 
-/// A conversion that can fail needs a route. A boundary that declares none does
-/// not get a default — the function is skipped and the report says why.
+/// A conversion that can fail needs a route. A form that declares none does not
+/// get a default — the function is skipped and the report says why.
 #[test]
 fn a_declared_failure_with_no_route_skips_the_function() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::FallibleStruct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::FallibleStruct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
-        panic!("its member reads can fail and the boundary routes nothing");
+        panic!("its member reads can fail and the form routes nothing");
     };
     assert_eq!(
         skip.capability.as_str(),
         "unsupported.boundary.unrouted_failure"
     );
     // The struct itself is unaffected: its conversion is fine, and it is the
-    // boundary that could not be assembled.
+    // wrapper that could not be assembled.
     assert!(matches!(
         outcome(&generation, "type:Stamp"),
         Outcome::Emitted
@@ -1121,27 +981,33 @@ fn a_declared_failure_with_no_route_skips_the_function() {
 /// Contradictory configuration fails the build; it is never turned into a
 /// capability the engine claims to be missing.
 #[test]
-fn a_value_declaration_on_an_exported_function_is_an_error() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    // A struct declarator where a function declarator belongs.
-    binding.declare(function("stamp_sum"), Choice::Struct);
+fn a_type_form_on_an_exported_function_is_an_error() {
+    let mut fixture = fixture();
+    let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    // A type's form where a function's belongs.
+    fixture.declare(
+        function("stamp_sum"),
+        OutputForm::Type {
+            representation: strukt,
+            release: None,
+            meta: (),
+        },
+    );
 
-    let error = binding.generate(model()).expect_err("refuses");
+    let error = fixture.generate(model()).expect_err("refuses");
     assert!(matches!(
         error,
         EngineError::Planning(PlanningError::InvalidInput(_))
     ));
 }
 
-/// A declaration the source never captured is an error, not a skip — the
-/// same rule the engine already held for its report-only run.
+/// A declaration the source never captured is an error, not a skip.
 #[test]
 fn a_declaration_naming_nothing_is_an_error() {
-    let mut binding = binding();
-    binding.declare_fn("nope", exported("nope", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_fn("nope", exported("nope", Routes::None));
 
-    let error = binding.generate(model()).expect_err("refuses");
+    let error = fixture.generate(model()).expect_err("refuses");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
 }
 
@@ -1150,10 +1016,10 @@ fn a_declaration_naming_nothing_is_an_error() {
 #[test]
 fn a_run_over_unchanged_input_produces_the_same_output() {
     let run = || {
-        let mut binding = binding();
-        binding.declare_type("Stamp", Choice::Struct);
-        binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-        let generation = binding.generate(model()).expect("plans");
+        let mut fixture = fixture();
+        fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+        fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+        let generation = fixture.generate(model()).expect("plans");
         (
             format!("{:?}", generation.skipped()),
             generation.rust().to_string(),
@@ -1162,42 +1028,43 @@ fn a_run_over_unchanged_input_produces_the_same_output() {
     assert_eq!(run(), run());
 }
 
-/// A conversion recorded for a *field* makes its struct a different
-/// conversion, whichever order the two uses are planned in.
+/// A rule recorded for a *field* makes its struct a different conversion,
+/// whichever order the two uses are planned in.
 ///
 /// The cache is consulted after the children are planned for exactly this
-/// reason: keyed on the struct's own conversion alone, the second use would
-/// inherit the first one's conversion and its support outcome, in whichever
-/// direction the two happened to be requested.
+/// reason: keyed on the struct's own representation alone, the second use
+/// would inherit the first one's conversion and its support outcome, in
+/// whichever direction the two happened to be requested.
 #[test]
-fn a_field_override_is_part_of_its_struct_conversion() {
+fn a_field_rule_is_part_of_its_struct_conversion() {
     let plan = |defaults_first: bool| {
-        let mut binding = binding();
-        binding.crossing("Stamp", Choice::Struct);
-        // Read through fields, on a scalar field: the target offers no struct
-        // relation for an `i64`, so this child cannot be selected at all.
-        binding.at_site("stamp_max", "param 0.field secs", Choice::Struct);
+        let mut fixture = fixture();
+        let strukt = fixture.repr(Shape::Struct("Stamp"));
+        fixture.crossing("Stamp", strukt);
+        // Read through fields, on a scalar field: an `i64` has no fields, so
+        // this child cannot be planned at all.
+        fixture.at("stamp_max", vec![param("stamp"), field("secs")], strukt);
         // Order matters twice over: which function is planned first, and
         // whether the struct's own request primed the conversion before either
         // of them. The refusal-first case must not be primed, or it would not
         // test what happens when a refusal is met before any success.
         if defaults_first {
-            binding.declare_type("Stamp", Choice::Struct);
-            binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-            binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+            fixture.expose("Stamp", strukt);
+            fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+            fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
         } else {
-            binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
-            binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-            binding.declare_type("Stamp", Choice::Struct);
+            fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+            fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+            fixture.expose("Stamp", strukt);
         }
-        binding.generate(model()).expect("plans")
+        fixture.generate(model()).expect("plans")
     };
     for defaults_first in [true, false] {
         let generation = plan(defaults_first);
         let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_max") else {
-            panic!("its `secs` field is declared a way nothing can serve");
+            panic!("its `secs` field is ruled a way nothing can serve");
         };
-        assert_eq!(skip.capability.as_str(), "unsupported.mini.no_relation");
+        assert_eq!(skip.capability.as_str(), "unsupported.type.not_a_struct");
         // The function that configured nothing keeps its conversion.
         assert!(matches!(
             outcome(&generation, "fn:stamp_sum"),
@@ -1210,26 +1077,18 @@ fn a_field_override_is_part_of_its_struct_conversion() {
 
 /// A temporary never shadows a parameter the wrapper still needs.
 ///
-/// The reference adapters name every parameter `argN`, which hides this: a
-/// boundary is free to name one `v0`, and a temporary taking that name would
-/// compile and feed the wrong value to the source call.
+/// A form is free to name a parameter `v0`, and a temporary taking that name
+/// would compile and feed the wrong value to the source call.
 #[test]
 fn a_temporary_never_takes_a_live_parameter_name() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn(
-        "stamp_pick",
-        Choice::Function {
-            symbol: "stamp_pick".to_string(),
-            routes: Routes::None,
-            // The names a writer would otherwise allocate for itself.
-            param_names: vec!["v0".to_string(), "v1".to_string()],
-            attrs: Vec::new(),
-            unsafety: false,
-        },
-    );
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let mut form = exported("stamp_pick", Routes::None);
+    // The names a writer would otherwise allocate for itself.
+    form.inputs = vec![quote::format_ident!("v0"), quote::format_ident!("v1")];
+    fixture.declare_fn("stamp_pick", form);
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert!(matches!(
         outcome(&generation, "fn:stamp_pick"),
         Outcome::Emitted
@@ -1246,24 +1105,24 @@ fn a_temporary_never_takes_a_live_parameter_name() {
     );
 }
 
-/// A failure route whose reporting operation needs a context the boundary does
+/// A failure route whose reporting operation needs a context the form does
 /// not supply skips the function.
 ///
-/// The conversions here need no context at all, so only the reporter's operands
-/// can reveal it — which is what makes this different from the conversion-side
+/// The conversions here need no context at all, so only the reporter can
+/// reveal it — which is what makes this different from the conversion-side
 /// check.
 #[test]
 fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::FallibleStruct);
-    binding.declare_fn(
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::FallibleStruct("Stamp"));
+    fixture.declare_fn(
         "stamp_sum",
         exported("stamp_sum", Routes::ReporterNeedsContext),
     );
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
-        panic!("its reporter needs a context this boundary does not supply");
+        panic!("its reporter needs a context this form does not supply");
     };
     assert_eq!(
         skip.capability.as_str(),
@@ -1271,21 +1130,23 @@ fn a_reporter_needing_an_unsupplied_context_skips_the_function() {
     );
 }
 
-/// A skip says where the walk stopped, not only which declaration vanished.
+/// A skip says where the walk stopped, as a value path: which parameter of
+/// which exported function, and which field inside it.
 #[test]
 fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
-    let mut binding = binding();
-    binding.crossing("Stamp", Choice::Struct);
-    binding.declare_type("Label", Choice::Struct);
-    binding.declare_fn("label_len", exported("label_len", Routes::None));
+    let mut fixture = fixture();
+    let strukt = fixture.repr(Shape::Struct("Stamp"));
+    fixture.crossing("Stamp", strukt);
+    fixture.declare_type("Label", Shape::Struct("Label"));
+    fixture.declare_fn("label_len", exported("label_len", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(caller) = outcome(&generation, "fn:label_len") else {
-        panic!("`Label` has a field nothing can carry");
+        panic!("`Label` has a field nothing covers");
     };
     assert_eq!(
         caller.dependency_path,
-        vec!["fn:label_len", "param 0", "field text"]
+        vec!["fn:label_len", "param label", "field text"]
     );
     // The struct reached the same cause by its own path.
     let Outcome::Skipped(strukt) = outcome(&generation, "type:Label") else {
@@ -1294,21 +1155,29 @@ fn a_skip_names_the_parameter_and_the_field_that_stopped_it() {
     assert_eq!(strukt.dependency_path, vec!["type:Label", "field text"]);
 }
 
-/// A public declaration the target refuses skips every declaration requiring
-/// it, even though every conversion involved was planned successfully.
+/// A type output the frontend refuses skips every declaration requiring it,
+/// even though every conversion involved was planned successfully.
 ///
-/// This is the retention loop rather than value planning: the struct's
-/// conversion is fine, and it is the public `Stamp` that does not exist.
+/// This is the retention loop rather than value planning: `Stamp`'s values
+/// cross fine, and it is the public `Stamp` that does not exist.
 #[test]
-fn a_refused_public_declaration_skips_what_requires_it() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::StructWithoutSurface);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+fn a_refused_type_output_skips_what_requires_it() {
+    let mut fixture = fixture();
+    let strukt = fixture.repr(Shape::Struct("Stamp"));
+    fixture.crossing("Stamp", strukt);
+    fixture.declare(
+        ty("Stamp"),
+        OutputForm::Unsupported(Unsupported::new(
+            "unsupported.mini.no_public_struct",
+            "this struct converts, and has no public declaration here",
+        )),
+    );
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     // Unrelated, and skipped for a cause of its own: `Label` holds a `String`,
-    // which nothing here carries.
-    binding.declare_fn("label_len", exported("label_len", Routes::None));
+    // which nothing here covers.
+    fixture.declare_fn("label_len", exported("label_len", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(strukt) = outcome(&generation, "type:Stamp") else {
         panic!("this target declares no public struct");
     };
@@ -1324,11 +1193,7 @@ fn a_refused_public_declaration_skips_what_requires_it() {
         caller.capability.as_str(),
         "unsupported.mini.no_public_struct"
     );
-    assert_eq!(caller.dependency_path.first().unwrap(), "fn:stamp_sum");
-    assert!(caller
-        .dependency_path
-        .iter()
-        .any(|step| step == "type:Stamp"));
+    assert_eq!(caller.dependency_path, ["fn:stamp_sum", "type:Stamp"]);
     assert!(generation.rust().is_empty());
 }
 
@@ -1338,16 +1203,17 @@ fn a_refused_public_declaration_skips_what_requires_it() {
 /// identity on their own rather than only when one of them fails.
 #[test]
 fn two_supported_children_make_two_struct_conversions() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
     // One field of one parameter crosses the same `i64` a different way. The
-    // struct above it is declared identically in both functions, so only the
+    // struct above it is ruled identically in both functions, so only the
     // child can make the two conversions differ.
-    binding.at_site("stamp_max", "param 0.field secs", Choice::ScalarThrough);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+    let through = fixture.repr(Shape::ScalarThrough);
+    fixture.at("stamp_max", vec![param("stamp"), field("secs")], through);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert_eq!(emitted(&generation), 3);
     // `Stamp` twice, `i64` into Rust twice, `i64` out of Rust once.
     assert_eq!(generation.values().len(), 5);
@@ -1358,25 +1224,33 @@ fn two_supported_children_make_two_struct_conversions() {
     assert_eq!(rust.matches("rebase(").count(), 1, "{rust}");
 }
 
-/// Two values the binding declared the same way share one conversion, however
-/// far apart the declarations are.
-///
-/// The other half of the contract a conversion key carries: different keys
-/// must not share, and equal keys must. Here the site override restates the
-/// type's own declaration, so the key it yields is equal and nothing new is
-/// planned — a target interning a fresh identity per lookup would silently
-/// double the conversions instead.
+/// A rule restating the type's own representation shares its conversion,
+/// however far apart the two are: equal representations are one id, and the
+/// id is what a conversion's identity holds.
 #[test]
-fn an_override_restating_the_default_shares_its_conversion() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.at_site("stamp_max", "param 0.field secs", Choice::Scalar);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+fn a_rule_restating_the_type_rule_shares_its_conversion() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let scalar = fixture.scalar;
+    fixture.at("stamp_max", vec![param("stamp"), field("secs")], scalar);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     // The same three as if nothing had been recorded for that field.
     assert_eq!(generation.values().len(), 3);
+}
+
+/// Declaring a representation equal to one already declared returns its id, so
+/// equal settings are equal data wherever they were stated.
+#[test]
+fn equal_representations_are_one_representation() {
+    let mut fixture = fixture();
+    let first = fixture.repr(Shape::Struct("Stamp"));
+    let again = fixture.repr(Shape::Struct("Stamp"));
+    let other = fixture.repr(Shape::FallibleStruct("Stamp"));
+    assert_eq!(first, again);
+    assert_ne!(first, other);
 }
 
 /// A raw identifier and its plain spelling are one name, and the writer treats
@@ -1387,20 +1261,16 @@ fn an_override_restating_the_default_shares_its_conversion() {
 /// different hat.
 #[test]
 fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn(
-        "stamp_pick",
-        Choice::Function {
-            symbol: "stamp_pick".to_string(),
-            routes: Routes::None,
-            param_names: vec!["r#v0".to_string(), "r#v1".to_string()],
-            attrs: Vec::new(),
-            unsafety: false,
-        },
-    );
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let mut form = exported("stamp_pick", Routes::None);
+    form.inputs = vec![
+        syn::parse_str("r#v0").expect("a raw ident"),
+        syn::parse_str("r#v1").expect("a raw ident"),
+    ];
+    fixture.declare_fn("stamp_pick", form);
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let rust = generation.rust();
     assert!(
         !rust.contains("let v0 ="),
@@ -1420,20 +1290,28 @@ fn a_raw_identifier_parameter_reserves_its_plain_spelling() {
 ///
 /// The chain is declared so that propagation needs more than one pass: the
 /// function is decided before the struct it requires, and that struct before
-/// the one *it* requires.
+/// the one *it* requires — through a field.
 #[test]
-fn a_refusal_travels_a_chain_of_public_requirements() {
-    let mut binding = binding();
-    // Every conversion here succeeds: what fails is a public declaration, two
-    // edges away from the function that needs it.
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
-    binding.declare_type("Stamp", Choice::StructRequiring("Point".to_string()));
-    binding.declare_type("Point", Choice::StructWithoutSurface);
+fn a_refusal_travels_a_chain_of_requirements() {
+    let mut fixture = fixture();
+    // Every conversion here succeeds: what fails is a type output, two edges
+    // away from the function that needs it.
+    fixture.declare_fn("wrap_sum", exported("wrap_sum", Routes::None));
+    fixture.declare_type("Wrap", Shape::Struct("Wrap"));
+    let stamp = fixture.repr(Shape::Struct("Stamp"));
+    fixture.crossing("Stamp", stamp);
+    fixture.declare(
+        ty("Stamp"),
+        OutputForm::Unsupported(Unsupported::new(
+            "unsupported.mini.no_public_struct",
+            "this struct converts, and has no public declaration here",
+        )),
+    );
 
-    let generation = binding.generate(model()).expect("plans");
-    for declaration in ["type:Point", "type:Stamp", "fn:stamp_sum"] {
+    let generation = fixture.generate(model()).expect("plans");
+    for declaration in ["type:Stamp", "type:Wrap", "fn:wrap_sum"] {
         let Outcome::Skipped(skip) = outcome(&generation, declaration) else {
-            panic!("{declaration} depends on a public declaration this target refuses");
+            panic!("{declaration} depends on a type output this target refuses");
         };
         assert_eq!(
             skip.capability.as_str(),
@@ -1443,30 +1321,179 @@ fn a_refusal_travels_a_chain_of_public_requirements() {
         assert_eq!(skip.dependency_path.first().unwrap(), declaration);
     }
     // Two edges, so the far end of the chain names both of them.
-    let Outcome::Skipped(caller) = outcome(&generation, "fn:stamp_sum") else {
+    let Outcome::Skipped(caller) = outcome(&generation, "fn:wrap_sum") else {
         unreachable!("checked above");
     };
     assert_eq!(
         caller.dependency_path,
-        vec!["fn:stamp_sum", "type:Stamp", "type:Point"]
+        vec!["fn:wrap_sum", "type:Wrap", "type:Stamp"]
     );
     assert!(generation.rust().is_empty());
 }
 
-/// A boundary that passes a carrier its conversion does not read is a defect,
-/// and fails the build rather than emitting a wrapper that reads the wrong
-/// thing.
+/// A form naming a wrapper parameter for each input it does not have is
+/// contradictory input: the registry names the inputs' parameters from it.
 #[test]
-fn a_wrapper_parameter_must_carry_what_its_conversion_reads() {
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_sum", Choice::FunctionWithWrongInput);
+fn a_form_naming_the_wrong_number_of_inputs_is_an_error() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let mut form = exported("stamp_pick", Routes::None);
+    form.inputs = vec![quote::format_ident!("only")];
+    fixture.declare_fn("stamp_pick", form);
 
-    let error = binding.generate(model()).expect_err("refuses");
-    let EngineError::Planning(PlanningError::InternalInvariant(message)) = error else {
-        panic!("an adapter describing an impossible boundary is a defect, not a capability gap");
+    let error = fixture.generate(model()).expect_err("refuses");
+    let EngineError::Planning(PlanningError::InvalidInput(message)) = error else {
+        panic!("a form that does not fit its function is invalid input");
     };
-    assert!(message.contains("its conversion reads"), "{message}");
+    assert!(
+        message.contains("1 wrapper parameter(s) for 2 input(s)"),
+        "{message}"
+    );
+}
+
+/// Two rules for one value are the binding saying two things about it, and fail
+/// the build before anything is planned — including a rule at a type output's
+/// root, which the output's own representation already is.
+#[test]
+fn two_rules_for_one_value_are_an_error() {
+    let mut fixture = fixture();
+    let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.crossing("Stamp", strukt);
+    let error = fixture.generate(model()).expect_err("refuses");
+    assert!(
+        error.to_string().contains("two rules cover every `Stamp`"),
+        "{error}"
+    );
+
+    let mut fixture = self::fixture();
+    let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let mut binding = fixture.build(&model());
+    binding.rule(Scope::At(OutputId(0), ValuePath::root()), strukt);
+    let error = generate(model(), &Mini, binding, syn::parse_quote!(source)).expect_err("refuses");
+    assert!(
+        error
+            .to_string()
+            .contains("two rules cover `type:Stamp` itself"),
+        "{error}"
+    );
+}
+
+/// A rule at a position the output does not have fails the build, rather than
+/// sitting unused while the binding believes it configured something.
+#[test]
+fn a_rule_at_a_position_that_does_not_exist_is_an_error() {
+    let refused = |path: Vec<Step>| {
+        let mut fixture = fixture();
+        fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+        fixture.declare_type("Token", Shape::Handle);
+        fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+        fixture.declare_fn("token_use", exported("token_use", Routes::Reported));
+        let function = match &path[0] {
+            Step::Param(name) if name == "token" => "token_use",
+            _ => "stamp_sum",
+        };
+        let scalar = fixture.scalar;
+        fixture.at(function, path, scalar);
+        fixture
+            .generate(model())
+            .expect_err("a rule at no position is refused")
+            .to_string()
+    };
+    assert!(
+        refused(vec![param("nope")]).contains("the function takes no `nope`"),
+        "a parameter the function does not take"
+    );
+    assert!(
+        refused(vec![param("stamp"), field("nope")]).contains("`Stamp` has no field `nope`"),
+        "a field the struct does not have"
+    );
+    assert!(
+        refused(vec![param("token"), field("inner")])
+            .contains("`Token` is not read through its fields there"),
+        "a field of a value carried whole"
+    );
+}
+
+/// A member whose part resolved to a wire type its carrier does not hold
+/// refuses the struct, where the member is.
+#[test]
+fn a_member_its_carrier_does_not_hold_refuses_the_value() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::StructHolding("Stamp", vec![Class::Pointer]));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+
+    let generation = fixture.generate(model()).expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "type:Stamp") else {
+        panic!("its carrier holds no scalar member");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.member.scalar");
+    assert_eq!(skip.dependency_path, ["type:Stamp", "field secs"]);
+    let Outcome::Skipped(caller) = outcome(&generation, "fn:stamp_sum") else {
+        panic!("and a function taking it goes with it");
+    };
+    assert_eq!(
+        caller.dependency_path,
+        ["fn:stamp_sum", "param stamp", "field secs"]
+    );
+}
+
+/// A value whose wire type a form does not hold as a parameter refuses the
+/// function, where the parameter is.
+#[test]
+fn a_parameter_its_form_does_not_hold_refuses_the_function() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let mut form = exported("stamp_sum", Routes::None);
+    form.params = Accepts::of([Class::Scalar]);
+    fixture.declare_fn("stamp_sum", form);
+
+    let generation = fixture.generate(model()).expect("plans");
+    let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
+        panic!("its form holds no aggregate parameter");
+    };
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.param.aggregate");
+    assert_eq!(skip.dependency_path, ["fn:stamp_sum", "param stamp"]);
+}
+
+/// A type rule no value was planned by is listed, not refused: a type rule is
+/// a default for many values, and one a binding never needed is harmless.
+#[test]
+fn a_type_rule_nothing_used_is_listed() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let point = fixture.repr(Shape::Struct("Point"));
+    fixture.crossing("Point", point);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+
+    let generation = fixture.generate(model()).expect("plans");
+    let unused: Vec<String> = generation
+        .unused_rules()
+        .iter()
+        .map(|scope| format!("{scope:?}"))
+        .collect();
+    assert_eq!(unused.len(), 1, "{unused:?}");
+    assert!(unused[0].contains("Point"), "{unused:?}");
+}
+
+/// The binding prints as the whole of what planning reads, one line per
+/// carrier, representation, rule and output.
+#[test]
+fn a_binding_prints_what_planning_reads() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let printed = fixture.build(&model()).to_string();
+    for line in [
+        "carrier  c0  i64  Scalar  Plain",
+        "carrier  c1  Stamp  Aggregate  Plain",
+        "repr     r1  product  c1  Fields  read: Standard(ReadMember)",
+        "rule     type i64  r0",
+        "rule     type Stamp  r1",
+        "output   type:Stamp  type r1  ()",
+        "output   fn:stamp_sum  function \"C\" stamp_sum  ()",
+    ] {
+        assert!(printed.contains(line), "missing `{line}` in:\n{printed}");
+    }
 }
 
 /// A guard the capture reader injected reaches the generated file, whatever
@@ -1475,8 +1502,7 @@ fn a_wrapper_parameter_must_carry_what_its_conversion_reads() {
 /// The one in production asserts that the source crate's features match the set
 /// the capture was filtered by. It belongs to no declaration, so nothing in
 /// retention decides its fate, and a run that emitted no wrapper at all must
-/// still carry it — otherwise a binding that skipped everything would also skip
-/// the check that its source crate is the one it was generated against.
+/// still carry it.
 #[test]
 fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
     let guarded = || {
@@ -1512,8 +1538,8 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
     };
 
     // With something to emit.
-    let mut full = binding();
-    full.declare_type("Stamp", Choice::Struct);
+    let mut full = fixture();
+    full.declare_type("Stamp", Shape::Struct("Stamp"));
     full.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let generation = full.generate(guarded()).expect("plans");
     assert_eq!(emitted(&generation), 2);
@@ -1525,7 +1551,7 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
 
     // And with nothing to emit: the declaration is skipped, and the guard is
     // still there.
-    let mut bare = binding();
+    let mut bare = fixture();
     bare.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let generation = bare.generate(guarded()).expect("plans");
     assert_eq!(emitted(&generation), 0);
@@ -1536,22 +1562,28 @@ fn a_capture_guard_is_emitted_whatever_else_the_run_retains() {
     );
 }
 
-/// A condition the capture reader could not evaluate reaches the wrapper
-/// generated for the item that carries it.
-///
-/// The reader rewrites such a condition back onto the item rather than guessing
-/// — `unix`, or a custom `--cfg` flag, is not something it has a rule for. The
-/// model then carries it uninterpreted, and the writer re-applies it, so the
-/// wrapper exists exactly where the function it calls does. Without that, a
-/// binding whose condition is false where the source crate compiles would call
-/// a function that is not there, and fail to compile.
-#[test]
-fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
+/// A small model of a struct and a function over it, some of it written under
+/// conditions the capture reader could not answer.
+fn conditioned(struct_item: syn::Item, function_item: syn::Item) -> Flat {
     let location = prebindgen::SourceLocation {
         crate_name: Some("fixture".to_string()),
         ..Default::default()
     };
-    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+    Flat::builder()
+        .items(vec![
+            (struct_item, location.clone()),
+            (function_item, location),
+        ])
+        .build()
+        .expect("the fixture builds a model")
+}
+
+/// A condition the capture reader could not evaluate reaches the wrapper
+/// generated for the item that carries it, so the wrapper exists exactly where
+/// the function it calls does.
+#[test]
+fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
+    let flat = conditioned(
         syn::parse_quote!(
             pub struct Stamp {
                 pub secs: i64,
@@ -1564,24 +1596,17 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
                 unimplemented!()
             }
         ),
-    ]
-    .into_iter()
-    .map(|item| (item, location.clone()))
-    .collect();
-    let flat = Flat::builder()
-        .items(items)
-        .build()
-        .expect("the fixture builds a model");
+    );
     // The model takes the item as it is: an attribute it cannot interpret is
     // not a reason to refuse one.
     assert_eq!(flat.unsupported().count(), 0);
     assert!(flat.function("stamp_sum").is_some());
 
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
-    let generation = binding.generate(flat).expect("plans");
+    let generation = fixture.generate(flat).expect("plans");
     assert_eq!(emitted(&generation), 2);
     let rust = generation.rust();
     assert!(
@@ -1598,18 +1623,9 @@ fn a_condition_the_reader_could_not_evaluate_reaches_the_wrapper() {
 /// The same, for a struct the wrapper constructs rather than the function it
 /// calls: the wrapper names both, so it inherits from both, and one condition
 /// two of them carry is stated once.
-///
-/// The struct carries a second condition the function does not, which is what
-/// separates per-condition dedup from comparing whole attribute sets. Restating
-/// a condition would compile — conjunction is idempotent — so what this holds to
-/// is the generated file being readable.
 #[test]
 fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
-    let location = prebindgen::SourceLocation {
-        crate_name: Some("fixture".to_string()),
-        ..Default::default()
-    };
-    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+    let flat = conditioned(
         syn::parse_quote!(
             #[cfg(some_custom_flag)]
             #[cfg(another_custom_flag)]
@@ -1624,20 +1640,13 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
                 unimplemented!()
             }
         ),
-    ]
-    .into_iter()
-    .map(|item| (item, location.clone()))
-    .collect();
-    let flat = Flat::builder()
-        .items(items)
-        .build()
-        .expect("the fixture builds a model");
+    );
 
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::Struct);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
-    let generation = binding.generate(flat).expect("plans");
+    let generation = fixture.generate(flat).expect("plans");
     let rust = generation.rust();
     assert_eq!(
         rust.matches("#[cfg(some_custom_flag)]").count(),
@@ -1652,20 +1661,11 @@ fn a_wrapper_inherits_the_condition_of_every_source_item_it_names() {
 }
 
 /// A field's condition reaches everything the wrapper generates for that field,
-/// and nothing it generates for the others.
-///
-/// A member that exists only sometimes can only be read sometimes, and the
-/// initializer that consumes the read exists only then; leaving any one of the
-/// three unconditional is what used to make the wrapper name a field the source
-/// struct may not have. The mirror the target declares carries it too, which is
-/// what makes the member and its read agree.
+/// and nothing it generates for the others — and the member the target
+/// declares for it, which it is fed with the part.
 #[test]
 fn a_field_condition_reaches_every_statement_that_serves_the_field() {
-    let location = prebindgen::SourceLocation {
-        crate_name: Some("fixture".to_string()),
-        ..Default::default()
-    };
-    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+    let flat = conditioned(
         syn::parse_quote!(
             pub struct Stamp {
                 pub secs: i64,
@@ -1678,20 +1678,13 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
                 unimplemented!()
             }
         ),
-    ]
-    .into_iter()
-    .map(|item| (item, location.clone()))
-    .collect();
-    let flat = Flat::builder()
-        .items(items)
-        .build()
-        .expect("the fixture builds a model");
+    );
 
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::StructWithMirror);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::MirroredStruct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
-    let generation = binding.generate(flat).expect("plans");
+    let generation = fixture.generate(flat).expect("plans");
     let rust = generation.rust();
     // The member, the read, and the initializer — three places, one condition,
     // and the unconditional field in none of them.
@@ -1713,18 +1706,14 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
     );
 }
 
-/// An item's condition reaches the Rust a target contributes for its public
-/// declaration of that item, not only the wrapper.
+/// An item's condition reaches the declaration the target writes for a
+/// carrier of that item, not only the wrapper.
 ///
 /// A mirror emitted where the struct it mirrors is absent is a type the foreign
 /// API declares and the build does not have.
 #[test]
-fn an_item_condition_reaches_the_declaration_a_target_contributes() {
-    let location = prebindgen::SourceLocation {
-        crate_name: Some("fixture".to_string()),
-        ..Default::default()
-    };
-    let items: Vec<(syn::Item, prebindgen::SourceLocation)> = vec![
+fn an_item_condition_reaches_the_declaration_a_target_writes() {
+    let flat = conditioned(
         syn::parse_quote!(
             #[cfg(some_custom_flag)]
             pub struct Stamp {
@@ -1738,20 +1727,13 @@ fn an_item_condition_reaches_the_declaration_a_target_contributes() {
                 unimplemented!()
             }
         ),
-    ]
-    .into_iter()
-    .map(|item| (item, location.clone()))
-    .collect();
-    let flat = Flat::builder()
-        .items(items)
-        .build()
-        .expect("the fixture builds a model");
+    );
 
-    let mut binding = binding();
-    binding.declare_type("Stamp", Choice::StructWithMirror);
-    binding.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::MirroredStruct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
-    let generation = binding.generate(flat).expect("plans");
+    let generation = fixture.generate(flat).expect("plans");
     let rust = generation.rust();
     // Once on the mirror, once on the wrapper. The fields carry none of their
     // own: the condition is the struct's.
@@ -1766,25 +1748,19 @@ fn an_item_condition_reaches_the_declaration_a_target_contributes() {
     );
 }
 
-/// The part of a wrapper's form a target may state — attributes beyond
+/// The part of a wrapper's form a binding may state — attributes beyond
 /// `#[no_mangle]`, and `unsafe` — is rendered as stated; the linkage is the
-/// writer's, and a target restating it is contradictory input.
+/// writer's, and a form restating it is contradictory input.
 #[test]
-fn a_target_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
+fn a_form_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
     let form = |attrs: Vec<syn::Attribute>, unsafety: bool| {
-        let mut binding = binding();
-        binding.declare_type("Stamp", Choice::Struct);
-        binding.declare_fn(
-            "stamp_sum",
-            Choice::Function {
-                symbol: "stamp_sum".to_string(),
-                routes: Routes::None,
-                param_names: Vec::new(),
-                attrs,
-                unsafety,
-            },
-        );
-        binding.generate(model())
+        let mut fixture = fixture();
+        fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+        let mut form = exported("stamp_sum", Routes::None);
+        form.attrs = attrs;
+        form.unsafety = unsafety;
+        fixture.declare_fn("stamp_sum", form);
+        fixture.generate(model())
     };
 
     let generation = form(vec![syn::parse_quote!(#[allow(non_snake_case)])], true).expect("plans");
@@ -1813,12 +1789,12 @@ fn a_target_states_a_wrappers_attributes_and_safety_but_not_its_linkage() {
 /// conversions with the type's own request.
 #[test]
 fn a_handle_is_carried_both_ways_and_released() {
-    let mut binding = binding();
-    binding.declare_type("Token", Choice::Handle);
-    binding.declare_fn("token_new", exported("token_new", Routes::None));
-    binding.declare_fn("token_use", exported("token_use", Routes::Reported));
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    fixture.declare_fn("token_new", exported("token_new", Routes::None));
+    fixture.declare_fn("token_use", exported("token_use", Routes::Reported));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     assert_eq!(emitted(&generation), 3);
     // `Token` out of Rust, `Token` into Rust, `i64` out of Rust — and the type's
     // own request planned nothing the functions did not.
@@ -1827,7 +1803,7 @@ fn a_handle_is_carried_both_ways_and_released() {
     let symbols: Vec<&str> = generation
         .functions()
         .iter()
-        .map(|plan| plan.abi.symbol.as_str())
+        .map(|plan| plan.symbol.as_str())
         .collect();
     assert_eq!(symbols, ["Token_free", "token_new", "token_use"]);
     let release = &generation.functions()[0];
@@ -1855,18 +1831,18 @@ fn a_handle_is_carried_both_ways_and_released() {
         rust.contains("unsafe { Box::from_raw(handle.as_ptr()) }"),
         "{rust}"
     );
-    assert!(release.failures.is_empty());
+    assert!(release.routes.is_empty());
 }
 
 /// A null address arriving where a handle is consumed is a binding failure, and
-/// the boundary has to say where it goes like any other.
+/// the form has to say where it goes like any other.
 #[test]
 fn a_consumed_handle_needs_a_binding_route() {
-    let mut binding = binding();
-    binding.declare_type("Token", Choice::Handle);
-    binding.declare_fn("token_use", exported("token_use", Routes::None));
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    fixture.declare_fn("token_use", exported("token_use", Routes::None));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:token_use") else {
         panic!("a null handle can arrive and nothing routes it");
     };
@@ -1881,23 +1857,25 @@ fn a_consumed_handle_needs_a_binding_route() {
     ));
 }
 
-/// A handle nobody can free is not a handle: the type is skipped where the
-/// release could not be placed, and the function taking it with it.
+/// A handle nobody can free is not a handle: the type is skipped where its
+/// release would be, and the function taking it with it.
 #[test]
 fn a_handle_without_a_release_skips_the_type_and_what_takes_it() {
-    let mut binding = binding();
-    binding.declare_type("Token", Choice::HandleWithoutRelease);
-    binding.declare_fn("token_use", exported("token_use", Routes::Reported));
+    let mut fixture = fixture();
+    let handle = fixture.repr(Shape::Handle);
+    fixture.crossing("Token", handle);
+    fixture.expose_with("Token", handle, None);
+    fixture.declare_fn("token_use", exported("token_use", Routes::Reported));
 
-    let generation = binding.generate(model()).expect("plans");
+    let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "type:Token") else {
         panic!("its release has nowhere to go");
     };
-    assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
+    assert_eq!(skip.capability.as_str(), "unsupported.type.no_release");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:token_use") else {
         panic!("it takes a type that was not declared");
     };
-    assert_eq!(skip.capability.as_str(), "unsupported.mini.no_release");
+    assert_eq!(skip.capability.as_str(), "unsupported.type.no_release");
     assert_eq!(skip.dependency_path, ["fn:token_use", "type:Token"]);
     assert!(generation.rust().is_empty());
 }

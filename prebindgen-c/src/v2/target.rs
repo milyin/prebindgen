@@ -1,528 +1,136 @@
-//! The C target, as the v2 engine asks it questions.
+//! The C target, as the v2 engine calls it: the declarations its carriers need.
 //!
-//! This is the whole of what C contributes to a v2 run: which relation a value
-//! crosses through, what carries it, how an exported function is shaped, and
-//! what public Rust its declarations need. There is no type walk here and no
-//! control flow — the registry owns both — which is why the adapter is a
-//! handful of local answers rather than a pipeline of its own.
-//!
-//! It also *holds* what the binding declared. The registry stores no
-//! configuration and knows no precedence: which C name a type gets, which
-//! declarator produced a declaration, which destructor frees a handle are all
-//! recorded here by [`super`] and looked up here when the registry asks
-//! (#766). The names themselves are the frontend's manglers' business, settled
-//! when the binding is built, so the target never spells one of its own.
+//! Everything a C binding decides — which carrier a type crosses in, which
+//! operations move it, what symbol a wrapper exports — is stated as data by
+//! [`super`] when the binding is built, and the registry plans from that alone.
+//! What is left here is writing: a `repr(C)` mirror of a struct, the
+//! incomplete type a handle points to, the enum C sees for a Rust one. Every C
+//! operation is a standard one the registry writes itself, so this target has
+//! none of its own.
 
-use std::collections::BTreeMap;
-
-use prebindgen_registry::flat::{ScalarKind, TypeKind, TypeRef};
-use prebindgen_registry_v2::{
-    mirrored_i32_enum, AbiSpec, Access, Artifact, BoundarySpec, ChildValue, Declaration, Direction,
-    EnumArm, FailureCategory, FailureRoute, Layout, OperandSpec, Operation, OperationType,
-    OutputPlacement, ParamRole, PlanningError, PrimitiveFailure, PrimitiveSpec, Protocol, Relation,
-    ReprSpec, Requirement, ResolvedShape, ResolvedValues, Selection, SelectionQuery,
-    SiteDescriptor, SourceItem, StandardOp, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
-    TargetSupport, Terminal, Unsupported, WireType, WrapperParam,
-};
+use prebindgen_registry_v2::{mirrored_i32_enum, CarrierFeed, OperationFeed, Target, Written};
 use quote::{format_ident, quote};
 
-/// What the C frontend recorded for one value or one exported function.
-///
-/// Also this target's [`Target::ConversionKey`]: it is plain data, so two
-/// values the binding declared the same way convert the same way — which is
-/// what the key has to mean for the registry to reuse one conversion for both.
+/// The C wire types a binding's carriers are, which is what a struct's members
+/// and a wrapper's parameters are allowed to be stated in.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CChoice {
-    /// A scalar crossing unchanged. The default for every value nothing more
-    /// specific covers.
-    Scalar,
-    /// A `repr(C)` aggregate passed by value, under this C name.
-    DataStruct { c_name: String },
-    /// An opaque handle: C holds a `<c_name> *` to a Rust-owned value and
-    /// frees it through the `release` symbol.
-    OpaquePtr { c_name: String, release: String },
-    /// A fieldless enum: C declares an enum of the same values under this
-    /// name, and a value of the type crosses as one of them — read, coming
-    /// into Rust, as the C `int` it holds.
-    /// The enumerators keep the Rust value names; cbindgen's `[enum]
-    /// prefix_with_name` is what keeps two enums' `Add` apart in a header.
+pub enum CClass {
+    /// A 64-bit integer: the one scalar this target carries so far.
+    I64,
+    /// An address: a handle to a Rust-owned value.
+    Pointer,
+    /// A `repr(C)` struct passed by value.
+    Aggregate,
+    /// A C enum, or the storage one arrives in.
+    Enum,
+}
+
+impl CClass {
+    /// Every class: what a wrapper parameter or return may be.
+    pub(crate) fn all() -> [CClass; 4] {
+        [
+            CClass::I64,
+            CClass::Pointer,
+            CClass::Aggregate,
+            CClass::Enum,
+        ]
+    }
+}
+
+/// What a C carrier needs declared, if anything, and under which C name.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CCarrier {
+    /// A type Rust and C already share: `i64` is `int64_t`.
+    Builtin,
+    /// A `repr(C)` struct mirroring the source struct, member for field.
+    Aggregate { c_name: String },
+    /// The incomplete type a handle points to: C holds a `<c_name> *` and
+    /// nothing else.
+    Opaque { c_name: String },
+    /// A C enum of the same values as the source enum.
     Enum { c_name: String },
-    /// A source function to expose: the wrapper around it carries this symbol.
-    Function { symbol: String },
-    /// A declaration v1 lowers and v2 does not yet: a value-opaque type, a
-    /// tagged union. Carries the declarator's name so the refusal says
-    /// which capability is missing, and the C name it would have had so the
-    /// report can say where it was going.
-    Unimplemented {
-        declarator: &'static str,
-        c_name: String,
-    },
+    /// The storage a C enum arrives in — `MaybeUninit` of it, since C lets an
+    /// enum variable hold any `int`. Declared by the enum it holds.
+    EnumBits,
 }
 
 /// C contributes no operation of its own: reading an aggregate member, and
 /// going between a source enum and the C one declared for it, are standard
-/// operations the registry renders — it is the registry that can spell a
-/// source path. This type has no values, which is that fact stated so the
-/// compiler keeps it true.
-#[derive(Clone, Debug)]
-pub enum CPayload {}
+/// operations the registry writes — it is the registry that can spell a source
+/// path. This type has no values, which is that fact stated so the compiler
+/// keeps it true.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum COp {}
 
-/// The C target: what the binding declared, and the answers the registry gets
-/// out of it.
+/// The C target: its writers.
 #[derive(Default)]
-pub struct CTarget {
-    /// How every value of this source type crosses, wherever it appears, by
-    /// the type's canonical key.
-    types: BTreeMap<String, CChoice>,
-}
-
-impl CTarget {
-    /// Record how a declared type's values cross.
-    ///
-    /// What each output *is* travels with it: the engine holds the binding's
-    /// declarations as the pair of what was declared and what this target
-    /// recorded for it, and hands the choice back with every question about
-    /// that output. This table answers the other question — how a value of
-    /// the type crosses wherever else it turns up.
-    pub(crate) fn declare(&mut self, declaration: &Declaration, choice: &CChoice) {
-        if let Declaration::Type(key) = declaration {
-            self.types.insert(key.as_str().to_string(), choice.clone());
-        }
-    }
-
-    /// How a value of this type crosses: what was declared for its type, else
-    /// a scalar.
-    ///
-    /// The position goes unread. C has no per-site declarator — `data_type!`
-    /// and `ptr_type!` are stated about a type, not about one parameter of one
-    /// function — so every value of a type crosses the same way, and the key
-    /// this yields depends on the type alone. Looked up by the type's key,
-    /// which is what the declaration was recorded by: `String` is a kind of
-    /// its own to the model, not a named type, and `ptr_type!(String)` has to
-    /// find it all the same.
-    fn conversion(&self, ty: &TypeRef) -> CChoice {
-        self.types
-            .get(ty.key().as_str())
-            .cloned()
-            .unwrap_or(CChoice::Scalar)
-    }
-}
-
-/// The C carrier for a scalar, when this adapter has one.
-///
-/// One scalar today, as the specification's declaration paths need. The rest of
-/// `ScalarKind` arrives with its own increment; until then a value of another
-/// kind is a reported skip, never a guess.
-fn c_scalar(kind: ScalarKind) -> Option<syn::Type> {
-    match kind {
-        ScalarKind::I64 => Some(syn::parse_quote!(i64)),
-        _ => None,
-    }
-}
-
-/// The scalar kind of a type, when it is one.
-fn scalar_of(ty: &TypeRef) -> Option<ScalarKind> {
-    match ty.kind() {
-        TypeKind::Scalar(kind) => Some(*kind),
-        _ => None,
-    }
-}
+pub struct CTarget;
 
 impl Target for CTarget {
     const NAME: &'static str = "c";
 
-    type ConversionKey = CChoice;
-    type Payload = CPayload;
+    type WireClass = CClass;
+    type CarrierMeta = CCarrier;
+    type Op = COp;
+    /// A C declaration is the Rust cbindgen reads, so nothing about an output
+    /// is for a foreign writer alone.
+    type OutputMeta = ();
 
-    fn select(&self, query: &SelectionQuery<'_, CChoice>) -> TargetSupport<Selection<CChoice>> {
-        // A declared type's own crossing is planned as that declaration says,
-        // not as the per-type default for values of it: the two agree for a
-        // type declared once, and differ by design for one declared twice.
-        let conversion = match query.position.is_declared_type() {
-            true => query.declared.clone(),
-            false => self.conversion(&query.crossing.ty),
-        };
-        // An aggregate carries its members, so it wants the struct's fields; a
-        // scalar is carried whole. A declarator v2 has no lowering for is
-        // refused here, before anything under it is planned — never quietly
-        // crossed as the scalar default.
-        let want_struct = match &conversion {
-            CChoice::DataStruct { .. } => true,
-            CChoice::Scalar
-            | CChoice::Enum { .. }
-            | CChoice::OpaquePtr { .. }
-            | CChoice::Function { .. } => false,
-            CChoice::Unimplemented { declarator, .. } => {
-                return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                    format!("unsupported.c.{declarator}"),
-                    format!(
-                        "`{}` is declared with `{declarator}`, which the v2 C target does not \
-                         lower yet",
-                        query.crossing.ty.key()
-                    ),
-                )));
-            }
-        };
-        for (id, relation) in query.candidates {
-            match (relation, want_struct) {
-                (Relation::Struct(_), true) | (Relation::Atomic, false) => {
-                    return Ok(TargetAttempt::Ready(Selection {
-                        relation: *id,
-                        conversion,
-                    }))
-                }
-                _ => {}
-            }
-        }
-        // A data struct is read through fields, and the model offers none for
-        // this type: it is an extern, captured or the binding's own, and there
-        // is nothing to see into.
-        Ok(TargetAttempt::Unsupported(Unsupported::new(
-            "unsupported.c.not_a_struct",
-            format!(
-                "`{}` is declared as a data struct, and the model has no fields for it",
-                query.crossing.ty.key()
-            ),
-        )))
+    fn write_operation(&self, op: &COp, _: &OperationFeed<'_, Self>) -> Written {
+        match *op {}
     }
 
-    fn represent(
-        &self,
-        shape: &ResolvedShape<'_>,
-        children: &[ChildValue<'_>],
-        conversion: &CChoice,
-    ) -> TargetSupport<ReprSpec<CPayload>> {
-        match (shape.relation, conversion) {
-            // The address of a boxed source value, cast to a pointer to the
-            // incomplete C type this adapter declares. Both directions and the
-            // release are the registry's standard operations; the adapter
-            // states only the carrier.
-            (Relation::Atomic, CChoice::OpaquePtr { c_name, .. }) => {
+    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        match &feed.carrier.meta {
+            CCarrier::Builtin | CCarrier::EnumBits => Vec::new(),
+            // A struct whose only member is a zero-length array is what
+            // `cbindgen` renders as an incomplete type: a C caller can hold a
+            // pointer to one and nothing else. The same declaration v1 emits,
+            // case lint included.
+            CCarrier::Opaque { c_name } => {
                 let ident = format_ident!("{c_name}");
-                let carrier = WireType::abi(syn::parse_quote!(*mut #ident));
-                let ty = shape.crossing.ty.clone();
-                Ok(TargetAttempt::Ready(match shape.crossing.direction {
-                    Direction::IntoRust => ReprSpec {
-                        layout: Layout::Scalar(carrier.clone()),
-                        protocol: Protocol::terminal(PrimitiveSpec::from_raw(
-                            carrier.clone(),
-                            ty.clone(),
-                        )),
-                        release: Some(PrimitiveSpec::release(carrier, ty)),
-                    },
-                    Direction::OutOfRust => ReprSpec {
-                        layout: Layout::Scalar(carrier.clone()),
-                        protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
-                        release: None,
-                    },
-                }))
+                vec![quote! {
+                    #[repr(C)]
+                    #[allow(non_camel_case_types)]
+                    pub struct #ident {
+                        _private: [u8; 0],
+                    }
+                }]
             }
-            // A fieldless enum crosses as the C enum this target declares for
-            // it, both ways, so the header names it wherever the source does.
-            // Into Rust it arrives as `MaybeUninit` of that enum and is read
-            // as the C `int` it holds: C lets an enum variable hold any `int`,
-            // and a Rust enum holding a number none of its values has is
-            // undefined behaviour before any match can look at it. So that
-            // direction matches the number, and fails on one no value has.
-            (Relation::Atomic, CChoice::Enum { c_name }) => {
-                let values = match mirrored_i32_enum(shape.unit, c_name, Self::NAME) {
-                    Ok(values) => values,
-                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
-                };
+            // `repr(C)` is required: without it the layout the header promises
+            // is not the layout the wrapper reads. The C name is the mangler's —
+            // `foo_t` — so the case lint is silenced as v1 silences it.
+            CCarrier::Aggregate { c_name } => {
                 let ident = format_ident!("{c_name}");
-                let ty = shape.crossing.ty.clone();
-                let (carrier, codec) = match shape.crossing.direction {
-                    Direction::OutOfRust => {
-                        let carrier = WireType::abi(syn::parse_quote!(#ident));
-                        let values = values
-                            .iter()
-                            .map(|(value, _)| {
-                                let name = &value.name;
-                                EnumArm {
-                                    name: name.clone(),
-                                    shape: value.shape,
-                                    carried: syn::parse_quote!(#ident::#name),
-                                }
-                            })
-                            .collect();
-                        let codec = PrimitiveSpec {
-                            operands: vec![OperandSpec::value(
-                                OperationType::Source(ty.clone()),
-                                Access::Owned,
-                            )],
-                            result: Some(OperationType::Carrier(carrier.clone())),
-                            failure: PrimitiveFailure::Infallible,
-                            dependencies: Vec::new(),
-                            implementation: Operation::Standard(StandardOp::EnumOut {
-                                source: Box::new(ty),
-                                values,
-                            }),
-                        };
-                        (carrier, codec)
+                let members = feed.members.iter().map(|(part, carrier)| {
+                    let name = format_ident!(
+                        "{}",
+                        part.name
+                            .as_ref()
+                            .expect("a positional field is refused when the binding is built")
+                    );
+                    let ty = &carrier.rust;
+                    // A member mirrors a field one for one, its condition
+                    // included: a field the source crate may not have must not
+                    // become a member the header always declares.
+                    let condition = &part.conditions;
+                    for under in condition {
+                        warn_undefined_condition(c_name, &name, under);
                     }
-                    Direction::IntoRust => {
-                        let carrier =
-                            WireType::abi(syn::parse_quote!(::core::mem::MaybeUninit<#ident>));
-                        let values = values
-                            .iter()
-                            .map(|(value, number)| {
-                                let number = proc_macro2::Literal::i32_unsuffixed(*number);
-                                EnumArm {
-                                    name: value.name.clone(),
-                                    shape: value.shape,
-                                    carried: syn::parse_quote!(#number),
-                                }
-                            })
-                            .collect();
-                        let codec = PrimitiveSpec {
-                            operands: vec![OperandSpec::value(
-                                OperationType::Carrier(carrier.clone()),
-                                Access::Owned,
-                            )],
-                            result: Some(OperationType::Source(ty.clone())),
-                            failure: PrimitiveFailure::fallible(
-                                OperationType::Carrier(WireType::internal(syn::parse_quote!(
-                                    String
-                                ))),
-                                FailureCategory::Binding,
-                            ),
-                            dependencies: Vec::new(),
-                            implementation: Operation::Standard(StandardOp::EnumIn {
-                                source: Box::new(ty),
-                                values,
-                                invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
-                                bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
-                            }),
-                        };
-                        (carrier, codec)
-                    }
-                };
-                Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Scalar(carrier),
-                    protocol: Protocol::terminal(codec),
-                    release: None,
-                }))
-            }
-            (Relation::Atomic, _) => {
-                let Some(carrier) = scalar_of(&shape.crossing.ty).and_then(c_scalar) else {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.carrier",
-                        format!("`{}` has no C carrier yet", shape.crossing.ty.key()),
-                    )));
-                };
-                let carrier = WireType::abi(carrier);
-                Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Scalar(carrier.clone()),
-                    // The C carrier of an `i64` *is* the `i64`, so the
-                    // conversion renders nothing at all.
-                    protocol: Protocol::terminal(PrimitiveSpec::identity(OperationType::Carrier(
-                        carrier,
-                    ))),
-                    release: None,
-                }))
-            }
-            (Relation::Struct(strukt), _) => {
-                let CChoice::DataStruct { c_name } = conversion else {
-                    return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is planned through its fields, and is declared to be carried whole",
-                        strukt.name
-                    )));
-                };
-                let Some(item) = shape.strukt else {
-                    return Err(PlanningError::InternalInvariant(
-                        "a struct relation without its strukt".to_string(),
-                    ));
-                };
-                if item.fields.is_empty() {
-                    // A `repr(C)` struct with no members has no portable C
-                    // representation, and rustc's FFI lint says so about
-                    // passing one across an `extern "C"` boundary.
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.empty_aggregate",
-                        format!(
-                            "`{c_name}` has no fields, and an empty aggregate has no portable \
-                             C form"
-                        ),
-                    )));
-                }
-                let aggregate = WireType::abi({
-                    let ident = format_ident!("{c_name}");
-                    syn::parse_quote!(#ident)
+                    quote!(#(#condition)* pub #name: #ty)
                 });
-                let mut members = Vec::new();
-                let mut projections = Vec::new();
-                for (field, child) in item.fields.iter().zip(children) {
-                    if !matches!(child.layout, Layout::Scalar(_)) {
-                        return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                            "unsupported.c.nested_member",
-                            format!(
-                                "member `{}` of `{c_name}` needs a nested aggregate member",
-                                child.part.label()
-                            ),
-                        )));
-                    }
-                    let member = field.member();
-                    members.push(member.clone());
-                    projections.push(PrimitiveSpec {
-                        operands: vec![OperandSpec::value(
-                            OperationType::Carrier(aggregate.clone()),
-                            Access::Shared,
-                        )],
-                        result: Some(OperationType::Carrier(child.layout.wire().clone())),
-                        // Reading a member of a by-value struct cannot fail,
-                        // and the copied value owes nothing to the aggregate.
-                        failure: PrimitiveFailure::Infallible,
-                        dependencies: Vec::new(),
-                        implementation: Operation::Standard(StandardOp::ReadMember { member }),
-                    });
-                }
-                Ok(TargetAttempt::Ready(ReprSpec {
-                    layout: Layout::Aggregate {
-                        ty: aggregate,
-                        members,
-                    },
-                    protocol: Protocol::Product { projections },
-                    release: None,
-                }))
+                vec![quote! {
+                    #[repr(C)]
+                    #[allow(non_camel_case_types)]
+                    pub struct #ident { #(#members),* }
+                }]
             }
-        }
-    }
-
-    fn boundary(
-        &self,
-        site: &SiteDescriptor<'_, CChoice>,
-        values: &ResolvedValues<'_, CPayload>,
-    ) -> TargetSupport<BoundarySpec<CPayload>> {
-        // A handle's release is a site with no source function, exported under
-        // the destructor symbol its declaration named.
-        let symbol = match (site.declared, site.function) {
-            (CChoice::Function { symbol }, Some(_)) => symbol,
-            (CChoice::OpaquePtr { release, .. }, None) => release,
-            (CChoice::Unimplemented { declarator, .. }, _) => {
-                return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                    format!("unsupported.c.{declarator}"),
-                    format!(
-                        "`{}` is declared as a `{declarator}`, which the v2 C target does not \
-                         lower yet",
-                        site.declaration
-                    ),
-                )));
-            }
-            _ => {
-                return Err(PlanningError::InvalidInput(format!(
-                    "`{}` is declared in a way that does not fit this site",
-                    site.declaration
-                )));
-            }
-        };
-        // A C parameter keeps the source parameter's name: that is what the
-        // header shows, and what v1 shows. A release has no source parameter
-        // to take a name from, and takes v1's.
-        let params = values
-            .inputs
-            .iter()
-            .enumerate()
-            .map(|(index, value)| WrapperParam {
-                name: match site.function {
-                    Some(function) => function.params[index].name.clone(),
-                    None => format_ident!("this_"),
-                },
-                ty: value.repr.layout.wire().clone(),
-                role: ParamRole::Input(index),
-                mutable: false,
-            })
-            .collect();
-        Ok(TargetAttempt::Ready(BoundarySpec {
-            abi: AbiSpec {
-                abi: "C".to_string(),
-                symbol: symbol.clone(),
-                params,
-                ret: values.output.map(|value| value.repr.layout.wire().clone()),
-                attrs: Vec::new(),
-                unsafety: false,
-            },
-            output: match values.output {
-                Some(_) => OutputPlacement::Return,
-                None => OutputPlacement::Void,
-            },
-            // A member read is infallible and a scalar crosses unchanged; the
-            // one thing that can fail is a handle arriving null, and C has no
-            // exception to raise. The process stops, as it does under v1's
-            // `.panic()`. A runtime failure has no route, and a function that
-            // could raise one is skipped until it does.
-            failures: vec![FailureRoute {
-                category: FailureCategory::Binding,
-                report: None,
-                on_report_failure: Terminal::Abort,
-                terminate: Terminal::Abort,
-            }],
-        }))
-    }
-
-    fn surface(
-        &self,
-        request: &SurfaceRequest<'_, CChoice>,
-        values: &ResolvedValues<'_, CPayload>,
-    ) -> TargetSupport<SurfaceSpec<CPayload>> {
-        let declared = request.declared;
-        // An opaque handle is declared the same way whatever the item behind
-        // it: an alias, or a struct whose fields C never sees.
-        if let CChoice::OpaquePtr { c_name, .. } = declared {
-            let ident = format_ident!("{c_name}");
-            return Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.clone(),
-                requires: Vec::new(),
-                // A struct whose only member is a zero-length array is what
-                // `cbindgen` renders as an incomplete type: a C caller can
-                // hold a pointer to one and nothing else. The same declaration
-                // v1 emits, case lint included.
-                rust: vec![Artifact::new(
-                    c_name.clone(),
-                    quote! {
-                        #[repr(C)]
-                        #[allow(non_camel_case_types)]
-                        pub struct #ident {
-                            _private: [u8; 0],
-                        }
-                    },
-                )],
-                payload: None,
-            }));
-        }
-        match request.item {
-            SourceItem::Extern(opaque) => Err(PlanningError::InvalidInput(format!(
-                "`{}` has no fields, and is declared as something that reads them",
-                opaque.name
-            ))),
-            SourceItem::Function(_) => Ok(TargetAttempt::Ready(SurfaceSpec {
-                declaration: request.declaration.clone(),
-                // A wrapper taking or returning a declared type is unusable
-                // unless the public type it names is emitted too.
-                requires: values
-                    .inputs
-                    .iter()
-                    .chain(values.output.iter())
-                    .filter_map(|value| Requirement::of(value))
-                    .collect(),
-                rust: Vec::new(),
-                payload: None,
-            })),
-            // The C enum itself: the same values under the same names, and
-            // the numbers Rust assigns, so a C caller reading the header sees
-            // what a Rust caller sees.
-            SourceItem::Enum(unit) => {
-                let CChoice::Enum { c_name } = declared else {
-                    return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is exposed as an enum, and is declared as something else",
-                        unit.name
-                    )));
-                };
-                // The same numbers the conversion matches on, refused for the
-                // same reasons.
-                let values = match mirrored_i32_enum(Some(unit), c_name, Self::NAME) {
-                    Ok(values) => values,
-                    Err(reason) => return Ok(TargetAttempt::Unsupported(reason)),
-                };
+            // The C enum itself: the same values under the same names, and the
+            // numbers Rust assigns, so a C caller reading the header sees what a
+            // Rust caller sees.
+            CCarrier::Enum { c_name } => {
+                let values = mirrored_i32_enum(feed.unit, c_name, Self::NAME)
+                    .expect("an enum C cannot mirror is refused when the binding is built");
                 let ident = format_ident!("{c_name}");
                 let size_message = format!("`{c_name}` is not the size of a C `int`");
                 let values = values.iter().map(|(value, number)| {
@@ -530,127 +138,53 @@ impl Target for CTarget {
                     let number = proc_macro2::Literal::i32_unsuffixed(*number);
                     quote!(#name = #number)
                 });
-                Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.clone(),
-                    requires: Vec::new(),
-                    rust: vec![
-                        Artifact::new(
-                            c_name.clone(),
-                            quote! {
-                                #[repr(C)]
-                                #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-                                #[allow(non_camel_case_types)]
-                                pub enum #ident {
-                                    #(#values),*
-                                }
-                            },
-                        ),
-                        // A value coming into Rust is read as a C `int`, which is
-                        // only its bits where the two are one size — not on a
-                        // target whose C enums are narrower. An artifact of its
-                        // own, so the enum's condition reaches it too.
-                        Artifact::new(
-                            format!("{c_name} size"),
-                            quote! {
-                                const _: () = assert!(
-                                    ::core::mem::size_of::<#ident>()
-                                        == ::core::mem::size_of::<::core::ffi::c_int>(),
-                                    #size_message
-                                );
-                            },
-                        ),
-                    ],
-                    payload: None,
-                }))
-            }
-            SourceItem::Struct(strukt) => {
-                let CChoice::DataStruct { c_name } = declared else {
-                    return Err(PlanningError::InvalidInput(format!(
-                        "`{}` is exposed as a data type, and is declared as something else",
-                        strukt.name
-                    )));
-                };
-                if strukt.fields.is_empty() {
-                    return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                        "unsupported.c.empty_aggregate",
-                        format!(
-                            "`{c_name}` has no fields, and an empty aggregate has no portable \
-                             C form"
-                        ),
-                    )));
-                }
-                let ident = format_ident!("{c_name}");
-                // A member mirrors a field one for one, its condition included:
-                // a field the source crate may not have must not become a
-                // member the header always declares.
-                let conditions = request.field_conditions();
-                let mut fields = Vec::new();
-                for (index, field) in strukt.fields.iter().enumerate() {
-                    let Some(ty) = scalar_of(&field.ty).and_then(c_scalar) else {
-                        return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                            "unsupported.c.carrier",
-                            format!("field `{}` of `{c_name}` has no C carrier yet", field.index),
-                        )));
-                    };
-                    let Some(name) = &field.name else {
-                        return Ok(TargetAttempt::Unsupported(Unsupported::new(
-                            "unsupported.c.positional_field",
-                            format!(
-                                "field {} of `{c_name}` has no name, and a C member needs one",
-                                field.index
-                            ),
-                        )));
-                    };
-                    let condition = &conditions[index];
-                    // cbindgen guards a member only for a condition its
-                    // `[defines]` table names; with no entry it writes the
-                    // member unguarded and says nothing, because its warning
-                    // goes through `log` and a build script driving its library
-                    // API installs no logger. The header then declares a member
-                    // the library may not have, which no compiler or linker
-                    // catches — the caller and the library simply disagree
-                    // about the struct's size. This line is the only output
-                    // such a build produces, so it names the fix; it cannot
-                    // tell whether the fix is already in place, since reading
-                    // the consumer's cbindgen configuration would cost a
-                    // dependency for a warning.
-                    for under in condition {
-                        // Tokens print with a space between each pair, which
-                        // `close_up` removes where it separates no two words —
-                        // the same treatment a type key gets in the report.
-                        let under = prebindgen_registry::close_up(&under.to_string());
-                        println!(
-                            "cargo:warning=prebindgen: `{c_name}.{name}` is emitted under \
-                             {under}; unless your cbindgen configuration already maps that \
-                             condition in [defines], the header declares the member \
-                             unconditionally and a C caller disagrees with the library \
-                             about the layout of `{c_name}`"
+                vec![
+                    quote! {
+                        #[repr(C)]
+                        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+                        #[allow(non_camel_case_types)]
+                        pub enum #ident {
+                            #(#values),*
+                        }
+                    },
+                    // A value coming into Rust is read as a C `int`, which is
+                    // only its bits where the two are one size — not on a
+                    // target whose C enums are narrower. An item of its own, so
+                    // the enum's condition reaches it too.
+                    quote! {
+                        const _: () = assert!(
+                            ::core::mem::size_of::<#ident>()
+                                == ::core::mem::size_of::<::core::ffi::c_int>(),
+                            #size_message
                         );
-                    }
-                    fields.push(quote!(#(#condition)* pub #name: #ty));
-                }
-                Ok(TargetAttempt::Ready(SurfaceSpec {
-                    declaration: request.declaration.clone(),
-                    requires: Vec::new(),
-                    // `repr(C)` is required: without it the layout the header
-                    // promises is not the layout the wrapper reads. The C name
-                    // is the mangler's — `foo_t` — so the case lint is silenced
-                    // as v1 silences it.
-                    rust: vec![Artifact::new(
-                        c_name.clone(),
-                        quote! {
-                            #[repr(C)]
-                            #[allow(non_camel_case_types)]
-                            pub struct #ident { #(#fields),* }
-                        },
-                    )],
-                    payload: None,
-                }))
+                    },
+                ]
             }
         }
     }
+}
 
-    fn render_operation(&self, payload: &CPayload, _: &[syn::Ident]) -> proc_macro2::TokenStream {
-        match *payload {}
-    }
+/// Say, in the build log, that a member written under a condition needs the
+/// consumer's cbindgen configuration to know that condition.
+///
+/// cbindgen guards a member only for a condition its `[defines]` table names;
+/// with no entry it writes the member unguarded and says nothing, because its
+/// warning goes through `log` and a build script driving its library API
+/// installs no logger. The header then declares a member the library may not
+/// have, which no compiler or linker catches — the caller and the library
+/// simply disagree about the struct's size. This line is the only output such a
+/// build produces, so it names the fix; it cannot tell whether the fix is
+/// already in place, since reading the consumer's cbindgen configuration would
+/// cost a dependency for a warning.
+fn warn_undefined_condition(c_name: &str, member: &syn::Ident, under: &proc_macro2::TokenStream) {
+    // Tokens print with a space between each pair, which `close_up` removes
+    // where it separates no two words — the same treatment a type key gets in
+    // the report.
+    let under = prebindgen_registry::close_up(&under.to_string());
+    println!(
+        "cargo:warning=prebindgen: `{c_name}.{member}` is emitted under {under}; unless your \
+         cbindgen configuration already maps that condition in [defines], the header declares \
+         the member unconditionally and a C caller disagrees with the library about the layout \
+         of `{c_name}`"
+    );
 }

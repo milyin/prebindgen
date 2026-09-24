@@ -5,108 +5,35 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
+    binding::{Accepts, Binding, FunctionForm, OutputForm, Representation, Scope},
     decl::Declaration,
     outcome::EngineError,
     plan::generate,
     run::Generation,
-    target::{
-        BoundarySpec, ChildValue, ReprSpec, ResolvedShape, ResolvedValues, Selection,
-        SelectionQuery, SiteDescriptor, SurfaceRequest, SurfaceSpec, Target, TargetAttempt,
-        TargetSupport, Unsupported,
-    },
+    target::{CarrierFeed, OperationFeed, Target, Unsupported, Written},
 };
 
-/// A target that carries nothing: every value is refused at selection, so a
-/// run over it exercises the accounting and nothing else.
-///
-/// What it was told an output is, standing in for a real target's choice.
-///
-/// The two halves are separate on purpose: the engine tells two declarations
-/// of one entity apart by the whole choice, while the report names each row
-/// by where the target says it is placed — and a target may place two
-/// different choices identically.
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct Declared {
-    id: u32,
-    placement: String,
-}
-
-impl Declared {
-    /// An output whose placement no test reads.
-    fn any() -> Self {
-        Declared {
-            id: 0,
-            placement: String::new(),
-        }
-    }
-
-    /// One placed where the report will name it.
-    fn placed(id: u32, placement: &str) -> Self {
-        Declared {
-            id,
-            placement: placement.to_string(),
-        }
-    }
-}
-
+/// A target that carries nothing: every value it is asked about is refused, so
+/// a run over it exercises the accounting and nothing else.
 struct Nothing;
 
 impl Target for Nothing {
     const NAME: &'static str = "test";
 
-    type ConversionKey = Declared;
-    type Payload = ();
+    type WireClass = ();
+    type CarrierMeta = ();
+    type Op = ();
+    /// Which output this is, standing in for a real target's placement: the
+    /// engine tells two declarations of one entity apart by their whole form.
+    type OutputMeta = u32;
 
-    fn select(&self, query: &SelectionQuery<'_, Declared>) -> TargetSupport<Selection<Declared>> {
-        Ok(TargetAttempt::Unsupported(Unsupported::new(
-            "unsupported.nothing.carrier",
-            format!("`{}` is carried by no target here", query.crossing.ty.key()),
-        )))
+    fn write_operation(&self, _: &(), _: &OperationFeed<'_, Self>) -> Written {
+        unreachable!("nothing is planned")
     }
 
-    fn represent(
-        &self,
-        _: &ResolvedShape<'_>,
-        _: &[ChildValue<'_>],
-        _: &Declared,
-    ) -> TargetSupport<ReprSpec<()>> {
-        unreachable!("nothing is selected")
+    fn write_carrier(&self, _: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        unreachable!("nothing is planned")
     }
-
-    fn boundary(
-        &self,
-        _: &SiteDescriptor<'_, Declared>,
-        _: &ResolvedValues<'_, ()>,
-    ) -> TargetSupport<BoundarySpec<()>> {
-        unreachable!("nothing is selected")
-    }
-
-    fn surface(
-        &self,
-        _: &SurfaceRequest<'_, Declared>,
-        _: &ResolvedValues<'_, ()>,
-    ) -> TargetSupport<SurfaceSpec<()>> {
-        unreachable!("nothing is selected")
-    }
-
-    fn render_operation(&self, _: &(), _: &[syn::Ident]) -> proc_macro2::TokenStream {
-        unreachable!("nothing is selected")
-    }
-}
-
-/// A binding stated directly, standing in for a facade's own storage.
-struct Stated {
-    declared: Vec<(Declaration, Declared)>,
-}
-
-/// Run the stated binding through the engine over [`sources`].
-fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<()>, EngineError> {
-    generate(
-        sources.build()?,
-        &Nothing,
-        stated.declared.clone(),
-        syn::parse_quote!(fixture),
-    )
 }
 
 /// Two captured functions and a captured struct, in the shape a source crate
@@ -155,13 +82,61 @@ fn declared_type(name: &str) -> Declaration {
     Declaration::Type(prebindgen_flat::TypeKey::parse(name).expect("a test names a type"))
 }
 
+/// A binding stated directly, standing in for a frontend: every value of
+/// `Handle`, owned or borrowed, is refused, and each output is placed at `id`.
+struct Stated {
+    declared: Vec<(Declaration, u32)>,
+}
+
+/// Run the stated binding through the engine over [`sources`].
+fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, EngineError> {
+    let mut binding: Binding<Nothing> = Binding::new();
+    let refused = binding.representation(Representation::Unsupported(Unsupported::new(
+        "unsupported.nothing.carrier",
+        "this target carries nothing",
+    )));
+    for key in ["Handle", "&Handle"] {
+        binding.rule(
+            Scope::Type(prebindgen_flat::TypeKey::parse(key).expect("a type key")),
+            refused,
+        );
+    }
+    for (declaration, id) in &stated.declared {
+        let form = match declaration {
+            Declaration::Type(_) => OutputForm::Type {
+                representation: refused,
+                release: None,
+                meta: *id,
+            },
+            _ => OutputForm::Function {
+                form: FunctionForm {
+                    abi: "C".to_string(),
+                    symbol: format!("f{id}"),
+                    context: Vec::new(),
+                    inputs: Vec::new(),
+                    routes: Vec::new(),
+                    attrs: Vec::new(),
+                    unsafety: false,
+                    params: Accepts::of([]),
+                    ret: Accepts::of([]),
+                },
+                meta: *id,
+            },
+        };
+        binding.output(declaration.clone(), form);
+    }
+    generate(
+        sources.build()?,
+        &Nothing,
+        binding,
+        syn::parse_quote!(fixture),
+    )
+}
+
 #[test]
 fn every_declaration_is_skipped_and_accounted_for() {
     let stated = Stated {
-        declared: vec![
-            (captured_fn("handle_new"), Declared::any()),
-            (declared_type("Handle"), Declared::any()),
-        ],
+        declared: vec![(captured_fn("handle_new"), 0), (declared_type("Handle"), 0)],
     };
     let generation = plan(&stated, sources()).expect("v2 plans");
 
@@ -173,14 +148,14 @@ fn every_declaration_is_skipped_and_accounted_for() {
         .map(|(declaration, _)| declaration.to_string())
         .collect();
     assert_eq!(skipped, ["fn:handle_new", "type:Handle"]);
-    assert!(generation.surfaces().is_empty());
+    assert!(generation.retained().is_empty());
     assert_eq!(generation.flat().captured().count(), 3);
 }
 
 #[test]
 fn a_declaration_that_names_nothing_captured_is_an_error() {
     let stated = Stated {
-        declared: vec![(captured_fn("handle_neu"), Declared::any())],
+        declared: vec![(captured_fn("handle_neu"), 0)],
     };
     let error = plan(&stated, sources()).expect_err("a typo is refused");
     assert!(matches!(error, EngineError::DeclaredNotFound { .. }));
@@ -192,21 +167,18 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![(
-            Declaration::Callback("impl Fn(i64)".to_string()),
-            Declared::any(),
-        )],
+        declared: vec![(Declaration::Callback("impl Fn(i64)".to_string()), 0)],
     };
     let generation = plan(&stated, sources()).expect("v2 plans");
     assert_eq!(generation.skipped().len(), 1);
 }
 
 #[test]
-fn one_declaration_may_be_stated_once_per_choice() {
+fn one_declaration_may_be_stated_once_per_form() {
     let stated = Stated {
         declared: vec![
-            (captured_fn("handle_new"), Declared::any()),
-            (captured_fn("handle_new"), Declared::any()),
+            (captured_fn("handle_new"), 0),
+            (captured_fn("handle_new"), 0),
         ],
     };
     let error = plan(&stated, sources()).expect_err("a repeat is refused");
@@ -223,7 +195,7 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
     let stated = Stated {
         declared: vec![(
             Declaration::Const(syn::parse_str("handle_new").expect("an ident")),
-            Declared::any(),
+            0,
         )],
     };
     let error = plan(&stated, sources()).expect_err("wrong kind is refused");
@@ -242,14 +214,13 @@ fn a_declaration_must_name_the_kind_it_says_it_does() {
 fn every_skip_names_the_capability_that_stopped_it() {
     let stated = Stated {
         declared: vec![
-            (captured_fn("handle_new"), Declared::any()),
-            (captured_fn("handle_value"), Declared::any()),
-            (declared_type("Handle"), Declared::any()),
+            (captured_fn("handle_new"), 0),
+            (captured_fn("handle_value"), 1),
+            (declared_type("Handle"), 0),
         ],
     };
     let generation = plan(&stated, sources()).expect("v2 plans");
-    // One cause, three roots: each stops at the first value the target is
-    // asked about.
+    // One cause, three roots: each stops at the first value it needs.
     let codes: Vec<&str> = generation
         .skipped()
         .iter()
@@ -264,9 +235,9 @@ fn every_skip_names_the_capability_that_stopped_it() {
 fn one_entity_declared_three_times_is_three_skips() {
     let stated = Stated {
         declared: vec![
-            (captured_fn("handle_new"), Declared::placed(1, "x#2")),
-            (captured_fn("handle_new"), Declared::placed(2, "x")),
-            (captured_fn("handle_new"), Declared::placed(3, "x")),
+            (captured_fn("handle_new"), 1),
+            (captured_fn("handle_new"), 2),
+            (captured_fn("handle_new"), 3),
         ],
     };
     let generation = plan(&stated, sources()).expect("v2 plans");

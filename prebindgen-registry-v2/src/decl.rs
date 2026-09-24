@@ -1,11 +1,10 @@
 //! What a binding declared, in terms neither language owns.
 //!
 //! A frontend turns its own declaration storage into these — one [`Declaration`]
-//! per thing the user asked for, each paired with what the target recorded it
-//! as, in the list it hands [`generate`](crate::generate). The declaration
-//! says which entity, in the source's own words; the choice beside it says
-//! what the binding wants made of it, and the engine hands that choice back
-//! with every question it asks about the output.
+//! per thing the user asked for, each recorded in its
+//! [`Binding`](crate::binding::Binding) with the form it is exposed in. The
+//! declaration says which entity, in the source's own words; the form beside
+//! it says what the binding wants made of it.
 
 use prebindgen_flat::flat::{Element, Flat, TypeKey};
 
@@ -52,12 +51,11 @@ use prebindgen_flat::flat::{Element, Flat, TypeKey};
 /// A binding may expose one entity more than once — `stamp_sum` as a Kotlin
 /// `fun` in one package and as a `val` read through it, `Stamp` as a data
 /// class and as a handle. What tells those apart is not the declaration but
-/// what the target recorded beside it: an [`OutputId`](crate::plan::OutputId)
-/// stands for the pair, and that is what an outcome is keyed by, what a
-/// [`Position`](crate::target::Position) is rooted at, and what a target's
-/// [`Requirement`](crate::target::Requirement) resolves to. Two outputs of one
-/// entity therefore print alike — what tells them apart is the target's own
-/// vocabulary, which this engine does not speak.
+/// the form recorded beside it: an [`OutputId`](crate::binding::OutputId)
+/// stands for the pair, and that is what an outcome is keyed by, what a rule
+/// at a position is rooted at, and what a value of the type requires. Two
+/// outputs of one entity therefore print alike — what tells them apart is the
+/// target's own vocabulary, which this engine does not speak.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Declaration {
     /// A function, exported through a wrapper that calls it — as a foreign
