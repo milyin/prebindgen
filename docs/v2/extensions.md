@@ -312,9 +312,9 @@ Each wire type has a kind — JNI's `Long`, `Int`, `Byte`, …, `Object`; C's
 pub enum SourceContainer { Vec, Slice, Array, Option, Box }
 
 pub struct Container<T: Target> {
-    pub source: SourceContainer,     // Which Rust container it serves.
-    pub kind: WireKindOf<T>,         // The result's kind, whose `parts()` are the
-                                     // element kinds it holds.
+    pub source: SourceContainer,     // Which Rust container it serves,
+    pub element: WireKindOf<T>,      // for elements of exactly this kind: the key.
+    pub kind: WireKindOf<T>,         // The result's kind.
     pub role: String,                // Its naming role: `vec`, `opt`.
     pub ops: ContainerOps<T::Op>,    // A sequence: len, get, build. An optional:
                                      // test, extract, inject.
@@ -339,8 +339,12 @@ or absent. A value of a container type takes, in order:
    and the registry looks up the container declared for this Rust container
    and the element's wire kind.
 
-A missing entry refuses the value, naming the Rust container and the wire
-kind: `Vec` of `Aggregate` has no container in JNI.
+The key is exact: one `SourceContainer` and one element kind, so a container
+serving `Long` and `Byte` elements is two entries. A binding declaring two
+containers for one key fails the build with invalid input, before anything
+is planned, so a lookup has at most one answer. A missing entry refuses the
+value, naming the Rust container and the wire kind: `Vec` of `Aggregate` has
+no container in JNI.
 
 For JNI the table is:
 
@@ -359,8 +363,9 @@ and for C:
 | `Option` | a kind with no niche | `{ bool present; E value }` | a `repr(C)` struct per instance |
 
 Three things follow from matching the element's wire kind rather than a
-Rust pattern. Two entries cannot overlap, since each covers one container
-level and one kind, so there is no precedence among them to define. An
+Rust pattern. Two entries cannot overlap, since each is keyed by one container
+and one kind and a repeated key is refused, so there is no precedence among
+them to define. An
 element that changes the container's Rust type is simply a different key:
 `Vec<i64>` becomes a `jlongArray` and `Vec<Stamp>` a `jobjectArray`. And an
 override on an element flows up by itself: a rule at `param xs.element` that
@@ -551,8 +556,28 @@ plans the chosen arm; out of Rust it matches on the value's variant and
 writes that arm's tag and members.
 
 The wire type holds the tag and every arm's members, and only the chosen arm's
-are read. An arm not chosen holds its wire type's null or zero, which the
-registry writes and never reads. A choice's niche is any tag no arm uses, so
+are read. An arm not chosen still has to hold valid values: a Rust struct
+field of a type with no zero — a `NonZeroU64`, a reference, a C enum with no
+value numbered 0 — cannot be filled with zeroes, even where nothing reads it.
+So a wire type states the value it holds when unused, as one more fact of the
+target's:
+
+```rust
+pub trait WireType {
+    // … kind, rust …
+    /// An expression a member of this wire type can hold where nothing reads
+    /// it — `0`, `::core::ptr::null_mut()`, `JObject::null()` — or `None` for
+    /// one that has no such value.
+    fn inactive(&self) -> Option<syn::Expr> { None }
+}
+```
+
+The registry writes each unchosen arm's members from their wire types'
+`inactive`, never from `mem::zeroed`, and refuses a choice with an arm that
+can go unchosen while one of its members has none, as
+`unsupported.choice.no_inactive_value`, naming the member. A C enum states
+the value numbered 0 if it has one; a nested aggregate states a value built
+from its own members'. A choice's niche is any tag no arm uses, so
 an `Option<KeyExpr>` needs no container: its absent value is tag −1, which is
 the `encodingSel = -1` the SDKs pass for "no encoding" today. That is the
 `Integer` niche above.
@@ -598,7 +623,7 @@ pub trait Target {
 | Holder | Stated by | Holds |
 | --- | --- | --- |
 | an aggregate wire type | its kind's `parts()` | its members |
-| a container | its kind's `parts()` | its elements |
+| a container | its `element`, one kind per declared container | its elements |
 | a choice | its wire type's kind's `parts()` | the tag and each arm's members |
 | a callback's wire type | its kind's `parts()` | its arguments |
 | a wrapper | `Target::PARAMS`, `Target::RETURNS` | its parameters, its return |
