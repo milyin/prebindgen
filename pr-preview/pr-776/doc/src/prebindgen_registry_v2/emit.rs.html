@@ -160,15 +160,15 @@
 <a href=#160 id=160 data-nosnippet>160</a>            .and_then(|name| flat.unit_enum(<span class="kw-2">&amp;</span>name));
 <a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">let </span>root = values.inputs.first().map(|root| <span class="kw-2">&amp;</span>nodes[root.<span class="number">0</span>]);
 <a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span><span class="kw-2">mut </span>used: Vec&lt;(WireTypeId, bool)&gt; = <span class="kw">match </span>binding.in_representation_of(<span class="kw-2">*</span>into_rust) {
-<a href=#163 id=163 data-nosnippet>163</a>            InRepresentation::Whole(codec) =&gt; <span class="macro">vec!</span>[(codec.wire_type, <span class="bool-val">false</span>)],
+<a href=#163 id=163 data-nosnippet>163</a>            InRepresentation::Whole { wire_type, .. } =&gt; <span class="macro">vec!</span>[(<span class="kw-2">*</span>wire_type, <span class="bool-val">false</span>)],
 <a href=#164 id=164 data-nosnippet>164</a>            InRepresentation::Parts { wire_type, .. }
 <a href=#165 id=165 data-nosnippet>165</a>            | InRepresentation::Callable { wire_type, .. } =&gt; <span class="macro">vec!</span>[(<span class="kw-2">*</span>wire_type, <span class="bool-val">true</span>)],
 <a href=#166 id=166 data-nosnippet>166</a>            InRepresentation::Unsupported(<span class="kw">_</span>) =&gt; Vec::new(),
 <a href=#167 id=167 data-nosnippet>167</a>        };
-<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(OutRepresentation::Whole { codec, .. }) =
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(OutRepresentation::Whole { wire_type, .. }) =
 <a href=#169 id=169 data-nosnippet>169</a>            out_of_rust.map(|id| binding.out_representation_of(id))
 <a href=#170 id=170 data-nosnippet>170</a>        {
-<a href=#171 id=171 data-nosnippet>171</a>            used.push((codec.wire_type, <span class="bool-val">false</span>));
+<a href=#171 id=171 data-nosnippet>171</a>            used.push((<span class="kw-2">*</span>wire_type, <span class="bool-val">false</span>));
 <a href=#172 id=172 data-nosnippet>172</a>        }
 <a href=#173 id=173 data-nosnippet>173</a>        <span class="kw">for </span>(wire_type, with_parts) <span class="kw">in </span>used {
 <a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">if </span>!written.insert(wire_type) {
