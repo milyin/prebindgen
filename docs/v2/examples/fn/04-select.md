@@ -36,7 +36,7 @@ the representation the later stages compare:
                      +-- field nanos --> i64, IntoRust,  relation: atomic
 
    return      --> i64, OutOfRust
-                     relation: atomic          // a `Terminal` representation
+                     relation: atomic          // a `Whole` representation
 ```
 
 Nothing in the tree says how a field is read. It says that `Stamp` will be built

@@ -6,7 +6,8 @@ use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
     binding::{
-        Binding, FunctionForm, OutputForm, Representation, Scope, TargetOp, WireKind, WireType,
+        Binding, FunctionForm, InRepresentation, OutRepresentation, OutputForm, Scope, TargetOp,
+        WireKind, WireType,
     },
     decl::Declaration,
     outcome::EngineError,
@@ -119,20 +120,23 @@ struct Stated {
 /// Run the stated binding through the engine over [`sources`].
 fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, EngineError> {
     let mut binding: Binding<Nothing> = Binding::new();
-    let refused = binding.representation(Representation::Unsupported(Unsupported::new(
+    let reason = Unsupported::new(
         "unsupported.nothing.representation",
         "this target carries nothing",
-    )));
+    );
+    let refused_in = binding.in_representation(InRepresentation::Unsupported(reason.clone()));
+    let refused_out = binding.out_representation(OutRepresentation::Unsupported(reason));
     for key in ["Handle", "&Handle"] {
-        binding.rule(
-            Scope::Type(prebindgen_flat::TypeKey::parse(key).expect("a type key")),
-            refused,
-        );
+        let key = prebindgen_flat::TypeKey::parse(key).expect("a type key");
+        binding.rule(Scope::Type(key.clone()), refused_in);
+        binding.rule(Scope::Type(key), refused_out);
     }
     for (declaration, id) in &stated.declared {
         let form = match declaration {
             Declaration::Type(_) | Declaration::Callback(_) => OutputForm::Type {
-                representation: refused,
+                into_rust: refused_in,
+                // A callback only crosses into Rust.
+                out_of_rust: matches!(declaration, Declaration::Type(_)).then_some(refused_out),
                 release: None,
                 meta: *id,
             },

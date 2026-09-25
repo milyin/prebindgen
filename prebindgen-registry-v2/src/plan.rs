@@ -14,8 +14,9 @@ use prebindgen_flat::{
 
 use crate::{
     binding::{
-        Binding, Failure, FailureRoute, FunctionFormOf, Operation, OutputForm, OutputId, ReprId,
-        Representation, Scope, Step, ValuePath, Via, WireKind, WireKindOf, WireType, WireTypeId,
+        Binding, Codec, Failure, FailureRoute, FunctionFormOf, InRepresentation, Operation,
+        OutRepresentation, OutputForm, OutputId, ReprId, Scope, Step, ValuePath, Via, WireKind,
+        WireKindOf, WireType, WireTypeId,
     },
     body::{BodyBuilder, Instr, NodeBody, Operand, Stmt, ValueId},
     decl::Declaration,
@@ -34,7 +35,7 @@ pub struct ValuePlan {
     pub crossing: Crossing,
     /// How the Rust value is built or read, as its representation names it.
     pub relation: Relation,
-    /// The representation it crosses as.
+    /// The representation it crosses as, of its direction.
     pub representation: ReprId,
     /// The wire type it crosses in, in this direction.
     pub wire_type: WireTypeId,
@@ -230,33 +231,46 @@ impl Planned {
     }
 }
 
-/// The binding's rules, by scope: a type output's representation is the rule
-/// at its root, beside the rules the binding recorded.
+/// The binding's rules, by scope and direction: a type output's
+/// representations are the rules at its root, beside the rules the binding
+/// recorded.
 struct Rules {
-    /// Scope → the recorded rule's index, `None` for a type output's own, and
-    /// the representation.
-    by_scope: HashMap<Scope, (Option<usize>, ReprId)>,
+    /// Scope and direction → the recorded rule's index, `None` for a type
+    /// output's own, and the representation.
+    by_scope: HashMap<(Scope, Direction), (Option<usize>, ReprId)>,
 }
 
 impl Rules {
     fn new<T: Target>(binding: &Binding<T>) -> Result<Self, PlanningError> {
         let mut by_scope = HashMap::new();
         for (index, (_, form)) in binding.outputs().iter().enumerate() {
-            if let OutputForm::Type { representation, .. } = form {
-                by_scope.insert(
-                    Scope::At(binding.output_id(index), ValuePath::root()),
-                    (None, *representation),
-                );
+            if let OutputForm::Type {
+                into_rust,
+                out_of_rust,
+                ..
+            } = form
+            {
+                let root = Scope::At(binding.output_id(index), ValuePath::root());
+                let exposed =
+                    std::iter::once(ReprId::In(*into_rust)).chain(out_of_rust.map(ReprId::Out));
+                for representation in exposed {
+                    by_scope.insert(
+                        (root.clone(), representation.direction()),
+                        (None, representation),
+                    );
+                }
             }
         }
         for (index, (scope, representation)) in binding.rules().iter().enumerate() {
+            let direction = representation.direction();
             if by_scope
-                .insert(scope.clone(), (Some(index), *representation))
+                .insert((scope.clone(), direction), (Some(index), *representation))
                 .is_some()
             {
                 return Err(PlanningError::InvalidInput(format!(
-                    "two rules cover {}: the binding says two things about one value",
-                    describe_scope(binding, scope)
+                    "two rules cover {} {}: the binding says two things about one value",
+                    describe_scope(binding, scope),
+                    describe(direction)
                 )));
             }
         }
@@ -264,17 +278,27 @@ impl Rules {
     }
 
     /// The representation of the value at `path` inside `output`, of type
-    /// `ty`: the rule at its position, else the rule for its type.
+    /// `ty`, crossing in `direction`: the rule at its position, else the rule
+    /// for its type.
     fn lookup(
         &self,
         output: OutputId,
         path: &ValuePath,
         ty: &TypeRef,
+        direction: Direction,
     ) -> Option<(Option<usize>, ReprId)> {
         self.by_scope
-            .get(&Scope::At(output, path.clone()))
-            .or_else(|| self.by_scope.get(&Scope::Type(ty.key())))
+            .get(&(Scope::At(output, path.clone()), direction))
+            .or_else(|| self.by_scope.get(&(Scope::Type(ty.key()), direction)))
             .copied()
+    }
+}
+
+/// How a diagnostic names a direction.
+fn describe(direction: Direction) -> &'static str {
+    match direction {
+        Direction::IntoRust => "into Rust",
+        Direction::OutOfRust => "out of Rust",
     }
 }
 
@@ -394,16 +418,19 @@ impl<'a, T: Target> Run<'a, T> {
             Ok(relations) => relations,
             Err(reason) => return Ok(Planned::refused(reason, position)),
         };
-        let Some((rule, representation)) =
-            self.rules
-                .lookup(position.output, &position.path, &crossing.ty)
-        else {
+        let Some((rule, representation)) = self.rules.lookup(
+            position.output,
+            &position.path,
+            &crossing.ty,
+            crossing.direction,
+        ) else {
             return Ok(Planned::refused(
                 Unsupported::new(
                     "unsupported.conversion.no_rule",
                     format!(
-                        "no rule covers `{}`, and this binding has no representation for it",
-                        crossing.ty.key()
+                        "no rule covers `{}` {}, and this binding has no representation for it",
+                        crossing.ty.key(),
+                        describe(crossing.direction)
                     ),
                 ),
                 position,
@@ -412,29 +439,13 @@ impl<'a, T: Target> Run<'a, T> {
         if let Some(rule) = rule {
             self.used.insert(rule);
         }
-        let relation = match self.binding.representation_of(representation) {
-            Representation::Unsupported(reason) => {
-                return Ok(Planned::refused(reason.clone(), position))
-            }
-            Representation::Terminal { .. } => Relation::Atomic,
-            Representation::Callback { .. } => {
-                // Rust receives a callable; handing one of its own out would
-                // need a foreign closure built around a Rust one, which no
-                // target states yet.
-                if crossing.direction == Direction::OutOfRust {
-                    return Ok(Planned::refused(
-                        Unsupported::new(
-                            "unsupported.callback.out_of_rust",
-                            format!(
-                                "`{}` leaves Rust as a callable; v2 builds callables only \
-                                 into Rust",
-                                crossing.ty.key()
-                            ),
-                        ),
-                        position,
-                    ));
+        let relation = match representation {
+            ReprId::In(id) => match self.binding.in_representation_of(id) {
+                InRepresentation::Unsupported(reason) => {
+                    return Ok(Planned::refused(reason.clone(), position))
                 }
-                match relations
+                InRepresentation::Whole(_) => Relation::Atomic,
+                InRepresentation::Callable { .. } => match relations
                     .iter()
                     .find(|relation| matches!(relation, Relation::Callback(_)))
                 {
@@ -452,25 +463,10 @@ impl<'a, T: Target> Run<'a, T> {
                             position,
                         ))
                     }
-                }
-            }
-            Representation::Product {
-                via: Via::Fields, ..
-            } => {
-                if crossing.direction == Direction::OutOfRust {
-                    return Ok(Planned::refused(
-                        Unsupported::new(
-                            "unsupported.struct.out_of_rust",
-                            format!(
-                                "`{}` leaves Rust as a composed value; v2 has no target \
-                                 construction operation yet",
-                                crossing.ty.key()
-                            ),
-                        ),
-                        position,
-                    ));
-                }
-                match relations
+                },
+                InRepresentation::Parts {
+                    via: Via::Fields, ..
+                } => match relations
                     .iter()
                     .find(|relation| matches!(relation, Relation::Struct(_)))
                 {
@@ -488,8 +484,14 @@ impl<'a, T: Target> Run<'a, T> {
                             position,
                         ))
                     }
+                },
+            },
+            ReprId::Out(id) => match self.binding.out_representation_of(id) {
+                OutRepresentation::Unsupported(reason) => {
+                    return Ok(Planned::refused(reason.clone(), position))
                 }
-            }
+                OutRepresentation::Whole { .. } => Relation::Atomic,
+            },
         };
 
         // Meeting a conversion that is already being resolved is a cycle: a
@@ -569,186 +571,159 @@ impl<'a, T: Target> Run<'a, T> {
             .collect();
         let mut body = BodyBuilder::new();
         let input = body.fresh();
-        let (wire_type, result) = match self.binding.representation_of(representation) {
-            Representation::Terminal {
-                into_rust,
-                out_of_rust,
-            } => {
-                let codec = match crossing.direction {
-                    Direction::IntoRust => into_rust.as_ref(),
-                    Direction::OutOfRust => out_of_rust.as_ref().map(|handout| &handout.codec),
-                };
-                let Some(codec) = codec else {
-                    return Ok(Planned::refused(
-                        Unsupported::new(
-                            "unsupported.conversion.direction",
-                            format!(
-                                "`{}` has no conversion {} in this binding",
-                                crossing.ty.key(),
-                                match crossing.direction {
-                                    Direction::IntoRust => "into Rust",
-                                    Direction::OutOfRust => "out of Rust",
-                                }
-                            ),
-                        ),
-                        position,
-                    ));
-                };
-                let (value, result) = match crossing.direction {
-                    Direction::IntoRust => (Slot::WireType(codec.wire_type), Slot::Source),
-                    Direction::OutOfRust => (Slot::Source, Slot::WireType(codec.wire_type)),
-                };
-                failures.extend(codec.operation.failure().map(|f| f.category));
-                let produced = self.apply(
-                    &mut body,
-                    &codec.operation,
-                    &crossing.ty,
-                    (value, input),
-                    Some(result),
-                    None,
-                    &[],
-                );
-                (codec.wire_type, produced)
-            }
-            Representation::Product {
-                wire_type, read, ..
-            } => {
-                let (wire_type, read) = (*wire_type, read.clone());
-                let strukt = match relation {
-                    Relation::Struct(strukt) => strukt.name.clone(),
-                    Relation::Atomic | Relation::Callback(_) => {
-                        return Err(PlanningError::InternalInvariant(
-                            "a product representation needs a relation with parts".to_string(),
-                        ))
-                    }
-                };
-                // What a wire type can have as its parts is its kind's to say:
-                // a member whose part resolved to a kind it cannot have
-                // refuses the value that would put it there.
-                let outer = self.parts_of(wire_type, crossing)?;
-                for (part, child) in parts.iter().zip(&children) {
-                    let kind = self.kind_of(*child);
-                    if !outer.1.contains(&kind) {
-                        return Ok(Planned::refused(
-                            Unsupported::new(
-                                format!("unsupported.{}.member.{}", T::NAME, kind.name()),
-                                format!(
-                                    "member `{}` of `{}` is {} {}, and {} {} can have only {} \
-                                     parts",
-                                    part.label(),
-                                    crossing.ty.key(),
-                                    article(kind.name()),
-                                    kind.name(),
-                                    article(outer.0.name()),
-                                    outer.0.name(),
-                                    names(outer.1)
-                                ),
-                            ),
-                            &position.child(Step::Field(part.label())),
-                        ));
-                    }
+        let binding = self.binding;
+        let unsupported = || {
+            PlanningError::InternalInvariant(
+                "an unsupported representation reached composition".to_string(),
+            )
+        };
+        let (wire_type, result) = match representation {
+            ReprId::Out(id) => match binding.out_representation_of(id) {
+                OutRepresentation::Whole { codec, .. } => {
+                    self.whole(&mut body, codec, crossing, input, &mut failures)
                 }
-                failures.extend(read.failure().map(|f| f.category));
-                let mut converted = Vec::new();
-                for (part, child) in parts.iter().zip(&children) {
-                    // Everything planned for this part, from the read of the
-                    // member to the last step of its conversion, exists exactly
-                    // where the source field does.
-                    let from = body.len();
-                    let obtained = self.apply(
+                OutRepresentation::Unsupported(_) => return Err(unsupported()),
+            },
+            ReprId::In(id) => match binding.in_representation_of(id) {
+                InRepresentation::Whole(codec) => {
+                    self.whole(&mut body, codec, crossing, input, &mut failures)
+                }
+                InRepresentation::Parts {
+                    wire_type, read, ..
+                } => {
+                    let (wire_type, read) = (*wire_type, read.clone());
+                    let strukt = match relation {
+                        Relation::Struct(strukt) => strukt.name.clone(),
+                        Relation::Atomic | Relation::Callback(_) => {
+                            return Err(PlanningError::InternalInvariant(
+                                "a parts representation needs a relation with parts".to_string(),
+                            ))
+                        }
+                    };
+                    // What a wire type can have as its parts is its kind's to say:
+                    // a member whose part resolved to a kind it cannot have
+                    // refuses the value that would put it there.
+                    let outer = self.parts_of(wire_type, crossing)?;
+                    for (part, child) in parts.iter().zip(&children) {
+                        let kind = self.kind_of(*child);
+                        if !outer.1.contains(&kind) {
+                            return Ok(Planned::refused(
+                                Unsupported::new(
+                                    format!("unsupported.{}.member.{}", T::NAME, kind.name()),
+                                    format!(
+                                        "member `{}` of `{}` is {} {}, and {} {} can have only \
+                                         {} parts",
+                                        part.label(),
+                                        crossing.ty.key(),
+                                        article(kind.name()),
+                                        kind.name(),
+                                        article(outer.0.name()),
+                                        outer.0.name(),
+                                        names(outer.1)
+                                    ),
+                                ),
+                                &position.child(Step::Field(part.label())),
+                            ));
+                        }
+                    }
+                    failures.extend(read.failure().map(|f| f.category));
+                    let mut converted = Vec::new();
+                    for (part, child) in parts.iter().zip(&children) {
+                        // Everything planned for this part, from the read of the
+                        // member to the last step of its conversion, exists exactly
+                        // where the source field does.
+                        let from = body.len();
+                        let obtained = self.apply(
+                            &mut body,
+                            &read,
+                            &crossing.ty,
+                            (Slot::WireType(wire_type), input),
+                            Some(Slot::WireType(self.nodes[child.0].wire_type)),
+                            Some(part.clone()),
+                            &[],
+                        );
+                        let child_body = self.nodes[child.0].body.clone();
+                        converted.push(child_body.inline(obtained, &mut body));
+                        body.condition(from, &part.conditions);
+                    }
+                    let result = body.fresh();
+                    body.push(Instr::Construct {
+                        name: strukt,
+                        parts: converted,
+                        result,
+                    });
+                    (wire_type, result)
+                }
+                InRepresentation::Callable {
+                    wire_type,
+                    capture,
+                    invoke,
+                    routes,
+                } => {
+                    let (wire_type, capture, invoke, routes) =
+                        (*wire_type, capture.clone(), invoke.clone(), routes.clone());
+                    if let Some(refusal) = self.check_callback(
+                        crossing, position, wire_type, &parts, &children, &invoke, &routes,
+                    )? {
+                        return Ok(Planned::Unsupported(refusal));
+                    }
+                    // What a call raises stays inside the closure, which routes
+                    // it; the wrapper sees only what capturing can raise.
+                    failures = capture.failure().map(|f| f.category).into_iter().collect();
+                    // Capturing runs before any call, and is told what the calls
+                    // will carry.
+                    let arg_wire_types: Vec<(WireTypeId, Option<ValueId>)> = children
+                        .iter()
+                        .map(|child| (self.nodes[child.0].wire_type, None))
+                        .collect();
+                    let captured = self.apply(
                         &mut body,
-                        &read,
+                        &capture,
                         &crossing.ty,
                         (Slot::WireType(wire_type), input),
-                        Some(Slot::WireType(self.nodes[child.0].wire_type)),
-                        Some(part.clone()),
-                        &[],
+                        Some(Slot::Captured),
+                        None,
+                        &arg_wire_types,
                     );
-                    let child_body = self.nodes[child.0].body.clone();
-                    converted.push(child_body.inline(obtained, &mut body));
-                    body.condition(from, &part.conditions);
+                    // An identity capture leaves the wire type itself to be moved
+                    // into the closure.
+                    let captured_slot = match captured == input {
+                        true => Slot::WireType(wire_type),
+                        false => Slot::Captured,
+                    };
+                    let from = body.len();
+                    let params: Vec<(ValueId, TypeRef)> = parts
+                        .iter()
+                        .map(|part| (body.fresh(), part.ty.clone()))
+                        .collect();
+                    let mut wires = Vec::new();
+                    for ((param, _), child) in params.iter().zip(&children) {
+                        let child_body = self.nodes[child.0].body.clone();
+                        let wire = child_body.inline(*param, &mut body);
+                        wires.push((self.nodes[child.0].wire_type, Some(wire)));
+                    }
+                    self.apply(
+                        &mut body,
+                        &invoke,
+                        &crossing.ty,
+                        (captured_slot, captured),
+                        None,
+                        None,
+                        &wires,
+                    );
+                    let instrs = body.split_off(from);
+                    let result = body.fresh();
+                    body.push(Instr::Closure {
+                        representation: id,
+                        captured,
+                        params,
+                        instrs,
+                        result,
+                    });
+                    (wire_type, result)
                 }
-                let result = body.fresh();
-                body.push(Instr::Construct {
-                    name: strukt,
-                    parts: converted,
-                    result,
-                });
-                (wire_type, result)
-            }
-            Representation::Callback {
-                wire_type,
-                capture,
-                invoke,
-                routes,
-            } => {
-                let (wire_type, capture, invoke, routes) =
-                    (*wire_type, capture.clone(), invoke.clone(), routes.clone());
-                if let Some(refusal) = self.check_callback(
-                    crossing, position, wire_type, &parts, &children, &invoke, &routes,
-                )? {
-                    return Ok(Planned::Unsupported(refusal));
-                }
-                // What a call raises stays inside the closure, which routes
-                // it; the wrapper sees only what capturing can raise.
-                failures = capture.failure().map(|f| f.category).into_iter().collect();
-                // Capturing runs before any call, and is told what the calls
-                // will carry.
-                let arg_wire_types: Vec<(WireTypeId, Option<ValueId>)> = children
-                    .iter()
-                    .map(|child| (self.nodes[child.0].wire_type, None))
-                    .collect();
-                let captured = self.apply(
-                    &mut body,
-                    &capture,
-                    &crossing.ty,
-                    (Slot::WireType(wire_type), input),
-                    Some(Slot::Captured),
-                    None,
-                    &arg_wire_types,
-                );
-                // An identity capture leaves the wire type itself to be moved
-                // into the closure.
-                let captured_slot = match captured == input {
-                    true => Slot::WireType(wire_type),
-                    false => Slot::Captured,
-                };
-                let from = body.len();
-                let params: Vec<(ValueId, TypeRef)> = parts
-                    .iter()
-                    .map(|part| (body.fresh(), part.ty.clone()))
-                    .collect();
-                let mut wires = Vec::new();
-                for ((param, _), child) in params.iter().zip(&children) {
-                    let child_body = self.nodes[child.0].body.clone();
-                    let wire = child_body.inline(*param, &mut body);
-                    wires.push((self.nodes[child.0].wire_type, Some(wire)));
-                }
-                self.apply(
-                    &mut body,
-                    &invoke,
-                    &crossing.ty,
-                    (captured_slot, captured),
-                    None,
-                    None,
-                    &wires,
-                );
-                let instrs = body.split_off(from);
-                let result = body.fresh();
-                body.push(Instr::Closure {
-                    representation,
-                    captured,
-                    params,
-                    instrs,
-                    result,
-                });
-                (wire_type, result)
-            }
-            Representation::Unsupported(_) => {
-                return Err(PlanningError::InternalInvariant(
-                    "an unsupported representation reached composition".to_string(),
-                ))
-            }
+                InRepresentation::Unsupported(_) => return Err(unsupported()),
+            },
         };
 
         failures.sort();
@@ -770,6 +745,33 @@ impl<'a, T: Target> Run<'a, T> {
         });
         self.cache.insert(key, id);
         Ok(Planned::Ready(id))
+    }
+
+    /// A whole value's conversion: one operation between its wire type and
+    /// its source type, in the crossing's direction.
+    fn whole(
+        &mut self,
+        body: &mut BodyBuilder,
+        codec: &Codec<T::Op>,
+        crossing: &Crossing,
+        input: ValueId,
+        failures: &mut Vec<FailureCategory>,
+    ) -> (WireTypeId, ValueId) {
+        let (value, result) = match crossing.direction {
+            Direction::IntoRust => (Slot::WireType(codec.wire_type), Slot::Source),
+            Direction::OutOfRust => (Slot::Source, Slot::WireType(codec.wire_type)),
+        };
+        failures.extend(codec.operation.failure().map(|f| f.category));
+        let produced = self.apply(
+            body,
+            &codec.operation,
+            &crossing.ty,
+            (value, input),
+            Some(result),
+            None,
+            &[],
+        );
+        (codec.wire_type, produced)
     }
 
     /// The kind of the wire type a planned value crosses in.
@@ -956,9 +958,10 @@ fn spell(ty: &syn::Type) -> String {
 /// before anything is planned.
 ///
 /// A rule at a position the output does not have — a parameter the function
-/// does not take, a field of a value nothing reads through its fields — would
-/// otherwise sit unused, and the binding would believe it had configured
-/// something.
+/// does not take, a field of a value nothing reads through its fields — or a
+/// rule whose representation serves the other direction than the value there
+/// crosses in would otherwise sit unused, and the binding would believe it had
+/// configured something.
 fn check_paths<'b, T: Target>(
     binding: &'b Binding<T>,
     rules: &Rules,
@@ -981,19 +984,26 @@ fn check_paths<'b, T: Target>(
             return Err(invalid("the binding has no such output".to_string()));
         };
         let mut steps = path.0.iter();
+        // The direction the value reached so far crosses in: fixed from a
+        // function's parameter or return on, and both ways at a type's root.
+        let mut direction = None;
         let mut ty = match declaration {
             Declaration::Function(ident) => {
                 let function = flat
                     .function(&ident.to_string())
                     .ok_or_else(|| invalid("its function is not in the model".to_string()))?;
                 match steps.next() {
-                    Some(Step::Param(name)) => function
-                        .params
-                        .iter()
-                        .find(|param| param_name(&param.name) == *name)
-                        .map(|param| param.ty.clone())
-                        .ok_or_else(|| invalid(format!("the function takes no `{name}`")))?,
+                    Some(Step::Param(name)) => {
+                        direction = Some(Direction::IntoRust);
+                        function
+                            .params
+                            .iter()
+                            .find(|param| param_name(&param.name) == *name)
+                            .map(|param| param.ty.clone())
+                            .ok_or_else(|| invalid(format!("the function takes no `{name}`")))?
+                    }
                     Some(Step::Return) if !matches!(function.ret.kind(), TypeKind::Unit) => {
+                        direction = Some(Direction::OutOfRust);
                         function.ret.clone()
                     }
                     Some(Step::Return) => {
@@ -1014,16 +1024,23 @@ fn check_paths<'b, T: Target>(
         let mut walked = ValuePath(path.0[..path.0.len() - steps.len()].to_vec());
         for step in steps {
             // The representation the value there takes decides which steps
-            // lead into it.
-            let taken = rules
-                .lookup(*output, &walked, &ty)
-                .map(|(_, representation)| binding.representation_of(representation));
+            // lead into it. Only a value crossing into Rust has parts: out of
+            // Rust, every value crosses whole.
+            let taken = match direction {
+                Some(Direction::OutOfRust) => None,
+                _ => rules
+                    .lookup(*output, &walked, &ty, Direction::IntoRust)
+                    .and_then(|(_, representation)| match representation {
+                        ReprId::In(id) => Some(binding.in_representation_of(id)),
+                        ReprId::Out(_) => None,
+                    }),
+            };
             if let Step::Arg(index) = step {
                 let args = match ty.kind() {
                     TypeKind::Callback { args } => args,
                     _ => return Err(invalid(format!("`{}` takes no arguments", ty.key()))),
                 };
-                if !matches!(taken, Some(Representation::Callback { .. })) {
+                if !matches!(taken, Some(InRepresentation::Callable { .. })) {
                     return Err(invalid(format!(
                         "`{}` is not represented as a callback there",
                         ty.key()
@@ -1033,6 +1050,8 @@ fn check_paths<'b, T: Target>(
                     .get(*index)
                     .cloned()
                     .ok_or_else(|| invalid(format!("`{}` has no argument {index}", ty.key())))?;
+                // Rust hands the callable its arguments.
+                direction = Some(Direction::OutOfRust);
                 walked = walked.then(step.clone());
                 continue;
             }
@@ -1041,7 +1060,7 @@ fn check_paths<'b, T: Target>(
             };
             let through_fields = matches!(
                 taken,
-                Some(Representation::Product {
+                Some(InRepresentation::Parts {
                     via: Via::Fields,
                     ..
                 })
@@ -1067,7 +1086,18 @@ fn check_paths<'b, T: Target>(
                 _ => None,
             };
             ty = field.ok_or_else(|| invalid(format!("`{}` has no field `{label}`", ty.key())))?;
+            direction = Some(Direction::IntoRust);
             walked = walked.then(step.clone());
+        }
+        if let Some(direction) = direction {
+            if direction != representation.direction() {
+                return Err(invalid(format!(
+                    "the value there crosses {}, and the rule's {representation} serves values \
+                     crossing {}",
+                    describe(direction),
+                    describe(representation.direction())
+                )));
+            }
         }
         covered.push((*representation, ty.key(), scope));
     }
@@ -1098,21 +1128,35 @@ fn check_one_type_per_representation<T: Target>(
         binding
             .outputs()
             .iter()
-            .filter_map(|(declaration, form)| match (declaration, form) {
+            .flat_map(|(declaration, form)| match (declaration, form) {
                 (
                     Declaration::Type(key) | Declaration::Callback(key),
-                    OutputForm::Type { representation, .. },
-                ) => Some((*representation, key.clone(), format!("`{declaration}`"))),
-                _ => None,
+                    OutputForm::Type {
+                        into_rust,
+                        out_of_rust,
+                        ..
+                    },
+                ) => std::iter::once(ReprId::In(*into_rust))
+                    .chain(out_of_rust.map(ReprId::Out))
+                    .map(|representation| (representation, key.clone(), format!("`{declaration}`")))
+                    .collect(),
+                _ => Vec::new(),
             });
     let at = at
         .into_iter()
         .map(|(representation, key, scope)| (representation, key, describe_scope(binding, scope)));
     for (representation, key, place) in type_rules.chain(outputs).chain(at) {
-        if matches!(
-            binding.representation_of(representation),
-            Representation::Unsupported(_)
-        ) {
+        let refused = match representation {
+            ReprId::In(id) => matches!(
+                binding.in_representation_of(id),
+                InRepresentation::Unsupported(_)
+            ),
+            ReprId::Out(id) => matches!(
+                binding.out_representation_of(id),
+                OutRepresentation::Unsupported(_)
+            ),
+        };
+        if refused {
             continue;
         }
         match serves.get(&representation) {
@@ -1293,12 +1337,12 @@ pub fn generate<T: Target>(
     // A rule for a type no planned value had. Not an error: a type rule is a
     // default for many values, and a scalar table covers kinds a binding may
     // never mention.
-    let unused_rules: Vec<Scope> = binding
+    let unused_rules: Vec<(Scope, ReprId)> = binding
         .rules()
         .iter()
         .enumerate()
         .filter(|(index, (scope, _))| matches!(scope, Scope::Type(_)) && !run.used.contains(index))
-        .map(|(_, (scope, _))| scope.clone())
+        .map(|(_, rule)| rule.clone())
         .collect();
 
     // Planning is over: the working state hands over its tables, and the model
@@ -1384,24 +1428,30 @@ fn retain<T: Target>(
     outcomes: &mut BTreeMap<OutputId, Outcome>,
 ) {
     // Every type and callback output, by the name a value of it requires it
-    // under, with the representation it exposes — none for one the frontend
+    // under, with the representations it exposes — none for one the frontend
     // refused, which a value of the type still requires, and so goes down
     // with.
-    let by_name: BTreeMap<String, Vec<(OutputId, Option<ReprId>)>> = binding
+    let by_name: BTreeMap<String, Vec<(OutputId, Vec<ReprId>)>> = binding
         .outputs()
         .iter()
         .enumerate()
         .filter_map(|(index, (declaration, form))| {
-            let representation = match form {
-                OutputForm::Type { representation, .. } => Some(*representation),
-                _ => None,
+            let representations = match form {
+                OutputForm::Type {
+                    into_rust,
+                    out_of_rust,
+                    ..
+                } => std::iter::once(ReprId::In(*into_rust))
+                    .chain(out_of_rust.map(ReprId::Out))
+                    .collect(),
+                _ => Vec::new(),
             };
             let name = match declaration {
                 Declaration::Type(_) => declaration.entity_name()?,
                 Declaration::Callback(key) => key.as_str().to_string(),
                 _ => return None,
             };
-            Some((name, (binding.output_id(index), representation)))
+            Some((name, (binding.output_id(index), representations)))
         })
         .fold(BTreeMap::new(), |mut all, (name, id)| {
             all.entry(name).or_default().push(id);
@@ -1442,12 +1492,8 @@ fn retain<T: Target>(
         // that, one the frontend refused, whose skip the value inherits.
         let found = declared
             .iter()
-            .find(|(_, representation)| *representation == Some(plan.representation))
-            .or_else(|| {
-                declared
-                    .iter()
-                    .find(|(_, representation)| representation.is_none())
-            })
+            .find(|(_, exposed)| exposed.contains(&plan.representation))
+            .or_else(|| declared.iter().find(|(_, exposed)| exposed.is_empty()))
             .map(|(output, _)| *output);
         Some(found.ok_or_else(|| {
             let explanation = match declared {
@@ -1520,12 +1566,15 @@ fn plan_callback<T: Target>(
 ) -> Result<Result<Emitted<T::Op>, Refusal>, PlanningError> {
     let root = Position::root(id, declaration);
     match form {
-        OutputForm::Type { release: None, .. } => {}
         OutputForm::Type {
-            release: Some(_), ..
-        } => {
+            out_of_rust: None,
+            release: None,
+            ..
+        } => {}
+        OutputForm::Type { .. } => {
             return Err(PlanningError::InvalidInput(format!(
-                "`{declaration}` is a callback, and a callback has nothing to release"
+                "`{declaration}` is a callback, which crosses only into Rust: it has nothing \
+                 to hand out or release"
             )))
         }
         OutputForm::Unsupported(reason) => return Ok(Err(Refusal::at(reason.clone(), &root))),
@@ -1947,12 +1996,12 @@ fn plan_type<T: Target>(
             "`{declaration}` was routed to the type planner"
         )));
     };
-    let (representation, release_form) = match form {
+    let (out_of_rust, release_form) = match form {
         OutputForm::Type {
-            representation,
+            out_of_rust,
             release,
             ..
-        } => (*representation, release.as_ref()),
+        } => (*out_of_rust, release.as_ref()),
         OutputForm::Unsupported(reason) => return Ok(Err(Refusal::at(reason.clone(), &root))),
         OutputForm::Function { .. } => {
             return Err(PlanningError::InvalidInput(format!(
@@ -2014,11 +2063,8 @@ fn plan_type<T: Target>(
         Planned::Ready(id) => id,
         Planned::Unsupported(refusal) => return Ok(Err(refusal)),
     };
-    let release = match run.binding.representation_of(representation) {
-        Representation::Terminal {
-            out_of_rust: Some(handout),
-            ..
-        } => handout.release.clone(),
+    let release = match out_of_rust.map(|id| run.binding.out_representation_of(id)) {
+        Some(OutRepresentation::Whole { release, .. }) => release.clone(),
         _ => None,
     };
     let mut given = None;

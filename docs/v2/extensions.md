@@ -118,9 +118,12 @@ a different treatment requires an explicit conversion role.
 A struct relation is implicit — the registry registers it for any struct the
 source model describes. A constructor or projector relation is explicit: it
 names a function, so a frontend declaration has to say which. It says so in
-the `Via` of a `Product` representation in a
+the `Via` of a `Parts` representation in a
 [conversion rule](stages/03-requests.md#conversion-rules), which gains one
-variant per relation:
+variant per relation. Into Rust, `Parts` builds the value through its `Via`;
+out of Rust, an `OutRepresentation::Parts` — the counterpart of the into-Rust
+one, with a `build` operation where that one has `read` — takes it apart
+through its own:
 
 ```rust
 pub enum Relation {
@@ -149,7 +152,7 @@ Pinning the constructor for `Stamp` is a rule recorded with the request, and it
 changes what the parts are without changing anything else:
 
 ```text
-rule:      Type(Stamp) -> Product { via: Construct(stamp_from_millis), wire type, read, build }
+rule:      Type(Stamp), into Rust -> Parts { via: Construct(stamp_from_millis), wire type, read }
 relation:  Relation::Construct, over the checked function view, registered for Stamp
 parts:     millis: i64, addressed as `….arg millis`
 ```
@@ -410,7 +413,7 @@ pub enum Niche {
     Integer(i64), // Another integer, such as a tag no arm of a choice uses.
 }
 
-// On `Representation::Terminal` and `Representation::Product`:
+// On an out-of-Rust `Whole` and `Parts`, which produce the value:
 pub niche: Option<Niche>,
 ```
 
@@ -493,14 +496,14 @@ a JNI operation the writer spells from the same feed.
 | --- | --- | --- |
 | C, a slice parameter | `xs: &[i64]` takes the slice container, carried in `slice_i64 { ptr, len }`; the form flattens `param xs` | `xs_ptr: *const i64, xs_len: usize` |
 | C, a flattened return | the value's aggregate wire type; the form flattens `return` with `OutParameters` | one `*mut` out-parameter per member |
-| JNI, `expand_return(Ledger)` | a `Product` over a Rust-only aggregate of the parts the declared accessors read; the form flattens `return` with `Callback` | `build: JObject` in, the callback's result out |
+| JNI, `expand_return(Ledger)` | an out-of-Rust `Parts` over a Rust-only aggregate of the parts the declared accessors read; the form flattens `return` with `Callback` | `build: JObject` in, the callback's result out |
 
 Neither the slice container nor a type's other representations know about
 the flattening: everywhere else a `Ledger` is still carried as its rules say.
 
 JNI's `expand_param` is the input side of the same idea. With one variant —
 one way to build the parameter, such as `zbytes_new_from_vec(Vec<u8>)` — it is
-a `Product` through that constructor's relation over a Rust-only aggregate of
+an into-Rust `Parts` through that constructor's relation over a Rust-only aggregate of
 its arguments, flattened like any other parameter. With several it is a
 [choice](#choices).
 
@@ -525,33 +528,35 @@ allocated per message, or a declared key expression's wire optimisation.
 A Rust enum with payloads crosses the same way in the other direction:
 `RecoveryMode` and `InstrumentationTimestamp` are sealed classes in
 zenoh-flat-jni, delivered as whichever variant the value is. So a choice is
-one more representation, not a parameter feature:
+one more representation in each direction, not a parameter feature:
 
 ```rust
-pub enum Representation<T: Target> {
-    // … Terminal, Product, Unsupported …
+pub enum InRepresentation<T: Target> {
+    // … Whole, Parts, Callable, Unsupported …
     /// One of several representations of the same type, and a tag saying which.
     Choice {
-        tag: WireTypeId,     // The tag's wire type: a `jint`, a C `int`.
-        arms: Vec<ReprId>,  // Each arm is a representation of this same type.
+        tag: WireTypeId,       // The tag's wire type: a `jint`, a C `int`.
+        arms: Vec<InReprId>,   // Each arm is a representation of this same type.
         wire_type: WireTypeId, // An aggregate: the tag, then one member per arm.
     },
 }
+// And `OutRepresentation::Choice`, the same over `Vec<OutReprId>`.
 ```
 
-Each arm is an ordinary representation of the value's own type, so an arm is
-whatever a representation can be:
+Each arm is an ordinary representation of the value's own type, of the
+choice's direction, so an arm is whatever a representation of that direction
+can be:
 
-| Arm | Its representation | Direction |
+| Arm | Into Rust | Out of Rust |
 | --- | --- | --- |
-| built through a constructor, `keyexpr_new_try_from(String)` | a `Product` through `Via::Construct(keyexpr_new_try_from)` | into Rust only |
-| the value itself, as a handle | the type's handle `Terminal` | both |
-| one variant of a Rust enum, `RecoveryMode::Heartbeat` | a `Product` through `Via::Variant(Heartbeat)`, its fields as parts | both |
+| built through a constructor, `keyexpr_new_try_from(String)` | `Parts` through `Via::Construct(keyexpr_new_try_from)` | none: a constructor only builds |
+| the value itself, as a handle | the type's handle `Whole` | the type's handle `Whole` |
+| one variant of a Rust enum, `RecoveryMode::Heartbeat` | `Parts` through `Via::Variant(Heartbeat)`, its fields as parts | `Parts` through the same |
 
 `Via::Variant` is the registry's relation for one variant of an enum, as
-`Via::Fields` is for a struct. The registry checks the arms before planning:
-each is a representation of the choice's type, and a choice with an arm that
-only builds cannot cross out of Rust. Into Rust it matches on the tag and
+`Via::Fields` is for a struct. The registry checks before planning that each
+arm is a representation of the choice's type; that an arm serves the choice's
+direction is the arm's type. Into Rust it matches on the tag and
 plans the chosen arm; out of Rust it matches on the value's variant and
 writes that arm's tag and members.
 

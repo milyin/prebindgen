@@ -11,8 +11,8 @@ The two selected [conversions](../../stages/04-select.md#select-conversion-relat
 representation its rule named:
 
 ```text
-Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   Product over `Stamp`, read: ReadMember
-i64,   OutOfRust, atomic                                               Terminal over `i64`, Identity
+Stamp, IntoRust,  Stamp.fields [secs: i64 atomic, nanos: i64 atomic]   Parts over `Stamp`, read: ReadMember
+i64,   OutOfRust, atomic                                               Whole over `i64`, Identity
 ```
 
 ## Result

@@ -19,8 +19,8 @@ use quote::{format_ident, quote};
 
 use crate::{
     binding::{
-        Binding, FailureRoute, Operation, OutputForm, Representation, StandardOp, WireType,
-        WireTypeId,
+        Binding, FailureRoute, InRepresentation, Operation, OutRepresentation, OutputForm,
+        StandardOp, WireType, WireTypeId,
     },
     body::{Instr, Operand, Stmt, ValueId},
     plan::{Applied, FunctionPlan, ParamRole, Retained, Slot, ValuePlan},
@@ -141,7 +141,12 @@ fn wire_types<T: Target>(
     let mut written: std::collections::HashSet<WireTypeId> = std::collections::HashSet::new();
     let mut items = Vec::new();
     for values in retained {
-        let OutputForm::Type { representation, .. } = binding.form_of(values.output) else {
+        let OutputForm::Type {
+            into_rust,
+            out_of_rust,
+            ..
+        } = binding.form_of(values.output)
+        else {
             continue;
         };
         let conditions = values
@@ -154,22 +159,17 @@ fn wire_types<T: Target>(
             .entity_name()
             .and_then(|name| flat.unit_enum(&name));
         let root = values.inputs.first().map(|root| &nodes[root.0]);
-        let used: Vec<(WireTypeId, bool)> = match binding.representation_of(*representation) {
-            Representation::Terminal {
-                into_rust,
-                out_of_rust,
-                ..
-            } => into_rust
-                .iter()
-                .chain(out_of_rust.iter().map(|handout| &handout.codec))
-                .map(|codec| (codec.wire_type, false))
-                .collect(),
-            Representation::Product { wire_type, .. }
-            | Representation::Callback { wire_type, .. } => {
-                vec![(*wire_type, true)]
-            }
-            Representation::Unsupported(_) => Vec::new(),
+        let mut used: Vec<(WireTypeId, bool)> = match binding.in_representation_of(*into_rust) {
+            InRepresentation::Whole(codec) => vec![(codec.wire_type, false)],
+            InRepresentation::Parts { wire_type, .. }
+            | InRepresentation::Callable { wire_type, .. } => vec![(*wire_type, true)],
+            InRepresentation::Unsupported(_) => Vec::new(),
         };
+        if let Some(OutRepresentation::Whole { codec, .. }) =
+            out_of_rust.map(|id| binding.out_representation_of(id))
+        {
+            used.push((codec.wire_type, false));
+        }
         for (wire_type, with_parts) in used {
             if !written.insert(wire_type) {
                 continue;
@@ -533,8 +533,8 @@ impl<T: Target> Scribe<'_, T> {
                 result,
                 ..
             } => {
-                let Representation::Callback { routes, .. } =
-                    self.binding.representation_of(*representation)
+                let InRepresentation::Callable { routes, .. } =
+                    self.binding.in_representation_of(*representation)
                 else {
                     unreachable!("a closure is built for a callback representation")
                 };

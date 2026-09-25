@@ -13,7 +13,7 @@ already planned:
 ```text
 impl Fn(i64), IntoRust, relation callback.args
   +-- arg 0 -> node(i64, OutOfRust)    // finished: the leaf a function's i64 result uses
-representation: the callback rule's — Callback { wire type, capture, invoke, routes }
+representation: the callback rule's — Callable { wire type, capture, invoke, routes }
 ```
 
 ## Result

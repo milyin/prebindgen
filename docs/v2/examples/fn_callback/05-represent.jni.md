@@ -9,7 +9,7 @@ Owner: the registry; the JNI frontend states the callable's capture, call and ro
 
 ```text
 impl Fn(i64), IntoRust, callback.args [arg 0: i64 OutOfRust, atomic]
-representation: Callback { wire_type: a `JObject` of example.LongCallback,
+representation: Callable { wire_type: a `JObject` of example.LongCallback,
                            capture: CaptureCallback (jni.env; Runtime),
                            invoke:  CallCallback (Runtime),
                            routes:  [Runtime -> ReportCallbackError, then return] }

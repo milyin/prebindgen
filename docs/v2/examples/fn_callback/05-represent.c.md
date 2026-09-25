@@ -9,7 +9,7 @@ Owner: the registry; the C frontend states the closure struct and its call
 
 ```text
 impl Fn(i64), IntoRust, callback.args [arg 0: i64 OutOfRust, atomic]
-representation: Callback { wire_type: `closure_i64`, capture: Identity, invoke: Call, routes: [] }
+representation: Callable { wire_type: `closure_i64`, capture: Identity, invoke: Call, routes: [] }
 ```
 
 ## Result

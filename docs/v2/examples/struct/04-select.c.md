@@ -10,8 +10,8 @@ Owner: the registry, from the rule the C frontend recorded for `data_struct!(Sta
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits
-rules:    Type(Stamp) -> Product { via: Fields, wire_type: stamp_c, read: ReadMember }
-          Type(i64)   -> Terminal { wire_type: i64_c, identity both ways }
+rules:    Type(Stamp), into Rust -> Parts { via: Fields, wire_type: stamp_c, read: ReadMember }
+          Type(i64),   into Rust -> Whole { wire_type: i64_c, identity }
 wire types: stamp_c = CWireType::Aggregate { name: Stamp }
             i64_c   = CWireType::I64
 relations of Stamp: [ Stamp.fields, atomic ]
@@ -26,7 +26,7 @@ nanos: i64, IntoRust   Type(i64) rule -> atomic
 ```
 
 A `data_struct` is a C struct passed by value, and a by-value struct is nothing
-but its members, so the C frontend records a `Product` through `Via::Fields`
+but its members, so the C frontend records `Parts` through `Via::Fields`
 over the `Stamp` [wire type](../../stages/05-represent.md#describing-target-values-and-operations) when it reads `data_struct!(Stamp)`. The registry resolves that to the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
@@ -34,7 +34,7 @@ Rust `Stamp` will be made of one conversion per field. No C code runs at this
 stage: the fields' `i64`s take the rule from C's scalar table.
 
 The alternative is real, not hypothetical: `ptr_type!(Stamp)` records a
-`Terminal` over a `*mut stamp_t` wire type instead, and the registry would then
+`Whole` over a `*mut stamp_t` wire type instead, and the registry would then
 plan `Stamp` as one whole value with no parts, its fields untouched.
 
 ## Checks

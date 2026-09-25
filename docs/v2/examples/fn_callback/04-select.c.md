@@ -11,8 +11,8 @@ The callback's [crossing](../../stages/03-requests.md#finding-an-existing-conver
 and the rules the C frontend recorded for it and its argument:
 
 ```text
-Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)) -> Callback over `closure_i64`
-                                                         Type(i64)          -> Terminal over `i64`, identity both ways
+Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)), into Rust -> Callable over `closure_i64`
+                                                         Type(i64), out of Rust        -> Whole over `i64`, identity
 ```
 
 ## Result

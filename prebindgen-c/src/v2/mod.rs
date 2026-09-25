@@ -20,8 +20,8 @@ mod target;
 use prebindgen_registry::{flat::Flat, TypeKey};
 use prebindgen_registry_v2::{
     generate, mirrored_i32_enum, Binding, Codec, Declaration, EngineError, EnumArm,
-    FailureCategory, FailureRoute, FunctionFormOf, Generation, Handout, Operation, OutputForm,
-    Representation, Scope, StandardOp, Target, Terminal, Unsupported, Via,
+    FailureCategory, FailureRoute, FunctionFormOf, Generation, InRepresentation, Operation,
+    OutRepresentation, OutputForm, Scope, StandardOp, Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
 pub use target::{COp, CTarget, CWireKind, CWireType};
@@ -69,10 +69,10 @@ impl CbindgenBuilder {
     /// Everything this binding declared, as the data the engine plans from.
     ///
     /// Read in one sorted pass over the builder's storage, so that a run over
-    /// unchanged input emits the same file. Each declared type is stated
-    /// twice over one representation: as the rule for every value of the
-    /// type, and as an output exposing it, which is what makes the type's own
-    /// declaration emitted whether or not a function uses it.
+    /// unchanged input emits the same file. Each declared type's
+    /// representations are stated twice: as the rules for every value of the
+    /// type, and as an output exposing them, which is what makes the type's
+    /// own declaration emitted whether or not a function uses it.
     fn binding(&self, flat: &Flat) -> Binding<CTarget> {
         let mut binding = Binding::new();
 
@@ -83,46 +83,65 @@ impl CbindgenBuilder {
             wire_type: i64_c,
             operation: Operation::Standard(StandardOp::Identity),
         };
-        let i64_whole = binding.representation(Representation::Terminal {
-            into_rust: Some(unchanged.clone()),
-            out_of_rust: Some(Handout::owned(unchanged)),
+        let i64_in = binding.in_representation(InRepresentation::Whole(unchanged.clone()));
+        let i64_out = binding.out_representation(OutRepresentation::Whole {
+            codec: unchanged,
+            release: None,
         });
-        binding.rule(Scope::Type(type_key("i64")), i64_whole);
+        binding.rule(Scope::Type(type_key("i64")), i64_in);
+        binding.rule(Scope::Type(type_key("i64")), i64_out);
 
         let declare_type = |binding: &mut Binding<CTarget>,
                             key: &TypeKey,
-                            representation: Representation<COp>,
+                            into_rust: InRepresentation<COp>,
+                            out_of_rust: Option<OutRepresentation<COp>>,
                             release: Option<FunctionFormOf<CTarget>>| {
-            let representation = binding.representation(representation);
-            binding.rule(Scope::Type(key.clone()), representation);
+            let into_rust = binding.in_representation(into_rust);
+            binding.rule(Scope::Type(key.clone()), into_rust);
+            let out_of_rust = out_of_rust.map(|out| binding.out_representation(out));
+            if let Some(out_of_rust) = out_of_rust {
+                binding.rule(Scope::Type(key.clone()), out_of_rust);
+            }
             binding.output(
                 Declaration::Type(key.clone()),
                 OutputForm::Type {
-                    representation,
+                    into_rust,
+                    out_of_rust,
                     release,
                     meta: (),
                 },
             );
+        };
+        // A declarator this target refuses refuses its values both ways.
+        let refuse = |binding: &mut Binding<CTarget>, key: &TypeKey, refusal: Unsupported| {
+            declare_type(
+                binding,
+                key,
+                InRepresentation::Unsupported(refusal.clone()),
+                Some(OutRepresentation::Unsupported(refusal)),
+                None,
+            )
         };
 
         // By-value data structs: a `repr(C)` aggregate, one member per field,
         // each member read where the wrapper needs the field.
         for key in sorted(self.data.keys()) {
             let c_name = self.c_type_name(key);
-            let representation = match self.aggregate_refusal(flat, key, &c_name) {
-                Some(refusal) => Representation::Unsupported(refusal),
+            match self.aggregate_refusal(flat, key, &c_name) {
+                Some(refusal) => refuse(&mut binding, key, refusal),
                 None => {
                     let wire_type = binding.wire_type(CWireType::Aggregate {
                         name: format_ident!("{c_name}"),
                     });
-                    Representation::Product {
+                    let parts = InRepresentation::Parts {
                         via: Via::Fields,
                         wire_type,
                         read: Operation::Standard(StandardOp::ReadMember),
-                    }
+                    };
+                    let out_of_rust = OutRepresentation::struct_unsupported(key);
+                    declare_type(&mut binding, key, parts, Some(out_of_rust), None);
                 }
-            };
-            declare_type(&mut binding, key, representation, None);
+            }
         }
 
         // Opaque handles: `<c_name> *` to a Rust-owned value, freed through
@@ -132,18 +151,16 @@ impl CbindgenBuilder {
             let pointer = binding.wire_type(CWireType::Pointer {
                 name: format_ident!("{c_name}"),
             });
-            let representation = Representation::Terminal {
-                into_rust: Some(Codec {
+            let into_rust = InRepresentation::Whole(Codec {
+                wire_type: pointer,
+                operation: Operation::Standard(StandardOp::FromRaw),
+            });
+            let out_of_rust = OutRepresentation::Whole {
+                codec: Codec {
                     wire_type: pointer,
-                    operation: Operation::Standard(StandardOp::FromRaw),
-                }),
-                out_of_rust: Some(Handout {
-                    codec: Codec {
-                        wire_type: pointer,
-                        operation: Operation::Standard(StandardOp::IntoRaw),
-                    },
-                    release: Some(Operation::Standard(StandardOp::Release)),
-                }),
+                    operation: Operation::Standard(StandardOp::IntoRaw),
+                },
+                release: Some(Operation::Standard(StandardOp::Release)),
             };
             // A release has no source parameter to take a name from, and
             // takes v1's.
@@ -151,7 +168,13 @@ impl CbindgenBuilder {
                 self.destructor_symbol(key).to_string(),
                 vec![format_ident!("this_")],
             );
-            declare_type(&mut binding, key, representation, Some(release));
+            declare_type(
+                &mut binding,
+                key,
+                into_rust,
+                Some(out_of_rust),
+                Some(release),
+            );
         }
 
         // A declared enum: C sees a `repr(C)` enum of the same values, and a
@@ -164,8 +187,8 @@ impl CbindgenBuilder {
         for key in sorted(self.enums.keys()) {
             let c_name = self.c_type_name(key);
             let unit = key.short_name().and_then(|name| flat.unit_enum(&name));
-            let representation = match mirrored_i32_enum(unit, &c_name, CTarget::NAME) {
-                Err(refusal) => Representation::Unsupported(refusal),
+            match mirrored_i32_enum(unit, &c_name, CTarget::NAME) {
+                Err(refusal) => refuse(&mut binding, key, refusal),
                 Ok(values) => {
                     let ident = format_ident!("{c_name}");
                     let enumeration = binding.wire_type(CWireType::Enum {
@@ -196,23 +219,24 @@ impl CbindgenBuilder {
                             }
                         })
                         .collect();
-                    Representation::Terminal {
-                        into_rust: Some(Codec {
-                            wire_type: storage,
-                            operation: Operation::Standard(StandardOp::EnumIn {
-                                values: numbered,
-                                invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
-                                bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
-                            }),
+                    let into_rust = InRepresentation::Whole(Codec {
+                        wire_type: storage,
+                        operation: Operation::Standard(StandardOp::EnumIn {
+                            values: numbered,
+                            invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
+                            bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
                         }),
-                        out_of_rust: Some(Handout::owned(Codec {
+                    });
+                    let out_of_rust = OutRepresentation::Whole {
+                        codec: Codec {
                             wire_type: enumeration,
                             operation: Operation::Standard(StandardOp::EnumOut { values: named }),
-                        })),
-                    }
+                        },
+                        release: None,
+                    };
+                    declare_type(&mut binding, key, into_rust, Some(out_of_rust), None);
                 }
-            };
-            declare_type(&mut binding, key, representation, None);
+            }
         }
 
         // Every other declarator is accounted for and refused by name. A
@@ -223,12 +247,7 @@ impl CbindgenBuilder {
         ] {
             for key in keys {
                 let refusal = unimplemented(declarator, &Declaration::Type(key.clone()));
-                declare_type(
-                    &mut binding,
-                    key,
-                    Representation::Unsupported(refusal),
-                    None,
-                );
+                refuse(&mut binding, key, refusal);
             }
         }
 
@@ -247,7 +266,7 @@ impl CbindgenBuilder {
             let closure = binding.wire_type(CWireType::Closure {
                 name: format_ident!("{c_name}"),
             });
-            let representation = binding.representation(Representation::Callback {
+            let representation = binding.in_representation(InRepresentation::Callable {
                 wire_type: closure,
                 capture: Operation::Standard(StandardOp::Identity),
                 invoke: Operation::Target(COp::Call),
@@ -257,7 +276,8 @@ impl CbindgenBuilder {
             binding.output(
                 Declaration::Callback(callback),
                 OutputForm::Type {
-                    representation,
+                    into_rust: representation,
+                    out_of_rust: None,
                     release: None,
                     meta: (),
                 },

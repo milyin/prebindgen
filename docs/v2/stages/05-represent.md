@@ -255,27 +255,32 @@ fragment each one writes.
 
 ## Target representations
 
-A representation is one of four shapes, each stated once and referred to by
-id from every rule and output that uses it:
+A representation serves one direction. A value that enters Rust takes an
+into-Rust representation, and a value that leaves Rust takes an out-of-Rust
+one; each is stated once and referred to by id from every rule and output that
+uses it:
 
 ```rust
-enum Representation<Op> {
-    // The whole value, one operation each way: a scalar, a handle, a fieldless
-    // enum. Each direction has a wire type of its own.
-    Terminal {
-        into_rust: Option<Codec<Op>>,     // None: never crosses into Rust.
-        out_of_rust: Option<Handout<Op>>, // None: never crosses out of Rust.
-    },
-    // The parts of a relation, carried together in one wire type, into Rust.
-    Product { via: Via, wire_type: WireTypeId, read: Operation<Op> },
-    // A foreign callable, into Rust as the closure the registry builds.
-    Callback {
-        wire_type: WireTypeId,               // What the callable arrives in.
+enum InRepresentation<Op> {
+    // The whole value, one operation: a scalar, a handle, a fieldless enum.
+    Whole(Codec<Op>),
+    // The parts of a relation, carried together in one wire type.
+    Parts { via: Via, wire_type: WireTypeId, read: Operation<Op> },
+    // A foreign callable, as the closure the registry builds.
+    Callable {
+        wire_type: WireTypeId,            // What the callable arrives in.
         capture: Operation<Op>,           // Applied once, where it enters Rust.
         invoke: Operation<Op>,            // Applied on every call.
         routes: Vec<FailureRoute<Op>>,    // What a failure inside a call does.
     },
     // A representation the target does not lower, refused by name.
+    Unsupported(Unsupported),
+}
+
+enum OutRepresentation<Op> {
+    // The whole value, one operation — and, for a value the foreign side holds
+    // and owes back, the operation that frees one unconverted.
+    Whole { codec: Codec<Op>, release: Option<Operation<Op>> },
     Unsupported(Unsupported),
 }
 
@@ -285,49 +290,50 @@ struct Codec<Op> {
 }
 ```
 
-A `Terminal` converts the whole value in one operation. Its two directions may
-use different wire types: a C enum leaves Rust as the C enum and arrives as
-`MaybeUninit` of it, since C lets an enum variable hold any `int` and a Rust
-enum holding a number none of its values has is undefined behaviour before any
-match could look at it.
+Which direction a value crosses in is fixed by where it sits: a parameter
+crosses into Rust, a result out of it, a callback's argument out of it, and a
+field in its struct's direction. So a rule at a position names a representation
+of that position's direction, and a type rule or a type output names one of
+each direction the type crosses in. A type that crosses both ways is stated
+twice, and the two representations may use different wire types: a C enum
+leaves Rust as the C enum and arrives as `MaybeUninit` of it, since C lets an
+enum variable hold any `int` and a Rust enum holding a number none of its values
+has is undefined behaviour before any match could look at it.
 
-A `Product` reads one part per part of the selected relation, reading a struct
-on the way into Rust. It has no construction operation, so a struct leaving
-Rust is a reported skip, `unsupported.struct.out_of_rust`. Its wire type must
+A `Whole` converts the whole value in one operation, either way.
+
+`Parts` reads one part per part of the selected relation, reading a struct on
+the way into Rust. There is no out-of-Rust counterpart: the registry has no
+operation that builds a value from its parts, so a frontend states a type read
+through its fields as
+`OutRepresentation::struct_unsupported`, and a struct leaving Rust is a
+reported skip, `unsupported.struct.out_of_rust`. The wire type of `Parts` must
 be of a kind that has parts, and the kind says which kinds they may be: a C
 aggregate's members are `i64`s and nothing else yet, a JVM object's getters
 read a `long`. A part that resolves to any other kind refuses the struct where
 the member is.
 
-```rust
-struct Codec<Op> { wire_type: WireTypeId, operation: Operation<Op> }
+A release is what makes a value a handle. A value the foreign side holds by
+address is one it owes back, and the release is the operation that takes it
+back without converting it: the typed destructor a C caller or a Kotlin
+`free()` calls. It frees what the out-of-Rust `Whole` handed out, in that
+representation's wire type, which is why it belongs to it. A value the foreign
+side holds by value has no release.
 
-/// A value leaving Rust: the conversion, and — for a value the foreign side
-/// holds and owes back — the operation that frees one unconverted.
-struct Handout<Op> { codec: Codec<Op>, release: Option<Operation<Op>> }
-```
+A representation converts one type — the one the rule applying it covers — and
+a binding ruling one representation for two types fails the build before
+planning. A type output whose out-of-Rust representation has a release exports
+the release as a wrapper of its own at
+[the boundary](06-boundary.md#assembling-an-exported-function), under the form
+the output names for it, and the registry plans the out-of-Rust direction too.
+The three operations a handle is made of — `IntoRaw`, `FromRaw`, `Release` —
+are standard ones, because each spells a source type; the wire type the address
+is cast to is the representation's, and [the handle path][typedef_represent]
+shows both targets doing exactly that.
 
-A release is what makes a representation a handle. A value the foreign side
-holds by address is one it owes back, and the release is the operation that
-takes it back without converting it: the typed destructor a C caller or a
-Kotlin `free()` calls. It frees what the out-of-Rust half handed out, in that
-half's wire type, which is why it is part of that half: a representation that
-never hands a value out cannot state one. A representation the foreign side
-holds by value names none.
-
-The two halves describe one type — the one the rule applying the
-representation covers — and one representation converts one type: a binding
-ruling one representation for two types fails the build before planning. A type output exposing a representation with a release exports it as a
-wrapper of its own at [the boundary](06-boundary.md#assembling-an-exported-function),
-under the form the output names for it, and the registry plans the out-of-Rust
-direction too. The three operations a handle is made of — `IntoRaw`, `FromRaw`,
-`Release` — are standard ones, because each spells a source type; the wire type
-the address is cast to is the representation's, and
-[the handle path][typedef_represent] shows both targets doing exactly that.
-
-A `Callback` carries an `impl Fn(..)` parameter into Rust. The relation it
-names is the callback's arguments, and each argument crosses the other way:
-Rust hands it to the callable, so it leaves Rust by the rule for its own type.
+`Callable` carries an `impl Fn(..)` parameter into Rust. The relation it names
+is the callback's arguments, and each argument crosses the other way: Rust
+hands it to the callable, so it leaves Rust by the rule for its own type.
 `capture` runs once, on the wire type the callable arrived in — for a JVM
 object, it takes a global reference and looks the method up — and what it
 produces is moved into the closure the registry builds. `invoke` runs on every
@@ -336,8 +342,9 @@ needs no capture at all: an identity capture moves the wire type itself into the
 closure. The kind of the callback's wire type says which kinds an argument
 may be, as an aggregate's does for its members, and an argument resolving to
 any other kind refuses the callback with `unsupported.<target>.arg.<kind>`,
-at that argument. A callable never leaves Rust: a callback that would is refused with
-`unsupported.callback.out_of_rust`.
+at that argument. A callable never leaves Rust: no out-of-Rust representation
+carries one, so a result of a callback type is refused with
+`unsupported.conversion.no_rule`.
 
 A failure inside a call cannot reach the wrapper that received the callable:
 the wrapper has returned, or is inside the source function that called. So a
@@ -365,7 +372,7 @@ struct ValuePlan {
     id: NodeId,                  // Reference used by callers of this conversion.
     crossing: Crossing,          // Exact source type and direction being converted.
     relation: Relation,          // The edge the walk took out of this type.
-    representation: ReprId,      // The representation that applied.
+    representation: ReprId,      // The representation that applied: `In(..)` or `Out(..)`.
     wire_type: WireTypeId,          // The wire type it crosses in, in this direction.
     children: Vec<NodeId>,       // One per part of the relation, in part order.
     body: NodeBody,              // Registry-owned structured instructions.
@@ -393,7 +400,7 @@ enum Instr {
     // Build a callback's closure: `move |params| { instrs }`, taking
     // `captured` with it; a failure inside takes the callback's routes.
     Closure {
-        representation: ReprId,
+        representation: InReprId,
         captured: ValueId,
         params: Vec<(ValueId, TypeRef)>,
         instrs: Vec<Stmt>,

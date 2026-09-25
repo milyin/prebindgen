@@ -177,8 +177,9 @@ pub struct StructRelation {
 /// How the registry constructs or reads a Rust value.
 ///
 /// Which one a value takes is stated by the representation that applies to it:
-/// a `Terminal` one is the atomic relation, and a `Product` one names its
-/// relation with a [`Via`](crate::binding::Via).
+/// a `Whole` one is the atomic relation, a `Parts` one names its relation with
+/// a [`Via`](crate::binding::Via), and a `Callable` one is the callback's
+/// arguments.
 #[derive(Clone, Debug)]
 pub enum Relation {
     /// The whole value converted by one operation: no parts, no recursion.
@@ -501,7 +502,7 @@ pub struct OperationFeed<'a, T: Target> {
     pub error: Option<syn::Ident>,
     /// What the expression must produce, if anything.
     pub result: Option<Fed<'a, T>>,
-    /// For an operation applied once per part — a `Product`'s `read` — the
+    /// For an operation applied once per part — the `read` of `Parts` — the
     /// part it is applied to.
     pub part: Option<&'a Part>,
     /// For a callback's `capture` and `invoke`: the wire types of the callback's
@@ -530,7 +531,7 @@ impl<T: Target> OperationFeed<'_, T> {
 /// Everything one wire type's declaration needs written.
 pub struct WireTypeFeed<'a, T: Target> {
     pub wire_type: &'a T::WireType,
-    /// For the wire type of a `Product` or a `Callback`: each part — a field,
+    /// For the wire type of `Parts` or of a `Callable`: each part — a field,
     /// or an argument — with the wire type it resolved to, in part order.
     pub parts: Vec<(&'a Part, &'a T::WireType)>,
     /// For a wire type of a fieldless enum's value: that enum, from the model.

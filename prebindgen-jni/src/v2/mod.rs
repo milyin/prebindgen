@@ -26,8 +26,8 @@ use prebindgen_registry::{
 use prebindgen_registry_v2::{
     field_is_conditional, generate, mirrored_i32_enum, Binding, Codec, ContextParam, Declaration,
     EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf, Generation,
-    Handout, Operation, OutputForm, OutputFormOf, PlanningError, Report, Representation, Scope,
-    StandardOp, Target, Terminal, Unsupported, Via,
+    InRepresentation, Operation, OutRepresentation, OutputForm, OutputFormOf, PlanningError,
+    Report, Scope, StandardOp, Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
 pub use target::{JniOp, JniOutput, JniTarget, JniWireKind, JniWireType, KotlinType};
@@ -123,14 +123,14 @@ impl Declarations {
             wire_type: jlong,
             operation: Operation::Standard(StandardOp::Identity),
         };
-        let i64_whole = binding.representation(Representation::Terminal {
-            into_rust: Some(unchanged.clone()),
-            out_of_rust: Some(Handout::owned(unchanged)),
+        let i64_key = TypeKey::parse("i64").expect("a scalar's name is a type key");
+        let i64_in = binding.in_representation(InRepresentation::Whole(unchanged.clone()));
+        let i64_out = binding.out_representation(OutRepresentation::Whole {
+            codec: unchanged,
+            release: None,
         });
-        binding.rule(
-            Scope::Type(TypeKey::parse("i64").expect("a scalar's name is a type key")),
-            i64_whole,
-        );
+        binding.rule(Scope::Type(i64_key.clone()), i64_in);
+        binding.rule(Scope::Type(i64_key), i64_out);
 
         // A function is declared wherever it is placed — as a class member, as
         // a package function, as the `val` a `constant!(X).fun(..)` reads
@@ -174,35 +174,53 @@ impl Declarations {
             // refused rather than emitted without it: the binding asked for
             // that supertype, and v2 writes none.
             let interface = config.interface_enabled || !config.interfaces.is_empty();
-            let (representation, release, meta) = match config.kind {
+            let (into_rust, out_of_rust, release, meta) = match config.kind {
                 _ if interface => (
-                    Representation::Unsupported(unimplemented(
+                    InRepresentation::Unsupported(unimplemented(
                         declarator,
                         "interface",
                         &declaration,
                         &placement,
                     )),
+                    Some(OutRepresentation::Unsupported(unimplemented(
+                        declarator,
+                        "interface",
+                        &declaration,
+                        &placement,
+                    ))),
                     None,
                     JniOutput::DataClass {
                         package: package.clone(),
                         class: class.clone(),
                     },
                 ),
-                crate::jni::DeclaredKind::Data => (
-                    self.data_class(&mut binding, flat, key, &placement),
-                    None,
-                    JniOutput::DataClass {
-                        package: package.clone(),
-                        class: class.clone(),
-                    },
-                ),
+                crate::jni::DeclaredKind::Data => {
+                    let into_rust = self.data_class(&mut binding, flat, key, &placement);
+                    // A class refused as a whole is refused both ways.
+                    let out_of_rust = match &into_rust {
+                        InRepresentation::Unsupported(reason) => {
+                            OutRepresentation::Unsupported(reason.clone())
+                        }
+                        _ => OutRepresentation::struct_unsupported(key),
+                    };
+                    (
+                        into_rust,
+                        Some(out_of_rust),
+                        None,
+                        JniOutput::DataClass {
+                            package: package.clone(),
+                            class: class.clone(),
+                        },
+                    )
+                }
                 // A Kotlin `enum class` of the same values: what crosses is the
                 // number each value carries.
                 crate::jni::DeclaredKind::Enum(_) => {
-                    let (representation, values) =
+                    let (into_rust, out_of_rust, values) =
                         self.enum_class(&mut binding, flat, key, &placement);
                     (
-                        representation,
+                        into_rust,
+                        Some(out_of_rust),
                         None,
                         JniOutput::EnumClass {
                             package: package.clone(),
@@ -219,22 +237,21 @@ impl Declarations {
                     let address = binding.wire_type(JniWireType::Handle {
                         kotlin_class: placement.clone(),
                     });
-                    let representation = Representation::Terminal {
-                        into_rust: Some(Codec {
+                    let into_rust = InRepresentation::Whole(Codec {
+                        wire_type: address,
+                        operation: Operation::Standard(StandardOp::FromRaw),
+                    });
+                    let out_of_rust = OutRepresentation::Whole {
+                        codec: Codec {
                             wire_type: address,
-                            operation: Operation::Standard(StandardOp::FromRaw),
-                        }),
-                        out_of_rust: Some(Handout {
-                            codec: Codec {
-                                wire_type: address,
-                                operation: Operation::Standard(StandardOp::IntoRaw),
-                            },
-                            release: Some(Operation::Standard(StandardOp::Release)),
-                        }),
+                            operation: Operation::Standard(StandardOp::IntoRaw),
+                        },
+                        release: Some(Operation::Standard(StandardOp::Release)),
                     };
                     let release = release_form(self.native_method_symbol(&native));
                     (
-                        representation,
+                        into_rust,
+                        Some(out_of_rust),
                         Some(release),
                         JniOutput::PtrClass {
                             package: package.clone(),
@@ -244,12 +261,18 @@ impl Declarations {
                     )
                 }
                 _ => (
-                    Representation::Unsupported(unimplemented(
+                    InRepresentation::Unsupported(unimplemented(
                         declarator,
                         declarator,
                         &declaration,
                         &placement,
                     )),
+                    Some(OutRepresentation::Unsupported(unimplemented(
+                        declarator,
+                        declarator,
+                        &declaration,
+                        &placement,
+                    ))),
                     None,
                     JniOutput::DataClass {
                         package: package.clone(),
@@ -257,12 +280,17 @@ impl Declarations {
                     },
                 ),
             };
-            let representation = binding.representation(representation);
-            binding.rule(Scope::Type(key.clone()), representation);
+            let into_rust = binding.in_representation(into_rust);
+            binding.rule(Scope::Type(key.clone()), into_rust);
+            let out_of_rust = out_of_rust.map(|out| binding.out_representation(out));
+            if let Some(out_of_rust) = out_of_rust {
+                binding.rule(Scope::Type(key.clone()), out_of_rust);
+            }
             binding.output(
                 declaration,
                 OutputForm::Type {
-                    representation,
+                    into_rust,
+                    out_of_rust,
                     release,
                     meta,
                 },
@@ -510,7 +538,7 @@ impl Declarations {
             if let Some(name) = collision {
                 let declaration = Declaration::Callback(ty.key());
                 let representation =
-                    binding.representation(Representation::Unsupported(Unsupported::new(
+                    binding.in_representation(InRepresentation::Unsupported(Unsupported::new(
                         "unsupported.jni.callback_name",
                         format!(
                             "`{declaration}` would be the Kotlin `{name}`, as would {}",
@@ -526,7 +554,8 @@ impl Declarations {
                 binding.output(
                     declaration,
                     OutputForm::Type {
-                        representation,
+                        into_rust: representation,
+                        out_of_rust: None,
                         release: None,
                         meta: JniOutput::Callback {
                             package: package.clone(),
@@ -541,7 +570,7 @@ impl Declarations {
                 interface: qualified(&class),
                 raw: raw.as_deref().map(qualified),
             });
-            let representation = binding.representation(Representation::Callback {
+            let representation = binding.in_representation(InRepresentation::Callable {
                 wire_type,
                 capture: Operation::Target(JniOp::CaptureCallback),
                 invoke: Operation::Target(JniOp::CallCallback),
@@ -559,7 +588,8 @@ impl Declarations {
             binding.output(
                 Declaration::Callback(ty.key()),
                 OutputForm::Type {
-                    representation,
+                    into_rust: representation,
+                    out_of_rust: None,
                     release: None,
                     meta: JniOutput::Callback {
                         package: package.clone(),
@@ -584,10 +614,10 @@ impl Declarations {
         flat: &Flat,
         key: &TypeKey,
         placement: &str,
-    ) -> Representation<JniOp> {
+    ) -> InRepresentation<JniOp> {
         if let Some(strukt) = key.short_name().and_then(|name| flat.struct_type(&name)) {
             if strukt.fields.is_empty() {
-                return Representation::Unsupported(Unsupported::new(
+                return InRepresentation::Unsupported(Unsupported::new(
                     "unsupported.jni.empty_class",
                     format!(
                         "`{}` has no fields, and a Kotlin data class needs at least one property",
@@ -597,13 +627,13 @@ impl Declarations {
             }
             for field in &strukt.fields {
                 let Some(name) = field.name.as_ref() else {
-                    return Representation::Unsupported(Unsupported::new(
+                    return InRepresentation::Unsupported(Unsupported::new(
                         "unsupported.jni.positional_field",
                         "a positional field has no Kotlin property to read".to_string(),
                     ));
                 };
                 if field_is_conditional(field) {
-                    return Representation::Unsupported(Unsupported::new(
+                    return InRepresentation::Unsupported(Unsupported::new(
                         "unsupported.jni.conditional_field",
                         format!(
                             "field `{name}` is written under a condition this build cannot \
@@ -618,7 +648,7 @@ impl Declarations {
         let object = binding.wire_type(JniWireType::Object {
             kotlin_class: placement.to_string(),
         });
-        Representation::Product {
+        InRepresentation::Parts {
             via: Via::Fields,
             wire_type: object,
             // A property read is a JVM call, which can fail: see `JniOp`.
@@ -634,11 +664,21 @@ impl Declarations {
         flat: &Flat,
         key: &TypeKey,
         placement: &str,
-    ) -> (Representation<JniOp>, Vec<(String, i32)>) {
+    ) -> (
+        InRepresentation<JniOp>,
+        OutRepresentation<JniOp>,
+        Vec<(String, i32)>,
+    ) {
         let unit = key.short_name().and_then(|name| flat.unit_enum(&name));
         let values = match mirrored_i32_enum(unit, placement, JniTarget::NAME) {
             Ok(values) => values,
-            Err(refusal) => return (Representation::Unsupported(refusal), Vec::new()),
+            Err(refusal) => {
+                return (
+                    InRepresentation::Unsupported(refusal.clone()),
+                    OutRepresentation::Unsupported(refusal),
+                    Vec::new(),
+                )
+            }
         };
         let number = binding.wire_type(JniWireType::Int {
             kotlin_enum: placement.to_string(),
@@ -665,21 +705,22 @@ impl Declarations {
         // Out of Rust every value names one number; into Rust the wire type is
         // an `Int` and can hold something no value names, which is what a
         // caller passing one gets told, rather than a value it did not ask for.
-        let representation = Representation::Terminal {
-            into_rust: Some(Codec {
-                wire_type: number,
-                operation: Operation::Standard(StandardOp::EnumIn {
-                    values: arms.clone(),
-                    invalid: Some(format!("`{placement}` has no value numbered {{}}")),
-                    bits: None,
-                }),
+        let into_rust = InRepresentation::Whole(Codec {
+            wire_type: number,
+            operation: Operation::Standard(StandardOp::EnumIn {
+                values: arms.clone(),
+                invalid: Some(format!("`{placement}` has no value numbered {{}}")),
+                bits: None,
             }),
-            out_of_rust: Some(Handout::owned(Codec {
+        });
+        let out_of_rust = OutRepresentation::Whole {
+            codec: Codec {
                 wire_type: number,
                 operation: Operation::Standard(StandardOp::EnumOut { values: arms }),
-            })),
+            },
+            release: None,
         };
-        (representation, named)
+        (into_rust, out_of_rust, named)
     }
 }
 

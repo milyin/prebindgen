@@ -34,14 +34,19 @@ over it, the rule, and the output.
 let closure = binding.wire_type(CWireType::Closure {
     name: format_ident!("closure_i64"),     // a struct the C target declares
 });
-let callback = binding.representation(Representation::Callback {
+let callback = binding.in_representation(InRepresentation::Callable {
     wire_type: closure,
     capture: Operation::Standard(StandardOp::Identity),   // the struct itself is kept
     invoke: Operation::Target(COp::Call),                 // calls its `call`
     routes: Vec::new(),                                   // nothing a call does can fail
 });
 binding.rule(Scope::Type(key), callback);
-binding.output(Declaration::Callback(key), OutputForm::Type { representation: callback, release: None, meta: () });
+binding.output(Declaration::Callback(key), OutputForm::Type {
+    into_rust: callback,
+    out_of_rust: None,                                    // a callable never leaves Rust
+    release: None,
+    meta: (),
+});
 ```
 
 `key` is the type's key, `impl Fn(i64) + Send + Sync + 'static`, built from

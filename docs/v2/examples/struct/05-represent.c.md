@@ -10,7 +10,7 @@ Owner: the registry; the C frontend states the aggregate and its member read
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-representation: Product { via: Fields, wire_type: `Stamp`, read: ReadMember }
+representation: Parts { via: Fields, wire_type: `Stamp`, read: ReadMember }
 ```
 
 ## Result
@@ -23,7 +23,7 @@ frontend states it when it reads `data_type!(Stamp)`:
 let stamp_c = binding.wire_type(CWireType::Aggregate {
     name: format_ident!("Stamp"),                  // the repr(C) `Stamp` C declares
 });
-Representation::Product {
+InRepresentation::Parts {
     via: Via::Fields,
     wire_type: stamp_c,
     read: Operation::Standard(StandardOp::ReadMember), // infallible, needs no context

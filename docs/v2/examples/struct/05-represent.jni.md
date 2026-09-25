@@ -10,7 +10,7 @@ Owner: the registry; the JNI frontend states the object [wire type](../../stages
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-representation: Product { via: Fields, wire_type: a `JObject` of example.Stamp, read: Getter }
+representation: Parts { via: Fields, wire_type: a `JObject` of example.Stamp, read: Getter }
 ```
 
 ## Result
@@ -23,7 +23,7 @@ JNI frontend states it when it reads `data_class!(Stamp)`:
 let stamp_obj = binding.wire_type(JniWireType::Object {
     kotlin_class: "example.Stamp".into(),          // a `JObject`, read as `Lexample/Stamp;`
 });
-Representation::Product {
+InRepresentation::Parts {
     via: Via::Fields,
     wire_type: stamp_obj,
     read: Operation::Target(JniOp::Getter),       // needs `jni.env`, can fail: see below

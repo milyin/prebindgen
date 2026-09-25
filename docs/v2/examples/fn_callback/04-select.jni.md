@@ -11,8 +11,8 @@ The callback's [crossing](../../stages/03-requests.md#finding-an-existing-conver
 and the rules the JNI frontend recorded for it and its argument:
 
 ```text
-Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)) -> Callback over a `JObject` of example.LongCallback
-                                                         Type(i64)          -> Terminal over `jlong`, identity both ways
+Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)), into Rust -> Callable over a `JObject` of example.LongCallback
+                                                         Type(i64), out of Rust        -> Whole over `jlong`, identity
 ```
 
 ## Result

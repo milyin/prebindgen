@@ -13,7 +13,7 @@ The [selection][struct_select] for the struct, with its leaves already planned:
 Stamp, IntoRust, relation Stamp.fields
   +-- secs  -> node(i64, IntoRust)     // finished: identity conversion
   +-- nanos -> node(i64, IntoRust)     // the same node
-representation: the Type(Stamp) rule's — Product { via: Fields, wire_type, read }
+representation: the Type(Stamp) rule's — Parts { via: Fields, wire_type, read }
 ```
 
 ## Result
@@ -59,8 +59,10 @@ operation. The owned result borrows neither input.
 - The node is recorded only once its children exist, so its identity — type,
   direction, representation, children — is complete when it is cached and
   another struct with the same identity shares it.
-- This is the struct entering Rust. Leaving Rust needs a construction
-  operation a `Product` does not have, and is a reported skip.
+- This is the struct entering Rust. `Parts` is an into-Rust representation;
+  leaving Rust needs a construction operation the registry does not have, so
+  the frontends state `OutRepresentation::struct_unsupported` for the type, and
+  a `Stamp` leaving Rust is a reported skip.
 
 ## Language variants
 

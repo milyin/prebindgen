@@ -192,7 +192,8 @@ The engine's unit tests use a small test adapter to isolate the planner's rules.
 They check conversion sharing and rules at positions, temporary-name
 collisions, propagation from a value no rule covers to its struct and callers,
 and the requirements between outputs. They check the rules themselves: two for
-one value, or one at a position the output does not have, fail the build; a
+one value in one direction, one at a position the output does not have, or one
+of the other direction than the value there crosses in, fail the build; a
 member or parameter of a kind its holder cannot have is refused where it
 sits; an unused type rule is listed; the binding prints as what planning
 reads. They also check that a function is skipped when an operation has no
@@ -228,11 +229,17 @@ establish the behavior of the resulting foreign interface.
    `TargetOp::contexts` and `TargetOp::failure` for a target's. C has one
    operation of its own, calling through a callback's closure struct, which
    needs nothing and cannot fail.
-3. **A rule applies to one value.** The rule at a value's position, else its
-   type's, gives the representation of the value currently being planned. It
-   says nothing of that value's children, which are looked up again at their
-   own positions. This gives each override one place to be expressed and keeps
-   child choices visible in the conversion cache key.
+3. **A rule applies to one value, in one direction.** A representation serves
+   one direction — into Rust or out of it — and a rule names one, so a type
+   that crosses both ways has a rule per direction. The rule of the value's
+   direction at its position, else its type's, gives the representation of the
+   value currently being planned. A position fixes its direction — a
+   parameter into Rust, a result out of it — so a rule there naming a
+   representation of the other direction fails the build, and the planner
+   never meets a representation it cannot use the way the value crosses. A
+   rule says nothing of that value's children, which are looked up again at
+   their own positions. This gives each override one place to be expressed and
+   keeps child choices visible in the conversion cache key.
 
    No writer is told the position it writes for. A conversion is reused
    wherever one of the same identity is needed —
@@ -255,7 +262,8 @@ establish the behavior of the resulting foreign interface.
 
    These declarations are checked where they meet the plan, which is the
    registry and nowhere else. What is checked today, and nothing beyond it: two
-   rules for one value, a rule at a position its output does not have, a form
+   rules for one value in one direction, a rule at a position its output does
+   not have or of the other direction than the value there crosses in, a form
    naming the wrong number of inputs, a symbol that is not an identifier, and a
    form restating the linkage all fail the build; a member, parameter or return
    of a kind its holder cannot have is refused where it sits; an
@@ -293,7 +301,7 @@ establish the behavior of the resulting foreign interface.
    address through three more standard operations — `IntoRaw`, `FromRaw`,
    `Release` — which are the registry's because they spell a source type. The
    frontend states the wire type the address is cast to and, on the
-   representation's out-of-Rust half, that a release exists; naming one is
+   out-of-Rust representation, that a release exists; naming one is
    what tells the registry the type is a handle, whether the item behind it is
    an alias or a struct whose fields the target never reads. The registry
    then plans the release as a wrapper under the type's own identity, taking
@@ -354,7 +362,7 @@ establish the behavior of the resulting foreign interface.
    such an enum and reads the capability back.
 
 10. **A callback is a closure the registry builds.** An `impl Fn(..)`
-    parameter crosses as a `Callback` representation: a wire type the callable
+    parameter crosses as a `Callable` representation: a wire type the callable
     arrives in, a `capture` applied to it once, an `invoke` applied on every
     call, and the routes a failure inside a call takes. The relation is the
     callback's arguments, planned out of Rust through the rules for their
@@ -380,9 +388,10 @@ this list says what the increment left open and why.
 - **The binding's vocabulary** is real for these paths — representations,
   codecs, operations, function forms, acceptance, and the writers' feeds — and
   untested by a third target or a deferred capability.
-- **The representations.** A `Product` reads one part per part, in the
-  into-Rust direction only. Struct output needs a construction operation that
-  is not implemented, and both targets reach the registry's
+- **The representations.** `Parts` reads one part per part, and is an into-Rust
+  representation only. Struct output needs a construction operation that is not
+  implemented, and both targets state `OutRepresentation::struct_unsupported`
+  for a struct they read through its fields, so a struct leaving Rust is the
   `unsupported.struct.out_of_rust` skip. Containers, choices, niches and
   flattening at the boundary describe the wider design.
 - **Fallible construction meeting the boundary** is untouched, because
@@ -408,8 +417,9 @@ this list says what the increment left open and why.
   increment does not have.
 - **A callback** takes arguments and returns nothing, and is moved into the
   source function. A callback returning a value, one taken by reference, and
-  a Rust callable handed out to foreign code are not built; the last is
-  refused as `unsupported.callback.out_of_rust`. Nothing inside a call has a
+  a Rust callable handed out to foreign code are not built; no out-of-Rust
+  representation carries the last, so it is refused as
+  `unsupported.conversion.no_rule`. Nothing inside a call has a
   runtime context, so an argument whose conversion needs one — a JNI `String`,
   when strings are built — refuses the callback.
 - **A condition reaches the Rust side only.** V2 carries a `#[cfg]` the capture

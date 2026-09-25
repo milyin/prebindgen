@@ -10,7 +10,8 @@ Owner: the registry, from the rule the JNI frontend recorded for `ptr_class!(Led
 ```text
 Crossing { source: Ledger, direction: IntoRust }
 Crossing { source: Ledger, direction: OutOfRust }
-rules:    Type(Ledger) -> Terminal { in: jlong FromRaw, out: jlong IntoRaw, release }
+rules:    Type(Ledger), into Rust   -> Whole { jlong, FromRaw }
+          Type(Ledger), out of Rust -> Whole { jlong, IntoRaw, release }
 ```
 
 ## Result
@@ -20,7 +21,7 @@ atomic, carried in a `jlong` whose metadata names `example.Ledger`
 ```
 
 for both. A `ptr_class!` holds an address, not properties, so the JNI frontend
-records a `Terminal` [representation](../../stages/05-represent.md#represent-and-compose-values)
+records a `Whole` [representation](../../stages/05-represent.md#represent-and-compose-values)
 naming the atomic [relation](../../stages/04-select.md#what-a-relation-is) —
 the same answer for the same reason as C's, which is what makes the selection
 stage target-independent in practice: the targets differ in what the address

@@ -12,7 +12,7 @@ use prebindgen_flat::TypeKey;
 
 use crate::{
     decl::Declaration,
-    target::{FailureCategory, Target, Terminal, Unsupported},
+    target::{Direction, FailureCategory, Target, Terminal, Unsupported},
 };
 
 /// Which binding issued an id. Every [`Binding`] draws a fresh one, and each id
@@ -36,13 +36,58 @@ pub struct WireTypeId {
     pub(crate) index: usize,
 }
 
-/// A representation the binding declared, valid only in the binding that
-/// issued it. Equal representations get one id, which is what makes it a
-/// conversion's identity.
+/// An into-Rust representation the binding declared, valid only in the
+/// binding that issued it. Equal representations get one id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ReprId {
+pub struct InReprId {
     issuer: Issuer,
     pub(crate) index: usize,
+}
+
+/// An out-of-Rust representation the binding declared, valid only in the
+/// binding that issued it. Equal representations get one id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct OutReprId {
+    issuer: Issuer,
+    pub(crate) index: usize,
+}
+
+/// A representation of either direction: what a rule names, and a
+/// conversion's identity. Its direction is the direction of every value it
+/// serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ReprId {
+    In(InReprId),
+    Out(OutReprId),
+}
+
+impl From<InReprId> for ReprId {
+    fn from(id: InReprId) -> Self {
+        ReprId::In(id)
+    }
+}
+
+impl From<OutReprId> for ReprId {
+    fn from(id: OutReprId) -> Self {
+        ReprId::Out(id)
+    }
+}
+
+impl ReprId {
+    fn issuer(self) -> Issuer {
+        match self {
+            ReprId::In(id) => id.issuer,
+            ReprId::Out(id) => id.issuer,
+        }
+    }
+
+    /// The direction of the values it serves.
+    pub fn direction(self) -> Direction {
+        match self {
+            ReprId::In(_) => Direction::IntoRust,
+            ReprId::Out(_) => Direction::OutOfRust,
+        }
+    }
 }
 
 /// One of the binding's outputs, valid only in the binding that issued it.
@@ -63,9 +108,24 @@ impl std::fmt::Display for WireTypeId {
     }
 }
 
+impl std::fmt::Display for InReprId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "in{}", self.index)
+    }
+}
+
+impl std::fmt::Display for OutReprId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "out{}", self.index)
+    }
+}
+
 impl std::fmt::Display for ReprId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "r{}", self.index)
+        match self {
+            ReprId::In(id) => id.fmt(f),
+            ReprId::Out(id) => id.fmt(f),
+        }
     }
 }
 
@@ -117,30 +177,22 @@ pub trait WireType: Clone + Eq + std::hash::Hash + std::fmt::Debug {
 /// The kind of a target's wire types.
 pub type WireKindOf<T> = <<T as Target>::WireType as WireType>::Kind;
 
-/// How the values a conversion rule covers cross.
+/// How the values a rule covers cross into Rust.
 ///
 /// It names its wire types and operations and states no type for either: a
 /// codec reads its wire type and produces the source type, a `read` reads the
 /// product's wire type and produces the part's, whatever wire type that part
 /// resolves to. The registry works them out when it plans a value, and feeds
 /// them to the writer.
-// A binding holds a few dozen of these, each once, so the unboxed codecs cost
-// nothing worth an indirection.
+// A binding holds a few dozen of these, each once, so the unboxed variants
+// cost nothing worth an indirection.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Representation<Op> {
-    /// The whole value, one operation each way: a scalar, a handle, a
-    /// fieldless enum. Each direction has a wire type of its own, because some
-    /// values are received in a form they are not returned in — a C enum
-    /// arrives as `MaybeUninit` of itself.
-    Terminal {
-        /// `None`: the value never crosses into Rust.
-        into_rust: Option<Codec<Op>>,
-        /// `None`: the value never crosses out of Rust.
-        out_of_rust: Option<Handout<Op>>,
-    },
-    /// The parts of a relation, carried together in one wire type, into Rust.
-    Product {
+pub enum InRepresentation<Op> {
+    /// The whole value, one operation: a scalar, a handle, a fieldless enum.
+    Whole(Codec<Op>),
+    /// The parts of a relation, carried together in one wire type.
+    Parts {
         via: Via,
         /// The aggregate or object holding the parts: a wire type of a kind
         /// that has parts.
@@ -148,10 +200,10 @@ pub enum Representation<Op> {
         /// One part out of the wire type, applied once per part.
         read: Operation<Op>,
     },
-    /// A foreign callable, into Rust as an `impl Fn(..)`: the registry builds
-    /// the closure, whose every call converts the arguments out of Rust and
-    /// hands them to `invoke`.
-    Callback {
+    /// A foreign callable, as an `impl Fn(..)`: the registry builds the
+    /// closure, whose every call converts the arguments out of Rust and hands
+    /// them to `invoke`.
+    Callable {
         /// What holds the callable on the foreign side: a C closure struct, a
         /// JVM object. Its parts are the arguments' wire types.
         wire_type: WireTypeId,
@@ -171,37 +223,46 @@ pub enum Representation<Op> {
     Unsupported(Unsupported),
 }
 
-/// One direction of a [`Representation::Terminal`]: the wire type, and the
-/// operation between it and the source type.
+/// How the values a rule covers cross out of Rust.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OutRepresentation<Op> {
+    /// The whole value, one operation: a scalar, a handle, a fieldless enum.
+    Whole {
+        codec: Codec<Op>,
+        /// Frees what `codec` handed out, taking it in `codec`'s wire type: a
+        /// handle's typed drop. Its presence is what makes the value a
+        /// handle; a type output exposing one exports it as a wrapper of its
+        /// own.
+        release: Option<Operation<Op>>,
+    },
+    /// A representation the target does not lower, refused by name.
+    Unsupported(Unsupported),
+}
+
+impl<Op> OutRepresentation<Op> {
+    /// What a type read through its fields into Rust states out of Rust: the
+    /// registry cannot build a value from its parts yet, so every target
+    /// refuses such a value leaving Rust under this one code.
+    pub fn struct_unsupported(ty: &TypeKey) -> Self {
+        OutRepresentation::Unsupported(Unsupported::new(
+            "unsupported.struct.out_of_rust",
+            format!(
+                "`{}` leaves Rust as a composed value; v2 has no target construction \
+                 operation yet",
+                ty.as_str()
+            ),
+        ))
+    }
+}
+
+/// A wire type, and the operation between it and the source type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Codec<Op> {
     pub wire_type: WireTypeId,
     pub operation: Operation<Op>,
 }
 
-/// The out-of-Rust direction of a [`Representation::Terminal`]: the
-/// conversion, and — for a value the foreign side holds and owes back — how it
-/// gives one back unconverted.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Handout<Op> {
-    pub codec: Codec<Op>,
-    /// Frees what `codec` handed out, taking it in `codec`'s wire type: a
-    /// handle's typed drop. Its presence is what makes the representation a
-    /// handle; a type output exposing one exports it as a wrapper of its own.
-    pub release: Option<Operation<Op>>,
-}
-
-impl<Op> Handout<Op> {
-    /// A value handed out and owned by the foreign side from then on.
-    pub fn owned(codec: Codec<Op>) -> Self {
-        Handout {
-            codec,
-            release: None,
-        }
-    }
-}
-
-/// Which relation of its type a `Product` reads a value through.
+/// Which relation of its type [`InRepresentation::Parts`] reads a value through.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Via {
     /// The struct relation: one part per field.
@@ -393,14 +454,18 @@ pub struct Report<Op> {
 /// What one output is.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OutputForm<Op, O> {
-    /// One representation of a type, exposed: its wire types' Rust
-    /// declarations, and its foreign declaration. The representation is also
-    /// the rule at the output's root, so two outputs of one type each plan as
-    /// declared.
+    /// A type's representations, exposed: their wire types' Rust
+    /// declarations, and the type's foreign declaration. Each representation
+    /// is also the rule at the output's root in its direction, so two outputs
+    /// of one type each plan as declared.
     Type {
-        representation: ReprId,
-        /// The wrapper releasing a handed-out value, for a representation
-        /// that has a release.
+        /// How the type crosses into Rust. Every type output has one: even a
+        /// handle handed out has to come back.
+        into_rust: InReprId,
+        /// How it crosses out of Rust, if it does.
+        out_of_rust: Option<OutReprId>,
+        /// The wrapper releasing a handed-out value, for an out-of-Rust
+        /// representation that has a release.
         release: Option<FunctionForm<Op>>,
         meta: O,
     },
@@ -469,8 +534,10 @@ impl std::fmt::Display for Step {
     }
 }
 
-/// A representation, as a binding for target `T` states one.
-pub type RepresentationOf<T> = Representation<<T as Target>::Op>;
+/// An into-Rust representation, as a binding for target `T` states one.
+pub type InRepresentationOf<T> = InRepresentation<<T as Target>::Op>;
+/// An out-of-Rust representation, as a binding for target `T` states one.
+pub type OutRepresentationOf<T> = OutRepresentation<<T as Target>::Op>;
 /// A function form, as a binding for target `T` states one.
 pub type FunctionFormOf<T> = FunctionForm<<T as Target>::Op>;
 /// An output's form, as a binding for target `T` states one.
@@ -484,7 +551,8 @@ pub type OutputFormOf<T> = OutputForm<<T as Target>::Op, <T as Target>::OutputMe
 pub struct Binding<T: Target> {
     issuer: Issuer,
     wire_types: Vec<T::WireType>,
-    representations: Vec<RepresentationOf<T>>,
+    in_representations: Vec<InRepresentationOf<T>>,
+    out_representations: Vec<OutRepresentationOf<T>>,
     rules: Vec<(Scope, ReprId)>,
     outputs: Vec<(Declaration, OutputFormOf<T>)>,
 }
@@ -494,7 +562,8 @@ impl<T: Target> Default for Binding<T> {
         Binding {
             issuer: Issuer::fresh(),
             wire_types: Vec::new(),
-            representations: Vec::new(),
+            in_representations: Vec::new(),
+            out_representations: Vec::new(),
             rules: Vec::new(),
             outputs: Vec::new(),
         }
@@ -509,65 +578,52 @@ impl<T: Target> Binding<T> {
     /// A wire type generated Rust may use. Declaring an equal wire type again
     /// returns the same id.
     pub fn wire_type(&mut self, wire_type: T::WireType) -> WireTypeId {
-        let index = match self.wire_types.iter().position(|known| *known == wire_type) {
-            Some(index) => index,
-            None => {
-                self.wire_types.push(wire_type);
-                self.wire_types.len() - 1
-            }
-        };
         WireTypeId {
             issuer: self.issuer,
-            index,
+            index: intern(&mut self.wire_types, wire_type),
         }
     }
 
-    /// One way a type crosses. Declaring an equal representation again
-    /// returns the same id.
+    /// One way a type crosses into Rust. Declaring an equal representation
+    /// again returns the same id.
     ///
     /// Panics if a wire type it names was issued by another binding.
-    pub fn representation(&mut self, representation: RepresentationOf<T>) -> ReprId {
-        let wire_types: Vec<WireTypeId> = match &representation {
-            Representation::Terminal {
-                into_rust,
-                out_of_rust,
-            } => into_rust
-                .iter()
-                .chain(out_of_rust.as_ref().map(|handout| &handout.codec))
-                .map(|codec| codec.wire_type)
-                .collect(),
-            Representation::Product { wire_type, .. }
-            | Representation::Callback { wire_type, .. } => {
-                vec![*wire_type]
+    pub fn in_representation(&mut self, representation: InRepresentationOf<T>) -> InReprId {
+        match &representation {
+            InRepresentation::Whole(Codec { wire_type, .. })
+            | InRepresentation::Parts { wire_type, .. }
+            | InRepresentation::Callable { wire_type, .. } => {
+                self.check(wire_type.issuer, "wire type")
             }
-            Representation::Unsupported(_) => Vec::new(),
-        };
-        for wire_type in wire_types {
-            self.check(wire_type.issuer, "wire type");
+            InRepresentation::Unsupported(_) => {}
         }
-        let index = match self
-            .representations
-            .iter()
-            .position(|known| *known == representation)
-        {
-            Some(index) => index,
-            None => {
-                self.representations.push(representation);
-                self.representations.len() - 1
-            }
-        };
-        ReprId {
+        InReprId {
             issuer: self.issuer,
-            index,
+            index: intern(&mut self.in_representations, representation),
         }
     }
 
-    /// The values `scope` covers cross as `representation`.
+    /// One way a type crosses out of Rust. Declaring an equal representation
+    /// again returns the same id.
+    ///
+    /// Panics if a wire type it names was issued by another binding.
+    pub fn out_representation(&mut self, representation: OutRepresentationOf<T>) -> OutReprId {
+        if let OutRepresentation::Whole { codec, .. } = &representation {
+            self.check(codec.wire_type.issuer, "wire type");
+        }
+        OutReprId {
+            issuer: self.issuer,
+            index: intern(&mut self.out_representations, representation),
+        }
+    }
+
+    /// The values `scope` covers cross as `representation`, in its direction.
     ///
     /// Panics if `representation`, or the output `scope` names, was issued by
     /// another binding.
-    pub fn rule(&mut self, scope: Scope, representation: ReprId) {
-        self.check(representation.issuer, "representation");
+    pub fn rule(&mut self, scope: Scope, representation: impl Into<ReprId>) {
+        let representation = representation.into();
+        self.check(representation.issuer(), "representation");
         if let Scope::At(output, _) = &scope {
             self.check(output.issuer, "output");
         }
@@ -577,11 +633,19 @@ impl<T: Target> Binding<T> {
     /// Expose `declaration` in `form`. The id is how a rule addresses a value
     /// inside the output.
     ///
-    /// Panics if the representation a type form names was issued by another
+    /// Panics if a representation a type form names was issued by another
     /// binding.
     pub fn output(&mut self, declaration: Declaration, form: OutputFormOf<T>) -> OutputId {
-        if let OutputForm::Type { representation, .. } = &form {
-            self.check(representation.issuer, "representation");
+        if let OutputForm::Type {
+            into_rust,
+            out_of_rust,
+            ..
+        } = &form
+        {
+            self.check(into_rust.issuer, "representation");
+            if let Some(out_of_rust) = out_of_rust {
+                self.check(out_of_rust.issuer, "representation");
+            }
         }
         self.outputs.push((declaration, form));
         self.output_id(self.outputs.len() - 1)
@@ -593,10 +657,18 @@ impl<T: Target> Binding<T> {
         &self.wire_types[id.index]
     }
 
-    /// The representation `id` names. Panics if another binding issued `id`.
-    pub fn representation_of(&self, id: ReprId) -> &RepresentationOf<T> {
+    /// The into-Rust representation `id` names. Panics if another binding
+    /// issued `id`.
+    pub fn in_representation_of(&self, id: InReprId) -> &InRepresentationOf<T> {
         self.check(id.issuer, "representation");
-        &self.representations[id.index]
+        &self.in_representations[id.index]
+    }
+
+    /// The out-of-Rust representation `id` names. Panics if another binding
+    /// issued `id`.
+    pub fn out_representation_of(&self, id: OutReprId) -> &OutRepresentationOf<T> {
+        self.check(id.issuer, "representation");
+        &self.out_representations[id.index]
     }
 
     /// Every rule, in the order the frontend stated them.
@@ -659,54 +731,49 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                 wire_type
             )?;
         }
-        for (index, representation) in self.representations.iter().enumerate() {
+        let codec =
+            |codec: &Codec<T::Op>| format!("{} {}", codec.wire_type, operation(&codec.operation));
+        for (index, representation) in self.in_representations.iter().enumerate() {
             let described = match representation {
-                Representation::Terminal {
-                    into_rust,
-                    out_of_rust,
-                } => {
-                    let codec = |codec: Option<&Codec<T::Op>>| match codec {
-                        Some(codec) => {
-                            format!("{} {}", codec.wire_type, operation(&codec.operation))
-                        }
-                        None => "-".to_string(),
-                    };
-                    format!(
-                        "terminal  in: {}  out: {}{}",
-                        codec(into_rust.as_ref()),
-                        codec(out_of_rust.as_ref().map(|handout| &handout.codec)),
-                        match out_of_rust
-                            .as_ref()
-                            .and_then(|handout| handout.release.as_ref())
-                        {
-                            Some(release) => format!("  release: {}", operation(release)),
-                            None => String::new(),
-                        }
-                    )
-                }
-                Representation::Product {
+                InRepresentation::Whole(whole) => format!("whole  {}", codec(whole)),
+                InRepresentation::Parts {
                     via,
                     wire_type,
                     read,
                 } => {
-                    format!("product  {wire_type}  {via:?}  read: {}", operation(read))
+                    format!("parts  {wire_type}  {via:?}  read: {}", operation(read))
                 }
-                Representation::Callback {
+                InRepresentation::Callable {
                     wire_type,
                     capture,
                     invoke,
                     routes,
                 } => format!(
-                    "callback  {wire_type}  capture: {}  invoke: {}  routes: [{}]",
+                    "callable  {wire_type}  capture: {}  invoke: {}  routes: [{}]",
                     operation(capture),
                     operation(invoke),
                     routes.iter().map(route).collect::<Vec<_>>().join("; ")
                 ),
-                Representation::Unsupported(reason) => {
-                    format!("unsupported  {}: {}", reason.capability, reason.explanation)
-                }
+                InRepresentation::Unsupported(reason) => unsupported(reason),
             };
-            writeln!(f, "repr     r{index}  {described}")?;
+            writeln!(f, "repr     in{index}  {described}")?;
+        }
+        for (index, representation) in self.out_representations.iter().enumerate() {
+            let described = match representation {
+                OutRepresentation::Whole {
+                    codec: whole,
+                    release,
+                } => format!(
+                    "whole  {}{}",
+                    codec(whole),
+                    match release {
+                        Some(release) => format!("  release: {}", operation(release)),
+                        None => String::new(),
+                    }
+                ),
+                OutRepresentation::Unsupported(reason) => unsupported(reason),
+            };
+            writeln!(f, "repr     out{index}  {described}")?;
         }
         for (scope, representation) in &self.rules {
             let scope = match scope {
@@ -720,11 +787,19 @@ impl<T: Target> std::fmt::Display for Binding<T> {
         for (declaration, form) in &self.outputs {
             match form {
                 OutputForm::Type {
-                    representation,
+                    into_rust,
+                    out_of_rust,
                     release,
                     meta,
                 } => {
-                    writeln!(f, "output   {declaration}  type {representation}  {meta:?}")?;
+                    let out_of_rust = match out_of_rust {
+                        Some(id) => id.to_string(),
+                        None => "-".to_string(),
+                    };
+                    writeln!(
+                        f,
+                        "output   {declaration}  type {into_rust} {out_of_rust}  {meta:?}"
+                    )?;
                     if let Some(release) = release {
                         write_form(f, "release", release)?;
                     }
@@ -742,6 +817,21 @@ impl<T: Target> std::fmt::Display for Binding<T> {
         }
         Ok(())
     }
+}
+
+/// Declaring an equal value again returns the index of the first.
+fn intern<V: PartialEq>(known: &mut Vec<V>, value: V) -> usize {
+    match known.iter().position(|one| *one == value) {
+        Some(index) => index,
+        None => {
+            known.push(value);
+            known.len() - 1
+        }
+    }
+}
+
+fn unsupported(reason: &Unsupported) -> String {
+    format!("unsupported  {}: {}", reason.capability, reason.explanation)
 }
 
 fn tokens(item: &impl quote::ToTokens) -> String {

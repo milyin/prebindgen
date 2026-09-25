@@ -10,8 +10,8 @@ Owner: the registry, from the binding's rules · Previous: [Record binding reque
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits           // what a rule at a position is looked up by
-rules:    Type(Stamp) -> Product { via: Fields, wire_type: <this target's Stamp wire type>, read, build }
-          Type(i64)   -> Terminal { wire_type: <this target's i64 wire type>, identity }
+rules:    Type(Stamp), into Rust -> Parts { via: Fields, wire_type: <this target's Stamp wire type>, read }
+          Type(i64),   into Rust -> Whole { wire_type: <this target's i64 wire type>, identity }
 relations of Stamp: [ Stamp.fields, atomic ] // registered by the registry from Flat
 ```
 
@@ -32,7 +32,7 @@ the struct [choices](../../stages/03-requests.md#what-a-choice-records) these
 pages use — a C `data_struct`, a Kotlin data class — that rule says `Fields`,
 which resolves to `Stamp.fields`, and only then does the registry read the
 relation's parts and plan each. Each part takes the `i64` rule from the
-adapter's scalar table: a `Terminal`, the atomic relation, with nothing under
+adapter's scalar table: a `Whole`, the atomic relation, with nothing under
 it, and the tree ends there.
 
 Selection is the whole of this stage for a struct, and the registry does all

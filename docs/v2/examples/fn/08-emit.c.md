@@ -11,8 +11,8 @@ Owner: the common Rust writer, then `cbindgen`
 FunctionPlan(fn:stamp_sum) frozen, with
     abi, symbol:  extern "C", "stamp_sum"
     params:       [ stamp: Stamp ],  ret: i64
-    node(input):  Product over the Stamp aggregate, ReadMember per part
-    node(output): Terminal over i64, Identity
+    node(input):  Parts over the Stamp aggregate, ReadMember per part
+    node(output): Whole over i64, Identity
 ```
 
 ## Result

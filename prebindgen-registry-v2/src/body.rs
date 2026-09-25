@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use prebindgen_flat::flat::TypeRef;
 
-use crate::{binding::ReprId, plan::PrimitiveId};
+use crate::{binding::InReprId, plan::PrimitiveId};
 
 /// One runtime value inside one body. Not a variable name: the writer chooses
 /// those.
@@ -58,7 +58,7 @@ pub enum Instr {
     /// callback representation's own, since the closure has no caller to hand
     /// one to.
     Closure {
-        representation: ReprId,
+        representation: InReprId,
         captured: ValueId,
         /// The arguments Rust calls it with, and their source types.
         params: Vec<(ValueId, TypeRef)>,

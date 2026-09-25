@@ -319,11 +319,13 @@ impl<T: Target> Binding<T> {
     /// A wire type generated Rust may use. Declaring an equal wire type again
     /// returns the same id.
     pub fn wire_type(&mut self, wire_type: T::WireType) -> WireTypeId;
-    /// One way a type crosses. Declaring an equal representation again
-    /// returns the same id.
-    pub fn representation(&mut self, representation: RepresentationOf<T>) -> ReprId;
-    /// The values `scope` covers cross as `representation`.
-    pub fn rule(&mut self, scope: Scope, representation: ReprId);
+    /// One way a type crosses into Rust, and one way it crosses out.
+    /// Declaring an equal representation again returns the same id.
+    pub fn in_representation(&mut self, representation: InRepresentationOf<T>) -> InReprId;
+    pub fn out_representation(&mut self, representation: OutRepresentationOf<T>) -> OutReprId;
+    /// The values `scope` covers cross as `representation`, in its direction:
+    /// an `InReprId` or an `OutReprId`.
+    pub fn rule(&mut self, scope: Scope, representation: impl Into<ReprId>);
     /// Expose `declaration` in this form. The id is how a rule addresses a
     /// value inside the output.
     pub fn output(&mut self, declaration: Declaration, form: OutputFormOf<T>) -> OutputId;
@@ -347,11 +349,12 @@ pub trait WireType: Clone + Eq + Hash + Debug {
 }
 
 pub enum OutputForm<Op, O> {       // `OutputFormOf<T>` fills in the target's own types.
-    /// One representation of a type, exposed: its wire types' Rust
-    /// declarations, and its foreign declaration. It is also the rule at
-    /// this output's root.
+    /// A type's representations, exposed: their wire types' Rust
+    /// declarations, and the type's foreign declaration. Each is also the
+    /// rule at this output's root, in its direction.
     Type {
-        representation: ReprId,
+        into_rust: InReprId,               // Every type output has one.
+        out_of_rust: Option<OutReprId>,    // If the type crosses out of Rust.
         release: Option<FunctionForm<Op>>, // The wrapper releasing a handed-out value.
         meta: O,
     },
@@ -385,29 +388,37 @@ what is placed there, and refuses the value it would put anywhere else, naming
 the kind by its `name`. The [extensions page](../extensions.md#acceptance)
 gives the rule in full, with the limits other targets would state in it.
 
-A representation is one way a type crosses. A type may have several — `Stamp`
-as a C struct and as a handle — and each is declared once and referred to by
-its `ReprId`, from rules and from outputs alike. It is the answer a target
-used to give when asked, stated in advance instead:
+A representation is one way a type crosses in one direction. A type may have
+several — `Stamp` as a C struct and as a handle — and each is declared once and
+referred to by its id, from rules and from outputs alike. It is the answer a
+target would otherwise give when asked, stated in advance instead. An
+into-Rust representation and an out-of-Rust one are different types, and so
+are their ids, `InReprId` and `OutReprId`; `ReprId` is either:
 
 ```rust
-pub enum Representation<Op> {
-    /// The whole value, one operation each way: a scalar, a handle, a
-    /// fieldless enum. Each direction has a wire type of its own: a C enum
-    /// arrives as `MaybeUninit` of itself.
-    Terminal {
-        into_rust: Option<Codec<Op>>,     // None: never crosses into Rust.
-        out_of_rust: Option<Handout<Op>>, // The codec, and a handle's release.
-    },
-    /// The parts of a relation, carried together in one wire type, into Rust.
-    Product {
+pub enum InRepresentation<Op> {
+    /// The whole value, one operation: a scalar, a handle, a fieldless enum.
+    Whole(Codec<Op>),
+    /// The parts of a relation, carried together in one wire type.
+    Parts {
         via: Via,              // Which relation: Fields.
-        wire_type: WireTypeId,    // The aggregate or object holding the parts.
+        wire_type: WireTypeId, // The aggregate or object holding the parts.
         read: Operation<Op>,   // One part out of the wire type, applied per part.
     },
+    /// A foreign callable, as the closure the registry builds.
+    Callable { wire_type: WireTypeId, capture: Operation<Op>, invoke: Operation<Op>,
+               routes: Vec<FailureRoute<Op>> },
     /// A representation the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
+
+pub enum OutRepresentation<Op> {
+    /// The whole value, one operation, and a handle's release.
+    Whole { codec: Codec<Op>, release: Option<Operation<Op>> },
+    Unsupported(Unsupported),
+}
+
+pub enum ReprId { In(InReprId), Out(OutReprId) }
 
 pub struct Codec<Op> {
     pub wire_type: WireTypeId,
@@ -423,9 +434,10 @@ pub enum Operation<Op> {
 ```
 
 An operation states no operand or result types. Its place in the
-representation fixes them: a `Terminal`'s `into_rust` codec takes its wire type
-and produces the source type, a `Product`'s `read` takes the wire type and
-produces the part's wire type, whatever wire type that part resolves to. The
+representation fixes them: an into-Rust `Whole` codec takes its wire type and
+produces the source type, an out-of-Rust one the reverse, and the `read` of
+`Parts` takes the wire type and produces the part's wire type, whatever wire
+type that part resolves to. The
 registry works them out when it plans the value and feeds them to the writer.
 A standard operation — a member read, a handle taken back or released, a
 fieldless enum matched value by value — is one the registry writes itself,
@@ -436,21 +448,23 @@ For the C `Stamp`, with the frontend's own `CWireType`:
 ```rust
 let i64_c = binding.wire_type(CWireType::I64);
 let unchanged = Codec { wire_type: i64_c, operation: Operation::Standard(StandardOp::Identity) };
-let i64_whole = binding.representation(Representation::Terminal {
-    into_rust: Some(unchanged.clone()),
-    out_of_rust: Some(Handout::owned(unchanged)),
-});
-binding.rule(Scope::Type(key!(i64)), i64_whole);
+let i64_in = binding.in_representation(InRepresentation::Whole(unchanged.clone()));
+let i64_out = binding.out_representation(OutRepresentation::Whole { codec: unchanged, release: None });
+binding.rule(Scope::Type(key!(i64)), i64_in);
+binding.rule(Scope::Type(key!(i64)), i64_out);
 
 let stamp_c = binding.wire_type(CWireType::Aggregate { name: format_ident!("Stamp") });
-let stamp_struct = binding.representation(Representation::Product {
+let stamp_struct = binding.in_representation(InRepresentation::Parts {
     via: Via::Fields,
     wire_type: stamp_c,
     read: Operation::Standard(StandardOp::ReadMember),
 });
+let stamp_out = binding.out_representation(OutRepresentation::struct_unsupported(&key!(Stamp)));
 binding.rule(Scope::Type(key!(Stamp)), stamp_struct);   // every Stamp value
+binding.rule(Scope::Type(key!(Stamp)), stamp_out);
 binding.output(Declaration::Type(key!(Stamp)),          // and the struct, exposed
-               OutputForm::Type { representation: stamp_struct, release: None, meta: () });
+               OutputForm::Type { into_rust: stamp_struct, out_of_rust: Some(stamp_out),
+                                  release: None, meta: () });
 ```
 
 What a C aggregate can have as members — `i64`s, not yet another aggregate, a
@@ -459,11 +473,11 @@ the JNI one, with `JniWireType`:
 
 ```rust
 let jlong = binding.wire_type(JniWireType::Long);
-// i64: a Terminal over `jlong`, as C's is over `i64`.
+// i64: a `Whole` over `jlong` each way, as C's is over `i64`.
 let stamp_obj = binding.wire_type(JniWireType::Object {
     kotlin_class: "example.Stamp".into(),   // so its descriptor is `Lexample/Stamp;`
 });
-let stamp_class = binding.representation(Representation::Product {
+let stamp_class = binding.in_representation(InRepresentation::Parts {
     via: Via::Fields,
     wire_type: stamp_obj,
     read: Operation::Target(JniOp::Getter),   // needs `jni.env`, can fail: see `JniOp`
@@ -473,25 +487,26 @@ binding.rule(Scope::Type(key!(Stamp)), stamp_class);
 
 The C declarations use only standard operations. C's `Target::Op` has one
 value, `COp::Call`, which only [a callback][fn_callback]
-uses: calling through the closure struct a C caller fills in. A scalar kind is one `Type` rule: each frontend records the
-scalars its target carries — `i64`, for both so far — before the binding's
-own declarations. There is no default for a type no rule covers: a
+uses: calling through the closure struct a C caller fills in. A scalar kind is one `Type` rule per direction: each frontend
+records the scalars its target carries — `i64`, for both so far — before the
+binding's own declarations. There is no default for a type no rule covers: a
 representation names a wire type, and one wire type cannot fit every type. A
 value no rule covers is refused as `unsupported.conversion.no_rule`, naming
-the type. How a generic instance such as `Vec<Stamp>` would cross without a
+the type and the direction. How a generic instance such as `Vec<Stamp>` would cross without a
 rule of its own is [designed](../extensions.md#containers), and not built.
 
 ### Conversion rules
 
-A **conversion rule** names the representation of the values in a scope: every
-value of one type, or one value at one position inside one output.
+A **conversion rule** names the representation of the values in a scope that
+cross in its direction: every value of one type, or one value at one position
+inside one output.
 
 ```rust
 pub enum Scope {
     /// Every value of this type, wherever it turns up.
     Type(TypeKey),
     /// The one value at this path inside this output. The empty path is the
-    /// output's own root: a type declaration's value, in both directions.
+    /// output's own root: a type declaration's value.
     At(OutputId, ValuePath),
 }
 
@@ -522,8 +537,9 @@ reads the way a build script author thinks of the value, and a renamed
 parameter makes the rule fail validation instead of silently applying
 nowhere.
 
-When the registry plans a value it uses the rule at the value's own position
-if there is one, and the rule for its type otherwise, whole. That is the only
+When the registry plans a value it uses the rule of the value's direction at
+the value's own position if there is one, and the rule of that direction for
+its type otherwise, whole. That is the only
 precedence. Nothing is merged between the two: a rule at a position replaces
 the type's rule for that value, and says nothing about the value's children,
 which are looked up again at their own positions.
@@ -541,15 +557,18 @@ field is recorded the same way, one step deeper.
 The registry checks the binding against the model before it plans anything,
 and fails the build with invalid input when:
 
-- two rules have the same scope, which is the binding saying two things about
-  one value — a rule at a type output's own root among them, since the
-  output's representation already is that rule;
+- two rules have the same scope and direction, which is the binding saying two
+  things about one value — a rule at a type output's own root among them,
+  since the output's representation of that direction already is that rule;
 - a function form names a symbol that is not a Rust identifier, or restates
   the linkage the writer owns with `#[no_mangle]` or `#[export_name]`;
 - a rule at `At(output, path)` names a position the output does not have: a
   parameter the function does not take, a `return` on a function returning
   nothing, a field of a value whose representation is not read through
   `Fields`, or a field the struct does not have;
+- a rule at a position names a representation of the other direction than the
+  value there crosses in: an out-of-Rust one for a parameter or a field read
+  into Rust, an into-Rust one for a result or a callback's argument;
 - one representation is ruled for two types — by type rules, type outputs and
   rules at positions together — since a representation's operations convert
   whatever type the value it serves has, and would convert one type as
@@ -557,7 +576,7 @@ and fails the build with invalid input when:
 
 The last check resolves each path the way planning will: each step's value
 has its rule looked up in the same order, and a `Field` step needs that
-rule's representation to be a `Product` through `Fields`. So
+rule's representation to be `Parts` through `Fields`. So
 `param stamp.field secs` is valid while `Stamp` crosses through its fields,
 and becomes invalid if a rule makes it an opaque handle — a rule that would
 otherwise sit unused under a value nothing reads into.
@@ -630,25 +649,26 @@ let generation = generate(source_model, &CTarget, binding, source_module)?;
 
 `CbindgenBuilder::binding()` reads the builder's storage once, sorted so that
 a run over unchanged input emits the same file. It records the scalar table,
-then for each declared type a wire type, a representation, the `Type` rule
-and the output naming that representation — `data_type!` a `Product`
-through `Fields`, `ptr_type!` a `Terminal` over a `*mut` wire type with a
-release — for each `callback!` signature a closure-struct wire type, a
-`Callback` representation, its `Type` rule and a `Declaration::Callback`
-output, and for each function an output with its
+then for each declared type a wire type, a representation per direction, the
+`Type` rules and the output naming them — `data_type!` `Parts` through
+`Fields` into Rust and `struct_unsupported` out of it, `ptr_type!` a `Whole`
+over a `*mut` wire type each way, the out-of-Rust one with a release — for each
+`callback!` signature a closure-struct wire type, a `Callable` representation,
+its `Type` rule and a `Declaration::Callback` output, and for each function an output with its
 function form. The JNI frontend does the same with its declarations, and
 states a callback for every `impl Fn(..)` an exported function takes, since
 its build scripts declare none. A check
 that needs the source model runs here too: a C enum numbering a value
-outside `i32` is recorded as `Representation::Unsupported`, with the reason,
-rather than refused later. Neither target holds anything: every choice it
+outside `i32` is recorded as `Unsupported` in both directions, with the
+reason, rather than refused later. Neither target holds anything: every choice it
 writes from arrives with what it is asked to write. What JNI knows of the whole
 binding — the package prefix, the harness object's name — is its Kotlin
 writer's, which reads the finished generation.
 
 A declarator the target has no lowering for — a tagged union, a declared
-conversion — still becomes an output. A type's is exposed as, and ruled by, a
-`Representation::Unsupported`, so a value of it is refused too; anything
+conversion — still becomes an output. A type's is exposed as, and ruled by,
+`Unsupported` representations in both directions, so a value of it is refused
+too; anything
 else's is recorded as `OutputForm::Unsupported`. It is refused by the
 declarator's name before anything under it is planned, and the skip carries
 the capability it waits for.
@@ -764,24 +784,27 @@ Kotlin placement, a C symbol — which the engine does not speak, so a binding
 that needs its diagnostics to tell them apart says so in its own terms, from
 the choices it recorded.
 
-Two declarations of one type are two representations of it, each exposed.
-A type output names the representation it exposes, which is the rule at its
-root, `At(output, [])`, and outranks the type's rule there and nowhere else.
-So `Stamp` declared as a C struct and as a handle is two representations,
-two outputs each naming one, and at most one `Type` rule saying which of the
-two a `Stamp` parameter gets:
+Two declarations of one type are two ways of carrying it, each exposed. A
+type output names the representations it exposes, which are the rules at its
+root, `At(output, [])`, in their directions, and outrank the type's rules
+there and nowhere else. So `Stamp` declared as a C struct and as a handle is
+two outputs each naming its own, and at most one `Type` rule per direction
+saying which a `Stamp` parameter gets:
 
 ```rust
-let stamp_struct = binding.representation(/* Product over the `Stamp` wire_type */);
-let stamp_handle = binding.representation(/* Terminal over `*mut stamp_t`, with a release */);
+let stamp_struct = binding.in_representation(/* Parts over the `Stamp` wire type */);
+let stamp_handle_in = binding.in_representation(/* Whole over `*mut stamp_t` */);
+let stamp_handle_out = binding.out_representation(/* Whole over `*mut stamp_t`, with a release */);
 binding.rule(Scope::Type(key!(Stamp)), stamp_struct);
-binding.output(Declaration::Type(key!(Stamp)), OutputForm::Type { representation: stamp_struct, meta: () });
-binding.output(Declaration::Type(key!(Stamp)), OutputForm::Type { representation: stamp_handle, meta: () });
+binding.output(Declaration::Type(key!(Stamp)),
+               OutputForm::Type { into_rust: stamp_struct, out_of_rust: None, .. });
+binding.output(Declaration::Type(key!(Stamp)),
+               OutputForm::Type { into_rust: stamp_handle_in, out_of_rust: Some(stamp_handle_out), .. });
 ```
 
-The two outputs differ by the representation they name, so they are two
-outputs rather than one stated twice; exposing one representation twice is
-the duplicate. A binding that records two `Type` rules
+The two outputs differ by the representations they name, so they are two
+outputs rather than one stated twice; exposing the same representations twice
+is the duplicate. A binding that records two `Type` rules of one direction
 for one type fails the
 [checks](#what-the-registry-checks-before-planning) instead of having one
 silently win. Which declaration a *value* requires is then settled at
@@ -830,7 +853,7 @@ A reusable conversion plan is a [node](05-represent.md#represent-and-compose-val
 struct NodeKey {
     source: TypeKey,       // Derived internally from crossing.source.key().
     direction: Direction, // Copied from that crossing.
-    representation: ReprId, // Wire type, operations and relation: equal ids are equal content.
+    representation: ReprId, // Wire type, operations, relation and direction: equal ids are equal content.
     children: Vec<NodeId>,// The conversions its parts resolved to.
 }
 ```

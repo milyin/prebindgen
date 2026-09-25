@@ -33,7 +33,7 @@ let callable = binding.wire_type(JniWireType::Callable {
     interface: "example.LongCallback".into(),   // so its descriptor is `Lexample/LongCallback;`
     raw: None,
 });
-let callback = binding.representation(Representation::Callback {
+let callback = binding.in_representation(InRepresentation::Callable {
     wire_type: callable,
     capture: Operation::Target(JniOp::CaptureCallback),   // needs `jni.env`, can fail
     invoke: Operation::Target(JniOp::CallCallback),       // needs nothing, can fail
@@ -51,7 +51,8 @@ binding.rule(Scope::Type(key), callback);
 binding.output(
     Declaration::Callback(key),
     OutputForm::Type {
-        representation: callback,
+        into_rust: callback,
+        out_of_rust: None,
         release: None,
         meta: JniOutput::Callback { package: "example".into(), class: "LongCallback".into(), raw: None },
     },

@@ -10,9 +10,9 @@ use prebindgen_flat::flat::Flat;
 
 use crate::{
     binding::{
-        Binding, Codec, Failure, FailureRoute, FunctionForm, Handout, Operation, OutputForm,
-        OutputFormOf, Report, ReprId, Representation, Scope, StandardOp, Step, TargetOp, ValuePath,
-        Via, WireKind, WireType,
+        Binding, Codec, Failure, FailureRoute, FunctionForm, InReprId, InRepresentation, Operation,
+        OutReprId, OutRepresentation, OutputForm, OutputFormOf, Report, ReprId, Scope, StandardOp,
+        Step, TargetOp, ValuePath, Via, WireKind, WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
@@ -431,6 +431,37 @@ enum Shape {
     ScalarThrough,
 }
 
+/// How a type's values cross, one representation per direction they cross in:
+/// what a frontend states for one declared type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Repr {
+    into_rust: InReprId,
+    out_of_rust: Option<OutReprId>,
+}
+
+impl Repr {
+    fn ids(self) -> impl Iterator<Item = ReprId> {
+        std::iter::once(ReprId::In(self.into_rust)).chain(self.out_of_rust.map(ReprId::Out))
+    }
+
+    /// The one for values crossing at the end of `path`, which a rule there
+    /// has to serve.
+    fn at(self, path: &[Step]) -> ReprId {
+        let out_of_rust = path.iter().fold(false, |out, step| match step {
+            Step::Param(_) => false,
+            Step::Return | Step::Arg(_) => true,
+            Step::Field(_) => out,
+        });
+        match out_of_rust {
+            false => ReprId::In(self.into_rust),
+            true => ReprId::Out(
+                self.out_of_rust
+                    .expect("a rule out of Rust names a representation with that direction"),
+            ),
+        }
+    }
+}
+
 /// A miniature frontend: what the binding declares, stated as a binding.
 ///
 /// Rules at a position name the function by name and are resolved to its
@@ -438,10 +469,10 @@ enum Shape {
 /// the function's declaration.
 struct Fixture {
     binding: Binding<Mini>,
-    scalar: ReprId,
+    scalar: Repr,
     outputs: Vec<(Declaration, OutputFormOf<Mini>)>,
     rules: Vec<(Scope, ReprId)>,
-    at: Vec<(Declaration, Vec<Step>, ReprId)>,
+    at: Vec<(Declaration, Vec<Step>, Repr)>,
 }
 
 fn fixture() -> Fixture {
@@ -451,22 +482,28 @@ fn fixture() -> Fixture {
         wire_type: i64_wire,
         operation: Operation::Standard(StandardOp::Identity),
     };
-    let scalar = binding.representation(Representation::Terminal {
-        into_rust: Some(unchanged.clone()),
-        out_of_rust: Some(Handout::owned(unchanged)),
-    });
+    let scalar = Repr {
+        into_rust: binding.in_representation(InRepresentation::Whole(unchanged.clone())),
+        out_of_rust: Some(binding.out_representation(OutRepresentation::Whole {
+            codec: unchanged,
+            release: None,
+        })),
+    };
     Fixture {
         binding,
         scalar,
         outputs: Vec::new(),
-        rules: vec![(Scope::Type(key("i64")), scalar)],
+        rules: scalar
+            .ids()
+            .map(|id| (Scope::Type(key("i64")), id))
+            .collect(),
         at: Vec::new(),
     }
 }
 
 impl Fixture {
-    /// Declare a representation.
-    fn repr(&mut self, shape: Shape) -> ReprId {
+    /// Declare a type's representations.
+    fn repr(&mut self, shape: Shape) -> Repr {
         let aggregate = |binding: &mut Binding<Mini>, name: &str, kind, mirror| {
             binding.wire_type(Wire::Aggregate {
                 kind,
@@ -474,63 +511,67 @@ impl Fixture {
                 mirror,
             })
         };
-        let representation = match shape {
-            Shape::Struct(name) => Representation::Product {
-                via: Via::Fields,
-                wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
-                read: Operation::Standard(StandardOp::ReadMember),
-            },
-            Shape::FallibleStruct(name) => Representation::Product {
-                via: Via::Fields,
-                wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
-                read: Operation::Target(Op::ReadFallibly),
-            },
-            Shape::MirroredStruct(name) => Representation::Product {
-                via: Via::Fields,
-                wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, true),
-                read: Operation::Standard(StandardOp::ReadMember),
-            },
-            Shape::StructOf(name, kind) => Representation::Product {
-                via: Via::Fields,
-                wire_type: aggregate(&mut self.binding, name, kind, false),
-                read: Operation::Standard(StandardOp::ReadMember),
-            },
+        let parts = |wire_type| InRepresentation::Parts {
+            via: Via::Fields,
+            wire_type,
+            read: Operation::Standard(StandardOp::ReadMember),
+        };
+        let (into_rust, out_of_rust) = match shape {
+            Shape::Struct(name) => (
+                parts(aggregate(&mut self.binding, name, Kind::Aggregate, false)),
+                None,
+            ),
+            Shape::FallibleStruct(name) => (
+                InRepresentation::Parts {
+                    via: Via::Fields,
+                    wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
+                    read: Operation::Target(Op::ReadFallibly),
+                },
+                None,
+            ),
+            Shape::MirroredStruct(name) => (
+                parts(aggregate(&mut self.binding, name, Kind::Aggregate, true)),
+                None,
+            ),
+            Shape::StructOf(name, kind) => {
+                (parts(aggregate(&mut self.binding, name, kind, false)), None)
+            }
             Shape::Handle => {
                 let pointer = self.binding.wire_type(Wire::Pointer {
                     name: quote::format_ident!("Raw"),
                 });
-                Representation::Terminal {
-                    into_rust: Some(Codec {
+                (
+                    InRepresentation::Whole(Codec {
                         wire_type: pointer,
                         operation: Operation::Standard(StandardOp::FromRaw),
                     }),
-                    out_of_rust: Some(Handout {
+                    Some(OutRepresentation::Whole {
                         codec: Codec {
                             wire_type: pointer,
                             operation: Operation::Standard(StandardOp::IntoRaw),
                         },
                         release: Some(Operation::Standard(StandardOp::Release)),
                     }),
-                }
+                )
             }
             Shape::SplitHandle => {
                 let pointer = self.binding.wire_type(Wire::Pointer {
                     name: quote::format_ident!("Raw"),
                 });
                 let integer = self.binding.wire_type(Wire::Address);
-                Representation::Terminal {
-                    into_rust: Some(Codec {
+                (
+                    InRepresentation::Whole(Codec {
                         wire_type: pointer,
                         operation: Operation::Standard(StandardOp::FromRaw),
                     }),
-                    out_of_rust: Some(Handout {
+                    Some(OutRepresentation::Whole {
                         codec: Codec {
                             wire_type: integer,
                             operation: Operation::Standard(StandardOp::IntoRaw),
                         },
                         release: Some(Operation::Standard(StandardOp::Release)),
                     }),
-                }
+                )
             }
             Shape::ScalarThrough => {
                 let i64_wire = self.binding.wire_type(Wire::Scalar);
@@ -538,18 +579,24 @@ impl Fixture {
                     wire_type: i64_wire,
                     operation: Operation::Target(Op::Rebase),
                 };
-                Representation::Terminal {
-                    into_rust: Some(through.clone()),
-                    out_of_rust: Some(Handout::owned(through)),
-                }
+                (
+                    InRepresentation::Whole(through.clone()),
+                    Some(OutRepresentation::Whole {
+                        codec: through,
+                        release: None,
+                    }),
+                )
             }
         };
-        self.binding.representation(representation)
+        Repr {
+            into_rust: self.binding.in_representation(into_rust),
+            out_of_rust: out_of_rust.map(|out| self.binding.out_representation(out)),
+        }
     }
 
     /// A callback representation: a closure wire type holding scalars and
     /// pointers, a capture, and an invocation that calls as `call` says.
-    fn callback_repr(&mut self, call: Call) -> ReprId {
+    fn callback_repr(&mut self, call: Call) -> Repr {
         let wire_type = self.binding.wire_type(Wire::Closure {
             kind: Kind::Closure,
             name: quote::format_ident!("Closure"),
@@ -571,24 +618,28 @@ impl Fixture {
             }],
             _ => Vec::new(),
         };
-        self.binding.representation(Representation::Callback {
-            wire_type,
-            capture: Operation::Target(Op::Capture),
-            invoke,
-            routes,
-        })
+        Repr {
+            into_rust: self.binding.in_representation(InRepresentation::Callable {
+                wire_type,
+                capture: Operation::Target(Op::Capture),
+                invoke,
+                routes,
+            }),
+            out_of_rust: None,
+        }
     }
 
     /// A declared callback signature, as the C frontend's `callback!` states
     /// one: the rule for every value of it, and the output exposing it.
-    fn declare_callback(&mut self, args: &str, call: Call) -> ReprId {
+    fn declare_callback(&mut self, args: &str, call: Call) -> Repr {
         let repr = self.callback_repr(call);
         let key = callback_key(args);
-        self.rules.push((Scope::Type(key.clone()), repr));
+        self.crossing_key(key.clone(), repr);
         self.outputs.push((
             Declaration::Callback(key),
             OutputForm::Type {
-                representation: repr,
+                into_rust: repr.into_rust,
+                out_of_rust: None,
                 release: None,
                 meta: (),
             },
@@ -598,20 +649,22 @@ impl Fixture {
 
     /// Every value of this type crosses as `repr` — without asking for the
     /// type itself to be declared.
-    fn crossing(&mut self, name: &str, repr: ReprId) -> &mut Self {
+    fn crossing(&mut self, name: &str, repr: Repr) -> &mut Self {
         self.crossing_key(key(name), repr)
     }
 
     /// The same, for a type named by its key.
-    fn crossing_key(&mut self, key: prebindgen_flat::TypeKey, repr: ReprId) -> &mut Self {
-        self.rules.push((Scope::Type(key), repr));
+    fn crossing_key(&mut self, key: prebindgen_flat::TypeKey, repr: Repr) -> &mut Self {
+        for id in repr.ids() {
+            self.rules.push((Scope::Type(key.clone()), id));
+        }
         self
     }
 
     /// A declared type: how its values cross, and the output exposing that
     /// representation. The two are one declarator in both real frontends. A
     /// handle gets a release exported as `<name>_free`.
-    fn declare_type(&mut self, name: &str, shape: Shape) -> ReprId {
+    fn declare_type(&mut self, name: &str, shape: Shape) -> Repr {
         let repr = self.repr(shape);
         self.crossing(name, repr);
         self.expose(name, repr);
@@ -619,16 +672,15 @@ impl Fixture {
     }
 
     /// An output exposing `repr` of the type `name`, with a release when the
-    /// representation has one.
-    fn expose(&mut self, name: &str, repr: ReprId) -> &mut Self {
-        let release = match self.binding.representation_of(repr) {
-            Representation::Terminal {
-                out_of_rust:
-                    Some(Handout {
-                        release: Some(_), ..
-                    }),
-                ..
-            } => {
+    /// out-of-Rust representation has one.
+    fn expose(&mut self, name: &str, repr: Repr) -> &mut Self {
+        let handed_out = repr
+            .out_of_rust
+            .map(|id| self.binding.out_representation_of(id));
+        let release = match handed_out {
+            Some(OutRepresentation::Whole {
+                release: Some(_), ..
+            }) => {
                 let item = key(name).short_name().expect("a named type");
                 let mut release = exported(&format!("{item}_free"), Routes::None);
                 release.inputs = vec![quote::format_ident!("arg0")];
@@ -643,13 +695,14 @@ impl Fixture {
     fn expose_with(
         &mut self,
         name: &str,
-        repr: ReprId,
+        repr: Repr,
         release: Option<FunctionForm<Op>>,
     ) -> &mut Self {
         self.outputs.push((
             ty(name),
             OutputForm::Type {
-                representation: repr,
+                into_rust: repr.into_rust,
+                out_of_rust: repr.out_of_rust,
                 release,
                 meta: (),
             },
@@ -672,7 +725,7 @@ impl Fixture {
 
     /// How one value inside one function crosses, overriding its type's rule:
     /// `("stamp_max", [param stamp])`, `("stamp_max", [param stamp, field secs])`.
-    fn at(&mut self, function_name: &str, path: Vec<Step>, repr: ReprId) -> &mut Self {
+    fn at(&mut self, function_name: &str, path: Vec<Step>, repr: Repr) -> &mut Self {
         self.at.push((function(function_name), path, repr));
         self
     }
@@ -709,7 +762,8 @@ impl Fixture {
                 .iter()
                 .find(|(declared, _)| *declared == declaration)
                 .expect("a rule at a position names a declared output");
-            rules.push((Scope::At(*output, ValuePath(path)), repr));
+            let id = repr.at(&path);
+            rules.push((Scope::At(*output, ValuePath(path)), id));
         }
         for (scope, repr) in rules {
             binding.rule(scope, repr);
@@ -1253,7 +1307,8 @@ fn a_type_form_on_an_exported_function_is_an_error() {
     fixture.declare(
         function("stamp_sum"),
         OutputForm::Type {
-            representation: strukt,
+            into_rust: strukt.into_rust,
+            out_of_rust: None,
             release: None,
             meta: (),
         },
@@ -1628,19 +1683,24 @@ fn two_rules_for_one_value_are_an_error() {
     fixture.crossing("Stamp", strukt);
     let error = fixture.generate(model()).expect_err("refuses");
     assert!(
-        error.to_string().contains("two rules cover every `Stamp`"),
+        error
+            .to_string()
+            .contains("two rules cover every `Stamp` into Rust"),
         "{error}"
     );
 
     let mut fixture = self::fixture();
     let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
     let mut binding = fixture.build(&model());
-    binding.rule(Scope::At(binding.output_id(0), ValuePath::root()), strukt);
+    binding.rule(
+        Scope::At(binding.output_id(0), ValuePath::root()),
+        strukt.into_rust,
+    );
     let error = generate(model(), &Mini, binding, syn::parse_quote!(source)).expect_err("refuses");
     assert!(
         error
             .to_string()
-            .contains("two rules cover `type:Stamp` itself"),
+            .contains("two rules cover `type:Stamp` itself into Rust"),
         "{error}"
     );
 }
@@ -1751,10 +1811,13 @@ fn a_binding_prints_what_planning_reads() {
     for line in [
         "wire     w0  i64  scalar  Scalar",
         "wire     w1  Stamp  aggregate  Aggregate { kind: Aggregate, name: Ident(Stamp), mirror: false }",
-        "repr     r1  product  w1  Fields  read: Standard(ReadMember)",
-        "rule     type i64  r0",
-        "rule     type Stamp  r1",
-        "output   type:Stamp  type r1  ()",
+        "repr     in0  whole  w0 Standard(Identity)",
+        "repr     in1  parts  w1  Fields  read: Standard(ReadMember)",
+        "repr     out0  whole  w0 Standard(Identity)",
+        "rule     type i64  in0",
+        "rule     type i64  out0",
+        "rule     type Stamp  in1",
+        "output   type:Stamp  type in1 -  ()",
         "output   fn:stamp_sum  function  ()",
         "         form  extern \"C\" stamp_sum  context []  inputs [arg0]",
     ] {
@@ -1809,7 +1872,9 @@ fn an_id_from_another_binding_is_refused() {
     let foreign = other.repr(Shape::Struct("Stamp"));
     let mut fixture = fixture();
     fixture.repr(Shape::Struct("Stamp"));
-    fixture.binding.rule(Scope::Type(key("Stamp")), foreign);
+    fixture
+        .binding
+        .rule(Scope::Type(key("Stamp")), foreign.into_rust);
 }
 
 /// A guard the capture reader injected reaches the generated file, whatever
@@ -2283,8 +2348,8 @@ fn an_unrouted_failure_inside_a_call_refuses_the_callback() {
     }
 }
 
-/// An argument that cannot leave Rust refuses the callback at that argument,
-/// and the function taking it goes down with it.
+/// An argument no rule carries out of Rust refuses the callback at that
+/// argument, and the function taking it goes down with it.
 #[test]
 fn an_argument_that_cannot_leave_rust_refuses_the_callback() {
     let mut fixture = fixture();
@@ -2294,7 +2359,8 @@ fn an_argument_that_cannot_leave_rust_refuses_the_callback() {
     let generation = fixture.generate(model()).expect("plans");
     match outcome(&generation, "fn:stamp_emit") {
         Outcome::Skipped(skip) => {
-            assert_eq!(skip.capability.as_str(), "unsupported.struct.out_of_rust");
+            assert_eq!(skip.capability.as_str(), "unsupported.conversion.no_rule");
+            assert!(skip.explanation.contains("out of Rust"), "{skip:?}");
             assert_eq!(
                 skip.dependency_path.last().map(String::as_str),
                 Some("arg 0")
@@ -2339,7 +2405,8 @@ fn a_rule_can_address_a_callback_argument() {
     fixture.declare(
         Declaration::Callback(key),
         OutputForm::Type {
-            representation: repr,
+            into_rust: repr.into_rust,
+            out_of_rust: None,
             release: None,
             meta: (),
         },
@@ -2369,7 +2436,7 @@ fn a_callback_representation_prints_what_a_call_does() {
     let mut fixture = fixture();
     fixture.declare_callback("i64", Call::Routed);
     let printed = fixture.build(&model()).to_string();
-    let expected = "callback  w1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
+    let expected = "callable  w1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
                     fails runtime Error  routes: [runtime: report Error by Target(Report), if \
                     that fails abort, then return ()]";
     assert!(
@@ -2377,7 +2444,7 @@ fn a_callback_representation_prints_what_a_call_does() {
         "missing `{expected}` in:\n{printed}"
     );
     assert!(
-        printed.contains("output   callback:impl Fn(i64)+Send+Sync+'static  type r1  ()"),
+        printed.contains("output   callback:impl Fn(i64)+Send+Sync+'static  type in1 -  ()"),
         "{printed}"
     );
 }
@@ -2400,8 +2467,8 @@ fn a_call_needing_a_runtime_context_refuses_the_callback() {
     }
 }
 
-/// A callable never leaves Rust: a function returning one is refused where
-/// its result is.
+/// A callable never leaves Rust: no representation carries one out, so a
+/// function returning one is refused where its result is.
 #[test]
 fn a_callback_leaving_rust_is_refused() {
     let mut fixture = fixture();
@@ -2410,7 +2477,7 @@ fn a_callback_leaving_rust_is_refused() {
     let generation = fixture.generate(model()).expect("plans");
     match outcome(&generation, "fn:each_new") {
         Outcome::Skipped(skip) => {
-            assert_eq!(skip.capability.as_str(), "unsupported.callback.out_of_rust");
+            assert_eq!(skip.capability.as_str(), "unsupported.conversion.no_rule");
             assert_eq!(
                 skip.dependency_path.last().map(String::as_str),
                 Some("return")
@@ -2448,18 +2515,24 @@ fn an_argument_the_callable_cannot_have_refuses_the_callback() {
         kind: Kind::ScalarClosure,
         name: quote::format_ident!("ScalarClosure"),
     });
-    let repr = fixture.binding.representation(Representation::Callback {
-        wire_type: scalars_only,
-        capture: Operation::Target(Op::Capture),
-        invoke: Operation::Target(Op::Invoke),
-        routes: Vec::new(),
-    });
+    let repr = Repr {
+        into_rust: fixture
+            .binding
+            .in_representation(InRepresentation::Callable {
+                wire_type: scalars_only,
+                capture: Operation::Target(Op::Capture),
+                invoke: Operation::Target(Op::Invoke),
+                routes: Vec::new(),
+            }),
+        out_of_rust: None,
+    };
     let key = callback_key("Token, i64");
     fixture.crossing_key(key.clone(), repr);
     fixture.declare(
         Declaration::Callback(key),
         OutputForm::Type {
-            representation: repr,
+            into_rust: repr.into_rust,
+            out_of_rust: None,
             release: None,
             meta: (),
         },
@@ -2546,18 +2619,40 @@ fn a_representation_ruled_for_two_types_is_an_error() {
 }
 
 /// A handle's release frees what it handed out, so it belongs to the
-/// out-of-Rust half, and a representation that never hands a value out has
-/// no release to state.
+/// out-of-Rust representation.
 #[test]
 fn a_release_is_part_of_what_is_handed_out() {
     let mut fixture = fixture();
     fixture.declare_type("Token", Shape::Handle);
     let printed = fixture.build(&model()).to_string();
     assert!(
-        printed.contains(
-            "terminal  in: w1 Standard(FromRaw) fails binding String  out: w1 \
-             Standard(IntoRaw)  release: Standard(Release)"
-        ),
+        printed.contains("repr     out1  whole  w1 Standard(IntoRaw)  release: Standard(Release)"),
         "{printed}"
+    );
+}
+
+/// A position crosses in one direction — a parameter into Rust, a result out
+/// of it — so a rule there naming a representation of the other direction
+/// fails the build rather than sitting unused.
+#[test]
+fn a_rule_of_the_other_direction_at_a_position_is_an_error() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let scalar = fixture.scalar;
+    let mut binding = fixture.build(&model());
+    let function = binding.output_id(1);
+    binding.rule(
+        Scope::At(function, ValuePath(vec![Step::Return])),
+        scalar.into_rust,
+    );
+    let error = generate(model(), &Mini, binding, syn::parse_quote!(source))
+        .expect_err("a result does not cross into Rust");
+    assert!(
+        error.to_string().contains(
+            "the value there crosses out of Rust, and the rule's in0 serves values crossing \
+             into Rust"
+        ),
+        "{error}"
     );
 }

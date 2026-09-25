@@ -12,7 +12,7 @@ The two [selections][typedef_select], each with nothing under it:
 ```text
 Ledger, IntoRust,  relation atomic
 Ledger, OutOfRust, relation atomic
-representation: the Type(Ledger) rule's — a Terminal with a codec each way and a release
+representations: the Type(Ledger) rules' — a Whole each way, the out-of-Rust one with a release
 ```
 
 ## Result

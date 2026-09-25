@@ -73,9 +73,9 @@ are answered.
   an opaque handle, it is carried whole and its fields are never read. The
   frontend knows which when it records the declaration, so it records the
   relation with it: the
-  [conversion rule](03-requests.md#conversion-rules) for `Stamp` holds a
-  `Product` [representation](05-represent.md#represent-and-compose-values)
-  through `Via::Fields`, or a `Terminal` one, which is the atomic relation.
+  [conversion rule](03-requests.md#conversion-rules) for `Stamp` into Rust
+  holds a `Parts` [representation](05-represent.md#represent-and-compose-values)
+  through `Via::Fields`, or a `Whole` one, which is the atomic relation.
   The registry finds the rule that applies to this value, resolves the
   relation against the source model, and walks the result. When a rule asks
   for something V2 has no lowering for, such as one of the C declarators it
@@ -101,10 +101,10 @@ loop, which calls no target code:
 
 ```text
 plan(type, direction, position):
-    repr = rules.at(position)                         # a rule for this one value,
-        or rules.for_type(type)                       # else one for every value of the type,
+    repr = rules.at(position, direction)              # a rule for this one value,
+        or rules.for_type(type, direction)            # else one for every value of the type,
         or refuse: unsupported.conversion.no_rule     # cheap: a lookup, no recursion yet
-    relation = the relation of type that repr names   # Terminal: atomic; Product: its Via
+    relation = the relation of type that repr names   # Whole: atomic; Parts: its Via
     mark (type, direction, repr) as being resolved
                                                       # meeting this mark again is a cycle
 
@@ -343,17 +343,17 @@ Which of a type's relations a value takes is not chosen by anyone at planning
 time. The representation that applies to the value states it:
 
 ```rust
-/// Which relation of its type a `Product` representation reads a value through.
+/// Which relation of its type an `InRepresentation::Parts` reads a value through.
 pub enum Via {
     /// The struct relation: one part per field.
     Fields,
 }
 ```
 
-A `Terminal` representation is the atomic relation of any type. A `Callback`
-representation is the callback relation of an `impl Fn(..)`, and is refused
-as `unsupported.type.not_a_callback` on any other type. A `Product`
-through `Via::Fields` is the struct relation of a type the model describes as
+A `Whole` representation, in either direction, is the atomic relation of any
+type. A `Callable` representation is the callback relation of an
+`impl Fn(..)`, and is refused as `unsupported.type.not_a_callback` on any
+other type. `Parts` through `Via::Fields` is the struct relation of a type the model describes as
 a struct. `Fields` on anything else — an extern, a type the binding declared
 although the source never exported it — has no relation to resolve to, and
 the value is refused as `unsupported.type.not_a_struct`. That refusal is a
@@ -430,7 +430,7 @@ pub struct OperationFeed<'a, T: Target> {
     pub error: Option<syn::Ident>,
     /// What the expression must produce.
     pub result: Option<Fed<'a, T>>,
-    /// For an operation applied per part, such as a `Product`'s `read`: which part.
+    /// For an operation applied per part, such as the `read` of `Parts`: which part.
     pub part: Option<&'a Part>,
     /// For a callback's `capture` and `invoke`: the arguments' wire types,
     /// each named for `invoke`, which is handed them.
@@ -445,7 +445,7 @@ pub enum Fed<'a, T: Target> {
 
 pub struct WireTypeFeed<'a, T: Target> {
     pub wire_type: &'a T::WireType,
-    /// For the wire type of a `Product` or a `Callback`: each part, with the
+    /// For the wire type of `Parts` or of a `Callable`: each part, with the
     /// wire type it resolved to.
     pub parts: Vec<(&'a Part, &'a T::WireType)>,
     /// For a wire type of a fieldless enum's value: that enum, from the model.
