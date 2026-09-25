@@ -160,15 +160,15 @@ fn wire_types<T: Target>(
             .and_then(|name| flat.unit_enum(&name));
         let root = values.inputs.first().map(|root| &nodes[root.0]);
         let mut used: Vec<(WireTypeId, bool)> = match binding.in_representation_of(*into_rust) {
-            InRepresentation::Whole(codec) => vec![(codec.wire_type, false)],
+            InRepresentation::Whole { wire_type, .. } => vec![(*wire_type, false)],
             InRepresentation::Parts { wire_type, .. }
             | InRepresentation::Callable { wire_type, .. } => vec![(*wire_type, true)],
             InRepresentation::Unsupported(_) => Vec::new(),
         };
-        if let Some(OutRepresentation::Whole { codec, .. }) =
+        if let Some(OutRepresentation::Whole { wire_type, .. }) =
             out_of_rust.map(|id| binding.out_representation_of(id))
         {
-            used.push((codec.wire_type, false));
+            used.push((*wire_type, false));
         }
         for (wire_type, with_parts) in used {
             if !written.insert(wire_type) {

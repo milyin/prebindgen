@@ -263,7 +263,7 @@ uses it:
 ```rust
 enum InRepresentation<Op> {
     // The whole value, one operation: a scalar, a handle, a fieldless enum.
-    Whole(Codec<Op>),
+    Whole { wire_type: WireTypeId, operation: Operation<Op> },
     // The parts of a relation, carried together in one wire type.
     Parts { via: Via, wire_type: WireTypeId, read: Operation<Op> },
     // A foreign callable, as the closure the registry builds.
@@ -280,13 +280,8 @@ enum InRepresentation<Op> {
 enum OutRepresentation<Op> {
     // The whole value, one operation — and, for a value the foreign side holds
     // and owes back, the operation that frees one unconverted.
-    Whole { codec: Codec<Op>, release: Option<Operation<Op>> },
+    Whole { wire_type: WireTypeId, operation: Operation<Op>, release: Option<Operation<Op>> },
     Unsupported(Unsupported),
-}
-
-struct Codec<Op> {
-    wire_type: WireTypeId,
-    operation: Operation<Op>,
 }
 ```
 

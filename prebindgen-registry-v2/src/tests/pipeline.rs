@@ -10,7 +10,7 @@ use prebindgen_flat::flat::Flat;
 
 use crate::{
     binding::{
-        Binding, Codec, Failure, FailureRoute, FunctionForm, InReprId, InRepresentation, Operation,
+        Binding, Failure, FailureRoute, FunctionForm, InReprId, InRepresentation, Operation,
         OutReprId, OutRepresentation, OutputForm, OutputFormOf, Report, ReprId, Scope, StandardOp,
         Step, TargetOp, ValuePath, Via, WireKind, WireType,
     },
@@ -478,14 +478,14 @@ struct Fixture {
 fn fixture() -> Fixture {
     let mut binding = Binding::new();
     let i64_wire = binding.wire_type(Wire::Scalar);
-    let unchanged = Codec {
-        wire_type: i64_wire,
-        operation: Operation::Standard(StandardOp::Identity),
-    };
     let scalar = Repr {
-        into_rust: binding.in_representation(InRepresentation::Whole(unchanged.clone())),
+        into_rust: binding.in_representation(InRepresentation::Whole {
+            wire_type: i64_wire,
+            operation: Operation::Standard(StandardOp::Identity),
+        }),
         out_of_rust: Some(binding.out_representation(OutRepresentation::Whole {
-            codec: unchanged,
+            wire_type: i64_wire,
+            operation: Operation::Standard(StandardOp::Identity),
             release: None,
         })),
     };
@@ -541,15 +541,13 @@ impl Fixture {
                     name: quote::format_ident!("Raw"),
                 });
                 (
-                    InRepresentation::Whole(Codec {
+                    InRepresentation::Whole {
                         wire_type: pointer,
                         operation: Operation::Standard(StandardOp::FromRaw),
-                    }),
+                    },
                     Some(OutRepresentation::Whole {
-                        codec: Codec {
-                            wire_type: pointer,
-                            operation: Operation::Standard(StandardOp::IntoRaw),
-                        },
+                        wire_type: pointer,
+                        operation: Operation::Standard(StandardOp::IntoRaw),
                         release: Some(Operation::Standard(StandardOp::Release)),
                     }),
                 )
@@ -560,29 +558,27 @@ impl Fixture {
                 });
                 let integer = self.binding.wire_type(Wire::Address);
                 (
-                    InRepresentation::Whole(Codec {
+                    InRepresentation::Whole {
                         wire_type: pointer,
                         operation: Operation::Standard(StandardOp::FromRaw),
-                    }),
+                    },
                     Some(OutRepresentation::Whole {
-                        codec: Codec {
-                            wire_type: integer,
-                            operation: Operation::Standard(StandardOp::IntoRaw),
-                        },
+                        wire_type: integer,
+                        operation: Operation::Standard(StandardOp::IntoRaw),
                         release: Some(Operation::Standard(StandardOp::Release)),
                     }),
                 )
             }
             Shape::ScalarThrough => {
                 let i64_wire = self.binding.wire_type(Wire::Scalar);
-                let through = Codec {
-                    wire_type: i64_wire,
-                    operation: Operation::Target(Op::Rebase),
-                };
                 (
-                    InRepresentation::Whole(through.clone()),
+                    InRepresentation::Whole {
+                        wire_type: i64_wire,
+                        operation: Operation::Target(Op::Rebase),
+                    },
                     Some(OutRepresentation::Whole {
-                        codec: through,
+                        wire_type: i64_wire,
+                        operation: Operation::Target(Op::Rebase),
                         release: None,
                     }),
                 )

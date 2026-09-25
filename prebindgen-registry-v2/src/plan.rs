@@ -14,7 +14,7 @@ use prebindgen_flat::{
 
 use crate::{
     binding::{
-        Binding, Codec, Failure, FailureRoute, FunctionFormOf, InRepresentation, Operation,
+        Binding, Failure, FailureRoute, FunctionFormOf, InRepresentation, Operation,
         OutRepresentation, OutputForm, OutputId, ReprId, Scope, Step, ValuePath, Via, WireKind,
         WireKindOf, WireType, WireTypeId,
     },
@@ -444,7 +444,7 @@ impl<'a, T: Target> Run<'a, T> {
                 InRepresentation::Unsupported(reason) => {
                     return Ok(Planned::refused(reason.clone(), position))
                 }
-                InRepresentation::Whole(_) => Relation::Atomic,
+                InRepresentation::Whole { .. } => Relation::Atomic,
                 InRepresentation::Callable { .. } => match relations
                     .iter()
                     .find(|relation| matches!(relation, Relation::Callback(_)))
@@ -579,15 +579,30 @@ impl<'a, T: Target> Run<'a, T> {
         };
         let (wire_type, result) = match representation {
             ReprId::Out(id) => match binding.out_representation_of(id) {
-                OutRepresentation::Whole { codec, .. } => {
-                    self.whole(&mut body, codec, crossing, input, &mut failures)
-                }
+                OutRepresentation::Whole {
+                    wire_type,
+                    operation,
+                    ..
+                } => self.whole(
+                    &mut body,
+                    (*wire_type, operation),
+                    crossing,
+                    input,
+                    &mut failures,
+                ),
                 OutRepresentation::Unsupported(_) => return Err(unsupported()),
             },
             ReprId::In(id) => match binding.in_representation_of(id) {
-                InRepresentation::Whole(codec) => {
-                    self.whole(&mut body, codec, crossing, input, &mut failures)
-                }
+                InRepresentation::Whole {
+                    wire_type,
+                    operation,
+                } => self.whole(
+                    &mut body,
+                    (*wire_type, operation),
+                    crossing,
+                    input,
+                    &mut failures,
+                ),
                 InRepresentation::Parts {
                     wire_type, read, ..
                 } => {
@@ -752,26 +767,26 @@ impl<'a, T: Target> Run<'a, T> {
     fn whole(
         &mut self,
         body: &mut BodyBuilder,
-        codec: &Codec<T::Op>,
+        (wire_type, operation): (WireTypeId, &Operation<T::Op>),
         crossing: &Crossing,
         input: ValueId,
         failures: &mut Vec<FailureCategory>,
     ) -> (WireTypeId, ValueId) {
         let (value, result) = match crossing.direction {
-            Direction::IntoRust => (Slot::WireType(codec.wire_type), Slot::Source),
-            Direction::OutOfRust => (Slot::Source, Slot::WireType(codec.wire_type)),
+            Direction::IntoRust => (Slot::WireType(wire_type), Slot::Source),
+            Direction::OutOfRust => (Slot::Source, Slot::WireType(wire_type)),
         };
-        failures.extend(codec.operation.failure().map(|f| f.category));
+        failures.extend(operation.failure().map(|f| f.category));
         let produced = self.apply(
             body,
-            &codec.operation,
+            operation,
             &crossing.ty,
             (value, input),
             Some(result),
             None,
             &[],
         );
-        (codec.wire_type, produced)
+        (wire_type, produced)
     }
 
     /// The kind of the wire type a planned value crosses in.

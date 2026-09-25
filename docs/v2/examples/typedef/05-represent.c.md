@@ -22,12 +22,13 @@ when it reads `ptr_type!(Ledger)`:
 let pointer = binding.wire_type(CWireType::Pointer {
     name: format_ident!("Ledger"),          // `*mut Ledger`: the C target's own type, not source::Ledger
 });
-let into_rust = binding.in_representation(InRepresentation::Whole(Codec {
+let into_rust = binding.in_representation(InRepresentation::Whole {
     wire_type: pointer,
     operation: Operation::Standard(StandardOp::FromRaw),
-}));
+});
 let out_of_rust = binding.out_representation(OutRepresentation::Whole {
-    codec: Codec { wire_type: pointer, operation: Operation::Standard(StandardOp::IntoRaw) },
+    wire_type: pointer,
+    operation: Operation::Standard(StandardOp::IntoRaw),
     release: Some(Operation::Standard(StandardOp::Release)),   // frees what `IntoRaw` handed out
 });
 ```

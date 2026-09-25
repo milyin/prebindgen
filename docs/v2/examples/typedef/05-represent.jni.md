@@ -21,12 +21,13 @@ C frontend states, over it:
 let address = binding.wire_type(JniWireType::Handle {
     kotlin_class: "example.Ledger".into(),  // a `jlong`, and not `Long`: an address, not a number
 });
-let into_rust = binding.in_representation(InRepresentation::Whole(Codec {
+let into_rust = binding.in_representation(InRepresentation::Whole {
     wire_type: address,
     operation: Operation::Standard(StandardOp::FromRaw),
-}));
+});
 let out_of_rust = binding.out_representation(OutRepresentation::Whole {
-    codec: Codec { wire_type: address, operation: Operation::Standard(StandardOp::IntoRaw) },
+    wire_type: address,
+    operation: Operation::Standard(StandardOp::IntoRaw),
     release: Some(Operation::Standard(StandardOp::Release)),   // frees what `IntoRaw` handed out
 });
 ```

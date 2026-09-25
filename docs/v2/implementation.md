@@ -386,7 +386,7 @@ The contracts designed for these are on [the extensions page](extensions.md);
 this list says what the increment left open and why.
 
 - **The binding's vocabulary** is real for these paths — representations,
-  codecs, operations, function forms, acceptance, and the writers' feeds — and
+  operations, function forms, acceptance, and the writers' feeds — and
   untested by a third target or a deferred capability.
 - **The representations.** `Parts` reads one part per part, and is an into-Rust
   representation only. Struct output needs a construction operation that is not

@@ -398,7 +398,7 @@ are their ids, `InReprId` and `OutReprId`; `ReprId` is either:
 ```rust
 pub enum InRepresentation<Op> {
     /// The whole value, one operation: a scalar, a handle, a fieldless enum.
-    Whole(Codec<Op>),
+    Whole { wire_type: WireTypeId, operation: Operation<Op> },
     /// The parts of a relation, carried together in one wire type.
     Parts {
         via: Via,              // Which relation: Fields.
@@ -414,16 +414,11 @@ pub enum InRepresentation<Op> {
 
 pub enum OutRepresentation<Op> {
     /// The whole value, one operation, and a handle's release.
-    Whole { codec: Codec<Op>, release: Option<Operation<Op>> },
+    Whole { wire_type: WireTypeId, operation: Operation<Op>, release: Option<Operation<Op>> },
     Unsupported(Unsupported),
 }
 
 pub enum ReprId { In(InReprId), Out(OutReprId) }
-
-pub struct Codec<Op> {
-    pub wire_type: WireTypeId,
-    pub operation: Operation<Op>,
-}
 
 pub enum Operation<Op> {
     Standard(StandardOp), // One the registry writes itself.
@@ -434,8 +429,8 @@ pub enum Operation<Op> {
 ```
 
 An operation states no operand or result types. Its place in the
-representation fixes them: an into-Rust `Whole` codec takes its wire type and
-produces the source type, an out-of-Rust one the reverse, and the `read` of
+representation fixes them: an into-Rust `Whole`'s operation takes its wire type
+and produces the source type, an out-of-Rust one's the reverse, and the `read` of
 `Parts` takes the wire type and produces the part's wire type, whatever wire
 type that part resolves to. The
 registry works them out when it plans the value and feeds them to the writer.
@@ -447,9 +442,16 @@ For the C `Stamp`, with the frontend's own `CWireType`:
 
 ```rust
 let i64_c = binding.wire_type(CWireType::I64);
-let unchanged = Codec { wire_type: i64_c, operation: Operation::Standard(StandardOp::Identity) };
-let i64_in = binding.in_representation(InRepresentation::Whole(unchanged.clone()));
-let i64_out = binding.out_representation(OutRepresentation::Whole { codec: unchanged, release: None });
+let unchanged = Operation::Standard(StandardOp::Identity);
+let i64_in = binding.in_representation(InRepresentation::Whole {
+    wire_type: i64_c,
+    operation: unchanged.clone(),
+});
+let i64_out = binding.out_representation(OutRepresentation::Whole {
+    wire_type: i64_c,
+    operation: unchanged,
+    release: None,
+});
 binding.rule(Scope::Type(key!(i64)), i64_in);
 binding.rule(Scope::Type(key!(i64)), i64_out);
 

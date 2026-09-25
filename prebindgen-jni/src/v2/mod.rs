@@ -24,7 +24,7 @@ use prebindgen_registry::{
     TypeKey,
 };
 use prebindgen_registry_v2::{
-    field_is_conditional, generate, mirrored_i32_enum, Binding, Codec, ContextParam, Declaration,
+    field_is_conditional, generate, mirrored_i32_enum, Binding, ContextParam, Declaration,
     EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf, Generation,
     InRepresentation, Operation, OutRepresentation, OutputForm, OutputFormOf, PlanningError,
     Report, Scope, StandardOp, Target, Terminal, Unsupported, Via,
@@ -119,14 +119,14 @@ impl Declarations {
         // The scalar this target carries so far: an `i64` is a `jlong`, and
         // the two are one Rust value.
         let jlong = binding.wire_type(JniWireType::Long);
-        let unchanged = Codec {
+        let i64_key = TypeKey::parse("i64").expect("a scalar's name is a type key");
+        let i64_in = binding.in_representation(InRepresentation::Whole {
             wire_type: jlong,
             operation: Operation::Standard(StandardOp::Identity),
-        };
-        let i64_key = TypeKey::parse("i64").expect("a scalar's name is a type key");
-        let i64_in = binding.in_representation(InRepresentation::Whole(unchanged.clone()));
+        });
         let i64_out = binding.out_representation(OutRepresentation::Whole {
-            codec: unchanged,
+            wire_type: jlong,
+            operation: Operation::Standard(StandardOp::Identity),
             release: None,
         });
         binding.rule(Scope::Type(i64_key.clone()), i64_in);
@@ -237,15 +237,13 @@ impl Declarations {
                     let address = binding.wire_type(JniWireType::Handle {
                         kotlin_class: placement.clone(),
                     });
-                    let into_rust = InRepresentation::Whole(Codec {
+                    let into_rust = InRepresentation::Whole {
                         wire_type: address,
                         operation: Operation::Standard(StandardOp::FromRaw),
-                    });
+                    };
                     let out_of_rust = OutRepresentation::Whole {
-                        codec: Codec {
-                            wire_type: address,
-                            operation: Operation::Standard(StandardOp::IntoRaw),
-                        },
+                        wire_type: address,
+                        operation: Operation::Standard(StandardOp::IntoRaw),
                         release: Some(Operation::Standard(StandardOp::Release)),
                     };
                     let release = release_form(self.native_method_symbol(&native));
@@ -705,19 +703,17 @@ impl Declarations {
         // Out of Rust every value names one number; into Rust the wire type is
         // an `Int` and can hold something no value names, which is what a
         // caller passing one gets told, rather than a value it did not ask for.
-        let into_rust = InRepresentation::Whole(Codec {
+        let into_rust = InRepresentation::Whole {
             wire_type: number,
             operation: Operation::Standard(StandardOp::EnumIn {
                 values: arms.clone(),
                 invalid: Some(format!("`{placement}` has no value numbered {{}}")),
                 bits: None,
             }),
-        });
+        };
         let out_of_rust = OutRepresentation::Whole {
-            codec: Codec {
-                wire_type: number,
-                operation: Operation::Standard(StandardOp::EnumOut { values: arms }),
-            },
+            wire_type: number,
+            operation: Operation::Standard(StandardOp::EnumOut { values: arms }),
             release: None,
         };
         (into_rust, out_of_rust, named)

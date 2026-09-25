@@ -180,9 +180,9 @@ pub type WireKindOf<T> = <<T as Target>::WireType as WireType>::Kind;
 /// How the values a rule covers cross into Rust.
 ///
 /// It names its wire types and operations and states no type for either: a
-/// codec reads its wire type and produces the source type, a `read` reads the
-/// product's wire type and produces the part's, whatever wire type that part
-/// resolves to. The registry works them out when it plans a value, and feeds
+/// whole value's operation reads its wire type and produces the source type, a
+/// `read` reads the parts' wire type and produces the part's, whatever wire
+/// type that part resolves to. The registry works them out when it plans a value, and feeds
 /// them to the writer.
 // A binding holds a few dozen of these, each once, so the unboxed variants
 // cost nothing worth an indirection.
@@ -190,7 +190,11 @@ pub type WireKindOf<T> = <<T as Target>::WireType as WireType>::Kind;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum InRepresentation<Op> {
     /// The whole value, one operation: a scalar, a handle, a fieldless enum.
-    Whole(Codec<Op>),
+    Whole {
+        wire_type: WireTypeId,
+        /// From the wire type to the source type.
+        operation: Operation<Op>,
+    },
     /// The parts of a relation, carried together in one wire type.
     Parts {
         via: Via,
@@ -228,8 +232,10 @@ pub enum InRepresentation<Op> {
 pub enum OutRepresentation<Op> {
     /// The whole value, one operation: a scalar, a handle, a fieldless enum.
     Whole {
-        codec: Codec<Op>,
-        /// Frees what `codec` handed out, taking it in `codec`'s wire type: a
+        wire_type: WireTypeId,
+        /// From the source type to the wire type.
+        operation: Operation<Op>,
+        /// Frees what `operation` handed out, taking it in the wire type: a
         /// handle's typed drop. Its presence is what makes the value a
         /// handle; a type output exposing one exports it as a wrapper of its
         /// own.
@@ -253,13 +259,6 @@ impl<Op> OutRepresentation<Op> {
             ),
         ))
     }
-}
-
-/// A wire type, and the operation between it and the source type.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Codec<Op> {
-    pub wire_type: WireTypeId,
-    pub operation: Operation<Op>,
 }
 
 /// Which relation of its type [`InRepresentation::Parts`] reads a value through.
@@ -590,7 +589,7 @@ impl<T: Target> Binding<T> {
     /// Panics if a wire type it names was issued by another binding.
     pub fn in_representation(&mut self, representation: InRepresentationOf<T>) -> InReprId {
         match &representation {
-            InRepresentation::Whole(Codec { wire_type, .. })
+            InRepresentation::Whole { wire_type, .. }
             | InRepresentation::Parts { wire_type, .. }
             | InRepresentation::Callable { wire_type, .. } => {
                 self.check(wire_type.issuer, "wire type")
@@ -608,8 +607,8 @@ impl<T: Target> Binding<T> {
     ///
     /// Panics if a wire type it names was issued by another binding.
     pub fn out_representation(&mut self, representation: OutRepresentationOf<T>) -> OutReprId {
-        if let OutRepresentation::Whole { codec, .. } = &representation {
-            self.check(codec.wire_type.issuer, "wire type");
+        if let OutRepresentation::Whole { wire_type, .. } = &representation {
+            self.check(wire_type.issuer, "wire type");
         }
         OutReprId {
             issuer: self.issuer,
@@ -731,11 +730,12 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                 wire_type
             )?;
         }
-        let codec =
-            |codec: &Codec<T::Op>| format!("{} {}", codec.wire_type, operation(&codec.operation));
         for (index, representation) in self.in_representations.iter().enumerate() {
             let described = match representation {
-                InRepresentation::Whole(whole) => format!("whole  {}", codec(whole)),
+                InRepresentation::Whole {
+                    wire_type,
+                    operation: whole,
+                } => format!("whole  {wire_type} {}", operation(whole)),
                 InRepresentation::Parts {
                     via,
                     wire_type,
@@ -761,11 +761,12 @@ impl<T: Target> std::fmt::Display for Binding<T> {
         for (index, representation) in self.out_representations.iter().enumerate() {
             let described = match representation {
                 OutRepresentation::Whole {
-                    codec: whole,
+                    wire_type,
+                    operation: whole,
                     release,
                 } => format!(
-                    "whole  {}{}",
-                    codec(whole),
+                    "whole  {wire_type} {}{}",
+                    operation(whole),
                     match release {
                         Some(release) => format!("  release: {}", operation(release)),
                         None => String::new(),

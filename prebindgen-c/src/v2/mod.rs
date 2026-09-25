@@ -19,9 +19,9 @@ mod target;
 
 use prebindgen_registry::{flat::Flat, TypeKey};
 use prebindgen_registry_v2::{
-    generate, mirrored_i32_enum, Binding, Codec, Declaration, EngineError, EnumArm,
-    FailureCategory, FailureRoute, FunctionFormOf, Generation, InRepresentation, Operation,
-    OutRepresentation, OutputForm, Scope, StandardOp, Target, Terminal, Unsupported, Via,
+    generate, mirrored_i32_enum, Binding, Declaration, EngineError, EnumArm, FailureCategory,
+    FailureRoute, FunctionFormOf, Generation, InRepresentation, Operation, OutRepresentation,
+    OutputForm, Scope, StandardOp, Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
 pub use target::{COp, CTarget, CWireKind, CWireType};
@@ -79,13 +79,13 @@ impl CbindgenBuilder {
         // The scalar this target carries so far: an `i64` is an `int64_t`, and
         // crosses unchanged.
         let i64_c = binding.wire_type(CWireType::I64);
-        let unchanged = Codec {
+        let i64_in = binding.in_representation(InRepresentation::Whole {
             wire_type: i64_c,
             operation: Operation::Standard(StandardOp::Identity),
-        };
-        let i64_in = binding.in_representation(InRepresentation::Whole(unchanged.clone()));
+        });
         let i64_out = binding.out_representation(OutRepresentation::Whole {
-            codec: unchanged,
+            wire_type: i64_c,
+            operation: Operation::Standard(StandardOp::Identity),
             release: None,
         });
         binding.rule(Scope::Type(type_key("i64")), i64_in);
@@ -151,15 +151,13 @@ impl CbindgenBuilder {
             let pointer = binding.wire_type(CWireType::Pointer {
                 name: format_ident!("{c_name}"),
             });
-            let into_rust = InRepresentation::Whole(Codec {
+            let into_rust = InRepresentation::Whole {
                 wire_type: pointer,
                 operation: Operation::Standard(StandardOp::FromRaw),
-            });
+            };
             let out_of_rust = OutRepresentation::Whole {
-                codec: Codec {
-                    wire_type: pointer,
-                    operation: Operation::Standard(StandardOp::IntoRaw),
-                },
+                wire_type: pointer,
+                operation: Operation::Standard(StandardOp::IntoRaw),
                 release: Some(Operation::Standard(StandardOp::Release)),
             };
             // A release has no source parameter to take a name from, and
@@ -219,19 +217,17 @@ impl CbindgenBuilder {
                             }
                         })
                         .collect();
-                    let into_rust = InRepresentation::Whole(Codec {
+                    let into_rust = InRepresentation::Whole {
                         wire_type: storage,
                         operation: Operation::Standard(StandardOp::EnumIn {
                             values: numbered,
                             invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
                             bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
                         }),
-                    });
+                    };
                     let out_of_rust = OutRepresentation::Whole {
-                        codec: Codec {
-                            wire_type: enumeration,
-                            operation: Operation::Standard(StandardOp::EnumOut { values: named }),
-                        },
+                        wire_type: enumeration,
+                        operation: Operation::Standard(StandardOp::EnumOut { values: named }),
                         release: None,
                     };
                     declare_type(&mut binding, key, into_rust, Some(out_of_rust), None);

@@ -47,7 +47,7 @@ pub mod target;
 mod tests;
 
 pub use binding::{
-    Binding, Codec, ContextParam, Failure, FailureRoute, FunctionForm, FunctionFormOf, InReprId,
+    Binding, ContextParam, Failure, FailureRoute, FunctionForm, FunctionFormOf, InReprId,
     InRepresentation, InRepresentationOf, Operation, OutReprId, OutRepresentation,
     OutRepresentationOf, OutputForm, OutputFormOf, OutputId, Report, ReprId, Scope, StandardOp,
     Step, TargetOp, ValuePath, Via, WireKind, WireKindOf, WireType, WireTypeId,
