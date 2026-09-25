@@ -24,8 +24,10 @@ let pointer = binding.wire_type(CWireType::Pointer {
 });
 Representation::Terminal {
     into_rust: Some(Codec { wire_type: pointer, operation: Operation::Standard(StandardOp::FromRaw) }),
-    out_of_rust: Some(Codec { wire_type: pointer, operation: Operation::Standard(StandardOp::IntoRaw) }),
-    release: Some(Operation::Standard(StandardOp::Release)),
+    out_of_rust: Some(Handout {
+        codec: Codec { wire_type: pointer, operation: Operation::Standard(StandardOp::IntoRaw) },
+        release: Some(Operation::Standard(StandardOp::Release)),   // frees what `IntoRaw` handed out
+    }),
 }
 ```
 

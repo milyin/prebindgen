@@ -26,8 +26,8 @@ use prebindgen_registry::{
 use prebindgen_registry_v2::{
     field_is_conditional, generate, mirrored_i32_enum, Binding, Codec, ContextParam, Declaration,
     EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf, Generation,
-    Operation, OutputForm, OutputFormOf, PlanningError, Report, Representation, Scope, StandardOp,
-    Target, Terminal, Unsupported, Via,
+    Handout, Operation, OutputForm, OutputFormOf, PlanningError, Report, Representation, Scope,
+    StandardOp, Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
 pub use target::{JniOp, JniOutput, JniTarget, JniWireKind, JniWireType, KotlinType};
@@ -125,8 +125,7 @@ impl Declarations {
         };
         let i64_whole = binding.representation(Representation::Terminal {
             into_rust: Some(unchanged.clone()),
-            out_of_rust: Some(unchanged),
-            release: None,
+            out_of_rust: Some(Handout::owned(unchanged)),
         });
         binding.rule(
             Scope::Type(TypeKey::parse("i64").expect("a scalar's name is a type key")),
@@ -225,11 +224,13 @@ impl Declarations {
                             wire_type: address,
                             operation: Operation::Standard(StandardOp::FromRaw),
                         }),
-                        out_of_rust: Some(Codec {
-                            wire_type: address,
-                            operation: Operation::Standard(StandardOp::IntoRaw),
+                        out_of_rust: Some(Handout {
+                            codec: Codec {
+                                wire_type: address,
+                                operation: Operation::Standard(StandardOp::IntoRaw),
+                            },
+                            release: Some(Operation::Standard(StandardOp::Release)),
                         }),
-                        release: Some(Operation::Standard(StandardOp::Release)),
                     };
                     let release = release_form(self.native_method_symbol(&native));
                     (
@@ -673,11 +674,10 @@ impl Declarations {
                     bits: None,
                 }),
             }),
-            out_of_rust: Some(Codec {
+            out_of_rust: Some(Handout::owned(Codec {
                 wire_type: number,
                 operation: Operation::Standard(StandardOp::EnumOut { values: arms }),
-            }),
-            release: None,
+            })),
         };
         (representation, named)
     }

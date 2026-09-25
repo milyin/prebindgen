@@ -573,11 +573,10 @@ impl<'a, T: Target> Run<'a, T> {
             Representation::Terminal {
                 into_rust,
                 out_of_rust,
-                ..
             } => {
                 let codec = match crossing.direction {
-                    Direction::IntoRust => into_rust,
-                    Direction::OutOfRust => out_of_rust,
+                    Direction::IntoRust => into_rust.as_ref(),
+                    Direction::OutOfRust => out_of_rust.as_ref().map(|handout| &handout.codec),
                 };
                 let Some(codec) = codec else {
                     return Ok(Planned::refused(
@@ -960,12 +959,15 @@ fn spell(ty: &syn::Type) -> String {
 /// does not take, a field of a value nothing reads through its fields — would
 /// otherwise sit unused, and the binding would believe it had configured
 /// something.
-fn check_paths<T: Target>(
-    binding: &Binding<T>,
+fn check_paths<'b, T: Target>(
+    binding: &'b Binding<T>,
     rules: &Rules,
     flat: &Flat,
-) -> Result<(), PlanningError> {
-    for (scope, _) in binding.rules() {
+) -> Result<Vec<(ReprId, prebindgen_flat::TypeKey, &'b Scope)>, PlanningError> {
+    // What each rule at a position turns out to cover, which the check that
+    // a representation converts one type needs.
+    let mut covered = Vec::new();
+    for (scope, representation) in binding.rules() {
         let Scope::At(output, path) = scope else {
             continue;
         };
@@ -1067,6 +1069,66 @@ fn check_paths<T: Target>(
             ty = field.ok_or_else(|| invalid(format!("`{}` has no field `{label}`", ty.key())))?;
             walked = walked.then(step.clone());
         }
+        covered.push((*representation, ty.key(), scope));
+    }
+    Ok(covered)
+}
+
+/// A representation converts values of one type: its operations are applied
+/// to whatever type the value it serves has, so a representation ruled for
+/// two types would convert one of them as the other. Every representation
+/// the frontends state is built for its one type, and a binding stating one
+/// for two is contradictory. A refused representation converts nothing, so
+/// it may stand for several.
+fn check_one_type_per_representation<T: Target>(
+    binding: &Binding<T>,
+    at: Vec<(ReprId, prebindgen_flat::TypeKey, &Scope)>,
+) -> Result<(), PlanningError> {
+    let mut serves: HashMap<ReprId, (prebindgen_flat::TypeKey, String)> = HashMap::new();
+    let type_rules = binding
+        .rules()
+        .iter()
+        .filter_map(|(scope, representation)| match scope {
+            Scope::Type(key) => {
+                Some((*representation, key.clone(), describe_scope(binding, scope)))
+            }
+            Scope::At(..) => None,
+        });
+    let outputs =
+        binding
+            .outputs()
+            .iter()
+            .filter_map(|(declaration, form)| match (declaration, form) {
+                (
+                    Declaration::Type(key) | Declaration::Callback(key),
+                    OutputForm::Type { representation, .. },
+                ) => Some((*representation, key.clone(), format!("`{declaration}`"))),
+                _ => None,
+            });
+    let at = at
+        .into_iter()
+        .map(|(representation, key, scope)| (representation, key, describe_scope(binding, scope)));
+    for (representation, key, place) in type_rules.chain(outputs).chain(at) {
+        if matches!(
+            binding.representation_of(representation),
+            Representation::Unsupported(_)
+        ) {
+            continue;
+        }
+        match serves.get(&representation) {
+            None => {
+                serves.insert(representation, (key, place));
+            }
+            Some((first, first_place)) if *first != key => {
+                return Err(PlanningError::InvalidInput(format!(
+                    "{representation} converts `{}` for {first_place} and `{}` for {place}; a \
+                     representation converts values of one type",
+                    first.as_str(),
+                    key.as_str()
+                )))
+            }
+            Some(_) => {}
+        }
     }
     Ok(())
 }
@@ -1115,7 +1177,8 @@ pub fn generate<T: Target>(
     check_declarations(binding.outputs(), &flat)?;
     check_kind_names::<T>().map_err(EngineError::Planning)?;
     let rules = Rules::new(&binding).map_err(EngineError::Planning)?;
-    check_paths(&binding, &rules, &flat).map_err(EngineError::Planning)?;
+    let at = check_paths(&binding, &rules, &flat).map_err(EngineError::Planning)?;
+    check_one_type_per_representation(&binding, at).map_err(EngineError::Planning)?;
     for (declaration, form) in binding.outputs() {
         let forms: Vec<&FunctionFormOf<T>> = match form {
             OutputForm::Type { release, .. } => release.iter().collect(),
@@ -1952,7 +2015,10 @@ fn plan_type<T: Target>(
         Planned::Unsupported(refusal) => return Ok(Err(refusal)),
     };
     let release = match run.binding.representation_of(representation) {
-        Representation::Terminal { release, .. } => release.clone(),
+        Representation::Terminal {
+            out_of_rust: Some(handout),
+            ..
+        } => handout.release.clone(),
         _ => None,
     };
     let mut given = None;

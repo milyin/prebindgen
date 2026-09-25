@@ -396,9 +396,8 @@ pub enum Representation<Op> {
     /// fieldless enum. Each direction has a wire type of its own: a C enum
     /// arrives as `MaybeUninit` of itself.
     Terminal {
-        into_rust: Option<Codec<Op>>,   // None: never crosses into Rust.
-        out_of_rust: Option<Codec<Op>>,
-        release: Option<Operation<Op>>, // How the foreign side gives a held value back.
+        into_rust: Option<Codec<Op>>,     // None: never crosses into Rust.
+        out_of_rust: Option<Handout<Op>>, // The codec, and a handle's release.
     },
     /// The parts of a relation, carried together in one wire type, into Rust.
     Product {
@@ -439,8 +438,7 @@ let i64_c = binding.wire_type(CWireType::I64);
 let unchanged = Codec { wire_type: i64_c, operation: Operation::Standard(StandardOp::Identity) };
 let i64_whole = binding.representation(Representation::Terminal {
     into_rust: Some(unchanged.clone()),
-    out_of_rust: Some(unchanged),
-    release: None,
+    out_of_rust: Some(Handout::owned(unchanged)),
 });
 binding.rule(Scope::Type(key!(i64)), i64_whole);
 
@@ -551,7 +549,11 @@ and fails the build with invalid input when:
 - a rule at `At(output, path)` names a position the output does not have: a
   parameter the function does not take, a `return` on a function returning
   nothing, a field of a value whose representation is not read through
-  `Fields`, or a field the struct does not have.
+  `Fields`, or a field the struct does not have;
+- one representation is ruled for two types — by type rules, type outputs and
+  rules at positions together — since a representation's operations convert
+  whatever type the value it serves has, and would convert one type as
+  another. A refused representation converts nothing and is exempt.
 
 The last check resolves each path the way planning will: each step's value
 has its rule looked up in the same order, and a `Field` step needs that

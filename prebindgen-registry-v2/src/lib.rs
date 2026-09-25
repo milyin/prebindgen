@@ -47,9 +47,10 @@ pub mod target;
 mod tests;
 
 pub use binding::{
-    Binding, Codec, ContextParam, Failure, FailureRoute, FunctionForm, FunctionFormOf, Operation,
-    OutputForm, OutputFormOf, OutputId, Report, ReprId, Representation, RepresentationOf, Scope,
-    StandardOp, Step, TargetOp, ValuePath, Via, WireKind, WireKindOf, WireType, WireTypeId,
+    Binding, Codec, ContextParam, Failure, FailureRoute, FunctionForm, FunctionFormOf, Handout,
+    Operation, OutputForm, OutputFormOf, OutputId, Report, ReprId, Representation,
+    RepresentationOf, Scope, StandardOp, Step, TargetOp, ValuePath, Via, WireKind, WireKindOf,
+    WireType, WireTypeId,
 };
 pub use body::{Instr, NodeBody, Operand, ValueId};
 pub use decl::Declaration;

@@ -137,11 +137,7 @@ pub enum Representation<Op> {
         /// `None`: the value never crosses into Rust.
         into_rust: Option<Codec<Op>>,
         /// `None`: the value never crosses out of Rust.
-        out_of_rust: Option<Codec<Op>>,
-        /// How the foreign side gives a held value back without converting
-        /// it — a handle's typed drop. A type output with a release exports it
-        /// as a wrapper of its own.
-        release: Option<Operation<Op>>,
+        out_of_rust: Option<Handout<Op>>,
     },
     /// The parts of a relation, carried together in one wire type, into Rust.
     Product {
@@ -181,6 +177,28 @@ pub enum Representation<Op> {
 pub struct Codec<Op> {
     pub wire_type: WireTypeId,
     pub operation: Operation<Op>,
+}
+
+/// The out-of-Rust direction of a [`Representation::Terminal`]: the
+/// conversion, and — for a value the foreign side holds and owes back — how it
+/// gives one back unconverted.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Handout<Op> {
+    pub codec: Codec<Op>,
+    /// Frees what `codec` handed out, taking it in `codec`'s wire type: a
+    /// handle's typed drop. Its presence is what makes the representation a
+    /// handle; a type output exposing one exports it as a wrapper of its own.
+    pub release: Option<Operation<Op>>,
+}
+
+impl<Op> Handout<Op> {
+    /// A value handed out and owned by the foreign side from then on.
+    pub fn owned(codec: Codec<Op>) -> Self {
+        Handout {
+            codec,
+            release: None,
+        }
+    }
 }
 
 /// Which relation of its type a `Product` reads a value through.
@@ -513,10 +531,9 @@ impl<T: Target> Binding<T> {
             Representation::Terminal {
                 into_rust,
                 out_of_rust,
-                ..
             } => into_rust
                 .iter()
-                .chain(out_of_rust)
+                .chain(out_of_rust.as_ref().map(|handout| &handout.codec))
                 .map(|codec| codec.wire_type)
                 .collect(),
             Representation::Product { wire_type, .. }
@@ -647,9 +664,8 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                 Representation::Terminal {
                     into_rust,
                     out_of_rust,
-                    release,
                 } => {
-                    let codec = |codec: &Option<Codec<T::Op>>| match codec {
+                    let codec = |codec: Option<&Codec<T::Op>>| match codec {
                         Some(codec) => {
                             format!("{} {}", codec.wire_type, operation(&codec.operation))
                         }
@@ -657,9 +673,12 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                     };
                     format!(
                         "terminal  in: {}  out: {}{}",
-                        codec(into_rust),
-                        codec(out_of_rust),
-                        match release {
+                        codec(into_rust.as_ref()),
+                        codec(out_of_rust.as_ref().map(|handout| &handout.codec)),
+                        match out_of_rust
+                            .as_ref()
+                            .and_then(|handout| handout.release.as_ref())
+                        {
                             Some(release) => format!("  release: {}", operation(release)),
                             None => String::new(),
                         }

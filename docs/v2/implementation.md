@@ -293,11 +293,11 @@ establish the behavior of the resulting foreign interface.
    address through three more standard operations — `IntoRaw`, `FromRaw`,
    `Release` — which are the registry's because they spell a source type. The
    frontend states the wire type the address is cast to and, on the
-   representation, that a release exists; naming one is what tells the
-   registry the type is a handle, whether the item behind it is an alias or a
-   struct whose fields the target never reads. The registry then requires the
-   out-of-Rust direction too and plans the release as a wrapper under the
-   type's own identity, from the release form the type output names. A null
+   representation's out-of-Rust half, that a release exists; naming one is
+   what tells the registry the type is a handle, whether the item behind it is
+   an alias or a struct whose fields the target never reads. The registry
+   then plans the release as a wrapper under the type's own identity, taking
+   the out-of-Rust wire type, from the release form the type output names. A null
    address taken back is a `Binding` failure carrying a `String`, routed like
    any other; a null address released is a no-op. What keeps this sound
    without `ResourceContract` is the shape of the three wrappers, stated in

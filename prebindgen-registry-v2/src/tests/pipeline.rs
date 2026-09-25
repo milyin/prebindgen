@@ -10,9 +10,9 @@ use prebindgen_flat::flat::Flat;
 
 use crate::{
     binding::{
-        Binding, Codec, Failure, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
-        Report, ReprId, Representation, Scope, StandardOp, Step, TargetOp, ValuePath, Via,
-        WireKind, WireType,
+        Binding, Codec, Failure, FailureRoute, FunctionForm, Handout, Operation, OutputForm,
+        OutputFormOf, Report, ReprId, Representation, Scope, StandardOp, Step, TargetOp, ValuePath,
+        Via, WireKind, WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
@@ -453,8 +453,7 @@ fn fixture() -> Fixture {
     };
     let scalar = binding.representation(Representation::Terminal {
         into_rust: Some(unchanged.clone()),
-        out_of_rust: Some(unchanged),
-        release: None,
+        out_of_rust: Some(Handout::owned(unchanged)),
     });
     Fixture {
         binding,
@@ -505,11 +504,13 @@ impl Fixture {
                         wire_type: pointer,
                         operation: Operation::Standard(StandardOp::FromRaw),
                     }),
-                    out_of_rust: Some(Codec {
-                        wire_type: pointer,
-                        operation: Operation::Standard(StandardOp::IntoRaw),
+                    out_of_rust: Some(Handout {
+                        codec: Codec {
+                            wire_type: pointer,
+                            operation: Operation::Standard(StandardOp::IntoRaw),
+                        },
+                        release: Some(Operation::Standard(StandardOp::Release)),
                     }),
-                    release: Some(Operation::Standard(StandardOp::Release)),
                 }
             }
             Shape::SplitHandle => {
@@ -522,11 +523,13 @@ impl Fixture {
                         wire_type: pointer,
                         operation: Operation::Standard(StandardOp::FromRaw),
                     }),
-                    out_of_rust: Some(Codec {
-                        wire_type: integer,
-                        operation: Operation::Standard(StandardOp::IntoRaw),
+                    out_of_rust: Some(Handout {
+                        codec: Codec {
+                            wire_type: integer,
+                            operation: Operation::Standard(StandardOp::IntoRaw),
+                        },
+                        release: Some(Operation::Standard(StandardOp::Release)),
                     }),
-                    release: Some(Operation::Standard(StandardOp::Release)),
                 }
             }
             Shape::ScalarThrough => {
@@ -537,8 +540,7 @@ impl Fixture {
                 };
                 Representation::Terminal {
                     into_rust: Some(through.clone()),
-                    out_of_rust: Some(through),
-                    release: None,
+                    out_of_rust: Some(Handout::owned(through)),
                 }
             }
         };
@@ -621,7 +623,11 @@ impl Fixture {
     fn expose(&mut self, name: &str, repr: ReprId) -> &mut Self {
         let release = match self.binding.representation_of(repr) {
             Representation::Terminal {
-                release: Some(_), ..
+                out_of_rust:
+                    Some(Handout {
+                        release: Some(_), ..
+                    }),
+                ..
             } => {
                 let item = key(name).short_name().expect("a named type");
                 let mut release = exported(&format!("{item}_free"), Routes::None);
@@ -1301,8 +1307,10 @@ fn a_field_rule_is_part_of_its_struct_conversion() {
         let strukt = fixture.repr(Shape::Struct("Stamp"));
         fixture.crossing("Stamp", strukt);
         // Read through fields, on a scalar field: an `i64` has no fields, so
-        // this child cannot be planned at all.
-        fixture.at("stamp_max", vec![param("stamp"), field("secs")], strukt);
+        // this child cannot be planned at all. A representation of its own,
+        // since `Stamp`'s converts `Stamp` and nothing else.
+        let fields = fixture.repr(Shape::Struct("Secs"));
+        fixture.at("stamp_max", vec![param("stamp"), field("secs")], fields);
         // Order matters twice over: which function is planned first, and
         // whether the struct's own request primed the conversion before either
         // of them. The refusal-first case must not be primed, or it would not
@@ -2514,5 +2522,42 @@ fn two_kinds_of_one_name_are_refused() {
     assert!(
         error.to_string().contains("two wire kinds `twin`"),
         "{error}"
+    );
+}
+
+/// A representation converts values of one type, so a binding ruling one for
+/// two types — a type rule and a rule at a position whose value is of another
+/// type — fails the build before anything is planned.
+#[test]
+fn a_representation_ruled_for_two_types_is_an_error() {
+    let mut fixture = fixture();
+    let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.at("stamp_max", vec![param("stamp"), field("secs")], strukt);
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+    let error = fixture
+        .generate(model())
+        .expect_err("one representation, two types");
+    assert!(
+        error
+            .to_string()
+            .contains("converts `Stamp` for every `Stamp` and `i64` for `param stamp.field secs`"),
+        "{error}"
+    );
+}
+
+/// A handle's release frees what it handed out, so it belongs to the
+/// out-of-Rust half, and a representation that never hands a value out has
+/// no release to state.
+#[test]
+fn a_release_is_part_of_what_is_handed_out() {
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    let printed = fixture.build(&model()).to_string();
+    assert!(
+        printed.contains(
+            "terminal  in: w1 Standard(FromRaw) fails binding String  out: w1 \
+             Standard(IntoRaw)  release: Standard(Release)"
+        ),
+        "{printed}"
     );
 }

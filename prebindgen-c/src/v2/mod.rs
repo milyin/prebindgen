@@ -20,7 +20,7 @@ mod target;
 use prebindgen_registry::{flat::Flat, TypeKey};
 use prebindgen_registry_v2::{
     generate, mirrored_i32_enum, Binding, Codec, Declaration, EngineError, EnumArm,
-    FailureCategory, FailureRoute, FunctionFormOf, Generation, Operation, OutputForm,
+    FailureCategory, FailureRoute, FunctionFormOf, Generation, Handout, Operation, OutputForm,
     Representation, Scope, StandardOp, Target, Terminal, Unsupported, Via,
 };
 use quote::format_ident;
@@ -85,8 +85,7 @@ impl CbindgenBuilder {
         };
         let i64_whole = binding.representation(Representation::Terminal {
             into_rust: Some(unchanged.clone()),
-            out_of_rust: Some(unchanged),
-            release: None,
+            out_of_rust: Some(Handout::owned(unchanged)),
         });
         binding.rule(Scope::Type(type_key("i64")), i64_whole);
 
@@ -138,11 +137,13 @@ impl CbindgenBuilder {
                     wire_type: pointer,
                     operation: Operation::Standard(StandardOp::FromRaw),
                 }),
-                out_of_rust: Some(Codec {
-                    wire_type: pointer,
-                    operation: Operation::Standard(StandardOp::IntoRaw),
+                out_of_rust: Some(Handout {
+                    codec: Codec {
+                        wire_type: pointer,
+                        operation: Operation::Standard(StandardOp::IntoRaw),
+                    },
+                    release: Some(Operation::Standard(StandardOp::Release)),
                 }),
-                release: Some(Operation::Standard(StandardOp::Release)),
             };
             // A release has no source parameter to take a name from, and
             // takes v1's.
@@ -204,11 +205,10 @@ impl CbindgenBuilder {
                                 bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
                             }),
                         }),
-                        out_of_rust: Some(Codec {
+                        out_of_rust: Some(Handout::owned(Codec {
                             wire_type: enumeration,
                             operation: Operation::Standard(StandardOp::EnumOut { values: named }),
-                        }),
-                        release: None,
+                        })),
                     }
                 }
             };

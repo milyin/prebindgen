@@ -263,9 +263,8 @@ enum Representation<Op> {
     // The whole value, one operation each way: a scalar, a handle, a fieldless
     // enum. Each direction has a wire type of its own.
     Terminal {
-        into_rust: Option<Codec<Op>>,   // None: never crosses into Rust.
-        out_of_rust: Option<Codec<Op>>,
-        release: Option<Operation<Op>>, // How the foreign side gives a held value back.
+        into_rust: Option<Codec<Op>>,     // None: never crosses into Rust.
+        out_of_rust: Option<Handout<Op>>, // None: never crosses out of Rust.
     },
     // The parts of a relation, carried together in one wire type, into Rust.
     Product { via: Via, wire_type: WireTypeId, read: Operation<Op> },
@@ -300,11 +299,25 @@ aggregate's members are `i64`s and nothing else yet, a JVM object's getters
 read a `long`. A part that resolves to any other kind refuses the struct where
 the member is.
 
-`release` is what makes a representation a handle. A value the foreign side
+```rust
+struct Codec<Op> { wire_type: WireTypeId, operation: Operation<Op> }
+
+/// A value leaving Rust: the conversion, and — for a value the foreign side
+/// holds and owes back — the operation that frees one unconverted.
+struct Handout<Op> { codec: Codec<Op>, release: Option<Operation<Op>> }
+```
+
+A release is what makes a representation a handle. A value the foreign side
 holds by address is one it owes back, and the release is the operation that
 takes it back without converting it: the typed destructor a C caller or a
-Kotlin `free()` calls. A representation the foreign side holds by value names
-none. A type output exposing a representation with a release exports it as a
+Kotlin `free()` calls. It frees what the out-of-Rust half handed out, in that
+half's wire type, which is why it is part of that half: a representation that
+never hands a value out cannot state one. A representation the foreign side
+holds by value names none.
+
+The two halves describe one type — the one the rule applying the
+representation covers — and one representation converts one type: a binding
+ruling one representation for two types fails the build before planning. A type output exposing a representation with a release exports it as a
 wrapper of its own at [the boundary](06-boundary.md#assembling-an-exported-function),
 under the form the output names for it, and the registry plans the out-of-Rust
 direction too. The three operations a handle is made of — `IntoRaw`, `FromRaw`,

@@ -161,7 +161,7 @@ fn wire_types<T: Target>(
                 ..
             } => into_rust
                 .iter()
-                .chain(out_of_rust.iter())
+                .chain(out_of_rust.iter().map(|handout| &handout.codec))
                 .map(|codec| (codec.wire_type, false))
                 .collect(),
             Representation::Product { wire_type, .. }
