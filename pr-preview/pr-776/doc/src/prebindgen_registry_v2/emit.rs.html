@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use crate</span>::{
 <a href=#21 id=21 data-nosnippet>21</a>    binding::{
-<a href=#22 id=22 data-nosnippet>22</a>        Binding, FailureRoute, Implementation, OutputForm, Representation, StandardOp, WireType,
+<a href=#22 id=22 data-nosnippet>22</a>        Binding, FailureRoute, Operation, OutputForm, Representation, StandardOp, WireType,
 <a href=#23 id=23 data-nosnippet>23</a>        WireTypeId,
 <a href=#24 id=24 data-nosnippet>24</a>    },
 <a href=#25 id=25 data-nosnippet>25</a>    body::{Instr, Operand, Stmt, ValueId},
@@ -267,8 +267,8 @@
 <a href=#267 id=267 data-nosnippet>267</a>            Instr::Call { function, .. } =&gt; function.clone(),
 <a href=#268 id=268 data-nosnippet>268</a>            Instr::Apply { primitive, .. } =&gt; {
 <a href=#269 id=269 data-nosnippet>269</a>                <span class="kw">let </span>applied = <span class="kw-2">&amp;</span>primitives[primitive.<span class="number">0</span>];
-<a href=#270 id=270 data-nosnippet>270</a>                <span class="kw">match </span><span class="kw-2">&amp;</span>applied.implementation {
-<a href=#271 id=271 data-nosnippet>271</a>                    Implementation::Standard(StandardOp::FromRaw | StandardOp::Release) =&gt; {
+<a href=#270 id=270 data-nosnippet>270</a>                <span class="kw">match </span><span class="kw-2">&amp;</span>applied.operation {
+<a href=#271 id=271 data-nosnippet>271</a>                    Operation::Standard(StandardOp::FromRaw | StandardOp::Release) =&gt; {
 <a href=#272 id=272 data-nosnippet>272</a>                        <span class="kw">match </span>applied.subject.kind() {
 <a href=#273 id=273 data-nosnippet>273</a>                            prebindgen_flat::flat::TypeKind::Named { id, .. } =&gt; id.name.clone(),
 <a href=#274 id=274 data-nosnippet>274</a>                            <span class="kw">_ </span>=&gt; <span class="kw">continue</span>,
@@ -321,8 +321,8 @@
 <a href=#321 id=321 data-nosnippet>321</a>    // look at. So the wrapper is `unsafe`, and says what it is owed.
 <a href=#322 id=322 data-nosnippet>322</a>    </span><span class="kw">let </span>reads_bits = function.instrs.iter().any(|step| <span class="kw">match </span><span class="kw-2">&amp;</span>step.instr {
 <a href=#323 id=323 data-nosnippet>323</a>        Instr::Apply { primitive, .. } =&gt; <span class="macro">matches!</span>(
-<a href=#324 id=324 data-nosnippet>324</a>            primitives[primitive.<span class="number">0</span>].implementation,
-<a href=#325 id=325 data-nosnippet>325</a>            Implementation::Standard(StandardOp::EnumIn { bits: <span class="prelude-val">Some</span>(<span class="kw">_</span>), .. })
+<a href=#324 id=324 data-nosnippet>324</a>            primitives[primitive.<span class="number">0</span>].operation,
+<a href=#325 id=325 data-nosnippet>325</a>            Operation::Standard(StandardOp::EnumIn { bits: <span class="prelude-val">Some</span>(<span class="kw">_</span>), .. })
 <a href=#326 id=326 data-nosnippet>326</a>        ),
 <a href=#327 id=327 data-nosnippet>327</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
 <a href=#328 id=328 data-nosnippet>328</a>    });
@@ -596,9 +596,9 @@
 <a href=#596 id=596 data-nosnippet>596</a>        <span class="kw">_ </span>=&gt; source_type(<span class="kw-2">&amp;</span>applied.subject),
 <a href=#597 id=597 data-nosnippet>597</a>    };
 <a href=#598 id=598 data-nosnippet>598</a>    <span class="kw">let </span>value = <span class="kw-2">&amp;</span>operands[<span class="number">0</span>];
-<a href=#599 id=599 data-nosnippet>599</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>applied.implementation {
-<a href=#600 id=600 data-nosnippet>600</a>        Implementation::Standard(StandardOp::Identity) =&gt; <span class="macro">quote!</span>(#value),
-<a href=#601 id=601 data-nosnippet>601</a>        Implementation::Standard(StandardOp::ReadMember) =&gt; {
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>applied.operation {
+<a href=#600 id=600 data-nosnippet>600</a>        Operation::Standard(StandardOp::Identity) =&gt; <span class="macro">quote!</span>(#value),
+<a href=#601 id=601 data-nosnippet>601</a>        Operation::Standard(StandardOp::ReadMember) =&gt; {
 <a href=#602 id=602 data-nosnippet>602</a>            <span class="kw">let </span>member = applied
 <a href=#603 id=603 data-nosnippet>603</a>                .part
 <a href=#604 id=604 data-nosnippet>604</a>                .as_ref()
@@ -606,11 +606,11 @@
 <a href=#606 id=606 data-nosnippet>606</a>                .member();
 <a href=#607 id=607 data-nosnippet>607</a>            <span class="macro">quote!</span>(#value.#member)
 <a href=#608 id=608 data-nosnippet>608</a>        }
-<a href=#609 id=609 data-nosnippet>609</a>        Implementation::Standard(StandardOp::IntoRaw) =&gt; {
-<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">let </span>wire_type = wire_rust(applied.result);
-<a href=#611 id=611 data-nosnippet>611</a>            <span class="macro">quote!</span>(Box::into_raw(Box::new(#value)) <span class="kw">as </span>#wire_type)
+<a href=#609 id=609 data-nosnippet>609</a>        Operation::Standard(StandardOp::IntoRaw) =&gt; {
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">let </span>rust = wire_rust(applied.result);
+<a href=#611 id=611 data-nosnippet>611</a>            <span class="macro">quote!</span>(Box::into_raw(Box::new(#value)) <span class="kw">as </span>#rust)
 <a href=#612 id=612 data-nosnippet>612</a>        }
-<a href=#613 id=613 data-nosnippet>613</a>        Implementation::Standard(StandardOp::FromRaw) =&gt; {
+<a href=#613 id=613 data-nosnippet>613</a>        Operation::Standard(StandardOp::FromRaw) =&gt; {
 <a href=#614 id=614 data-nosnippet>614</a>            <span class="kw">let </span>ty = source_type(<span class="kw-2">&amp;</span>applied.subject);
 <a href=#615 id=615 data-nosnippet>615</a>            <span class="kw">let </span>message = <span class="macro">format!</span>(<span class="string">"null `{}` handle"</span>, applied.subject.key());
 <a href=#616 id=616 data-nosnippet>616</a>            <span class="macro">quote!</span> {
@@ -619,7 +619,7 @@
 <a href=#619 id=619 data-nosnippet>619</a>                    .ok_or_else(|| String::from(#message))
 <a href=#620 id=620 data-nosnippet>620</a>            }
 <a href=#621 id=621 data-nosnippet>621</a>        }
-<a href=#622 id=622 data-nosnippet>622</a>        Implementation::Standard(StandardOp::EnumOut { values }) =&gt; {
+<a href=#622 id=622 data-nosnippet>622</a>        Operation::Standard(StandardOp::EnumOut { values }) =&gt; {
 <a href=#623 id=623 data-nosnippet>623</a>            <span class="kw">let </span>ty = source_type(<span class="kw-2">&amp;</span>applied.subject);
 <a href=#624 id=624 data-nosnippet>624</a>            <span class="kw">let </span>arms = values.iter().map(|arm| {
 <a href=#625 id=625 data-nosnippet>625</a>                <span class="kw">let </span>pattern = enum_value(<span class="kw-2">&amp;</span>ty, arm);
@@ -628,7 +628,7 @@
 <a href=#628 id=628 data-nosnippet>628</a>            });
 <a href=#629 id=629 data-nosnippet>629</a>            <span class="macro">quote!</span>(<span class="kw">match </span>#value { #(#arms),* })
 <a href=#630 id=630 data-nosnippet>630</a>        }
-<a href=#631 id=631 data-nosnippet>631</a>        Implementation::Standard(StandardOp::EnumIn {
+<a href=#631 id=631 data-nosnippet>631</a>        Operation::Standard(StandardOp::EnumIn {
 <a href=#632 id=632 data-nosnippet>632</a>            values,
 <a href=#633 id=633 data-nosnippet>633</a>            invalid,
 <a href=#634 id=634 data-nosnippet>634</a>            bits,
@@ -656,14 +656,14 @@
 <a href=#656 id=656 data-nosnippet>656</a>                <span class="prelude-val">None </span>=&gt; <span class="macro">quote!</span>(<span class="kw">match </span>#value { #(#arms),* }),
 <a href=#657 id=657 data-nosnippet>657</a>            }
 <a href=#658 id=658 data-nosnippet>658</a>        }
-<a href=#659 id=659 data-nosnippet>659</a>        Implementation::Standard(StandardOp::Release) =&gt; {
+<a href=#659 id=659 data-nosnippet>659</a>        Operation::Standard(StandardOp::Release) =&gt; {
 <a href=#660 id=660 data-nosnippet>660</a>            <span class="kw">let </span>ty = source_type(<span class="kw-2">&amp;</span>applied.subject);
 <a href=#661 id=661 data-nosnippet>661</a>            <span class="macro">quote!</span> {
 <a href=#662 id=662 data-nosnippet>662</a>                drop(::core::ptr::NonNull::new(#value <span class="kw">as </span><span class="kw-2">*mut </span>#ty)
 <a href=#663 id=663 data-nosnippet>663</a>                    .map(|handle| <span class="kw">unsafe </span>{ Box::from_raw(handle.as_ptr()) }))
 <a href=#664 id=664 data-nosnippet>664</a>            }
 <a href=#665 id=665 data-nosnippet>665</a>        }
-<a href=#666 id=666 data-nosnippet>666</a>        Implementation::Target(op) =&gt; {
+<a href=#666 id=666 data-nosnippet>666</a>        Operation::Target(op) =&gt; {
 <a href=#667 id=667 data-nosnippet>667</a>            <span class="kw">let </span>fed = |slot: Slot| <span class="kw">match </span>slot {
 <a href=#668 id=668 data-nosnippet>668</a>                Slot::Source =&gt; Fed::Source(<span class="kw-2">&amp;</span>applied.subject),
 <a href=#669 id=669 data-nosnippet>669</a>                Slot::WireType(wire_type) =&gt; Fed::WireType(binding.wire_type_of(wire_type)),
@@ -677,7 +677,7 @@
 <a href=#677 id=677 data-nosnippet>677</a>                contexts: applied
 <a href=#678 id=678 data-nosnippet>678</a>                    .contexts
 <a href=#679 id=679 data-nosnippet>679</a>                    .iter()
-<a href=#680 id=680 data-nosnippet>680</a>                    .cloned()
+<a href=#680 id=680 data-nosnippet>680</a>                    .map(|name| name.to_string())
 <a href=#681 id=681 data-nosnippet>681</a>                    .zip(operands[<span class="number">1</span>..].iter().cloned())
 <a href=#682 id=682 data-nosnippet>682</a>                    .collect(),
 <a href=#683 id=683 data-nosnippet>683</a>                error: <span class="prelude-val">None</span>,
@@ -742,12 +742,12 @@
 <a href=#742 id=742 data-nosnippet>742</a>    <span class="kw">let </span>report = route.report.as_ref().map(|report| {
 <a href=#743 id=743 data-nosnippet>743</a>        <span class="kw">let </span>contexts: Vec&lt;(String, syn::Ident)&gt; = report
 <a href=#744 id=744 data-nosnippet>744</a>            .operation
-<a href=#745 id=745 data-nosnippet>745</a>            .context
+<a href=#745 id=745 data-nosnippet>745</a>            .contexts()
 <a href=#746 id=746 data-nosnippet>746</a>            .iter()
-<a href=#747 id=747 data-nosnippet>747</a>            .map(|name| (name.clone(), frame.context(name)))
+<a href=#747 id=747 data-nosnippet>747</a>            .map(|name| (name.to_string(), frame.context(name)))
 <a href=#748 id=748 data-nosnippet>748</a>            .collect();
-<a href=#749 id=749 data-nosnippet>749</a>        <span class="kw">let </span>expression = <span class="kw">match </span><span class="kw-2">&amp;</span>report.operation.implementation {
-<a href=#750 id=750 data-nosnippet>750</a>            Implementation::Target(op) =&gt; {
+<a href=#749 id=749 data-nosnippet>749</a>        <span class="kw">let </span>expression = <span class="kw">match </span><span class="kw-2">&amp;</span>report.operation {
+<a href=#750 id=750 data-nosnippet>750</a>            Operation::Target(op) =&gt; {
 <a href=#751 id=751 data-nosnippet>751</a>                <span class="kw">let </span>feed = OperationFeed::&lt;T&gt; {
 <a href=#752 id=752 data-nosnippet>752</a>                    value: <span class="prelude-val">None</span>,
 <a href=#753 id=753 data-nosnippet>753</a>                    contexts,
@@ -760,12 +760,12 @@
 <a href=#760 id=760 data-nosnippet>760</a>            }
 <a href=#761 id=761 data-nosnippet>761</a>            <span class="comment">// A standard operation converts a value, and a report has none to
 <a href=#762 id=762 data-nosnippet>762</a>            // convert; a binding that stated one is refused before assembly.
-<a href=#763 id=763 data-nosnippet>763</a>            </span>Implementation::Standard(<span class="kw">_</span>) =&gt; {
+<a href=#763 id=763 data-nosnippet>763</a>            </span>Operation::Standard(<span class="kw">_</span>) =&gt; {
 <a href=#764 id=764 data-nosnippet>764</a>                <span class="macro">unreachable!</span>(<span class="string">"a reporting operation is the target's own"</span>)
 <a href=#765 id=765 data-nosnippet>765</a>            }
 <a href=#766 id=766 data-nosnippet>766</a>        };
 <a href=#767 id=767 data-nosnippet>767</a>        <span class="kw">let </span>on_failure = terminal(<span class="kw-2">&amp;</span>route.on_report_failure);
-<a href=#768 id=768 data-nosnippet>768</a>        <span class="kw">match </span>report.operation.failure {
+<a href=#768 id=768 data-nosnippet>768</a>        <span class="kw">match </span>report.operation.failure() {
 <a href=#769 id=769 data-nosnippet>769</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">quote!</span>(#expression;),
 <a href=#770 id=770 data-nosnippet>770</a>            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">quote!</span> {
 <a href=#771 id=771 data-nosnippet>771</a>                <span class="kw">if </span>#expression.is_err() { #on_failure }
