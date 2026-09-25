@@ -35,16 +35,13 @@ let callable = binding.wire_type(JniWireType::Callable {
 });
 let callback = binding.representation(Representation::Callback {
     wire_type: callable,
-    capture: Operation::target(JniOp::CaptureCallback)
-        .context("jni.env")
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
-    invoke: Operation::target(JniOp::CallCallback)
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
+    capture: Operation::Target(JniOp::CaptureCallback),   // needs `jni.env`, can fail
+    invoke: Operation::Target(JniOp::CallCallback),       // needs nothing, can fail
     routes: vec![FailureRoute {
         category: FailureCategory::Runtime,
         report: Some(Report {
             error: parse_quote!(jni::errors::Error),
-            operation: Operation::target(JniOp::ReportCallbackError),
+            operation: Operation::Target(JniOp::ReportCallbackError),
         }),
         on_report_failure: Terminal::Abort,
         terminate: Terminal::Return(parse_quote!(())),

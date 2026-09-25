@@ -217,15 +217,17 @@ establish the behavior of the resulting foreign interface.
    whose own instructions use the same identities. These implement the body roles
    described with the rest of the
    [conversion plans](stages/05-represent.md#the-conversion-plans-the-registry-builds).
-   A conversion's body is a template whose
-   wire type is its
-   input; using it inlines it under the caller's identities. Temporary names are allocated by the writer from
+   A conversion's body is a template with one input value and one result;
+   using it inlines it under the caller's identities. Temporary names are allocated by the writer from
    definition order, never by an adapter.
-2. **Standard and target operations.** An operation's implementation is
-   `Implementation<Op>`: either a `Standard` operation the registry writes —
-   identity, member read, the handle and enum operations — or the target's own
-   `Op`, which its writer writes when the registry feeds it. C writes no
-   operation at all, which its target states by giving `Op` no values.
+2. **Standard and target operations.** An `Operation<Op>` is either a
+   `Standard` operation the registry writes — identity, member read, the handle
+   and enum operations — or the target's own `Op`, which its writer writes when
+   the registry feeds it. What an operation needs and what it can raise are its
+   own facts, stated once: by the registry for a standard one, and through
+   `TargetOp::contexts` and `TargetOp::failure` for a target's. C has one
+   operation of its own, calling through a callback's closure struct, which
+   needs nothing and cannot fail.
 3. **A rule applies to one value.** The rule at a value's position, else its
    type's, gives the representation of the value currently being planned. It
    says nothing of that value's children, which are looked up again at their

@@ -23,15 +23,15 @@ let pointer = binding.wire_type(CWireType::Pointer {
     name: format_ident!("Ledger"),          // `*mut Ledger`: the C target's own type, not source::Ledger
 });
 Representation::Terminal {
-    into_rust: Some(Codec { wire_type: pointer, operation: Operation::standard(StandardOp::FromRaw) }),
-    out_of_rust: Some(Codec { wire_type: pointer, operation: Operation::standard(StandardOp::IntoRaw) }),
-    release: Some(Operation::standard(StandardOp::Release)),
+    into_rust: Some(Codec { wire_type: pointer, operation: Operation::Standard(StandardOp::FromRaw) }),
+    out_of_rust: Some(Codec { wire_type: pointer, operation: Operation::Standard(StandardOp::IntoRaw) }),
+    release: Some(Operation::Standard(StandardOp::Release)),
 }
 ```
 
-`Operation::standard` fixes each standard
+A standard
 [primitive](../../stages/05-represent.md#represent-and-compose-values)'s
-failure: taking a handle back fails in the binding category with a `String`,
+failure is the registry's, fixed by the operation: taking a handle back fails in the binding category with a `String`,
 and nothing else here can fail. A frontend cannot state the same operation
 with a different failure, so a C route that aborts and a JNI route that throws
 agree on what they are handed. Applied to the

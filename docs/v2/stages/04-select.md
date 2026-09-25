@@ -454,7 +454,7 @@ pub struct WireTypeFeed<'a, T: Target> {
 ```
 
 The JNI getter shows the split. The binding stated
-`read: Operation::target(JniOp::Getter)` for `Stamp`; `JniOp::Getter` carries
+`read: Operation::Target(JniOp::Getter)` for `Stamp`; `JniOp::Getter` carries
 no name and no type. To read `secs`, the registry calls `write_operation`
 with the object operand and its `example.Stamp` wire type, the `env` context,
 the part `secs`, and the result wire type the `i64` rule resolved to —

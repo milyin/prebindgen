@@ -22,9 +22,9 @@ let address = binding.wire_type(JniWireType::Handle {
     kotlin_class: "example.Ledger".into(),  // a `jlong`, and not `Long`: an address, not a number
 });
 Representation::Terminal {
-    into_rust: Some(Codec { wire_type: address, operation: Operation::standard(StandardOp::FromRaw) }),
-    out_of_rust: Some(Codec { wire_type: address, operation: Operation::standard(StandardOp::IntoRaw) }),
-    release: Some(Operation::standard(StandardOp::Release)),
+    into_rust: Some(Codec { wire_type: address, operation: Operation::Standard(StandardOp::FromRaw) }),
+    out_of_rust: Some(Codec { wire_type: address, operation: Operation::Standard(StandardOp::IntoRaw) }),
+    release: Some(Operation::Standard(StandardOp::Release)),
 }
 ```
 

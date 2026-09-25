@@ -154,26 +154,27 @@ impl BodyBuilder {
 
 /// A planned conversion's instructions, as a template.
 ///
-/// [`NodeBody::wire type`] is the value handed in when the conversion is used;
+/// [`NodeBody::input`] is the value handed in when the conversion is used —
+/// the wire value into Rust, the source value out of it — and
 /// [`NodeBody::result`] is what it produces. An identity conversion is the
-/// degenerate case — no instructions, and the result *is* the wire type — which
-/// is what makes a scalar child render nothing.
+/// degenerate case — no instructions, and the result *is* the input — which is
+/// what makes a scalar child render nothing.
 #[derive(Clone, Debug)]
 pub struct NodeBody {
-    pub wire_type: ValueId,
+    pub input: ValueId,
     pub instrs: Vec<Stmt>,
     pub result: ValueId,
 }
 
 impl NodeBody {
-    /// Inline this conversion into `out`, with `wire type` supplying its input.
+    /// Inline this conversion into `out`, with `input` supplying its input.
     ///
     /// Value identities are local to a template, so they are remapped as they
     /// are met: an operand must already be mapped, and a result is allocated
     /// fresh in the destination body.
-    pub fn inline(&self, wire_type: ValueId, out: &mut BodyBuilder) -> ValueId {
+    pub fn inline(&self, input: ValueId, out: &mut BodyBuilder) -> ValueId {
         let mut map = HashMap::new();
-        map.insert(self.wire_type, wire_type);
+        map.insert(self.input, input);
         for step in remap(&self.instrs, &mut map, out) {
             out.instrs.push(step);
         }

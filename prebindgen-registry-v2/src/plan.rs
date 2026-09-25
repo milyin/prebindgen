@@ -14,9 +14,8 @@ use prebindgen_flat::{
 
 use crate::{
     binding::{
-        Binding, Failure, FailureRoute, FunctionFormOf, Implementation, Operation, OutputForm,
-        OutputId, ReprId, Representation, Scope, Step, ValuePath, Via, WireKind, WireKindOf,
-        WireType, WireTypeId,
+        Binding, Failure, FailureRoute, FunctionFormOf, Operation, OutputForm, OutputId, ReprId,
+        Representation, Scope, Step, ValuePath, Via, WireKind, WireKindOf, WireType, WireTypeId,
     },
     body::{BodyBuilder, Instr, NodeBody, Operand, Stmt, ValueId},
     decl::Declaration,
@@ -69,13 +68,13 @@ pub enum Slot {
 /// One use of an operation, with everything its writer will be fed.
 #[derive(Clone, Debug)]
 pub struct Applied<Op> {
-    pub implementation: Implementation<Op>,
+    pub operation: Operation<Op>,
     /// The source type of the value the conversion serves.
     pub subject: TypeRef,
     /// What the conversion hands the operation.
     pub value: Slot,
-    /// The runtime contexts it needs, by name, in the order it asked.
-    pub contexts: Vec<String>,
+    /// The runtime contexts it needs, by name.
+    pub contexts: &'static [&'static str],
     /// What it produces, if anything.
     pub result: Option<Slot>,
     /// The part it is applied to, for a per-part read.
@@ -600,7 +599,7 @@ impl<'a, T: Target> Run<'a, T> {
                     Direction::IntoRust => (Slot::WireType(codec.wire_type), Slot::Source),
                     Direction::OutOfRust => (Slot::Source, Slot::WireType(codec.wire_type)),
                 };
-                failures.extend(codec.operation.failure.iter().map(|f| f.category));
+                failures.extend(codec.operation.failure().map(|f| f.category));
                 let produced = self.apply(
                     &mut body,
                     &codec.operation,
@@ -650,7 +649,7 @@ impl<'a, T: Target> Run<'a, T> {
                         ));
                     }
                 }
-                failures.extend(read.failure.iter().map(|f| f.category));
+                failures.extend(read.failure().map(|f| f.category));
                 let mut converted = Vec::new();
                 for (part, child) in parts.iter().zip(&children) {
                     // Everything planned for this part, from the read of the
@@ -693,7 +692,7 @@ impl<'a, T: Target> Run<'a, T> {
                 }
                 // What a call raises stays inside the closure, which routes
                 // it; the wrapper sees only what capturing can raise.
-                failures = capture.failure.iter().map(|f| f.category).collect();
+                failures = capture.failure().map(|f| f.category).into_iter().collect();
                 // Capturing runs before any call, and is told what the calls
                 // will carry.
                 let arg_wire_types: Vec<(WireTypeId, Option<ValueId>)> = children
@@ -764,7 +763,7 @@ impl<'a, T: Target> Run<'a, T> {
             wire_type,
             children,
             body: NodeBody {
-                wire_type: input,
+                input,
                 instrs: body.into_instrs(),
                 result,
             },
@@ -840,21 +839,21 @@ impl<'a, T: Target> Run<'a, T> {
         }
         // Every operation a call applies: the arguments' conversions, then
         // the invocation.
-        let mut applied: Vec<(Option<&Failure>, &[String])> = Vec::new();
+        let mut applied: Vec<(Option<Failure>, &[&str])> = Vec::new();
         for child in children {
             for step in &self.nodes[child.0].body.instrs {
                 if let Instr::Apply { primitive, .. } = &step.instr {
                     let primitive = &self.primitives[primitive.0];
-                    applied.push((primitive.failure.as_ref(), &primitive.contexts));
+                    applied.push((primitive.failure.clone(), primitive.contexts));
                 }
             }
         }
-        applied.push((invoke.failure.as_ref(), &invoke.context));
+        applied.push((invoke.failure(), invoke.contexts()));
         let reporters = routes
             .iter()
             .filter_map(|route| route.report.as_ref())
-            .map(|report| (None, report.operation.context.as_slice()));
-        for (_, contexts) in applied.iter().copied().chain(reporters) {
+            .map(|report| (None, report.operation.contexts()));
+        for (_, contexts) in applied.iter().cloned().chain(reporters) {
             if let Some(name) = contexts.first() {
                 return refused(
                     "unsupported.callback.missing_context".to_string(),
@@ -867,7 +866,7 @@ impl<'a, T: Target> Run<'a, T> {
                 );
             }
         }
-        for failure in applied.iter().filter_map(|(failure, _)| *failure) {
+        for failure in applied.iter().filter_map(|(failure, _)| failure.as_ref()) {
             let Some(route) = routes
                 .iter()
                 .find(|route| route.category == failure.category)
@@ -916,24 +915,28 @@ impl<'a, T: Target> Run<'a, T> {
         args: &[(WireTypeId, Option<ValueId>)],
     ) -> ValueId {
         if matches!(
-            operation.implementation,
-            Implementation::Standard(crate::binding::StandardOp::Identity)
-        ) && operation.failure.is_none()
-        {
+            operation,
+            Operation::Standard(crate::binding::StandardOp::Identity)
+        ) {
             return value;
         }
         let mut operands = vec![Operand::Value(value)];
-        operands.extend(operation.context.iter().cloned().map(Operand::Context));
+        operands.extend(
+            operation
+                .contexts()
+                .iter()
+                .map(|name| Operand::Context(name.to_string())),
+        );
         operands.extend(args.iter().filter_map(|(_, arg)| arg.map(Operand::Value)));
         let id = self.register(Applied {
-            implementation: operation.implementation.clone(),
+            operation: operation.clone(),
             subject: subject.clone(),
             value: slot,
-            contexts: operation.context.clone(),
+            contexts: operation.contexts(),
             result,
             part,
             args: args.iter().map(|(wire_type, _)| *wire_type).collect(),
-            failure: operation.failure.clone(),
+            failure: operation.failure(),
         });
         let produced = result.map(|_| body.fresh());
         body.push(Instr::Apply {
@@ -1666,9 +1669,9 @@ fn assemble<T: Target>(
             .flat_map(|node| run.nodes[node.0].failures.clone())
             .collect(),
         Body::Release(release) => release
-            .failure
-            .iter()
+            .failure()
             .map(|failure| failure.category)
+            .into_iter()
             .collect(),
     };
     categories.sort();
@@ -1720,9 +1723,9 @@ fn assemble<T: Target>(
     }
     let mut arguments = Vec::new();
     for (index, node) in inputs.iter().enumerate() {
-        let wire_type = body.fresh();
+        let wire_value = body.fresh();
         params.push((
-            wire_type,
+            wire_value,
             WrapperParam {
                 name: form.inputs[index].clone(),
                 ty: run
@@ -1737,7 +1740,7 @@ fn assemble<T: Target>(
         match &action {
             Body::Call(_) => {
                 let node_body = run.nodes[node.0].body.clone();
-                arguments.push(node_body.inline(wire_type, &mut body));
+                arguments.push(node_body.inline(wire_value, &mut body));
             }
             // A release takes the wire type as the conversion would, and drops
             // what it holds instead of converting it.
@@ -1748,7 +1751,7 @@ fn assemble<T: Target>(
                     &mut body,
                     release,
                     &subject,
-                    (slot, wire_type),
+                    (slot, wire_value),
                     None,
                     None,
                     &[],
@@ -1780,7 +1783,7 @@ fn assemble<T: Target>(
     // An operation that asks for a runtime context the boundary does not supply
     // cannot be assembled. That covers the reporting operations as much as the
     // conversions.
-    let mut needed: Vec<&String> = Vec::new();
+    let mut needed: Vec<&str> = Vec::new();
     for step in &instrs {
         if let Instr::Apply { operands, .. } = &step.instr {
             for operand in operands {
@@ -1792,7 +1795,7 @@ fn assemble<T: Target>(
     }
     for route in &form.routes {
         if let Some(report) = &route.report {
-            needed.extend(report.operation.context.iter());
+            needed.extend(report.operation.contexts().iter().copied());
         }
     }
     // The reporter is handed the error the operation produced, so the two have

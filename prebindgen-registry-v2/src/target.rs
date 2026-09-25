@@ -43,7 +43,7 @@ use prebindgen_flat::flat::{Enum, EnumValue, FieldShape, TypeRef};
 use proc_macro2::TokenStream;
 
 use crate::{
-    binding::{WireKind, WireKindOf, WireType},
+    binding::{TargetOp, WireKind, WireKindOf, WireType},
     outcome::Capability,
 };
 
@@ -364,7 +364,7 @@ pub fn mirrored_i32_enum<'a>(
                 Err(_) => Err(Unsupported::new(
                     format!("unsupported.{language}.enum_range"),
                     format!(
-                        "`{declared_as}` numbers `{}` {number}, which a 32-bit wire_type cannot \
+                        "`{declared_as}` numbers `{}` {number}, which a 32-bit wire type cannot \
                          hold",
                         value.name
                     ),
@@ -431,7 +431,7 @@ pub trait Target: Sized {
     /// The target's own operations: what only its language has — a JVM
     /// getter call, a throw, calling through C's closure struct, whose
     /// members only the C target declares and knows.
-    type Op: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+    type Op: TargetOp;
 
     /// What only the target's foreign writer reads about an output: a Kotlin
     /// package and name. C has none.

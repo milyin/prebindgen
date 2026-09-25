@@ -111,22 +111,35 @@ own enum, one variant per **wire kind** — C's `I64`, `Pointer`, `Aggregate`;
 JNI's `Long`, `Handle`, `Object` — each variant holding only what its kind
 needs, such as a C name or a Kotlin class. A kind carries no data, and is what
 a target states its capabilities in: which kinds each kind can have as its
-parts, and which kinds a [wrapper](../stages/06-boundary.md#assemble-the-wrapper-boundary) can take and return.
+parts, and which kinds a [wrapper](06-boundary.md#assemble-the-wrapper-boundary) can take and return.
 
 ### Individual target operations
 
 A primitive is one operation, such as converting a scalar, reading a JVM
 property, handing out a handle, or signalling an error. (The word means an
 indivisible *operation* here, not a primitive type; a scalar conversion is one
-of the things a primitive can do.) The binding states it as an `Operation`:
+of the things a primitive can do.) The binding states it as an `Operation`,
+which says which operation and nothing else:
 
 ```rust
-struct Operation<Op> {
-    implementation: Implementation<Op>, // Standard(StandardOp), or the target's own Op.
-    context: Vec<String>,               // Runtime contexts it needs, by name: "jni.env".
-    failure: Option<Failure>,           // Its failure category and error type, if it can fail.
+enum Operation<Op> {
+    Standard(StandardOp), // One the registry writes itself.
+    Target(Op),           // One of the target's own.
+}
+
+/// What the registry plans a target's operation with: facts of the operation
+/// itself, the same wherever it is applied.
+trait TargetOp: Clone + Eq + Hash + Debug {
+    fn contexts(&self) -> &'static [&'static str] { &[] }  // Runtime contexts it needs: "jni.env".
+    fn failure(&self) -> Option<Failure> { None }          // Its failure category and error type.
 }
 ```
+
+The registry reads both facts from the operation: from `TargetOp` for a
+target's own, and from its own table for a standard one — taking back a null
+handle, or reading a number no value of an enum has, is a binding failure
+carrying a message. No use of an operation restates them, so no two uses can
+disagree.
 
 A **standard** operation is one the registry writes itself, because writing it
 means naming a source type, which only the registry can do: the identity, a
@@ -145,13 +158,24 @@ emitted once however many operations need it. A target's writer returns the
 artifacts its text needs beside the text.
 
 This is the JNI getter that reads a `Stamp` object's properties, as the JNI
-frontend states it:
+frontend states it, and what the JNI target says of it:
 
 ```rust
-Operation::target(JniOp::Getter)
-    .context("jni.env") // The environment: an operand, not an ambient variable.
-    // A JVM call can fail, and the error is the jni crate's.
-    .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error))
+Operation::Target(JniOp::Getter)
+
+impl TargetOp for JniOp {
+    fn contexts(&self) -> &'static [&'static str] {
+        match self {
+            // The environment: an operand, not an ambient variable.
+            JniOp::Getter | /* … */ => &["jni.env"],
+            // …
+        }
+    }
+    fn failure(&self) -> Option<Failure> {
+        // A JVM call can fail, and the error is the jni crate's.
+        Some(Failure { category: FailureCategory::Runtime, error: parse_quote!(jni::errors::Error) })
+    }
+}
 ```
 
 It names no property and no type. Applied to the part `secs`, to an
@@ -370,13 +394,13 @@ enum Operand {
 }
 ```
 
-A conversion's body is a **template**: one value identity is its wire type — the
-value handed in when the conversion is used — and one is its result. Using a
-conversion inlines its instructions under the caller's identities, so a
-conversion belongs to no function and is still written down once. An identity
-conversion is the degenerate template: no instructions, and the result *is* the
-wire type, which is why a scalar child renders nothing between a member read and
-the construction that uses it.
+A conversion's body is a **template**: one value identity is its input — the
+value handed in when the conversion is used, a wire value on the way into Rust
+— and one is its result. Using a conversion inlines its instructions under the
+caller's identities, so a conversion belongs to no function and is still
+written down once. An identity conversion is the degenerate template: no
+instructions, and the result *is* the input, which is why a scalar child
+renders nothing between a member read and the construction that uses it.
 
 An operation that needs a runtime scope names it, and the function form says
 which wrapper parameter supplies it; nothing in a written fragment can reach for

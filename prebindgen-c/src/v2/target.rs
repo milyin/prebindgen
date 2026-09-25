@@ -9,7 +9,7 @@
 //! calling through that closure.
 
 use prebindgen_registry_v2::{
-    mirrored_i32_enum, OperationFeed, Target, WireKind, WireType, WireTypeFeed, Written,
+    mirrored_i32_enum, OperationFeed, Target, TargetOp, WireKind, WireType, WireTypeFeed, Written,
 };
 use quote::{format_ident, quote};
 
@@ -124,6 +124,10 @@ pub enum COp {
     /// so nothing happens.
     Call,
 }
+
+/// Calling through a closure struct needs nothing but the struct and its
+/// arguments, and cannot fail.
+impl TargetOp for COp {}
 
 /// The C target: its writers.
 #[derive(Default)]

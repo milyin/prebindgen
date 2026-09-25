@@ -19,7 +19,7 @@ use quote::{format_ident, quote};
 
 use crate::{
     binding::{
-        Binding, FailureRoute, Implementation, OutputForm, Representation, StandardOp, WireType,
+        Binding, FailureRoute, Operation, OutputForm, Representation, StandardOp, WireType,
         WireTypeId,
     },
     body::{Instr, Operand, Stmt, ValueId},
@@ -267,8 +267,8 @@ fn wrapper<T: Target>(
             Instr::Call { function, .. } => function.clone(),
             Instr::Apply { primitive, .. } => {
                 let applied = &primitives[primitive.0];
-                match &applied.implementation {
-                    Implementation::Standard(StandardOp::FromRaw | StandardOp::Release) => {
+                match &applied.operation {
+                    Operation::Standard(StandardOp::FromRaw | StandardOp::Release) => {
                         match applied.subject.kind() {
                             prebindgen_flat::flat::TypeKind::Named { id, .. } => id.name.clone(),
                             _ => continue,
@@ -321,8 +321,8 @@ fn wrapper<T: Target>(
     // look at. So the wrapper is `unsafe`, and says what it is owed.
     let reads_bits = function.instrs.iter().any(|step| match &step.instr {
         Instr::Apply { primitive, .. } => matches!(
-            primitives[primitive.0].implementation,
-            Implementation::Standard(StandardOp::EnumIn { bits: Some(_), .. })
+            primitives[primitive.0].operation,
+            Operation::Standard(StandardOp::EnumIn { bits: Some(_), .. })
         ),
         _ => false,
     });
@@ -596,9 +596,9 @@ fn operation<T: Target>(
         _ => source_type(&applied.subject),
     };
     let value = &operands[0];
-    match &applied.implementation {
-        Implementation::Standard(StandardOp::Identity) => quote!(#value),
-        Implementation::Standard(StandardOp::ReadMember) => {
+    match &applied.operation {
+        Operation::Standard(StandardOp::Identity) => quote!(#value),
+        Operation::Standard(StandardOp::ReadMember) => {
             let member = applied
                 .part
                 .as_ref()
@@ -606,11 +606,11 @@ fn operation<T: Target>(
                 .member();
             quote!(#value.#member)
         }
-        Implementation::Standard(StandardOp::IntoRaw) => {
-            let wire_type = wire_rust(applied.result);
-            quote!(Box::into_raw(Box::new(#value)) as #wire_type)
+        Operation::Standard(StandardOp::IntoRaw) => {
+            let rust = wire_rust(applied.result);
+            quote!(Box::into_raw(Box::new(#value)) as #rust)
         }
-        Implementation::Standard(StandardOp::FromRaw) => {
+        Operation::Standard(StandardOp::FromRaw) => {
             let ty = source_type(&applied.subject);
             let message = format!("null `{}` handle", applied.subject.key());
             quote! {
@@ -619,7 +619,7 @@ fn operation<T: Target>(
                     .ok_or_else(|| String::from(#message))
             }
         }
-        Implementation::Standard(StandardOp::EnumOut { values }) => {
+        Operation::Standard(StandardOp::EnumOut { values }) => {
             let ty = source_type(&applied.subject);
             let arms = values.iter().map(|arm| {
                 let pattern = enum_value(&ty, arm);
@@ -628,7 +628,7 @@ fn operation<T: Target>(
             });
             quote!(match #value { #(#arms),* })
         }
-        Implementation::Standard(StandardOp::EnumIn {
+        Operation::Standard(StandardOp::EnumIn {
             values,
             invalid,
             bits,
@@ -656,14 +656,14 @@ fn operation<T: Target>(
                 None => quote!(match #value { #(#arms),* }),
             }
         }
-        Implementation::Standard(StandardOp::Release) => {
+        Operation::Standard(StandardOp::Release) => {
             let ty = source_type(&applied.subject);
             quote! {
                 drop(::core::ptr::NonNull::new(#value as *mut #ty)
                     .map(|handle| unsafe { Box::from_raw(handle.as_ptr()) }))
             }
         }
-        Implementation::Target(op) => {
+        Operation::Target(op) => {
             let fed = |slot: Slot| match slot {
                 Slot::Source => Fed::Source(&applied.subject),
                 Slot::WireType(wire_type) => Fed::WireType(binding.wire_type_of(wire_type)),
@@ -677,7 +677,7 @@ fn operation<T: Target>(
                 contexts: applied
                     .contexts
                     .iter()
-                    .cloned()
+                    .map(|name| name.to_string())
                     .zip(operands[1..].iter().cloned())
                     .collect(),
                 error: None,
@@ -742,12 +742,12 @@ fn failure_arm<T: Target>(
     let report = route.report.as_ref().map(|report| {
         let contexts: Vec<(String, syn::Ident)> = report
             .operation
-            .context
+            .contexts()
             .iter()
-            .map(|name| (name.clone(), frame.context(name)))
+            .map(|name| (name.to_string(), frame.context(name)))
             .collect();
-        let expression = match &report.operation.implementation {
-            Implementation::Target(op) => {
+        let expression = match &report.operation {
+            Operation::Target(op) => {
                 let feed = OperationFeed::<T> {
                     value: None,
                     contexts,
@@ -760,12 +760,12 @@ fn failure_arm<T: Target>(
             }
             // A standard operation converts a value, and a report has none to
             // convert; a binding that stated one is refused before assembly.
-            Implementation::Standard(_) => {
+            Operation::Standard(_) => {
                 unreachable!("a reporting operation is the target's own")
             }
         };
         let on_failure = terminal(&route.on_report_failure);
-        match report.operation.failure {
+        match report.operation.failure() {
             None => quote!(#expression;),
             Some(_) => quote! {
                 if #expression.is_err() { #on_failure }

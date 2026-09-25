@@ -36,8 +36,8 @@ let closure = binding.wire_type(CWireType::Closure {
 });
 let callback = binding.representation(Representation::Callback {
     wire_type: closure,
-    capture: Operation::standard(StandardOp::Identity),   // the struct itself is kept
-    invoke: Operation::target(COp::Call),                 // calls its `call`
+    capture: Operation::Standard(StandardOp::Identity),   // the struct itself is kept
+    invoke: Operation::Target(COp::Call),                 // calls its `call`
     routes: Vec::new(),                                   // nothing a call does can fail
 });
 binding.rule(Scope::Type(key), callback);

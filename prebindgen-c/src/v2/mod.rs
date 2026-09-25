@@ -81,7 +81,7 @@ impl CbindgenBuilder {
         let i64_c = binding.wire_type(CWireType::I64);
         let unchanged = Codec {
             wire_type: i64_c,
-            operation: Operation::standard(StandardOp::Identity),
+            operation: Operation::Standard(StandardOp::Identity),
         };
         let i64_whole = binding.representation(Representation::Terminal {
             into_rust: Some(unchanged.clone()),
@@ -119,7 +119,7 @@ impl CbindgenBuilder {
                     Representation::Product {
                         via: Via::Fields,
                         wire_type,
-                        read: Operation::standard(StandardOp::ReadMember),
+                        read: Operation::Standard(StandardOp::ReadMember),
                     }
                 }
             };
@@ -136,13 +136,13 @@ impl CbindgenBuilder {
             let representation = Representation::Terminal {
                 into_rust: Some(Codec {
                     wire_type: pointer,
-                    operation: Operation::standard(StandardOp::FromRaw),
+                    operation: Operation::Standard(StandardOp::FromRaw),
                 }),
                 out_of_rust: Some(Codec {
                     wire_type: pointer,
-                    operation: Operation::standard(StandardOp::IntoRaw),
+                    operation: Operation::Standard(StandardOp::IntoRaw),
                 }),
-                release: Some(Operation::standard(StandardOp::Release)),
+                release: Some(Operation::Standard(StandardOp::Release)),
             };
             // A release has no source parameter to take a name from, and
             // takes v1's.
@@ -198,7 +198,7 @@ impl CbindgenBuilder {
                     Representation::Terminal {
                         into_rust: Some(Codec {
                             wire_type: storage,
-                            operation: Operation::standard(StandardOp::EnumIn {
+                            operation: Operation::Standard(StandardOp::EnumIn {
                                 values: numbered,
                                 invalid: Some(format!("`{c_name}` has no value numbered {{}}")),
                                 bits: Some(Box::new(syn::parse_quote!(::core::ffi::c_int))),
@@ -206,7 +206,7 @@ impl CbindgenBuilder {
                         }),
                         out_of_rust: Some(Codec {
                             wire_type: enumeration,
-                            operation: Operation::standard(StandardOp::EnumOut { values: named }),
+                            operation: Operation::Standard(StandardOp::EnumOut { values: named }),
                         }),
                         release: None,
                     }
@@ -249,8 +249,8 @@ impl CbindgenBuilder {
             });
             let representation = binding.representation(Representation::Callback {
                 wire_type: closure,
-                capture: Operation::standard(StandardOp::Identity),
-                invoke: Operation::target(COp::Call),
+                capture: Operation::Standard(StandardOp::Identity),
+                invoke: Operation::Target(COp::Call),
                 routes: Vec::new(),
             });
             binding.rule(Scope::Type(callback.clone()), representation);

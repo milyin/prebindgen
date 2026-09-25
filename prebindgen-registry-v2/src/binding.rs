@@ -190,65 +190,54 @@ pub enum Via {
     Fields,
 }
 
-/// One operation, as the binding states it.
+/// One operation, as the binding states it: which one, and nothing else.
+///
+/// What it needs and what it can raise are facts of the operation itself —
+/// the registry's own table for a standard one, the target's
+/// [`TargetOp`] for one of its own — so no use of an operation restates them
+/// and no two uses can disagree.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Operation<Op> {
-    pub implementation: Implementation<Op>,
-    /// Runtime contexts it needs, by name: `jni.env`. A function form's
-    /// context parameters supply them.
-    pub context: Vec<String>,
-    /// Its failure category and error type, if it can fail.
-    pub failure: Option<Failure>,
-}
-
-impl<Op> Operation<Op> {
-    /// A standard operation, with the failure it has by definition.
-    pub fn standard(op: StandardOp) -> Self {
-        let failure = match &op {
-            StandardOp::FromRaw
-            | StandardOp::EnumIn {
-                invalid: Some(_), ..
-            } => Some(Failure::binding_message()),
-            _ => None,
-        };
-        Operation {
-            implementation: Implementation::Standard(op),
-            context: Vec::new(),
-            failure,
-        }
-    }
-
-    /// One of the target's own operations, infallible until stated
-    /// otherwise.
-    pub fn target(op: Op) -> Self {
-        Operation {
-            implementation: Implementation::Target(op),
-            context: Vec::new(),
-            failure: None,
-        }
-    }
-
-    /// The same, needing the runtime context `name`.
-    pub fn context(mut self, name: impl Into<String>) -> Self {
-        self.context.push(name.into());
-        self
-    }
-
-    /// The same, failing in `category` with an error of type `error`.
-    pub fn fails(mut self, category: FailureCategory, error: syn::Type) -> Self {
-        self.failure = Some(Failure {
-            category,
-            error: Box::new(error),
-        });
-        self
-    }
-}
-
-/// What actually performs an operation.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Implementation<Op> {
+pub enum Operation<Op> {
+    /// One the registry writes itself.
     Standard(StandardOp),
+    /// One of the target's own, which its writer writes.
     Target(Op),
+}
+
+impl<Op: TargetOp> Operation<Op> {
+    /// The runtime contexts it needs besides its operand, by name:
+    /// `"jni.env"`. A standard operation needs none.
+    pub fn contexts(&self) -> &'static [&'static str] {
+        match self {
+            Operation::Standard(_) => &[],
+            Operation::Target(op) => op.contexts(),
+        }
+    }
+
+    /// Its failure category and error type, if it can fail.
+    pub fn failure(&self) -> Option<Failure> {
+        match self {
+            Operation::Standard(op) => op.failure(),
+            Operation::Target(op) => op.failure(),
+        }
+    }
+}
+
+/// An operation only a target's language has — a JVM getter call, a throw —
+/// and the two facts about it the registry plans with. Both are the
+/// operation's own, the same wherever it is applied.
+pub trait TargetOp: Clone + Eq + std::hash::Hash + std::fmt::Debug {
+    /// The runtime contexts it needs besides its operand, by name: `"jni.env"`.
+    /// A function form's context parameters supply them, and nothing supplies
+    /// one inside a callback's call.
+    fn contexts(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    /// Its failure category and error type, if it can fail.
+    fn failure(&self) -> Option<Failure> {
+        None
+    }
 }
 
 /// How an operation fails.
@@ -310,6 +299,21 @@ pub enum StandardOp {
         invalid: Option<String>,
         bits: Option<Box<syn::Type>>,
     },
+}
+
+impl StandardOp {
+    /// The failure a standard operation has by definition: taking back a null
+    /// handle, and reading a number no value of an enum has where the enum
+    /// says how to refuse one — each a binding failure carrying a message.
+    pub fn failure(&self) -> Option<Failure> {
+        match self {
+            StandardOp::FromRaw
+            | StandardOp::EnumIn {
+                invalid: Some(_), ..
+            } => Some(Failure::binding_message()),
+            _ => None,
+        }
+    }
 }
 
 /// How one source function is exported: everything about its wrapper that is
@@ -727,12 +731,12 @@ fn tokens(item: &impl quote::ToTokens) -> String {
 
 /// An operation on one line: what it is, the contexts it needs and the failure
 /// it can raise.
-fn operation<Op: std::fmt::Debug>(operation: &Operation<Op>) -> String {
-    let mut text = format!("{:?}", operation.implementation);
-    if !operation.context.is_empty() {
-        text += &format!(" needs {}", operation.context.join(", "));
+fn operation<Op: TargetOp>(operation: &Operation<Op>) -> String {
+    let mut text = format!("{operation:?}");
+    if !operation.contexts().is_empty() {
+        text += &format!(" needs {}", operation.contexts().join(", "));
     }
-    if let Some(failure) = &operation.failure {
+    if let Some(failure) = &operation.failure() {
         text += &format!(
             " fails {} {}",
             failure.category.as_str(),
@@ -751,7 +755,7 @@ fn terminal(terminal: &Terminal) -> String {
 
 /// A function form, indented under the output it belongs to: its signature on
 /// one line, then one line per route.
-fn write_form<Op: std::fmt::Debug>(
+fn write_form<Op: TargetOp>(
     f: &mut std::fmt::Formatter<'_>,
     label: &str,
     form: &FunctionForm<Op>,
@@ -795,7 +799,7 @@ fn write_form<Op: std::fmt::Debug>(
 
 /// A failure route on one line: its category, what reports it, and how it
 /// ends.
-fn route<Op: std::fmt::Debug>(route: &FailureRoute<Op>) -> String {
+fn route<Op: TargetOp>(route: &FailureRoute<Op>) -> String {
     let report = match &route.report {
         Some(report) => format!(
             "report {} by {}, if that fails {}, then ",

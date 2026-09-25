@@ -26,7 +26,7 @@ let stamp_c = binding.wire_type(CWireType::Aggregate {
 Representation::Product {
     via: Via::Fields,
     wire_type: stamp_c,
-    read: Operation::standard(StandardOp::ReadMember), // infallible, needs no context
+    read: Operation::Standard(StandardOp::ReadMember), // infallible, needs no context
 }
 ```
 

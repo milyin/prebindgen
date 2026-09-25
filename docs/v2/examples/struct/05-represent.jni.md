@@ -26,9 +26,7 @@ let stamp_obj = binding.wire_type(JniWireType::Object {
 Representation::Product {
     via: Via::Fields,
     wire_type: stamp_obj,
-    read: Operation::target(JniOp::Getter)
-        .context("jni.env")                         // the JNI environment
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
+    read: Operation::Target(JniOp::Getter),       // needs `jni.env`, can fail: see below
 }
 ```
 

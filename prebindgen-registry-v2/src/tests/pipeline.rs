@@ -10,8 +10,9 @@ use prebindgen_flat::flat::Flat;
 
 use crate::{
     binding::{
-        Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf, Report,
-        ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireKind, WireType,
+        Binding, Codec, Failure, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
+        Report, ReprId, Representation, Scope, StandardOp, Step, TargetOp, ValuePath, Via,
+        WireKind, WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
@@ -252,6 +253,31 @@ enum Op {
     Invoke,
     /// The same, failing at runtime.
     InvokeFallibly,
+    /// The same, needing a runtime context.
+    InvokeNeedingContext,
+    /// A reporter needing a runtime context no form here supplies.
+    ReportNeedingContext,
+}
+
+/// The one runtime context this target's operations know, and the one error
+/// its fallible operations raise.
+impl TargetOp for Op {
+    fn contexts(&self) -> &'static [&'static str] {
+        match self {
+            Op::InvokeNeedingContext | Op::ReportNeedingContext => &["mini.log"],
+            _ => &[],
+        }
+    }
+
+    fn failure(&self) -> Option<Failure> {
+        match self {
+            Op::ReadFallibly | Op::InvokeFallibly => Some(Failure {
+                category: FailureCategory::Runtime,
+                error: Box::new(syn::parse_quote!(Error)),
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// The miniature target: a writer for each of its operations, and a mirror
@@ -281,14 +307,14 @@ impl Target for Mini {
         let error = feed.error.as_ref();
         Written::new(match op {
             Op::ReadFallibly => quote::quote!(read(#value)),
-            Op::Report => quote::quote!(report(#error)),
+            Op::Report | Op::ReportNeedingContext => quote::quote!(report(#error)),
             Op::ReportMessage => quote::quote!(report_message(#error)),
             Op::Rebase => quote::quote!(rebase(#value)),
             Op::Capture => {
                 let carried = feed.args.iter().map(|(_, wire_type)| wire_type.rust());
                 quote::quote!(capture::<(#(#carried,)*)>(#value))
             }
-            Op::Invoke | Op::InvokeFallibly => {
+            Op::Invoke | Op::InvokeFallibly | Op::InvokeNeedingContext => {
                 let args = feed.args.iter().map(|(name, _)| name);
                 quote::quote!(invoke(&#value, #(#args),*))
             }
@@ -328,12 +354,9 @@ enum Routes {
 /// A form exporting a function under `symbol`. Its wrapper parameters are
 /// named `arg0`, `arg1`, … unless a test names them.
 fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op> {
-    let report = |op: Op, error: syn::Type, context: bool| Report {
+    let report = |op: Op, error: syn::Type| Report {
         error,
-        operation: match context {
-            true => Operation::target(op).context("mini.log"),
-            false => Operation::target(op),
-        },
+        operation: Operation::Target(op),
     };
     FunctionForm {
         abi: "C".to_string(),
@@ -345,16 +368,18 @@ fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op> {
             Routes::Reported | Routes::ReporterNeedsContext => vec![
                 FailureRoute {
                     category: FailureCategory::Binding,
-                    report: Some(report(Op::ReportMessage, syn::parse_quote!(String), false)),
+                    report: Some(report(Op::ReportMessage, syn::parse_quote!(String))),
                     on_report_failure: Terminal::Abort,
                     terminate: Terminal::Return(syn::parse_quote!(0)),
                 },
                 FailureRoute {
                     category: FailureCategory::Runtime,
                     report: Some(report(
-                        Op::Report,
+                        match routes {
+                            Routes::ReporterNeedsContext => Op::ReportNeedingContext,
+                            _ => Op::Report,
+                        },
                         syn::parse_quote!(Error),
-                        routes == Routes::ReporterNeedsContext,
                     )),
                     on_report_failure: Terminal::Abort,
                     terminate: Terminal::Return(syn::parse_quote!(0)),
@@ -424,7 +449,7 @@ fn fixture() -> Fixture {
     let i64_wire = binding.wire_type(Wire::Scalar);
     let unchanged = Codec {
         wire_type: i64_wire,
-        operation: Operation::standard(StandardOp::Identity),
+        operation: Operation::Standard(StandardOp::Identity),
     };
     let scalar = binding.representation(Representation::Terminal {
         into_rust: Some(unchanged.clone()),
@@ -454,23 +479,22 @@ impl Fixture {
             Shape::Struct(name) => Representation::Product {
                 via: Via::Fields,
                 wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
-                read: Operation::standard(StandardOp::ReadMember),
+                read: Operation::Standard(StandardOp::ReadMember),
             },
             Shape::FallibleStruct(name) => Representation::Product {
                 via: Via::Fields,
                 wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
-                read: Operation::target(Op::ReadFallibly)
-                    .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
+                read: Operation::Target(Op::ReadFallibly),
             },
             Shape::MirroredStruct(name) => Representation::Product {
                 via: Via::Fields,
                 wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, true),
-                read: Operation::standard(StandardOp::ReadMember),
+                read: Operation::Standard(StandardOp::ReadMember),
             },
             Shape::StructOf(name, kind) => Representation::Product {
                 via: Via::Fields,
                 wire_type: aggregate(&mut self.binding, name, kind, false),
-                read: Operation::standard(StandardOp::ReadMember),
+                read: Operation::Standard(StandardOp::ReadMember),
             },
             Shape::Handle => {
                 let pointer = self.binding.wire_type(Wire::Pointer {
@@ -479,13 +503,13 @@ impl Fixture {
                 Representation::Terminal {
                     into_rust: Some(Codec {
                         wire_type: pointer,
-                        operation: Operation::standard(StandardOp::FromRaw),
+                        operation: Operation::Standard(StandardOp::FromRaw),
                     }),
                     out_of_rust: Some(Codec {
                         wire_type: pointer,
-                        operation: Operation::standard(StandardOp::IntoRaw),
+                        operation: Operation::Standard(StandardOp::IntoRaw),
                     }),
-                    release: Some(Operation::standard(StandardOp::Release)),
+                    release: Some(Operation::Standard(StandardOp::Release)),
                 }
             }
             Shape::SplitHandle => {
@@ -496,20 +520,20 @@ impl Fixture {
                 Representation::Terminal {
                     into_rust: Some(Codec {
                         wire_type: pointer,
-                        operation: Operation::standard(StandardOp::FromRaw),
+                        operation: Operation::Standard(StandardOp::FromRaw),
                     }),
                     out_of_rust: Some(Codec {
                         wire_type: integer,
-                        operation: Operation::standard(StandardOp::IntoRaw),
+                        operation: Operation::Standard(StandardOp::IntoRaw),
                     }),
-                    release: Some(Operation::standard(StandardOp::Release)),
+                    release: Some(Operation::Standard(StandardOp::Release)),
                 }
             }
             Shape::ScalarThrough => {
                 let i64_wire = self.binding.wire_type(Wire::Scalar);
                 let through = Codec {
                     wire_type: i64_wire,
-                    operation: Operation::target(Op::Rebase),
+                    operation: Operation::Target(Op::Rebase),
                 };
                 Representation::Terminal {
                     into_rust: Some(through.clone()),
@@ -529,17 +553,16 @@ impl Fixture {
             name: quote::format_ident!("Closure"),
         });
         let invoke = match call {
-            Call::Infallible => Operation::target(Op::Invoke),
-            Call::NeedsContext => Operation::target(Op::Invoke).context("mini.log"),
-            Call::Routed | Call::Unrouted => Operation::target(Op::InvokeFallibly)
-                .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
+            Call::Infallible => Operation::Target(Op::Invoke),
+            Call::NeedsContext => Operation::Target(Op::InvokeNeedingContext),
+            Call::Routed | Call::Unrouted => Operation::Target(Op::InvokeFallibly),
         };
         let routes = match call {
             Call::Routed => vec![FailureRoute {
                 category: FailureCategory::Runtime,
                 report: Some(Report {
                     error: syn::parse_quote!(Error),
-                    operation: Operation::target(Op::Report),
+                    operation: Operation::Target(Op::Report),
                 }),
                 on_report_failure: Terminal::Abort,
                 terminate: Terminal::Return(syn::parse_quote!(())),
@@ -548,7 +571,7 @@ impl Fixture {
         };
         self.binding.representation(Representation::Callback {
             wire_type,
-            capture: Operation::target(Op::Capture),
+            capture: Operation::Target(Op::Capture),
             invoke,
             routes,
         })
@@ -2419,8 +2442,8 @@ fn an_argument_the_callable_cannot_have_refuses_the_callback() {
     });
     let repr = fixture.binding.representation(Representation::Callback {
         wire_type: scalars_only,
-        capture: Operation::target(Op::Capture),
-        invoke: Operation::target(Op::Invoke),
+        capture: Operation::Target(Op::Capture),
+        invoke: Operation::Target(Op::Invoke),
         routes: Vec::new(),
     });
     let key = callback_key("Token, i64");

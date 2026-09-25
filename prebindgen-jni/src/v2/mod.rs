@@ -121,7 +121,7 @@ impl Declarations {
         let jlong = binding.wire_type(JniWireType::Long);
         let unchanged = Codec {
             wire_type: jlong,
-            operation: Operation::standard(StandardOp::Identity),
+            operation: Operation::Standard(StandardOp::Identity),
         };
         let i64_whole = binding.representation(Representation::Terminal {
             into_rust: Some(unchanged.clone()),
@@ -223,13 +223,13 @@ impl Declarations {
                     let representation = Representation::Terminal {
                         into_rust: Some(Codec {
                             wire_type: address,
-                            operation: Operation::standard(StandardOp::FromRaw),
+                            operation: Operation::Standard(StandardOp::FromRaw),
                         }),
                         out_of_rust: Some(Codec {
                             wire_type: address,
-                            operation: Operation::standard(StandardOp::IntoRaw),
+                            operation: Operation::Standard(StandardOp::IntoRaw),
                         }),
-                        release: Some(Operation::standard(StandardOp::Release)),
+                        release: Some(Operation::Standard(StandardOp::Release)),
                     };
                     let release = release_form(self.native_method_symbol(&native));
                     (
@@ -542,16 +542,13 @@ impl Declarations {
             });
             let representation = binding.representation(Representation::Callback {
                 wire_type,
-                capture: Operation::target(JniOp::CaptureCallback)
-                    .context("jni.env")
-                    .fails(FailureCategory::Runtime, jni_error.clone()),
-                invoke: Operation::target(JniOp::CallCallback)
-                    .fails(FailureCategory::Runtime, jni_error.clone()),
+                capture: Operation::Target(JniOp::CaptureCallback),
+                invoke: Operation::Target(JniOp::CallCallback),
                 routes: vec![FailureRoute {
                     category: FailureCategory::Runtime,
                     report: Some(Report {
                         error: jni_error.clone(),
-                        operation: Operation::target(JniOp::ReportCallbackError),
+                        operation: Operation::Target(JniOp::ReportCallbackError),
                     }),
                     on_report_failure: Terminal::Abort,
                     terminate: Terminal::Return(syn::parse_quote!(())),
@@ -623,12 +620,8 @@ impl Declarations {
         Representation::Product {
             via: Via::Fields,
             wire_type: object,
-            // A property read is a JVM call, which can fail, and the error is
-            // the jni crate's.
-            read: Operation::target(JniOp::Getter).context("jni.env").fails(
-                FailureCategory::Runtime,
-                syn::parse_quote!(jni::errors::Error),
-            ),
+            // A property read is a JVM call, which can fail: see `JniOp`.
+            read: Operation::Target(JniOp::Getter),
         }
     }
 
@@ -674,7 +667,7 @@ impl Declarations {
         let representation = Representation::Terminal {
             into_rust: Some(Codec {
                 wire_type: number,
-                operation: Operation::standard(StandardOp::EnumIn {
+                operation: Operation::Standard(StandardOp::EnumIn {
                     values: arms.clone(),
                     invalid: Some(format!("`{placement}` has no value numbered {{}}")),
                     bits: None,
@@ -682,7 +675,7 @@ impl Declarations {
             }),
             out_of_rust: Some(Codec {
                 wire_type: number,
-                operation: Operation::standard(StandardOp::EnumOut { values: arms }),
+                operation: Operation::Standard(StandardOp::EnumOut { values: arms }),
             }),
             release: None,
         };
@@ -783,9 +776,7 @@ fn jni_form(
                 category: FailureCategory::Runtime,
                 report: Some(Report {
                     error: jni_error.clone(),
-                    operation: Operation::target(JniOp::ReportError)
-                        .context("jni.env")
-                        .fails(FailureCategory::Runtime, jni_error.clone()),
+                    operation: Operation::Target(JniOp::ReportError),
                 }),
                 on_report_failure: Terminal::Abort,
                 terminate: terminate(),
@@ -796,9 +787,7 @@ fn jni_form(
                 category: FailureCategory::Binding,
                 report: Some(Report {
                     error: syn::parse_quote!(String),
-                    operation: Operation::target(JniOp::ThrowMessage)
-                        .context("jni.env")
-                        .fails(FailureCategory::Runtime, jni_error),
+                    operation: Operation::Target(JniOp::ThrowMessage),
                 }),
                 on_report_failure: Terminal::Abort,
                 terminate: terminate(),

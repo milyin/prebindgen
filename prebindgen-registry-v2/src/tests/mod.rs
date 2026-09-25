@@ -5,7 +5,9 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    binding::{Binding, FunctionForm, OutputForm, Representation, Scope, WireKind, WireType},
+    binding::{
+        Binding, FunctionForm, OutputForm, Representation, Scope, TargetOp, WireKind, WireType,
+    },
     decl::Declaration,
     outcome::EngineError,
     plan::generate,
@@ -16,6 +18,9 @@ use crate::{
 /// A target that carries nothing: every value it is asked about is refused, so
 /// a run over it exercises the accounting and nothing else.
 struct Nothing;
+
+/// A target with no operations of its own states nothing about them.
+impl TargetOp for () {}
 
 /// The wire types of a target that carries nothing: there are none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

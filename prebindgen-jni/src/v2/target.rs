@@ -11,7 +11,8 @@
 //! own writer's, in [`super::kotlin`], over the finished generation.
 
 use prebindgen_registry_v2::{
-    Artifact, Fed, OperationFeed, Target, WireKind, WireType, WireTypeFeed, Written,
+    Artifact, Failure, FailureCategory, Fed, OperationFeed, Target, TargetOp, WireKind, WireType,
+    WireTypeFeed, Written,
 };
 use quote::{format_ident, quote};
 
@@ -199,6 +200,32 @@ pub enum JniOp {
     /// Say that a call of a callback failed. There is no caller to throw to,
     /// so it is written to standard error.
     ReportCallbackError,
+}
+
+/// Every JVM operation but the last runs through the environment of the
+/// wrapper that applies it, and every one that calls into the JVM can fail
+/// with the `jni` crate's error. A callback's call is made on whatever thread
+/// Rust calls from, so it attaches its own and asks for none; writing out a
+/// call's failure needs nothing.
+impl TargetOp for JniOp {
+    fn contexts(&self) -> &'static [&'static str] {
+        match self {
+            JniOp::Getter | JniOp::ReportError | JniOp::ThrowMessage | JniOp::CaptureCallback => {
+                &["jni.env"]
+            }
+            JniOp::CallCallback | JniOp::ReportCallbackError => &[],
+        }
+    }
+
+    fn failure(&self) -> Option<Failure> {
+        match self {
+            JniOp::ReportCallbackError => None,
+            _ => Some(Failure {
+                category: FailureCategory::Runtime,
+                error: Box::new(syn::parse_quote!(jni::errors::Error)),
+            }),
+        }
+    }
 }
 
 /// What the Kotlin writer needs about one output that no plan says.

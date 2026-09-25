@@ -415,10 +415,11 @@ pub struct Codec<Op> {
     pub operation: Operation<Op>,
 }
 
-pub struct Operation<Op> {
-    pub implementation: Implementation<Op>, // Standard(StandardOp) or Target(Op)
-    pub context: Vec<String>,               // Runtime contexts it needs, by name: "jni.env".
-    pub failure: Option<Failure>,           // Its failure category and error type, if it can fail.
+pub enum Operation<Op> {
+    Standard(StandardOp), // One the registry writes itself.
+    Target(Op),           // One of the target's own; its runtime contexts and its
+                          // failure are the op's own facts, `TargetOp::contexts`
+                          // and `TargetOp::failure`.
 }
 ```
 
@@ -435,7 +436,7 @@ For the C `Stamp`, with the frontend's own `CWireType`:
 
 ```rust
 let i64_c = binding.wire_type(CWireType::I64);
-let unchanged = Codec { wire_type: i64_c, operation: Operation::standard(StandardOp::Identity) };
+let unchanged = Codec { wire_type: i64_c, operation: Operation::Standard(StandardOp::Identity) };
 let i64_whole = binding.representation(Representation::Terminal {
     into_rust: Some(unchanged.clone()),
     out_of_rust: Some(unchanged),
@@ -447,7 +448,7 @@ let stamp_c = binding.wire_type(CWireType::Aggregate { name: format_ident!("Stam
 let stamp_struct = binding.representation(Representation::Product {
     via: Via::Fields,
     wire_type: stamp_c,
-    read: Operation::standard(StandardOp::ReadMember),
+    read: Operation::Standard(StandardOp::ReadMember),
 });
 binding.rule(Scope::Type(key!(Stamp)), stamp_struct);   // every Stamp value
 binding.output(Declaration::Type(key!(Stamp)),          // and the struct, exposed
@@ -467,9 +468,7 @@ let stamp_obj = binding.wire_type(JniWireType::Object {
 let stamp_class = binding.representation(Representation::Product {
     via: Via::Fields,
     wire_type: stamp_obj,
-    read: Operation::target(JniOp::Getter)
-        .context("jni.env")
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
+    read: Operation::Target(JniOp::Getter),   // needs `jni.env`, can fail: see `JniOp`
 });
 binding.rule(Scope::Type(key!(Stamp)), stamp_class);
 ```
