@@ -177,363 +177,364 @@
 <a href=#177 id=177 data-nosnippet>177</a><span class="doccomment">/// How the registry constructs or reads a Rust value.
 <a href=#178 id=178 data-nosnippet>178</a>///
 <a href=#179 id=179 data-nosnippet>179</a>/// Which one a value takes is stated by the representation that applies to it:
-<a href=#180 id=180 data-nosnippet>180</a>/// a `Terminal` one is the atomic relation, and a `Product` one names its
-<a href=#181 id=181 data-nosnippet>181</a>/// relation with a [`Via`](crate::binding::Via).
-<a href=#182 id=182 data-nosnippet>182</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#183 id=183 data-nosnippet>183</a></span><span class="kw">pub enum </span>Relation {
-<a href=#184 id=184 data-nosnippet>184</a>    <span class="doccomment">/// The whole value converted by one operation: no parts, no recursion.
-<a href=#185 id=185 data-nosnippet>185</a>    </span>Atomic,
-<a href=#186 id=186 data-nosnippet>186</a>    <span class="doccomment">/// The struct's fields.
-<a href=#187 id=187 data-nosnippet>187</a>    </span>Struct(StructRelation),
-<a href=#188 id=188 data-nosnippet>188</a>    <span class="doccomment">/// A callback's arguments, in order: unnamed parts, each crossing the
-<a href=#189 id=189 data-nosnippet>189</a>    /// other way from the callback, since Rust hands them to the callable.
-<a href=#190 id=190 data-nosnippet>190</a>    </span>Callback(Vec&lt;Part&gt;),
-<a href=#191 id=191 data-nosnippet>191</a>}
-<a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a><span class="kw">impl </span>Relation {
-<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">pub fn </span>parts(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Part] {
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#196 id=196 data-nosnippet>196</a>            Relation::Atomic =&gt; <span class="kw-2">&amp;</span>[],
-<a href=#197 id=197 data-nosnippet>197</a>            Relation::Struct(strukt) =&gt; <span class="kw-2">&amp;</span>strukt.parts,
-<a href=#198 id=198 data-nosnippet>198</a>            Relation::Callback(args) =&gt; args,
-<a href=#199 id=199 data-nosnippet>199</a>        }
-<a href=#200 id=200 data-nosnippet>200</a>    }
-<a href=#201 id=201 data-nosnippet>201</a>
-<a href=#202 id=202 data-nosnippet>202</a>    <span class="doccomment">/// The word a report uses for this relation.
-<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="kw">pub fn </span>label(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#205 id=205 data-nosnippet>205</a>            Relation::Atomic =&gt; <span class="string">"atomic"</span>.to_string(),
-<a href=#206 id=206 data-nosnippet>206</a>            Relation::Struct(strukt) =&gt; <span class="macro">format!</span>(<span class="string">"{}.fields"</span>, strukt.name),
-<a href=#207 id=207 data-nosnippet>207</a>            Relation::Callback(<span class="kw">_</span>) =&gt; <span class="string">"callback.args"</span>.to_string(),
-<a href=#208 id=208 data-nosnippet>208</a>        }
-<a href=#209 id=209 data-nosnippet>209</a>    }
-<a href=#210 id=210 data-nosnippet>210</a>}
-<a href=#211 id=211 data-nosnippet>211</a>
-<a href=#212 id=212 data-nosnippet>212</a><span class="comment">// ---------------------------------------------------------------------------
-<a href=#213 id=213 data-nosnippet>213</a>// Failures
-<a href=#214 id=214 data-nosnippet>214</a>// ---------------------------------------------------------------------------
-<a href=#215 id=215 data-nosnippet>215</a>
-<a href=#216 id=216 data-nosnippet>216</a></span><span class="doccomment">/// Which boundary route a failure takes.
-<a href=#217 id=217 data-nosnippet>217</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">pub enum </span>FailureCategory {
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="doccomment">/// Reported by an explicitly selected source operation.
-<a href=#220 id=220 data-nosnippet>220</a>    </span>Domain,
-<a href=#221 id=221 data-nosnippet>221</a>    <span class="doccomment">/// An invalid foreign value or a failed representation conversion.
-<a href=#222 id=222 data-nosnippet>222</a>    </span>Binding,
-<a href=#223 id=223 data-nosnippet>223</a>    <span class="doccomment">/// A target runtime failure, such as a JNI call.
-<a href=#224 id=224 data-nosnippet>224</a>    </span>Runtime,
-<a href=#225 id=225 data-nosnippet>225</a>}
-<a href=#226 id=226 data-nosnippet>226</a>
-<a href=#227 id=227 data-nosnippet>227</a><span class="kw">impl </span>FailureCategory {
-<a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">pub fn </span>as_str(<span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
-<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#230 id=230 data-nosnippet>230</a>            FailureCategory::Domain =&gt; <span class="string">"domain"</span>,
-<a href=#231 id=231 data-nosnippet>231</a>            FailureCategory::Binding =&gt; <span class="string">"binding"</span>,
-<a href=#232 id=232 data-nosnippet>232</a>            FailureCategory::Runtime =&gt; <span class="string">"runtime"</span>,
-<a href=#233 id=233 data-nosnippet>233</a>        }
-<a href=#234 id=234 data-nosnippet>234</a>    }
-<a href=#235 id=235 data-nosnippet>235</a>}
-<a href=#236 id=236 data-nosnippet>236</a>
-<a href=#237 id=237 data-nosnippet>237</a><span class="doccomment">/// How a failure route ends the wrapper's call.
-<a href=#238 id=238 data-nosnippet>238</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-<a href=#239 id=239 data-nosnippet>239</a></span><span class="kw">pub enum </span>Terminal {
-<a href=#240 id=240 data-nosnippet>240</a>    <span class="doccomment">/// Return this expression to the caller.
-<a href=#241 id=241 data-nosnippet>241</a>    </span>Return(syn::Expr),
-<a href=#242 id=242 data-nosnippet>242</a>    <span class="doccomment">/// Give up: the process cannot continue correctly.
-<a href=#243 id=243 data-nosnippet>243</a>    </span>Abort,
-<a href=#244 id=244 data-nosnippet>244</a>}
-<a href=#245 id=245 data-nosnippet>245</a>
-<a href=#246 id=246 data-nosnippet>246</a><span class="doccomment">/// One generated unit: a helper function, a type declaration.
-<a href=#247 id=247 data-nosnippet>247</a>///
-<a href=#248 id=248 data-nosnippet>248</a>/// Contributed whole by whoever needs it. The name is its identity, so two
-<a href=#249 id=249 data-nosnippet>249</a>/// operations depending on the same helper emit it once.
-<a href=#250 id=250 data-nosnippet>250</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#251 id=251 data-nosnippet>251</a></span><span class="kw">pub struct </span>Artifact {
-<a href=#252 id=252 data-nosnippet>252</a>    <span class="kw">pub </span>name: String,
-<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">pub </span>rust: TokenStream,
-<a href=#254 id=254 data-nosnippet>254</a>}
-<a href=#255 id=255 data-nosnippet>255</a>
-<a href=#256 id=256 data-nosnippet>256</a><span class="kw">impl </span>Artifact {
-<a href=#257 id=257 data-nosnippet>257</a>    <span class="kw">pub fn </span>new(name: <span class="kw">impl </span>Into&lt;String&gt;, rust: TokenStream) -&gt; <span class="self">Self </span>{
-<a href=#258 id=258 data-nosnippet>258</a>        Artifact {
-<a href=#259 id=259 data-nosnippet>259</a>            name: name.into(),
-<a href=#260 id=260 data-nosnippet>260</a>            rust,
-<a href=#261 id=261 data-nosnippet>261</a>        }
-<a href=#262 id=262 data-nosnippet>262</a>    }
-<a href=#263 id=263 data-nosnippet>263</a>}
-<a href=#264 id=264 data-nosnippet>264</a>
-<a href=#265 id=265 data-nosnippet>265</a><span class="comment">// ---------------------------------------------------------------------------
-<a href=#266 id=266 data-nosnippet>266</a>// Fieldless enums
-<a href=#267 id=267 data-nosnippet>267</a>// ---------------------------------------------------------------------------
-<a href=#268 id=268 data-nosnippet>268</a>
-<a href=#269 id=269 data-nosnippet>269</a></span><span class="doccomment">/// The values of a fieldless enum a target may mirror, or why it may not.
-<a href=#270 id=270 data-nosnippet>270</a>///
-<a href=#271 id=271 data-nosnippet>271</a>/// What stops a mirror stops every target alike, so the check lives here
-<a href=#272 id=272 data-nosnippet>272</a>/// rather than once per adapter:
-<a href=#273 id=273 data-nosnippet>273</a>///
-<a href=#274 id=274 data-nosnippet>274</a>/// * the type is not a fieldless enum at all, which is the binding declaring
-<a href=#275 id=275 data-nosnippet>275</a>///   one thing as another;
-<a href=#276 id=276 data-nosnippet>276</a>/// * a value's number could not be evaluated — a `const`, arithmetic,
-<a href=#277 id=277 data-nosnippet>277</a>///   anything but a literal — and the numbers are what a mirror is made of;
-<a href=#278 id=278 data-nosnippet>278</a>/// * a value was written under a `#[cfg]`. The model numbers every value as
-<a href=#279 id=279 data-nosnippet>279</a>///   present, so a conditional value followed by an implicit one gives
-<a href=#280 id=280 data-nosnippet>280</a>///   numbers the compiled enum disagrees with, and a mirror entry for an
-<a href=#281 id=281 data-nosnippet>281</a>///   absent value names a variant that is not there;
-<a href=#282 id=282 data-nosnippet>282</a>/// * the enum, or any of its values, is `#[non_exhaustive]`. Both put a value
-<a href=#283 id=283 data-nosnippet>283</a>///   out of another crate's reach, and a binding crate is always another
-<a href=#284 id=284 data-nosnippet>284</a>///   crate. A non-exhaustive enum needs a wildcard arm, and going out of Rust
-<a href=#285 id=285 data-nosnippet>285</a>///   there is nothing for that arm to produce — the target has a value for
-<a href=#286 id=286 data-nosnippet>286</a>///   each value it knows, and none for one it does not. A non-exhaustive
-<a href=#287 id=287 data-nosnippet>287</a>///   *value* cannot be constructed from outside at all, and its pattern needs
-<a href=#288 id=288 data-nosnippet>288</a>///   a `..`; that holds for a unit value too, whose constructor is private
-<a href=#289 id=289 data-nosnippet>289</a>///   outside the crate that declared it. Preserving delimiters does not make
-<a href=#290 id=290 data-nosnippet>290</a>///   such a value constructible, so the enum is refused;
-<a href=#291 id=291 data-nosnippet>291</a>/// * the enum has no values, and an enumeration of nothing is not one a
-<a href=#292 id=292 data-nosnippet>292</a>///   target can declare.
-<a href=#293 id=293 data-nosnippet>293</a>///
-<a href=#294 id=294 data-nosnippet>294</a>/// `language` is the adapter's own name, for the capability code: a refusal
-<a href=#295 id=295 data-nosnippet>295</a>/// reads `unsupported.c.enum_discriminant`, and the next target's reads its
-<a href=#296 id=296 data-nosnippet>296</a>/// own.
-<a href=#297 id=297 data-nosnippet>297</a></span><span class="kw">pub fn </span>mirrored_enum&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#298 id=298 data-nosnippet>298</a>    unit: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Enum&gt;,
-<a href=#299 id=299 data-nosnippet>299</a>    declared_as: <span class="kw-2">&amp;</span>str,
-<a href=#300 id=300 data-nosnippet>300</a>    language: <span class="kw-2">&amp;</span>str,
-<a href=#301 id=301 data-nosnippet>301</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[EnumValue], Unsupported&gt; {
-<a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(unit) = unit <span class="kw">else </span>{
-<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
-<a href=#304 id=304 data-nosnippet>304</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.not_an_enum"</span>),
-<a href=#305 id=305 data-nosnippet>305</a>            <span class="macro">format!</span>(<span class="string">"`{declared_as}` is declared as an enum, and is not a fieldless enum"</span>),
-<a href=#306 id=306 data-nosnippet>306</a>        ));
-<a href=#307 id=307 data-nosnippet>307</a>    };
-<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(value) = unit.discriminant_values() {
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
-<a href=#310 id=310 data-nosnippet>310</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.enum_discriminant"</span>),
-<a href=#311 id=311 data-nosnippet>311</a>            <span class="macro">format!</span>(
-<a href=#312 id=312 data-nosnippet>312</a>                <span class="string">"`{declared_as}` has a value `{value}` whose number the model cannot \
-<a href=#313 id=313 data-nosnippet>313</a>                 evaluate, and what crosses is the numbers"
-<a href=#314 id=314 data-nosnippet>314</a>            </span>),
-<a href=#315 id=315 data-nosnippet>315</a>        ));
-<a href=#316 id=316 data-nosnippet>316</a>    }
-<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">if </span>unit.is_non_exhaustive() {
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
-<a href=#319 id=319 data-nosnippet>319</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.non_exhaustive_enum"</span>),
-<a href=#320 id=320 data-nosnippet>320</a>            <span class="macro">format!</span>(
-<a href=#321 id=321 data-nosnippet>321</a>                <span class="string">"`{declared_as}` is `#[non_exhaustive]`, or one of its values is, and a \
-<a href=#322 id=322 data-nosnippet>322</a>                 binding crate cannot name such a value"
-<a href=#323 id=323 data-nosnippet>323</a>            </span>),
-<a href=#324 id=324 data-nosnippet>324</a>        ));
-<a href=#325 id=325 data-nosnippet>325</a>    }
-<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">if </span>unit.has_conditional_value() {
-<a href=#327 id=327 data-nosnippet>327</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
-<a href=#328 id=328 data-nosnippet>328</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.conditional_value"</span>),
-<a href=#329 id=329 data-nosnippet>329</a>            <span class="macro">format!</span>(
-<a href=#330 id=330 data-nosnippet>330</a>                <span class="string">"`{declared_as}` has a value written under a `#[cfg]`, and the numbers \
-<a href=#331 id=331 data-nosnippet>331</a>                 count every value as present"
-<a href=#332 id=332 data-nosnippet>332</a>            </span>),
-<a href=#333 id=333 data-nosnippet>333</a>        ));
-<a href=#334 id=334 data-nosnippet>334</a>    }
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">if </span>unit.values.is_empty() {
-<a href=#336 id=336 data-nosnippet>336</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
-<a href=#337 id=337 data-nosnippet>337</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.empty_enum"</span>),
-<a href=#338 id=338 data-nosnippet>338</a>            <span class="macro">format!</span>(<span class="string">"`{declared_as}` has no values, and an enumeration needs one"</span>),
-<a href=#339 id=339 data-nosnippet>339</a>        ));
-<a href=#340 id=340 data-nosnippet>340</a>    }
-<a href=#341 id=341 data-nosnippet>341</a>    <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span>unit.values)
-<a href=#342 id=342 data-nosnippet>342</a>}
-<a href=#343 id=343 data-nosnippet>343</a>
-<a href=#344 id=344 data-nosnippet>344</a><span class="doccomment">/// [`mirrored_enum`]'s values with their numbers as an `i32`, for a target
-<a href=#345 id=345 data-nosnippet>345</a>/// whose wire type is 32 bits: a C `int`, a JNI `jint`.
-<a href=#346 id=346 data-nosnippet>346</a>///
-<a href=#347 id=347 data-nosnippet>347</a>/// Everything [`mirrored_enum`] refuses, plus a number outside `i32`.
-<a href=#348 id=348 data-nosnippet>348</a>/// `#[repr(i64)] enum P { High = 2147483648 }` is valid Rust, and a 32-bit
-<a href=#349 id=349 data-nosnippet>349</a>/// wire type cannot hold it, so the enum is refused rather than mirrored with a
-<a href=#350 id=350 data-nosnippet>350</a>/// number the target's side truncates or does not accept.
-<a href=#351 id=351 data-nosnippet>351</a></span><span class="kw">pub fn </span>mirrored_i32_enum&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#352 id=352 data-nosnippet>352</a>    unit: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Enum&gt;,
-<a href=#353 id=353 data-nosnippet>353</a>    declared_as: <span class="kw-2">&amp;</span>str,
-<a href=#354 id=354 data-nosnippet>354</a>    language: <span class="kw-2">&amp;</span>str,
-<a href=#355 id=355 data-nosnippet>355</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>EnumValue, i32)&gt;, Unsupported&gt; {
-<a href=#356 id=356 data-nosnippet>356</a>    mirrored_enum(unit, declared_as, language)<span class="question-mark">?
-<a href=#357 id=357 data-nosnippet>357</a>        </span>.iter()
-<a href=#358 id=358 data-nosnippet>358</a>        .map(|value| {
-<a href=#359 id=359 data-nosnippet>359</a>            <span class="kw">let </span>number = value
-<a href=#360 id=360 data-nosnippet>360</a>                .discriminant
-<a href=#361 id=361 data-nosnippet>361</a>                .expect(<span class="string">"mirrored_enum refuses an enum with a number it could not evaluate"</span>);
-<a href=#362 id=362 data-nosnippet>362</a>            <span class="kw">match </span>i32::try_from(number) {
-<a href=#363 id=363 data-nosnippet>363</a>                <span class="prelude-val">Ok</span>(number) =&gt; <span class="prelude-val">Ok</span>((value, number)),
-<a href=#364 id=364 data-nosnippet>364</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(Unsupported::new(
-<a href=#365 id=365 data-nosnippet>365</a>                    <span class="macro">format!</span>(<span class="string">"unsupported.{language}.enum_range"</span>),
-<a href=#366 id=366 data-nosnippet>366</a>                    <span class="macro">format!</span>(
-<a href=#367 id=367 data-nosnippet>367</a>                        <span class="string">"`{declared_as}` numbers `{}` {number}, which a 32-bit wire type cannot \
-<a href=#368 id=368 data-nosnippet>368</a>                         hold"</span>,
-<a href=#369 id=369 data-nosnippet>369</a>                        value.name
-<a href=#370 id=370 data-nosnippet>370</a>                    ),
-<a href=#371 id=371 data-nosnippet>371</a>                )),
-<a href=#372 id=372 data-nosnippet>372</a>            }
-<a href=#373 id=373 data-nosnippet>373</a>        })
-<a href=#374 id=374 data-nosnippet>374</a>        .collect()
-<a href=#375 id=375 data-nosnippet>375</a>}
-<a href=#376 id=376 data-nosnippet>376</a>
-<a href=#377 id=377 data-nosnippet>377</a><span class="doccomment">/// One value of a fieldless enum, as the two enum operations match it.
-<a href=#378 id=378 data-nosnippet>378</a>///
-<a href=#379 id=379 data-nosnippet>379</a>/// [`Self::shape`] is why this is not a bare name: `enum Op { Add(), Mul {} }`
-<a href=#380 id=380 data-nosnippet>380</a>/// has no fields and is a fieldless enum to the model, but its values are
-<a href=#381 id=381 data-nosnippet>381</a>/// spelled `Add()` and `Mul {}` in a pattern and a constructor alike. The
-<a href=#382 id=382 data-nosnippet>382</a>/// registry renders through the model's own speller, so what it writes is
-<a href=#383 id=383 data-nosnippet>383</a>/// what the source declared.
-<a href=#384 id=384 data-nosnippet>384</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-<a href=#385 id=385 data-nosnippet>385</a></span><span class="kw">pub struct </span>EnumArm {
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// The value's name in the source enum.
-<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">pub </span>name: syn::Ident,
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="doccomment">/// Its constructor and pattern shape, from the model.
-<a href=#389 id=389 data-nosnippet>389</a>    </span><span class="kw">pub </span>shape: FieldShape,
-<a href=#390 id=390 data-nosnippet>390</a>    <span class="doccomment">/// What it is carried as: the target's own enum value, or a number.
-<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub </span>carried: syn::Expr,
-<a href=#392 id=392 data-nosnippet>392</a>}
-<a href=#393 id=393 data-nosnippet>393</a>
-<a href=#394 id=394 data-nosnippet>394</a><span class="comment">// ---------------------------------------------------------------------------
-<a href=#395 id=395 data-nosnippet>395</a>// The writers
-<a href=#396 id=396 data-nosnippet>396</a>// ---------------------------------------------------------------------------
-<a href=#397 id=397 data-nosnippet>397</a>
-<a href=#398 id=398 data-nosnippet>398</a></span><span class="doccomment">/// The language adapter, as the engine sees it: a set of writers.
-<a href=#399 id=399 data-nosnippet>399</a>///
-<a href=#400 id=400 data-nosnippet>400</a>/// Nothing here decides anything a plan depends on. Which wire type holds a
-<a href=#401 id=401 data-nosnippet>401</a>/// value, which operations move it and what form an exported function takes
-<a href=#402 id=402 data-nosnippet>402</a>/// are stated in the [`Binding`](crate::binding::Binding) before planning
-<a href=#403 id=403 data-nosnippet>403</a>/// starts. What the target can do at all — the parts a kind of wire type can
-<a href=#404 id=404 data-nosnippet>404</a>/// have, the kinds a wrapper can take and return — is stated by its kinds and
-<a href=#405 id=405 data-nosnippet>405</a>/// by [`PARAMS`](Self::PARAMS) and [`RETURNS`](Self::RETURNS), as fixed facts
-<a href=#406 id=406 data-nosnippet>406</a>/// about the language rather than choices of a binding. The registry plans
-<a href=#407 id=407 data-nosnippet>407</a>/// from those alone. A writer is called only once the plan is complete, is fed
-<a href=#408 id=408 data-nosnippet>408</a>/// everything its piece of text needs, and cannot refuse: whatever could make
-<a href=#409 id=409 data-nosnippet>409</a>/// a value unsupported was decided before it runs.
-<a href=#410 id=410 data-nosnippet>410</a>///
-<a href=#411 id=411 data-nosnippet>411</a>/// Apart from the kinds' capabilities and a wire type's kind and Rust type,
-<a href=#412 id=412 data-nosnippet>412</a>/// the associated types are the adapter's own vocabulary, which the registry
-<a href=#413 id=413 data-nosnippet>413</a>/// compares and hashes but never reads.
-<a href=#414 id=414 data-nosnippet>414</a></span><span class="kw">pub trait </span>Target: Sized {
-<a href=#415 id=415 data-nosnippet>415</a>    <span class="doccomment">/// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
-<a href=#416 id=416 data-nosnippet>416</a>    /// adapter, so nothing has to carry it alongside the requests.
-<a href=#417 id=417 data-nosnippet>417</a>    </span><span class="kw">const </span>NAME: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a>    <span class="doccomment">/// The adapter's wire types: one variant per kind, holding what only
-<a href=#420 id=420 data-nosnippet>420</a>    /// that kind needs — C's name for a struct it declares, a Kotlin class.
-<a href=#421 id=421 data-nosnippet>421</a>    </span><span class="kw">type </span>WireType: WireType;
-<a href=#422 id=422 data-nosnippet>422</a>
-<a href=#423 id=423 data-nosnippet>423</a>    <span class="doccomment">/// The kinds a wrapper parameter can be. Every kind, unless the target
-<a href=#424 id=424 data-nosnippet>424</a>    /// cannot pass some.
-<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">const </span>PARAMS: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[WireKindOf&lt;<span class="self">Self</span>&gt;] = &lt;WireKindOf&lt;<span class="self">Self</span>&gt; <span class="kw">as </span>WireKind&gt;::ALL;
-<a href=#426 id=426 data-nosnippet>426</a>
-<a href=#427 id=427 data-nosnippet>427</a>    <span class="doccomment">/// The kinds a wrapper can return. Every kind, unless the target cannot
-<a href=#428 id=428 data-nosnippet>428</a>    /// return some.
-<a href=#429 id=429 data-nosnippet>429</a>    </span><span class="kw">const </span>RETURNS: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[WireKindOf&lt;<span class="self">Self</span>&gt;] = &lt;WireKindOf&lt;<span class="self">Self</span>&gt; <span class="kw">as </span>WireKind&gt;::ALL;
-<a href=#430 id=430 data-nosnippet>430</a>
-<a href=#431 id=431 data-nosnippet>431</a>    <span class="doccomment">/// The target's own operations: what only its language has — a JVM
-<a href=#432 id=432 data-nosnippet>432</a>    /// getter call, a throw, calling through C's closure struct, whose
-<a href=#433 id=433 data-nosnippet>433</a>    /// members only the C target declares and knows.
-<a href=#434 id=434 data-nosnippet>434</a>    </span><span class="kw">type </span>Op: TargetOp;
-<a href=#435 id=435 data-nosnippet>435</a>
-<a href=#436 id=436 data-nosnippet>436</a>    <span class="doccomment">/// What only the target's foreign writer reads about an output: a Kotlin
-<a href=#437 id=437 data-nosnippet>437</a>    /// package and name. C has none.
-<a href=#438 id=438 data-nosnippet>438</a>    </span><span class="kw">type </span>OutputMeta: Clone + Eq + std::hash::Hash + std::fmt::Debug;
-<a href=#439 id=439 data-nosnippet>439</a>
-<a href=#440 id=440 data-nosnippet>440</a>    <span class="doccomment">/// One of this target's operations, as a single Rust expression.
-<a href=#441 id=441 data-nosnippet>441</a>    ///
-<a href=#442 id=442 data-nosnippet>442</a>    /// One expression and nothing around it: no `let`, no `match`, no return.
-<a href=#443 id=443 data-nosnippet>443</a>    /// The feed names every operand and says what each holds.
-<a href=#444 id=444 data-nosnippet>444</a>    </span><span class="kw">fn </span>write_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, op: <span class="kw-2">&amp;</span><span class="self">Self</span>::Op, feed: <span class="kw-2">&amp;</span>OperationFeed&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;) -&gt; Written;
-<a href=#445 id=445 data-nosnippet>445</a>
-<a href=#446 id=446 data-nosnippet>446</a>    <span class="doccomment">/// The Rust items a wire type needs declared, in order — a `repr(C)` struct
-<a href=#447 id=447 data-nosnippet>447</a>    /// or enum mirror, an incomplete type behind a pointer — or none for a
-<a href=#448 id=448 data-nosnippet>448</a>    /// type Rust already has, such as `i64` or `JObject`.
-<a href=#449 id=449 data-nosnippet>449</a>    ///
-<a href=#450 id=450 data-nosnippet>450</a>    /// The registry puts the condition of the source item the wire type serves
-<a href=#451 id=451 data-nosnippet>451</a>    /// on every item returned, so each is one item.
-<a href=#452 id=452 data-nosnippet>452</a>    </span><span class="kw">fn </span>write_wire_type(<span class="kw-2">&amp;</span><span class="self">self</span>, feed: <span class="kw-2">&amp;</span>WireTypeFeed&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;) -&gt; Vec&lt;TokenStream&gt;;
-<a href=#453 id=453 data-nosnippet>453</a>}
-<a href=#454 id=454 data-nosnippet>454</a>
-<a href=#455 id=455 data-nosnippet>455</a><span class="doccomment">/// What a writer produced, and the helpers it needs emitted once beside it.
-<a href=#456 id=456 data-nosnippet>456</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#457 id=457 data-nosnippet>457</a></span><span class="kw">pub struct </span>Written {
-<a href=#458 id=458 data-nosnippet>458</a>    <span class="kw">pub </span>text: TokenStream,
-<a href=#459 id=459 data-nosnippet>459</a>    <span class="doccomment">/// Generated units this text needs in order to compile — a helper
-<a href=#460 id=460 data-nosnippet>460</a>    /// function — each emitted once whoever needs it.
-<a href=#461 id=461 data-nosnippet>461</a>    </span><span class="kw">pub </span>helpers: Vec&lt;Artifact&gt;,
-<a href=#462 id=462 data-nosnippet>462</a>}
-<a href=#463 id=463 data-nosnippet>463</a>
-<a href=#464 id=464 data-nosnippet>464</a><span class="kw">impl </span>Written {
-<a href=#465 id=465 data-nosnippet>465</a>    <span class="doccomment">/// Text needing no helper.
-<a href=#466 id=466 data-nosnippet>466</a>    </span><span class="kw">pub fn </span>new(text: TokenStream) -&gt; <span class="self">Self </span>{
-<a href=#467 id=467 data-nosnippet>467</a>        Written {
-<a href=#468 id=468 data-nosnippet>468</a>            text,
-<a href=#469 id=469 data-nosnippet>469</a>            helpers: Vec::new(),
-<a href=#470 id=470 data-nosnippet>470</a>        }
-<a href=#471 id=471 data-nosnippet>471</a>    }
-<a href=#472 id=472 data-nosnippet>472</a>
-<a href=#473 id=473 data-nosnippet>473</a>    <span class="doccomment">/// The same, needing `helper` emitted too.
-<a href=#474 id=474 data-nosnippet>474</a>    </span><span class="kw">pub fn </span>with_helper(<span class="kw-2">mut </span><span class="self">self</span>, helper: Artifact) -&gt; <span class="self">Self </span>{
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="self">self</span>.helpers.push(helper);
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="self">self
-<a href=#477 id=477 data-nosnippet>477</a>    </span>}
-<a href=#478 id=478 data-nosnippet>478</a>}
-<a href=#479 id=479 data-nosnippet>479</a>
-<a href=#480 id=480 data-nosnippet>480</a><span class="doccomment">/// What the registry knows about one operand or result of an operation.
-<a href=#481 id=481 data-nosnippet>481</a></span><span class="kw">pub enum </span>Fed&lt;<span class="lifetime">'a</span>, T: Target&gt; {
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="doccomment">/// An exact Rust type from the source model.
-<a href=#483 id=483 data-nosnippet>483</a>    </span>Source(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>TypeRef),
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="doccomment">/// A wire type the binding declared.
-<a href=#485 id=485 data-nosnippet>485</a>    </span>WireType(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType),
-<a href=#486 id=486 data-nosnippet>486</a>    <span class="doccomment">/// What a callback's `capture` produced: a value of the target's own
-<a href=#487 id=487 data-nosnippet>487</a>    /// making, which the registry moves into the closure and names nothing
-<a href=#488 id=488 data-nosnippet>488</a>    /// about.
-<a href=#489 id=489 data-nosnippet>489</a>    </span>Captured,
-<a href=#490 id=490 data-nosnippet>490</a>}
-<a href=#491 id=491 data-nosnippet>491</a>
-<a href=#492 id=492 data-nosnippet>492</a><span class="doccomment">/// Everything one application of a target operation needs written.
-<a href=#493 id=493 data-nosnippet>493</a></span><span class="kw">pub struct </span>OperationFeed&lt;<span class="lifetime">'a</span>, T: Target&gt; {
-<a href=#494 id=494 data-nosnippet>494</a>    <span class="doccomment">/// The value the operation is applied to, already named, and what it
-<a href=#495 id=495 data-nosnippet>495</a>    /// holds — `None` for a reporting operation, which is handed the error.
-<a href=#496 id=496 data-nosnippet>496</a>    </span><span class="kw">pub </span>value: <span class="prelude-ty">Option</span>&lt;(syn::Ident, Fed&lt;<span class="lifetime">'a</span>, T&gt;)&gt;,
-<a href=#497 id=497 data-nosnippet>497</a>    <span class="doccomment">/// The runtime contexts the operation asked for, by name, each bound to
-<a href=#498 id=498 data-nosnippet>498</a>    /// the wrapper parameter that supplies it.
-<a href=#499 id=499 data-nosnippet>499</a>    </span><span class="kw">pub </span>contexts: Vec&lt;(String, syn::Ident)&gt;,
-<a href=#500 id=500 data-nosnippet>500</a>    <span class="doccomment">/// The error a reporting operation reports.
-<a href=#501 id=501 data-nosnippet>501</a>    </span><span class="kw">pub </span>error: <span class="prelude-ty">Option</span>&lt;syn::Ident&gt;,
-<a href=#502 id=502 data-nosnippet>502</a>    <span class="doccomment">/// What the expression must produce, if anything.
-<a href=#503 id=503 data-nosnippet>503</a>    </span><span class="kw">pub </span>result: <span class="prelude-ty">Option</span>&lt;Fed&lt;<span class="lifetime">'a</span>, T&gt;&gt;,
-<a href=#504 id=504 data-nosnippet>504</a>    <span class="doccomment">/// For an operation applied once per part — a `Product`'s `read` — the
-<a href=#505 id=505 data-nosnippet>505</a>    /// part it is applied to.
-<a href=#506 id=506 data-nosnippet>506</a>    </span><span class="kw">pub </span>part: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Part&gt;,
-<a href=#507 id=507 data-nosnippet>507</a>    <span class="doccomment">/// For a callback's `capture` and `invoke`: the wire types of the callback's
-<a href=#508 id=508 data-nosnippet>508</a>    /// arguments, in order — each named for `invoke`, which is handed them,
-<a href=#509 id=509 data-nosnippet>509</a>    /// and unnamed for `capture`, which runs before any call.
-<a href=#510 id=510 data-nosnippet>510</a>    </span><span class="kw">pub </span>args: Vec&lt;(<span class="prelude-ty">Option</span>&lt;syn::Ident&gt;, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType)&gt;,
-<a href=#511 id=511 data-nosnippet>511</a>}
-<a href=#512 id=512 data-nosnippet>512</a>
-<a href=#513 id=513 data-nosnippet>513</a><span class="kw">impl</span>&lt;T: Target&gt; OperationFeed&lt;<span class="lifetime">'_</span>, T&gt; {
-<a href=#514 id=514 data-nosnippet>514</a>    <span class="doccomment">/// The wrapper parameter supplying the context the operation asked for
-<a href=#515 id=515 data-nosnippet>515</a>    /// under `name`.
-<a href=#516 id=516 data-nosnippet>516</a>    ///
-<a href=#517 id=517 data-nosnippet>517</a>    /// # Panics
-<a href=#518 id=518 data-nosnippet>518</a>    ///
-<a href=#519 id=519 data-nosnippet>519</a>    /// When the operation did not ask for it, which is the adapter reading a
-<a href=#520 id=520 data-nosnippet>520</a>    /// context it never declared.
-<a href=#521 id=521 data-nosnippet>521</a>    </span><span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;</span>syn::Ident {
-<a href=#522 id=522 data-nosnippet>522</a>        <span class="self">self</span>.contexts
-<a href=#523 id=523 data-nosnippet>523</a>            .iter()
-<a href=#524 id=524 data-nosnippet>524</a>            .find(|(asked, <span class="kw">_</span>)| asked == name)
-<a href=#525 id=525 data-nosnippet>525</a>            .map(|(<span class="kw">_</span>, ident)| ident)
-<a href=#526 id=526 data-nosnippet>526</a>            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"the operation did not ask for the `{name}` context"</span>))
-<a href=#527 id=527 data-nosnippet>527</a>    }
-<a href=#528 id=528 data-nosnippet>528</a>}
-<a href=#529 id=529 data-nosnippet>529</a>
-<a href=#530 id=530 data-nosnippet>530</a><span class="doccomment">/// Everything one wire type's declaration needs written.
-<a href=#531 id=531 data-nosnippet>531</a></span><span class="kw">pub struct </span>WireTypeFeed&lt;<span class="lifetime">'a</span>, T: Target&gt; {
-<a href=#532 id=532 data-nosnippet>532</a>    <span class="kw">pub </span>wire_type: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType,
-<a href=#533 id=533 data-nosnippet>533</a>    <span class="doccomment">/// For the wire type of a `Product` or a `Callback`: each part — a field,
-<a href=#534 id=534 data-nosnippet>534</a>    /// or an argument — with the wire type it resolved to, in part order.
-<a href=#535 id=535 data-nosnippet>535</a>    </span><span class="kw">pub </span>parts: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Part, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType)&gt;,
-<a href=#536 id=536 data-nosnippet>536</a>    <span class="doccomment">/// For a wire type of a fieldless enum's value: that enum, from the model.
-<a href=#537 id=537 data-nosnippet>537</a>    </span><span class="kw">pub </span>unit: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Enum&gt;,
-<a href=#538 id=538 data-nosnippet>538</a>}
+<a href=#180 id=180 data-nosnippet>180</a>/// a `Whole` one is the atomic relation, a `Parts` one names its relation with
+<a href=#181 id=181 data-nosnippet>181</a>/// a [`Via`](crate::binding::Via), and a `Callable` one is the callback's
+<a href=#182 id=182 data-nosnippet>182</a>/// arguments.
+<a href=#183 id=183 data-nosnippet>183</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#184 id=184 data-nosnippet>184</a></span><span class="kw">pub enum </span>Relation {
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="doccomment">/// The whole value converted by one operation: no parts, no recursion.
+<a href=#186 id=186 data-nosnippet>186</a>    </span>Atomic,
+<a href=#187 id=187 data-nosnippet>187</a>    <span class="doccomment">/// The struct's fields.
+<a href=#188 id=188 data-nosnippet>188</a>    </span>Struct(StructRelation),
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="doccomment">/// A callback's arguments, in order: unnamed parts, each crossing the
+<a href=#190 id=190 data-nosnippet>190</a>    /// other way from the callback, since Rust hands them to the callable.
+<a href=#191 id=191 data-nosnippet>191</a>    </span>Callback(Vec&lt;Part&gt;),
+<a href=#192 id=192 data-nosnippet>192</a>}
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a><span class="kw">impl </span>Relation {
+<a href=#195 id=195 data-nosnippet>195</a>    <span class="kw">pub fn </span>parts(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[Part] {
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#197 id=197 data-nosnippet>197</a>            Relation::Atomic =&gt; <span class="kw-2">&amp;</span>[],
+<a href=#198 id=198 data-nosnippet>198</a>            Relation::Struct(strukt) =&gt; <span class="kw-2">&amp;</span>strukt.parts,
+<a href=#199 id=199 data-nosnippet>199</a>            Relation::Callback(args) =&gt; args,
+<a href=#200 id=200 data-nosnippet>200</a>        }
+<a href=#201 id=201 data-nosnippet>201</a>    }
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="doccomment">/// The word a report uses for this relation.
+<a href=#204 id=204 data-nosnippet>204</a>    </span><span class="kw">pub fn </span>label(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#206 id=206 data-nosnippet>206</a>            Relation::Atomic =&gt; <span class="string">"atomic"</span>.to_string(),
+<a href=#207 id=207 data-nosnippet>207</a>            Relation::Struct(strukt) =&gt; <span class="macro">format!</span>(<span class="string">"{}.fields"</span>, strukt.name),
+<a href=#208 id=208 data-nosnippet>208</a>            Relation::Callback(<span class="kw">_</span>) =&gt; <span class="string">"callback.args"</span>.to_string(),
+<a href=#209 id=209 data-nosnippet>209</a>        }
+<a href=#210 id=210 data-nosnippet>210</a>    }
+<a href=#211 id=211 data-nosnippet>211</a>}
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a><span class="comment">// ---------------------------------------------------------------------------
+<a href=#214 id=214 data-nosnippet>214</a>// Failures
+<a href=#215 id=215 data-nosnippet>215</a>// ---------------------------------------------------------------------------
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a></span><span class="doccomment">/// Which boundary route a failure takes.
+<a href=#218 id=218 data-nosnippet>218</a></span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+<a href=#219 id=219 data-nosnippet>219</a></span><span class="kw">pub enum </span>FailureCategory {
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="doccomment">/// Reported by an explicitly selected source operation.
+<a href=#221 id=221 data-nosnippet>221</a>    </span>Domain,
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="doccomment">/// An invalid foreign value or a failed representation conversion.
+<a href=#223 id=223 data-nosnippet>223</a>    </span>Binding,
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="doccomment">/// A target runtime failure, such as a JNI call.
+<a href=#225 id=225 data-nosnippet>225</a>    </span>Runtime,
+<a href=#226 id=226 data-nosnippet>226</a>}
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a><span class="kw">impl </span>FailureCategory {
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">pub fn </span>as_str(<span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#231 id=231 data-nosnippet>231</a>            FailureCategory::Domain =&gt; <span class="string">"domain"</span>,
+<a href=#232 id=232 data-nosnippet>232</a>            FailureCategory::Binding =&gt; <span class="string">"binding"</span>,
+<a href=#233 id=233 data-nosnippet>233</a>            FailureCategory::Runtime =&gt; <span class="string">"runtime"</span>,
+<a href=#234 id=234 data-nosnippet>234</a>        }
+<a href=#235 id=235 data-nosnippet>235</a>    }
+<a href=#236 id=236 data-nosnippet>236</a>}
+<a href=#237 id=237 data-nosnippet>237</a>
+<a href=#238 id=238 data-nosnippet>238</a><span class="doccomment">/// How a failure route ends the wrapper's call.
+<a href=#239 id=239 data-nosnippet>239</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+<a href=#240 id=240 data-nosnippet>240</a></span><span class="kw">pub enum </span>Terminal {
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="doccomment">/// Return this expression to the caller.
+<a href=#242 id=242 data-nosnippet>242</a>    </span>Return(syn::Expr),
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="doccomment">/// Give up: the process cannot continue correctly.
+<a href=#244 id=244 data-nosnippet>244</a>    </span>Abort,
+<a href=#245 id=245 data-nosnippet>245</a>}
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a><span class="doccomment">/// One generated unit: a helper function, a type declaration.
+<a href=#248 id=248 data-nosnippet>248</a>///
+<a href=#249 id=249 data-nosnippet>249</a>/// Contributed whole by whoever needs it. The name is its identity, so two
+<a href=#250 id=250 data-nosnippet>250</a>/// operations depending on the same helper emit it once.
+<a href=#251 id=251 data-nosnippet>251</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#252 id=252 data-nosnippet>252</a></span><span class="kw">pub struct </span>Artifact {
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">pub </span>name: String,
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">pub </span>rust: TokenStream,
+<a href=#255 id=255 data-nosnippet>255</a>}
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a><span class="kw">impl </span>Artifact {
+<a href=#258 id=258 data-nosnippet>258</a>    <span class="kw">pub fn </span>new(name: <span class="kw">impl </span>Into&lt;String&gt;, rust: TokenStream) -&gt; <span class="self">Self </span>{
+<a href=#259 id=259 data-nosnippet>259</a>        Artifact {
+<a href=#260 id=260 data-nosnippet>260</a>            name: name.into(),
+<a href=#261 id=261 data-nosnippet>261</a>            rust,
+<a href=#262 id=262 data-nosnippet>262</a>        }
+<a href=#263 id=263 data-nosnippet>263</a>    }
+<a href=#264 id=264 data-nosnippet>264</a>}
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a><span class="comment">// ---------------------------------------------------------------------------
+<a href=#267 id=267 data-nosnippet>267</a>// Fieldless enums
+<a href=#268 id=268 data-nosnippet>268</a>// ---------------------------------------------------------------------------
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a></span><span class="doccomment">/// The values of a fieldless enum a target may mirror, or why it may not.
+<a href=#271 id=271 data-nosnippet>271</a>///
+<a href=#272 id=272 data-nosnippet>272</a>/// What stops a mirror stops every target alike, so the check lives here
+<a href=#273 id=273 data-nosnippet>273</a>/// rather than once per adapter:
+<a href=#274 id=274 data-nosnippet>274</a>///
+<a href=#275 id=275 data-nosnippet>275</a>/// * the type is not a fieldless enum at all, which is the binding declaring
+<a href=#276 id=276 data-nosnippet>276</a>///   one thing as another;
+<a href=#277 id=277 data-nosnippet>277</a>/// * a value's number could not be evaluated — a `const`, arithmetic,
+<a href=#278 id=278 data-nosnippet>278</a>///   anything but a literal — and the numbers are what a mirror is made of;
+<a href=#279 id=279 data-nosnippet>279</a>/// * a value was written under a `#[cfg]`. The model numbers every value as
+<a href=#280 id=280 data-nosnippet>280</a>///   present, so a conditional value followed by an implicit one gives
+<a href=#281 id=281 data-nosnippet>281</a>///   numbers the compiled enum disagrees with, and a mirror entry for an
+<a href=#282 id=282 data-nosnippet>282</a>///   absent value names a variant that is not there;
+<a href=#283 id=283 data-nosnippet>283</a>/// * the enum, or any of its values, is `#[non_exhaustive]`. Both put a value
+<a href=#284 id=284 data-nosnippet>284</a>///   out of another crate's reach, and a binding crate is always another
+<a href=#285 id=285 data-nosnippet>285</a>///   crate. A non-exhaustive enum needs a wildcard arm, and going out of Rust
+<a href=#286 id=286 data-nosnippet>286</a>///   there is nothing for that arm to produce — the target has a value for
+<a href=#287 id=287 data-nosnippet>287</a>///   each value it knows, and none for one it does not. A non-exhaustive
+<a href=#288 id=288 data-nosnippet>288</a>///   *value* cannot be constructed from outside at all, and its pattern needs
+<a href=#289 id=289 data-nosnippet>289</a>///   a `..`; that holds for a unit value too, whose constructor is private
+<a href=#290 id=290 data-nosnippet>290</a>///   outside the crate that declared it. Preserving delimiters does not make
+<a href=#291 id=291 data-nosnippet>291</a>///   such a value constructible, so the enum is refused;
+<a href=#292 id=292 data-nosnippet>292</a>/// * the enum has no values, and an enumeration of nothing is not one a
+<a href=#293 id=293 data-nosnippet>293</a>///   target can declare.
+<a href=#294 id=294 data-nosnippet>294</a>///
+<a href=#295 id=295 data-nosnippet>295</a>/// `language` is the adapter's own name, for the capability code: a refusal
+<a href=#296 id=296 data-nosnippet>296</a>/// reads `unsupported.c.enum_discriminant`, and the next target's reads its
+<a href=#297 id=297 data-nosnippet>297</a>/// own.
+<a href=#298 id=298 data-nosnippet>298</a></span><span class="kw">pub fn </span>mirrored_enum&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#299 id=299 data-nosnippet>299</a>    unit: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Enum&gt;,
+<a href=#300 id=300 data-nosnippet>300</a>    declared_as: <span class="kw-2">&amp;</span>str,
+<a href=#301 id=301 data-nosnippet>301</a>    language: <span class="kw-2">&amp;</span>str,
+<a href=#302 id=302 data-nosnippet>302</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[EnumValue], Unsupported&gt; {
+<a href=#303 id=303 data-nosnippet>303</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(unit) = unit <span class="kw">else </span>{
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
+<a href=#305 id=305 data-nosnippet>305</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.not_an_enum"</span>),
+<a href=#306 id=306 data-nosnippet>306</a>            <span class="macro">format!</span>(<span class="string">"`{declared_as}` is declared as an enum, and is not a fieldless enum"</span>),
+<a href=#307 id=307 data-nosnippet>307</a>        ));
+<a href=#308 id=308 data-nosnippet>308</a>    };
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(value) = unit.discriminant_values() {
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
+<a href=#311 id=311 data-nosnippet>311</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.enum_discriminant"</span>),
+<a href=#312 id=312 data-nosnippet>312</a>            <span class="macro">format!</span>(
+<a href=#313 id=313 data-nosnippet>313</a>                <span class="string">"`{declared_as}` has a value `{value}` whose number the model cannot \
+<a href=#314 id=314 data-nosnippet>314</a>                 evaluate, and what crosses is the numbers"
+<a href=#315 id=315 data-nosnippet>315</a>            </span>),
+<a href=#316 id=316 data-nosnippet>316</a>        ));
+<a href=#317 id=317 data-nosnippet>317</a>    }
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">if </span>unit.is_non_exhaustive() {
+<a href=#319 id=319 data-nosnippet>319</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
+<a href=#320 id=320 data-nosnippet>320</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.non_exhaustive_enum"</span>),
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="macro">format!</span>(
+<a href=#322 id=322 data-nosnippet>322</a>                <span class="string">"`{declared_as}` is `#[non_exhaustive]`, or one of its values is, and a \
+<a href=#323 id=323 data-nosnippet>323</a>                 binding crate cannot name such a value"
+<a href=#324 id=324 data-nosnippet>324</a>            </span>),
+<a href=#325 id=325 data-nosnippet>325</a>        ));
+<a href=#326 id=326 data-nosnippet>326</a>    }
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">if </span>unit.has_conditional_value() {
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
+<a href=#329 id=329 data-nosnippet>329</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.conditional_value"</span>),
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="macro">format!</span>(
+<a href=#331 id=331 data-nosnippet>331</a>                <span class="string">"`{declared_as}` has a value written under a `#[cfg]`, and the numbers \
+<a href=#332 id=332 data-nosnippet>332</a>                 count every value as present"
+<a href=#333 id=333 data-nosnippet>333</a>            </span>),
+<a href=#334 id=334 data-nosnippet>334</a>        ));
+<a href=#335 id=335 data-nosnippet>335</a>    }
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">if </span>unit.values.is_empty() {
+<a href=#337 id=337 data-nosnippet>337</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(Unsupported::new(
+<a href=#338 id=338 data-nosnippet>338</a>            <span class="macro">format!</span>(<span class="string">"unsupported.{language}.empty_enum"</span>),
+<a href=#339 id=339 data-nosnippet>339</a>            <span class="macro">format!</span>(<span class="string">"`{declared_as}` has no values, and an enumeration needs one"</span>),
+<a href=#340 id=340 data-nosnippet>340</a>        ));
+<a href=#341 id=341 data-nosnippet>341</a>    }
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span>unit.values)
+<a href=#343 id=343 data-nosnippet>343</a>}
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a><span class="doccomment">/// [`mirrored_enum`]'s values with their numbers as an `i32`, for a target
+<a href=#346 id=346 data-nosnippet>346</a>/// whose wire type is 32 bits: a C `int`, a JNI `jint`.
+<a href=#347 id=347 data-nosnippet>347</a>///
+<a href=#348 id=348 data-nosnippet>348</a>/// Everything [`mirrored_enum`] refuses, plus a number outside `i32`.
+<a href=#349 id=349 data-nosnippet>349</a>/// `#[repr(i64)] enum P { High = 2147483648 }` is valid Rust, and a 32-bit
+<a href=#350 id=350 data-nosnippet>350</a>/// wire type cannot hold it, so the enum is refused rather than mirrored with a
+<a href=#351 id=351 data-nosnippet>351</a>/// number the target's side truncates or does not accept.
+<a href=#352 id=352 data-nosnippet>352</a></span><span class="kw">pub fn </span>mirrored_i32_enum&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#353 id=353 data-nosnippet>353</a>    unit: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Enum&gt;,
+<a href=#354 id=354 data-nosnippet>354</a>    declared_as: <span class="kw-2">&amp;</span>str,
+<a href=#355 id=355 data-nosnippet>355</a>    language: <span class="kw-2">&amp;</span>str,
+<a href=#356 id=356 data-nosnippet>356</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>EnumValue, i32)&gt;, Unsupported&gt; {
+<a href=#357 id=357 data-nosnippet>357</a>    mirrored_enum(unit, declared_as, language)<span class="question-mark">?
+<a href=#358 id=358 data-nosnippet>358</a>        </span>.iter()
+<a href=#359 id=359 data-nosnippet>359</a>        .map(|value| {
+<a href=#360 id=360 data-nosnippet>360</a>            <span class="kw">let </span>number = value
+<a href=#361 id=361 data-nosnippet>361</a>                .discriminant
+<a href=#362 id=362 data-nosnippet>362</a>                .expect(<span class="string">"mirrored_enum refuses an enum with a number it could not evaluate"</span>);
+<a href=#363 id=363 data-nosnippet>363</a>            <span class="kw">match </span>i32::try_from(number) {
+<a href=#364 id=364 data-nosnippet>364</a>                <span class="prelude-val">Ok</span>(number) =&gt; <span class="prelude-val">Ok</span>((value, number)),
+<a href=#365 id=365 data-nosnippet>365</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(Unsupported::new(
+<a href=#366 id=366 data-nosnippet>366</a>                    <span class="macro">format!</span>(<span class="string">"unsupported.{language}.enum_range"</span>),
+<a href=#367 id=367 data-nosnippet>367</a>                    <span class="macro">format!</span>(
+<a href=#368 id=368 data-nosnippet>368</a>                        <span class="string">"`{declared_as}` numbers `{}` {number}, which a 32-bit wire type cannot \
+<a href=#369 id=369 data-nosnippet>369</a>                         hold"</span>,
+<a href=#370 id=370 data-nosnippet>370</a>                        value.name
+<a href=#371 id=371 data-nosnippet>371</a>                    ),
+<a href=#372 id=372 data-nosnippet>372</a>                )),
+<a href=#373 id=373 data-nosnippet>373</a>            }
+<a href=#374 id=374 data-nosnippet>374</a>        })
+<a href=#375 id=375 data-nosnippet>375</a>        .collect()
+<a href=#376 id=376 data-nosnippet>376</a>}
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a><span class="doccomment">/// One value of a fieldless enum, as the two enum operations match it.
+<a href=#379 id=379 data-nosnippet>379</a>///
+<a href=#380 id=380 data-nosnippet>380</a>/// [`Self::shape`] is why this is not a bare name: `enum Op { Add(), Mul {} }`
+<a href=#381 id=381 data-nosnippet>381</a>/// has no fields and is a fieldless enum to the model, but its values are
+<a href=#382 id=382 data-nosnippet>382</a>/// spelled `Add()` and `Mul {}` in a pattern and a constructor alike. The
+<a href=#383 id=383 data-nosnippet>383</a>/// registry renders through the model's own speller, so what it writes is
+<a href=#384 id=384 data-nosnippet>384</a>/// what the source declared.
+<a href=#385 id=385 data-nosnippet>385</a></span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+<a href=#386 id=386 data-nosnippet>386</a></span><span class="kw">pub struct </span>EnumArm {
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="doccomment">/// The value's name in the source enum.
+<a href=#388 id=388 data-nosnippet>388</a>    </span><span class="kw">pub </span>name: syn::Ident,
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="doccomment">/// Its constructor and pattern shape, from the model.
+<a href=#390 id=390 data-nosnippet>390</a>    </span><span class="kw">pub </span>shape: FieldShape,
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="doccomment">/// What it is carried as: the target's own enum value, or a number.
+<a href=#392 id=392 data-nosnippet>392</a>    </span><span class="kw">pub </span>carried: syn::Expr,
+<a href=#393 id=393 data-nosnippet>393</a>}
+<a href=#394 id=394 data-nosnippet>394</a>
+<a href=#395 id=395 data-nosnippet>395</a><span class="comment">// ---------------------------------------------------------------------------
+<a href=#396 id=396 data-nosnippet>396</a>// The writers
+<a href=#397 id=397 data-nosnippet>397</a>// ---------------------------------------------------------------------------
+<a href=#398 id=398 data-nosnippet>398</a>
+<a href=#399 id=399 data-nosnippet>399</a></span><span class="doccomment">/// The language adapter, as the engine sees it: a set of writers.
+<a href=#400 id=400 data-nosnippet>400</a>///
+<a href=#401 id=401 data-nosnippet>401</a>/// Nothing here decides anything a plan depends on. Which wire type holds a
+<a href=#402 id=402 data-nosnippet>402</a>/// value, which operations move it and what form an exported function takes
+<a href=#403 id=403 data-nosnippet>403</a>/// are stated in the [`Binding`](crate::binding::Binding) before planning
+<a href=#404 id=404 data-nosnippet>404</a>/// starts. What the target can do at all — the parts a kind of wire type can
+<a href=#405 id=405 data-nosnippet>405</a>/// have, the kinds a wrapper can take and return — is stated by its kinds and
+<a href=#406 id=406 data-nosnippet>406</a>/// by [`PARAMS`](Self::PARAMS) and [`RETURNS`](Self::RETURNS), as fixed facts
+<a href=#407 id=407 data-nosnippet>407</a>/// about the language rather than choices of a binding. The registry plans
+<a href=#408 id=408 data-nosnippet>408</a>/// from those alone. A writer is called only once the plan is complete, is fed
+<a href=#409 id=409 data-nosnippet>409</a>/// everything its piece of text needs, and cannot refuse: whatever could make
+<a href=#410 id=410 data-nosnippet>410</a>/// a value unsupported was decided before it runs.
+<a href=#411 id=411 data-nosnippet>411</a>///
+<a href=#412 id=412 data-nosnippet>412</a>/// Apart from the kinds' capabilities and a wire type's kind and Rust type,
+<a href=#413 id=413 data-nosnippet>413</a>/// the associated types are the adapter's own vocabulary, which the registry
+<a href=#414 id=414 data-nosnippet>414</a>/// compares and hashes but never reads.
+<a href=#415 id=415 data-nosnippet>415</a></span><span class="kw">pub trait </span>Target: Sized {
+<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
+<a href=#417 id=417 data-nosnippet>417</a>    /// adapter, so nothing has to carry it alongside the requests.
+<a href=#418 id=418 data-nosnippet>418</a>    </span><span class="kw">const </span>NAME: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="doccomment">/// The adapter's wire types: one variant per kind, holding what only
+<a href=#421 id=421 data-nosnippet>421</a>    /// that kind needs — C's name for a struct it declares, a Kotlin class.
+<a href=#422 id=422 data-nosnippet>422</a>    </span><span class="kw">type </span>WireType: WireType;
+<a href=#423 id=423 data-nosnippet>423</a>
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="doccomment">/// The kinds a wrapper parameter can be. Every kind, unless the target
+<a href=#425 id=425 data-nosnippet>425</a>    /// cannot pass some.
+<a href=#426 id=426 data-nosnippet>426</a>    </span><span class="kw">const </span>PARAMS: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[WireKindOf&lt;<span class="self">Self</span>&gt;] = &lt;WireKindOf&lt;<span class="self">Self</span>&gt; <span class="kw">as </span>WireKind&gt;::ALL;
+<a href=#427 id=427 data-nosnippet>427</a>
+<a href=#428 id=428 data-nosnippet>428</a>    <span class="doccomment">/// The kinds a wrapper can return. Every kind, unless the target cannot
+<a href=#429 id=429 data-nosnippet>429</a>    /// return some.
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="kw">const </span>RETURNS: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>[WireKindOf&lt;<span class="self">Self</span>&gt;] = &lt;WireKindOf&lt;<span class="self">Self</span>&gt; <span class="kw">as </span>WireKind&gt;::ALL;
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="doccomment">/// The target's own operations: what only its language has — a JVM
+<a href=#433 id=433 data-nosnippet>433</a>    /// getter call, a throw, calling through C's closure struct, whose
+<a href=#434 id=434 data-nosnippet>434</a>    /// members only the C target declares and knows.
+<a href=#435 id=435 data-nosnippet>435</a>    </span><span class="kw">type </span>Op: TargetOp;
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>    <span class="doccomment">/// What only the target's foreign writer reads about an output: a Kotlin
+<a href=#438 id=438 data-nosnippet>438</a>    /// package and name. C has none.
+<a href=#439 id=439 data-nosnippet>439</a>    </span><span class="kw">type </span>OutputMeta: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="doccomment">/// One of this target's operations, as a single Rust expression.
+<a href=#442 id=442 data-nosnippet>442</a>    ///
+<a href=#443 id=443 data-nosnippet>443</a>    /// One expression and nothing around it: no `let`, no `match`, no return.
+<a href=#444 id=444 data-nosnippet>444</a>    /// The feed names every operand and says what each holds.
+<a href=#445 id=445 data-nosnippet>445</a>    </span><span class="kw">fn </span>write_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, op: <span class="kw-2">&amp;</span><span class="self">Self</span>::Op, feed: <span class="kw-2">&amp;</span>OperationFeed&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;) -&gt; Written;
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="doccomment">/// The Rust items a wire type needs declared, in order — a `repr(C)` struct
+<a href=#448 id=448 data-nosnippet>448</a>    /// or enum mirror, an incomplete type behind a pointer — or none for a
+<a href=#449 id=449 data-nosnippet>449</a>    /// type Rust already has, such as `i64` or `JObject`.
+<a href=#450 id=450 data-nosnippet>450</a>    ///
+<a href=#451 id=451 data-nosnippet>451</a>    /// The registry puts the condition of the source item the wire type serves
+<a href=#452 id=452 data-nosnippet>452</a>    /// on every item returned, so each is one item.
+<a href=#453 id=453 data-nosnippet>453</a>    </span><span class="kw">fn </span>write_wire_type(<span class="kw-2">&amp;</span><span class="self">self</span>, feed: <span class="kw-2">&amp;</span>WireTypeFeed&lt;<span class="lifetime">'_</span>, <span class="self">Self</span>&gt;) -&gt; Vec&lt;TokenStream&gt;;
+<a href=#454 id=454 data-nosnippet>454</a>}
+<a href=#455 id=455 data-nosnippet>455</a>
+<a href=#456 id=456 data-nosnippet>456</a><span class="doccomment">/// What a writer produced, and the helpers it needs emitted once beside it.
+<a href=#457 id=457 data-nosnippet>457</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#458 id=458 data-nosnippet>458</a></span><span class="kw">pub struct </span>Written {
+<a href=#459 id=459 data-nosnippet>459</a>    <span class="kw">pub </span>text: TokenStream,
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="doccomment">/// Generated units this text needs in order to compile — a helper
+<a href=#461 id=461 data-nosnippet>461</a>    /// function — each emitted once whoever needs it.
+<a href=#462 id=462 data-nosnippet>462</a>    </span><span class="kw">pub </span>helpers: Vec&lt;Artifact&gt;,
+<a href=#463 id=463 data-nosnippet>463</a>}
+<a href=#464 id=464 data-nosnippet>464</a>
+<a href=#465 id=465 data-nosnippet>465</a><span class="kw">impl </span>Written {
+<a href=#466 id=466 data-nosnippet>466</a>    <span class="doccomment">/// Text needing no helper.
+<a href=#467 id=467 data-nosnippet>467</a>    </span><span class="kw">pub fn </span>new(text: TokenStream) -&gt; <span class="self">Self </span>{
+<a href=#468 id=468 data-nosnippet>468</a>        Written {
+<a href=#469 id=469 data-nosnippet>469</a>            text,
+<a href=#470 id=470 data-nosnippet>470</a>            helpers: Vec::new(),
+<a href=#471 id=471 data-nosnippet>471</a>        }
+<a href=#472 id=472 data-nosnippet>472</a>    }
+<a href=#473 id=473 data-nosnippet>473</a>
+<a href=#474 id=474 data-nosnippet>474</a>    <span class="doccomment">/// The same, needing `helper` emitted too.
+<a href=#475 id=475 data-nosnippet>475</a>    </span><span class="kw">pub fn </span>with_helper(<span class="kw-2">mut </span><span class="self">self</span>, helper: Artifact) -&gt; <span class="self">Self </span>{
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="self">self</span>.helpers.push(helper);
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="self">self
+<a href=#478 id=478 data-nosnippet>478</a>    </span>}
+<a href=#479 id=479 data-nosnippet>479</a>}
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a><span class="doccomment">/// What the registry knows about one operand or result of an operation.
+<a href=#482 id=482 data-nosnippet>482</a></span><span class="kw">pub enum </span>Fed&lt;<span class="lifetime">'a</span>, T: Target&gt; {
+<a href=#483 id=483 data-nosnippet>483</a>    <span class="doccomment">/// An exact Rust type from the source model.
+<a href=#484 id=484 data-nosnippet>484</a>    </span>Source(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>TypeRef),
+<a href=#485 id=485 data-nosnippet>485</a>    <span class="doccomment">/// A wire type the binding declared.
+<a href=#486 id=486 data-nosnippet>486</a>    </span>WireType(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType),
+<a href=#487 id=487 data-nosnippet>487</a>    <span class="doccomment">/// What a callback's `capture` produced: a value of the target's own
+<a href=#488 id=488 data-nosnippet>488</a>    /// making, which the registry moves into the closure and names nothing
+<a href=#489 id=489 data-nosnippet>489</a>    /// about.
+<a href=#490 id=490 data-nosnippet>490</a>    </span>Captured,
+<a href=#491 id=491 data-nosnippet>491</a>}
+<a href=#492 id=492 data-nosnippet>492</a>
+<a href=#493 id=493 data-nosnippet>493</a><span class="doccomment">/// Everything one application of a target operation needs written.
+<a href=#494 id=494 data-nosnippet>494</a></span><span class="kw">pub struct </span>OperationFeed&lt;<span class="lifetime">'a</span>, T: Target&gt; {
+<a href=#495 id=495 data-nosnippet>495</a>    <span class="doccomment">/// The value the operation is applied to, already named, and what it
+<a href=#496 id=496 data-nosnippet>496</a>    /// holds — `None` for a reporting operation, which is handed the error.
+<a href=#497 id=497 data-nosnippet>497</a>    </span><span class="kw">pub </span>value: <span class="prelude-ty">Option</span>&lt;(syn::Ident, Fed&lt;<span class="lifetime">'a</span>, T&gt;)&gt;,
+<a href=#498 id=498 data-nosnippet>498</a>    <span class="doccomment">/// The runtime contexts the operation asked for, by name, each bound to
+<a href=#499 id=499 data-nosnippet>499</a>    /// the wrapper parameter that supplies it.
+<a href=#500 id=500 data-nosnippet>500</a>    </span><span class="kw">pub </span>contexts: Vec&lt;(String, syn::Ident)&gt;,
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="doccomment">/// The error a reporting operation reports.
+<a href=#502 id=502 data-nosnippet>502</a>    </span><span class="kw">pub </span>error: <span class="prelude-ty">Option</span>&lt;syn::Ident&gt;,
+<a href=#503 id=503 data-nosnippet>503</a>    <span class="doccomment">/// What the expression must produce, if anything.
+<a href=#504 id=504 data-nosnippet>504</a>    </span><span class="kw">pub </span>result: <span class="prelude-ty">Option</span>&lt;Fed&lt;<span class="lifetime">'a</span>, T&gt;&gt;,
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="doccomment">/// For an operation applied once per part — the `read` of `Parts` — the
+<a href=#506 id=506 data-nosnippet>506</a>    /// part it is applied to.
+<a href=#507 id=507 data-nosnippet>507</a>    </span><span class="kw">pub </span>part: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Part&gt;,
+<a href=#508 id=508 data-nosnippet>508</a>    <span class="doccomment">/// For a callback's `capture` and `invoke`: the wire types of the callback's
+<a href=#509 id=509 data-nosnippet>509</a>    /// arguments, in order — each named for `invoke`, which is handed them,
+<a href=#510 id=510 data-nosnippet>510</a>    /// and unnamed for `capture`, which runs before any call.
+<a href=#511 id=511 data-nosnippet>511</a>    </span><span class="kw">pub </span>args: Vec&lt;(<span class="prelude-ty">Option</span>&lt;syn::Ident&gt;, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType)&gt;,
+<a href=#512 id=512 data-nosnippet>512</a>}
+<a href=#513 id=513 data-nosnippet>513</a>
+<a href=#514 id=514 data-nosnippet>514</a><span class="kw">impl</span>&lt;T: Target&gt; OperationFeed&lt;<span class="lifetime">'_</span>, T&gt; {
+<a href=#515 id=515 data-nosnippet>515</a>    <span class="doccomment">/// The wrapper parameter supplying the context the operation asked for
+<a href=#516 id=516 data-nosnippet>516</a>    /// under `name`.
+<a href=#517 id=517 data-nosnippet>517</a>    ///
+<a href=#518 id=518 data-nosnippet>518</a>    /// # Panics
+<a href=#519 id=519 data-nosnippet>519</a>    ///
+<a href=#520 id=520 data-nosnippet>520</a>    /// When the operation did not ask for it, which is the adapter reading a
+<a href=#521 id=521 data-nosnippet>521</a>    /// context it never declared.
+<a href=#522 id=522 data-nosnippet>522</a>    </span><span class="kw">pub fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;</span>syn::Ident {
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="self">self</span>.contexts
+<a href=#524 id=524 data-nosnippet>524</a>            .iter()
+<a href=#525 id=525 data-nosnippet>525</a>            .find(|(asked, <span class="kw">_</span>)| asked == name)
+<a href=#526 id=526 data-nosnippet>526</a>            .map(|(<span class="kw">_</span>, ident)| ident)
+<a href=#527 id=527 data-nosnippet>527</a>            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"the operation did not ask for the `{name}` context"</span>))
+<a href=#528 id=528 data-nosnippet>528</a>    }
+<a href=#529 id=529 data-nosnippet>529</a>}
+<a href=#530 id=530 data-nosnippet>530</a>
+<a href=#531 id=531 data-nosnippet>531</a><span class="doccomment">/// Everything one wire type's declaration needs written.
+<a href=#532 id=532 data-nosnippet>532</a></span><span class="kw">pub struct </span>WireTypeFeed&lt;<span class="lifetime">'a</span>, T: Target&gt; {
+<a href=#533 id=533 data-nosnippet>533</a>    <span class="kw">pub </span>wire_type: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType,
+<a href=#534 id=534 data-nosnippet>534</a>    <span class="doccomment">/// For the wire type of `Parts` or of a `Callable`: each part — a field,
+<a href=#535 id=535 data-nosnippet>535</a>    /// or an argument — with the wire type it resolved to, in part order.
+<a href=#536 id=536 data-nosnippet>536</a>    </span><span class="kw">pub </span>parts: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Part, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>T::WireType)&gt;,
+<a href=#537 id=537 data-nosnippet>537</a>    <span class="doccomment">/// For a wire type of a fieldless enum's value: that enum, from the model.
+<a href=#538 id=538 data-nosnippet>538</a>    </span><span class="kw">pub </span>unit: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Enum&gt;,
+<a href=#539 id=539 data-nosnippet>539</a>}
 </code></pre></div></section></main></body></html>
