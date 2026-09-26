@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "struct", "stage": "04-select", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-select.md) · [Common cell][struct_select] · [Element path][struct]
-Owner: the registry; the JNI adapter selects from the offered [relations](../../stages/04-select.md#what-a-relation-is)
+Owner: the registry, from the rule the JNI frontend recorded for `data_class!(Stamp)`
 
 # Struct with scalar fields — Select conversion relations — Kotlin/JNI
 
@@ -10,48 +10,45 @@ Owner: the registry; the JNI adapter selects from the offered [relations](../../
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 position: wherever this Stamp sits
-offered:  [ Stamp.fields, atomic ]
-
-held by the JniTarget, not passed in:
-choice:   DataClass { class: "example.Stamp" }
+rules:    Type(Stamp) -> Product { via: Fields, carrier: stamp_obj, read: JniOp::Getter (env, runtime failure), build: JniOp::NewObject }
+          Type(i64)   -> Terminal { carrier: jlong carrier, identity both ways }
+carriers: stamp_obj = Jvm { descriptor: "Lexample/Stamp;", kotlin: "example.Stamp" }
+          jlong carrier, Jvm { descriptor: "J", kotlin: "Long" }
+relations of Stamp: [ Stamp.fields, atomic ]
 ```
 
 ## Result
 
 ```text
-Stamp.fields, conversion JniChoice::DataClass { class: "example.Stamp" }
+Stamp.fields, carried in stamp_obj
+secs:  i64, IntoRust   Type(i64) rule -> atomic
+nanos: i64, IntoRust   Type(i64) rule -> atomic
 ```
 
-and, for each part the registry then plans:
-
-```text
-secs:  i64, IntoRust   choice: jlong carrier   offered: [ atomic ]   -> atomic
-nanos: i64, IntoRust   choice: jlong carrier   offered: [ atomic ]   -> atomic
-```
-
-A `DataClass` [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
-properties mirror the fields, so the JNI adapter answers with the struct
+A data class [choice](../../stages/03-requests.md#what-a-choice-records) says the Kotlin side holds `Stamp` as a data class whose
+properties mirror the fields, so the JNI frontend records a `Product` through
+`Via::Fields` over a `JObject` [carrier](../../stages/05-represent.md#describing-target-values-and-operations) whose metadata names `example.Stamp`.
+The registry resolves that to the struct
 [relation](../../stages/04-select.md#what-a-relation-is): the
 [conversion](../../stages/04-select.md#select-conversion-relations) into a
-Rust `Stamp` is made of reading one property per field. The answer follows from
-the choice alone. The adapter
-has not yet derived a getter name or a descriptor; those belong to the
-[representation](../../stages/05-represent.md#represent-and-compose-values), and the representation is asked for only after the parts are
-planned.
+Rust `Stamp` is made of reading one property per field. No getter name or
+descriptor exists yet; the JNI writer derives both when the registry feeds it
+the part and the part's `jlong` carrier, at
+[composition][struct_represent_jni].
 
-A pointer-class choice — the struct kept in Rust and handed to Kotlin as an
-opaque `jlong` handle — would make the same adapter answer `atomic`, and no
-property would ever be read.
+`ptr_class!(Stamp)` — the struct kept in Rust and handed to Kotlin as an
+opaque `jlong` handle — records a `Terminal` over a `jlong` carrier instead,
+and no property would ever be read.
 
 ## Checks
 
-- The answer is one of the ids the registry offered.
-- Under `DataClass` the adapter has committed to one property read per part in
-  the next stage, and since a property read is a JVM call, it has also
-  committed this conversion to being fallible — a fact
-  [the getters][struct_represent_jni] make explicit and the boundary routes.
-- The scalar parts select `atomic`: a `jlong` is one JNI value, and an `i64`
-  has no other relation to offer.
+- The relation is resolved by the registry from the rule; the JNI target never
+  sees a relation id.
+- The rule's `read` is fallible in the runtime category, since a property read
+  is a JVM call, so this conversion is fallible — known now, before anything
+  is written, and routed by the boundary.
+- The scalar parts take the `i64` rule from JNI's scalar table: a `Terminal`
+  over `jlong`, one JNI value.
 
 [struct]: README.md
 [struct_select]: 04-select.md

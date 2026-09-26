@@ -28,12 +28,15 @@ directly. Three components cooperate to generate the connecting code:
   shared planner. It determines how values must be converted, assembles the
   wrappers and renders their Rust code. It also records which requests
   it could not satisfy.
-- The [target adapter](README.md#the-components) supplies language-specific
-  answers to the registry. For C, it describes member reads from a struct. For
-  JNI, it describes getter calls on a JVM object. The registry combines those
-  operations; the adapter does not independently traverse the entire type tree.
-  Where a chapter is describing what the engine asks rather than who implements
-  the answer, it calls this component simply **the target**.
+- The [target adapter](README.md#the-components) knows how to write its
+  language. Its frontend states, before planning, which Rust types may hold a
+  value at the boundary and how each value crosses — for C, a struct read
+  member by member; for JNI, a JVM object read through getters. Its writers
+  then turn what the registry feeds them into text: one getter call, one
+  `repr(C)` struct declaration, the Kotlin sources. The adapter never walks
+  the type tree and never decides anything while the registry plans.
+  Where a chapter is describing the writing role rather than the crate, it
+  calls this component simply **the target**.
 
 Frontend and adapter are two roles in the same language-specific crate, not
 two packages you configure separately. The registry is shared by both targets.
@@ -86,23 +89,24 @@ See [Record binding requests](stages/03-requests.md#record-binding-requests).
 ### Choice
 
 One language-specific decision the binding recorded about a declaration or a
-value, held by the frontend that recorded it and by the target that frontend
-builds. For example, C records that `Stamp` crosses as a by-value struct, while
-JNI records the Kotlin class that will carry it. The registry stores none of
-them and knows no precedence among them: it asks the target whenever it needs a
-language-specific decision, and the target resolves what applies from its own
-storage. The shared planner never interprets a C or Kotlin option.
+value. For example, C records that `Stamp` crosses as a by-value struct, while
+JNI records the Kotlin class that will carry it. The frontend hands every
+choice to the registry as data before planning: as a Rust type allowed at the
+boundary, as a rule for how some values cross, as the form an exported
+function takes, or as metadata only the foreign writer reads. The registry
+decides everything from those; it compares metadata but never interprets a C
+or Kotlin option.
 See [What a choice records](stages/03-requests.md#what-a-choice-records).
 
-### Conversion key
+### Conversion rule
 
-The adapter's own name for one way of converting a value, returned from
-`select` beside the relation. The registry never looks inside it; it compares
-keys, and two values whose crossing, relation, children and key all match share
-one plan. So a key means one thing: *equal keys are interchangeable
-conversions*. Settings that generate differently must produce different keys,
-and a fresh key per visit would share nothing and defeat cycle detection. See
-[Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
+How the values in one scope cross, recorded by the frontend before planning:
+every value of one type, or the one value at one position inside one requested
+function or type. It says what holds those values at the boundary and how
+they are read and built, so C's rule for `Stamp` says a `repr(C)` struct read
+member by member. Rules are data the registry holds and looks values up in,
+with one precedence: a rule at a value's position outranks a rule for its
+type. See [Conversion rules](stages/03-requests.md#conversion-rules).
 
 ### Root
 
@@ -119,8 +123,8 @@ A position inside a requested function: parameter 0 of `stamp_sum`, for
 example, or its return value. A type alone cannot identify that position:
 two parameters may have the same type but require different settings.
 Position-specific overrides and diagnostic paths therefore name where a value
-is used. Current V2 represents this with a declaration id and a path; the
-separate `SiteId` type shown in the design is not implemented yet.
+is used, as the first step of a path under the output that exports the
+function: `param stamp`, or `return`.
 See [A value's position in an exported function](stages/03-requests.md#a-values-position-in-an-exported-function).
 
 ### Part
@@ -152,7 +156,7 @@ The exact source type paired with its direction of travel. The argument makes
 the crossing `Stamp` into Rust; the result makes the crossing `i64` out of
 Rust. Direction matters: constructing a Rust struct is not the same operation
 as taking a returned struct apart. The crossing identifies the problem, but
-the selected relation, conversion key and child plans are also needed to
+the representation that applies and the child plans are also needed to
 identify a reusable solution. See [Finding an existing conversion plan](stages/03-requests.md#finding-an-existing-conversion-plan).
 
 ### Relation
@@ -174,30 +178,39 @@ A relation says nothing about a C struct or Kotlin object: it describes the
 source-side work.
 See [What a relation is](stages/04-select.md#what-a-relation-is).
 
-### Representation
-
-The target adapter's description of the foreign-side values and the operations
-that access them. C uses a `repr(C)` struct whose members can be read directly.
-JNI uses a JVM object whose properties are read by getter calls. Both can serve
-the same source-side struct relation, but need different access operations.
-The adapter describes those operations; the registry combines them with the
-children's conversions. See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
-
 ### Carrier
 
-A value carrying data during conversion: a wrapper argument, wrapper return or
-intermediate value in generated Rust. In the JNI example, the object reference
-is one carrier and an integer returned by a getter is another. Its `WireType`
-describes the Rust type used to hold it and whether it is safe at the wrapper
-boundary. An internal temporary need not itself be legal as an
-exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
+A Rust type the binding allows to hold a value during conversion: a wrapper
+argument, wrapper return or intermediate value in generated Rust. In the JNI
+example, the `Stamp` object reference is one carrier and the `jlong` a getter
+returns is another. The frontend declares each one as a `WireType`: the Rust
+type, which of the adapter's few wire types it is, for an aggregate which
+wire types its members may be, and the metadata the target's writers need — a
+C name, a JVM descriptor. Two carriers may share a
+Rust type and differ in metadata, as two `JObject`s of different classes do.
+Where a carrier may appear is stated by what holds it: a function form lists
+the wire types its wrapper parameters may be, so an internal temporary need
+not be legal as an exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
+
+### Representation
+
+How the values a conversion rule covers cross: which carrier holds them,
+which relation they are read through, and the operations that read and build
+the carrier. C uses a `repr(C)` struct whose members can be read directly.
+JNI uses a JVM object whose properties are read by getter calls. Both can serve
+the same source-side struct relation, but need different access operations.
+A type may have several — `Stamp` as a C struct and as a handle — so the
+frontend declares each once, and a conversion rule or an exposed type names
+it. The registry combines its operations with the children's conversions. See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
 
 ### Primitive
 
-One typed operation supplied by the target adapter: read a member, call a
+One operation a representation or a function form names: read a member, call a
 getter or report an error. The word means an operation here, not a primitive
-type such as `i64`. Its description states its inputs, result, possible failure
-and generated-code dependencies. It does not choose the caller's local variable
+type such as `i64`. A standard one the registry writes itself; a target's own
+one the target writes when the registry feeds it typed operands. Its
+description states its possible failure and the runtime contexts it needs;
+its operand and result types follow from where it is used. It does not choose the caller's local variable
 names or decide what the enclosing function does on failure. The registry
 plans those connections and control flow before the writer renders code.
 See [Represent and compose values](stages/05-represent.md#represent-and-compose-values).
@@ -205,7 +218,7 @@ See [Represent and compose values](stages/05-represent.md#represent-and-compose-
 ### Node
 
 A completed conversion plan stored for reuse. Its identity includes the
-crossing, selected relation, conversion key and child-plan identities. Those
+crossing, the representation that applied and child-plan identities. Those
 details explain why “same Rust type” is not enough for sharing: two structs
 whose fields need different conversions need different plans too. In the
 example, both `i64` fields can reuse one input node, applied once per field.

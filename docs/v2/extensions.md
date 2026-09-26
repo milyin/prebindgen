@@ -117,9 +117,10 @@ a different treatment requires an explicit conversion role.
 
 A struct relation is implicit — the registry registers it for any struct the
 source model describes. A constructor or projector relation is explicit: it
-names a function, so a frontend declaration has to say which. That declaration,
-and the rule that pins the relation at a position, is the **conversion rule**
-the chapter's `select` reads and that no build script can write yet:
+names a function, so a frontend declaration has to say which. It says so in
+the `Via` of a `Product` representation in a
+[conversion rule](stages/03-requests.md#conversion-rules), which gains one
+variant per relation:
 
 ```rust
 pub enum Relation {
@@ -130,18 +131,17 @@ pub enum Relation {
     // conversion, representation-reuse and callable descriptions.
 }
 
-struct RelationDefinition {
-    operation: Relation, // Checked role; no independently assignable subject field.
+pub enum Via {
+    Fields,
+    Construct(syn::Ident), // Into Rust through this source function.
+    Project(syn::Ident),   // Out of Rust through this source function.
 }
-struct RelationId { /* private table identity and entry ID */ }
-struct Selection<ConversionKey> {
-    relation: RelationId, // Registered RelationDefinition containing the checked role.
-    conversion: ConversionKey, // The target's name for the settings it applied.
-}
-struct ConversionRules {
-    sites: Map<SiteId, Selection>, // Parameter/result overrides.
-    parts: Map<PartId, Selection>, // Field/helper-argument selections.
-    defaults: DefaultRules,       // Frontend-defined override precedence.
+
+pub enum Step {
+    Param(String),
+    Return,
+    Field(String),
+    Arg(String), // An argument of the constructor the value is built through.
 }
 ```
 
@@ -149,10 +149,17 @@ Pinning the constructor for `Stamp` is a rule recorded with the request, and it
 changes what the parts are without changing anything else:
 
 ```text
-relation:  stamp_from_millis  = Relation::Construct(over the checked function view)
-parts:     PartId { owner: stamp_from_millis, arm: None, position: Argument(0) }  // millis: i64
-rule:      the Stamp type default selects that relation instead of Stamp.fields
+rule:      Type(Stamp) -> Product { via: Construct(stamp_from_millis), carrier, read, build }
+relation:  Relation::Construct, over the checked function view, registered for Stamp
+parts:     millis: i64, addressed as `….arg millis`
 ```
+
+The registry resolves `Construct(stamp_from_millis)` the way it resolves
+`Fields`: it checks the function against the type before planning, and a
+function that does not construct the type fails the build as invalid input.
+The [carrier](stages/05-represent.md#describing-target-values-and-operations)'s
+members are then the constructor's arguments, so its writer
+is fed one `millis` member instead of `secs` and `nanos`.
 
 The registry then converts one `i64`, calls `stamp_from_millis`, and has a
 `Stamp` — one child instead of two, the same recursion, and a target that need
@@ -285,136 +292,365 @@ arrange runtime cleanup. A dependency on an external runtime crate belongs in
 the target's build requirements; a generated helper wrapping that runtime call
 is an artifact.
 
-## Multi-value layouts
+## Containers
 
-Extends [target representations](stages/05-represent.md#target-representations).
-Needed by the optional-field, sequence-field and enum paths.
+Extends [conversion rules](stages/03-requests.md#conversion-rules). Needed by
+the sequence-field and optional-field paths.
 
-The engine has two layouts, one scalar [carrier](stages/05-represent.md#describing-target-values-and-operations)
-or one aggregate, and two protocols, converting the whole value or reading one
-part per part. The broader design adds an empty layout, independent slots,
-nested member layouts, id-based references and four more protocols:
+A `Type` rule names one exact type, and a binding cannot list every
+`Vec<Stamp>`, `Vec<Ledger>` or `Option<i64>` its source happens to use. What
+makes a finite answer possible is that the target side is finite: an adapter
+has a handful of wire types, and a handful of ways to pack wire values into a
+container. So a generic instance is matched one container level at a time,
+against the wire type its element *resolved to* — never against a pattern of
+Rust types.
+
+Each carrier states which of the adapter's wire types it is, as its
+`class`, and the adapter declares its containers:
 
 ```rust
-enum Layout {
-    Empty,                 // No carried values, as for a unit result.
-    Scalar(WireTypeId),     // One scalar/reference/carrier value.
-    Slots(Vec<SlotSpec>),   // Several independent ordered values.
-    Aggregate {
-        ty: WireTypeId,            // Type of the one containing struct/object carrier.
-        members: Vec<MemberLayout>,// Named/indexed members and their child layouts.
-    },
+pub struct WireType<T: Target> {
+    pub rust: syn::Type,
+    pub class: T::WireClass, // JNI: Long, Int, Byte, …, Object. C: I64, …, Pointer, Aggregate.
+    pub base: String,        // Its naming base: `stamp`, `i64`.
+    pub members: Option<Accepts<T>>, // See acceptance.
+    pub meta: T::CarrierMeta,
 }
 
-struct SlotSpec {
-    id: SlotId,          // This value's identity within the layout.
-    wire: WireTypeId,    // Target or intermediate type of the value.
-    role: SlotRole,      // Payload, presence flag, variant selector, etc.
-    active_when: GuardId,// Condition under which its payload can be converted.
+/// The Rust containers the registry knows the relation of.
+pub enum SourceContainer { Vec, Slice, Array, Option, Box }
+
+pub struct Container<T: Target> {
+    pub source: SourceContainer,     // Which Rust container it serves.
+    pub accepts: Accepts<T>,         // Which element wire classes it holds.
+    pub role: String,                // Its naming role: `vec`, `opt`.
+    pub carrier: CarrierTemplate<T>, // The result's Rust type and class; its metadata
+                                     // is derived per instance from the element's.
+    pub ops: ContainerOps<T::Op>,    // A sequence: len, get, build. An optional:
+                                     // test, extract, inject.
+    pub release: Option<Operation<T::Op>>,
+    pub niche: Option<Niche>,        // What the result leaves free; see optional values.
 }
 
-enum Protocol {
-    Terminal { codec: PrimitiveId }, // Converts the whole value in one operation, with no parts.
-    Product(ProductOps),   // Project members and construct a target product.
-    Optional(OptionalOps), // Detect/extract/inject presence or absence.
-    Sequence(SequenceOps), // Read or append target sequence elements.
-    Choice(ChoiceOps),     // Inspect/write a tag and its active payload.
-    Callable(CallableOps), // Capture/invoke a target callable.
+impl<T: Target> Binding<T> {
+    pub fn container(&mut self, container: Container<T>);
 }
 ```
 
-A **slot** is one value in a multi-value representation — for a `Stamp` passed
-to JNI as two separate arguments rather than an object, the layout is two slots,
-and a function taking two such structs has four wrapper arguments in all.
-`SlotRole` states a slot's meaning, independent of its generated name. `GuardId`
-refers to an activation condition on a slot — "always," "presence is true," or
-"variant tag selects this arm" — and is unrelated to the guard items of
-[capture](stages/01-source.md). Enclosing conditions also apply. Inactive slots
-can require valid wire defaults even though their source payload must not be
-read or constructed. When one layout is used for two function arguments, its
-slot identities are qualified by each use so their ABI positions remain
-separate.
+The registry owns each container's relation, since it is a source-side fact
+and the same for every target: a `Vec<T>`, a slice or an array is one part,
+the element, converted once per element; an `Option<T>` is one part, present
+or absent. A value of a container type takes, in order:
 
-A layout stays nested for as long as nesting is meaningful: an aggregate whose
-member is itself an aggregate is described that way, and only a place that
-requires a flat list of values — a wrapper signature, where each slot becomes one
-ABI argument — flattens it, at that point, in that use. Keeping the nesting
-until then is what lets the same struct representation be an argument in one
-function and a member of another.
+1. the rule at its position;
+2. the `Type` rule for its exact type — `Type(Vec<u8>)`, say, for a byte array
+   carried whole;
+3. the container table: its element is planned first, at its own position,
+   and the registry looks up the container declared for this Rust container
+   and the element's wire class.
 
-`ProductOps` in the design describes both member reads and a target
-construction operation over converted children. The implemented form has no
-target-construction operation, which is why a struct leaving Rust is a reported
-skip. A future C output could use a struct literal, while a future
-separate-arguments JNI form would map children to argument slots. For
-sequences, variants and callbacks, adapters supply runtime operations; the
-registry supplies loops, branches and child calls.
+A missing entry refuses the value, naming the Rust container and the wire
+class: `Vec` of `Aggregate` has no container in JNI.
+
+For JNI the table is:
+
+| Rust container | Element wire class | Container | Instance carrier |
+| --- | --- | --- | --- |
+| `Vec`, slice | `Long` | `jlongArray`, read in bulk | `[J` |
+| `Vec`, slice | `Byte` | `jbyteArray`, read in bulk | `[B` |
+| `Vec`, slice | `Object` | `jobjectArray`, element by element | `[` + the element's descriptor |
+| `Option` | `Long` | a boxed `java.lang.Long` | `Ljava/lang/Long;` |
+
+and for C:
+
+| Rust container | Element wire class | Container | Instance carrier |
+| --- | --- | --- | --- |
+| `Vec`, slice | any | `{ ptr, len }` | a `repr(C)` struct per instance |
+| `Option` | a class with no niche | `{ bool present; E value }` | a `repr(C)` struct per instance |
+
+Three things follow from matching the element's wire class rather than a
+Rust pattern. Two entries cannot overlap, since each covers one container
+level and one class, so there is no precedence among them to define. An
+element that changes the container's Rust type is simply a different key:
+`Vec<i64>` becomes a `jlongArray` and `Vec<Stamp>` a `jobjectArray`. And an
+override on an element flows up by itself: a rule at `param xs.element` that
+makes `Stamp` a handle gives the element class `Long`, and the container
+follows.
+
+A container instance is a carrier the registry builds during planning, from
+the container and the element's carrier. It holds it as that pair, compared
+structurally, and feeds both to the writers: the JNI writer spells
+`[Lexample/Stamp;` from the element's descriptor, and the C writer writes the
+instance's `repr(C)` struct from its element's carrier. Planning still calls
+no target code; the instance is data the binding's declarations determine.
+
+An instance's name is composed the way a callback's closure struct is named
+today, from bases. Its base is the container's role and the element's base —
+`Vec<Stamp>` is `vec_stamp`, and nesting composes, so `Vec<Option<Stamp>>` is
+`vec_opt_stamp`. The target turns a base into a name with the frontend's own
+manglers, as it does for a declared type: `mangle_type_name` gives the C
+struct its name and `mangle_destructor` gives a `Vec` handed out of Rust its
+release symbol, `vec_stamp_drop` by default. No planning decision depends on
+a name, so the target applies the manglers when it writes, through
+`Target::write_name`, and the registry checks the names for collisions once
+they are written.
 
 ## Optional values
 
-Extends [target representations](stages/05-represent.md#target-representations).
-Demonstrated, when built, by the struct with an optional field.
+Extends [containers](#containers). Demonstrated, when built, by the struct
+with an optional field.
 
-Nothing carries an optional value yet: `Layout::Slots`, `SlotRole`, `GuardId`
-and the encodings below are names. This section says what the slot has to hold.
-
-An optional value needs both a representation of its child and a way to
-distinguish absence. Different targets can encode that distinction differently:
+An `Option<T>` is cheapest when the element's wire value has a value no real
+element ever takes — a **niche** — and absence can be that value. Whether one
+exists depends on the representation, not on the wire type alone. A `jlong`
+carrying a handle is never 0, because `Box::into_raw` never returns null; a
+`jlong` carrying an `i64` can be anything. A C `*mut ledger_t` handle is never
+null; a `JObject` a data-class conversion produces is never null. So the
+representation that produces a value declares its niche:
 
 ```rust
-enum AbsenceEncoding {
-    Presence {
-        flag: SlotId,         // Separate value indicating whether the child is present.
-        inactive: DefaultsId, // Valid wire defaults for the absent child's slots.
-    },
-    Nullable {
-        test: PrimitiveId,    // Test for absence in a nullable carrier.
-        extract: PrimitiveId, // Obtain the present child's carrier.
-        inject: PrimitiveId,  // Wrap a converted child as present.
-    },
-    Niche {
-        domain: DomainId,     // Valid child values and a reserved absence encoding.
-        test: PrimitiveId,    // Test for the reserved encoding.
-        extract: PrimitiveId, // Recover the present child's carrier.
-        inject: PrimitiveId,  // Encode a child without colliding with absence.
-    },
+pub enum Niche {
+    Null,         // A null pointer or a null object reference.
+    Zero,         // An integer 0.
+    Integer(i64), // Another integer, such as a tag no arm of a choice uses.
 }
 
-struct OptionalOps {
-    encoding: AbsenceEncoding, // The selected absence/presence convention.
-    payload: LayoutId,         // Child representation when present.
-    absent: PrimitiveId,       // Produce the complete representation of absence.
+// On `Representation::Terminal` and `Representation::Product`:
+pub niche: Option<Niche>,
+```
+
+An `Option<X>` resolves from its element's representation:
+
+| The element's representation | `Option<X>` |
+| --- | --- |
+| has a niche | The element's carrier. Absent is the niche value; the test for it and the conversion each way are standard operations the registry writes. The result has no niche left. |
+| has none | The container declared for `Option` and the element's wire class: C's `{ bool present; E value }`, JNI's boxed `java.lang.Long`. The result's niche is the container's. |
+
+Nesting falls out of that. `Option<Ledger>` takes the pointer's null.
+`Option<Option<Ledger>>` finds that niche consumed and takes the flag
+container, so `None` and `Some(None)` stay distinct. In JNI,
+`Option<i64>` is a boxed `Long`, whose own niche is `null`, and an
+`Option<Option<i64>>` then needs a container for class `Object` or is
+refused.
+
+A container's `inject` writes the whole absent form, including a valid value
+for a member that is not read: C's `{ false, 0 }`. Its `extract` is only
+reached on the present path; the registry branches on `test` and converts
+the element only there.
+
+## Multi-value layouts
+
+Extends [the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-boundary).
+Needed by the sequence-field path, and by JNI's `expand_param` and
+`expand_return`.
+
+Inside a plan one value is always one carrier. A C slice is one `{ ptr, len }`
+aggregate, and a `Stamp` read from a JVM object is one `JObject`, wherever
+the value sits: as a parameter, a field, or an element of another container.
+Only the wrapper boundary may split a value into several, and the function
+form says which, and how a split return reaches the caller:
+
+```rust
+pub struct FunctionForm<T: Target> {
+    // … the calling convention, symbol, context parameters, routes …
+    /// The parameters, or the return, that cross as their members rather
+    /// than as one value.
+    pub flatten: Vec<Step>, // Step::Param("xs"), Step::Return
+    /// How the members of a flattened return reach the caller.
+    pub members_out: MembersOut<T>,
+}
+
+pub enum MembersOut<T: Target> {
+    /// One out-parameter per member. C.
+    OutParameters,
+    /// One call of a callback the caller passes in, taking every member as
+    /// an argument; the wrapper returns what the callback returns. JNI.
+    Callback {
+        param: ContextParam,        // The extra wrapper parameter: `build: JObject`.
+        invoke: Operation<T::Op>,   // The call, fed the members' carriers.
+    },
 }
 ```
 
-A **niche** is a reserved representation that cannot be a valid present child,
-such as zero for a handle whose valid values exclude zero. `DomainId` describes
-those validity facts. `DefaultsId` describes valid wire defaults, not fabricated
-Rust source values. `absent` builds the complete absent representation;
-`inactive` supplies the unused child slots for the separate-flag convention.
+A flattened value must be carried in an aggregate: a carrier with members,
+such as a `repr(C)` struct. It may be one the foreign side never sees whole —
+a JNI function form accepts no aggregate as a parameter, so a JNI aggregate
+exists only to be flattened. The registry checks that before planning.
 
-The registry branches on presence and invokes the child conversion only on the
-present path. It validates active inputs and supplies required inactive
-defaults. Nested optionals must preserve distinct states such as `None` and
-`Some(None)`; if the selected encoding cannot do that, the combination is
-unsupported.
+**A flattened parameter** becomes one wrapper parameter per member, each typed
+as that member's carrier and named by the target's writer — `xs` becomes
+`xs_ptr` and `xs_len` — and the registry binds each member directly where the
+plan would have read it out of the aggregate.
+
+**A flattened return** delivers its members the way `members_out` says. In C
+each member is written through an out-parameter. A JNI method returns one
+value and has no out-parameters, so the caller passes a callback instead: the
+wrapper gains one parameter holding it, computes the members, calls it once
+with all of them, and returns its result. V1's `expand_return` does exactly
+this. In its covertest example, `ledgerNew(n: Long, build: LedgerBuilder<R>): R`
+hands `build.run(…)` the members of the returned `Ledger` and returns
+whatever `run` builds. The callback's interface, `fun interface
+LedgerBuilder<out R>` with one `run` taking the members, is a foreign
+declaration the JNI writer emits from the members' carriers, and the call is
+a JNI operation the writer spells from the same feed.
+
+| Frontend setting | Declarations | At the wrapper boundary |
+| --- | --- | --- |
+| C, a slice parameter | `xs: &[i64]` takes the slice container, carried in `slice_i64 { ptr, len }`; the form flattens `param xs` | `xs_ptr: *const i64, xs_len: usize` |
+| C, a flattened return | the value's aggregate carrier; the form flattens `return` with `OutParameters` | one `*mut` out-parameter per member |
+| JNI, `expand_return(Ledger)` | a `Product` over a Rust-only aggregate of the parts the declared accessors read; the form flattens `return` with `Callback` | `build: JObject` in, the callback's result out |
+
+Neither the slice container nor a type's other representations know about
+the flattening: everywhere else a `Ledger` is still carried as its rules say.
+
+JNI's `expand_param` is the input side of the same idea. With one variant —
+one way to build the parameter, such as `zbytes_new_from_vec(Vec<u8>)` — it is
+a `Product` through that constructor's relation over a Rust-only aggregate of
+its arguments, flattened like any other parameter. With several it is a
+[choice](#choices).
+
+## Choices
+
+Extends [conversion rules](stages/03-requests.md#conversion-rules). Needed by
+JNI's multi-variant `expand_param`, and by the enum-with-payload path.
+
+Some values cross in one of several forms, and which one is only known at run
+time. zenoh-flat-jni has two: a `KeyExpr` parameter is built from a `String`
+through `keyexpr_new_try_from` *or* passed as an existing handle, and an
+`Encoding` from its `(id, schema)` through `encoding_new_from_id` *or* as a
+handle. The SDKs over it choose per value, not per call: their `KeyExpr`
+is string-backed until it is declared and handle-backed after, and one
+`session.put` passes whichever it holds. Fixing the form per call would not do —
+26 of zenoh-flat-jni's 211 JNI entry points take such a parameter and 5 take
+two, so one entry point per combination is 62 instead of 26, each call
+in both SDKs branching on the value's state. Forcing one form costs what
+zenoh-flat-jni's `build.rs` documents choosing both for: a Rust-owned handle
+allocated per message, or a declared key expression's wire optimisation.
+
+A Rust enum with payloads crosses the same way in the other direction:
+`RecoveryMode` and `InstrumentationTimestamp` are sealed classes in
+zenoh-flat-jni, delivered as whichever variant the value is. So a choice is
+one more representation, not a parameter feature:
+
+```rust
+pub enum Representation<T: Target> {
+    // … Terminal, Product, Unsupported …
+    /// One of several representations of the same type, and a tag saying which.
+    Choice {
+        tag: CarrierId,     // The tag's carrier: a `jint`, a C `int`.
+        arms: Vec<ReprId>,  // Each arm is a representation of this same type.
+        carrier: CarrierId, // An aggregate: the tag, then one member per arm.
+    },
+}
+```
+
+Each arm is an ordinary representation of the value's own type, so an arm is
+whatever a representation can be:
+
+| Arm | Its representation | Direction |
+| --- | --- | --- |
+| built through a constructor, `keyexpr_new_try_from(String)` | a `Product` through `Via::Construct(keyexpr_new_try_from)` | into Rust only |
+| the value itself, as a handle | the type's handle `Terminal` | both |
+| one variant of a Rust enum, `RecoveryMode::Heartbeat` | a `Product` through `Via::Variant(Heartbeat)`, its fields as parts | both |
+
+`Via::Variant` is the registry's relation for one variant of an enum, as
+`Via::Fields` is for a struct. The registry checks the arms before planning:
+each is a representation of the choice's type, and a choice with an arm that
+only builds cannot cross out of Rust. Into Rust it matches on the tag and
+plans the chosen arm; out of Rust it matches on the value's variant and
+writes that arm's tag and members.
+
+The carrier holds the tag and every arm's members, and only the chosen arm's
+are read. An arm not chosen holds its wire type's null or zero, which the
+registry writes and never reads. A choice's niche is any tag no arm uses, so
+an `Option<KeyExpr>` needs no container: its absent value is tag −1, which is
+the `encodingSel = -1` the SDKs pass for "no encoding" today. That is the
+`Integer` niche above.
+
+Flattened at the boundary the carrier becomes the tag and each arm's
+members, flattened in turn, which reproduces v1's signature exactly:
+`keyExprSel, keyExpr0, keyExpr1` for a `KeyExpr`, and
+`encodingSel, encoding00, encoding01, encoding1` for an `Encoding`, whose
+first arm is itself the pair `(id, schema)`. V1's `split_on_param`, which
+adds a typed Kotlin overload per arm over the same entry point, is the Kotlin
+writer's business alone and stays in the function's output metadata.
+
+## Acceptance
+
+Extends [conversion rules](stages/03-requests.md#conversion-rules) and
+[the wrapper boundary](stages/06-boundary.md#assemble-the-wrapper-boundary).
+Needed by any target that cannot hold every wire type everywhere.
+
+A target may be unable to put one wire value inside another: C's v2 target
+does not yet nest one `repr(C)` struct inside another, a JNI method cannot
+take an aggregate as a parameter, and other conventions have limits of their
+own. Whether a limit is hit depends on what a child resolved to, which can
+differ by position, so the frontend cannot check it when it builds the
+binding. No target code runs while the registry plans, so the target cannot
+check it then either. So every place that holds a wire value states, as data,
+which wire classes it can hold, and the registry checks each placement:
+
+```rust
+pub struct Accepts<T: Target> {
+    pub classes: Vec<T::WireClass>, // What may be placed here; empty is nothing.
+}
+```
+
+| Holder | Declared on | Holds |
+| --- | --- | --- |
+| an aggregate carrier | `WireType::members` | its members |
+| a container | `Container::accepts` | its elements |
+| a choice | its carrier, an aggregate | the tag and each arm's members |
+| a function form | `FunctionForm::params`, `FunctionForm::ret` | wrapper parameters, the return |
+| a callback, when callbacks are built | its form | its arguments and its result |
+
+The registry checks on the way up the planning walk, once a
+[node](stages/05-represent.md#represent-and-compose-values)'s children have
+resolved to carriers: each child's class must be in its holder's list.
+At the wrapper boundary it checks each wrapper parameter and the return
+against the function form, after flattening, so a flattened aggregate is
+judged by its members. A placement that fails refuses that node like any
+unsupported child. The refusal climbs to every output that needed the node
+and names the holder, the class and the position: "`Stamp.origin` is an
+`Aggregate`, which a C aggregate does not hold (`param stamp.field origin`
+of `stamp_sum`)", with the capability `unsupported.c.member.aggregate`.
+
+Checking per node rather than per type is what position rules need. With an
+`At` rule making `origin` a handle in one function, `Stamp` is accepted there
+and refused where `origin` is a struct, which is the right answer; a node's
+identity already includes its children, so the two never meet.
+
+The declarations of both targets:
+
+| Target | Aggregate members | Wrapper parameters and return |
+| --- | --- | --- |
+| C | every scalar class, `Pointer`, `Enum` — and `Aggregate` once nesting is built | every class |
+| JNI | every class | `Long`, `Int`, …, `Object` — no `Aggregate`, so a JNI aggregate must be flattened |
+
+Another target's limits take the same form. A .NET binding marshalling
+structs by value would leave `Object` out of its aggregates' member list, so a
+struct with a string field is refused unless a rule carries the field as a
+handle. A WebAssembly binding would accept only its four numeric classes as
+parameters, so aggregates are flattened and objects cross as handles.
+
+Acceptance is a set of wire classes per holder. It does not count — JNI's
+limit of 255 method parameters — or constrain members jointly, or measure
+size and alignment. A target that needs one of those gets more data on the
+holder, checked by the registry the same way, rather than a call into target
+code. A constraint on the values themselves, rather than their wire types,
+is a run-time check inside an operation.
 
 ## Requesting further conversions
 
-Extends [how the registry asks a target for decisions](stages/04-select.md#how-the-registry-asks-a-target-for-decisions).
+Extends [what the target writes](stages/04-select.md#what-the-target-writes).
 
-Source-conversion dependencies come from the selected relation's children, and
-target operations list generated helpers. Current public dependencies are
-`Requirement`s in `SurfaceSpec.requires`, each resolved to a `Declaration`. The more general design will need an
-explicit request mechanism if a target requires additional conversions beyond
-those; that mechanism is not implemented. Rendering must not discover new
-conversions.
-
-Descriptions returned by a target can contain new primitive, layout or helper
-definitions with references local to that description. The registry validates and registers the
-definitions and assigns its own table IDs. Existing descriptors can reference
-IDs the registry already supplied. The target does not allocate entries in
-registry-owned tables itself.
+A value's conversions come from its representation's relation and the rules
+for its parts, and a writer's needs are its helpers. A target that needs a
+conversion beyond those — a helper that takes a value the plan has no reason
+to convert — states it in the binding, as another carrier and rule, so it is
+planned and checked like any other. It is never requested while writing: a
+writer that discovered a conversion would be a decision the plan could not
+see, and planning would stop being a function of the model and the binding.
 
 ## The full value contract
 

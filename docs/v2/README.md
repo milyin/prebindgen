@@ -149,13 +149,17 @@ build-dependency only:
   C or Kotlin through JNI. Each adapter answers to two callers, which is why the
   chapters address it under two names. Facing you, it is the **frontend**: the
   builder your build script configures with what to expose and how it should look
-  in that language. Facing the engine, it is the **target adapter**: the
-  implementation the engine queries while planning — what carries a `Stamp`, how
-  a member of it is read, what this exported function's wrapper signature is. One
-  crate, two directions; the first records decisions, the second is made to spell
-  them out item by item. Producing the target language's own declarations is part
-  of the same job — the JNI adapter emits the Kotlin, since only it knows what a
-  Kotlin class should look like. The C adapter is the exception, and only because
+  in that language. It turns that configuration into data the engine plans
+  from: which Rust types may carry a value at the boundary, how each value
+  crosses, what form each exported function takes. Facing the engine, it is the
+  **target adapter**: the writers the engine calls once the plan is complete,
+  fed with everything a piece of text needs — one getter call with its typed
+  operands, one `repr(C)` struct with its resolved members. One crate, two
+  directions; the first states every decision before planning, the second
+  writes and decides nothing. The adapter knows how to write its language; the
+  registry knows what to feed it. Producing the target language's own
+  declarations is part of the same job — the JNI adapter emits the Kotlin, since
+  only it knows what a Kotlin class should look like. The C adapter is the exception, and only because
   a well-established tool already does that work: `cbindgen` derives C headers
   from Rust source, so there is nothing for a C emitter to add.
 - **`cbindgen`** is external, and only a C binding crate runs it — over the
@@ -179,11 +183,12 @@ binding can also avoid depending on the Kotlin adapter.
 ```text
 captured Rust source + declared local helper signatures
   -> Flat builds the checked source model
-  -> language frontend records binding requests from Flat views and user choices
-  -> registry plans value conversions using Flat facts and target descriptions
+  -> language frontend states the binding: carriers, conversion rules, outputs
+  -> registry plans value conversions from Flat facts and the binding alone
   -> registry assembles the wrapper boundary of each exported function
   -> registry retains complete supported plans and reports skipped requests
-       -> common Rust writer -> generated Rust -> cbindgen -> C headers
+       -> common Rust writer, calling the target's writers -> generated Rust
+            -> cbindgen -> C headers
        -> JNI's Kotlin writer -> Kotlin declarations
 ```
 
