@@ -12,7 +12,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct string_t {
+  uint8_t _private[0];
+} string_t;
 
+typedef struct storage_t {
+  uint8_t _private[0];
+} storage_t;
 
 typedef struct payload_handler_t {
   uint8_t _private[0];
@@ -21,14 +27,6 @@ typedef struct payload_handler_t {
 typedef struct payload_vec_handler_t {
   uint8_t _private[0];
 } payload_vec_handler_t;
-
-typedef struct storage_t {
-  uint8_t _private[0];
-} storage_t;
-
-typedef struct string_t {
-  uint8_t _private[0];
-} string_t;
 
 typedef struct payload_t {
   int64_t id;
@@ -50,50 +48,48 @@ typedef struct closure_payload_vec_t {
   void (*drop)(void*);
 } closure_payload_vec_t;
 
-
-
 void perftest_free(void *p);
+
+void string_drop(struct string_t *this_);
+
+void storage_drop(struct storage_t *this_);
 
 void payload_handler_drop(struct payload_handler_t *this_);
 
 void payload_vec_handler_drop(struct payload_vec_handler_t *this_);
 
-void storage_drop(struct storage_t *this_);
-
-void string_drop(struct string_t *this_);
-
 void payload_drop(struct payload_t *this_);
 
-struct payload_handler_t *payload_handler_new(struct closure_payload_t f);
-
-struct payload_vec_handler_t *payload_vec_handler_new(struct closure_payload_vec_t f);
-
-void storage_callback(const struct storage_t *s, const struct payload_handler_t *handler);
-
-void storage_callback_vec(const struct storage_t *s, const struct payload_vec_handler_t *handler);
+struct storage_t *storage_new(void);
 
 bool storage_get(const struct storage_t *s, struct payload_t *out);
 
-bool storage_get_into_init(const struct storage_t *s, struct payload_t *payload);
-
-bool storage_get_into_uninit(const struct storage_t *s, struct payload_t *payload);
-
-bool storage_get_vec(const struct storage_t *s, struct payload_t **out, uintptr_t *out_len);
-
-struct storage_t *storage_new(void);
+void storage_put_by_take(struct storage_t *s, struct payload_t *payload);
 
 void storage_put_by_read(struct storage_t *s, const struct payload_t *payload);
 
 void storage_put_by_read_and_update(struct storage_t *s, struct payload_t *payload);
 
-void storage_put_by_take(struct storage_t *s, struct payload_t *payload);
+bool storage_get_into_init(const struct storage_t *s, struct payload_t *payload);
+
+bool storage_get_into_uninit(const struct storage_t *s, struct payload_t *payload);
+
+struct payload_handler_t *payload_handler_new(struct closure_payload_t f);
+
+void storage_callback(const struct storage_t *s, const struct payload_handler_t *handler);
+
+struct string_t *string_new(const char *s);
+
+uintptr_t string_len(const struct string_t *s);
 
 void storage_put_slice(struct storage_t *s,
                        const struct payload_t *payloads,
                        uintptr_t payloads_len);
 
-uintptr_t string_len(const struct string_t *s);
+bool storage_get_vec(const struct storage_t *s, struct payload_t **out, uintptr_t *out_len);
 
-struct string_t *string_new(const char *s);
+struct payload_vec_handler_t *payload_vec_handler_new(struct closure_payload_vec_t f);
+
+void storage_callback_vec(const struct storage_t *s, const struct payload_vec_handler_t *handler);
 
 #endif  /* PERFTEST_H */

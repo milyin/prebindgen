@@ -28,12 +28,6 @@ typedef struct calculator_t {
   uint8_t _private[0];
 } calculator_t;
 
-typedef struct caption_t {
-  uint64_t id;
-  char *text;
-  bool emphatic;
-} caption_t;
-
 typedef enum shape_t_Tag {
   Empty,
   Circle,
@@ -61,6 +55,12 @@ typedef struct shape_t {
     Labeled_Body labeled;
   };
 } shape_t;
+
+typedef struct caption_t {
+  uint64_t id;
+  char *text;
+  bool emphatic;
+} caption_t;
 
 typedef struct drawing_t {
   uint64_t id;
@@ -93,17 +93,17 @@ typedef struct note_t {
   };
 } note_t;
 
-typedef struct closure_value_t {
-  void *context;
-  void (*call)(double, void*);
-  void (*drop)(void*);
-} closure_value_t;
-
 typedef struct foo_t {
   uint64_t id;
   uint64_t x86_64_field;
   uint64_t unstable_field;
 } foo_t;
+
+typedef struct closure_value_t {
+  void *context;
+  void (*call)(double, void*);
+  void (*drop)(void*);
+} closure_value_t;
 
 extern void *malloc(uintptr_t size);
 
@@ -113,11 +113,13 @@ void example_free(void *p);
 
 void calculator_drop(struct calculator_t *this_);
 
-void note_drop(struct note_t *this_);
-
 void shape_drop(struct shape_t *this_);
 
-bool calculator_absorb(struct calculator_t *a, const struct calculator_t *b, double *out, char **e);
+void note_drop(struct note_t *this_);
+
+struct calculator_t *calculator_new(void);
+
+struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 bool calculator_apply(struct calculator_t *c,
                       enum operation_t op,
@@ -125,68 +127,66 @@ bool calculator_apply(struct calculator_t *c,
                       double *out,
                       char **e);
 
-void calculator_for_each(const struct calculator_t *c, struct closure_value_t f);
-
-uint64_t calculator_get_count(const struct calculator_t *c);
-
-double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
-
-double calculator_get_value(const struct calculator_t *c);
-
-bool calculator_is(const struct calculator_t *c, double value);
-
 struct calculator_t *calculator_merge(struct calculator_t *a, struct calculator_t *b, char **e);
 
-struct calculator_t *calculator_new(void);
-
-struct calculator_t *calculator_new_clone(const struct calculator_t *c);
-
-struct calculator_t *calculator_new_from_str(const char *s, char **e);
-
-void calculator_reset(struct calculator_t *c);
-
-char *calculator_to_string(const struct calculator_t *c);
-
-struct caption_t caption_new(uint64_t id, const char *text, bool emphatic);
-
-struct shape_t drawing_get_shape(struct drawing_t d);
-
-struct drawing_t drawing_new(uint64_t id, struct shape_t shape);
-
-uint64_t foo_get_id(struct foo_t f);
+bool calculator_absorb(struct calculator_t *a, const struct calculator_t *b, double *out, char **e);
 
 struct foo_t foo_new(uint64_t id);
 
+uint64_t foo_get_id(struct foo_t f);
+
 enum inside_foo_t inside_foo_default(void);
 
-int32_t inside_foo_value(enum inside_foo_t x);
+struct shape_t shape_new_empty(void);
 
-bool note_emphatic(struct note_t n);
+struct shape_t shape_new_circle(double radius);
+
+struct shape_t shape_new_rect(double width, double height);
+
+bool shape_try_area(struct shape_t s, double *out, char **e);
+
+struct note_t note_new_silent(void);
 
 struct note_t note_new_after(uint64_t millis);
 
 struct note_t note_new_flagged(bool flag);
 
-struct note_t note_new_silent(void);
+void calculator_reset(struct calculator_t *c);
 
-struct note_t note_new_sketched(uint64_t id, const char *label);
-
-struct note_t note_new_titled(uint64_t id, const char *text, bool emphatic);
-
-uint64_t note_value(struct note_t n);
+int32_t inside_foo_value(enum inside_foo_t x);
 
 double shape_area(struct shape_t s);
 
 char *shape_get_label(struct shape_t s);
 
-struct shape_t shape_new_circle(double radius);
+struct drawing_t drawing_new(uint64_t id, struct shape_t shape);
 
-struct shape_t shape_new_empty(void);
+struct shape_t drawing_get_shape(struct drawing_t d);
+
+uint64_t note_value(struct note_t n);
+
+bool note_emphatic(struct note_t n);
+
+struct note_t note_new_titled(uint64_t id, const char *text, bool emphatic);
+
+struct note_t note_new_sketched(uint64_t id, const char *label);
+
+struct caption_t caption_new(uint64_t id, const char *text, bool emphatic);
+
+struct calculator_t *calculator_new_clone(const struct calculator_t *c);
+
+double calculator_get_value(const struct calculator_t *c);
+
+uint64_t calculator_get_count(const struct calculator_t *c);
+
+bool calculator_is(const struct calculator_t *c, double value);
+
+char *calculator_to_string(const struct calculator_t *c);
+
+double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
+
+void calculator_for_each(const struct calculator_t *c, struct closure_value_t f);
 
 struct shape_t shape_new_labeled(const char *label, enum operation_t op);
-
-struct shape_t shape_new_rect(double width, double height);
-
-bool shape_try_area(struct shape_t s, double *out, char **e);
 
 #endif  /* EXAMPLE_FLAT_H */
