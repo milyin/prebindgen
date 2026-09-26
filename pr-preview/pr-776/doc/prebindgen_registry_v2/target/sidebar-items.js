@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Direction","FailureCategory","Fed","PlanningError","Relation","Terminal"],"fn":["mirrored_enum","mirrored_i32_enum"],"struct":["Artifact","Crossing","EnumArm","OperationFeed","Part","StructRelation","Unsupported","WireTypeFeed","Written"],"trait":["Target"]};

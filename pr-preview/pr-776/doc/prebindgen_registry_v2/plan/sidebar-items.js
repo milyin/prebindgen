@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["ParamRole","Slot"],"fn":["generate"],"struct":["Applied","FunctionPlan","NodeId","PrimitiveId","Retained","ValuePlan","WrapperParam"]};
