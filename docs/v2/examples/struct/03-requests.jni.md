@@ -31,7 +31,7 @@ JVM method descriptor: empty parentheses mean no arguments, and `J` means a
 64-bit `long`. It describes the getter the generated JNI code will invoke.
 
 ```text
-recorded in the JniTarget, under `type:Stamp`:
+recorded in the binding by the JNI frontend, under `type:Stamp`:
     DataClass { class: "example.Stamp" }
 
 derived during planning:

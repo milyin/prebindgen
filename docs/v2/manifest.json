@@ -78,16 +78,18 @@
       "dir": "typedef",
       "title": "Type alias declaring an opaque handle",
       "fixture": "Ledger"
+    },
+    {
+      "id": "fn_callback",
+      "dir": "fn_callback",
+      "title": "Function taking a callback",
+      "fixture": "stamp_each"
     }
   ],
   "deferred_examples": [
     {
       "id": "fn_fallible",
       "title": "Function returning Result"
-    },
-    {
-      "id": "fn_callback",
-      "title": "Function taking a callback"
     },
     {
       "id": "fn_borrowed_param",
@@ -270,6 +272,61 @@
     },
     {
       "example": "typedef",
+      "stage": "08-emit",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "fn_callback",
+      "stage": "01-source",
+      "languages": []
+    },
+    {
+      "example": "fn_callback",
+      "stage": "02-flat",
+      "languages": []
+    },
+    {
+      "example": "fn_callback",
+      "stage": "03-requests",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "fn_callback",
+      "stage": "04-select",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "fn_callback",
+      "stage": "05-represent",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "fn_callback",
+      "stage": "06-boundary",
+      "languages": [
+        "c",
+        "jni"
+      ]
+    },
+    {
+      "example": "fn_callback",
+      "stage": "07-retain",
+      "languages": []
+    },
+    {
+      "example": "fn_callback",
       "stage": "08-emit",
       "languages": [
         "c",

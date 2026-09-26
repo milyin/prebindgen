@@ -4,9 +4,9 @@
 //! operations move it, what symbol a wrapper exports — is stated as data by
 //! [`super`] when the binding is built, and the registry plans from that alone.
 //! What is left here is writing: a `repr(C)` mirror of a struct, the
-//! incomplete type a handle points to, the enum C sees for a Rust one. Every C
-//! operation is a standard one the registry writes itself, so this target has
-//! none of its own.
+//! incomplete type a handle points to, the enum C sees for a Rust one, the
+//! closure struct a callback arrives in — and the one operation of its own,
+//! calling through that closure.
 
 use prebindgen_registry_v2::{mirrored_i32_enum, CarrierFeed, OperationFeed, Target, Written};
 use quote::{format_ident, quote};
@@ -23,16 +23,20 @@ pub enum CClass {
     Aggregate,
     /// A C enum, or the storage one arrives in.
     Enum,
+    /// A closure struct: a context, a function to call with it, and one to
+    /// drop it.
+    Closure,
 }
 
 impl CClass {
     /// Every class: what a wrapper parameter or return may be.
-    pub(crate) fn all() -> [CClass; 4] {
+    pub(crate) fn all() -> [CClass; 5] {
         [
             CClass::I64,
             CClass::Pointer,
             CClass::Aggregate,
             CClass::Enum,
+            CClass::Closure,
         ]
     }
 }
@@ -52,15 +56,22 @@ pub enum CCarrier {
     /// The storage a C enum arrives in — `MaybeUninit` of it, since C lets an
     /// enum variable hold any `int`. Declared by the enum it holds.
     EnumBits,
+    /// The closure struct a callback arrives in, its `call` taking the
+    /// callback's arguments' carriers.
+    Closure { c_name: String },
 }
 
-/// C contributes no operation of its own: reading an aggregate member, and
-/// going between a source enum and the C one declared for it, are standard
+/// The one operation C writes itself. Reading an aggregate member, and going
+/// between a source enum and the C one declared for it, are standard
 /// operations the registry writes — it is the registry that can spell a source
-/// path. This type has no values, which is that fact stated so the compiler
-/// keeps it true.
+/// path.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum COp {}
+pub enum COp {
+    /// Call a closure struct's `call` with the arguments and its context. A
+    /// closure with no `call` is one C asked to be called and not told about,
+    /// so nothing happens.
+    Call,
+}
 
 /// The C target: its writers.
 #[derive(Default)]
@@ -76,13 +87,77 @@ impl Target for CTarget {
     /// is for a foreign writer alone.
     type OutputMeta = ();
 
-    fn write_operation(&self, op: &COp, _: &OperationFeed<'_, Self>) -> Written {
-        match *op {}
+    fn write_operation(&self, op: &COp, feed: &OperationFeed<'_, Self>) -> Written {
+        match op {
+            COp::Call => {
+                let (closure, _) = feed
+                    .value
+                    .as_ref()
+                    .expect("a call is applied to the closure struct");
+                let args = feed.args.iter().map(|(name, _)| name);
+                // Borrowed whole before its fields are read: a closure
+                // capturing `.context` alone would hold a raw pointer, which
+                // is neither `Send` nor `Sync`, where the struct is both.
+                Written::new(quote! {
+                    {
+                        let closure = &#closure;
+                        if let ::core::option::Option::Some(call) = closure.call {
+                            unsafe { call(#(#args,)* closure.context) }
+                        }
+                    }
+                })
+            }
+        }
     }
 
     fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
         match &feed.carrier.meta {
             CCarrier::Builtin | CCarrier::EnumBits => Vec::new(),
+            // What a C caller fills in to be called back: its own context, the
+            // function to call with each argument's carrier and that context,
+            // and the function that frees the context once Rust drops the
+            // closure. Rust may call and drop it from any thread, which is the
+            // contract a C caller signs by passing one — hence the two unsafe
+            // impls, which the closure Rust builds needs.
+            CCarrier::Closure { c_name } => {
+                let ident = format_ident!("{c_name}");
+                let args = feed.members.iter().map(|(_, carrier)| &carrier.rust);
+                vec![
+                    // What each member means is said on the member, which is
+                    // where `cbindgen` puts it in the header: a C caller never
+                    // reads this Rust.
+                    quote! {
+                        #[repr(C)]
+                        #[allow(non_camel_case_types)]
+                        pub struct #ident {
+                            /// The caller's own state, handed to `call` and to `drop`.
+                            pub context: *mut ::core::ffi::c_void,
+                            /// Called on every call of the callback, with its arguments
+                            /// and `context`, from whichever thread Rust calls it on. When
+                            /// null, a call does nothing.
+                            pub call: ::core::option::Option<
+                                unsafe extern "C" fn(#(#args,)* *mut ::core::ffi::c_void),
+                            >,
+                            /// Called once with `context` when Rust lets go of the
+                            /// callback. When null, nothing frees `context`.
+                            pub drop: ::core::option::Option<
+                                unsafe extern "C" fn(*mut ::core::ffi::c_void),
+                            >,
+                        }
+                    },
+                    quote!(unsafe impl ::core::marker::Send for #ident {}),
+                    quote!(unsafe impl ::core::marker::Sync for #ident {}),
+                    quote! {
+                        impl ::core::ops::Drop for #ident {
+                            fn drop(&mut self) {
+                                if let ::core::option::Option::Some(drop) = self.drop {
+                                    unsafe { drop(self.context) }
+                                }
+                            }
+                        }
+                    },
+                ]
+            }
             // A struct whose only member is a zero-length array is what
             // `cbindgen` renders as an incomplete type: a C caller can hold a
             // pointer to one and nothing else. The same declaration v1 emits,

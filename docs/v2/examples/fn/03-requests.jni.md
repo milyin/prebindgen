@@ -34,7 +34,7 @@ the long exported `Java_...` symbol. This summary records both names because
 the public API and the JVM entry point have different naming roles:
 
 ```text
-recorded in the JniTarget, under `fn:stamp_sum` (JNI function):
+recorded in the binding by the JNI frontend, under `fn:stamp_sum` (JNI function):
     kotlin:     example.stampSum                    // the function a caller uses
     external:   example.JNINative.stampSum          // the harness method it delegates to
     symbol:     "Java_example_JNINative_stampSum"   // derived from that placement

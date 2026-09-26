@@ -270,7 +270,7 @@ in terms of itself, directly or through a ring of types. The acyclicity the plan
 graph enjoys is [enforced during the walk](#refusal-and-cycles), by refusing a
 conversion that is already open, and is not a property of the source.
 
-As built, the engine has the two relations its element paths need:
+As built, the engine has the three relations its element paths need:
 
 ```rust
 /// How the registry constructs or reads a Rust value.
@@ -280,6 +280,8 @@ pub enum Relation {
     Atomic,
     /// The struct's fields. `Stamp` is `secs` and `nanos`.
     Struct(StructRelation),
+    /// A callback's arguments, in order. `impl Fn(i64)` is one `i64`.
+    Callback(Vec<Part>),
 }
 
 pub struct StructRelation {
@@ -289,7 +291,8 @@ pub struct StructRelation {
     pub parts: Vec<Part>,
 }
 
-/// One field of a struct relation, or one argument of a constructor relation.
+/// One field of a struct relation, or one argument of a callback or a
+/// constructor relation.
 pub struct Part {
     pub name: Option<String>,  // `secs`; `None` for a positional field
     pub index: usize,
@@ -322,6 +325,13 @@ once per visit is what makes a `RelationId` stable: a fresh id on every visit
 would make every parallel edge unique, and nothing would ever share a node.
 `RelationId` is private to the registry. No target sees one.
 
+A callback's relation is implicit too: an `impl Fn(A, B)` is related to its
+arguments, positional parts with no names. It is the one relation whose parts
+cross the other way from the value: Rust receives the callable and hands the
+arguments to it, so a callback entering Rust plans each argument leaving Rust.
+The direction follows from the relation, not from anything the binding says per
+argument.
+
 The user does not register a relation for each scalar or field-based struct.
 A **struct relation** is implicit: for any struct the source model describes,
 the registry registers the relation built from its fields, so `Stamp.fields`
@@ -340,7 +350,9 @@ pub enum Via {
 }
 ```
 
-A `Terminal` representation is the atomic relation of any type. A `Product`
+A `Terminal` representation is the atomic relation of any type. A `Callback`
+representation is the callback relation of an `impl Fn(..)`, and is refused
+as `unsupported.type.not_a_callback` on any other type. A `Product`
 through `Via::Fields` is the struct relation of a type the model describes as
 a struct. `Fields` on anything else — an extern, a type the binding declared
 although the source never exported it — has no relation to resolve to, and
@@ -510,7 +522,7 @@ method; `ConstructorRelation::new(function)` belongs to the registry library.
 
 ## What is not settled here
 
-The atomic and struct relations are implemented, and
+The atomic, struct and callback relations are implemented, and
 [the first increment](../implementation.md#the-first-increment-as-built)
 records what building them settled. Everything else this chapter names — the
 [source views](../extensions.md#source-views) the registry would read through,
@@ -524,6 +536,7 @@ and the conversion rules that would pin one, and a target's
 - [Function taking an owned struct][fn_select] · [C][fn_select_c] · [Kotlin/JNI][fn_select_jni]
 - [Struct with scalar fields][struct_select] · [C][struct_select_c] · [Kotlin/JNI][struct_select_jni]
 - [Type alias declaring an opaque handle][typedef_select] · [C][typedef_select_c] · [Kotlin/JNI][typedef_select_jni]
+- [Function taking a callback][fn_callback_select] · [C][fn_callback_select_c] · [Kotlin/JNI][fn_callback_select_jni]
 
 [fn_select]: ../examples/fn/04-select.md
 [fn_select_c]: ../examples/fn/04-select.c.md
@@ -534,3 +547,6 @@ and the conversion rules that would pin one, and a target's
 [typedef_select]: ../examples/typedef/04-select.md
 [typedef_select_c]: ../examples/typedef/04-select.c.md
 [typedef_select_jni]: ../examples/typedef/04-select.jni.md
+[fn_callback_select]: ../examples/fn_callback/04-select.md
+[fn_callback_select_c]: ../examples/fn_callback/04-select.c.md
+[fn_callback_select_jni]: ../examples/fn_callback/04-select.jni.md

@@ -70,9 +70,10 @@ pub enum Declaration {
     /// A declared conversion between a type and its wire form, defined by the
     /// binding.
     Conversion(TypeKey),
-    /// A callback signature the binding exports as a foreign callable. No
-    /// entity backs one, so the signature is the name it goes by.
-    Callback(String),
+    /// A callback signature the binding exports as a foreign callable: the
+    /// type of the `impl Fn(..)` parameters that take one. No entity backs
+    /// it, so the signature is the name it goes by.
+    Callback(TypeKey),
     /// A foreign constant the binding computes rather than reads —
     /// `constant!(X).expr(..)`. No entity holds its value.
     ComputedConst(String),
@@ -150,7 +151,8 @@ impl Declaration {
         match self {
             Declaration::Function(ident) | Declaration::Const(ident) => ident.to_string(),
             Declaration::Type(key) | Declaration::Conversion(key) => key.as_str().to_string(),
-            Declaration::Callback(name) | Declaration::ComputedConst(name) => name.clone(),
+            Declaration::Callback(key) => prebindgen_flat::close_up(key.as_str()),
+            Declaration::ComputedConst(name) => name.clone(),
         }
     }
 }

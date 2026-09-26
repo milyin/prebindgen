@@ -101,6 +101,26 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
                 unimplemented!()
             }
         ),
+        syn::parse_quote!(
+            pub fn stamp_each(stamp: Stamp, f: impl Fn(i64) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        ),
+        syn::parse_quote!(
+            pub fn token_watch(f: impl Fn(Token, i64) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        ),
+        syn::parse_quote!(
+            pub fn stamp_emit(f: impl Fn(Stamp) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        ),
+        syn::parse_quote!(
+            pub fn each_new() -> impl Fn(i64) + Send + Sync + 'static {
+                unimplemented!()
+            }
+        ),
     ]
     .into_iter()
     .map(|item| (item, location.clone()))
@@ -114,6 +134,7 @@ enum Class {
     Scalar,
     Aggregate,
     Pointer,
+    Closure,
 }
 
 /// Whether a carrier needs a declaration of its own: only a mirrored struct
@@ -137,6 +158,12 @@ enum Op {
     /// rather than the registry's identity: the same `i64` on the wire, a
     /// different conversion.
     Rebase,
+    /// What a callback keeps from its carrier.
+    Capture,
+    /// One call of the foreign callable, which cannot fail.
+    Invoke,
+    /// The same, failing at runtime.
+    InvokeFallibly,
 }
 
 /// The miniature target: a writer for each of its operations, and a mirror
@@ -159,6 +186,14 @@ impl Target for Mini {
             Op::Report => quote::quote!(report(#error)),
             Op::ReportMessage => quote::quote!(report_message(#error)),
             Op::Rebase => quote::quote!(rebase(#value)),
+            Op::Capture => {
+                let carried = feed.args.iter().map(|(_, carrier)| &carrier.rust);
+                quote::quote!(capture::<(#(#carried,)*)>(#value))
+            }
+            Op::Invoke | Op::InvokeFallibly => {
+                let args = feed.args.iter().map(|(name, _)| name);
+                quote::quote!(invoke(&#value, #(#args),*))
+            }
         })
     }
 
@@ -230,9 +265,33 @@ fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
         },
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::of([Class::Scalar, Class::Aggregate, Class::Pointer]),
+        params: Accepts::of([
+            Class::Scalar,
+            Class::Aggregate,
+            Class::Pointer,
+            Class::Closure,
+        ]),
         ret: Accepts::of([Class::Scalar, Class::Aggregate, Class::Pointer]),
     }
+}
+
+/// How a test's callback calls through.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Call {
+    /// An invocation that cannot fail.
+    Infallible,
+    /// One that can, with a route logging the failure.
+    Routed,
+    /// One that can, with no route for it.
+    Unrouted,
+    /// An invocation asking for a runtime context, which nothing inside a
+    /// call supplies.
+    NeedsContext,
+}
+
+/// The callback signature `impl Fn(<args>) + Send + Sync + 'static`.
+fn callback_key(args: &str) -> prebindgen_flat::TypeKey {
+    key(&format!("impl Fn({args}) + Send + Sync + 'static"))
 }
 
 /// A representation, by what a test needs of it.
@@ -395,10 +454,67 @@ impl Fixture {
         self.binding.representation(representation)
     }
 
+    /// A callback representation: a closure carrier holding scalars and
+    /// pointers, a capture, and an invocation that calls as `call` says.
+    fn callback_repr(&mut self, call: Call) -> ReprId {
+        let carrier = self.binding.carrier(WireType {
+            rust: syn::parse_quote!(Closure),
+            class: Class::Closure,
+            members: Some(Accepts::of([Class::Scalar, Class::Pointer])),
+            meta: Meta::Plain,
+        });
+        let invoke = match call {
+            Call::Infallible => Operation::target(Op::Invoke),
+            Call::NeedsContext => Operation::target(Op::Invoke).context("mini.log"),
+            Call::Routed | Call::Unrouted => Operation::target(Op::InvokeFallibly)
+                .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
+        };
+        let routes = match call {
+            Call::Routed => vec![FailureRoute {
+                category: FailureCategory::Runtime,
+                report: Some(Report {
+                    error: syn::parse_quote!(Error),
+                    operation: Operation::target(Op::Report),
+                }),
+                on_report_failure: Terminal::Abort,
+                terminate: Terminal::Return(syn::parse_quote!(())),
+            }],
+            _ => Vec::new(),
+        };
+        self.binding.representation(Representation::Callback {
+            carrier,
+            capture: Operation::target(Op::Capture),
+            invoke,
+            routes,
+        })
+    }
+
+    /// A declared callback signature, as the C frontend's `callback!` states
+    /// one: the rule for every value of it, and the output exposing it.
+    fn declare_callback(&mut self, args: &str, call: Call) -> ReprId {
+        let repr = self.callback_repr(call);
+        let key = callback_key(args);
+        self.rules.push((Scope::Type(key.clone()), repr));
+        self.outputs.push((
+            Declaration::Callback(key),
+            OutputForm::Type {
+                representation: repr,
+                release: None,
+                meta: (),
+            },
+        ));
+        repr
+    }
+
     /// Every value of this type crosses as `repr` — without asking for the
     /// type itself to be declared.
     fn crossing(&mut self, name: &str, repr: ReprId) -> &mut Self {
-        self.rules.push((Scope::Type(key(name)), repr));
+        self.crossing_key(key(name), repr)
+    }
+
+    /// The same, for a type named by its key.
+    fn crossing_key(&mut self, key: prebindgen_flat::TypeKey, repr: ReprId) -> &mut Self {
+        self.rules.push((Scope::Type(key), repr));
         self
     }
 
@@ -1984,4 +2100,288 @@ fn a_handle_without_a_release_skips_the_type_and_what_takes_it() {
     assert_eq!(skip.capability.as_str(), "unsupported.type.no_release");
     assert_eq!(skip.dependency_path, ["fn:token_use", "type:Token"]);
     assert!(generation.rust().is_empty());
+}
+
+/// A callback enters Rust as a closure the registry builds: the carrier is
+/// captured once, and each call converts its arguments out of Rust and hands
+/// them to the invocation.
+#[test]
+fn a_callback_enters_rust_as_a_closure_that_calls_through() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_callback("i64", Call::Infallible);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
+    let rust = generation.rust();
+    let compact: String = rust.split_whitespace().collect();
+    for expected in [
+        "pubextern\"C\"fnstamp_each(arg0:Stamp,arg1:Closure)",
+        "letv3=capture::<(i64,)>(arg1);",
+        "letv5=move|v4:i64|{invoke(&v3,v4);};",
+        "source::stamp_each(v2,v5);",
+    ] {
+        assert!(
+            compact.contains(expected),
+            "missing `{expected}` in:\n{rust}"
+        );
+    }
+}
+
+/// An argument crosses the other way from its callback, and takes the rule
+/// its own type has: a handle is handed out, inside each call.
+#[test]
+fn a_callback_argument_leaves_rust_inside_each_call() {
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    fixture.declare_callback("Token, i64", Call::Infallible);
+    fixture.declare_fn("token_watch", exported("token_watch", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
+    let rust = generation.rust();
+    let compact: String = rust.split_whitespace().collect();
+    assert!(compact.contains("capture::<(*mutRaw,i64)>(arg0)"), "{rust}");
+    assert!(
+        compact.contains(
+            "move|v1:source::Token,v2:i64|{letv3=Box::into_raw(Box::new(v1))as*mutRaw;invoke(&v0,v3,v2);}"
+        ),
+        "{rust}"
+    );
+}
+
+/// A failure inside a call takes the callback's own route, not the wrapper's:
+/// the closure has no caller to hand it to, and the wrapper routes nothing a
+/// call raises.
+#[test]
+fn a_failure_inside_a_call_takes_the_callbacks_route() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_callback("i64", Call::Routed);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    assert_eq!(emitted(&generation), 3, "{:?}", generation.skipped());
+    let compact: String = generation.rust().split_whitespace().collect();
+    assert!(
+        compact.contains("ifletErr(error)=invoke(&v3,v4){report(error);return();}"),
+        "{}",
+        generation.rust()
+    );
+}
+
+/// A call that can fail with no route of the callback's for it is refused
+/// where the callback is, and takes down what requires it.
+#[test]
+fn an_unrouted_failure_inside_a_call_refuses_the_callback() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_callback("i64", Call::Unrouted);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::Reported));
+    let generation = fixture.generate(model()).expect("plans");
+    for id in ["callback:impl Fn(i64)+Send+Sync+'static", "fn:stamp_each"] {
+        match outcome(&generation, id) {
+            Outcome::Skipped(skip) => assert_eq!(
+                skip.capability.as_str(),
+                "unsupported.callback.unrouted_failure",
+                "{id}: {skip:?}"
+            ),
+            other => panic!("{id} is skipped, and is {other:?}"),
+        }
+    }
+}
+
+/// An argument that cannot leave Rust refuses the callback at that argument,
+/// and the function taking it goes down with it.
+#[test]
+fn an_argument_that_cannot_leave_rust_refuses_the_callback() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_callback("Stamp", Call::Infallible);
+    fixture.declare_fn("stamp_emit", exported("stamp_emit", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:stamp_emit") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.struct.out_of_rust");
+            assert_eq!(
+                skip.dependency_path.last().map(String::as_str),
+                Some("arg 0")
+            );
+        }
+        other => panic!("stamp_emit is skipped, and is {other:?}"),
+    }
+}
+
+/// A function taking a callback no output declares is skipped, as one taking
+/// an undeclared type is: the foreign signature would name a callable type
+/// nothing emits.
+#[test]
+fn a_callback_no_output_declares_is_required_and_missing() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let repr = fixture.callback_repr(Call::Infallible);
+    fixture.crossing_key(callback_key("i64"), repr);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:stamp_each") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(
+                skip.capability.as_str(),
+                "unsupported.requirement.unrequested"
+            );
+            assert!(skip.explanation.contains("callback"), "{skip:?}");
+        }
+        other => panic!("stamp_each is skipped, and is {other:?}"),
+    }
+}
+
+/// A rule can address one argument of one callback parameter, below the
+/// parameter that takes it.
+#[test]
+fn a_rule_can_address_a_callback_argument() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let repr = fixture.callback_repr(Call::Infallible);
+    let key = callback_key("i64");
+    fixture.crossing_key(key.clone(), repr);
+    fixture.declare(
+        Declaration::Callback(key),
+        OutputForm::Type {
+            representation: repr,
+            release: None,
+            meta: (),
+        },
+    );
+    let through = fixture.repr(Shape::ScalarThrough);
+    fixture.at("stamp_each", vec![param("f"), Step::Arg(0)], through);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    let rust = generation.rust();
+    assert!(rust.contains("rebase("), "{rust}");
+
+    let mut wrong = self::fixture();
+    wrong.declare_type("Stamp", Shape::Struct("Stamp"));
+    let through = wrong.repr(Shape::ScalarThrough);
+    wrong.at("stamp_each", vec![param("stamp"), Step::Arg(0)], through);
+    wrong.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let error = wrong
+        .generate(model())
+        .expect_err("a struct takes no arguments");
+    assert!(error.to_string().contains("takes no arguments"), "{error}");
+}
+
+/// A callback's representation prints with its capture, invocation and
+/// routes.
+#[test]
+fn a_callback_representation_prints_what_a_call_does() {
+    let mut fixture = fixture();
+    fixture.declare_callback("i64", Call::Routed);
+    let printed = fixture.build(&model()).to_string();
+    let expected = "callback  c1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
+                    fails runtime Error  routes: [runtime: report Error by Target(Report), if \
+                    that fails abort, then return ()]";
+    assert!(
+        printed.contains(expected),
+        "missing `{expected}` in:\n{printed}"
+    );
+    assert!(
+        printed.contains("output   callback:impl Fn(i64)+Send+Sync+'static  type r1  ()"),
+        "{printed}"
+    );
+}
+
+/// Nothing inside a call supplies a runtime context — the wrapper that had one
+/// may have returned — so a call that needs one refuses the callback.
+#[test]
+fn a_call_needing_a_runtime_context_refuses_the_callback() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_callback("i64", Call::NeedsContext);
+    fixture.declare_fn("stamp_each", exported("stamp_each", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:stamp_each") {
+        Outcome::Skipped(skip) => assert_eq!(
+            skip.capability.as_str(),
+            "unsupported.callback.missing_context"
+        ),
+        other => panic!("stamp_each is skipped, and is {other:?}"),
+    }
+}
+
+/// A callable never leaves Rust: a function returning one is refused where
+/// its result is.
+#[test]
+fn a_callback_leaving_rust_is_refused() {
+    let mut fixture = fixture();
+    fixture.declare_callback("i64", Call::Infallible);
+    fixture.declare_fn("each_new", exported("each_new", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:each_new") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.callback.out_of_rust");
+            assert_eq!(
+                skip.dependency_path.last().map(String::as_str),
+                Some("return")
+            );
+        }
+        other => panic!("each_new is skipped, and is {other:?}"),
+    }
+}
+
+/// A callback representation on a value that is not an `impl Fn(..)` has no
+/// arguments to plan, and is refused as not a callback.
+#[test]
+fn a_callback_representation_on_another_type_is_refused() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    let callback = fixture.callback_repr(Call::Infallible);
+    fixture.at("stamp_sum", vec![param("stamp")], callback);
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:stamp_sum") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.type.not_a_callback")
+        }
+        other => panic!("stamp_sum is skipped, and is {other:?}"),
+    }
+}
+
+/// An argument of a wire class the callback's carrier does not hold refuses
+/// the callback at that argument.
+#[test]
+fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    let scalars_only = fixture.binding.carrier(WireType {
+        rust: syn::parse_quote!(ScalarClosure),
+        class: Class::Closure,
+        members: Some(Accepts::of([Class::Scalar])),
+        meta: Meta::Plain,
+    });
+    let repr = fixture.binding.representation(Representation::Callback {
+        carrier: scalars_only,
+        capture: Operation::target(Op::Capture),
+        invoke: Operation::target(Op::Invoke),
+        routes: Vec::new(),
+    });
+    let key = callback_key("Token, i64");
+    fixture.crossing_key(key.clone(), repr);
+    fixture.declare(
+        Declaration::Callback(key),
+        OutputForm::Type {
+            representation: repr,
+            release: None,
+            meta: (),
+        },
+    );
+    fixture.declare_fn("token_watch", exported("token_watch", Routes::None));
+    let generation = fixture.generate(model()).expect("plans");
+    match outcome(&generation, "fn:token_watch") {
+        Outcome::Skipped(skip) => {
+            assert_eq!(skip.capability.as_str(), "unsupported.mini.arg.pointer");
+            assert_eq!(
+                skip.dependency_path.last().map(String::as_str),
+                Some("arg 0")
+            );
+        }
+        other => panic!("token_watch is skipped, and is {other:?}"),
+    }
 }

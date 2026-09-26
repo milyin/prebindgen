@@ -483,7 +483,11 @@ def check_stage_page(page, manifest, stage_by_id, example_by_id, ids):
 
 def check_example_page(page, ids, order):
     example = page.meta["example"]
-    own = {link_id for link_id in ids if link_id.split("_")[0] == example}
+    # An element's pages are the ones in its own directory. Its id does not
+    # say which they are: `fn_callback_select` starts with `fn_` and is not
+    # the function path's.
+    directory = page.relative.rsplit("/", 1)[0] + "/"
+    own = {link_id for link_id, path in ids.items() if path.startswith(directory)}
     listed = ordered_ids(page.text, own)
     expected = [ids_by_path(ids)[path] for path in order[example]]
     expanded = []

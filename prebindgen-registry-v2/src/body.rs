@@ -2,13 +2,18 @@
 //!
 //! The chapters leave this vocabulary named but undefined (`ConversionBodyId`,
 //! `FunctionBodyId`); this is the concrete form the first increment settles on.
-//! Three instructions cover the scalar and owned-struct paths: apply a target
-//! operation, construct a source struct, call the source function. Every value
+//! Four instructions cover what it carries: apply an operation, construct a
+//! source struct, call the source function, and build the closure a callback
+//! enters Rust as. Every value
 //! is a [`ValueId`] — an identity, not a name. Names are allocated once, by the
 //! writer, from definition order, which is why two operations rendered into one
 //! wrapper cannot collide.
 
-use crate::plan::PrimitiveId;
+use std::collections::HashMap;
+
+use prebindgen_flat::flat::TypeRef;
+
+use crate::{binding::ReprId, plan::PrimitiveId};
 
 /// One runtime value inside one body. Not a variable name: the writer chooses
 /// those.
@@ -47,6 +52,18 @@ pub enum Instr {
         function: String,
         args: Vec<ValueId>,
         result: Option<ValueId>,
+    },
+    /// Build the closure a callback enters Rust as: `move |params| { instrs }`,
+    /// taking `captured` with it. A failure inside it takes a route of the
+    /// callback representation's own, since the closure has no caller to hand
+    /// one to.
+    Closure {
+        representation: ReprId,
+        captured: ValueId,
+        /// The arguments Rust calls it with, and their source types.
+        params: Vec<(ValueId, TypeRef)>,
+        instrs: Vec<Stmt>,
+        result: ValueId,
     },
 }
 
@@ -93,6 +110,13 @@ impl BodyBuilder {
 
     pub fn push(&mut self, instr: Instr) {
         self.instrs.push(Stmt::new(instr));
+    }
+
+    /// Take the instructions added since `from` out of this body, keeping
+    /// their value identities allocated: a closure's own instructions are
+    /// built here, then moved into the closure.
+    pub fn split_off(&mut self, from: usize) -> Vec<Stmt> {
+        self.instrs.split_off(from)
     }
 
     pub fn instrs(&self) -> &[Stmt] {
@@ -148,13 +172,33 @@ impl NodeBody {
     /// are met: an operand must already be mapped, and a result is allocated
     /// fresh in the destination body.
     pub fn inline(&self, carrier: ValueId, out: &mut BodyBuilder) -> ValueId {
-        let mut map = std::collections::HashMap::new();
+        let mut map = HashMap::new();
         map.insert(self.carrier, carrier);
-        let value = |map: &std::collections::HashMap<ValueId, ValueId>, id: ValueId| {
-            *map.get(&id)
-                .expect("a body uses no value before defining it")
-        };
-        for step in &self.instrs {
+        for step in remap(&self.instrs, &mut map, out) {
+            out.instrs.push(step);
+        }
+        value(&map, self.result)
+    }
+}
+
+fn value(map: &HashMap<ValueId, ValueId>, id: ValueId) -> ValueId {
+    *map.get(&id)
+        .expect("a body uses no value before defining it")
+}
+
+/// `stmts` with every value identity renamed into `out`'s: operands through
+/// `map`, results allocated fresh and added to it. A closure's instructions
+/// are renamed the same way, into the same body, since its names and the
+/// names around it share one scope.
+fn remap(stmts: &[Stmt], map: &mut HashMap<ValueId, ValueId>, out: &mut BodyBuilder) -> Vec<Stmt> {
+    let fresh = |map: &mut HashMap<ValueId, ValueId>, out: &mut BodyBuilder, id: ValueId| {
+        let fresh = out.fresh();
+        map.insert(id, fresh);
+        fresh
+    };
+    stmts
+        .iter()
+        .map(|step| {
             let instr = match &step.instr {
                 Instr::Apply {
                     primitive,
@@ -164,57 +208,60 @@ impl NodeBody {
                     let operands = operands
                         .iter()
                         .map(|operand| match operand {
-                            Operand::Value(id) => Operand::Value(value(&map, *id)),
+                            Operand::Value(id) => Operand::Value(value(map, *id)),
                             Operand::Context(name) => Operand::Context(name.clone()),
                         })
                         .collect();
-                    let result = result.map(|id| {
-                        let fresh = out.fresh();
-                        map.insert(id, fresh);
-                        fresh
-                    });
                     Instr::Apply {
                         primitive: *primitive,
                         operands,
-                        result,
+                        result: result.map(|id| fresh(map, out, id)),
                     }
                 }
                 Instr::Construct {
                     name,
                     parts,
                     result,
-                } => {
-                    let parts = parts.iter().map(|id| value(&map, *id)).collect();
-                    let fresh = out.fresh();
-                    map.insert(*result, fresh);
-                    Instr::Construct {
-                        name: name.clone(),
-                        parts,
-                        result: fresh,
-                    }
-                }
+                } => Instr::Construct {
+                    name: name.clone(),
+                    parts: parts.iter().map(|id| value(map, *id)).collect(),
+                    result: fresh(map, out, *result),
+                },
                 Instr::Call {
                     function,
                     args,
                     result,
+                } => Instr::Call {
+                    function: function.clone(),
+                    args: args.iter().map(|id| value(map, *id)).collect(),
+                    result: result.map(|id| fresh(map, out, id)),
+                },
+                Instr::Closure {
+                    representation,
+                    captured,
+                    params,
+                    instrs,
+                    result,
                 } => {
-                    let args = args.iter().map(|id| value(&map, *id)).collect();
-                    let result = result.map(|id| {
-                        let fresh = out.fresh();
-                        map.insert(id, fresh);
-                        fresh
-                    });
-                    Instr::Call {
-                        function: function.clone(),
-                        args,
-                        result,
+                    let captured = value(map, *captured);
+                    let params = params
+                        .iter()
+                        .map(|(id, ty)| (fresh(map, out, *id), ty.clone()))
+                        .collect();
+                    let instrs = remap(instrs, map, out);
+                    Instr::Closure {
+                        representation: *representation,
+                        captured,
+                        params,
+                        instrs,
+                        result: fresh(map, out, *result),
                     }
                 }
             };
-            let from = out.len();
-            out.push(instr);
-            out.condition(from, &step.conditions);
-        }
-        value(&map, self.result)
-    }
+            Stmt {
+                instr,
+                conditions: step.conditions.clone(),
+            }
+        })
+        .collect()
 }

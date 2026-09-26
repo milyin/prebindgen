@@ -140,6 +140,25 @@ pub enum Representation<Op> {
         /// One part out of the carrier, applied once per part.
         read: Operation<Op>,
     },
+    /// A foreign callable, into Rust as an `impl Fn(..)`: the registry builds
+    /// the closure, whose every call converts the arguments out of Rust and
+    /// hands them to `invoke`.
+    Callback {
+        /// What holds the callable on the foreign side: a C closure struct, a
+        /// JVM object. Its members are the arguments' carriers.
+        carrier: CarrierId,
+        /// Applied once to the carrier, where the callable enters Rust: what
+        /// every call will need, such as a reference the JVM keeps alive. Its
+        /// result is moved into the closure.
+        capture: Operation<Op>,
+        /// Applied on every call to what `capture` produced and the
+        /// arguments' carriers, in order. It produces nothing.
+        invoke: Operation<Op>,
+        /// What a call does when converting an argument or invoking fails:
+        /// the closure returns nothing, so no caller can take the failure.
+        /// Reporting inside a call has no runtime context to use.
+        routes: Vec<FailureRoute<Op>>,
+    },
     /// A representation the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
@@ -404,6 +423,9 @@ pub enum Step {
     /// A field of the struct the current value is read through: its name, or
     /// its position for a tuple field.
     Field(String),
+    /// An argument of the callback the current value is, by position: the
+    /// value Rust hands the foreign callable, out of Rust.
+    Arg(usize),
 }
 
 impl std::fmt::Display for Step {
@@ -412,6 +434,7 @@ impl std::fmt::Display for Step {
             Step::Param(name) => write!(f, "param {name}"),
             Step::Return => write!(f, "return"),
             Step::Field(name) => write!(f, "field {name}"),
+            Step::Arg(index) => write!(f, "arg {index}"),
         }
     }
 }
@@ -487,7 +510,9 @@ impl<T: Target> Binding<T> {
                 .chain(out_of_rust)
                 .map(|codec| codec.carrier)
                 .collect(),
-            Representation::Product { carrier, .. } => vec![*carrier],
+            Representation::Product { carrier, .. } | Representation::Callback { carrier, .. } => {
+                vec![*carrier]
+            }
             Representation::Unsupported(_) => Vec::new(),
         };
         for carrier in carriers {
@@ -635,6 +660,17 @@ impl<T: Target> std::fmt::Display for Binding<T> {
                 Representation::Product { via, carrier, read } => {
                     format!("product  {carrier}  {via:?}  read: {}", operation(read))
                 }
+                Representation::Callback {
+                    carrier,
+                    capture,
+                    invoke,
+                    routes,
+                } => format!(
+                    "callback  {carrier}  capture: {}  invoke: {}  routes: [{}]",
+                    operation(capture),
+                    operation(invoke),
+                    routes.iter().map(route).collect::<Vec<_>>().join("; ")
+                ),
                 Representation::Unsupported(reason) => {
                     format!("unsupported  {}: {}", reason.capability, reason.explanation)
                 }
@@ -748,22 +784,27 @@ fn write_form<Op: std::fmt::Debug, C: std::fmt::Debug>(
         "         {label}  params {:?}  ret {:?}",
         form.params.classes, form.ret.classes
     )?;
-    for route in &form.routes {
-        let report = match &route.report {
-            Some(report) => format!(
-                "report {} by {}, if that fails {}, then ",
-                tokens(&report.error),
-                operation(&report.operation),
-                terminal(&route.on_report_failure)
-            ),
-            None => String::new(),
-        };
-        writeln!(
-            f,
-            "         {label}  route {}: {report}{}",
-            route.category.as_str(),
-            terminal(&route.terminate)
-        )?;
+    for one in &form.routes {
+        writeln!(f, "         {label}  route {}", route(one))?;
     }
     Ok(())
+}
+
+/// A failure route on one line: its category, what reports it, and how it
+/// ends.
+fn route<Op: std::fmt::Debug>(route: &FailureRoute<Op>) -> String {
+    let report = match &route.report {
+        Some(report) => format!(
+            "report {} by {}, if that fails {}, then ",
+            tokens(&report.error),
+            operation(&report.operation),
+            terminal(&route.on_report_failure)
+        ),
+        None => String::new(),
+    };
+    format!(
+        "{}: {report}{}",
+        route.category.as_str(),
+        terminal(&route.terminate)
+    )
 }

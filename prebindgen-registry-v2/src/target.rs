@@ -52,6 +52,14 @@ pub enum Direction {
 }
 
 impl Direction {
+    /// The other way.
+    pub fn reversed(self) -> Self {
+        match self {
+            Direction::IntoRust => Direction::OutOfRust,
+            Direction::OutOfRust => Direction::IntoRust,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Direction::IntoRust => "into_rust",
@@ -172,6 +180,9 @@ pub enum Relation {
     Atomic,
     /// The struct's fields.
     Struct(StructRelation),
+    /// A callback's arguments, in order: unnamed parts, each crossing the
+    /// other way from the callback, since Rust hands them to the callable.
+    Callback(Vec<Part>),
 }
 
 impl Relation {
@@ -179,6 +190,7 @@ impl Relation {
         match self {
             Relation::Atomic => &[],
             Relation::Struct(strukt) => &strukt.parts,
+            Relation::Callback(args) => args,
         }
     }
 
@@ -187,6 +199,7 @@ impl Relation {
         match self {
             Relation::Atomic => "atomic".to_string(),
             Relation::Struct(strukt) => format!("{}.fields", strukt.name),
+            Relation::Callback(_) => "callback.args".to_string(),
         }
     }
 }
@@ -463,6 +476,10 @@ pub enum Fed<'a, T: Target> {
     Source(&'a TypeRef),
     /// A carrier the binding declared.
     Carrier(&'a CarrierOf<T>),
+    /// What a callback's `capture` produced: a value of the target's own
+    /// making, which the registry moves into the closure and names nothing
+    /// about.
+    Captured,
 }
 
 /// Everything one application of a target operation needs written.
@@ -480,6 +497,10 @@ pub struct OperationFeed<'a, T: Target> {
     /// For an operation applied once per part — a `Product`'s `read` — the
     /// part it is applied to.
     pub part: Option<&'a Part>,
+    /// For a callback's `capture` and `invoke`: the carriers of the callback's
+    /// arguments, in order — each named for `invoke`, which is handed them,
+    /// and unnamed for `capture`, which runs before any call.
+    pub args: Vec<(Option<syn::Ident>, &'a CarrierOf<T>)>,
 }
 
 impl<T: Target> OperationFeed<'_, T> {
@@ -502,8 +523,8 @@ impl<T: Target> OperationFeed<'_, T> {
 /// Everything one carrier's declaration needs written.
 pub struct CarrierFeed<'a, T: Target> {
     pub carrier: &'a CarrierOf<T>,
-    /// For the carrier of a `Product`: each part, with the carrier it
-    /// resolved to, in part order.
+    /// For the carrier of a `Product` or a `Callback`: each part — a field,
+    /// or an argument — with the carrier it resolved to, in part order.
     pub members: Vec<(&'a Part, &'a CarrierOf<T>)>,
     /// For a carrier of a fieldless enum's value: that enum, from the model.
     pub unit: Option<&'a Enum>,

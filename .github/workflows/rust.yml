@@ -137,11 +137,11 @@ jobs:
 
         # example -> the fewest wrappers its declarations produce today.
         floors = {
-            "covertest-kotlin": 16,
+            "covertest-kotlin": 17,
             "example-cbindgen": 3,
             "perftest-kotlin": 6,
             "perftest-c": 5,
-            "emitcheck": 2,
+            "emitcheck": 3,
         }
         wrapper = re.compile(r'pub extern "(C|system)" fn ')
         failed = False

@@ -103,7 +103,7 @@ fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, En
     }
     for (declaration, id) in &stated.declared {
         let form = match declaration {
-            Declaration::Type(_) => OutputForm::Type {
+            Declaration::Type(_) | Declaration::Callback(_) => OutputForm::Type {
                 representation: refused,
                 release: None,
                 meta: *id,
@@ -167,7 +167,13 @@ fn a_declaration_that_names_nothing_captured_is_an_error() {
 #[test]
 fn a_declaration_the_binding_defines_itself_is_not_looked_up() {
     let stated = Stated {
-        declared: vec![(Declaration::Callback("impl Fn(i64)".to_string()), 0)],
+        declared: vec![(
+            Declaration::Callback(
+                prebindgen_flat::TypeKey::parse("impl Fn(i64) + Send + Sync + 'static")
+                    .expect("a callback type"),
+            ),
+            0,
+        )],
     };
     let generation = plan(&stated, sources()).expect("v2 plans");
     assert_eq!(generation.skipped().len(), 1);

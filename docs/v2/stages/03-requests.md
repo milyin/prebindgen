@@ -507,11 +507,14 @@ pub enum Step {
     /// A field of the struct the current value is read through: its name,
     /// or its position for a tuple field.
     Field(String),
+    /// An argument of the callback the current value is, by position.
+    Arg(usize),
 }
 ```
 
 A **value path** is that `ValuePath`, printed with its steps joined by dots:
-`param stamp`, `return`, `param stamp.field secs`. It is the public
+`param stamp`, `return`, `param stamp.field secs`, `param each.arg 0`. It is
+the public
 vocabulary for a [site](#a-values-position-in-an-exported-function) — its
 first step — and for the
 [parts](#fields-constructor-arguments-and-enum-variants) below it; a
@@ -627,8 +630,12 @@ a run over unchanged input emits the same file. It records the scalar table,
 then for each declared type a carrier, a representation, the `Type` rule
 and the output naming that representation — `data_type!` a `Product`
 through `Fields`, `ptr_type!` a `Terminal` over a `*mut` carrier with a
-release — and for each function an output with its
-function form. The JNI frontend does the same with its declarations. A check
+release — for each `callback!` signature a closure-struct carrier, a
+`Callback` representation, its `Type` rule and a `Declaration::Callback`
+output, and for each function an output with its
+function form. The JNI frontend does the same with its declarations, and
+states a callback for every `impl Fn(..)` an exported function takes, since
+its build scripts declare none. A check
 that needs the source model runs here too: a C enum numbering a value
 outside `i32` is recorded as `Representation::Unsupported`, with the reason,
 rather than refused later. Neither target holds anything: every choice it
@@ -636,8 +643,8 @@ writes from arrives with what it is asked to write. What JNI knows of the whole
 binding — the package prefix, the harness object's name — is its Kotlin
 writer's, which reads the finished generation.
 
-A declarator the target has no lowering for — a tagged union, a callback
-signature — still becomes an output. A type's is exposed as, and ruled by, a
+A declarator the target has no lowering for — a tagged union, a declared
+conversion — still becomes an output. A type's is exposed as, and ruled by, a
 `Representation::Unsupported`, so a value of it is refused too; anything
 else's is recorded as `OutputForm::Unsupported`. It is refused by the
 declarator's name before anything under it is planned, and the skip carries
@@ -719,7 +726,7 @@ enum Declaration {
     Const(Ident),           // exposed as a foreign constant
     Type(TypeKey),          // given a foreign representation
     Conversion(TypeKey),    // a wire mapping the binding defines for a type
-    Callback(String),       // a callback signature the binding exports
+    Callback(TypeKey),      // a callback signature the binding exports: an `impl Fn(..)`
     ComputedConst(String),  // a constant the binding computes on the foreign side
 }
 ```
@@ -731,7 +738,9 @@ captured type and an opaque one the binding declares over a type the source
 never exported. Nor is how the target shows the entity: a Kotlin `val` read
 through a nullary function, `constant!(X).fun(fun!(f))`, is `Function(f)`, and
 the `val` is the target's choice recorded under that declaration. A callback
-and a computed constant name no entity at all. `generate` matches on the
+and a computed constant name no entity at all: a callback is named by its
+signature, the type of the `impl Fn(..)` parameters that take one, and prints
+as `callback:impl Fn(i64)+Send+Sync+'static`. `generate` matches on the
 whole, so each planner is reached by the variants it can plan and is handed
 the entity they name.
 
@@ -777,7 +786,7 @@ silently win. Which declaration a *value* requires is then settled at
 
 ### A value's position in an exported function
 
-The registry needs to locate the parameter affected by a per-function override. A **site** is such a position: for example, the `stamp` parameter of the requested `normalize` binding, or its result. It is the first step of a [value path](#conversion-rules), `Step::Param("stamp")` or `Step::Return`, under the output that exports the function, and it is how the registry applies an override there and reports problems there. A callback's argument, when callbacks are lowered, is one more step below the parameter that receives the callback.
+The registry needs to locate the parameter affected by a per-function override. A **site** is such a position: for example, the `stamp` parameter of the requested `normalize` binding, or its result. It is the first step of a [value path](#conversion-rules), `Step::Param("stamp")` or `Step::Return`, under the output that exports the function, and it is how the registry applies an override there and reports problems there. A callback's argument is one more step below the parameter that receives the callback: `param each.arg 0`, `Step::Arg(0)`, valid where that parameter is represented as a callback.
 
 ### Fields, constructor arguments and enum variants
 
@@ -861,6 +870,7 @@ same things.
 - [Function taking an owned struct][fn_requests] · [C][fn_requests_c] · [Kotlin/JNI][fn_requests_jni]
 - [Struct with scalar fields][struct_requests] · [C][struct_requests_c] · [Kotlin/JNI][struct_requests_jni]
 - [Type alias declaring an opaque handle][typedef_requests] · [C][typedef_requests_c] · [Kotlin/JNI][typedef_requests_jni]
+- [Function taking a callback][fn_callback_requests] · [C][fn_callback_requests_c] · [Kotlin/JNI][fn_callback_requests_jni]
 
 [fn_requests]: ../examples/fn/03-requests.md
 [fn_requests_c]: ../examples/fn/03-requests.c.md
@@ -871,3 +881,6 @@ same things.
 [typedef_requests]: ../examples/typedef/03-requests.md
 [typedef_requests_c]: ../examples/typedef/03-requests.c.md
 [typedef_requests_jni]: ../examples/typedef/03-requests.jni.md
+[fn_callback_requests]: ../examples/fn_callback/03-requests.md
+[fn_callback_requests_c]: ../examples/fn_callback/03-requests.c.md
+[fn_callback_requests_jni]: ../examples/fn_callback/03-requests.jni.md

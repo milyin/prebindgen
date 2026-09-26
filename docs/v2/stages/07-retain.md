@@ -142,7 +142,8 @@ contradictory configuration, panics and I/O failures are not ordinary skips.
 A function also needs the public type used by its parameters, and a type
 needs the public types of its fields. The registry works out both itself,
 from the plan: every value of a named type a function takes or returns, and
-every part of a type's own value, requires the type output exposing the
+every part of a type's own value or a callback's, requires the type output
+exposing the
 [representation](05-represent.md#represent-and-compose-values) that value's
 [crossing](03-requests.md#finding-an-existing-conversion-plan) was planned
 with, and only that one: `Stamp` exposed as a struct and as a handle is two
@@ -152,7 +153,11 @@ skipped with the refused output's cause. A value of a type no output
 exposes, or exposed only as other representations, produces
 `unsupported.requirement.unrequested`: a foreign signature would otherwise
 name a type the header or the Kotlin sources declare differently, or not at
-all.
+all. A callback is required the same way, by its signature: a function taking
+an `impl Fn(i64)` requires the `callback:` output exposing the representation
+its parameter crossed as — the C closure struct or the Kotlin `fun interface`
+its parameter is typed as — and a callback requires the type outputs of its
+arguments.
 
 Requiring a type does not export it: a type nothing requested is not emitted
 because something needed it, and whatever needed it is skipped instead.
@@ -258,7 +263,9 @@ retention decisions described here.
 - [Function taking an owned struct][fn_retain]
 - [Struct with scalar fields][struct_retain]
 - [Type alias declaring an opaque handle][typedef_retain]
+- [Function taking a callback][fn_callback_retain]
 
 [fn_retain]: ../examples/fn/07-retain.md
 [struct_retain]: ../examples/struct/07-retain.md
 [typedef_retain]: ../examples/typedef/07-retain.md
+[fn_callback_retain]: ../examples/fn_callback/07-retain.md

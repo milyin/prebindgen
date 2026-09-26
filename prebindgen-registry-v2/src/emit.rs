@@ -11,15 +11,17 @@
 //! Source types and struct shapes are generated through Flat's emission
 //! capability, never from retained syntax and never spelled by an adapter.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use prebindgen_flat::{flat::Flat, Conditioned, RustEmitter};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::{
-    binding::{Binding, CarrierId, Implementation, OutputForm, Representation, StandardOp},
-    body::{Instr, Operand, ValueId},
+    binding::{
+        Binding, CarrierId, FailureRoute, Implementation, OutputForm, Representation, StandardOp,
+    },
+    body::{Instr, Operand, Stmt, ValueId},
     plan::{Applied, FunctionPlan, ParamRole, Retained, Slot, ValuePlan},
     target::{
         Artifact, CarrierFeed, FailureCategory, Fed, OperationFeed, Target, Terminal, Written,
@@ -161,14 +163,16 @@ fn carriers<T: Target>(
                 .chain(out_of_rust.iter())
                 .map(|codec| (codec.carrier, false))
                 .collect(),
-            Representation::Product { carrier, .. } => vec![(*carrier, true)],
+            Representation::Product { carrier, .. } | Representation::Callback { carrier, .. } => {
+                vec![(*carrier, true)]
+            }
             Representation::Unsupported(_) => Vec::new(),
         };
-        for (carrier, product) in used {
+        for (carrier, with_members) in used {
             if !written.insert(carrier) {
                 continue;
             }
-            let members = match (product, root) {
+            let members = match (with_members, root) {
                 (true, Some(root)) => root
                     .relation
                     .parts()
@@ -201,7 +205,6 @@ fn wrapper<T: Target>(
     function: &FunctionPlan<T::Op>,
     helpers: &mut Vec<Artifact>,
 ) -> TokenStream {
-    let mut names: HashMap<ValueId, syn::Ident> = HashMap::new();
     // Parameters are named by the form, because a convention that requires an
     // environment operand has to say what it is called. Everything else is
     // named here, and around those names: a temporary that shadowed a live
@@ -209,40 +212,37 @@ fn wrapper<T: Target>(
     // Reserved by their canonical spelling: `r#v0` and `v0` are one name to
     // Rust, so reserving the raw form would leave the plain one free to shadow
     // it.
-    let mut taken: std::collections::HashSet<String> = function
+    let mut taken: HashSet<String> = function
         .params
         .iter()
         .map(|(_, p)| unraw(&p.name))
         .collect();
+    let ok_binding = free_name("value", &mut taken);
+    let error_binding = free_name("error", &mut taken);
+    let mut scribe = Scribe {
+        flat,
+        target,
+        binding,
+        reach,
+        primitives,
+        helpers,
+        names: HashMap::new(),
+        taken,
+        next_local: 0,
+        ok_binding,
+        error_binding,
+    };
     let params: Vec<TokenStream> = function
         .params
         .iter()
         .map(|(id, param)| {
-            names.insert(*id, param.name.clone());
+            scribe.names.insert(*id, param.name.clone());
             let name = &param.name;
             let ty = &param.ty;
             let mutable = param.mutable.then(|| quote!(mut));
             quote!(#mutable #name: #ty)
         })
         .collect();
-    let ok_binding = free_name("value", &mut taken);
-    let error_binding = free_name("error", &mut taken);
-    // Temporaries are numbered by definition order, which is why the same
-    // operation used twice cannot collide with itself.
-    let mut next_local = 0;
-    let mut local = |names: &mut HashMap<ValueId, syn::Ident>,
-                     taken: &mut std::collections::HashSet<String>,
-                     id: ValueId| {
-        let name = loop {
-            let candidate = format!("v{next_local}");
-            next_local += 1;
-            if taken.insert(candidate.clone()) {
-                break format_ident!("{candidate}");
-            }
-        };
-        names.insert(id, name.clone());
-        name
-    };
 
     // A wrapper names source items — the function it calls, and every struct it
     // constructs — and compiles only where all of them exist. So it inherits
@@ -258,7 +258,7 @@ fn wrapper<T: Target>(
     // a handle taken back or released, cast to `*mut source::Ledger` — is a
     // standard one the registry writes, so it is found here too.
     let mut conditions = Vec::new();
-    let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut conditioned: HashSet<String> = HashSet::new();
     for step in &function.instrs {
         let named = match &step.instr {
             Instr::Construct { name, .. } => name.clone(),
@@ -275,6 +275,9 @@ fn wrapper<T: Target>(
                     _ => continue,
                 }
             }
+            // What a call converts leaves Rust, and names nothing a condition
+            // is on that the wrapper's call does not name too.
+            Instr::Closure { .. } => continue,
         };
         // Planning names only items the model declares.
         let Some(element) = flat.element(named.as_str()) else {
@@ -287,124 +290,22 @@ fn wrapper<T: Target>(
         }
     }
 
-    let mut statements = Vec::new();
-    for step in &function.instrs {
-        // What a field's condition holds the statement to: a member declared
-        // only sometimes is read only sometimes, and the initializer that
-        // consumes the read exists only then. The statement is one `let`, so
-        // the attribute goes in front of it.
-        let guarded = &step.conditions;
-        match &step.instr {
-            Instr::Apply {
-                primitive,
-                operands,
-                result,
-            } => {
-                let applied = &primitives[primitive.0];
-                let operand_names: Vec<syn::Ident> = operands
-                    .iter()
-                    .map(|operand| operand_name(&names, function, operand))
-                    .collect();
-                let expression =
-                    operation(target, binding, reach, applied, &operand_names, helpers);
-                let statement = match (&applied.failure, result) {
-                    (None, Some(result)) => {
-                        let name = local(&mut names, &mut taken, *result);
-                        quote!(let #name = #expression;)
-                    }
-                    (None, None) => quote!(#expression;),
-                    (Some(failure), Some(result)) => {
-                        let name = local(&mut names, &mut taken, *result);
-                        let route = failure_arm(
-                            target,
-                            function,
-                            failure.category,
-                            &error_binding,
-                            helpers,
-                        );
-                        let ok = &ok_binding;
-                        let error = error_pattern(function, failure.category, &error_binding);
-                        quote! {
-                            let #name = match #expression {
-                                Ok(#ok) => #ok,
-                                Err(#error) => { #route }
-                            };
-                        }
-                    }
-                    (Some(failure), None) => {
-                        let route = failure_arm(
-                            target,
-                            function,
-                            failure.category,
-                            &error_binding,
-                            helpers,
-                        );
-                        let error = error_pattern(function, failure.category, &error_binding);
-                        quote! {
-                            if let Err(#error) = #expression { #route }
-                        }
-                    }
-                };
-                statements.push(quote!(#(#guarded)* #statement));
-            }
-            Instr::Construct {
-                name,
-                parts,
-                result,
-            } => {
-                let item = flat
-                    .struct_type(name.as_str())
-                    .expect("a construction names a struct the model declares");
-                let ident = &item.name;
-                let module = reach.of(&ident.to_string());
-                let head = quote!(#module::#ident);
-                // An initializer carries its own field's condition: the value
-                // it names was bound by a statement under the same one, so a
-                // field the source does not have is neither read nor filled in.
-                //
-                // Read from the model here, while the statements got theirs
-                // from `Part::conditions` at plan time. The two agree because
-                // both read the same field.
-                let bound: Vec<TokenStream> = item
-                    .fields
-                    .iter()
-                    .zip(parts)
-                    .map(|(field, value)| {
-                        let conditions = Writer.conditions(Conditioned::Field(field));
-                        let bound = field.bind(&names[value]);
-                        quote!(#(#conditions)* #bound)
-                    })
-                    .collect();
-                let value = Writer.shape_struct(item, head, &bound);
-                let name = local(&mut names, &mut taken, *result);
-                statements.push(quote!(#(#guarded)* let #name = #value;));
-            }
-            Instr::Call {
-                function: callee,
-                args,
-                result,
-            } => {
-                let module = reach.of(callee);
-                let callee = format_ident!("{callee}");
-                let args: Vec<syn::Ident> = args.iter().map(|value| names[value].clone()).collect();
-                let call = quote!(#module::#callee(#(#args),*));
-                // A source function returning nothing produces no value, and a
-                // `let` over it would name one nobody can use.
-                let statement = match result {
-                    Some(result) => {
-                        let name = local(&mut names, &mut taken, *result);
-                        quote!(let #name = #call;)
-                    }
-                    None => quote!(#call;),
-                };
-                statements.push(quote!(#(#guarded)* #statement));
-            }
-        }
-    }
+    let frame = Frame {
+        routes: &function.routes,
+        contexts: function
+            .params
+            .iter()
+            .filter_map(|(_, param)| match &param.role {
+                ParamRole::Context(name) => Some((name.clone(), param.name.clone())),
+                _ => None,
+            })
+            .collect(),
+    };
+    let statements = scribe.statements(&function.instrs, &frame);
 
     let tail = match function.result {
         Some(result) => {
-            let name = &names[&result];
+            let name = &scribe.names[&result];
             quote!(#name)
         }
         None => quote!(),
@@ -447,6 +348,217 @@ fn wrapper<T: Target>(
         pub #unsafety extern #abi fn #symbol(#(#params),*) #ret {
             #(#statements)*
             #tail
+        }
+    }
+}
+
+/// Where statements are rendered: the routes a failure there takes, and the
+/// names the runtime contexts go by. A wrapper's body is one frame, and the
+/// body of a callback's closure is another, with the callback's routes and no
+/// contexts.
+struct Frame<'a, Op> {
+    routes: &'a [FailureRoute<Op>],
+    contexts: HashMap<String, syn::Ident>,
+}
+
+impl<Op> Frame<'_, Op> {
+    fn context(&self, name: &str) -> syn::Ident {
+        self.contexts
+            .get(name)
+            .cloned()
+            .expect("a missing runtime context is refused before assembly")
+    }
+}
+
+/// Renders the statements of one wrapper, and allocates every name in it.
+struct Scribe<'a, T: Target> {
+    flat: &'a Flat,
+    target: &'a T,
+    binding: &'a Binding<T>,
+    reach: &'a Reach,
+    primitives: &'a [Applied<T::Op>],
+    helpers: &'a mut Vec<Artifact>,
+    names: HashMap<ValueId, syn::Ident>,
+    taken: HashSet<String>,
+    /// Temporaries are numbered by definition order, which is why the same
+    /// operation used twice cannot collide with itself.
+    next_local: usize,
+    ok_binding: syn::Ident,
+    error_binding: syn::Ident,
+}
+
+impl<T: Target> Scribe<'_, T> {
+    /// A fresh name for `id`, one nothing in this wrapper uses.
+    fn local(&mut self, id: ValueId) -> syn::Ident {
+        let name = loop {
+            let candidate = format!("v{}", self.next_local);
+            self.next_local += 1;
+            if self.taken.insert(candidate.clone()) {
+                break format_ident!("{candidate}");
+            }
+        };
+        self.names.insert(id, name.clone());
+        name
+    }
+
+    fn statements(&mut self, instrs: &[Stmt], frame: &Frame<'_, T::Op>) -> Vec<TokenStream> {
+        let mut statements = Vec::new();
+        for step in instrs {
+            // What a field's condition holds the statement to: a member
+            // declared only sometimes is read only sometimes, and the
+            // initializer that consumes the read exists only then. The
+            // statement is one `let`, so the attribute goes in front of it.
+            let guarded = &step.conditions;
+            let statement = self.statement(&step.instr, frame);
+            statements.push(quote!(#(#guarded)* #statement));
+        }
+        statements
+    }
+
+    fn statement(&mut self, instr: &Instr, frame: &Frame<'_, T::Op>) -> TokenStream {
+        match instr {
+            Instr::Apply {
+                primitive,
+                operands,
+                result,
+            } => {
+                let applied = &self.primitives[primitive.0];
+                let operand_names: Vec<syn::Ident> = operands
+                    .iter()
+                    .map(|operand| match operand {
+                        Operand::Value(id) => self.names[id].clone(),
+                        Operand::Context(name) => frame.context(name),
+                    })
+                    .collect();
+                let expression = operation(
+                    self.target,
+                    self.binding,
+                    self.reach,
+                    applied,
+                    &operand_names,
+                    self.helpers,
+                );
+                let Some(failure) = &applied.failure else {
+                    return match result {
+                        Some(result) => {
+                            let name = self.local(*result);
+                            quote!(let #name = #expression;)
+                        }
+                        None => quote!(#expression;),
+                    };
+                };
+                let error = error_pattern(frame.routes, failure.category, &self.error_binding);
+                let route = failure_arm(
+                    self.target,
+                    frame,
+                    failure.category,
+                    &self.error_binding,
+                    self.helpers,
+                );
+                match result {
+                    Some(result) => {
+                        let name = self.local(*result);
+                        let ok = &self.ok_binding;
+                        quote! {
+                            let #name = match #expression {
+                                Ok(#ok) => #ok,
+                                Err(#error) => { #route }
+                            };
+                        }
+                    }
+                    None => quote! {
+                        if let Err(#error) = #expression { #route }
+                    },
+                }
+            }
+            Instr::Construct {
+                name,
+                parts,
+                result,
+            } => {
+                let item = self
+                    .flat
+                    .struct_type(name.as_str())
+                    .expect("a construction names a struct the model declares");
+                let ident = &item.name;
+                let module = self.reach.of(&ident.to_string());
+                let head = quote!(#module::#ident);
+                // An initializer carries its own field's condition: the value
+                // it names was bound by a statement under the same one, so a
+                // field the source does not have is neither read nor filled in.
+                //
+                // Read from the model here, while the statements got theirs
+                // from `Part::conditions` at plan time. The two agree because
+                // both read the same field.
+                let bound: Vec<TokenStream> = item
+                    .fields
+                    .iter()
+                    .zip(parts)
+                    .map(|(field, value)| {
+                        let conditions = Writer.conditions(Conditioned::Field(field));
+                        let bound = field.bind(&self.names[value]);
+                        quote!(#(#conditions)* #bound)
+                    })
+                    .collect();
+                let value = Writer.shape_struct(item, head, &bound);
+                let name = self.local(*result);
+                quote!(let #name = #value;)
+            }
+            Instr::Call {
+                function: callee,
+                args,
+                result,
+            } => {
+                let module = self.reach.of(callee);
+                let callee = format_ident!("{callee}");
+                let args: Vec<syn::Ident> =
+                    args.iter().map(|value| self.names[value].clone()).collect();
+                let call = quote!(#module::#callee(#(#args),*));
+                // A source function returning nothing produces no value, and a
+                // `let` over it would name one nobody can use.
+                match result {
+                    Some(result) => {
+                        let name = self.local(*result);
+                        quote!(let #name = #call;)
+                    }
+                    None => quote!(#call;),
+                }
+            }
+            Instr::Closure {
+                representation,
+                params,
+                instrs,
+                result,
+                ..
+            } => {
+                let Representation::Callback { routes, .. } =
+                    self.binding.representation_of(*representation)
+                else {
+                    unreachable!("a closure is built for a callback representation")
+                };
+                let params: Vec<TokenStream> = params
+                    .iter()
+                    .map(|(id, ty)| {
+                        let name = self.local(*id);
+                        let ty =
+                            Writer.emit_source_type(ty, &self.reach.modules, &self.reach.default);
+                        quote!(#name: #ty)
+                    })
+                    .collect();
+                // Inside a call no runtime context exists: planning refused
+                // any operation there that asks for one.
+                let inner = Frame {
+                    routes,
+                    contexts: HashMap::new(),
+                };
+                let body = self.statements(instrs, &inner);
+                let name = self.local(*result);
+                quote! {
+                    let #name = move |#(#params),*| {
+                        #(#body)*
+                    };
+                }
+            }
         }
     }
 }
@@ -553,7 +665,11 @@ fn operation<T: Target>(
             let fed = |slot: Slot| match slot {
                 Slot::Source => Fed::Source(&applied.subject),
                 Slot::Carrier(carrier) => Fed::Carrier(binding.carrier_of(carrier)),
+                Slot::Captured => Fed::Captured,
             };
+            // After the value and the contexts come the arguments a callback's
+            // `invoke` is handed; its `capture` is told their carriers only.
+            let named = &operands[1 + applied.contexts.len()..];
             let feed = OperationFeed {
                 value: Some((value.clone(), fed(applied.value))),
                 contexts: applied
@@ -565,6 +681,14 @@ fn operation<T: Target>(
                 error: None,
                 result: applied.result.map(fed),
                 part: applied.part.as_ref(),
+                args: applied
+                    .args
+                    .iter()
+                    .enumerate()
+                    .map(|(index, carrier)| {
+                        (named.get(index).cloned(), binding.carrier_of(*carrier))
+                    })
+                    .collect(),
             };
             keep(helpers, target.write_operation(op, &feed))
         }
@@ -585,12 +709,11 @@ fn enum_value(ty: &TokenStream, arm: &crate::target::EnumArm) -> TokenStream {
 /// The pattern a failure arm binds the error with: the name when a reporter
 /// reads it, `_` when the route only terminates.
 fn error_pattern<Op>(
-    function: &FunctionPlan<Op>,
+    routes: &[FailureRoute<Op>],
     category: FailureCategory,
     error: &syn::Ident,
 ) -> TokenStream {
-    let reported = function
-        .routes
+    let reported = routes
         .iter()
         .any(|route| route.category == category && route.report.is_some());
     if reported {
@@ -604,12 +727,12 @@ fn error_pattern<Op>(
 /// operation for it, then terminate.
 fn failure_arm<T: Target>(
     target: &T,
-    function: &FunctionPlan<T::Op>,
+    frame: &Frame<'_, T::Op>,
     category: FailureCategory,
     error: &syn::Ident,
     helpers: &mut Vec<Artifact>,
 ) -> TokenStream {
-    let route = function
+    let route = frame
         .routes
         .iter()
         .find(|route| route.category == category)
@@ -619,7 +742,7 @@ fn failure_arm<T: Target>(
             .operation
             .context
             .iter()
-            .map(|name| (name.clone(), context_name(function, name)))
+            .map(|name| (name.clone(), frame.context(name)))
             .collect();
         let expression = match &report.operation.implementation {
             Implementation::Target(op) => {
@@ -629,6 +752,7 @@ fn failure_arm<T: Target>(
                     error: Some(error.clone()),
                     result: None,
                     part: None,
+                    args: Vec::new(),
                 };
                 keep(helpers, target.write_operation(op, &feed))
             }
@@ -660,17 +784,6 @@ fn terminal(terminal: &Terminal) -> TokenStream {
     }
 }
 
-fn operand_name<Op>(
-    names: &HashMap<ValueId, syn::Ident>,
-    function: &FunctionPlan<Op>,
-    operand: &Operand,
-) -> syn::Ident {
-    match operand {
-        Operand::Value(id) => names[id].clone(),
-        Operand::Context(name) => context_name(function, name),
-    }
-}
-
 /// An identifier's canonical spelling: `r#type` and `type` name one binding.
 fn unraw(ident: &syn::Ident) -> String {
     ident.to_string().trim_start_matches("r#").to_string()
@@ -688,14 +801,4 @@ fn free_name(preferred: &str, taken: &mut std::collections::HashSet<String>) -> 
         }
     }
     unreachable!("the search above only ends by returning")
-}
-
-/// The wrapper parameter supplying a runtime context.
-fn context_name<Op>(function: &FunctionPlan<Op>, context: &str) -> syn::Ident {
-    function
-        .params
-        .iter()
-        .find(|(_, param)| matches!(&param.role, ParamRole::Context(name) if name == context))
-        .map(|(_, param)| param.name.clone())
-        .expect("a missing runtime context is refused before assembly")
 }
