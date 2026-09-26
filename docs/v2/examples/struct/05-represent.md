@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "struct", "stage": "05-represent"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Element path][struct] · [Source crate](../../source.md)
-Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][struct_select] · Next: [Retain supported output][struct_retain]
+Owner: the registry, from the binding's rules · Previous: [Select conversion relations][struct_select] · Next: [Retain supported output][struct_retain]
 
 # Struct with scalar fields — Represent and compose values
 
@@ -13,61 +13,53 @@ The [selection][struct_select] for the struct, with its leaves already planned:
 Stamp, IntoRust, relation Stamp.fields
   +-- secs  -> node(i64, IntoRust)     // finished: identity conversion
   +-- nanos -> node(i64, IntoRust)     // the same node
-conversion: <what this target recorded for Stamp>   // the key select returned
+representation: the Type(Stamp) rule's — Product { via: Fields, carrier, read }
 ```
 
 ## Result
 
 ```text
 node(Stamp, IntoRust) {
-    relation: Stamp.fields
-    children: [ node(i64, IntoRust) as "secs",
-                node(i64, IntoRust) as "nanos" ]
-    repr:     layout   — the target's carrier for one Stamp
-              protocol — Product { projections: [read secs, read nanos] }
-    body:     apply read secs  to carrier -> convert -> local
-              apply read nanos to carrier -> convert -> local
-              construct source::Stamp { secs, nanos }
-    contract: produces an owned source Stamp, validity Independent
+    relation:       Stamp.fields
+    representation: the Stamp rule's
+    carrier:        this target's Stamp carrier
+    children:       [ node(i64, IntoRust) as "secs",
+                      node(i64, IntoRust) as "nanos" ]
+    body:           apply read to carrier, for secs  -> convert -> local
+                    apply read to carrier, for nanos -> convert -> local
+                    construct source::Stamp { secs, nanos }
 }
 ```
 
-With both children finished, the registry asks the target for the struct's
+With both children finished, the registry composes the struct from its
 [representation](../../stages/05-represent.md#represent-and-compose-values):
-which [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
-holds a `Stamp` on its side — a C member value or a JVM object here — and one
-[primitive](../../stages/05-represent.md#represent-and-compose-values) per
-part that reads a field out of it. The [C][struct_represent_c] and
-[Kotlin/JNI][struct_represent_jni] pages show those reads. The registry then
-composes the body: each read is applied to the carrier, its result is passed
-through the child's template, and the converted parts construct the source
-struct.
+the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+that holds a `Stamp` on the target's side — a C aggregate or a JVM object
+here — and the `read`
+[primitive](../../stages/05-represent.md#represent-and-compose-values), applied
+once per part. The [C][struct_represent_c] and [Kotlin/JNI][struct_represent_jni]
+pages show those reads. Each read's result is passed through the child's
+template, and the converted parts construct the source struct.
 
 Both field positions resolve to the same cached `i64` input
-[node](../../stages/05-represent.md#represent-and-compose-values) under this
-[choice](../../stages/03-requests.md#what-a-choice-records); the
+[node](../../stages/05-represent.md#represent-and-compose-values); the
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) applies
-that plan once per field. Each carrier already has the required Rust `i64`
-value, so the child [conversion](../../stages/04-select.md#select-conversion-relations)
+that plan once per field. Each read already produces the Rust `i64` value, so
+the child [conversion](../../stages/04-select.md#select-conversion-relations)
 is **identity**: it passes the value through without generating another
-operation. `Independent` describes the owned result, which borrows neither
-input; the full validity-contract structure remains a proposed extension.
+operation. The owned result borrows neither input.
 
 ## Checks
 
-- The registry checks the number and types of projections against the parts
-  of the selected [relation](../../stages/04-select.md#what-a-relation-is);
-  the adapter is responsible for associating each read with the intended
-  source field.
+- Each member's carrier is one the Stamp carrier holds as a member; a part
+  resolving to another wire type refuses the struct where the member is.
 - Construction follows declaration order, and a read that fails stops the body
   before the construction: no `Stamp` is built from a partial set of fields.
 - The node is recorded only once its children exist, so its identity — type,
-  direction, relation, [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan),
-  children — is complete when it is cached and another struct with the same
-  identity shares it.
+  direction, representation, children — is complete when it is cached and
+  another struct with the same identity shares it.
 - This is the struct entering Rust. Leaving Rust needs a construction
-  operation on the target side that `Product` does not have yet, and is a
-  reported skip.
+  operation a `Product` does not have, and is a reported skip.
 
 ## Language variants
 

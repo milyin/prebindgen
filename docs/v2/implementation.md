@@ -141,11 +141,15 @@ says. A JVM that loads the library and calls the method, which is what
 comes with the covertest work rather than here. What follows records what
 building this settled, so the chapters and the engine describe the same thing.
 
-To find the implementation, start with `generate(flat, &target, declarations, source_module, declaring_crate)`
+To find the implementation, start with `generate(flat, &target, binding, source_module)`
 in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
-- `target.rs` defines the questions adapters answer and the descriptions they return.
-- `plan.rs` selects and combines conversions, caches reusable plans, assembles
+- `binding.rs` defines what a frontend states before planning:
+  [carriers](stages/05-represent.md#describing-target-values-and-operations),
+  representations, rules, outputs and function forms.
+- `target.rs` defines the writers an adapter implements and the feeds they are
+  handed, with the vocabulary both sides share.
+- `plan.rs` looks conversions up and combines them, caches reusable plans, assembles
   [wrappers](stages/06-boundary.md#assemble-the-wrapper-boundary) and checks public dependencies.
 - `body.rs` defines the instructions stored in those plans; `emit.rs` writes
   the corresponding Rust code.
@@ -155,12 +159,12 @@ in `prebindgen-registry-v2`. Its responsibilities are divided across files:
 
 The two targets live in the language frontends, under their `v2` feature:
 `prebindgen-c/src/v2/` and `prebindgen-jni/src/v2/`. Each is two things. A
-`Target` implementation of a few hundred lines — `select`, `represent`,
-`boundary`, `surface`, `render_operation` — that walks no type and names no
-temporary; and a reader of the frontend's own declaration storage that turns it
-into the declaration list, one entry per declaration in a stable order, with the frontend's
+`Target` of two writers — `write_operation` and `write_carrier` — that decides
+nothing, walks no type and names no temporary; and a reader of the frontend's
+own declaration storage that turns it into the binding — carriers,
+representations, rules and outputs, in a stable order — with the frontend's
 manglers already applied to every name. The JNI frontend also carries its Kotlin
-writer, over the payloads its declarations came back with. A frontend's
+writer, over the outputs the generation retained. A frontend's
 `build()` runs this route when `PREBINDGEN_PIPELINE=v2` selects it — or
 `build_with(Pipeline::V2)` states it — and nothing of v1 runs on that route.
 The user's `build.rs` is the same under either engine: the one thing v2 adds to
@@ -183,11 +187,14 @@ and comes back with an outcome — the data classes and functions within this
 increment emitted, everything else skipped under the capability it waits for.
 
 The engine's unit tests use a small test adapter to isolate the planner's rules.
-They check conversion sharing and field overrides, temporary-name collisions,
-propagation from an unsupported field to its struct and callers, and public
-declaration dependencies. They also check that a function is skipped when an
-operation has no error route or needs a runtime context the boundary cannot
-supply; that a handle is carried both ways and released under its type's
+They check conversion sharing and rules at positions, temporary-name
+collisions, propagation from a value no rule covers to its struct and callers,
+and the requirements between outputs. They check the rules themselves: two for
+one value, or one at a position the output does not have, fail the build; a
+member or parameter of a wire type its holder does not accept is refused where
+it sits; an unused type rule is listed; the binding prints as what planning
+reads. They also check that a function is skipped when an operation has no
+error route or needs a runtime context the form does not supply; that a handle is carried both ways and released under its type's
 identity, while a null one arriving where it is consumed needs a route; and
 that a handle nobody can release skips the type and what takes it. Contradictory configuration must instead produce a generation error.
 These tests establish planner behavior; C/JNI runtime tests are still needed to
@@ -202,46 +209,47 @@ establish the behavior of the resulting foreign interface.
    described with the rest of the
    [conversion plans](stages/05-represent.md#the-conversion-plans-the-registry-builds).
    A conversion's body is a template whose
-   [carrier](stages/05-represent.md#describing-target-values-and-operations) is its
+   carrier is its
    input; using it inlines it under the caller's identities. Temporary names are allocated by the writer from
    definition order, never by an adapter.
-2. **Registry-supplied operations inside an adapter's payload.** An operation's
-   implementation is `Operation<Payload>`: either a `Standard` operation the
-   registry renders — identity, member read — or the adapter's own `Payload`.
-   The payload has no standard variant to imitate, and C ships no operation
-   renderer at all, which its target states by giving `Payload` no values.
-3. **Selection applies to one value.** `select` chooses the source relation for
-   the value currently being planned. It does not choose conversions for that
-   value's children. Child settings are recorded at their own positions and
-   consulted when recursion reaches them. This gives each override one place
-   to be expressed and keeps child choices visible in the conversion cache key.
+2. **Standard and target operations.** An operation's implementation is
+   `Implementation<Op>`: either a `Standard` operation the registry writes —
+   identity, member read, the handle and enum operations — or the target's own
+   `Op`, which its writer writes when the registry feeds it. C writes no
+   operation at all, which its target states by giving `Op` no values.
+3. **A rule applies to one value.** The rule at a value's position, else its
+   type's, gives the representation of the value currently being planned. It
+   says nothing of that value's children, which are looked up again at their
+   own positions. This gives each override one place to be expressed and keeps
+   child choices visible in the conversion cache key.
 
-   For the same reason, `represent` is not told the position it is answering
-   for. A representation is reused wherever a conversion of the same identity is
-   needed — [crossing](stages/03-requests.md#finding-an-existing-conversion-plan), relation, [conversion key](stages/03-requests.md#finding-an-existing-conversion-plan), children — so a target that
-   answered differently for two positions would have its second answer silently
-   bypassed by the first one's [node](stages/05-represent.md#represent-and-compose-values). Varying by position is what
-   `select` is for: it is the one call that sees a position, and a
-   [choice](stages/03-requests.md#what-a-choice-records) recorded there comes back
-   as a different key, which is in the identity.
-4. **How an adapter declares its types and generated units.** Neither is an id an
-   adapter allocates. A carrier is a `WireType` — the Rust type it is spelled as,
-   plus whether it may appear in an extern signature — carried inline in the
-   description that uses it. A generated unit is an `Artifact`: a name and the
-   Rust it contributes. The registry keeps one [artifact](stages/05-represent.md#individual-target-operations) per name and publishes
-   only those a retained output needs.
+   No writer is told the position it writes for. A conversion is reused
+   wherever one of the same identity is needed —
+   [crossing](stages/03-requests.md#finding-an-existing-conversion-plan),
+   representation, children — so a writer that wrote differently for two
+   positions would have its second text silently bypassed by the first one's
+   [node](stages/05-represent.md#represent-and-compose-values). Varying by
+   position is what a rule at a position is for: it names a different
+   representation, which is in the identity.
+4. **How a binding declares its types and generated units.** A carrier is a
+   `WireType` — the Rust type it is spelled as, which of the target's wire
+   classes it is, which classes its members may be, and metadata only the
+   writers read — declared once and named by id, as a representation is. A
+   generated unit is an `Artifact`: a name and the Rust it contributes, returned
+   by a writer beside the text that needs it. The registry keeps one
+   [artifact](stages/05-represent.md#individual-target-operations) per name and
+   publishes only those a retained output needs.
 
-   These descriptions are checked where they meet the values in hand, which is
-   the registry and nowhere else. What is checked today, and nothing beyond it:
-   a carrier that may not cross the ABI cannot be a wrapper parameter or return;
-   a wrapper parameter must carry what its conversion reads, and a wrapper return
-   what the result conversion produces; where an operation states an operand or
-   result *carrier*, it must be the carrier it is applied to and produces; a
-   member read must name a member the representation declared; no projection may
-   consume a carrier its siblings still read; and a failure route must report the
-   error carrier the operation raises. An operand or result stated as a source
-   type is carried and not compared, because nothing yet needs to relate a
-   conversion's Rust type to an operation's.
+   These declarations are checked where they meet the plan, which is the
+   registry and nowhere else. What is checked today, and nothing beyond it: two
+   rules for one value, a rule at a position its output does not have, a form
+   naming the wrong number of inputs, a symbol that is not an identifier, and a
+   form restating the linkage all fail the build; a member, parameter or return
+   of a wire class its holder does not accept is refused where it sits; an
+   operation needing a context the form does not supply is refused; and a
+   failure route must report the error type the operation raises. Wrapper
+   parameters are typed from the carriers their conversions resolved to, so a
+   parameter and the conversion reading it cannot disagree.
 5. **Feature-assertion guards.** Reading captured source injects a `const _`
    assertion comparing the source crate's features against the set the capture
    was filtered by. Flat retains it as a guard, and the V2 writer emits every
@@ -254,7 +262,7 @@ establish the behavior of the resulting foreign interface.
    existing example with `PREBINDGEN_PIPELINE=v2` shows it in the generated file.
 6. **Runtime contexts.** `ScopeRequirement`'s concrete form is a named operand
    role: an operation declares `Context("jni.env")` where it needs the
-   environment, the boundary names the wrapper parameter that supplies it, and
+   environment, the function form names the wrapper parameter that supplies it, and
    the registry binds the two at assembly. A conversion asking for a context its
    boundary does not supply is a reported skip, not a fragment reaching for a
    variable its caller happens to have.
@@ -271,12 +279,12 @@ establish the behavior of the resulting foreign interface.
 8. **Handles without a resource contract.** An opaque value crosses as an
    address through three more standard operations — `IntoRaw`, `FromRaw`,
    `Release` — which are the registry's because they spell a source type. The
-   adapter states the carrier the address is cast to and, on the into-Rust
+   frontend states the carrier the address is cast to and, on the
    representation, that a release exists; naming one is what tells the
    registry the type is a handle, whether the item behind it is an alias or a
    struct whose fields the target never reads. The registry then requires the
    out-of-Rust direction too and plans the release as a wrapper under the
-   type's own identity, through `boundary` with no source function. A null
+   type's own identity, from the release form the type output names. A null
    address taken back is a `Binding` failure carrying a `String`, routed like
    any other; a null address released is a no-op. What keeps this sound
    without `ResourceContract` is the shape of the three wrappers, stated in
@@ -289,7 +297,7 @@ establish the behavior of the resulting foreign interface.
    model already computes. Two more standard operations spell the conversion,
    `EnumOut` and `EnumIn`, for the reason the handle operations are standard:
    they name the source type, and an adapter cannot spell a source path. What
-   the number is carried *as* is the adapter's. C declares an enum of the same
+   the number is carried *as* is the frontend's to state. C declares an enum of the same
    values, and a value crosses as one of them either way, so the header names
    the enum wherever the source does. Out of Rust that is an exhaustive `match`
    that cannot fail. Into Rust the enum arrives as `MaybeUninit` and is matched
@@ -337,34 +345,33 @@ establish the behavior of the resulting foreign interface.
 The contracts designed for these are on [the extensions page](extensions.md);
 this list says what the increment left open and why.
 
-- **The target interface's parameter types** are real for these three paths —
-  `SelectionQuery`, `ResolvedShape`, `ChildValue` (the chapters' `ValueDescriptor`),
-  `ResolvedValues`, `SiteDescriptor`, `SurfaceRequest` — and untested by a third
-  target or a deferred capability.
-- **The composition protocols.** `Protocol::Product { projections }` reads
-  one projection per part, in the into-Rust direction only. Struct output needs
-  a construction operation that is not implemented: C reaches the registry's
-  `unsupported.struct.out_of_rust` skip, while JNI refuses earlier with
-  `unsupported.jni.object_output`. `ProductOps`, `SequenceOps`, `ChoiceOps`,
-  `CallableOps` and multi-slot child flattening describe the wider design.
+- **The binding's vocabulary** is real for these paths — representations,
+  codecs, operations, function forms, acceptance, and the writers' feeds — and
+  untested by a third target or a deferred capability.
+- **The representations.** A `Product` reads one part per part, in the
+  into-Rust direction only. Struct output needs a construction operation that
+  is not implemented, and both targets reach the registry's
+  `unsupported.struct.out_of_rust` skip. Containers, choices, niches and
+  flattening at the boundary describe the wider design.
 - **Fallible construction meeting the boundary** is untouched, because
   constructor and projector relations are not implemented: the only relations are
   the struct's fields and the atomic conversion.
 - **Optional values** and everything that goes with them — `Layout::Slots`,
   `SlotRole`, `GuardId`, `AbsenceEncoding` — are not implemented.
-- **Validity and resource contracts** are absent from `PrimitiveSpec`. The one
+- **Validity and resource contracts** are absent from `Operation`. The one
   resource-bearing operation set — the owned handle — is safe without them by
   construction on the Rust side, as
   [the extensions page](extensions.md#runtime-resources) argues; a borrowed
   handle, an optional handle or a retained callback is what has to add them,
   and cannot be written without them.
-- **A wrapper's form** is the writer's, except what `AbiSpec` lets a target
-  state: the convention, the symbol, the parameters and return, attributes
-  beyond `#[no_mangle]`, and `unsafe`. A target reached other than by an
+- **A wrapper's form** is the writer's, except what `FunctionForm` lets a
+  binding state: the convention, the symbol, the parameters the convention
+  adds, the names of the inputs' parameters, attributes beyond `#[no_mangle]`,
+  and `unsafe`. A target reached other than by an
   exported symbol — a registration table, an attribute macro — has no way to
   say so yet, and no target has asked.
 - **Delivery** is a wrapper return or nothing. Out-parameters, `Result` branches
-  and declared sinks are `OutputPlacement` variants the increment does not have.
+  and callbacks the caller passes in are deliveries the increment does not have.
 - **A condition reaches the Rust side only.** V2 carries a `#[cfg]` the capture
   reader could not answer onto everything it generates in Rust for the item that
   carries it — the wrapper, the target's own declaration, and, for a field,
@@ -392,8 +399,8 @@ this list says what the increment left open and why.
   binding asked for.
 - **A sum** — an enum whose alternatives carry values — has no representation.
   The fieldless enum above is a named set of integers and crosses as one; a
-  sum needs a tag and one group of slots per alternative, which
-  `Layout::Slots` and `ChoiceOps` describe and nothing implements. The engine
+  sum needs a tag and one group of members per alternative, which
+  [choices](extensions.md#choices) describe and nothing implements. The engine
   refuses one with `unsupported.type.variant`.
 
 ## Acceptance and feasibility evidence
@@ -401,10 +408,10 @@ this list says what the increment left open and why.
 Acceptance criteria:
 
 - [x] The design's boundaries are exercised by scalar and struct bindings — in `examples/v2check`, over the specification's own source crate, and in the existing C/JNI examples built with `PREBINDGEN_PIPELINE=v2`, whose declarations are unchanged.
-- [x] Users configure the existing language frontends; frontend internals construct the declaration list for the registry, and the target that holds what each declaration is. `CChoice` and `JniChoice` represent implemented choices and include an `Unimplemented` case naming other declarators; each is its target's private storage and its conversion key, and the registry names neither.
+- [x] Users configure the existing language frontends; frontend internals construct the binding for the registry — carriers, representations, rules and outputs — with every name already mangled. A declarator a frontend does not lower is recorded as unsupported, naming it; the registry reads the binding's structure and never the target's own metadata.
 - [x] The registry owns recursive conversion, source calls, dependency resolution, control flow and Rust wrapper assembly.
-- [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association and derives conversion keys privately.
-- [x] Targets retain their representation, runtime-operation and delivery choices without implementing another recursive source planner: neither target walks a type or names a temporary.
+- [ ] The [source model](stages/02-flat.md) supplies checked source views; the registry validates snapshot association.
+- [x] Targets are writers only: every representation, runtime-operation and delivery choice is stated in the binding before planning, and neither target walks a type, decides a plan or names a temporary.
 - [x] Complete unsupported inputs produce actionable per-declaration outcomes; malformed configuration and generator defects fail generation.
 - [x] One immutable generation result supplies Rust output, optional foreign-writer output and what the run left out; C headers are derived from the retained Rust output by `cbindgen`.
 - [ ] Test selection from what a run left out.

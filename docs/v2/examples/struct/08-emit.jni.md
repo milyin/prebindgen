@@ -8,9 +8,9 @@ Owner: the JNI adapter's Kotlin writer
 ## Input
 
 ```text
-SurfaceSpec(public Stamp) frozen, with
-    payload: data_class example.Stamp,
-             properties [secs: Long, nanos: Long]
+Retained(type:Stamp), read by the Kotlin writer, with
+    metadata: DataClass example.Stamp
+    parts:    [secs, nanos], each through a jlong carrier of Kotlin type Long
 ```
 
 ## Result

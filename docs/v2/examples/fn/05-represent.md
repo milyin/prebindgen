@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "cell", "example": "fn", "stage": "05-represent"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Element path][fn] · [Source crate](../../source.md)
-Owner: the registry, on descriptions from the target adapter · Previous: [Select conversion relations][fn_select] · Next: [Assemble the wrapper boundary][fn_boundary]
+Owner: the registry, from the binding's rules · Previous: [Select conversion relations][fn_select] · Next: [Assemble the wrapper boundary][fn_boundary]
 
 # Function taking an owned struct — Represent and compose values
 
@@ -10,10 +10,10 @@ Owner: the registry, on descriptions from the target adapter · Previous: [Selec
 The [selection tree][fn_select] the previous stage left, read from the leaves:
 
 ```text
-   Param(0) --> Stamp, IntoRust,  relation Stamp.fields
-                  +-- secs  --> i64, IntoRust,  atomic
-                  +-- nanos --> i64, IntoRust,  atomic
-   Return   --> i64, OutOfRust, atomic
+   param stamp --> Stamp, IntoRust,  relation Stamp.fields
+                     +-- secs  --> i64, IntoRust,  atomic
+                     +-- nanos --> i64, IntoRust,  atomic
+   return      --> i64, OutOfRust, atomic
 ```
 
 ## Result
@@ -30,7 +30,7 @@ that source call between them.
 node(input)  = Crossing { Stamp, IntoRust }
                relation: Stamp.fields
                children: [ node(i64, IntoRust), node(i64, IntoRust) ] // same node twice
-               repr:     the target's carrier for Stamp, with one read per part
+               repr:     the Stamp rule's: its carrier, and a read applied per part
                body:     obtain secs carrier -> convert
                          obtain nanos carrier -> convert
                          construct source::Stamp { secs, nanos }
@@ -38,7 +38,7 @@ node(input)  = Crossing { Stamp, IntoRust }
 node(output) = Crossing { i64, OutOfRust }
                relation: atomic
                children: []
-               repr:     the target's scalar carrier
+               repr:     the i64 rule's: its carrier, converted by identity
                body:     identity — source i64 and the target carrier are one value
 ```
 
@@ -46,13 +46,13 @@ Taken together the two plans are a small graph — three nodes, and one edge per
 part, with both fields landing on the same child:
 
 ```text
-   Param(0) --> node(input)  Stamp, IntoRust, Stamp.fields
-                     |
-                     +-- secs  --+
-                     |           +--> node(i64, IntoRust, atomic)
-                     +-- nanos --+
+   param stamp --> node(input)  Stamp, IntoRust, Stamp.fields
+                        |
+                        +-- secs  --+
+                        |           +--> node(i64, IntoRust, atomic)
+                        +-- nanos --+
 
-   Return   --> node(output) i64, OutOfRust, atomic
+   return      --> node(output) i64, OutOfRust, atomic
 ```
 
 The two `i64` plans stay apart because direction is part of a node's identity,
@@ -63,15 +63,15 @@ each leaf is complete, made them one node.
 The input node is the struct's own conversion,
 [planned on its own path][struct_represent]; this function refers to it, and so
 does anything else taking an owned `Stamp` under the same
-[choice](../../stages/03-requests.md#what-a-choice-records). Their `NodeId`s are
+[representation](../../stages/05-represent.md#represent-and-compose-values). Their `NodeId`s are
 what [the boundary][fn_boundary] assembles.
 
 ## Checks
 
-- Reuse depends on type, direction, [relation](../../stages/04-select.md#what-a-relation-is),
-  [conversion key](../../stages/03-requests.md#finding-an-existing-conversion-plan)
-  and child conversions. A second owned `Stamp` input with
-  the same choices can reuse this plan. C and JNI run separate generation jobs.
+- Reuse depends on type, direction, representation — which names the
+  [relation](../../stages/04-select.md#what-a-relation-is) — and child
+  conversions. A second owned `Stamp` input under the same rules reuses this
+  plan. C and JNI run separate generation jobs.
 - The cache is checked after the children exist, not before: the key includes
   them.
 - An unsupported child made the input conversion unsupported in the previous

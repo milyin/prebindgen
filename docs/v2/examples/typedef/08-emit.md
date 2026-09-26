@@ -7,12 +7,13 @@ Owner: the common Rust writer, then `cbindgen` or the Kotlin writer · Previous:
 
 ## Input
 
-The frozen public declaration for this alias, and the frozen release plan:
+The retained output for this alias, and its release plan:
 
 ```text
-SurfaceSpec  { declaration: public Ledger, payload: <the target's declaration metadata> }
-FunctionPlan { declaration: public Ledger, boundary: <the release symbol and carrier>,
-               body: [ apply Release(this_) ] }
+Retained     { output: type:Ledger, output_value: node(Ledger, IntoRust) }
+               carrier: the handle carrier, metadata: <none for C, the ptr class for JNI>
+FunctionPlan { declaration: public Ledger, symbol, params: <from the release form>,
+               instrs: [ apply Release(this_) ] }
 ```
 
 with the two [conversion](../../stages/04-select.md#select-conversion-relations)

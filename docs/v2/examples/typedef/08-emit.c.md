@@ -8,18 +8,20 @@ Owner: the common Rust writer, then `cbindgen`
 ## Input
 
 ```text
-SurfaceSpec(public Ledger) frozen, with
-    rust: [ the incomplete type Ledger ]
+Retained(type:Ledger), whose carrier is fed to the C writer:
+    CarrierFeed { carrier: *mut Ledger (Opaque, c_name "Ledger"), members: [] }
 FunctionPlan(release of Ledger) frozen, with
-    boundary: extern "C", symbol "ledger_drop", arg this_ *mut Ledger, no return
-    body:     Release(this_)
+    abi, symbol: extern "C", "ledger_drop"
+    params:      [ this_: *mut Ledger ], no return
+    instrs:      Release(this_)
 ```
 
 ## Result
 
-In the generated C Rust module (`c.rs`), the declaration among the
-[artifacts](../../stages/05-represent.md#individual-target-operations) and
-the release among the
+In the generated C Rust module (`c.rs`), the declaration the C writer returns
+for the
+[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
+among the carrier declarations, and the release among the
 [wrappers](../../stages/06-boundary.md#assemble-the-wrapper-boundary):
 
 ```rust

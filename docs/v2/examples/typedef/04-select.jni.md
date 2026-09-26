@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "04-select", "language": "jni"} -->
 
 [Stage chapter](../../stages/04-select.md) · [Common cell][typedef_select] · [Element path][typedef]
-Owner: the registry; the JNI adapter selects from the offered [relations](../../stages/04-select.md#what-a-relation-is)
+Owner: the registry, from the rule the JNI frontend recorded for `ptr_class!(Ledger)`
 
 # Type alias declaring an opaque handle — Select conversion relations — Kotlin/JNI
 
@@ -10,34 +10,30 @@ Owner: the registry; the JNI adapter selects from the offered [relations](../../
 ```text
 Crossing { source: Ledger, direction: IntoRust }
 Crossing { source: Ledger, direction: OutOfRust }
-offered:  [ atomic ]
-
-held by the JniTarget, not passed in:
-choice:   ptr_class example.Ledger
+rules:    Type(Ledger) -> Terminal { in: jlong FromRaw, out: jlong IntoRaw, release }
 ```
 
 ## Result
 
 ```text
-atomic, conversion JniChoice::PtrClass { class: "example.Ledger", .. }
+atomic, carried in a `jlong` whose metadata names `example.Ledger`
 ```
 
-for both. A `ptr_class` holds an address, not properties, so the JNI adapter
-wants the value whole and answers `atomic` off the
-[choice](../../stages/03-requests.md#what-a-choice-records) — the same answer for
-the same reason as C's, which is what makes the selection stage
-target-independent in practice: the adapters differ at the next stage, in what
-the address is carried as.
+for both. A `ptr_class!` holds an address, not properties, so the JNI frontend
+records a `Terminal` [representation](../../stages/05-represent.md#represent-and-compose-values)
+naming the atomic [relation](../../stages/04-select.md#what-a-relation-is) —
+the same answer for the same reason as C's, which is what makes the selection
+stage target-independent in practice: the targets differ in what the address
+is carried as.
 
 ## Checks
 
 - Declared as `data_class!` instead, the extern would be refused here with
-  `unsupported.jni.not_a_struct`: no struct relation is offered for a type with
-  no fields.
-- Under `ptr_class` the adapter has committed to describing a `jlong`
-  [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
-  in each direction, and a release for the consuming one.
-- A `ptr_class` with `.method(..)` members is still refused at those members:
+  `unsupported.type.not_a_struct`: a type with no fields has no struct relation.
+- The `jlong` [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+  is of class `Handle`, not `Long`: the same Rust type as an `i64`'s, a
+  different wire type, and so a different carrier.
+- A `ptr_class!` with `.method(..)` members is still refused at those members:
   a method's receiver is a borrowed handle, which is the `fn_borrowed_param`
   path and not this one.
 

@@ -3,21 +3,14 @@
 //! [`Declarations`] keeps accumulating exactly as it does for v1 — same
 //! `package!`/`ptr_class!`/`fun!` surface, same `set_*` settings, same
 //! name-mangle closures — and this module is the only thing that reads them
-//! for the other engine: it turns that storage into a list of
-//! [`Declaration`]s, each paired with the [`JniChoice`] saying what the
-//! binding declared it as, and a [`JniTarget`] that answers about values of a
-//! type wherever they turn up. An ignore is a v1 decision about v1's
+//! for the other engine: it states the whole binding as data — the carriers the
+//! JVM holds values in, how each type's values cross, the native method and
+//! `Java_…` symbol each wrapper gets — and hands it to the engine with a
+//! [`JniTarget`], which only writes. An ignore is a v1 decision about v1's
 //! undeclared-item warnings, which v2 does not emit, so none reaches the
 //! engine. [`generate`] hands back a [`Generation`] the frontend writes out —
 //! the Rust through the engine's writer, the Kotlin through its own writer in
 //! `kotlin.rs`.
-//!
-//! What a declaration *is* — its Kotlin class or package function, its native
-//! method, its `Java_…` symbol, and which setting on it v2 does not honour
-//! yet — is the choice beside it, which the engine hands back with every
-//! question about that output. The declaration itself names the entity and
-//! nothing more, so one function placed twice is two outputs of one
-//! declaration rather than one setting overwriting the other.
 //!
 //! Nothing of v1 runs on this route. Kotlin names, packages and `Java_…`
 //! symbols come from this adapter's settings applied to the declarations,
@@ -26,8 +19,15 @@
 mod kotlin;
 mod target;
 
-use prebindgen_registry_v2::{generate, Declaration, EngineError, Generation, PlanningError};
-pub use target::{ClassKind, JniChoice, JniPayload, JniTarget};
+use prebindgen_registry::{flat::Flat, TypeKey};
+use prebindgen_registry_v2::{
+    field_is_conditional, generate, mirrored_i32_enum, Accepts, Binding, Codec, ContextParam,
+    Declaration, EngineError, EnumArm, FailureCategory, FailureRoute, FunctionForm, FunctionFormOf,
+    Generation, Operation, OutputForm, OutputFormOf, PlanningError, Report, Representation, Scope,
+    StandardOp, Target, Terminal, Unsupported, Via, WireType,
+};
+use quote::format_ident;
+pub use target::{JniClass, JniOp, JniOutput, JniTarget, Jvm, KotlinType};
 
 use crate::jni::{ClassMember, Declarations, FunctionEntry};
 
@@ -36,7 +36,7 @@ impl Declarations {
     pub(crate) fn generate_v2(
         &self,
         sources: prebindgen_registry::flat::FlatBuilder,
-    ) -> Result<Generation<JniPayload>, EngineError> {
+    ) -> Result<Generation<JniTarget>, EngineError> {
         let mut sources = sources;
         // What the binding defines itself enters the model as entities: a
         // helper with the signature `fun!(crate::x).sig(..)` stated, reached
@@ -53,10 +53,10 @@ impl Declarations {
             sources = sources.local_function(sig, module);
         }
         // Every declared class, not only the handle ones: a data class over a
-        // type the model cannot see into is then refused by the target for
-        // what it is, rather than failing the build as a name nothing
-        // captured. The item's name is the key's, without the arguments a key
-        // may carry — `ptr_class!(Publisher<'static>)` names `Publisher`.
+        // type the model cannot see into is then refused for what it is,
+        // rather than failing the build as a name nothing captured. The item's
+        // name is the key's, without the arguments a key may carry —
+        // `ptr_class!(Publisher<'static>)` names `Publisher`.
         for key in sorted(self.types.keys()) {
             if let Some(name) = key.short_name().and_then(|name| syn::parse_str(&name).ok()) {
                 sources = sources.local_type(name);
@@ -70,49 +70,31 @@ impl Declarations {
             .first()
             .and_then(|module| syn::parse_str(module).ok())
             .unwrap_or_else(|| syn::parse_quote!(crate));
-        let classes = self
-            .types
-            .iter()
-            .filter_map(|(key, config)| {
-                let kind = match config.kind {
-                    crate::jni::DeclaredKind::Ptr(_) => ClassKind::Handle,
-                    crate::jni::DeclaredKind::Enum(_) => ClassKind::Enum,
-                    _ => ClassKind::Data,
-                };
-                Some((key.as_str().to_string(), (self.kotlin_fqn(key)?, kind)))
-            })
-            .collect();
-        let (target, declarations) = self.binding(&flat, classes)?;
-        generate(flat, &target, declarations, source_module)
+        let binding = self.binding(&flat)?;
+        generate(flat, &JniTarget, binding, source_module)
     }
 
     /// Write the Kotlin side of a v2 generation under `kotlin_root`.
     pub(crate) fn write_kotlin_v2(
         &self,
-        generation: &Generation<JniPayload>,
+        generation: &Generation<JniTarget>,
         kotlin_root: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, kotlin_codegen::WriteKotlinError> {
         kotlin::write(self, generation, kotlin_root)
     }
 
-    /// Everything this binding declared: each declaration paired with what
-    /// this target recorded it as, which together are what the engine plans
-    /// and accounts for.
+    /// Everything this binding declared, as the data the engine plans from.
     ///
-    /// One entry per declaration, in any order. Stating the two halves
-    /// together is what keeps them in step: a declaration cannot be planned
-    /// without saying what it is.
+    /// Read in one sorted pass over the declarations, so that a run over
+    /// unchanged input emits the same file. Each declared class is stated
+    /// twice over one representation: as the rule for every value of the
+    /// type, and as an output exposing it.
     ///
     /// Fails when the binding contradicts itself — two declarations claiming
     /// one native method on the harness — which is the frontend's own
     /// validation and not a capability the engine lacks.
-    fn binding(
-        &self,
-        flat: &prebindgen_registry::flat::Flat,
-        classes: std::collections::BTreeMap<String, (String, ClassKind)>,
-    ) -> Result<(JniTarget, Vec<(Declaration, JniChoice)>), EngineError> {
-        let mut target = JniTarget::new(classes);
-        let mut declarations = Vec::new();
+    fn binding(&self, flat: &Flat) -> Result<Binding<JniTarget>, EngineError> {
+        let mut binding = Binding::new();
         // Every wrapper hangs off one harness object, so its native methods
         // share a namespace: two declarations naming the same one would be two
         // definitions of one `Java_…` symbol, which the generated code cannot
@@ -120,20 +102,41 @@ impl Declarations {
         let mut natives: std::collections::HashMap<String, Declaration> =
             std::collections::HashMap::new();
         let mut collision = None;
-        let mut declare = |declaration: Declaration, choice: JniChoice| {
-            if let Some(native) = choice.native() {
-                if let Some(taken) = natives.insert(native.to_string(), declaration.clone()) {
-                    collision.get_or_insert_with(|| {
-                        format!(
-                            "`{taken}` and `{declaration}` would both be the native method \
-                             `{native}` on the JNI harness; give one of them another Kotlin name"
-                        )
-                    });
-                }
+        let mut claim = |native: &str, declaration: &Declaration| {
+            if let Some(taken) = natives.insert(native.to_string(), declaration.clone()) {
+                collision.get_or_insert_with(|| {
+                    format!(
+                        "`{taken}` and `{declaration}` would both be the native method \
+                         `{native}` on the JNI harness; give one of them another Kotlin name"
+                    )
+                });
             }
-            target.declare(&declaration, &choice);
-            declarations.push((declaration, choice));
         };
+
+        // The scalar this target carries so far: an `i64` is a `jlong`, and
+        // the two are one Rust value.
+        let jlong = binding.carrier(WireType {
+            rust: syn::parse_quote!(jni::sys::jlong),
+            class: JniClass::Long,
+            members: None,
+            meta: Jvm {
+                descriptor: "J".to_string(),
+                kotlin: KotlinType::Value("Long".to_string()),
+            },
+        });
+        let unchanged = Codec {
+            carrier: jlong,
+            operation: Operation::standard(StandardOp::Identity),
+        };
+        let i64_whole = binding.representation(Representation::Terminal {
+            into_rust: Some(unchanged.clone()),
+            out_of_rust: Some(unchanged),
+            release: None,
+        });
+        binding.rule(
+            Scope::Type(TypeKey::parse("i64").expect("a scalar's name is a type key")),
+            i64_whole,
+        );
 
         // A function is declared wherever it is placed — as a class member, as
         // a package function, as the `val` a `constant!(X).fun(..)` reads
@@ -161,47 +164,117 @@ impl Declarations {
         let placed_more_than_once =
             |ident: &syn::Ident| placements.get(ident).is_some_and(|n| *n > 1);
 
-        // Declared classes. A data class is the one representation v2 lowers;
-        // the per-type entry makes every value of the type cross that way,
-        // wherever it appears. A declared class need not name a captured item:
-        // a target may represent `String` or `Vec<u8>` without the source
+        // Declared classes. A declared class need not name a captured item: a
+        // target may represent `String` or `Vec<u8>` without the source
         // exporting one.
         for key in sorted(self.types.keys()) {
             let config = &self.types[key];
             let placement = self.kotlin_fqn(key).unwrap_or_default();
+            let (package, class) = match placement.rsplit_once('.') {
+                Some((package, class)) => (package.to_string(), class.to_string()),
+                None => (String::new(), placement.clone()),
+            };
+            let declaration = Declaration::Type(key.clone());
             let declarator = declarator(&config.kind);
             // A class implementing an interface, or generating one, is
             // refused rather than emitted without it: the binding asked for
             // that supertype, and v2 writes none.
             let interface = config.interface_enabled || !config.interfaces.is_empty();
-            declare(
-                Declaration::Type(key.clone()),
-                match config.kind {
-                    _ if interface => JniChoice::Unimplemented {
+            let (representation, release, meta) = match config.kind {
+                _ if interface => (
+                    Representation::Unsupported(unimplemented(
                         declarator,
-                        capability: "interface",
-                        placement: placement.clone(),
+                        "interface",
+                        &declaration,
+                        &placement,
+                    )),
+                    None,
+                    JniOutput::DataClass {
+                        package: package.clone(),
+                        class: class.clone(),
                     },
-                    crate::jni::DeclaredKind::Data => JniChoice::DataClass {
-                        class: placement.clone(),
+                ),
+                crate::jni::DeclaredKind::Data => (
+                    self.data_class(&mut binding, flat, key, &placement),
+                    None,
+                    JniOutput::DataClass {
+                        package: package.clone(),
+                        class: class.clone(),
                     },
-                    // A Kotlin `enum class` of the same values: what crosses
-                    // is the number each value carries.
-                    crate::jni::DeclaredKind::Enum(_) => JniChoice::EnumClass {
-                        class: placement.clone(),
-                    },
-                    // The release is a native method on the harness like any
-                    // other, named after the class: `freeLedger`.
-                    crate::jni::DeclaredKind::Ptr(_) => {
-                        let short = placement.rsplit('.').next().unwrap_or_default();
-                        let native = self.mangle_jni_method(&format!("free{short}"));
-                        JniChoice::PtrClass {
-                            class: placement.clone(),
-                            symbol: self.native_method_symbol(&native),
+                ),
+                // A Kotlin `enum class` of the same values: what crosses is the
+                // number each value carries.
+                crate::jni::DeclaredKind::Enum(_) => {
+                    let (representation, values) =
+                        self.enum_class(&mut binding, flat, key, &placement);
+                    (
+                        representation,
+                        None,
+                        JniOutput::EnumClass {
+                            package: package.clone(),
+                            class: class.clone(),
+                            values,
+                        },
+                    )
+                }
+                // The release is a native method on the harness like any other,
+                // named after the class: `freeLedger`.
+                crate::jni::DeclaredKind::Ptr(_) => {
+                    let native = self.mangle_jni_method(&format!("free{class}"));
+                    claim(&native, &declaration);
+                    let address = binding.carrier(WireType {
+                        rust: syn::parse_quote!(jni::sys::jlong),
+                        class: JniClass::Handle,
+                        members: None,
+                        meta: Jvm {
+                            descriptor: "J".to_string(),
+                            kotlin: KotlinType::Handle(placement.clone()),
+                        },
+                    });
+                    let representation = Representation::Terminal {
+                        into_rust: Some(Codec {
+                            carrier: address,
+                            operation: Operation::standard(StandardOp::FromRaw),
+                        }),
+                        out_of_rust: Some(Codec {
+                            carrier: address,
+                            operation: Operation::standard(StandardOp::IntoRaw),
+                        }),
+                        release: Some(Operation::standard(StandardOp::Release)),
+                    };
+                    let release = release_form(self.native_method_symbol(&native));
+                    (
+                        representation,
+                        Some(release),
+                        JniOutput::PtrClass {
+                            package: package.clone(),
+                            class: class.clone(),
                             native,
-                        }
-                    }
-                    _ => JniChoice::unimplemented(declarator, placement.clone()),
+                        },
+                    )
+                }
+                _ => (
+                    Representation::Unsupported(unimplemented(
+                        declarator,
+                        declarator,
+                        &declaration,
+                        &placement,
+                    )),
+                    None,
+                    JniOutput::DataClass {
+                        package: package.clone(),
+                        class: class.clone(),
+                    },
+                ),
+            };
+            let representation = binding.representation(representation);
+            binding.rule(Scope::Type(key.clone()), representation);
+            binding.output(
+                declaration,
+                OutputForm::Type {
+                    representation,
+                    release,
+                    meta,
                 },
             );
 
@@ -210,10 +283,10 @@ impl Declarations {
             // lowered yet: a method's receiver is a handle.
             for member in self.class_members.get(key).into_iter().flatten() {
                 let placed = format!("{placement}.{}", self.effective_method_name(key, member));
-                declare(
-                    Declaration::Function(member.rust_ident.clone()),
-                    JniChoice::unimplemented(member_representation(member), placed),
-                );
+                let declaration = Declaration::Function(member.rust_ident.clone());
+                let represented = member_representation(member);
+                let refusal = unimplemented(represented, represented, &declaration, &placed);
+                binding.output(declaration, OutputForm::Unsupported(refusal));
             }
         }
 
@@ -241,27 +314,42 @@ impl Declarations {
                     false => entry.rust_ident.to_string(),
                 };
                 let native = self.mangle_jni_method(&crate::util::snake_to_camel(&native_name));
-                // A function under a setting v2 does not honour is still a
-                // `fun` in the report; the setting is the capability missing.
-                // It is refused rather than emitted with the setting dropped:
-                // a lookup that fell back to the default here would generate
-                // an interface the binding did not ask for.
-                declare(
-                    Declaration::Function(entry.rust_ident.clone()),
-                    match self.unimplemented_setting(flat, &entry.rust_ident) {
-                        Some(setting) => JniChoice::Unimplemented {
-                            declarator: "fun",
-                            capability: setting,
-                            placement: placed(entry),
-                        },
-                        None => JniChoice::Function {
-                            package: package.clone(),
-                            symbol: self.native_method_symbol(&native),
-                            native,
-                            method,
-                        },
-                    },
-                );
+                let declaration = Declaration::Function(entry.rust_ident.clone());
+                // A function under a setting v2 does not honour is refused
+                // rather than emitted with the setting dropped: the default
+                // interface is not the one the binding asked for.
+                let form: OutputFormOf<JniTarget> = match self
+                    .unimplemented_setting(flat, &entry.rust_ident)
+                {
+                    Some(setting) => OutputForm::Unsupported(unimplemented(
+                        "fun",
+                        setting,
+                        &declaration,
+                        &placed(entry),
+                    )),
+                    None => {
+                        claim(&native, &declaration);
+                        match flat.function(&entry.rust_ident.to_string()) {
+                            Some(function) => OutputForm::Function {
+                                form: function_form(self.native_method_symbol(&native), function),
+                                meta: JniOutput::Function {
+                                    package: package.clone(),
+                                    method,
+                                    native,
+                                },
+                            },
+                            // Not in the model: the engine fails the run
+                            // over the declaration naming nothing.
+                            None => OutputForm::Unsupported(unimplemented(
+                                "fun",
+                                "fun",
+                                &declaration,
+                                &placed(entry),
+                            )),
+                        }
+                    }
+                };
+                binding.output(declaration, form);
             }
             // A `constant!(X)` names the `#[prebindgen]` const it reads. The
             // Kotlin `val` keeps the const's own name — it is not a function
@@ -274,29 +362,29 @@ impl Declarations {
                         .clone()
                         .unwrap_or_else(|| entry.rust_ident.to_string())
                 );
-                declare(
-                    Declaration::Const(entry.rust_ident.clone()),
-                    JniChoice::unimplemented("constant", placed),
-                );
+                let declaration = Declaration::Const(entry.rust_ident.clone());
+                let refusal = unimplemented("constant", "constant", &declaration, &placed);
+                binding.output(declaration, OutputForm::Unsupported(refusal));
             }
             // A `constant!(X).fun(..)` is a Kotlin `val` read through a nullary
             // function: the declaration is the function's, and the `val` is
             // what this target chooses to show the call as.
             for entry in &config.constant_functions {
-                declare(
-                    Declaration::Function(entry.rust_ident.clone()),
-                    JniChoice::unimplemented("constant_fun", placed(entry)),
-                );
+                let declaration = Declaration::Function(entry.rust_ident.clone());
+                let refusal =
+                    unimplemented("constant_fun", "constant_fun", &declaration, &placed(entry));
+                binding.output(declaration, OutputForm::Unsupported(refusal));
             }
             // A `constant!(X).expr(..)` has no Rust item behind it at all.
             for decl in &config.constant_exprs {
-                declare(
-                    Declaration::ComputedConst(decl.kotlin_name.clone()),
-                    JniChoice::unimplemented(
-                        "constant_expr",
-                        format!("{package}.{}", decl.kotlin_name),
-                    ),
+                let declaration = Declaration::ComputedConst(decl.kotlin_name.clone());
+                let refusal = unimplemented(
+                    "constant_expr",
+                    "constant_expr",
+                    &declaration,
+                    &format!("{package}.{}", decl.kotlin_name),
                 );
+                binding.output(declaration, OutputForm::Unsupported(refusal));
             }
         }
 
@@ -305,16 +393,16 @@ impl Declarations {
         //
         // A binding-local fn is NOT a declaration of its own. It is a helper the
         // binding defines, and what the target exports is the member or the
-        // package function it was bound to — already stated above. Listing it
-        // twice would give one id to two entries.
+        // package function it was bound to — already stated above.
         for decl in &self.convert_decls {
-            declare(
-                Declaration::Conversion(decl.key().clone()),
-                JniChoice::unimplemented(
-                    "convert",
-                    self.kotlin_fqn(decl.key()).unwrap_or_default(),
-                ),
+            let declaration = Declaration::Conversion(decl.key().clone());
+            let refusal = unimplemented(
+                "convert",
+                "convert",
+                &declaration,
+                &self.kotlin_fqn(decl.key()).unwrap_or_default(),
             );
+            binding.output(declaration, OutputForm::Unsupported(refusal));
         }
 
         if let Some(collision) = collision {
@@ -322,8 +410,277 @@ impl Declarations {
                 collision,
             )));
         }
-        Ok((target, declarations))
+        Ok(binding)
     }
+
+    /// A data class: a JVM object whose properties are read, one per field —
+    /// or why the class cannot be one.
+    ///
+    /// What the model already says is checked here: a Kotlin data class needs
+    /// a property, a property needs a name, and Kotlin cannot state a
+    /// condition, so a field written under one would be a property filled in
+    /// by every caller and read by the library only sometimes.
+    fn data_class(
+        &self,
+        binding: &mut Binding<JniTarget>,
+        flat: &Flat,
+        key: &TypeKey,
+        placement: &str,
+    ) -> Representation<JniOp> {
+        if let Some(strukt) = key.short_name().and_then(|name| flat.struct_type(&name)) {
+            if strukt.fields.is_empty() {
+                return Representation::Unsupported(Unsupported::new(
+                    "unsupported.jni.empty_class",
+                    format!(
+                        "`{}` has no fields, and a Kotlin data class needs at least one property",
+                        strukt.name
+                    ),
+                ));
+            }
+            for field in &strukt.fields {
+                let Some(name) = field.name.as_ref() else {
+                    return Representation::Unsupported(Unsupported::new(
+                        "unsupported.jni.positional_field",
+                        "a positional field has no Kotlin property to read".to_string(),
+                    ));
+                };
+                if field_is_conditional(field) {
+                    return Representation::Unsupported(Unsupported::new(
+                        "unsupported.jni.conditional_field",
+                        format!(
+                            "field `{name}` is written under a condition this build cannot \
+                             evaluate, and Kotlin cannot state one: a property for it would \
+                             be filled in by every caller and read by the wrapper only \
+                             sometimes"
+                        ),
+                    ));
+                }
+            }
+        }
+        let object = binding.carrier(WireType {
+            rust: syn::parse_quote!(jni::objects::JObject<'_>),
+            class: JniClass::Object,
+            // What a property may be: what a getter returning a `long` reads.
+            members: Some(Accepts::of([JniClass::Long])),
+            meta: Jvm {
+                descriptor: format!("L{};", placement.replace('.', "/")),
+                kotlin: KotlinType::Value(placement.to_string()),
+            },
+        });
+        Representation::Product {
+            via: Via::Fields,
+            carrier: object,
+            // A property read is a JVM call, which can fail, and the error is
+            // the jni crate's.
+            read: Operation::target(JniOp::Getter).context("jni.env").fails(
+                FailureCategory::Runtime,
+                syn::parse_quote!(jni::errors::Error),
+            ),
+        }
+    }
+
+    /// An `enum class`: a value crosses as the number Rust assigns it, which
+    /// is what the Kotlin class carries too — or why the enum cannot be one.
+    fn enum_class(
+        &self,
+        binding: &mut Binding<JniTarget>,
+        flat: &Flat,
+        key: &TypeKey,
+        placement: &str,
+    ) -> (Representation<JniOp>, Vec<(String, i32)>) {
+        let unit = key.short_name().and_then(|name| flat.unit_enum(&name));
+        let values = match mirrored_i32_enum(unit, placement, JniTarget::NAME) {
+            Ok(values) => values,
+            Err(refusal) => return (Representation::Unsupported(refusal), Vec::new()),
+        };
+        let number = binding.carrier(WireType {
+            rust: syn::parse_quote!(::jni::sys::jint),
+            class: JniClass::Int,
+            members: None,
+            meta: Jvm {
+                descriptor: "I".to_string(),
+                kotlin: KotlinType::Enum(placement.to_string()),
+            },
+        });
+        let arms: Vec<EnumArm> = values
+            .iter()
+            .map(|(value, number)| {
+                let number = proc_macro2::Literal::i32_unsuffixed(*number);
+                EnumArm {
+                    name: value.name.clone(),
+                    shape: value.shape,
+                    carried: syn::parse_quote!(#number),
+                }
+            })
+            .collect();
+        let named = values
+            .iter()
+            .map(|(value, number)| {
+                let screaming =
+                    crate::util::camel_to_screaming_snake(target::plain(&value.name.to_string()));
+                (kotlin_codegen::escape_kotlin_ident(&screaming), *number)
+            })
+            .collect();
+        // Out of Rust every value names one number; into Rust the carrier is
+        // an `Int` and can hold something no value names, which is what a
+        // caller passing one gets told, rather than a value it did not ask for.
+        let representation = Representation::Terminal {
+            into_rust: Some(Codec {
+                carrier: number,
+                operation: Operation::standard(StandardOp::EnumIn {
+                    values: arms.clone(),
+                    invalid: Some(format!("`{placement}` has no value numbered {{}}")),
+                    bits: None,
+                }),
+            }),
+            out_of_rust: Some(Codec {
+                carrier: number,
+                operation: Operation::standard(StandardOp::EnumOut { values: arms }),
+            }),
+            release: None,
+        };
+        (representation, named)
+    }
+}
+
+/// The form of a native method exporting `function`.
+///
+/// The two parameters the JVM adds are named around the source's: a source
+/// parameter called `env` keeps its name, and the environment steps aside. The
+/// native method is an instance method of the harness `object`, so what the
+/// JVM passes second is the singleton, not a class.
+fn function_form(
+    symbol: String,
+    function: &prebindgen_registry::flat::Function,
+) -> FunctionFormOf<JniTarget> {
+    let returns = !matches!(
+        function.ret.kind(),
+        prebindgen_registry::flat::TypeKind::Unit
+    );
+    jni_form(
+        symbol,
+        vec![
+            ContextParam {
+                name: target::free_name("env", function),
+                ty: syn::parse_quote!(jni::JNIEnv<'_>),
+                supplies: Some("jni.env".to_string()),
+                mutable: true,
+            },
+            ContextParam {
+                name: target::free_name("_this", function),
+                ty: syn::parse_quote!(jni::objects::JObject<'_>),
+                supplies: None,
+                mutable: false,
+            },
+        ],
+        // A wrapper parameter keeps the source parameter's name, as v1's do.
+        function
+            .params
+            .iter()
+            .map(|param| param.name.clone())
+            .collect(),
+        returns,
+    )
+}
+
+/// The form of the native method releasing a handle: it calls nothing on the
+/// JVM, so the environment it is handed goes unused — and is named so — and it
+/// has no source parameter to take a name from, and takes v1's.
+fn release_form(symbol: String) -> FunctionFormOf<JniTarget> {
+    jni_form(
+        symbol,
+        vec![
+            ContextParam {
+                name: format_ident!("_env"),
+                ty: syn::parse_quote!(jni::JNIEnv<'_>),
+                supplies: Some("jni.env".to_string()),
+                mutable: false,
+            },
+            ContextParam {
+                name: format_ident!("_this"),
+                ty: syn::parse_quote!(jni::objects::JObject<'_>),
+                supplies: None,
+                mutable: false,
+            },
+        ],
+        vec![format_ident!("ptr")],
+        false,
+    )
+}
+
+/// What every native method shares: `extern "system"`, any JVM wire type on
+/// either side, and a route for each failure a conversion can raise, each
+/// throwing into the JVM.
+///
+/// Zero is not a result: it is what a native method must return while an
+/// exception is pending, and Kotlin observes the exception. A wrapper that
+/// returns nothing terminates with nothing.
+fn jni_form(
+    symbol: String,
+    context: Vec<ContextParam>,
+    inputs: Vec<syn::Ident>,
+    returns: bool,
+) -> FunctionFormOf<JniTarget> {
+    let jni_error: syn::Type = syn::parse_quote!(jni::errors::Error);
+    let terminate = || match returns {
+        true => Terminal::Return(syn::parse_quote!(0)),
+        false => Terminal::Return(syn::parse_quote!(())),
+    };
+    FunctionForm {
+        abi: "system".to_string(),
+        symbol,
+        context,
+        inputs,
+        routes: vec![
+            // A runtime failure: a JVM call that failed.
+            FailureRoute {
+                category: FailureCategory::Runtime,
+                report: Some(Report {
+                    error: jni_error.clone(),
+                    operation: Operation::target(JniOp::ReportError)
+                        .context("jni.env")
+                        .fails(FailureCategory::Runtime, jni_error.clone()),
+                }),
+                on_report_failure: Terminal::Abort,
+                terminate: terminate(),
+            },
+            // A binding failure: the caller broke the contract — a null
+            // handle — and the message says how.
+            FailureRoute {
+                category: FailureCategory::Binding,
+                report: Some(Report {
+                    error: syn::parse_quote!(String),
+                    operation: Operation::target(JniOp::ThrowMessage)
+                        .context("jni.env")
+                        .fails(FailureCategory::Runtime, jni_error),
+                }),
+                on_report_failure: Terminal::Abort,
+                terminate: terminate(),
+            },
+        ],
+        attrs: Vec::new(),
+        unsafety: false,
+        params: Accepts::of(JniClass::all()),
+        ret: Accepts::of(JniClass::all()),
+    }
+}
+
+/// A declarator v2 has no lowering for — or a setting on one it does not
+/// honour — refused by name, with the Kotlin placement it would have had, so a
+/// skip says which capability it waits for and where it was going.
+fn unimplemented(
+    declarator: &str,
+    capability: &str,
+    declaration: &Declaration,
+    placement: &str,
+) -> Unsupported {
+    Unsupported::new(
+        format!("unsupported.jni.{capability}"),
+        format!(
+            "`{declaration}` is declared as a `{declarator}` at `{placement}`, which the v2 JNI \
+             target does not lower yet"
+        ),
+    )
 }
 
 impl Declarations {

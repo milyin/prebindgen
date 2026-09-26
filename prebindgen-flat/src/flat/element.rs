@@ -605,7 +605,7 @@ impl Field {
 ///
 /// This is structure, not retained syntax: it is the exact Flat fact needed
 /// to generate `S`, `S(...)`, or `S { ... }` without reopening a `syn` node.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum FieldShape {
     Unit,
     Tuple,

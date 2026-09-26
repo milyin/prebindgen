@@ -4,8 +4,9 @@
 //! branches on failure, the construction of the source value, the call, the
 //! return — and allocates every temporary from the plan, so two operations
 //! rendered into one wrapper cannot collide over a name. A target contributes
-//! one expression per operation of its own ([`Target::render_operation`]) and
-//! whole [`Artifact`]s; it contributes no control flow.
+//! one expression per operation of its own ([`Target::write_operation`]) and
+//! the declarations its carriers need ([`Target::write_carrier`]); it
+//! contributes no control flow.
 //!
 //! Source types and struct shapes are generated through Flat's emission
 //! capability, never from retained syntax and never spelled by an adapter.
@@ -17,11 +18,11 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 use crate::{
+    binding::{Binding, CarrierId, Implementation, OutputForm, Representation, StandardOp},
     body::{Instr, Operand, ValueId},
-    plan::FunctionPlan,
+    plan::{Applied, FunctionPlan, ParamRole, Retained, Slot, ValuePlan},
     target::{
-        Artifact, FailureCategory, Operation, OutputPlacement, ParamRole, PrimitiveFailure,
-        PrimitiveSpec, StandardOp, Target, Terminal,
+        Artifact, CarrierFeed, FailureCategory, Fed, OperationFeed, Target, Terminal, Written,
     },
 };
 
@@ -69,13 +70,16 @@ impl Reach {
 }
 
 /// The whole generated Rust file, as text.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn render<T: Target>(
     flat: &Flat,
     target: &T,
+    binding: &Binding<T>,
     reach: &Reach,
-    artifacts: &[Artifact],
-    primitives: &[PrimitiveSpec<T::Payload>],
-    functions: &[FunctionPlan<T::Payload>],
+    retained: &[Retained],
+    nodes: &[ValuePlan],
+    primitives: &[Applied<T::Op>],
+    functions: &[FunctionPlan<T::Op>],
 ) -> String {
     // The guards come first, and they are emitted whatever else this run
     // retained. Each one is a compile-time assertion the capture reader
@@ -84,13 +88,29 @@ pub(crate) fn render<T: Target>(
     // happily against a source crate it disagrees with. It belongs to no
     // declaration, so nothing in retention decides whether to keep it.
     let guards = flat.guards().map(|guard| Writer.guard(guard));
-    let artifacts = artifacts.iter().map(|artifact| &artifact.rust);
-    let wrappers = functions
+    let carriers = carriers(flat, target, binding, retained, nodes);
+    // A helper an operation needs is emitted once, before the wrappers, in
+    // the order the wrappers first need it.
+    let mut helpers: Vec<Artifact> = Vec::new();
+    let wrappers: Vec<TokenStream> = functions
         .iter()
-        .map(|function| wrapper(flat, target, reach, primitives, function));
+        .map(|function| {
+            wrapper(
+                flat,
+                target,
+                binding,
+                reach,
+                primitives,
+                function,
+                &mut helpers,
+            )
+        })
+        .collect();
+    let helpers = helpers.iter().map(|helper| &helper.rust);
     let tokens = quote! {
         #(#guards)*
-        #(#artifacts)*
+        #(#carriers)*
+        #(#helpers)*
         #(#wrappers)*
     };
     match syn::parse2::<syn::File>(tokens.clone()) {
@@ -102,16 +122,87 @@ pub(crate) fn render<T: Target>(
     }
 }
 
+/// The declarations the carriers of every retained type need, each once, in
+/// the order the types were declared.
+///
+/// A carrier's declaration exists only where the source item its type names
+/// does — the `repr(C)` mirror of a conditional struct is itself conditional —
+/// so every item the target writes carries that item's conditions.
+fn carriers<T: Target>(
+    flat: &Flat,
+    target: &T,
+    binding: &Binding<T>,
+    retained: &[Retained],
+    nodes: &[ValuePlan],
+) -> Vec<TokenStream> {
+    let mut written: std::collections::HashSet<CarrierId> = std::collections::HashSet::new();
+    let mut items = Vec::new();
+    for values in retained {
+        let OutputForm::Type { representation, .. } = binding.form_of(values.output) else {
+            continue;
+        };
+        let conditions = values
+            .declaration
+            .captured(flat)
+            .map(|element| Writer.conditions(Conditioned::Item(element)))
+            .unwrap_or_default();
+        let unit = values
+            .declaration
+            .entity_name()
+            .and_then(|name| flat.unit_enum(&name));
+        let root = values.inputs.first().map(|root| &nodes[root.0]);
+        let used: Vec<(CarrierId, bool)> = match binding.representation_of(*representation) {
+            Representation::Terminal {
+                into_rust,
+                out_of_rust,
+                ..
+            } => into_rust
+                .iter()
+                .chain(out_of_rust.iter())
+                .map(|codec| (codec.carrier, false))
+                .collect(),
+            Representation::Product { carrier, .. } => vec![(*carrier, true)],
+            Representation::Unsupported(_) => Vec::new(),
+        };
+        for (carrier, product) in used {
+            if !written.insert(carrier) {
+                continue;
+            }
+            let members = match (product, root) {
+                (true, Some(root)) => root
+                    .relation
+                    .parts()
+                    .iter()
+                    .zip(&root.children)
+                    .map(|(part, child)| (part, binding.carrier_of(nodes[child.0].carrier)))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let feed = CarrierFeed {
+                carrier: binding.carrier_of(carrier),
+                members,
+                unit,
+            };
+            for item in target.write_carrier(&feed) {
+                items.push(quote!(#(#conditions)* #item));
+            }
+        }
+    }
+    items
+}
+
 /// One exported function.
 fn wrapper<T: Target>(
     flat: &Flat,
     target: &T,
+    binding: &Binding<T>,
     reach: &Reach,
-    primitives: &[PrimitiveSpec<T::Payload>],
-    function: &FunctionPlan<T::Payload>,
+    primitives: &[Applied<T::Op>],
+    function: &FunctionPlan<T::Op>,
+    helpers: &mut Vec<Artifact>,
 ) -> TokenStream {
     let mut names: HashMap<ValueId, syn::Ident> = HashMap::new();
-    // Parameters are named by the boundary, because a target that requires an
+    // Parameters are named by the form, because a convention that requires an
     // environment operand has to say what it is called. Everything else is
     // named here, and around those names: a temporary that shadowed a live
     // parameter would compile and read the wrong value.
@@ -129,7 +220,7 @@ fn wrapper<T: Target>(
         .map(|(id, param)| {
             names.insert(*id, param.name.clone());
             let name = &param.name;
-            let ty = &param.ty.ty;
+            let ty = &param.ty;
             let mutable = param.mutable.then(|| quote!(mut));
             quote!(#mutable #name: #ty)
         })
@@ -163,25 +254,27 @@ fn wrapper<T: Target>(
     // review makes worth doing.
     //
     // The instructions are where a wrapper spells a source item: its signature
-    // carries target wire types only, and the one operation that spells a
-    // source type — a handle taken back or released, cast to
-    // `*mut source::Ledger` — is a standard one the registry renders, so it is
-    // found here too.
+    // carries carriers only, and the one operation that spells a source type —
+    // a handle taken back or released, cast to `*mut source::Ledger` — is a
+    // standard one the registry writes, so it is found here too.
     let mut conditions = Vec::new();
     let mut conditioned: std::collections::HashSet<String> = std::collections::HashSet::new();
     for step in &function.instrs {
         let named = match &step.instr {
             Instr::Construct { name, .. } => name.clone(),
             Instr::Call { function, .. } => function.clone(),
-            Instr::Apply { primitive, .. } => match &primitives[primitive.0].implementation {
-                Operation::Standard(
-                    StandardOp::FromRaw { source } | StandardOp::Release { source },
-                ) => match source.kind() {
-                    prebindgen_flat::flat::TypeKind::Named { id, .. } => id.name.clone(),
+            Instr::Apply { primitive, .. } => {
+                let applied = &primitives[primitive.0];
+                match &applied.implementation {
+                    Implementation::Standard(StandardOp::FromRaw | StandardOp::Release) => {
+                        match applied.subject.kind() {
+                            prebindgen_flat::flat::TypeKind::Named { id, .. } => id.name.clone(),
+                            _ => continue,
+                        }
+                    }
                     _ => continue,
-                },
-                _ => continue,
-            },
+                }
+            }
         };
         // Planning names only items the model declares.
         let Some(element) = flat.element(named.as_str()) else {
@@ -207,23 +300,30 @@ fn wrapper<T: Target>(
                 operands,
                 result,
             } => {
-                let primitive = &primitives[primitive.0];
+                let applied = &primitives[primitive.0];
                 let operand_names: Vec<syn::Ident> = operands
                     .iter()
                     .map(|operand| operand_name(&names, function, operand))
                     .collect();
-                let expression = operation(target, reach, primitive, &operand_names);
-                let statement = match (&primitive.failure, result) {
-                    (PrimitiveFailure::Infallible, Some(result)) => {
+                let expression =
+                    operation(target, binding, reach, applied, &operand_names, helpers);
+                let statement = match (&applied.failure, result) {
+                    (None, Some(result)) => {
                         let name = local(&mut names, &mut taken, *result);
                         quote!(let #name = #expression;)
                     }
-                    (PrimitiveFailure::Infallible, None) => quote!(#expression;),
-                    (PrimitiveFailure::Fallible { category, .. }, Some(result)) => {
+                    (None, None) => quote!(#expression;),
+                    (Some(failure), Some(result)) => {
                         let name = local(&mut names, &mut taken, *result);
-                        let route = failure_arm(target, reach, function, *category, &error_binding);
+                        let route = failure_arm(
+                            target,
+                            function,
+                            failure.category,
+                            &error_binding,
+                            helpers,
+                        );
                         let ok = &ok_binding;
-                        let error = error_pattern(function, *category, &error_binding);
+                        let error = error_pattern(function, failure.category, &error_binding);
                         quote! {
                             let #name = match #expression {
                                 Ok(#ok) => #ok,
@@ -231,9 +331,15 @@ fn wrapper<T: Target>(
                             };
                         }
                     }
-                    (PrimitiveFailure::Fallible { category, .. }, None) => {
-                        let route = failure_arm(target, reach, function, *category, &error_binding);
-                        let error = error_pattern(function, *category, &error_binding);
+                    (Some(failure), None) => {
+                        let route = failure_arm(
+                            target,
+                            function,
+                            failure.category,
+                            &error_binding,
+                            helpers,
+                        );
+                        let error = error_pattern(function, failure.category, &error_binding);
                         quote! {
                             if let Err(#error) = #expression { #route }
                         }
@@ -258,10 +364,7 @@ fn wrapper<T: Target>(
                 //
                 // Read from the model here, while the statements got theirs
                 // from `Part::conditions` at plan time. The two agree because
-                // both read the same field; should a part's conditions ever
-                // become something a target contributes to, this has to read
-                // the part instead — an initializer written under a condition
-                // its read does not share names a value that is not there.
+                // both read the same field.
                 let bound: Vec<TokenStream> = item
                     .fields
                     .iter()
@@ -299,16 +402,16 @@ fn wrapper<T: Target>(
         }
     }
 
-    let tail = match (&function.output, function.result) {
-        (OutputPlacement::Return, Some(result)) => {
+    let tail = match function.result {
+        Some(result) => {
             let name = &names[&result];
             quote!(#name)
         }
-        _ => quote!(),
+        None => quote!(),
     };
-    let symbol = format_ident!("{}", function.abi.symbol);
-    let abi = &function.abi.abi;
-    let attrs = &function.abi.attrs;
+    let symbol = format_ident!("{}", function.symbol);
+    let abi = &function.abi;
+    let attrs = &function.attrs;
     // A carrier whose bits are read as an integer holds whatever the caller
     // put in it. A foreign caller passes a number, which the match checks;
     // safe Rust could pass storage never initialized, which no check can
@@ -316,11 +419,11 @@ fn wrapper<T: Target>(
     let reads_bits = function.instrs.iter().any(|step| match &step.instr {
         Instr::Apply { primitive, .. } => matches!(
             primitives[primitive.0].implementation,
-            Operation::Standard(StandardOp::EnumIn { bits: Some(_), .. })
+            Implementation::Standard(StandardOp::EnumIn { bits: Some(_), .. })
         ),
         _ => false,
     });
-    let unsafety = (function.abi.unsafety || reads_bits).then(|| quote!(unsafe));
+    let unsafety = (function.unsafety || reads_bits).then(|| quote!(unsafe));
     let safety = reads_bits.then(|| {
         quote! {
             /// # Safety
@@ -332,13 +435,9 @@ fn wrapper<T: Target>(
         }
     });
     let ret = function
-        .abi
         .ret
         .as_ref()
-        .map(|wire| {
-            let ty = &wire.ty;
-            quote!(-> #ty)
-        })
+        .map(|ty| quote!(-> #ty))
         .unwrap_or_default();
     quote! {
         #safety
@@ -352,43 +451,62 @@ fn wrapper<T: Target>(
     }
 }
 
-/// One operation's expression: the registry renders its own, the target renders
-/// its own.
+/// Keep `written`'s helpers, each once.
+fn keep(helpers: &mut Vec<Artifact>, written: Written) -> TokenStream {
+    for helper in written.helpers {
+        if !helpers.iter().any(|kept| kept.name == helper.name) {
+            helpers.push(helper);
+        }
+    }
+    written.text
+}
+
+/// One operation's expression: the registry writes its own, the target writes
+/// its own from what the plan feeds it.
 fn operation<T: Target>(
     target: &T,
+    binding: &Binding<T>,
     reach: &Reach,
-    primitive: &PrimitiveSpec<T::Payload>,
+    applied: &Applied<T::Op>,
     operands: &[syn::Ident],
+    helpers: &mut Vec<Artifact>,
 ) -> TokenStream {
     // The handle operations spell a source type, which is what makes them the
     // registry's: an adapter has no way to, and no business doing it.
     let source_type = |ty| Writer.emit_source_type(ty, &reach.modules, &reach.default);
-    match &primitive.implementation {
-        Operation::Standard(StandardOp::Identity) => {
-            let value = &operands[0];
-            quote!(#value)
+    let carrier_type = |slot: Option<Slot>| match slot {
+        Some(Slot::Carrier(carrier)) => {
+            let ty = &binding.carrier_of(carrier).rust;
+            quote!(#ty)
         }
-        Operation::Standard(StandardOp::ReadMember { member }) => {
-            let value = &operands[0];
+        _ => source_type(&applied.subject),
+    };
+    let value = &operands[0];
+    match &applied.implementation {
+        Implementation::Standard(StandardOp::Identity) => quote!(#value),
+        Implementation::Standard(StandardOp::ReadMember) => {
+            let member = applied
+                .part
+                .as_ref()
+                .expect("a member read is applied to a part")
+                .member();
             quote!(#value.#member)
         }
-        Operation::Standard(StandardOp::IntoRaw { carrier }) => {
-            let value = &operands[0];
+        Implementation::Standard(StandardOp::IntoRaw) => {
+            let carrier = carrier_type(applied.result);
             quote!(Box::into_raw(Box::new(#value)) as #carrier)
         }
-        Operation::Standard(StandardOp::FromRaw { source }) => {
-            let value = &operands[0];
-            let ty = source_type(source);
-            let message = format!("null `{}` handle", source.key());
+        Implementation::Standard(StandardOp::FromRaw) => {
+            let ty = source_type(&applied.subject);
+            let message = format!("null `{}` handle", applied.subject.key());
             quote! {
                 ::core::ptr::NonNull::new(#value as *mut #ty)
                     .map(|handle| unsafe { *Box::from_raw(handle.as_ptr()) })
                     .ok_or_else(|| String::from(#message))
             }
         }
-        Operation::Standard(StandardOp::EnumOut { source, values }) => {
-            let value = &operands[0];
-            let ty = source_type(source);
+        Implementation::Standard(StandardOp::EnumOut { values }) => {
+            let ty = source_type(&applied.subject);
             let arms = values.iter().map(|arm| {
                 let pattern = enum_value(&ty, arm);
                 let carried = &arm.carried;
@@ -396,18 +514,16 @@ fn operation<T: Target>(
             });
             quote!(match #value { #(#arms),* })
         }
-        Operation::Standard(StandardOp::EnumIn {
-            source,
+        Implementation::Standard(StandardOp::EnumIn {
             values,
             invalid,
             bits,
         }) => {
-            let value = &operands[0];
             let value = match bits {
                 Some(bits) => quote!(unsafe { ::core::mem::transmute_copy::<_, #bits>(&(#value)) }),
                 None => quote!(#value),
             };
-            let ty = source_type(source);
+            let ty = source_type(&applied.subject);
             let arms = values.iter().map(|arm| {
                 let carried = &arm.carried;
                 let constructed = enum_value(&ty, arm);
@@ -426,15 +542,32 @@ fn operation<T: Target>(
                 None => quote!(match #value { #(#arms),* }),
             }
         }
-        Operation::Standard(StandardOp::Release { source }) => {
-            let value = &operands[0];
-            let ty = source_type(source);
+        Implementation::Standard(StandardOp::Release) => {
+            let ty = source_type(&applied.subject);
             quote! {
                 drop(::core::ptr::NonNull::new(#value as *mut #ty)
                     .map(|handle| unsafe { Box::from_raw(handle.as_ptr()) }))
             }
         }
-        Operation::Target(payload) => target.render_operation(payload, operands),
+        Implementation::Target(op) => {
+            let fed = |slot: Slot| match slot {
+                Slot::Source => Fed::Source(&applied.subject),
+                Slot::Carrier(carrier) => Fed::Carrier(binding.carrier_of(carrier)),
+            };
+            let feed = OperationFeed {
+                value: Some((value.clone(), fed(applied.value))),
+                contexts: applied
+                    .contexts
+                    .iter()
+                    .cloned()
+                    .zip(operands[1..].iter().cloned())
+                    .collect(),
+                error: None,
+                result: applied.result.map(fed),
+                part: applied.part.as_ref(),
+            };
+            keep(helpers, target.write_operation(op, &feed))
+        }
     }
 }
 
@@ -451,13 +584,13 @@ fn enum_value(ty: &TokenStream, arm: &crate::target::EnumArm) -> TokenStream {
 
 /// The pattern a failure arm binds the error with: the name when a reporter
 /// reads it, `_` when the route only terminates.
-fn error_pattern<P>(
-    function: &FunctionPlan<P>,
+fn error_pattern<Op>(
+    function: &FunctionPlan<Op>,
     category: FailureCategory,
     error: &syn::Ident,
 ) -> TokenStream {
     let reported = function
-        .failures
+        .routes
         .iter()
         .any(|route| route.category == category && route.report.is_some());
     if reported {
@@ -467,39 +600,48 @@ fn error_pattern<P>(
     }
 }
 
-/// What one failure category does at this boundary: report if the target has an
+/// What one failure category does at this boundary: report if the form has an
 /// operation for it, then terminate.
 fn failure_arm<T: Target>(
     target: &T,
-    reach: &Reach,
-    function: &FunctionPlan<T::Payload>,
+    function: &FunctionPlan<T::Op>,
     category: FailureCategory,
     error: &syn::Ident,
+    helpers: &mut Vec<Artifact>,
 ) -> TokenStream {
     let route = function
-        .failures
+        .routes
         .iter()
         .find(|route| route.category == category)
         .expect("an unrouted failure category is refused before assembly");
     let report = route.report.as_ref().map(|report| {
-        let operands: Vec<syn::Ident> = report
-            .operands
+        let contexts: Vec<(String, syn::Ident)> = report
+            .operation
+            .context
             .iter()
-            .map(|operand| match &operand.role {
-                crate::target::OperandRole::Context(name) => context_name(function, name),
-                crate::target::OperandRole::Error => error.clone(),
-                // Refused when the boundary is assembled: a reporting operation
-                // is given the error and the contexts, and has no value to read.
-                crate::target::OperandRole::Value => {
-                    unreachable!("a reporting operation with a value operand is refused")
-                }
-            })
+            .map(|name| (name.clone(), context_name(function, name)))
             .collect();
-        let expression = operation(target, reach, report, &operands);
+        let expression = match &report.operation.implementation {
+            Implementation::Target(op) => {
+                let feed = OperationFeed::<T> {
+                    value: None,
+                    contexts,
+                    error: Some(error.clone()),
+                    result: None,
+                    part: None,
+                };
+                keep(helpers, target.write_operation(op, &feed))
+            }
+            // A standard operation converts a value, and a report has none to
+            // convert; a binding that stated one is refused before assembly.
+            Implementation::Standard(_) => {
+                unreachable!("a reporting operation is the target's own")
+            }
+        };
         let on_failure = terminal(&route.on_report_failure);
-        match report.failure {
-            PrimitiveFailure::Infallible => quote!(#expression;),
-            PrimitiveFailure::Fallible { .. } => quote! {
+        match report.operation.failure {
+            None => quote!(#expression;),
+            Some(_) => quote! {
                 if #expression.is_err() { #on_failure }
             },
         }
@@ -518,9 +660,9 @@ fn terminal(terminal: &Terminal) -> TokenStream {
     }
 }
 
-fn operand_name<P>(
+fn operand_name<Op>(
     names: &HashMap<ValueId, syn::Ident>,
-    function: &FunctionPlan<P>,
+    function: &FunctionPlan<Op>,
     operand: &Operand,
 ) -> syn::Ident {
     match operand {
@@ -549,7 +691,7 @@ fn free_name(preferred: &str, taken: &mut std::collections::HashSet<String>) -> 
 }
 
 /// The wrapper parameter supplying a runtime context.
-fn context_name<P>(function: &FunctionPlan<P>, context: &str) -> syn::Ident {
+fn context_name<Op>(function: &FunctionPlan<Op>, context: &str) -> syn::Ident {
     function
         .params
         .iter()

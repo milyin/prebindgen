@@ -24,29 +24,24 @@ function exists and asking to export it are separate inputs.
 
 ## Result
 
-The request names the public declaration; the adapter's function settings stay
-with the adapter, under that same name. This sketch names the two positions
-whose values need [conversion](../../stages/04-select.md#select-conversion-relations): the first parameter and the return value.
-The block uses design notation, not exact current fields. The frontend hands
-the engine a `Declaration` — here `Declaration::Function(stamp_sum)` — paired
-with the choice it recorded for it; the engine uses
-`Position { output, declaration, path }` rather than the proposed `SiteId`
-below.
+The frontend records one output in the binding: the declaration
+`Declaration::Function(stamp_sum)`, paired with the function form it chose for
+it. The form's contents differ per target, and so live on the language pages.
+The two positions whose values need
+[conversion](../../stages/04-select.md#select-conversion-relations) — the
+parameter and the return value — are addressed by path inside that output,
+and no rule names either:
 
 ```text
-OutputRequest {
-    id:     DeclarationId("fn:stamp_sum"),
-    source: SourceItemId(crate::source::stamp_sum),
-}
+output   fn:stamp_sum   function <the form this target recorded>
 
-sites:
-    SiteId { owner: <that DeclarationId>, path: Param(0) }   // the owned Stamp
-    SiteId { owner: <that DeclarationId>, path: Return }     // the i64
+positions:
+    At(fn:stamp_sum, param stamp)   // the owned Stamp — no rule here
+    At(fn:stamp_sum, return)        // the i64         — no rule here
 
-in the target, not the request set:
-    output    <this DeclarationId> -> what this target recorded for stamp_sum
-    per site  none                 -> no position-specific overrides
-    per type  Stamp                -> <the struct's choice>
+rules that reach them:
+    Type(Stamp) -> <the struct's representation>
+    Type(i64)   -> <this target's integer representation>
 ```
 
 The struct's [representation](../../stages/05-represent.md#represent-and-compose-values) is not decided here: it comes from

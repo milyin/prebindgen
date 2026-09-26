@@ -10,35 +10,39 @@
 
 use std::path::{Path, PathBuf};
 
-use prebindgen_flat::flat::Flat;
+use prebindgen_flat::{flat::Flat, Conditioned, RustEmitter};
 
 use crate::{
+    binding::{Binding, Scope},
     decl::Declaration,
     outcome::{EngineError, Skip},
+    plan::{FunctionPlan, Retained, ValuePlan},
+    target::Target,
 };
 
 /// The engine's name wherever a run identifies itself.
 pub const PIPELINE: &str = "v2";
 
-/// A finished v2 run: the model it read, what it generated, and what a
-/// missing capability left out.
+/// A finished v2 run: the model and binding it read, what it generated, and
+/// what a missing capability left out.
 ///
 /// Immutable. Every writer is a pure emission over it, so they can run in any
 /// order, or not at all.
-pub struct Generation<P = ()> {
+pub struct Generation<T: Target> {
     flat: Flat,
-    /// The target this was generated for, as [`crate::target::Target::NAME`]
-    /// spells it — stamped into the generated file.
+    /// The target this was generated for, as [`Target::NAME`] spells it —
+    /// stamped into the generated file.
     target: &'static str,
+    binding: Binding<T>,
     skipped: Vec<(Declaration, Skip)>,
-    values: Vec<crate::plan::ValuePlan<P>>,
-    functions: Vec<crate::plan::FunctionPlan<P>>,
-    surfaces: Vec<crate::target::SurfaceSpec<P>>,
-    primitives: Vec<crate::target::PrimitiveSpec<P>>,
+    unused_rules: Vec<Scope>,
+    values: Vec<ValuePlan>,
+    retained: Vec<Retained>,
+    functions: Vec<FunctionPlan<T::Op>>,
     rust: String,
 }
 
-impl<P> std::fmt::Debug for Generation<P> {
+impl<T: Target> std::fmt::Debug for Generation<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -50,51 +54,58 @@ impl<P> std::fmt::Debug for Generation<P> {
     }
 }
 
-impl<P> Generation<P> {
+impl<T: Target> Generation<T> {
     /// A finished run over the plans it retained.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         flat: Flat,
         target: &'static str,
+        binding: Binding<T>,
         skipped: Vec<(Declaration, Skip)>,
-        values: Vec<crate::plan::ValuePlan<P>>,
-        functions: Vec<crate::plan::FunctionPlan<P>>,
-        surfaces: Vec<crate::target::SurfaceSpec<P>>,
-        primitives: Vec<crate::target::PrimitiveSpec<P>>,
+        unused_rules: Vec<Scope>,
+        values: Vec<ValuePlan>,
+        retained: Vec<Retained>,
+        functions: Vec<FunctionPlan<T::Op>>,
         rust: String,
     ) -> Self {
         Generation {
             flat,
             target,
+            binding,
             skipped,
+            unused_rules,
             values,
+            retained,
             functions,
-            surfaces,
-            primitives,
             rust,
         }
     }
 
-    /// The retained conversions, shared by every value that crosses the same
-    /// way.
-    pub fn values(&self) -> &[crate::plan::ValuePlan<P>] {
+    /// The planned conversions, shared by every value that crosses the same
+    /// way, by [`NodeId`](crate::NodeId).
+    pub fn values(&self) -> &[ValuePlan] {
         &self.values
     }
 
+    /// One planned conversion.
+    pub fn value(&self, id: crate::NodeId) -> &ValuePlan {
+        &self.values[id.0]
+    }
+
+    /// The outputs that survived, in the order the binding declared them, with
+    /// the values planned for each — what a foreign writer declares.
+    pub fn retained(&self) -> &[Retained] {
+        &self.retained
+    }
+
+    /// The binding this run planned.
+    pub fn binding(&self) -> &Binding<T> {
+        &self.binding
+    }
+
     /// The retained wrappers.
-    pub fn functions(&self) -> &[crate::plan::FunctionPlan<P>] {
+    pub fn functions(&self) -> &[FunctionPlan<T::Op>] {
         &self.functions
-    }
-
-    /// The retained public declarations, which is what a target's own foreign
-    /// writer renders from.
-    pub fn surfaces(&self) -> &[crate::target::SurfaceSpec<P>] {
-        &self.surfaces
-    }
-
-    /// The registered operations the wrappers apply.
-    pub fn primitives(&self) -> &[crate::target::PrimitiveSpec<P>] {
-        &self.primitives
     }
 
     /// The generated Rust, as it is written to disk.
@@ -107,11 +118,30 @@ impl<P> Generation<P> {
         &self.flat
     }
 
+    /// The `#[cfg]` conditions the captured item behind `declaration` was
+    /// written under, spelled as the source wrote them — empty in the ordinary
+    /// case.
+    ///
+    /// Text rather than tokens, because the registry is what puts a condition
+    /// on the Rust it emits. What is left for a foreign writer is the
+    /// declaration in *its* language, which usually cannot state a condition
+    /// at all; saying so in that declaration's documentation is the most it
+    /// can do.
+    pub fn item_conditions(&self, declaration: &Declaration) -> Vec<String> {
+        declaration
+            .captured(&self.flat)
+            .map(|element| crate::emit::Writer.conditions(Conditioned::Item(element)))
+            .unwrap_or_default()
+            .iter()
+            .map(|condition| prebindgen_flat::close_up(&condition.to_string()))
+            .collect()
+    }
+
     /// What the binding asked for and did not get, in the order it asked.
     ///
     /// One entry per declaration a missing capability stopped, with the
     /// [`Skip`] naming the capability, a readable sentence, and the path from
-    /// the declaration to the site that could not be lowered. A declaration
+    /// the declaration to the value that could not be lowered. A declaration
     /// absent from this list was generated.
     ///
     /// One entity may be declared more than once, so the same [`Declaration`]
@@ -120,6 +150,13 @@ impl<P> Generation<P> {
     /// which this engine does not speak.
     pub fn skipped(&self) -> &[(Declaration, Skip)] {
         &self.skipped
+    }
+
+    /// The type rules no planned value was covered by, in the order the
+    /// binding recorded them. Not an error: a type rule is a default for many
+    /// values, and a scalar table covers kinds a binding may never mention.
+    pub fn unused_rules(&self) -> &[Scope] {
+        &self.unused_rules
     }
 
     /// Write the generated Rust file.
@@ -168,9 +205,9 @@ impl<P> Generation<P> {
 /// that was not there; looking it up in the whole namespace let a
 /// `.fun(fun!(x))` naming a captured `const x` through as a capability skip.
 ///
-/// An output is the declaration *and* what the target recorded for it, so one
+/// An output is the declaration *and* the form recorded with it, so one
 /// entity declared twice is two outputs and is allowed; the same entity
-/// declared twice as the same thing is the binding saying one thing twice, and
+/// declared twice in the same form is the binding saying one thing twice, and
 /// is refused — the two would be one foreign declaration emitted from two
 /// plans.
 pub(crate) fn check_declarations<K: Clone + Eq + std::hash::Hash>(
@@ -199,4 +236,17 @@ pub(crate) fn check_declarations<K: Clone + Eq + std::hash::Hash>(
         return Err(EngineError::DuplicateDeclaration { entries: repeated });
     }
     Ok(())
+}
+
+/// Whether a struct field was written under a `#[cfg]` the capture reader
+/// could not answer.
+///
+/// A frontend asks while it builds a binding: a target that cannot state a
+/// condition on its own side — Kotlin has none — refuses such a struct rather
+/// than promise a member the library has only sometimes. Reading the
+/// condition itself stays the registry's, which puts it on the Rust it emits.
+pub fn field_is_conditional(field: &prebindgen_flat::flat::Field) -> bool {
+    !crate::emit::Writer
+        .conditions(Conditioned::Field(field))
+        .is_empty()
 }

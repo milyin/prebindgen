@@ -10,42 +10,41 @@ Owner: the registry · Previous: [Assemble the wrapper boundary][typedef_boundar
 The candidates this alias produced, and what they require:
 
 ```text
-candidate: SurfaceSpec(public Ledger)
-candidate: FunctionPlan(release of Ledger)      // under the type's own identity
+candidate: output type:Ledger, with its release FunctionPlan  // under the type's own identity
 
-requires:  node(Ledger, IntoRust)
+planned:   node(Ledger, IntoRust)
            node(Ledger, OutOfRust)
-           a boundary for the release
+           the release wrapper
+requires:  nothing
 ```
 
 ## Result
 
 ```text
-SurfaceSpec {
-    declaration: public Ledger in this target,
-    requires:    [],
-    rust:        [ the incomplete C type ]  |  []
-    payload:     none                       |  the example.Ledger class and its release method
+Retained {
+    output:       type:Ledger,
+    declaration:  public Ledger in this target,
+    output_value: node(Ledger, IntoRust),
 }
 
-outcome(public Ledger) = Emitted { artifacts: [ type declaration, release wrapper ] }
+outcome(public Ledger) = Emitted { artifacts: [ carrier declaration, release wrapper ] }
 
 outcome(exported ledger_open)  = Emitted    // requires public Ledger, which is
 outcome(exported ledger_close) = Emitted    // emitted — so both stand
 ```
 
-Had the target refused to place the release:
+Had the binding given the type output no release form:
 
 ```text
-outcome(public Ledger)         = Skipped { cause#1: no release }
+outcome(public Ledger)         = Skipped { cause#1: unsupported.type.no_release }
 outcome(exported ledger_open)  = Skipped { cause#1, path [fn:ledger_open,  type:Ledger] }
 outcome(exported ledger_close) = Skipped { cause#1, path [fn:ledger_close, type:Ledger] }
 ```
 
 The type's [outcome](../../stages/07-retain.md#retain-supported-output)
 requires both directions and the release. One refused direction, or a release
-with nowhere to go, skips the type; the report names the refused direction
-(`out_of_rust`) or the boundary as the place the walk stopped. A function
+with no form, skips the type; the report names the refused direction
+(`out_of_rust`) or the release as the place the walk stopped. A function
 returning a handle requires the handle's public declaration, exactly as
 [one taking a struct requires the struct's][fn_retain]: a C caller cannot hold
 a `Ledger *` to a type the header never names, and a Kotlin caller cannot free

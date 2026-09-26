@@ -1,10 +1,12 @@
 //! The Kotlin side of a v2 generation.
 //!
 //! The engine renders Rust only; what Kotlin a binding needs is the JNI
-//! adapter's to say, and it says it here from the payloads its declarations
-//! carried through planning — a `data class` per emitted struct, a handle
-//! class per emitted opaque type, one `external fun` per emitted function on
-//! the harness object, and a public function calling each. Rendering goes
+//! adapter's to say, and it says it here from the outputs that survived — a
+//! `data class` per emitted struct, a handle class per emitted opaque type,
+//! one `external fun` per emitted function on the harness object, and a public
+//! function calling each. What a class or a function is called is the output
+//! metadata the binding recorded; what each property or parameter is spelled
+//! as is the metadata of the carrier the plan resolved it to. Rendering goes
 //! through `kotlin-codegen`, as v1's does, so the output is validated Kotlin
 //! and lands in the same generator-owned tree.
 //!
@@ -23,15 +25,15 @@ use kotlin_codegen::{
     write_files, KtClass, KtCode, KtCtorParam, KtDecl, KtFile, KtFun, KtParam, KtProperty, KtType,
     KtVis, WriteKotlinError,
 };
-use prebindgen_registry_v2::Generation;
+use prebindgen_registry_v2::{Declaration, Generation, NodeId, OutputForm};
 
-use super::target::{JniPayload, KotlinType};
+use super::target::{kotlin_ident, JniOutput, JniTarget, KotlinType};
 use crate::jni::Declarations;
 
 /// Write one file per package under `kotlin_root`, and return the paths.
 pub(super) fn write(
     decls: &Declarations,
-    generation: &Generation<JniPayload>,
+    generation: &Generation<JniTarget>,
     kotlin_root: &Path,
 ) -> Result<Vec<PathBuf>, WriteKotlinError> {
     let mut files: BTreeMap<String, KtFile> = BTreeMap::new();
@@ -50,33 +52,52 @@ pub(super) fn write(
         false => format!("{harness_package}.{harness}"),
     };
     let mut natives: Vec<KtDecl> = Vec::new();
+    let binding = generation.binding();
+    // How Kotlin spells the value a planned conversion carries.
+    let kotlin = |node: NodeId| -> KotlinType {
+        binding
+            .carrier_of(generation.value(node).carrier)
+            .meta
+            .kotlin
+            .clone()
+    };
 
-    for surface in generation.surfaces() {
-        match &surface.payload {
-            Some(JniPayload::Class {
-                package,
-                class,
-                properties,
-            }) => {
-                let mut properties = properties.iter();
+    for retained in generation.retained() {
+        let meta = match binding.form_of(retained.output) {
+            OutputForm::Type { meta, .. } | OutputForm::Function { meta, .. } => meta,
+            OutputForm::Unsupported(_) => continue,
+        };
+        match meta {
+            // A data class, one property per field, each spelled as the
+            // carrier its field resolved to.
+            JniOutput::DataClass { package, class } => {
+                let root = generation.value(retained.inputs[0]);
+                let mut properties =
+                    root.relation
+                        .parts()
+                        .iter()
+                        .zip(&root.children)
+                        .map(|(part, child)| {
+                            let name = kotlin_ident(part.name.as_deref().unwrap_or_default());
+                            (name, kotlin(*child).public().to_string())
+                        });
                 let (name, ty) = properties
                     .next()
                     .expect("a class with no properties is refused before it is emitted");
-                let mut declaration = KtClass::data(class, property(name, ty)).vis(KtVis::Public);
+                let mut declaration = KtClass::data(class, property(&name, &ty)).vis(KtVis::Public);
                 for (name, ty) in properties {
-                    declaration = declaration.ctor_param(property(name, ty));
+                    declaration = declaration.ctor_param(property(&name, &ty));
                 }
                 file(package, &mut files).decls.push(declaration.into());
             }
             // A Kotlin `enum class` of the same values, each carrying the
             // number Rust assigns it, and a `fromInt` looking one up: that
             // number is what crosses, in both directions.
-            Some(JniPayload::EnumClass {
+            JniOutput::EnumClass {
                 package,
                 class,
                 values,
-                conditions,
-            }) => {
+            } => {
                 let mut declaration = crate::jni::render::enum_class(
                     class,
                     values
@@ -84,7 +105,7 @@ pub(super) fn write(
                         .map(|(name, number)| (name.clone(), i64::from(*number))),
                 );
                 if let Some(kdoc) = conditions_kdoc(
-                    conditions,
+                    &generation.item_conditions(&retained.declaration),
                     "the functions that take or return it are what a library built without \
                      that condition lacks",
                 ) {
@@ -92,15 +113,29 @@ pub(super) fn write(
                 }
                 file(package, &mut files).decls.push(declaration.into());
             }
-            Some(JniPayload::Method {
+            JniOutput::Function {
                 package,
                 method,
                 native,
-                params,
-                ret,
-                conditions,
-            }) => {
-                natives.push(native_method(native, params, ret));
+            } => {
+                let Declaration::Function(ident) = &retained.declaration else {
+                    unreachable!("a function's metadata is recorded for a function");
+                };
+                let function = generation
+                    .flat()
+                    .function(&ident.to_string())
+                    .expect("an emitted function is in the model");
+                let params: Vec<(String, KotlinType)> = function
+                    .params
+                    .iter()
+                    .zip(&retained.inputs)
+                    .map(|(param, node)| (kotlin_ident(&param.name.to_string()), kotlin(*node)))
+                    .collect();
+                let ret = match retained.output_value {
+                    Some(node) => kotlin(node),
+                    None => KotlinType::Value("Unit".to_string()),
+                };
+                natives.push(native_method(native, &params, &ret));
                 // The function a caller uses, delegating to it. The harness is
                 // named in full only from another package.
                 let harness = match *package == harness_package {
@@ -108,19 +143,19 @@ pub(super) fn write(
                     false => harness_fqn.as_str(),
                 };
                 let mut public = KtFun::new(method).vis(KtVis::Public);
-                for (name, ty) in params {
+                for (name, ty) in &params {
                     public = public.param(KtParam::new(name, KtType::cls(ty.public())));
                 }
                 public = public
                     .returns(KtType::cls(ret.public()))
-                    .expr_body(KtCode::new().line(call(harness, native, params, ret, package)));
+                    .expr_body(KtCode::new().line(call(harness, native, &params, &ret, package)));
                 // Kotlin has no conditional compilation, so a function whose
                 // source was written under a condition is declared here
                 // whatever that condition says, and the symbol behind it is
                 // there only where the condition held. Saying so is all this
                 // writer can do about it.
                 if let Some(kdoc) = conditions_kdoc(
-                    conditions,
+                    &generation.item_conditions(&retained.declaration),
                     "using it against a library built without that condition raises \
                      UnsatisfiedLinkError",
                 ) {
@@ -132,21 +167,16 @@ pub(super) fn write(
                 }
                 file(package, &mut files).decls.push(public.into());
             }
-            Some(JniPayload::Handle {
+            JniOutput::PtrClass {
                 package,
                 class,
-                release,
-            }) => {
-                let JniPayload::Method {
+                native,
+            } => {
+                natives.push(native_method(
                     native,
-                    params,
-                    ret,
-                    ..
-                } = &**release
-                else {
-                    unreachable!("a handle's release is a native method");
-                };
-                natives.push(native_method(native, params, ret));
+                    &[("ptr".to_string(), KotlinType::Handle(class.clone()))],
+                    &KotlinType::Value("Unit".to_string()),
+                ));
                 let harness = match *package == harness_package {
                     true => harness.as_str(),
                     false => harness_fqn.as_str(),
@@ -196,7 +226,6 @@ pub(super) fn write(
                     );
                 file(package, &mut files).decls.push(declaration.into());
             }
-            _ => {}
         }
     }
 

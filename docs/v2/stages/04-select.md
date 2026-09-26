@@ -89,7 +89,7 @@ are answered.
   object whose properties are read by calling `getSecs()` and `getNanos()`
   through JNI. This answer is the rest of the same representation: the
   [carrier](05-represent.md#describing-target-values-and-operations), and the
-  operations that read and build it. The frontend states it, because only the
+  operations that read it or convert it. The frontend states it, because only the
   language's own crate knows what a C struct or a JVM object is; the registry
   holds it, types it and orders it without needing to know.
 - **How are the pieces put together?** Read each part, convert it, construct the
@@ -103,9 +103,6 @@ loop, which calls no target code:
 plan(type, direction, position):
     repr = rules.at(position)                         # a rule for this one value,
         or rules.for_type(type)                       # else one for every value of the type,
-        or containers.for(type)                       # else, for Vec<T> or Option<T>, the
-                                                      # container for T's wire class, once
-                                                      # T is planned
         or refuse: unsupported.conversion.no_rule     # cheap: a lookup, no recursion yet
     relation = the relation of type that repr names   # Terminal: atomic; Product: its Via
     mark (type, direction, repr) as being resolved
@@ -381,47 +378,43 @@ before the first writer runs.
 pub trait Target: Sized {
     const NAME: &'static str;
 
-    /// The adapter's few wire types, which containers are keyed by.
-    /// C: I64, …, Pointer, Aggregate. JNI: Long, Int, …, Object.
+    /// The adapter's few wire types, which acceptance is stated in.
+    /// C: I64, Pointer, Aggregate, Enum. JNI: Long, Int, Handle, Object.
     type WireClass: Clone + Eq + Hash + Debug;
     /// What a carrier tells the writers beyond its Rust type.
-    /// C: its C name. JNI: its JVM descriptor and Kotlin type.
+    /// C: which declaration it needs, under which C name. JNI: its JVM
+    /// descriptor and Kotlin type.
     type CarrierMeta: Clone + Eq + Hash + Debug;
-    /// The target's own operations. C: none. JNI: a getter call, an object
-    /// construction, a throw.
+    /// The target's own operations. C: none. JNI: a getter call, and the two
+    /// ways a failure is reported.
     type Op: Clone + Eq + Hash + Debug;
-    /// What only the foreign writer reads. C: nothing. JNI: a Kotlin name and package.
+    /// What only the foreign writer reads about an output. C: nothing. JNI: a
+    /// Kotlin package and name.
     type OutputMeta: Clone + Eq + Hash + Debug;
 
     /// One of the target's operations, as one Rust expression.
-    fn write_operation(&self, op: &Self::Op, feed: &OperationFeed<'_, Self>) -> Written<syn::Expr>;
+    fn write_operation(&self, op: &Self::Op, feed: &OperationFeed<'_, Self>) -> Written;
 
-    /// The Rust declaration a carrier needs, if it needs one: a `repr(C)`
-    /// struct or enum mirror, an incomplete type behind a pointer. `None` for a
-    /// type Rust already has, such as `i64` or `JObject`.
-    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Option<Written<TokenStream>>;
-
-    /// A name for something the registry built during planning — a
-    /// container instance's type, its release symbol — from its base
-    /// (`vec_stamp`), through the frontend's own manglers.
-    fn write_name(&self, role: NameRole, base: &str) -> String;
-
-    /// The foreign declarations, in the target's own language. C writes none:
-    /// cbindgen derives the header from the Rust.
-    fn write_foreign(&self, feed: &ForeignFeed<'_, Self>) -> Vec<ForeignFile> {
-        Vec::new()
-    }
+    /// The Rust items a carrier needs declared: a `repr(C)` struct or enum
+    /// mirror, an incomplete type behind a pointer. None for a type Rust
+    /// already has, such as `i64` or `JObject`.
+    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<TokenStream>;
 }
 
 /// What a writer produced, and the helpers it needs emitted once beside it.
-pub struct Written<X> {
-    pub text: X,
+pub struct Written {
+    pub text: TokenStream,
     pub helpers: Vec<Artifact>,
 }
 
 pub struct OperationFeed<'a, T: Target> {
-    /// The operands, already named, each with the carrier or source type it holds.
-    pub operands: &'a [(syn::Ident, Fed<'a, T>)],
+    /// The value the operation is applied to, already named, and what it holds.
+    pub value: Option<(syn::Ident, Fed<'a, T>)>,
+    /// The runtime contexts it asked for, each bound to the wrapper parameter
+    /// supplying it.
+    pub contexts: Vec<(String, syn::Ident)>,
+    /// The error a reporting operation reports.
+    pub error: Option<syn::Ident>,
     /// What the expression must produce.
     pub result: Option<Fed<'a, T>>,
     /// For an operation applied per part, such as a `Product`'s `read`: which part.
@@ -430,14 +423,14 @@ pub struct OperationFeed<'a, T: Target> {
 
 pub enum Fed<'a, T: Target> {
     Source(&'a TypeRef),
-    Carrier(&'a WireType<T>),
+    Carrier(&'a CarrierOf<T>),
 }
 
 pub struct CarrierFeed<'a, T: Target> {
-    pub carrier: &'a WireType<T>,
+    pub carrier: &'a CarrierOf<T>,
     /// For the carrier of a `Product`: each part, with the carrier it resolved to.
-    pub members: &'a [(&'a Part, &'a WireType<T>)],
-    /// For a carrier mirroring a fieldless enum: that enum, from the model.
+    pub members: Vec<(&'a Part, &'a CarrierOf<T>)>,
+    /// For a carrier of a fieldless enum's value: that enum, from the model.
     pub unit: Option<&'a Enum>,
 }
 ```
@@ -449,16 +442,17 @@ with the object operand and its `example/Stamp` carrier, the `env` context, the
 part `secs`, and the result carrier the `i64` rule resolved to — a `jlong`
 whose metadata says `J`. The JNI writer turns the part's name into `getSecs`
 by the Kotlin convention and the result's descriptor into `()J`, and
-writes `env.call_method(&arg0, "getSecs", "()J", &[])?.j()?`. Nothing in the
-feed was decided by the writer, and nothing the writer produced changes what
-the registry planned.
+writes `env.call_method(&stamp, "getSecs", "()J", &[]).and_then(|value| value.j())`.
+Nothing in the feed was decided by the writer, and nothing the writer produced
+changes what the registry planned.
 
 C writes even less. Every C operation is a standard one the registry writes
-itself — a member read, a struct literal, a pointer cast — so C's `Op` has no
-values and `write_operation` is never called. What C writes is carriers: fed
-the `Stamp` carrier and its two members, each with its resolved `i64`
-carrier, it writes `#[repr(C)] pub struct Stamp { pub secs: i64, pub nanos: i64 }`,
-which cbindgen then turns into the header's declaration.
+itself — a member read, a pointer cast, a match over an enum's values — so
+C's `Op` has no values and `write_operation` is never called. What C writes
+is carriers: fed the `Stamp` carrier and its two members, each with its
+resolved `i64` carrier, it writes
+`#[repr(C)] pub struct Stamp { pub secs: i64, pub nanos: i64 }`, which
+cbindgen then turns into the header's declaration.
 
 What each stage feeds:
 
@@ -466,9 +460,14 @@ What each stage feeds:
 | --- | --- | --- |
 | Selection (this chapter) | Which representation, relation and carrier each value has | Nothing |
 | [Composition](05-represent.md) | Which operations run in what order, and each operand's and result's carrier | Each target operation, as an expression |
-| [The wrapper](06-boundary.md) | The wrapper's parameters and return from the function form and the resolved carriers, and a route per failure category | Nothing: the registry writes the `extern` function itself |
-| [Retention](07-retain.md) | Which declarations a retained output requires: the declarations of the carriers its wrappers use | Each required carrier's declaration |
-| [Emission](08-emit.md) | The retained outputs with their metadata, and each one's resolved carriers | The foreign declarations |
+| [The wrapper](06-boundary.md) | The wrapper's parameters and return from the function form and the resolved carriers, and a route per failure category | Each reporting operation a route names |
+| [Retention](07-retain.md) | Which outputs survive: those whose values' types are exposed by surviving outputs | Nothing |
+| [Emission](08-emit.md) | The carriers of every retained type output, each with its resolved members | Each carrier's declaration |
+
+The foreign declarations are not a call the registry makes. The JNI
+frontend's Kotlin writer reads the finished generation — the retained
+outputs in order, the values planned for each, and the binding's metadata —
+and C has none to write, since cbindgen derives the header from the Rust.
 
 The `CarrierMeta` a writer reads is the one thing in the plan the registry
 does not understand, and it needs no promise about it: the registry compares

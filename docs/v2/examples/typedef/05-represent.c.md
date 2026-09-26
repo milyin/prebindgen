@@ -1,53 +1,43 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "05-represent", "language": "c"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Common cell][typedef_represent] · [Element path][typedef]
-Owner: the registry; the C adapter states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+Owner: the registry; the C frontend states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
 
 # Type alias declaring an opaque handle — Represent and compose values — C
 
 ## Input
 
 ```text
-Crossing { source: Ledger, direction: IntoRust }    relation: atomic   conversion: opaque_ptr Ledger
-Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   conversion: opaque_ptr Ledger
+Crossing { source: Ledger, direction: IntoRust }    relation: atomic   the Type(Ledger) rule
+Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   the Type(Ledger) rule
 ```
 
 ## Result
 
-The carrier is a pointer to the incomplete C type the adapter declares, and the
-adapter's whole answer is three standard descriptions over it:
-
-```text
-node(Ledger, IntoRust)   ReprSpec { layout: Scalar(*mut Ledger),
-                                    protocol: Terminal(from_raw(*mut Ledger -> Ledger)),
-                                    release: Some(release(*mut Ledger)) }
-node(Ledger, OutOfRust)  ReprSpec { layout: Scalar(*mut Ledger),
-                                    protocol: Terminal(into_raw(Ledger -> *mut Ledger)),
-                                    release: None }
-```
+The carrier is a pointer to the incomplete C type the C target declares, and
+the frontend's whole statement is three standard operations over it, recorded
+when it reads `ptr_type!(Ledger)`:
 
 ```rust
-// The adapter's `represent`, for the atomic relation under an opaque_ptr choice.
-let carrier = WireType::abi(parse_quote!(*mut Ledger));   // the adapter's own type, not source::Ledger
-match direction {
-    Direction::IntoRust => ReprSpec {
-        layout: Layout::Scalar(carrier.clone()),
-        protocol: Protocol::terminal(PrimitiveSpec::from_raw(carrier.clone(), ty.clone())),
-        release: Some(PrimitiveSpec::release(carrier, ty)),
-    },
-    Direction::OutOfRust => ReprSpec {
-        layout: Layout::Scalar(carrier.clone()),
-        protocol: Protocol::terminal(PrimitiveSpec::into_raw(ty, carrier)),
-        release: None,
-    },
+let pointer = binding.carrier(WireType {
+    rust: parse_quote!(*mut Ledger),        // the C target's own type, not source::Ledger
+    class: CClass::Pointer,
+    members: None,
+    meta: CCarrier::Opaque { c_name: "Ledger".into() },
+});
+Representation::Terminal {
+    into_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::FromRaw) }),
+    out_of_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::IntoRaw) }),
+    release: Some(Operation::standard(StandardOp::Release)),
 }
 ```
 
-`PrimitiveSpec::from_raw`, `into_raw` and `release` build the three standard
-[primitives](../../stages/05-represent.md#represent-and-compose-values) with
-their operand types, results and failures fixed: an adapter cannot describe the
-same operation with a different failure, so a C route that aborts and a JNI
-route that throws agree on what they are handed. Applied to the
+`Operation::standard` fixes each standard
+[primitive](../../stages/05-represent.md#represent-and-compose-values)'s
+failure: taking a handle back fails in the binding category with a `String`,
+and nothing else here can fail. A frontend cannot state the same operation
+with a different failure, so a C route that aborts and a JNI route that throws
+agree on what they are handed. Applied to the
 [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary)'s value
 `v3` and its parameters `ledger` and `this_`, the three render:
 
