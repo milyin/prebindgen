@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["FunctionPlan","NodeId","OutputId","ValuePlan"]};
