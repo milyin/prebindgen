@@ -6,7 +6,7 @@
 
 The frontends translate user configuration into two things: a `Binding`,
 which is data — the
-[carriers](05-represent.md#describing-target-values-and-operations) generated
+[wire types](05-represent.md#describing-target-values-and-operations) generated
 Rust may use, the rules saying how
 each value's [conversion](04-select.md#select-conversion-relations) is made,
 and each `Declaration` with the form it is exposed in — and their own
@@ -274,24 +274,24 @@ planning starts, and hands all of them to the registry:
 
 | A choice about | Becomes | Read by |
 | --- | --- | --- |
-| a Rust type generated code may hold at the boundary | a [carrier](05-represent.md#describing-target-values-and-operations): its Rust type, and the metadata the target's writers need — a C name, a JVM descriptor | the registry, to type the plan; the target, to write |
+| a Rust type generated code may hold at the boundary | a [wire type](05-represent.md#describing-target-values-and-operations): its Rust type, and the metadata the target's writers need — a C name, a JVM descriptor | the registry, to type the plan; the target, to write |
 | how the values in some scope cross | a [conversion rule](#conversion-rules): a scope, and the [representation](05-represent.md#represent-and-compose-values) of the values it covers | the registry |
 | how one function is exported | a function form: calling convention, symbol, the extra parameters the convention adds, and a route per failure category | the registry |
 | what only the foreign declaration shows | output metadata: a Kotlin name and package | the target's foreign writer |
 
 So the split of concerns is fixed at this stage. The registry decides, from
-these declarations alone, which carriers each value uses, which operations
+these declarations alone, which wire types each value uses, which operations
 move it, and how every wrapper is put together. The target writes: given what
 the registry feeds it — an operation and its already-typed operands, a
-carrier and its members — it produces Rust text, and for Kotlin the foreign
+wire type and its members — it produces Rust text, and for Kotlin the foreign
 declarations. It decides nothing the plan depends on, because by the time it
 is called the plan is complete.
 
 Metadata, and the target's own operations, are the two things the registry
-holds without reading. It compares them for equality. A carrier's metadata
-matters to that comparison, because two carriers with the same Rust type may
+holds without reading. It compares them for equality. A wire type's metadata
+matters to that comparison, because two wire types with the same Rust type may
 differ in it: every JVM object is a `JObject`, and a
-`JObject` holding an `example.Stamp` is a different carrier from one holding
+`JObject` holding an `example.Stamp` is a different wire type from one holding
 an `other.Stamp`. What the metadata says is the writers' business: the JNI
 writer needs the class to construct an object going out of Rust, and the
 descriptor to call a getter going in.
@@ -316,42 +316,55 @@ is only [the writers](04-select.md#what-the-target-writes).
 pub struct Binding<T: Target> { /* private */ }
 
 impl<T: Target> Binding<T> {
-    /// A carrier generated Rust may use. Declaring an equal carrier again
+    /// A wire type generated Rust may use. Declaring an equal wire type again
     /// returns the same id.
-    pub fn carrier(&mut self, carrier: CarrierOf<T>) -> CarrierId;
-    /// One way a type crosses. Declaring an equal representation again
-    /// returns the same id.
-    pub fn representation(&mut self, representation: RepresentationOf<T>) -> ReprId;
-    /// The values `scope` covers cross as `representation`.
-    pub fn rule(&mut self, scope: Scope, representation: ReprId);
+    pub fn wire_type(&mut self, wire_type: T::WireType) -> WireTypeId;
+    /// One way a type crosses into Rust, and one way it crosses out.
+    /// Declaring an equal representation again returns the same id.
+    pub fn in_representation(&mut self, representation: InRepresentationOf<T>) -> InReprId;
+    pub fn out_representation(&mut self, representation: OutRepresentationOf<T>) -> OutReprId;
+    /// The values `scope` covers cross as `representation`, in its direction:
+    /// an `InReprId` or an `OutReprId`.
+    pub fn rule(&mut self, scope: Scope, representation: impl Into<ReprId>);
     /// Expose `declaration` in this form. The id is how a rule addresses a
     /// value inside the output.
     pub fn output(&mut self, declaration: Declaration, form: OutputFormOf<T>) -> OutputId;
 }
 
-pub struct WireType<C, M> {         // `CarrierOf<T>` is `WireType<T::WireClass, T::CarrierMeta>`.
-    pub rust: syn::Type,            // `i64`, `*mut ledger_t`, `Stamp`, `JObject<'_>`
-    pub class: C,                   // Which of the adapter's few wire types it is.
-    pub members: Option<Accepts<C>>, // For an aggregate, the classes its members may be.
-    pub meta: M,                    // What the target's writers need to know of it.
+/// What kind of wire type a value crosses in — C's `I64`, `Pointer`,
+/// `Aggregate`; JNI's `Long`, `Int`, `Handle`, `Object`, `Callable`. It
+/// carries no data, so what the target can do with one is stated per kind.
+pub trait WireKind: Copy + Eq + Hash + Debug + 'static {
+    const ALL: &'static [Self];         // Every kind of the target.
+    fn name(self) -> &'static str;      // `pointer`, in `unsupported.c.member.pointer`.
+    fn parts(self) -> &'static [Self];  // The kinds it can have as parts; none by default.
 }
 
-pub enum OutputForm<Op, C, O> {    // `OutputFormOf<T>` fills in the target's own types.
-    /// One representation of a type, exposed: its carriers' Rust
-    /// declarations, and its foreign declaration. It is also the rule at
-    /// this output's root.
+/// The type of a value on the boundary, as both sides see it: a target's own
+/// enum, one variant per kind, each holding what only that kind needs.
+pub trait WireType: Clone + Eq + Hash + Debug {
+    type Kind: WireKind;
+    fn kind(&self) -> Self::Kind;
+    fn rust(&self) -> syn::Type;        // `i64`, `*mut Ledger`, `jni::objects::JObject<'_>`
+}
+
+pub enum OutputForm<Op, O> {       // `OutputFormOf<T>` fills in the target's own types.
+    /// A type's representations, exposed: their wire types' Rust
+    /// declarations, and the type's foreign declaration. Each is also the
+    /// rule at this output's root, in its direction.
     Type {
-        representation: ReprId,
-        release: Option<FunctionForm<Op, C>>, // The wrapper releasing a handed-out value.
+        into_rust: InReprId,               // Every type output has one.
+        out_of_rust: Option<OutReprId>,    // If the type crosses out of Rust.
+        release: Option<FunctionForm<Op>>, // The wrapper releasing a handed-out value.
         meta: O,
     },
     /// A function, exported through a wrapper of this form.
-    Function { form: FunctionForm<Op, C>, meta: O },
+    Function { form: FunctionForm<Op>, meta: O },
     /// A declarator the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
 
-pub struct FunctionForm<Op, C> {
+pub struct FunctionForm<Op> {
     pub abi: String,                   // "C", "system"
     pub symbol: String,                // stamp_sum, Java_example_JNINative_stampSum
     pub context: Vec<ContextParam>,    // Parameters no source parameter feeds: `env: JNIEnv`.
@@ -359,140 +372,143 @@ pub struct FunctionForm<Op, C> {
     pub routes: Vec<FailureRoute<Op>>, // Per failure category: how it is reported, how the call ends.
     pub attrs: Vec<syn::Attribute>,
     pub unsafety: bool,
-    pub params: Accepts<C>,            // The classes a wrapper parameter may be,
-    pub ret: Accepts<C>,               // and the wrapper's return.
 }
 ```
 
-`Accepts` lists the wire classes a holder may hold: an aggregate's members, a
-wrapper's parameters, its return. The registry checks each placement once the
-plan has worked out what is placed there, and refuses the value it would put
-anywhere else. The [extensions page](../extensions.md#acceptance) gives the
-rule in full, with the limits other targets would state in it.
+A wire type is data: `CWireType::Pointer { name: Ledger }` is the Rust type
+`*mut Ledger` and the C handle `Ledger *`; `JniWireType::Object { kotlin_class:
+"example.Stamp" }` is a `JObject` the JVM side reads as an `example.Stamp`.
+The binding holds wire types and nothing about what a target can do with them.
+That is stated once, by the target, per kind: which kinds a kind can have as
+its parts — a C aggregate's members are `i64`s, a JVM data object's properties
+are `long`s — and which kinds a wrapper can take and return, as
+`Target::PARAMS` and `Target::RETURNS`, every kind unless a target says
+otherwise. The registry checks each placement once the plan has worked out
+what is placed there, and refuses the value it would put anywhere else, naming
+the kind by its `name`. The [extensions page](../extensions.md#acceptance)
+gives the rule in full, with the limits other targets would state in it.
 
-A representation is one way a type crosses. A type may have several — `Stamp`
-as a C struct and as a handle — and each is declared once and referred to by
-its `ReprId`, from rules and from outputs alike. It is the answer a target
-used to give when asked, stated in advance instead:
+A representation is one way a type crosses in one direction. A type may have
+several — `Stamp` as a C struct and as a handle — and each is declared once and
+referred to by its id, from rules and from outputs alike. It is the answer a
+target would otherwise give when asked, stated in advance instead. An
+into-Rust representation and an out-of-Rust one are different types, and so
+are their ids, `InReprId` and `OutReprId`; `ReprId` is either:
 
 ```rust
-pub enum Representation<Op> {
-    /// The whole value, one operation each way: a scalar, a handle, a
-    /// fieldless enum. Each direction has a carrier of its own: a C enum
-    /// arrives as `MaybeUninit` of itself.
-    Terminal {
-        into_rust: Option<Codec<Op>>,   // None: never crosses into Rust.
-        out_of_rust: Option<Codec<Op>>,
-        release: Option<Operation<Op>>, // How the foreign side gives a held value back.
-    },
-    /// The parts of a relation, carried together in one carrier, into Rust.
-    Product {
+pub enum InRepresentation<Op> {
+    /// The whole value, one operation: a scalar, a handle, a fieldless enum.
+    Whole { wire_type: WireTypeId, operation: Operation<Op> },
+    /// The parts of a relation, carried together in one wire type.
+    Parts {
         via: Via,              // Which relation: Fields.
-        carrier: CarrierId,    // The aggregate or object holding the parts.
-        read: Operation<Op>,   // One part out of the carrier, applied per part.
+        wire_type: WireTypeId, // The aggregate or object holding the parts.
+        read: Operation<Op>,   // One part out of the wire type, applied per part.
     },
+    /// A foreign callable, as the closure the registry builds.
+    Callable { wire_type: WireTypeId, capture: Operation<Op>, invoke: Operation<Op>,
+               routes: Vec<FailureRoute<Op>> },
     /// A representation the target does not lower, refused by name.
     Unsupported(Unsupported),
 }
 
-pub struct Codec<Op> {
-    pub carrier: CarrierId,
-    pub operation: Operation<Op>,
+pub enum OutRepresentation<Op> {
+    /// The whole value, one operation, and a handle's release.
+    Whole { wire_type: WireTypeId, operation: Operation<Op>, release: Option<Operation<Op>> },
+    Unsupported(Unsupported),
 }
 
-pub struct Operation<Op> {
-    pub implementation: Implementation<Op>, // Standard(StandardOp) or Target(Op)
-    pub context: Vec<String>,               // Runtime contexts it needs, by name: "jni.env".
-    pub failure: Option<Failure>,           // Its failure category and error type, if it can fail.
+pub enum ReprId { In(InReprId), Out(OutReprId) }
+
+pub enum Operation<Op> {
+    Standard(StandardOp), // One the registry writes itself.
+    Target(Op),           // One of the target's own; its runtime contexts and its
+                          // failure are the op's own facts, `TargetOp::contexts`
+                          // and `TargetOp::failure`.
 }
 ```
 
 An operation states no operand or result types. Its place in the
-representation fixes them: a `Terminal`'s `into_rust` codec takes its carrier
-and produces the source type, a `Product`'s `read` takes the carrier and
-produces the part's carrier, whatever carrier that part resolves to. The
+representation fixes them: an into-Rust `Whole`'s operation takes its wire type
+and produces the source type, an out-of-Rust one's the reverse, and the `read` of
+`Parts` takes the wire type and produces the part's wire type, whatever wire
+type that part resolves to. The
 registry works them out when it plans the value and feeds them to the writer.
 A standard operation — a member read, a handle taken back or released, a
 fieldless enum matched value by value — is one the registry writes itself,
 because writing it means naming a source type.
 
-For the C `Stamp`, with the frontend's own `CCarrier` as the carrier metadata:
+For the C `Stamp`, with the frontend's own `CWireType`:
 
 ```rust
-let i64_c = binding.carrier(WireType {
-    rust: parse_quote!(i64), class: CClass::I64, members: None, meta: CCarrier::Builtin,
+let i64_c = binding.wire_type(CWireType::I64);
+let unchanged = Operation::Standard(StandardOp::Identity);
+let i64_in = binding.in_representation(InRepresentation::Whole {
+    wire_type: i64_c,
+    operation: unchanged.clone(),
 });
-let unchanged = Codec { carrier: i64_c, operation: Operation::standard(StandardOp::Identity) };
-let i64_whole = binding.representation(Representation::Terminal {
-    into_rust: Some(unchanged.clone()),
-    out_of_rust: Some(unchanged),
+let i64_out = binding.out_representation(OutRepresentation::Whole {
+    wire_type: i64_c,
+    operation: unchanged,
     release: None,
 });
-binding.rule(Scope::Type(key!(i64)), i64_whole);
+binding.rule(Scope::Type(key!(i64)), i64_in);
+binding.rule(Scope::Type(key!(i64)), i64_out);
 
-let stamp_c = binding.carrier(WireType {
-    rust: parse_quote!(Stamp),
-    class: CClass::Aggregate,
-    members: Some(Accepts::of([CClass::I64])), // Not yet another aggregate, a handle or an enum.
-    meta: CCarrier::Aggregate { c_name: "Stamp".into() },
-});
-let stamp_struct = binding.representation(Representation::Product {
+let stamp_c = binding.wire_type(CWireType::Aggregate { name: format_ident!("Stamp") });
+let stamp_struct = binding.in_representation(InRepresentation::Parts {
     via: Via::Fields,
-    carrier: stamp_c,
-    read: Operation::standard(StandardOp::ReadMember),
+    wire_type: stamp_c,
+    read: Operation::Standard(StandardOp::ReadMember),
 });
+let stamp_out = binding.out_representation(OutRepresentation::struct_unsupported(&key!(Stamp)));
 binding.rule(Scope::Type(key!(Stamp)), stamp_struct);   // every Stamp value
+binding.rule(Scope::Type(key!(Stamp)), stamp_out);
 binding.output(Declaration::Type(key!(Stamp)),          // and the struct, exposed
-               OutputForm::Type { representation: stamp_struct, release: None, meta: () });
+               OutputForm::Type { into_rust: stamp_struct, out_of_rust: Some(stamp_out),
+                                  release: None, meta: () });
 ```
 
-and for the JNI one, with `Jvm { descriptor, kotlin }` as the metadata:
+What a C aggregate can have as members — `i64`s, not yet another aggregate, a
+handle or an enum — is `CWireKind::Aggregate`'s, not the binding's. And for
+the JNI one, with `JniWireType`:
 
 ```rust
-let jlong = binding.carrier(WireType {
-    rust: parse_quote!(jni::sys::jlong), class: JniClass::Long, members: None,
-    meta: Jvm { descriptor: "J".into(), kotlin: KotlinType::Value("Long".into()) },
+let jlong = binding.wire_type(JniWireType::Long);
+// i64: a `Whole` over `jlong` each way, as C's is over `i64`.
+let stamp_obj = binding.wire_type(JniWireType::Object {
+    kotlin_class: "example.Stamp".into(),   // so its descriptor is `Lexample/Stamp;`
 });
-// i64: a Terminal over `jlong`, as C's is over `i64`.
-let stamp_obj = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'_>),
-    class: JniClass::Object,
-    members: Some(Accepts::of([JniClass::Long])), // What a getter returning a `long` reads.
-    meta: Jvm {
-        descriptor: "Lexample/Stamp;".into(),
-        kotlin: KotlinType::Value("example.Stamp".into()),
-    },
-});
-let stamp_class = binding.representation(Representation::Product {
+let stamp_class = binding.in_representation(InRepresentation::Parts {
     via: Via::Fields,
-    carrier: stamp_obj,
-    read: Operation::target(JniOp::Getter)
-        .context("jni.env")
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
+    wire_type: stamp_obj,
+    read: Operation::Target(JniOp::Getter),   // needs `jni.env`, can fail: see `JniOp`
 });
 binding.rule(Scope::Type(key!(Stamp)), stamp_class);
 ```
 
-The C declarations use only standard operations, so C's `Target::Op` has no
-values at all. A scalar kind is one `Type` rule: each frontend records the
-scalars its target carries — `i64`, for both so far — before the binding's
-own declarations. There is no default for a type no rule covers: a
-representation names a carrier, and one carrier cannot fit every type. A
+The C declarations use only standard operations. C's `Target::Op` has one
+value, `COp::Call`, which only [a callback][fn_callback]
+uses: calling through the closure struct a C caller fills in. A scalar kind is one `Type` rule per direction: each frontend
+records the scalars its target carries — `i64`, for both so far — before the
+binding's own declarations. There is no default for a type no rule covers: a
+representation names a wire type, and one wire type cannot fit every type. A
 value no rule covers is refused as `unsupported.conversion.no_rule`, naming
-the type. How a generic instance such as `Vec<Stamp>` would cross without a
+the type and the direction. How a generic instance such as `Vec<Stamp>` would cross without a
 rule of its own is [designed](../extensions.md#containers), and not built.
 
 ### Conversion rules
 
-A **conversion rule** names the representation of the values in a scope: every
-value of one type, or one value at one position inside one output.
+A **conversion rule** names the representation of the values in a scope that
+cross in its direction: every value of one type, or one value at one position
+inside one output.
 
 ```rust
 pub enum Scope {
     /// Every value of this type, wherever it turns up.
     Type(TypeKey),
     /// The one value at this path inside this output. The empty path is the
-    /// output's own root: a type declaration's value, in both directions.
+    /// output's own root: a type declaration's value.
     At(OutputId, ValuePath),
 }
 
@@ -523,8 +539,9 @@ reads the way a build script author thinks of the value, and a renamed
 parameter makes the rule fail validation instead of silently applying
 nowhere.
 
-When the registry plans a value it uses the rule at the value's own position
-if there is one, and the rule for its type otherwise, whole. That is the only
+When the registry plans a value it uses the rule of the value's direction at
+the value's own position if there is one, and the rule of that direction for
+its type otherwise, whole. That is the only
 precedence. Nothing is merged between the two: a rule at a position replaces
 the type's rule for that value, and says nothing about the value's children,
 which are looked up again at their own positions.
@@ -542,19 +559,26 @@ field is recorded the same way, one step deeper.
 The registry checks the binding against the model before it plans anything,
 and fails the build with invalid input when:
 
-- two rules have the same scope, which is the binding saying two things about
-  one value — a rule at a type output's own root among them, since the
-  output's representation already is that rule;
+- two rules have the same scope and direction, which is the binding saying two
+  things about one value — a rule at a type output's own root among them,
+  since the output's representation of that direction already is that rule;
 - a function form names a symbol that is not a Rust identifier, or restates
   the linkage the writer owns with `#[no_mangle]` or `#[export_name]`;
 - a rule at `At(output, path)` names a position the output does not have: a
   parameter the function does not take, a `return` on a function returning
   nothing, a field of a value whose representation is not read through
-  `Fields`, or a field the struct does not have.
+  `Fields`, or a field the struct does not have;
+- a rule at a position names a representation of the other direction than the
+  value there crosses in: an out-of-Rust one for a parameter or a field read
+  into Rust, an into-Rust one for a result or a callback's argument;
+- one representation is ruled for two types — by type rules, type outputs and
+  rules at positions together — since a representation's operations convert
+  whatever type the value it serves has, and would convert one type as
+  another. A refused representation converts nothing and is exempt.
 
 The last check resolves each path the way planning will: each step's value
 has its rule looked up in the same order, and a `Field` step needs that
-rule's representation to be a `Product` through `Fields`. So
+rule's representation to be `Parts` through `Fields`. So
 `param stamp.field secs` is valid while `Stamp` crosses through its fields,
 and becomes invalid if a rule makes it an opaque handle — a rule that would
 otherwise sit unused under a value nothing reads into.
@@ -570,28 +594,28 @@ rules cover kinds a binding may never mention, and a binding may declare a
 type no function uses. Such rules are listed in `Generation::unused_rules`,
 which a build script may print.
 
-The binding is also printable, one line per carrier, representation, rule
-and output, a function form's signature, acceptance and routes on the lines
-under its output, and metadata in its `Debug` form:
+The binding is also printable, one line per wire type, representation, rule
+and output, a function form's signature and routes on the lines under its
+output, and each wire type with its kind's name and its `Debug` form:
 
 ```text
-carrier  c0  i64  I64  no members  Builtin
-carrier  c1  Stamp  Aggregate  members [I64]  Aggregate { c_name: "Stamp" }
-repr     r0  terminal  in: c0 Standard(Identity)  out: c0 Standard(Identity)
-repr     r1  product  c1  Fields  read: Standard(ReadMember)
+wire     w0  i64  i64  I64
+wire     w1  Stamp  aggregate  Aggregate { name: Ident(Stamp) }
+repr     r0  terminal  in: w0 Standard(Identity)  out: w0 Standard(Identity)
+repr     r1  product  w1  Fields  read: Standard(ReadMember)
 rule     type i64  r0
 rule     type Stamp  r1
 output   type:Stamp  type r1  ()
 output   fn:stamp_sum  function  ()
          form  extern "C" stamp_sum  context []  inputs [stamp]
-         form  params [I64, Pointer, Aggregate, Enum]  ret [I64, Pointer, Aggregate, Enum]
          form  route binding: abort
 ```
 
 The text prints every field planning reads, which makes it the diagnostic to
 diff when two builds of one binding generate differently. It does not prove
-two bindings equal: the target's classes, metadata and operations print only
-as much as their `Debug` form tells apart.
+two bindings equal: the target's wire types and operations print only as much
+as their `Debug` form tells apart. What a kind can hold is the target's, not
+the binding's, so it is not in the text.
 
 ### How the frontends build a binding
 
@@ -627,25 +651,26 @@ let generation = generate(source_model, &CTarget, binding, source_module)?;
 
 `CbindgenBuilder::binding()` reads the builder's storage once, sorted so that
 a run over unchanged input emits the same file. It records the scalar table,
-then for each declared type a carrier, a representation, the `Type` rule
-and the output naming that representation — `data_type!` a `Product`
-through `Fields`, `ptr_type!` a `Terminal` over a `*mut` carrier with a
-release — for each `callback!` signature a closure-struct carrier, a
-`Callback` representation, its `Type` rule and a `Declaration::Callback`
-output, and for each function an output with its
+then for each declared type a wire type, a representation per direction, the
+`Type` rules and the output naming them — `data_type!` `Parts` through
+`Fields` into Rust and `struct_unsupported` out of it, `ptr_type!` a `Whole`
+over a `*mut` wire type each way, the out-of-Rust one with a release — for each
+`callback!` signature a closure-struct wire type, a `Callable` representation,
+its `Type` rule and a `Declaration::Callback` output, and for each function an output with its
 function form. The JNI frontend does the same with its declarations, and
 states a callback for every `impl Fn(..)` an exported function takes, since
 its build scripts declare none. A check
 that needs the source model runs here too: a C enum numbering a value
-outside `i32` is recorded as `Representation::Unsupported`, with the reason,
-rather than refused later. Neither target holds anything: every choice it
+outside `i32` is recorded as `Unsupported` in both directions, with the
+reason, rather than refused later. Neither target holds anything: every choice it
 writes from arrives with what it is asked to write. What JNI knows of the whole
 binding — the package prefix, the harness object's name — is its Kotlin
 writer's, which reads the finished generation.
 
 A declarator the target has no lowering for — a tagged union, a declared
-conversion — still becomes an output. A type's is exposed as, and ruled by, a
-`Representation::Unsupported`, so a value of it is refused too; anything
+conversion — still becomes an output. A type's is exposed as, and ruled by,
+`Unsupported` representations in both directions, so a value of it is refused
+too; anything
 else's is recorded as `OutputForm::Unsupported`. It is refused by the
 declarator's name before anything under it is planned, and the skip carries
 the capability it waits for.
@@ -684,7 +709,7 @@ are built; nothing is serialized.
 
 Names ending in `Id` identify particular records, but they do not all have the
 same lifetime or construction rules. `RelationId` and `NodeId` identify entries
-used within a generation run, and so does the `CarrierId` a binding's carrier
+used within a generation run, and so does the `WireTypeId` a binding's wire type
 is registered under. A `Declaration` is instead a
 stable value naming the kind the target gets and the Rust item, printed as
 `fn:stamp_sum`; an `OutputId` stands for one of those together with the form
@@ -710,9 +735,9 @@ A declaration is that identity and nothing else. What the declaration *is* —
 its symbol, its placement, the declarator it came from — is the form
 recorded beside it. What it *depends on* follows from the plan, and the
 registry works it out without asking: a wrapper taking a `Stamp` aggregate is
-unusable unless the `Stamp` carrier is declared too, and
+unusable unless the `Stamp` wire type is declared too, and
 [retention](07-retain.md#retain-supported-output) finds the type output whose
-representation uses that carrier. Requiring a type does not export it: a type nothing
+representation uses that wire type. Requiring a type does not export it: a type nothing
 requested is not emitted because something needed it, and whatever needed it is
 skipped instead.
 
@@ -761,24 +786,27 @@ Kotlin placement, a C symbol — which the engine does not speak, so a binding
 that needs its diagnostics to tell them apart says so in its own terms, from
 the choices it recorded.
 
-Two declarations of one type are two representations of it, each exposed.
-A type output names the representation it exposes, which is the rule at its
-root, `At(output, [])`, and outranks the type's rule there and nowhere else.
-So `Stamp` declared as a C struct and as a handle is two representations,
-two outputs each naming one, and at most one `Type` rule saying which of the
-two a `Stamp` parameter gets:
+Two declarations of one type are two ways of carrying it, each exposed. A
+type output names the representations it exposes, which are the rules at its
+root, `At(output, [])`, in their directions, and outrank the type's rules
+there and nowhere else. So `Stamp` declared as a C struct and as a handle is
+two outputs each naming its own, and at most one `Type` rule per direction
+saying which a `Stamp` parameter gets:
 
 ```rust
-let stamp_struct = binding.representation(/* Product over the `Stamp` carrier */);
-let stamp_handle = binding.representation(/* Terminal over `*mut stamp_t`, with a release */);
+let stamp_struct = binding.in_representation(/* Parts over the `Stamp` wire type */);
+let stamp_handle_in = binding.in_representation(/* Whole over `*mut stamp_t` */);
+let stamp_handle_out = binding.out_representation(/* Whole over `*mut stamp_t`, with a release */);
 binding.rule(Scope::Type(key!(Stamp)), stamp_struct);
-binding.output(Declaration::Type(key!(Stamp)), OutputForm::Type { representation: stamp_struct, meta: () });
-binding.output(Declaration::Type(key!(Stamp)), OutputForm::Type { representation: stamp_handle, meta: () });
+binding.output(Declaration::Type(key!(Stamp)),
+               OutputForm::Type { into_rust: stamp_struct, out_of_rust: None, .. });
+binding.output(Declaration::Type(key!(Stamp)),
+               OutputForm::Type { into_rust: stamp_handle_in, out_of_rust: Some(stamp_handle_out), .. });
 ```
 
-The two outputs differ by the representation they name, so they are two
-outputs rather than one stated twice; exposing one representation twice is
-the duplicate. A binding that records two `Type` rules
+The two outputs differ by the representations they name, so they are two
+outputs rather than one stated twice; exposing the same representations twice
+is the duplicate. A binding that records two `Type` rules of one direction
 for one type fails the
 [checks](#what-the-registry-checks-before-planning) instead of having one
 silently win. Which declaration a *value* requires is then settled at
@@ -827,7 +855,7 @@ A reusable conversion plan is a [node](05-represent.md#represent-and-compose-val
 struct NodeKey {
     source: TypeKey,       // Derived internally from crossing.source.key().
     direction: Direction, // Copied from that crossing.
-    representation: ReprId, // Carrier, operations and relation: equal ids are equal content.
+    representation: ReprId, // Wire type, operations, relation and direction: equal ids are equal content.
     children: Vec<NodeId>,// The conversions its parts resolved to.
 }
 ```
@@ -854,11 +882,11 @@ overrides and diagnostic paths.
 Two values share a node exactly when their crossings, representations and
 children are equal, and the registry can check every part of that itself:
 representations are compared by id, and the binding gives two equal
-representations one id — comparing their carriers by id, and operations and
+representations one id — comparing their wire types by id, and operations and
 metadata by value. Nothing rests
 on a promise from the target that two opaque keys mean the same thing.
 Representations are recorded before planning, so equal settings are equal
-data. A naming closure runs when the frontend records a carrier or a rule,
+data. A naming closure runs when the frontend records a wire type or a rule,
 and what lands in the binding is the name it produced.
 
 Outcomes are keyed by source and configuration identities that do not vary
@@ -884,3 +912,4 @@ same things.
 [fn_callback_requests]: ../examples/fn_callback/03-requests.md
 [fn_callback_requests_c]: ../examples/fn_callback/03-requests.c.md
 [fn_callback_requests_jni]: ../examples/fn_callback/03-requests.jni.md
+[fn_callback]: ../examples/fn_callback/README.md

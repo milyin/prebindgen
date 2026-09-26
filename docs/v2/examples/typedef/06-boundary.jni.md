@@ -8,7 +8,7 @@ Owner: the registry, on the JNI frontend's release form
 ## Input
 
 ```text
-node(taken) : carrier jlong, release infallible
+node(taken) : wire type jlong, release infallible
 
 the release form the JNI frontend recorded on `type:Ledger`'s output:
   symbol "Java_example_JNINative_freeLedger", extern "system",

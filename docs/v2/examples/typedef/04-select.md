@@ -10,7 +10,8 @@ Owner: the registry, from the binding's rules · Previous: [Record binding reque
 ```text
 Crossing { source: Ledger, direction: IntoRust  }   // the type's own value, and ledger_close's parameter
 Crossing { source: Ledger, direction: OutOfRust }   // the type's own value, and ledger_open's return
-rules:    Type(Ledger) -> this target's handle: a Terminal over an address, with a release
+rules:    Type(Ledger) -> this target's handle: a Whole over an address each way,
+                          the out-of-Rust one with a release
 relations of Ledger: [ atomic ]                     // the only relation an extern has
 ```
 
@@ -23,12 +24,12 @@ Ledger, OutOfRust
   relation: atomic
 ```
 
-A `Terminal` [representation](../../stages/05-represent.md#represent-and-compose-values)
+A `Whole` [representation](../../stages/05-represent.md#represent-and-compose-values)
 names the atomic [relation](../../stages/04-select.md#what-a-relation-is), the
 one every type has, and there is nothing under it to plan: the whole
 [conversion](../../stages/04-select.md#select-conversion-relations) is one
-operation each way, which the representation states. Both directions are
-planned because the representation names a release: a handle is a promise
+operation, which the representation states. Both directions are planned
+because the out-of-Rust representation names a release: a handle is a promise
 that what one function returns can be given to another.
 
 Selection is trivial here, and that is the point of the page. A struct under a
@@ -38,7 +39,7 @@ type with private or unsupported fields can still cross, as
 
 ## Checks
 
-- A handle rule on a struct names the atomic relation too; a `Product` rule on
+- A handle rule on a struct names the atomic relation too; a `Parts` rule on
   an extern finds no struct relation and is refused with
   `unsupported.type.not_a_struct`, in the same words for both targets.
 - No part is planned, so nothing under the type can be unsupported.

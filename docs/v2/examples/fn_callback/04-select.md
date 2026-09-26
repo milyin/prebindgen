@@ -23,13 +23,13 @@ rules:    Type(Stamp)        -> this target's Stamp representation, read through
                      +-- field nanos --> i64, IntoRust, atomic
 
    param each  --> impl Fn(i64), IntoRust
-                     relation: callback.args                 // what a `Callback` names
+                     relation: callback.args                 // what a `Callable` names
                      +-- arg 0 --> i64, OutOfRust, atomic
 ```
 
 The callback's [representation](../../stages/05-represent.md#represent-and-compose-values)
-is a `Callback`, and the
-[relation](../../stages/04-select.md#what-a-relation-is) a `Callback` names is
+is a `Callable`, and the
+[relation](../../stages/04-select.md#what-a-relation-is) a `Callable` names is
 the callback's arguments: one positional part per argument, `arg 0` here. The
 registry descends into it as it descends into a struct's fields, with one
 difference. The callable enters Rust, and Rust hands the argument to it, so the
@@ -39,15 +39,16 @@ is the other way: an `i64` leaving Rust, which is exactly the crossing
 
 ## Checks
 
-- The direction of `arg 0` follows from the relation. Nothing in the binding
-  states it, and nothing can state it otherwise.
+- The direction of `arg 0` follows from the relation, and the rule it takes is
+  an out-of-Rust one. A rule at `param each.arg 0` naming an into-Rust
+  representation fails the build.
 - The argument is looked up at its own position first, `param each.arg 0`: a
   rule there would give this callback's argument a representation of its own
   without touching any other `i64`.
 - An argument that cannot leave Rust refuses the callback, and the function
   with it: an `impl Fn(Stamp)` would need a `Stamp` built out of Rust, and is
   refused with `unsupported.struct.out_of_rust` at `param emit.arg 0`.
-- A `Callback` rule on a type that is not an `impl Fn(..)` finds no relation,
+- A `Callable` rule on a type that is not an `impl Fn(..)` finds no relation,
   and is refused as `unsupported.type.not_a_callback`.
 
 ## Language variants

@@ -10,7 +10,7 @@ Owner: the registry; the C frontend states the aggregate and its member read
 ```text
 Crossing { source: Stamp, direction: IntoRust }
 relation: Stamp.fields, parts [secs, nanos]
-representation: Product { via: Fields, carrier: `Stamp`, read: ReadMember }
+representation: Parts { via: Fields, wire_type: `Stamp`, read: ReadMember }
 ```
 
 ## Result
@@ -20,16 +20,13 @@ is one C-compatible struct and one read, applied to each member. The C
 frontend states it when it reads `data_type!(Stamp)`:
 
 ```rust
-let stamp_c = binding.carrier(WireType {
-    rust: parse_quote!(Stamp),                     // the repr(C) Stamp
-    class: CClass::Aggregate,
-    members: Some(Accepts::of([CClass::I64])),     // what a member may be
-    meta: CCarrier::Aggregate { c_name: "Stamp".into() },
+let stamp_c = binding.wire_type(CWireType::Aggregate {
+    name: format_ident!("Stamp"),                  // the repr(C) `Stamp` C declares
 });
-Representation::Product {
+InRepresentation::Parts {
     via: Via::Fields,
-    carrier: stamp_c,
-    read: Operation::standard(StandardOp::ReadMember), // infallible, needs no context
+    wire_type: stamp_c,
+    read: Operation::Standard(StandardOp::ReadMember), // infallible, needs no context
 }
 ```
 
@@ -44,9 +41,9 @@ named `stamp`, for the part `secs`, it renders:
 stamp.secs
 ```
 
-The [carrier](../../stages/05-represent.md#describing-target-values-and-operations)'s
+The [wire type](../../stages/05-represent.md#describing-target-values-and-operations)'s
 own declaration — the `repr(C)` struct — is what the C target writes, when the
-registry feeds it the carrier and its two resolved members at emission.
+registry feeds it the wire type and its two resolved members at emission.
 
 ## Checks
 

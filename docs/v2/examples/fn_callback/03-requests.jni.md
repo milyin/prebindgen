@@ -29,28 +29,19 @@ base package, named from its arguments — `LongCallback` here, `Long` being how
 Kotlin spells an `i64`:
 
 ```rust
-let callable = binding.carrier(WireType {
-    rust: parse_quote!(jni::objects::JObject<'_>),
-    class: JniClass::Object,
-    // What an argument may be: a number, an enum's number, an address.
-    members: Some(Accepts::of([JniClass::Long, JniClass::Int, JniClass::Handle])),
-    meta: Jvm {
-        descriptor: "Lexample/LongCallback;".into(),
-        kotlin: KotlinType::Callback { class: "example.LongCallback".into(), raw: None },
-    },
+let callable = binding.wire_type(JniWireType::Callable {
+    interface: "example.LongCallback".into(),   // so its descriptor is `Lexample/LongCallback;`
+    raw: None,
 });
-let callback = binding.representation(Representation::Callback {
-    carrier: callable,
-    capture: Operation::target(JniOp::CaptureCallback)
-        .context("jni.env")
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
-    invoke: Operation::target(JniOp::CallCallback)
-        .fails(FailureCategory::Runtime, parse_quote!(jni::errors::Error)),
+let callback = binding.in_representation(InRepresentation::Callable {
+    wire_type: callable,
+    capture: Operation::Target(JniOp::CaptureCallback),   // needs `jni.env`, can fail
+    invoke: Operation::Target(JniOp::CallCallback),       // needs nothing, can fail
     routes: vec![FailureRoute {
         category: FailureCategory::Runtime,
         report: Some(Report {
             error: parse_quote!(jni::errors::Error),
-            operation: Operation::target(JniOp::ReportCallbackError),
+            operation: Operation::Target(JniOp::ReportCallbackError),
         }),
         on_report_failure: Terminal::Abort,
         terminate: Terminal::Return(parse_quote!(())),
@@ -60,7 +51,8 @@ binding.rule(Scope::Type(key), callback);
 binding.output(
     Declaration::Callback(key),
     OutputForm::Type {
-        representation: callback,
+        into_rust: callback,
+        out_of_rust: None,
         release: None,
         meta: JniOutput::Callback { package: "example".into(), class: "LongCallback".into(), raw: None },
     },

@@ -8,8 +8,8 @@ Owner: the common Rust writer, then `cbindgen`
 ## Input
 
 ```text
-Retained(callback:impl Fn(i64)+Send+Sync+'static), whose carrier is fed to the C writer:
-    CarrierFeed { carrier: closure_i64 (Closure, c_name "closure_i64"), members: [ arg 0: i64 ] }
+Retained(callback:impl Fn(i64)+Send+Sync+'static), whose wire type is fed to the C writer:
+    WireTypeFeed { wire_type: closure_i64 (Closure, c_name "closure_i64"), members: [ arg 0: i64 ] }
 FunctionPlan(fn:stamp_each) frozen, with
     abi, symbol: extern "C", "stamp_each"
     params:      [ stamp: Stamp, each: closure_i64 ], no return
@@ -18,7 +18,7 @@ FunctionPlan(fn:stamp_each) frozen, with
 ## Result
 
 What the C writer returns for the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations),
 in the generated C Rust module (`c.rs`):
 
 ```rust
@@ -48,7 +48,7 @@ impl ::core::ops::Drop for closure_i64 {
 }
 ```
 
-`call` takes each argument's carrier, then the context. Each member says what
+`call` takes each argument's wire type, then the context. Each member says what
 it is for, and what a null one means, in its own comment — which is where
 `cbindgen` carries it into the header, since a C caller reads that and not
 this Rust. A null `call` is a callback that is told nothing: the source

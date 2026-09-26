@@ -28,7 +28,7 @@ The request is a root, as a struct's is. Its
 [choice](../../stages/03-requests.md#what-a-choice-records) names two things a
 struct's does not: through the
 [representation](../../stages/05-represent.md#represent-and-compose-values), the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 the address crosses as, and, through the release form, where the **release** —
 the exported function that frees a handle the caller does not give back —
 lands: a symbol for C, an `external` method on the harness for Kotlin. Both are the frontend's choices,
@@ -47,7 +47,7 @@ avoid.
   [site](../../stages/03-requests.md#a-values-position-in-an-exported-function);
   it takes the type's choice, exactly as
   [a function taking a struct does][fn_requests].
-- The same extern under a different carrier, or a struct under a handle
+- The same extern under a different wire type, or a struct under a handle
   representation, is a different
   [conversion](../../stages/04-select.md#select-conversion-relations): the
   representation a [conversion rule](../../stages/03-requests.md#conversion-rules)

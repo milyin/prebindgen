@@ -133,7 +133,7 @@ links document dependencies; they never replace an index or a backlink.
 
 The nouns that name what flows between stages — source item, declaration,
 conversion rule, root, site, part, conversion, crossing, relation,
-representation, carrier, primitive, node, artifact, wrapper, outcome,
+representation, wire type, primitive, node, artifact, wrapper, outcome,
 capability — are listed
 in the manifest's `vocabulary` with the page and heading that define each. A
 term is **defined**, set in bold, under that heading and nowhere else;

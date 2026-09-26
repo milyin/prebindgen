@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use prebindgen_flat::flat::TypeRef;
 
-use crate::{binding::ReprId, plan::PrimitiveId};
+use crate::{binding::InReprId, plan::PrimitiveId};
 
 /// One runtime value inside one body. Not a variable name: the writer chooses
 /// those.
@@ -58,7 +58,7 @@ pub enum Instr {
     /// callback representation's own, since the closure has no caller to hand
     /// one to.
     Closure {
-        representation: ReprId,
+        representation: InReprId,
         captured: ValueId,
         /// The arguments Rust calls it with, and their source types.
         params: Vec<(ValueId, TypeRef)>,
@@ -154,26 +154,27 @@ impl BodyBuilder {
 
 /// A planned conversion's instructions, as a template.
 ///
-/// [`NodeBody::carrier`] is the value handed in when the conversion is used;
+/// [`NodeBody::input`] is the value handed in when the conversion is used —
+/// the wire value into Rust, the source value out of it — and
 /// [`NodeBody::result`] is what it produces. An identity conversion is the
-/// degenerate case — no instructions, and the result *is* the carrier — which
-/// is what makes a scalar child render nothing.
+/// degenerate case — no instructions, and the result *is* the input — which is
+/// what makes a scalar child render nothing.
 #[derive(Clone, Debug)]
 pub struct NodeBody {
-    pub carrier: ValueId,
+    pub input: ValueId,
     pub instrs: Vec<Stmt>,
     pub result: ValueId,
 }
 
 impl NodeBody {
-    /// Inline this conversion into `out`, with `carrier` supplying its input.
+    /// Inline this conversion into `out`, with `input` supplying its input.
     ///
     /// Value identities are local to a template, so they are remapped as they
     /// are met: an operand must already be mapped, and a result is allocated
     /// fresh in the destination body.
-    pub fn inline(&self, carrier: ValueId, out: &mut BodyBuilder) -> ValueId {
+    pub fn inline(&self, input: ValueId, out: &mut BodyBuilder) -> ValueId {
         let mut map = HashMap::new();
-        map.insert(self.carrier, carrier);
+        map.insert(self.input, input);
         for step in remap(&self.instrs, &mut map, out) {
             out.instrs.push(step);
         }

@@ -5,23 +5,52 @@ mod pipeline;
 use prebindgen_flat::flat::FlatBuilder;
 
 use crate::{
-    binding::{Accepts, Binding, FunctionForm, OutputForm, Representation, Scope},
+    binding::{
+        Binding, FunctionForm, InRepresentation, OutRepresentation, OutputForm, Scope, TargetOp,
+        WireKind, WireType,
+    },
     decl::Declaration,
     outcome::EngineError,
     plan::generate,
     run::Generation,
-    target::{CarrierFeed, OperationFeed, Target, Unsupported, Written},
+    target::{OperationFeed, Target, Unsupported, WireTypeFeed, Written},
 };
 
 /// A target that carries nothing: every value it is asked about is refused, so
 /// a run over it exercises the accounting and nothing else.
 struct Nothing;
 
+/// A target with no operations of its own states nothing about them.
+impl TargetOp for () {}
+
+/// The wire types of a target that carries nothing: there are none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum NoWire {}
+
+impl WireKind for NoWire {
+    const ALL: &'static [Self] = &[];
+
+    fn name(self) -> &'static str {
+        match self {}
+    }
+}
+
+impl WireType for NoWire {
+    type Kind = NoWire;
+
+    fn kind(&self) -> NoWire {
+        *self
+    }
+
+    fn rust(&self) -> syn::Type {
+        match *self {}
+    }
+}
+
 impl Target for Nothing {
     const NAME: &'static str = "test";
 
-    type WireClass = ();
-    type CarrierMeta = ();
+    type WireType = NoWire;
     type Op = ();
     /// Which output this is, standing in for a real target's placement: the
     /// engine tells two declarations of one entity apart by their whole form.
@@ -31,7 +60,7 @@ impl Target for Nothing {
         unreachable!("nothing is planned")
     }
 
-    fn write_carrier(&self, _: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+    fn write_wire_type(&self, _: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
         unreachable!("nothing is planned")
     }
 }
@@ -91,20 +120,23 @@ struct Stated {
 /// Run the stated binding through the engine over [`sources`].
 fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, EngineError> {
     let mut binding: Binding<Nothing> = Binding::new();
-    let refused = binding.representation(Representation::Unsupported(Unsupported::new(
-        "unsupported.nothing.carrier",
+    let reason = Unsupported::new(
+        "unsupported.nothing.representation",
         "this target carries nothing",
-    )));
+    );
+    let refused_in = binding.in_representation(InRepresentation::Unsupported(reason.clone()));
+    let refused_out = binding.out_representation(OutRepresentation::Unsupported(reason));
     for key in ["Handle", "&Handle"] {
-        binding.rule(
-            Scope::Type(prebindgen_flat::TypeKey::parse(key).expect("a type key")),
-            refused,
-        );
+        let key = prebindgen_flat::TypeKey::parse(key).expect("a type key");
+        binding.rule(Scope::Type(key.clone()), refused_in);
+        binding.rule(Scope::Type(key), refused_out);
     }
     for (declaration, id) in &stated.declared {
         let form = match declaration {
             Declaration::Type(_) | Declaration::Callback(_) => OutputForm::Type {
-                representation: refused,
+                into_rust: refused_in,
+                // A callback only crosses into Rust.
+                out_of_rust: matches!(declaration, Declaration::Type(_)).then_some(refused_out),
                 release: None,
                 meta: *id,
             },
@@ -117,8 +149,6 @@ fn plan(stated: &Stated, sources: FlatBuilder) -> Result<Generation<Nothing>, En
                     routes: Vec::new(),
                     attrs: Vec::new(),
                     unsafety: false,
-                    params: Accepts::of([]),
-                    ret: Accepts::of([]),
                 },
                 meta: *id,
             },
@@ -232,7 +262,7 @@ fn every_skip_names_the_capability_that_stopped_it() {
         .iter()
         .map(|(_, skip)| skip.capability.as_str())
         .collect();
-    assert_eq!(codes, ["unsupported.nothing.carrier"; 3]);
+    assert_eq!(codes, ["unsupported.nothing.representation"; 3]);
 }
 
 /// One entity declared several times is several skips, in the order the

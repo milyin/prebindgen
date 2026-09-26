@@ -183,7 +183,7 @@ binding can also avoid depending on the Kotlin adapter.
 ```text
 captured Rust source + declared local helper signatures
   -> Flat builds the checked source model
-  -> language frontend states the binding: carriers, conversion rules, outputs
+  -> language frontend states the binding: wire types, conversion rules, outputs
   -> registry plans value conversions from Flat facts and the binding alone
   -> registry assembles the wrapper boundary of each exported function
   -> registry retains complete supported plans and reports skipped requests

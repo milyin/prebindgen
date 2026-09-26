@@ -2,7 +2,7 @@
 //! stated in.
 //!
 //! A target knows how to write its language and nothing else. Everything a
-//! plan depends on — which carrier holds a value, which operations move it,
+//! plan depends on — which wire type holds a value, which operations move it,
 //! what form an exported function takes — is stated before planning starts,
 //! as the [`Binding`](crate::binding::Binding) a frontend hands
 //! [`generate`](crate::generate). The registry plans from that data alone and
@@ -29,9 +29,11 @@
 //!   the registry generates around it: one the target's calling interface can
 //!   reach, which converts what arrives, calls the source function once, and
 //!   converts what it returns.
-//! - A **carrier** is a Rust type generated code may hold a value in at the
-//!   boundary — `i64`, `*mut ledger_t`, a `repr(C)` `Stamp`, a `JObject` —
-//!   declared by the frontend as a [`WireType`](crate::binding::WireType).
+//! - A **wire type** is the type of a value on the boundary, as both sides see
+//!   it: its Rust type — `i64`, `*mut ledger_t`, a `repr(C)` `Stamp`, a
+//!   `JObject` — and what the foreign side reads it as. Each target's wire
+//!   types are its own [`WireType`] enum, and their
+//!   [kinds](crate::binding::WireKind) are what its capabilities are stated in.
 //!
 //! This is the first increment (docs/v2). What it carries is the scalar, the
 //! owned struct, the owned opaque handle and the fieldless enum;
@@ -40,7 +42,10 @@
 use prebindgen_flat::flat::{Enum, EnumValue, FieldShape, TypeRef};
 use proc_macro2::TokenStream;
 
-use crate::{binding::CarrierOf, outcome::Capability};
+use crate::{
+    binding::{TargetOp, WireKind, WireKindOf, WireType},
+    outcome::Capability,
+};
 
 /// Which way a value crosses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -80,7 +85,7 @@ pub struct Crossing {
 /// Not an error: the run continues, the affected outputs are skipped, and the
 /// report says which capability would unblock them. A frontend records one in
 /// the binding for a declaration it cannot lower — a declarator it has no
-/// representation for, an enum numbered beyond its carrier — and the registry
+/// representation for, an enum numbered beyond its wire type — and the registry
 /// reports it wherever a value or an output meets it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Unsupported {
@@ -172,8 +177,9 @@ pub struct StructRelation {
 /// How the registry constructs or reads a Rust value.
 ///
 /// Which one a value takes is stated by the representation that applies to it:
-/// a `Terminal` one is the atomic relation, and a `Product` one names its
-/// relation with a [`Via`](crate::binding::Via).
+/// a `Whole` one is the atomic relation, a `Parts` one names its relation with
+/// a [`Via`](crate::binding::Via), and a `Callable` one is the callback's
+/// arguments.
 #[derive(Clone, Debug)]
 pub enum Relation {
     /// The whole value converted by one operation: no parts, no recursion.
@@ -337,11 +343,11 @@ pub fn mirrored_enum<'a>(
 }
 
 /// [`mirrored_enum`]'s values with their numbers as an `i32`, for a target
-/// whose carrier is 32 bits: a C `int`, a JNI `jint`.
+/// whose wire type is 32 bits: a C `int`, a JNI `jint`.
 ///
 /// Everything [`mirrored_enum`] refuses, plus a number outside `i32`.
 /// `#[repr(i64)] enum P { High = 2147483648 }` is valid Rust, and a 32-bit
-/// carrier cannot hold it, so the enum is refused rather than mirrored with a
+/// wire type cannot hold it, so the enum is refused rather than mirrored with a
 /// number the target's side truncates or does not accept.
 pub fn mirrored_i32_enum<'a>(
     unit: Option<&'a Enum>,
@@ -359,7 +365,7 @@ pub fn mirrored_i32_enum<'a>(
                 Err(_) => Err(Unsupported::new(
                     format!("unsupported.{language}.enum_range"),
                     format!(
-                        "`{declared_as}` numbers `{}` {number}, which a 32-bit carrier cannot \
+                        "`{declared_as}` numbers `{}` {number}, which a 32-bit wire type cannot \
                          hold",
                         value.name
                     ),
@@ -392,39 +398,41 @@ pub struct EnumArm {
 
 /// The language adapter, as the engine sees it: a set of writers.
 ///
-/// Nothing here decides anything a plan depends on. Which carrier holds a
-/// value, which operations move it, what form an exported function takes and
-/// which wire types each place may hold are all stated in the
-/// [`Binding`](crate::binding::Binding) before planning starts, and the
-/// registry plans from that alone. A writer is called only once the plan is
-/// complete, is fed everything its piece of text needs, and cannot refuse:
-/// whatever could make a value unsupported was decided when the binding was
-/// built.
+/// Nothing here decides anything a plan depends on. Which wire type holds a
+/// value, which operations move it and what form an exported function takes
+/// are stated in the [`Binding`](crate::binding::Binding) before planning
+/// starts. What the target can do at all — the parts a kind of wire type can
+/// have, the kinds a wrapper can take and return — is stated by its kinds and
+/// by [`PARAMS`](Self::PARAMS) and [`RETURNS`](Self::RETURNS), as fixed facts
+/// about the language rather than choices of a binding. The registry plans
+/// from those alone. A writer is called only once the plan is complete, is fed
+/// everything its piece of text needs, and cannot refuse: whatever could make
+/// a value unsupported was decided before it runs.
 ///
-/// The associated types are the adapter's own vocabulary, which the registry
+/// Apart from the kinds' capabilities and a wire type's kind and Rust type,
+/// the associated types are the adapter's own vocabulary, which the registry
 /// compares and hashes but never reads.
 pub trait Target: Sized {
     /// This target's name in a report — `"c"`, `"jni"`. Intrinsic to the
     /// adapter, so nothing has to carry it alongside the requests.
     const NAME: &'static str;
 
-    /// The adapter's few wire types, which acceptance is stated in: C's `I64`,
-    /// `Pointer`, `Aggregate`; JNI's `Long`, `Int`, `Object`.
-    ///
-    /// Its `Debug` form, lower-cased, is how a refusal names one:
-    /// `unsupported.c.member.aggregate`.
-    type WireClass: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+    /// The adapter's wire types: one variant per kind, holding what only
+    /// that kind needs — C's name for a struct it declares, a Kotlin class.
+    type WireType: WireType;
 
-    /// What a carrier tells the writers beyond its Rust type: C's name for
-    /// it, a JVM descriptor and Kotlin type.
-    ///
-    /// Compared, because two carriers of one Rust type may differ in it —
-    /// every JVM object is a `JObject`, and one holding an `example.Stamp` is
-    /// a different carrier from one holding an `other.Stamp`.
-    type CarrierMeta: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+    /// The kinds a wrapper parameter can be. Every kind, unless the target
+    /// cannot pass some.
+    const PARAMS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
 
-    /// The target's own operations: a JVM getter call, a throw. C has none.
-    type Op: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+    /// The kinds a wrapper can return. Every kind, unless the target cannot
+    /// return some.
+    const RETURNS: &'static [WireKindOf<Self>] = <WireKindOf<Self> as WireKind>::ALL;
+
+    /// The target's own operations: what only its language has — a JVM
+    /// getter call, a throw, calling through C's closure struct, whose
+    /// members only the C target declares and knows.
+    type Op: TargetOp;
 
     /// What only the target's foreign writer reads about an output: a Kotlin
     /// package and name. C has none.
@@ -436,13 +444,13 @@ pub trait Target: Sized {
     /// The feed names every operand and says what each holds.
     fn write_operation(&self, op: &Self::Op, feed: &OperationFeed<'_, Self>) -> Written;
 
-    /// The Rust items a carrier needs declared, in order — a `repr(C)` struct
+    /// The Rust items a wire type needs declared, in order — a `repr(C)` struct
     /// or enum mirror, an incomplete type behind a pointer — or none for a
     /// type Rust already has, such as `i64` or `JObject`.
     ///
-    /// The registry puts the condition of the source item the carrier serves
+    /// The registry puts the condition of the source item the wire type serves
     /// on every item returned, so each is one item.
-    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<TokenStream>;
+    fn write_wire_type(&self, feed: &WireTypeFeed<'_, Self>) -> Vec<TokenStream>;
 }
 
 /// What a writer produced, and the helpers it needs emitted once beside it.
@@ -474,8 +482,8 @@ impl Written {
 pub enum Fed<'a, T: Target> {
     /// An exact Rust type from the source model.
     Source(&'a TypeRef),
-    /// A carrier the binding declared.
-    Carrier(&'a CarrierOf<T>),
+    /// A wire type the binding declared.
+    WireType(&'a T::WireType),
     /// What a callback's `capture` produced: a value of the target's own
     /// making, which the registry moves into the closure and names nothing
     /// about.
@@ -494,13 +502,13 @@ pub struct OperationFeed<'a, T: Target> {
     pub error: Option<syn::Ident>,
     /// What the expression must produce, if anything.
     pub result: Option<Fed<'a, T>>,
-    /// For an operation applied once per part — a `Product`'s `read` — the
+    /// For an operation applied once per part — the `read` of `Parts` — the
     /// part it is applied to.
     pub part: Option<&'a Part>,
-    /// For a callback's `capture` and `invoke`: the carriers of the callback's
+    /// For a callback's `capture` and `invoke`: the wire types of the callback's
     /// arguments, in order — each named for `invoke`, which is handed them,
     /// and unnamed for `capture`, which runs before any call.
-    pub args: Vec<(Option<syn::Ident>, &'a CarrierOf<T>)>,
+    pub args: Vec<(Option<syn::Ident>, &'a T::WireType)>,
 }
 
 impl<T: Target> OperationFeed<'_, T> {
@@ -520,12 +528,12 @@ impl<T: Target> OperationFeed<'_, T> {
     }
 }
 
-/// Everything one carrier's declaration needs written.
-pub struct CarrierFeed<'a, T: Target> {
-    pub carrier: &'a CarrierOf<T>,
-    /// For the carrier of a `Product` or a `Callback`: each part — a field,
-    /// or an argument — with the carrier it resolved to, in part order.
-    pub members: Vec<(&'a Part, &'a CarrierOf<T>)>,
-    /// For a carrier of a fieldless enum's value: that enum, from the model.
+/// Everything one wire type's declaration needs written.
+pub struct WireTypeFeed<'a, T: Target> {
+    pub wire_type: &'a T::WireType,
+    /// For the wire type of `Parts` or of a `Callable`: each part — a field,
+    /// or an argument — with the wire type it resolved to, in part order.
+    pub parts: Vec<(&'a Part, &'a T::WireType)>,
+    /// For a wire type of a fieldless enum's value: that enum, from the model.
     pub unit: Option<&'a Enum>,
 }

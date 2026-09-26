@@ -15,7 +15,7 @@ carries. There is no source signature: nothing in the source crate frees a
 
 ```text
 node(taken) : Ledger  IntoRust  -> an owned source Ledger, failures { Binding }
-              release: apply Release to the carrier
+              release: apply Release to the wire type
 
 source: none
 ```
@@ -27,7 +27,7 @@ FunctionPlan {
     declaration: public Ledger in this target,          // the type's own, not a function's
     symbol, abi: from the type output's release form    // per target, below
     params:      the form's context parameters, then the form's one input,
-                 typed as node(taken)'s carrier
+                 typed as node(taken)'s wire type
     ret:         none
     instrs:      apply the release to the wrapper parameter
 }

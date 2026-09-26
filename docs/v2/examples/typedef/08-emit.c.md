@@ -8,8 +8,8 @@ Owner: the common Rust writer, then `cbindgen`
 ## Input
 
 ```text
-Retained(type:Ledger), whose carrier is fed to the C writer:
-    CarrierFeed { carrier: *mut Ledger (Opaque, c_name "Ledger"), members: [] }
+Retained(type:Ledger), whose wire type is fed to the C writer:
+    WireTypeFeed { wire_type: *mut Ledger (Opaque, c_name "Ledger"), members: [] }
 FunctionPlan(release of Ledger) frozen, with
     abi, symbol: extern "C", "ledger_drop"
     params:      [ this_: *mut Ledger ], no return
@@ -20,8 +20,8 @@ FunctionPlan(release of Ledger) frozen, with
 
 In the generated C Rust module (`c.rs`), the declaration the C writer returns
 for the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
-among the carrier declarations, and the release among the
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations),
+among the wire type declarations, and the release among the
 [wrappers](../../stages/06-boundary.md#assemble-the-wrapper-boundary):
 
 ```rust

@@ -11,8 +11,8 @@ The callback's [crossing](../../stages/03-requests.md#finding-an-existing-conver
 and the rules the JNI frontend recorded for it and its argument:
 
 ```text
-Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)) -> Callback over a `JObject` of example.LongCallback
-                                                         Type(i64)          -> Terminal over `jlong`, identity both ways
+Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)), into Rust -> Callable over a `JObject` of example.LongCallback
+                                                         Type(i64), out of Rust        -> Whole over `jlong`, identity
 ```
 
 ## Result
@@ -23,14 +23,14 @@ param each    impl Fn(i64), IntoRust   -> callback.args, carried in a `JObject`
 ```
 
 The argument leaves Rust as a `jlong`, the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 whose descriptor, `J`, is what the `run` method will be looked up with.
 `param stamp` selects exactly as on [the function path][fn_select_jni].
 
 ## Checks
 
-- The callable's carrier holds numbers, enums' numbers and addresses as
-  arguments, and a `jlong` is a number. A `Stamp` argument would be refused
+- A callable can have numbers, enums' numbers and addresses as arguments, and
+  a `jlong` is a number. A `Stamp` argument would be refused
   before this check, since no JNI [conversion](../../stages/04-select.md#select-conversion-relations) builds one out of Rust.
 - A handle argument would resolve to a `jlong` of the handle class, and an
   enum to a `jint`: both accepted, and both what makes the frontend add a raw

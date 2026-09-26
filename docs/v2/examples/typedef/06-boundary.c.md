@@ -8,7 +8,7 @@ Owner: the registry, on the C frontend's release form
 ## Input
 
 ```text
-node(taken) : carrier *mut Ledger, release infallible
+node(taken) : wire type *mut Ledger, release infallible
 
 the release form the C frontend recorded on `type:Ledger`'s output:
   symbol "ledger_drop", extern "C", no context parameters, inputs [this_],

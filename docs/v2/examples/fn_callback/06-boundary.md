@@ -23,7 +23,7 @@ source: pub fn stamp_each(stamp: Stamp, each: impl Fn(i64) + Send + Sync + 'stat
 FunctionPlan {
     symbol, abi:  from the form                     // per target, below
     params:       the form's context parameters, then `stamp` and `each`,
-                  each typed as its conversion's carrier
+                  each typed as its conversion's wire type
     ret:          none                              // stamp_each returns nothing
     instrs:       convert stamp
                   -> capture each, build the closure
@@ -33,7 +33,7 @@ FunctionPlan {
 ```
 
 The callback is placed like any input: a [wrapper](../../stages/06-boundary.md#assemble-the-wrapper-boundary) parameter typed as its
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations),
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations),
 feeding its [conversion](../../stages/04-select.md#select-conversion-relations).
 The conversion ends with a closure rather than a converted value, and the
 source function receives the closure. Everything before the source call

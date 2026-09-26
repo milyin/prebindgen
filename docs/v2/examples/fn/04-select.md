@@ -36,11 +36,11 @@ the representation the later stages compare:
                      +-- field nanos --> i64, IntoRust,  relation: atomic
 
    return      --> i64, OutOfRust
-                     relation: atomic          // a `Terminal` representation
+                     relation: atomic          // a `Whole` representation
 ```
 
 Nothing in the tree says how a field is read. It says that `Stamp` will be built
-from two fields — so the `Stamp` [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+from two fields — so the `Stamp` [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 has two members, each carried as the `i64` rule says — and that an `i64` is a
 leaf, converted whole. The [C][fn_select_c] and [Kotlin/JNI][fn_select_jni]
 pages show each frontend's rules.

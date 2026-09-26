@@ -11,8 +11,8 @@ The callback's [crossing](../../stages/03-requests.md#finding-an-existing-conver
 and the rules the C frontend recorded for it and its argument:
 
 ```text
-Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)) -> Callback over `closure_i64`
-                                                         Type(i64)          -> Terminal over `i64`, identity both ways
+Crossing { source: impl Fn(i64), direction: IntoRust }   Type(impl Fn(i64)), into Rust -> Callable over `closure_i64`
+                                                         Type(i64), out of Rust        -> Whole over `i64`, identity
 ```
 
 ## Result
@@ -23,7 +23,7 @@ param each    impl Fn(i64), IntoRust   -> callback.args, carried in `closure_i64
 ```
 
 The argument leaves Rust in the `i64`
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 it would leave in anywhere, which is what the closure struct's `call` will be
 declared to take. `param stamp` selects exactly as on
 [the function path][fn_select_c].

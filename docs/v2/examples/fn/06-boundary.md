@@ -11,7 +11,7 @@ The two [nodes](../../stages/05-represent.md#represent-and-compose-values) [repr
 
 ```text
 node(input)  : Stamp   IntoRust   -> an owned source Stamp
-node(output) : i64     OutOfRust  -> the target's signed 64-bit carrier
+node(output) : i64     OutOfRust  -> the target's signed 64-bit wire type
 
 source: pub fn stamp_sum(stamp: Stamp) -> i64
 ```
@@ -28,8 +28,8 @@ generated code operates.
 FunctionPlan {
     symbol, abi:  from the form                   // per target, below
     params:       the form's context parameters, then one per source parameter,
-                  each typed as its conversion's carrier
-    ret:          the output conversion's carrier
+                  each typed as its conversion's wire type
+    ret:          the output conversion's wire type
     instrs:       convert the input
                   -> call the source function once
                   -> convert the result
@@ -43,7 +43,7 @@ FunctionPlan {
   succeeded.
 - Every failure the input node declares needs a route here; a category with no
   route is an unsupported boundary, not a default.
-- A value of a wire type the form's parameters or return do not hold skips the
+- A value of a kind of [wire type](../../stages/05-represent.md#describing-target-values-and-operations) the target cannot pass or return skips the
   function. Its ABI is never quietly changed to make it fit.
 - There is one ordinary result. A future `Result` example will need separate
   success/error conversions and delivery; that branching behavior is not

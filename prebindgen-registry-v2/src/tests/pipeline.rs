@@ -10,15 +10,16 @@ use prebindgen_flat::flat::Flat;
 
 use crate::{
     binding::{
-        Accepts, Binding, Codec, FailureRoute, FunctionForm, Operation, OutputForm, OutputFormOf,
-        Report, ReprId, Representation, Scope, StandardOp, Step, ValuePath, Via, WireType,
+        Binding, Failure, FailureRoute, FunctionForm, InReprId, InRepresentation, Operation,
+        OutReprId, OutRepresentation, OutputForm, OutputFormOf, Report, ReprId, Scope, StandardOp,
+        Step, TargetOp, ValuePath, Via, WireKind, WireType,
     },
     decl::Declaration,
     outcome::{EngineError, Outcome},
     plan::generate,
     run::Generation,
     target::{
-        CarrierFeed, FailureCategory, OperationFeed, PlanningError, Target, Terminal, Unsupported,
+        FailureCategory, OperationFeed, PlanningError, Target, Terminal, Unsupported, WireTypeFeed,
         Written,
     },
 };
@@ -128,21 +129,109 @@ fn model_items() -> Vec<(syn::Item, prebindgen::SourceLocation)> {
     items
 }
 
-/// This target's wire types.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Class {
+/// This target's kinds of wire type. Beside one of each kind a real target
+/// has, it has kinds whose capabilities are narrower, which is how a test
+/// states a limit of the target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Kind {
     Scalar,
+    /// A struct holding scalars, other structs and pointers.
     Aggregate,
+    /// A struct that can hold only pointers.
+    PointerAggregate,
+    /// A struct that can hold only scalars.
+    ScalarAggregate,
+    /// A struct a wrapper cannot take as a parameter.
+    Local,
     Pointer,
+    /// A callable taking scalars and pointers.
     Closure,
+    /// A callable that can take only scalars.
+    ScalarClosure,
+    /// An address carried as an integer.
+    Address,
 }
 
-/// Whether a carrier needs a declaration of its own: only a mirrored struct
-/// does, so every other test's generated file holds wrappers alone.
+impl WireKind for Kind {
+    const ALL: &'static [Self] = &[
+        Kind::Scalar,
+        Kind::Aggregate,
+        Kind::PointerAggregate,
+        Kind::ScalarAggregate,
+        Kind::Local,
+        Kind::Pointer,
+        Kind::Closure,
+        Kind::ScalarClosure,
+        Kind::Address,
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            Kind::Scalar => "scalar",
+            Kind::Aggregate => "aggregate",
+            Kind::PointerAggregate => "pointer_aggregate",
+            Kind::ScalarAggregate => "scalar_aggregate",
+            Kind::Local => "local",
+            Kind::Pointer => "pointer",
+            Kind::Closure => "closure",
+            Kind::ScalarClosure => "scalar_closure",
+            Kind::Address => "address",
+        }
+    }
+
+    fn parts(self) -> &'static [Self] {
+        match self {
+            Kind::Aggregate | Kind::Local => &[Kind::Scalar, Kind::Aggregate, Kind::Pointer],
+            Kind::PointerAggregate => &[Kind::Pointer],
+            Kind::ScalarAggregate | Kind::ScalarClosure => &[Kind::Scalar],
+            Kind::Closure => &[Kind::Scalar, Kind::Pointer],
+            _ => &[],
+        }
+    }
+}
+
+/// This target's wire types. Only a mirrored struct needs a declaration of its
+/// own, so every other test's generated file holds wrappers alone.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Meta {
-    Plain,
-    Mirror,
+enum Wire {
+    Scalar,
+    Address,
+    /// A struct of one of the aggregate kinds, named, and mirrored or not.
+    Aggregate {
+        kind: Kind,
+        name: syn::Ident,
+        mirror: bool,
+    },
+    Pointer {
+        name: syn::Ident,
+    },
+    /// A callable of one of the closure kinds.
+    Closure {
+        kind: Kind,
+        name: syn::Ident,
+    },
+}
+
+impl WireType for Wire {
+    type Kind = Kind;
+
+    fn kind(&self) -> Kind {
+        match self {
+            Wire::Scalar => Kind::Scalar,
+            Wire::Address => Kind::Address,
+            Wire::Aggregate { kind, .. } | Wire::Closure { kind, .. } => *kind,
+            Wire::Pointer { .. } => Kind::Pointer,
+        }
+    }
+
+    fn rust(&self) -> syn::Type {
+        match self {
+            Wire::Scalar => syn::parse_quote!(i64),
+            Wire::Address => syn::parse_quote!(usize),
+            Wire::Aggregate { name, .. } | Wire::Closure { name, .. } => syn::parse_quote!(#name),
+            Wire::Pointer { name } => syn::parse_quote!(*mut #name),
+        }
+    }
 }
 
 /// This target's own operations.
@@ -158,12 +247,37 @@ enum Op {
     /// rather than the registry's identity: the same `i64` on the wire, a
     /// different conversion.
     Rebase,
-    /// What a callback keeps from its carrier.
+    /// What a callback keeps from its wire type.
     Capture,
     /// One call of the foreign callable, which cannot fail.
     Invoke,
     /// The same, failing at runtime.
     InvokeFallibly,
+    /// The same, needing a runtime context.
+    InvokeNeedingContext,
+    /// A reporter needing a runtime context no form here supplies.
+    ReportNeedingContext,
+}
+
+/// The one runtime context this target's operations know, and the one error
+/// its fallible operations raise.
+impl TargetOp for Op {
+    fn contexts(&self) -> &'static [&'static str] {
+        match self {
+            Op::InvokeNeedingContext | Op::ReportNeedingContext => &["mini.log"],
+            _ => &[],
+        }
+    }
+
+    fn failure(&self) -> Option<Failure> {
+        match self {
+            Op::ReadFallibly | Op::InvokeFallibly => Some(Failure {
+                category: FailureCategory::Runtime,
+                error: Box::new(syn::parse_quote!(Error)),
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// The miniature target: a writer for each of its operations, and a mirror
@@ -173,9 +287,19 @@ struct Mini;
 impl Target for Mini {
     const NAME: &'static str = "mini";
 
-    type WireClass = Class;
-    type CarrierMeta = Meta;
+    type WireType = Wire;
     type Op = Op;
+
+    const PARAMS: &'static [Kind] = &[
+        Kind::Scalar,
+        Kind::Aggregate,
+        Kind::PointerAggregate,
+        Kind::ScalarAggregate,
+        Kind::Pointer,
+        Kind::Closure,
+        Kind::ScalarClosure,
+        Kind::Address,
+    ];
     type OutputMeta = ();
 
     fn write_operation(&self, op: &Op, feed: &OperationFeed<'_, Self>) -> Written {
@@ -183,14 +307,14 @@ impl Target for Mini {
         let error = feed.error.as_ref();
         Written::new(match op {
             Op::ReadFallibly => quote::quote!(read(#value)),
-            Op::Report => quote::quote!(report(#error)),
+            Op::Report | Op::ReportNeedingContext => quote::quote!(report(#error)),
             Op::ReportMessage => quote::quote!(report_message(#error)),
             Op::Rebase => quote::quote!(rebase(#value)),
             Op::Capture => {
-                let carried = feed.args.iter().map(|(_, carrier)| &carrier.rust);
+                let carried = feed.args.iter().map(|(_, wire_type)| wire_type.rust());
                 quote::quote!(capture::<(#(#carried,)*)>(#value))
             }
-            Op::Invoke | Op::InvokeFallibly => {
+            Op::Invoke | Op::InvokeFallibly | Op::InvokeNeedingContext => {
                 let args = feed.args.iter().map(|(name, _)| name);
                 quote::quote!(invoke(&#value, #(#args),*))
             }
@@ -199,15 +323,15 @@ impl Target for Mini {
 
     /// The mirror is what a real C target contributes: a struct of its own,
     /// one member per source field, each under that field's condition.
-    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
-        if feed.carrier.meta != Meta::Mirror {
+    fn write_wire_type(&self, feed: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        if !matches!(feed.wire_type, Wire::Aggregate { mirror: true, .. }) {
             return Vec::new();
         }
-        let ty = &feed.carrier.rust;
-        let members = feed.members.iter().map(|(part, carrier)| {
+        let ty = feed.wire_type.rust();
+        let members = feed.parts.iter().map(|(part, wire_type)| {
             let name = quote::format_ident!("{}", part.label());
             let conditions = &part.conditions;
-            let member = &carrier.rust;
+            let member = wire_type.rust();
             quote::quote!(#(#conditions)* pub #name: #member)
         });
         vec![quote::quote!(#[repr(C)] pub struct #ty { #(#members),* })]
@@ -229,13 +353,10 @@ enum Routes {
 
 /// A form exporting a function under `symbol`. Its wrapper parameters are
 /// named `arg0`, `arg1`, … unless a test names them.
-fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
-    let report = |op: Op, error: syn::Type, context: bool| Report {
+fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op> {
+    let report = |op: Op, error: syn::Type| Report {
         error,
-        operation: match context {
-            true => Operation::target(op).context("mini.log"),
-            false => Operation::target(op),
-        },
+        operation: Operation::Target(op),
     };
     FunctionForm {
         abi: "C".to_string(),
@@ -247,16 +368,18 @@ fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
             Routes::Reported | Routes::ReporterNeedsContext => vec![
                 FailureRoute {
                     category: FailureCategory::Binding,
-                    report: Some(report(Op::ReportMessage, syn::parse_quote!(String), false)),
+                    report: Some(report(Op::ReportMessage, syn::parse_quote!(String))),
                     on_report_failure: Terminal::Abort,
                     terminate: Terminal::Return(syn::parse_quote!(0)),
                 },
                 FailureRoute {
                     category: FailureCategory::Runtime,
                     report: Some(report(
-                        Op::Report,
+                        match routes {
+                            Routes::ReporterNeedsContext => Op::ReportNeedingContext,
+                            _ => Op::Report,
+                        },
                         syn::parse_quote!(Error),
-                        routes == Routes::ReporterNeedsContext,
                     )),
                     on_report_failure: Terminal::Abort,
                     terminate: Terminal::Return(syn::parse_quote!(0)),
@@ -265,13 +388,6 @@ fn exported(symbol: &str, routes: Routes) -> FunctionForm<Op, Class> {
         },
         attrs: Vec::new(),
         unsafety: false,
-        params: Accepts::of([
-            Class::Scalar,
-            Class::Aggregate,
-            Class::Pointer,
-            Class::Closure,
-        ]),
-        ret: Accepts::of([Class::Scalar, Class::Aggregate, Class::Pointer]),
     }
 }
 
@@ -303,16 +419,47 @@ enum Shape {
     FallibleStruct(&'static str),
     /// The same, with a declaration of its own: a mirror of the source struct.
     MirroredStruct(&'static str),
-    /// A struct whose carrier holds only the given wire types as members.
-    StructHolding(&'static str, Vec<Class>),
+    /// A struct whose wire type is of the given aggregate kind.
+    StructOf(&'static str, Kind),
     /// An opaque value carried whole as an address, released through a
     /// release of its own.
     Handle,
     /// A handle taken back as an address and handed out as an integer: two
-    /// carriers, one per direction.
+    /// wire types, one per direction.
     SplitHandle,
     /// An `i64` carried through this target's own operation.
     ScalarThrough,
+}
+
+/// How a type's values cross, one representation per direction they cross in:
+/// what a frontend states for one declared type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Repr {
+    into_rust: InReprId,
+    out_of_rust: Option<OutReprId>,
+}
+
+impl Repr {
+    fn ids(self) -> impl Iterator<Item = ReprId> {
+        std::iter::once(ReprId::In(self.into_rust)).chain(self.out_of_rust.map(ReprId::Out))
+    }
+
+    /// The one for values crossing at the end of `path`, which a rule there
+    /// has to serve.
+    fn at(self, path: &[Step]) -> ReprId {
+        let out_of_rust = path.iter().fold(false, |out, step| match step {
+            Step::Param(_) => false,
+            Step::Return | Step::Arg(_) => true,
+            Step::Field(_) => out,
+        });
+        match out_of_rust {
+            false => ReprId::In(self.into_rust),
+            true => ReprId::Out(
+                self.out_of_rust
+                    .expect("a rule out of Rust names a representation with that direction"),
+            ),
+        }
+    }
 }
 
 /// A miniature frontend: what the binding declares, stated as a binding.
@@ -322,183 +469,173 @@ enum Shape {
 /// the function's declaration.
 struct Fixture {
     binding: Binding<Mini>,
-    scalar: ReprId,
+    scalar: Repr,
     outputs: Vec<(Declaration, OutputFormOf<Mini>)>,
     rules: Vec<(Scope, ReprId)>,
-    at: Vec<(Declaration, Vec<Step>, ReprId)>,
+    at: Vec<(Declaration, Vec<Step>, Repr)>,
 }
 
 fn fixture() -> Fixture {
     let mut binding = Binding::new();
-    let i64_carrier = binding.carrier(WireType {
-        rust: syn::parse_quote!(i64),
-        class: Class::Scalar,
-        members: None,
-        meta: Meta::Plain,
-    });
-    let unchanged = Codec {
-        carrier: i64_carrier,
-        operation: Operation::standard(StandardOp::Identity),
+    let i64_wire = binding.wire_type(Wire::Scalar);
+    let scalar = Repr {
+        into_rust: binding.in_representation(InRepresentation::Whole {
+            wire_type: i64_wire,
+            operation: Operation::Standard(StandardOp::Identity),
+        }),
+        out_of_rust: Some(binding.out_representation(OutRepresentation::Whole {
+            wire_type: i64_wire,
+            operation: Operation::Standard(StandardOp::Identity),
+            release: None,
+        })),
     };
-    let scalar = binding.representation(Representation::Terminal {
-        into_rust: Some(unchanged.clone()),
-        out_of_rust: Some(unchanged),
-        release: None,
-    });
     Fixture {
         binding,
         scalar,
         outputs: Vec::new(),
-        rules: vec![(Scope::Type(key("i64")), scalar)],
+        rules: scalar
+            .ids()
+            .map(|id| (Scope::Type(key("i64")), id))
+            .collect(),
         at: Vec::new(),
     }
 }
 
 impl Fixture {
-    /// Declare a representation.
-    fn repr(&mut self, shape: Shape) -> ReprId {
-        let aggregate = |binding: &mut Binding<Mini>, name: &str, holds: Vec<Class>, meta| {
-            let ident = quote::format_ident!("{name}");
-            binding.carrier(WireType {
-                rust: syn::parse_quote!(#ident),
-                class: Class::Aggregate,
-                members: Some(Accepts::of(holds)),
-                meta,
+    /// Declare a type's representations.
+    fn repr(&mut self, shape: Shape) -> Repr {
+        let aggregate = |binding: &mut Binding<Mini>, name: &str, kind, mirror| {
+            binding.wire_type(Wire::Aggregate {
+                kind,
+                name: quote::format_ident!("{name}"),
+                mirror,
             })
         };
-        let holds_all = || vec![Class::Scalar, Class::Aggregate, Class::Pointer];
-        let representation = match shape {
-            Shape::Struct(name) => Representation::Product {
-                via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Plain),
-                read: Operation::standard(StandardOp::ReadMember),
-            },
-            Shape::FallibleStruct(name) => Representation::Product {
-                via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Plain),
-                read: Operation::target(Op::ReadFallibly)
-                    .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
-            },
-            Shape::MirroredStruct(name) => Representation::Product {
-                via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds_all(), Meta::Mirror),
-                read: Operation::standard(StandardOp::ReadMember),
-            },
-            Shape::StructHolding(name, holds) => Representation::Product {
-                via: Via::Fields,
-                carrier: aggregate(&mut self.binding, name, holds, Meta::Plain),
-                read: Operation::standard(StandardOp::ReadMember),
-            },
+        let parts = |wire_type| InRepresentation::Parts {
+            via: Via::Fields,
+            wire_type,
+            read: Operation::Standard(StandardOp::ReadMember),
+        };
+        let (into_rust, out_of_rust) = match shape {
+            Shape::Struct(name) => (
+                parts(aggregate(&mut self.binding, name, Kind::Aggregate, false)),
+                None,
+            ),
+            Shape::FallibleStruct(name) => (
+                InRepresentation::Parts {
+                    via: Via::Fields,
+                    wire_type: aggregate(&mut self.binding, name, Kind::Aggregate, false),
+                    read: Operation::Target(Op::ReadFallibly),
+                },
+                None,
+            ),
+            Shape::MirroredStruct(name) => (
+                parts(aggregate(&mut self.binding, name, Kind::Aggregate, true)),
+                None,
+            ),
+            Shape::StructOf(name, kind) => {
+                (parts(aggregate(&mut self.binding, name, kind, false)), None)
+            }
             Shape::Handle => {
-                let pointer = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(*mut Raw),
-                    class: Class::Pointer,
-                    members: None,
-                    meta: Meta::Plain,
+                let pointer = self.binding.wire_type(Wire::Pointer {
+                    name: quote::format_ident!("Raw"),
                 });
-                Representation::Terminal {
-                    into_rust: Some(Codec {
-                        carrier: pointer,
-                        operation: Operation::standard(StandardOp::FromRaw),
+                (
+                    InRepresentation::Whole {
+                        wire_type: pointer,
+                        operation: Operation::Standard(StandardOp::FromRaw),
+                    },
+                    Some(OutRepresentation::Whole {
+                        wire_type: pointer,
+                        operation: Operation::Standard(StandardOp::IntoRaw),
+                        release: Some(Operation::Standard(StandardOp::Release)),
                     }),
-                    out_of_rust: Some(Codec {
-                        carrier: pointer,
-                        operation: Operation::standard(StandardOp::IntoRaw),
-                    }),
-                    release: Some(Operation::standard(StandardOp::Release)),
-                }
+                )
             }
             Shape::SplitHandle => {
-                let pointer = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(*mut Raw),
-                    class: Class::Pointer,
-                    members: None,
-                    meta: Meta::Plain,
+                let pointer = self.binding.wire_type(Wire::Pointer {
+                    name: quote::format_ident!("Raw"),
                 });
-                let integer = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(usize),
-                    class: Class::Scalar,
-                    members: None,
-                    meta: Meta::Plain,
-                });
-                Representation::Terminal {
-                    into_rust: Some(Codec {
-                        carrier: pointer,
-                        operation: Operation::standard(StandardOp::FromRaw),
+                let integer = self.binding.wire_type(Wire::Address);
+                (
+                    InRepresentation::Whole {
+                        wire_type: pointer,
+                        operation: Operation::Standard(StandardOp::FromRaw),
+                    },
+                    Some(OutRepresentation::Whole {
+                        wire_type: integer,
+                        operation: Operation::Standard(StandardOp::IntoRaw),
+                        release: Some(Operation::Standard(StandardOp::Release)),
                     }),
-                    out_of_rust: Some(Codec {
-                        carrier: integer,
-                        operation: Operation::standard(StandardOp::IntoRaw),
-                    }),
-                    release: Some(Operation::standard(StandardOp::Release)),
-                }
+                )
             }
             Shape::ScalarThrough => {
-                let i64_carrier = self.binding.carrier(WireType {
-                    rust: syn::parse_quote!(i64),
-                    class: Class::Scalar,
-                    members: None,
-                    meta: Meta::Plain,
-                });
-                let through = Codec {
-                    carrier: i64_carrier,
-                    operation: Operation::target(Op::Rebase),
-                };
-                Representation::Terminal {
-                    into_rust: Some(through.clone()),
-                    out_of_rust: Some(through),
-                    release: None,
-                }
+                let i64_wire = self.binding.wire_type(Wire::Scalar);
+                (
+                    InRepresentation::Whole {
+                        wire_type: i64_wire,
+                        operation: Operation::Target(Op::Rebase),
+                    },
+                    Some(OutRepresentation::Whole {
+                        wire_type: i64_wire,
+                        operation: Operation::Target(Op::Rebase),
+                        release: None,
+                    }),
+                )
             }
         };
-        self.binding.representation(representation)
+        Repr {
+            into_rust: self.binding.in_representation(into_rust),
+            out_of_rust: out_of_rust.map(|out| self.binding.out_representation(out)),
+        }
     }
 
-    /// A callback representation: a closure carrier holding scalars and
+    /// A callback representation: a closure wire type holding scalars and
     /// pointers, a capture, and an invocation that calls as `call` says.
-    fn callback_repr(&mut self, call: Call) -> ReprId {
-        let carrier = self.binding.carrier(WireType {
-            rust: syn::parse_quote!(Closure),
-            class: Class::Closure,
-            members: Some(Accepts::of([Class::Scalar, Class::Pointer])),
-            meta: Meta::Plain,
+    fn callback_repr(&mut self, call: Call) -> Repr {
+        let wire_type = self.binding.wire_type(Wire::Closure {
+            kind: Kind::Closure,
+            name: quote::format_ident!("Closure"),
         });
         let invoke = match call {
-            Call::Infallible => Operation::target(Op::Invoke),
-            Call::NeedsContext => Operation::target(Op::Invoke).context("mini.log"),
-            Call::Routed | Call::Unrouted => Operation::target(Op::InvokeFallibly)
-                .fails(FailureCategory::Runtime, syn::parse_quote!(Error)),
+            Call::Infallible => Operation::Target(Op::Invoke),
+            Call::NeedsContext => Operation::Target(Op::InvokeNeedingContext),
+            Call::Routed | Call::Unrouted => Operation::Target(Op::InvokeFallibly),
         };
         let routes = match call {
             Call::Routed => vec![FailureRoute {
                 category: FailureCategory::Runtime,
                 report: Some(Report {
                     error: syn::parse_quote!(Error),
-                    operation: Operation::target(Op::Report),
+                    operation: Operation::Target(Op::Report),
                 }),
                 on_report_failure: Terminal::Abort,
                 terminate: Terminal::Return(syn::parse_quote!(())),
             }],
             _ => Vec::new(),
         };
-        self.binding.representation(Representation::Callback {
-            carrier,
-            capture: Operation::target(Op::Capture),
-            invoke,
-            routes,
-        })
+        Repr {
+            into_rust: self.binding.in_representation(InRepresentation::Callable {
+                wire_type,
+                capture: Operation::Target(Op::Capture),
+                invoke,
+                routes,
+            }),
+            out_of_rust: None,
+        }
     }
 
     /// A declared callback signature, as the C frontend's `callback!` states
     /// one: the rule for every value of it, and the output exposing it.
-    fn declare_callback(&mut self, args: &str, call: Call) -> ReprId {
+    fn declare_callback(&mut self, args: &str, call: Call) -> Repr {
         let repr = self.callback_repr(call);
         let key = callback_key(args);
-        self.rules.push((Scope::Type(key.clone()), repr));
+        self.crossing_key(key.clone(), repr);
         self.outputs.push((
             Declaration::Callback(key),
             OutputForm::Type {
-                representation: repr,
+                into_rust: repr.into_rust,
+                out_of_rust: None,
                 release: None,
                 meta: (),
             },
@@ -508,20 +645,22 @@ impl Fixture {
 
     /// Every value of this type crosses as `repr` — without asking for the
     /// type itself to be declared.
-    fn crossing(&mut self, name: &str, repr: ReprId) -> &mut Self {
+    fn crossing(&mut self, name: &str, repr: Repr) -> &mut Self {
         self.crossing_key(key(name), repr)
     }
 
     /// The same, for a type named by its key.
-    fn crossing_key(&mut self, key: prebindgen_flat::TypeKey, repr: ReprId) -> &mut Self {
-        self.rules.push((Scope::Type(key), repr));
+    fn crossing_key(&mut self, key: prebindgen_flat::TypeKey, repr: Repr) -> &mut Self {
+        for id in repr.ids() {
+            self.rules.push((Scope::Type(key.clone()), id));
+        }
         self
     }
 
     /// A declared type: how its values cross, and the output exposing that
     /// representation. The two are one declarator in both real frontends. A
     /// handle gets a release exported as `<name>_free`.
-    fn declare_type(&mut self, name: &str, shape: Shape) -> ReprId {
+    fn declare_type(&mut self, name: &str, shape: Shape) -> Repr {
         let repr = self.repr(shape);
         self.crossing(name, repr);
         self.expose(name, repr);
@@ -529,12 +668,15 @@ impl Fixture {
     }
 
     /// An output exposing `repr` of the type `name`, with a release when the
-    /// representation has one.
-    fn expose(&mut self, name: &str, repr: ReprId) -> &mut Self {
-        let release = match self.binding.representation_of(repr) {
-            Representation::Terminal {
+    /// out-of-Rust representation has one.
+    fn expose(&mut self, name: &str, repr: Repr) -> &mut Self {
+        let handed_out = repr
+            .out_of_rust
+            .map(|id| self.binding.out_representation_of(id));
+        let release = match handed_out {
+            Some(OutRepresentation::Whole {
                 release: Some(_), ..
-            } => {
+            }) => {
                 let item = key(name).short_name().expect("a named type");
                 let mut release = exported(&format!("{item}_free"), Routes::None);
                 release.inputs = vec![quote::format_ident!("arg0")];
@@ -549,13 +691,14 @@ impl Fixture {
     fn expose_with(
         &mut self,
         name: &str,
-        repr: ReprId,
-        release: Option<FunctionForm<Op, Class>>,
+        repr: Repr,
+        release: Option<FunctionForm<Op>>,
     ) -> &mut Self {
         self.outputs.push((
             ty(name),
             OutputForm::Type {
-                representation: repr,
+                into_rust: repr.into_rust,
+                out_of_rust: repr.out_of_rust,
                 release,
                 meta: (),
             },
@@ -564,7 +707,7 @@ impl Fixture {
     }
 
     /// An exported source function.
-    fn declare_fn(&mut self, name: &str, form: FunctionForm<Op, Class>) -> &mut Self {
+    fn declare_fn(&mut self, name: &str, form: FunctionForm<Op>) -> &mut Self {
         self.outputs
             .push((function(name), OutputForm::Function { form, meta: () }));
         self
@@ -578,7 +721,7 @@ impl Fixture {
 
     /// How one value inside one function crosses, overriding its type's rule:
     /// `("stamp_max", [param stamp])`, `("stamp_max", [param stamp, field secs])`.
-    fn at(&mut self, function_name: &str, path: Vec<Step>, repr: ReprId) -> &mut Self {
+    fn at(&mut self, function_name: &str, path: Vec<Step>, repr: Repr) -> &mut Self {
         self.at.push((function(function_name), path, repr));
         self
     }
@@ -615,7 +758,8 @@ impl Fixture {
                 .iter()
                 .find(|(declared, _)| *declared == declaration)
                 .expect("a rule at a position names a declared output");
-            rules.push((Scope::At(*output, ValuePath(path)), repr));
+            let id = repr.at(&path);
+            rules.push((Scope::At(*output, ValuePath(path)), id));
         }
         for (scope, repr) in rules {
             binding.rule(scope, repr);
@@ -1159,7 +1303,8 @@ fn a_type_form_on_an_exported_function_is_an_error() {
     fixture.declare(
         function("stamp_sum"),
         OutputForm::Type {
-            representation: strukt,
+            into_rust: strukt.into_rust,
+            out_of_rust: None,
             release: None,
             meta: (),
         },
@@ -1213,8 +1358,10 @@ fn a_field_rule_is_part_of_its_struct_conversion() {
         let strukt = fixture.repr(Shape::Struct("Stamp"));
         fixture.crossing("Stamp", strukt);
         // Read through fields, on a scalar field: an `i64` has no fields, so
-        // this child cannot be planned at all.
-        fixture.at("stamp_max", vec![param("stamp"), field("secs")], strukt);
+        // this child cannot be planned at all. A representation of its own,
+        // since `Stamp`'s converts `Stamp` and nothing else.
+        let fields = fixture.repr(Shape::Struct("Secs"));
+        fixture.at("stamp_max", vec![param("stamp"), field("secs")], fields);
         // Order matters twice over: which function is planned first, and
         // whether the struct's own request primed the conversion before either
         // of them. The refusal-first case must not be primed, or it would not
@@ -1532,19 +1679,24 @@ fn two_rules_for_one_value_are_an_error() {
     fixture.crossing("Stamp", strukt);
     let error = fixture.generate(model()).expect_err("refuses");
     assert!(
-        error.to_string().contains("two rules cover every `Stamp`"),
+        error
+            .to_string()
+            .contains("two rules cover every `Stamp` into Rust"),
         "{error}"
     );
 
     let mut fixture = self::fixture();
     let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
     let mut binding = fixture.build(&model());
-    binding.rule(Scope::At(binding.output_id(0), ValuePath::root()), strukt);
+    binding.rule(
+        Scope::At(binding.output_id(0), ValuePath::root()),
+        strukt.into_rust,
+    );
     let error = generate(model(), &Mini, binding, syn::parse_quote!(source)).expect_err("refuses");
     assert!(
         error
             .to_string()
-            .contains("two rules cover `type:Stamp` itself"),
+            .contains("two rules cover `type:Stamp` itself into Rust"),
         "{error}"
     );
 }
@@ -1585,17 +1737,17 @@ fn a_rule_at_a_position_that_does_not_exist_is_an_error() {
     );
 }
 
-/// A member whose part resolved to a wire type its carrier does not hold
+/// A member whose part resolved to a wire type its wire type does not hold
 /// refuses the struct, where the member is.
 #[test]
-fn a_member_its_carrier_does_not_hold_refuses_the_value() {
+fn a_member_its_wire_type_cannot_have_refuses_the_value() {
     let mut fixture = fixture();
-    fixture.declare_type("Stamp", Shape::StructHolding("Stamp", vec![Class::Pointer]));
+    fixture.declare_type("Stamp", Shape::StructOf("Stamp", Kind::PointerAggregate));
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "type:Stamp") else {
-        panic!("its carrier holds no scalar member");
+        panic!("a pointer aggregate cannot have a scalar member");
     };
     assert_eq!(skip.capability.as_str(), "unsupported.mini.member.scalar");
     assert_eq!(skip.dependency_path, ["type:Stamp", "field secs"]);
@@ -1608,21 +1760,19 @@ fn a_member_its_carrier_does_not_hold_refuses_the_value() {
     );
 }
 
-/// A value whose wire type a form does not hold as a parameter refuses the
+/// A value of a kind the target cannot pass to a wrapper refuses the
 /// function, where the parameter is.
 #[test]
-fn a_parameter_its_form_does_not_hold_refuses_the_function() {
+fn a_parameter_the_target_cannot_pass_refuses_the_function() {
     let mut fixture = fixture();
-    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
-    let mut form = exported("stamp_sum", Routes::None);
-    form.params = Accepts::of([Class::Scalar]);
-    fixture.declare_fn("stamp_sum", form);
+    fixture.declare_type("Stamp", Shape::StructOf("Stamp", Kind::Local));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
 
     let generation = fixture.generate(model()).expect("plans");
     let Outcome::Skipped(skip) = outcome(&generation, "fn:stamp_sum") else {
-        panic!("its form holds no aggregate parameter");
+        panic!("the target cannot pass a local struct");
     };
-    assert_eq!(skip.capability.as_str(), "unsupported.mini.param.aggregate");
+    assert_eq!(skip.capability.as_str(), "unsupported.mini.param.local");
     assert_eq!(skip.dependency_path, ["fn:stamp_sum", "param stamp"]);
 }
 
@@ -1647,7 +1797,7 @@ fn a_type_rule_nothing_used_is_listed() {
 }
 
 /// The binding prints every field planning reads, one line per
-/// carrier, representation, rule and output.
+/// wire type, representation, rule and output.
 #[test]
 fn a_binding_prints_what_planning_reads() {
     let mut fixture = fixture();
@@ -1655,12 +1805,15 @@ fn a_binding_prints_what_planning_reads() {
     fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
     let printed = fixture.build(&model()).to_string();
     for line in [
-        "carrier  c0  i64  Scalar  no members  Plain",
-        "carrier  c1  Stamp  Aggregate  members [Scalar, Aggregate, Pointer]  Plain",
-        "repr     r1  product  c1  Fields  read: Standard(ReadMember)",
-        "rule     type i64  r0",
-        "rule     type Stamp  r1",
-        "output   type:Stamp  type r1  ()",
+        "wire     w0  i64  scalar  Scalar",
+        "wire     w1  Stamp  aggregate  Aggregate { kind: Aggregate, name: Ident(Stamp), mirror: false }",
+        "repr     in0  whole  w0 Standard(Identity)",
+        "repr     in1  parts  w1  Fields  read: Standard(ReadMember)",
+        "repr     out0  whole  w0 Standard(Identity)",
+        "rule     type i64  in0",
+        "rule     type i64  out0",
+        "rule     type Stamp  in1",
+        "output   type:Stamp  type in1 -  ()",
         "output   fn:stamp_sum  function  ()",
         "         form  extern \"C\" stamp_sum  context []  inputs [arg0]",
     ] {
@@ -1683,7 +1836,7 @@ fn bindings_that_plan_differently_print_differently() {
         print(Shape::FallibleStruct("Stamp"), Routes::None),
         print(Shape::Struct("Stamp"), Routes::Reported),
         print(
-            Shape::StructHolding("Stamp", vec![Class::Scalar]),
+            Shape::StructOf("Stamp", Kind::ScalarAggregate),
             Routes::None,
         ),
     ] {
@@ -1692,9 +1845,9 @@ fn bindings_that_plan_differently_print_differently() {
 }
 
 /// A release frees what was handed out, so its wrapper takes the out-of-Rust
-/// carrier even where the representation takes values back in through another.
+/// wire type even where the representation takes values back in through another.
 #[test]
-fn a_release_takes_the_carrier_that_was_handed_out() {
+fn a_release_takes_the_wire_type_that_was_handed_out() {
     let mut fixture = fixture();
     fixture.declare_type("Stamp", Shape::SplitHandle);
     let generation = fixture.generate(model()).expect("plans");
@@ -1715,7 +1868,9 @@ fn an_id_from_another_binding_is_refused() {
     let foreign = other.repr(Shape::Struct("Stamp"));
     let mut fixture = fixture();
     fixture.repr(Shape::Struct("Stamp"));
-    fixture.binding.rule(Scope::Type(key("Stamp")), foreign);
+    fixture
+        .binding
+        .rule(Scope::Type(key("Stamp")), foreign.into_rust);
 }
 
 /// A guard the capture reader injected reaches the generated file, whatever
@@ -1929,7 +2084,7 @@ fn a_field_condition_reaches_every_statement_that_serves_the_field() {
 }
 
 /// An item's condition reaches the declaration the target writes for a
-/// carrier of that item, not only the wrapper.
+/// wire type of that item, not only the wrapper.
 ///
 /// A mirror emitted where the struct it mirrors is absent is a type the foreign
 /// API declares and the build does not have.
@@ -2102,7 +2257,7 @@ fn a_handle_without_a_release_skips_the_type_and_what_takes_it() {
     assert!(generation.rust().is_empty());
 }
 
-/// A callback enters Rust as a closure the registry builds: the carrier is
+/// A callback enters Rust as a closure the registry builds: the wire type is
 /// captured once, and each call converts its arguments out of Rust and hands
 /// them to the invocation.
 #[test]
@@ -2189,8 +2344,8 @@ fn an_unrouted_failure_inside_a_call_refuses_the_callback() {
     }
 }
 
-/// An argument that cannot leave Rust refuses the callback at that argument,
-/// and the function taking it goes down with it.
+/// An argument no rule carries out of Rust refuses the callback at that
+/// argument, and the function taking it goes down with it.
 #[test]
 fn an_argument_that_cannot_leave_rust_refuses_the_callback() {
     let mut fixture = fixture();
@@ -2200,7 +2355,8 @@ fn an_argument_that_cannot_leave_rust_refuses_the_callback() {
     let generation = fixture.generate(model()).expect("plans");
     match outcome(&generation, "fn:stamp_emit") {
         Outcome::Skipped(skip) => {
-            assert_eq!(skip.capability.as_str(), "unsupported.struct.out_of_rust");
+            assert_eq!(skip.capability.as_str(), "unsupported.conversion.no_rule");
+            assert!(skip.explanation.contains("out of Rust"), "{skip:?}");
             assert_eq!(
                 skip.dependency_path.last().map(String::as_str),
                 Some("arg 0")
@@ -2245,7 +2401,8 @@ fn a_rule_can_address_a_callback_argument() {
     fixture.declare(
         Declaration::Callback(key),
         OutputForm::Type {
-            representation: repr,
+            into_rust: repr.into_rust,
+            out_of_rust: None,
             release: None,
             meta: (),
         },
@@ -2275,7 +2432,7 @@ fn a_callback_representation_prints_what_a_call_does() {
     let mut fixture = fixture();
     fixture.declare_callback("i64", Call::Routed);
     let printed = fixture.build(&model()).to_string();
-    let expected = "callback  c1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
+    let expected = "callable  w1  capture: Target(Capture)  invoke: Target(InvokeFallibly) \
                     fails runtime Error  routes: [runtime: report Error by Target(Report), if \
                     that fails abort, then return ()]";
     assert!(
@@ -2283,7 +2440,7 @@ fn a_callback_representation_prints_what_a_call_does() {
         "missing `{expected}` in:\n{printed}"
     );
     assert!(
-        printed.contains("output   callback:impl Fn(i64)+Send+Sync+'static  type r1  ()"),
+        printed.contains("output   callback:impl Fn(i64)+Send+Sync+'static  type in1 -  ()"),
         "{printed}"
     );
 }
@@ -2306,8 +2463,8 @@ fn a_call_needing_a_runtime_context_refuses_the_callback() {
     }
 }
 
-/// A callable never leaves Rust: a function returning one is refused where
-/// its result is.
+/// A callable never leaves Rust: no representation carries one out, so a
+/// function returning one is refused where its result is.
 #[test]
 fn a_callback_leaving_rust_is_refused() {
     let mut fixture = fixture();
@@ -2316,7 +2473,7 @@ fn a_callback_leaving_rust_is_refused() {
     let generation = fixture.generate(model()).expect("plans");
     match outcome(&generation, "fn:each_new") {
         Outcome::Skipped(skip) => {
-            assert_eq!(skip.capability.as_str(), "unsupported.callback.out_of_rust");
+            assert_eq!(skip.capability.as_str(), "unsupported.conversion.no_rule");
             assert_eq!(
                 skip.dependency_path.last().map(String::as_str),
                 Some("return")
@@ -2344,30 +2501,34 @@ fn a_callback_representation_on_another_type_is_refused() {
     }
 }
 
-/// An argument of a wire class the callback's carrier does not hold refuses
-/// the callback at that argument.
+/// An argument of a kind the callback's wire type cannot have as a part
+/// refuses the callback at that argument.
 #[test]
-fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
+fn an_argument_the_callable_cannot_have_refuses_the_callback() {
     let mut fixture = fixture();
     fixture.declare_type("Token", Shape::Handle);
-    let scalars_only = fixture.binding.carrier(WireType {
-        rust: syn::parse_quote!(ScalarClosure),
-        class: Class::Closure,
-        members: Some(Accepts::of([Class::Scalar])),
-        meta: Meta::Plain,
+    let scalars_only = fixture.binding.wire_type(Wire::Closure {
+        kind: Kind::ScalarClosure,
+        name: quote::format_ident!("ScalarClosure"),
     });
-    let repr = fixture.binding.representation(Representation::Callback {
-        carrier: scalars_only,
-        capture: Operation::target(Op::Capture),
-        invoke: Operation::target(Op::Invoke),
-        routes: Vec::new(),
-    });
+    let repr = Repr {
+        into_rust: fixture
+            .binding
+            .in_representation(InRepresentation::Callable {
+                wire_type: scalars_only,
+                capture: Operation::Target(Op::Capture),
+                invoke: Operation::Target(Op::Invoke),
+                routes: Vec::new(),
+            }),
+        out_of_rust: None,
+    };
     let key = callback_key("Token, i64");
     fixture.crossing_key(key.clone(), repr);
     fixture.declare(
         Declaration::Callback(key),
         OutputForm::Type {
-            representation: repr,
+            into_rust: repr.into_rust,
+            out_of_rust: None,
             release: None,
             meta: (),
         },
@@ -2384,4 +2545,110 @@ fn an_argument_the_carrier_does_not_hold_refuses_the_callback() {
         }
         other => panic!("token_watch is skipped, and is {other:?}"),
     }
+}
+
+/// A kind's name is part of a capability code, so a target naming two kinds
+/// alike is refused before anything is planned.
+#[test]
+fn two_kinds_of_one_name_are_refused() {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Twins {
+        Left,
+        Right,
+    }
+    impl WireKind for Twins {
+        const ALL: &'static [Self] = &[Twins::Left, Twins::Right];
+        fn name(self) -> &'static str {
+            "twin"
+        }
+    }
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    struct Twin;
+    impl WireType for Twin {
+        type Kind = Twins;
+        fn kind(&self) -> Twins {
+            Twins::Left
+        }
+        fn rust(&self) -> syn::Type {
+            syn::parse_quote!(i64)
+        }
+    }
+    struct Twinned;
+    impl Target for Twinned {
+        const NAME: &'static str = "twinned";
+        type WireType = Twin;
+        type Op = ();
+        type OutputMeta = ();
+        fn write_operation(&self, _: &(), _: &OperationFeed<'_, Self>) -> Written {
+            unreachable!("nothing is planned")
+        }
+        fn write_wire_type(&self, _: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+            unreachable!("nothing is planned")
+        }
+    }
+    let error = generate(model(), &Twinned, Binding::new(), syn::parse_quote!(source))
+        .expect_err("two kinds named `twin`");
+    assert!(
+        error.to_string().contains("two wire kinds `twin`"),
+        "{error}"
+    );
+}
+
+/// A representation converts values of one type, so a binding ruling one for
+/// two types — a type rule and a rule at a position whose value is of another
+/// type — fails the build before anything is planned.
+#[test]
+fn a_representation_ruled_for_two_types_is_an_error() {
+    let mut fixture = fixture();
+    let strukt = fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.at("stamp_max", vec![param("stamp"), field("secs")], strukt);
+    fixture.declare_fn("stamp_max", exported("stamp_max", Routes::None));
+    let error = fixture
+        .generate(model())
+        .expect_err("one representation, two types");
+    assert!(
+        error
+            .to_string()
+            .contains("converts `Stamp` for every `Stamp` and `i64` for `param stamp.field secs`"),
+        "{error}"
+    );
+}
+
+/// A handle's release frees what it handed out, so it belongs to the
+/// out-of-Rust representation.
+#[test]
+fn a_release_is_part_of_what_is_handed_out() {
+    let mut fixture = fixture();
+    fixture.declare_type("Token", Shape::Handle);
+    let printed = fixture.build(&model()).to_string();
+    assert!(
+        printed.contains("repr     out1  whole  w1 Standard(IntoRaw)  release: Standard(Release)"),
+        "{printed}"
+    );
+}
+
+/// A position crosses in one direction — a parameter into Rust, a result out
+/// of it — so a rule there naming a representation of the other direction
+/// fails the build rather than sitting unused.
+#[test]
+fn a_rule_of_the_other_direction_at_a_position_is_an_error() {
+    let mut fixture = fixture();
+    fixture.declare_type("Stamp", Shape::Struct("Stamp"));
+    fixture.declare_fn("stamp_sum", exported("stamp_sum", Routes::None));
+    let scalar = fixture.scalar;
+    let mut binding = fixture.build(&model());
+    let function = binding.output_id(1);
+    binding.rule(
+        Scope::At(function, ValuePath(vec![Step::Return])),
+        scalar.into_rust,
+    );
+    let error = generate(model(), &Mini, binding, syn::parse_quote!(source))
+        .expect_err("a result does not cross into Rust");
+    assert!(
+        error.to_string().contains(
+            "the value there crosses out of Rust, and the rule's in0 serves values crossing \
+             into Rust"
+        ),
+        "{error}"
+    );
 }

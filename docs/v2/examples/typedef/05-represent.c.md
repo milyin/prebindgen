@@ -1,7 +1,7 @@
 <!-- spec: {"kind": "variant", "example": "typedef", "stage": "05-represent", "language": "c"} -->
 
 [Stage chapter](../../stages/05-represent.md) · [Common cell][typedef_represent] · [Element path][typedef]
-Owner: the registry; the C frontend states the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+Owner: the registry; the C frontend states the [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 
 # Type alias declaring an opaque handle — Represent and compose values — C
 
@@ -14,27 +14,28 @@ Crossing { source: Ledger, direction: OutOfRust }   relation: atomic   the Type(
 
 ## Result
 
-The carrier is a pointer to the incomplete C type the C target declares, and
+The wire type is a pointer to the incomplete C type the C target declares, and
 the frontend's whole statement is three standard operations over it, recorded
 when it reads `ptr_type!(Ledger)`:
 
 ```rust
-let pointer = binding.carrier(WireType {
-    rust: parse_quote!(*mut Ledger),        // the C target's own type, not source::Ledger
-    class: CClass::Pointer,
-    members: None,
-    meta: CCarrier::Opaque { c_name: "Ledger".into() },
+let pointer = binding.wire_type(CWireType::Pointer {
+    name: format_ident!("Ledger"),          // `*mut Ledger`: the C target's own type, not source::Ledger
 });
-Representation::Terminal {
-    into_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::FromRaw) }),
-    out_of_rust: Some(Codec { carrier: pointer, operation: Operation::standard(StandardOp::IntoRaw) }),
-    release: Some(Operation::standard(StandardOp::Release)),
-}
+let into_rust = binding.in_representation(InRepresentation::Whole {
+    wire_type: pointer,
+    operation: Operation::Standard(StandardOp::FromRaw),
+});
+let out_of_rust = binding.out_representation(OutRepresentation::Whole {
+    wire_type: pointer,
+    operation: Operation::Standard(StandardOp::IntoRaw),
+    release: Some(Operation::Standard(StandardOp::Release)),   // frees what `IntoRaw` handed out
+});
 ```
 
-`Operation::standard` fixes each standard
+A standard
 [primitive](../../stages/05-represent.md#represent-and-compose-values)'s
-failure: taking a handle back fails in the binding category with a `String`,
+failure is the registry's, fixed by the operation: taking a handle back fails in the binding category with a `String`,
 and nothing else here can fail. A frontend cannot state the same operation
 with a different failure, so a C route that aborts and a JNI route that throws
 agree on what they are handed. Applied to the

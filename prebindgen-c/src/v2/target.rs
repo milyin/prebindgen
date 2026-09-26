@@ -1,6 +1,6 @@
-//! The C target, as the v2 engine calls it: the declarations its carriers need.
+//! The C target, as the v2 engine calls it: the declarations its wire types need.
 //!
-//! Everything a C binding decides — which carrier a type crosses in, which
+//! Everything a C binding decides — which wire type a type crosses in, which
 //! operations move it, what symbol a wrapper exports — is stated as data by
 //! [`super`] when the binding is built, and the registry plans from that alone.
 //! What is left here is writing: a `repr(C)` mirror of a struct, the
@@ -8,57 +8,109 @@
 //! closure struct a callback arrives in — and the one operation of its own,
 //! calling through that closure.
 
-use prebindgen_registry_v2::{mirrored_i32_enum, CarrierFeed, OperationFeed, Target, Written};
+use prebindgen_registry_v2::{
+    mirrored_i32_enum, OperationFeed, Target, TargetOp, WireKind, WireType, WireTypeFeed, Written,
+};
 use quote::{format_ident, quote};
 
-/// The C wire types a binding's carriers are, which is what a struct's members
-/// and a wrapper's parameters are allowed to be stated in.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CClass {
+/// The kinds of C wire type, which is what C's capabilities are stated in:
+/// what a struct can have as members, what a callback can take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CWireKind {
     /// A 64-bit integer: the one scalar this target carries so far.
     I64,
     /// An address: a handle to a Rust-owned value.
     Pointer,
     /// A `repr(C)` struct passed by value.
     Aggregate,
-    /// A C enum, or the storage one arrives in.
+    /// A C enum.
     Enum,
+    /// The storage a C enum arrives in: `MaybeUninit` of it, since C lets an
+    /// enum variable hold any `int`.
+    EnumBits,
     /// A closure struct: a context, a function to call with it, and one to
     /// drop it.
     Closure,
 }
 
-impl CClass {
-    /// Every class: what a wrapper parameter or return may be.
-    pub(crate) fn all() -> [CClass; 5] {
-        [
-            CClass::I64,
-            CClass::Pointer,
-            CClass::Aggregate,
-            CClass::Enum,
-            CClass::Closure,
-        ]
+impl WireKind for CWireKind {
+    const ALL: &'static [Self] = &[
+        CWireKind::I64,
+        CWireKind::Pointer,
+        CWireKind::Aggregate,
+        CWireKind::Enum,
+        CWireKind::EnumBits,
+        CWireKind::Closure,
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            CWireKind::I64 => "i64",
+            CWireKind::Pointer => "pointer",
+            CWireKind::Aggregate => "aggregate",
+            CWireKind::Enum => "enum",
+            CWireKind::EnumBits => "enum_bits",
+            CWireKind::Closure => "closure",
+        }
+    }
+
+    /// A struct's members are scalars — not yet another struct, a handle or an
+    /// enum. A callback's arguments are what leaves Rust in a register: a
+    /// scalar, an address, an enum; a struct leaving Rust has no construction
+    /// yet.
+    fn parts(self) -> &'static [Self] {
+        match self {
+            CWireKind::Aggregate => &[CWireKind::I64],
+            CWireKind::Closure => &[CWireKind::I64, CWireKind::Pointer, CWireKind::Enum],
+            _ => &[],
+        }
     }
 }
 
-/// What a C carrier needs declared, if anything, and under which C name.
+/// A C wire type: its kind, and for every kind but the scalar the name of the
+/// type this target declares for it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CCarrier {
-    /// A type Rust and C already share: `i64` is `int64_t`.
-    Builtin,
+pub enum CWireType {
+    /// `i64`, which C already has as `int64_t`.
+    I64,
+    /// `*mut <name>`: a pointer to the incomplete type a handle is.
+    Pointer { name: syn::Ident },
     /// A `repr(C)` struct mirroring the source struct, member for field.
-    Aggregate { c_name: String },
-    /// The incomplete type a handle points to: C holds a `<c_name> *` and
-    /// nothing else.
-    Opaque { c_name: String },
+    Aggregate { name: syn::Ident },
     /// A C enum of the same values as the source enum.
-    Enum { c_name: String },
-    /// The storage a C enum arrives in — `MaybeUninit` of it, since C lets an
-    /// enum variable hold any `int`. Declared by the enum it holds.
-    EnumBits,
+    Enum { name: syn::Ident },
+    /// `MaybeUninit<name>`: the storage the C enum `name` arrives in. Declared
+    /// by the enum it holds.
+    EnumBits { name: syn::Ident },
     /// The closure struct a callback arrives in, its `call` taking the
-    /// callback's arguments' carriers.
-    Closure { c_name: String },
+    /// callback's arguments' wire types.
+    Closure { name: syn::Ident },
+}
+
+impl WireType for CWireType {
+    type Kind = CWireKind;
+
+    fn kind(&self) -> CWireKind {
+        match self {
+            CWireType::I64 => CWireKind::I64,
+            CWireType::Pointer { .. } => CWireKind::Pointer,
+            CWireType::Aggregate { .. } => CWireKind::Aggregate,
+            CWireType::Enum { .. } => CWireKind::Enum,
+            CWireType::EnumBits { .. } => CWireKind::EnumBits,
+            CWireType::Closure { .. } => CWireKind::Closure,
+        }
+    }
+
+    fn rust(&self) -> syn::Type {
+        match self {
+            CWireType::I64 => syn::parse_quote!(i64),
+            CWireType::Pointer { name } => syn::parse_quote!(*mut #name),
+            CWireType::Aggregate { name }
+            | CWireType::Enum { name }
+            | CWireType::Closure { name } => syn::parse_quote!(#name),
+            CWireType::EnumBits { name } => syn::parse_quote!(::core::mem::MaybeUninit<#name>),
+        }
+    }
 }
 
 /// The one operation C writes itself. Reading an aggregate member, and going
@@ -73,6 +125,10 @@ pub enum COp {
     Call,
 }
 
+/// Calling through a closure struct needs nothing but the struct and its
+/// arguments, and cannot fail.
+impl TargetOp for COp {}
+
 /// The C target: its writers.
 #[derive(Default)]
 pub struct CTarget;
@@ -80,8 +136,7 @@ pub struct CTarget;
 impl Target for CTarget {
     const NAME: &'static str = "c";
 
-    type WireClass = CClass;
-    type CarrierMeta = CCarrier;
+    type WireType = CWireType;
     type Op = COp;
     /// A C declaration is the Rust cbindgen reads, so nothing about an output
     /// is for a foreign writer alone.
@@ -110,18 +165,17 @@ impl Target for CTarget {
         }
     }
 
-    fn write_carrier(&self, feed: &CarrierFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
-        match &feed.carrier.meta {
-            CCarrier::Builtin | CCarrier::EnumBits => Vec::new(),
+    fn write_wire_type(&self, feed: &WireTypeFeed<'_, Self>) -> Vec<proc_macro2::TokenStream> {
+        match feed.wire_type {
+            CWireType::I64 | CWireType::EnumBits { .. } => Vec::new(),
             // What a C caller fills in to be called back: its own context, the
-            // function to call with each argument's carrier and that context,
+            // function to call with each argument's wire type and that context,
             // and the function that frees the context once Rust drops the
             // closure. Rust may call and drop it from any thread, which is the
             // contract a C caller signs by passing one — hence the two unsafe
             // impls, which the closure Rust builds needs.
-            CCarrier::Closure { c_name } => {
-                let ident = format_ident!("{c_name}");
-                let args = feed.members.iter().map(|(_, carrier)| &carrier.rust);
+            CWireType::Closure { name: ident } => {
+                let args = feed.parts.iter().map(|(_, wire_type)| wire_type.rust());
                 vec![
                     // What each member means is said on the member, which is
                     // where `cbindgen` puts it in the header: a C caller never
@@ -162,8 +216,7 @@ impl Target for CTarget {
             // `cbindgen` renders as an incomplete type: a C caller can hold a
             // pointer to one and nothing else. The same declaration v1 emits,
             // case lint included.
-            CCarrier::Opaque { c_name } => {
-                let ident = format_ident!("{c_name}");
+            CWireType::Pointer { name: ident } => {
                 vec![quote! {
                     #[repr(C)]
                     #[allow(non_camel_case_types)]
@@ -175,22 +228,22 @@ impl Target for CTarget {
             // `repr(C)` is required: without it the layout the header promises
             // is not the layout the wrapper reads. The C name is the mangler's —
             // `foo_t` — so the case lint is silenced as v1 silences it.
-            CCarrier::Aggregate { c_name } => {
-                let ident = format_ident!("{c_name}");
-                let members = feed.members.iter().map(|(part, carrier)| {
+            CWireType::Aggregate { name: ident } => {
+                let c_name = ident.to_string();
+                let members = feed.parts.iter().map(|(part, wire_type)| {
                     let name = format_ident!(
                         "{}",
                         part.name
                             .as_ref()
                             .expect("a positional field is refused when the binding is built")
                     );
-                    let ty = &carrier.rust;
+                    let ty = wire_type.rust();
                     // A member mirrors a field one for one, its condition
                     // included: a field the source crate may not have must not
                     // become a member the header always declares.
                     let condition = &part.conditions;
                     for under in condition {
-                        warn_undefined_condition(c_name, &name, under);
+                        warn_undefined_condition(&c_name, &name, under);
                     }
                     quote!(#(#condition)* pub #name: #ty)
                 });
@@ -203,10 +256,10 @@ impl Target for CTarget {
             // The C enum itself: the same values under the same names, and the
             // numbers Rust assigns, so a C caller reading the header sees what a
             // Rust caller sees.
-            CCarrier::Enum { c_name } => {
-                let values = mirrored_i32_enum(feed.unit, c_name, Self::NAME)
+            CWireType::Enum { name: ident } => {
+                let c_name = ident.to_string();
+                let values = mirrored_i32_enum(feed.unit, &c_name, Self::NAME)
                     .expect("an enum C cannot mirror is refused when the binding is built");
-                let ident = format_ident!("{c_name}");
                 let size_message = format!("`{c_name}` is not the size of a C `int`");
                 let values = values.iter().map(|(value, number)| {
                     let name = &value.name;

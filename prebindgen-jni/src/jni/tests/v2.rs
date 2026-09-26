@@ -960,7 +960,7 @@ fn a_fieldless_enum_crosses_as_its_number() {
     assert!(
         compact.contains(
             "priorityRaise(mutenv:jni::JNIEnv<'_>,_this:jni::objects::JObject<'_>,\
-                          p:::jni::sys::jint,)->::jni::sys::jint{"
+                          p:jni::sys::jint,)->jni::sys::jint{"
         ),
         "{rust}"
     );

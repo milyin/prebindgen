@@ -174,7 +174,7 @@ propagation is implemented; interface and method promises extend that rule:
 - An unimplemented semantic setting blocks the affected promise; it is not silently discarded.
 
 Retaining a type output is not the same as writing it: its
-[carriers](05-represent.md#describing-target-values-and-operations)'
+[wire types](05-represent.md#describing-target-values-and-operations)'
 declarations are written at [emission](08-emit.md), and whether it becomes a
 header entry or a Kotlin class is the target's business then. An
 [artifact](05-represent.md#individual-target-operations) — one generated unit,
@@ -204,7 +204,7 @@ The pipeline is:
 existing source captures + C/JNI frontend configured through its Rust API
  -> user calls the frontend build method
  -> frontend selects v1 or v2
- -> v2 frontend builds its binding — carriers, representations, rules,
+ -> v2 frontend builds its binding — wire types, representations, rules,
     outputs — and calls generate with its target
  -> registry checks declarations against the model, and rules against the
     outputs they address
@@ -215,7 +215,7 @@ existing source captures + C/JNI frontend configured through its Rust API
  -> registry assembles each wrapper from its function form
  -> registry propagates skips and retains complete supported output
  -> common Rust writer renders the retained plans, calling the target's
-    writers for its operations and for its carriers' declarations
+    writers for its operations and for its wire types' declarations
  -> return Generation with Rust text, the binding, retained outputs and skips
  -> C: cbindgen derives headers from generated Rust
     JNI: the frontend's Kotlin writer reads the retained outputs
@@ -249,7 +249,7 @@ rather than a dangling reference.
 
 The common Rust writer renders before `Generation` is returned;
 `Generation::write_rust` writes the stored text. The JNI Kotlin writer reads
-the retained outputs, their metadata and the carriers their values resolved
+the retained outputs, their metadata and the wire types their values resolved
 to. The C build passes generated Rust to `cbindgen` for headers. Writers must
 not introduce a newly discovered dependency or reverse a support decision.
 Files should be published only after output generation succeeds.

@@ -34,10 +34,10 @@ outcome(public Stamp) = Emitted
 ```
 
 What the retained output becomes is the target's to write: the
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 its root [node](../../stages/05-represent.md#represent-and-compose-values)
 resolved to — the `repr(C)` aggregate for C, a `JObject` for JNI —
-is fed to the target's carrier writer at emission, and the Kotlin writer reads
+is fed to the target's wire type writer at emission, and the Kotlin writer reads
 the output's metadata, the `example.Stamp` data class.
 
 ## Checks

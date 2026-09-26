@@ -12,8 +12,8 @@ FunctionPlan(fn:stamp_sum) frozen, with
     abi, symbol:  extern "system", "Java_example_JNINative_stampSum"
     params:       [ mut env: JNIEnv, _this: JObject, stamp: JObject ],  ret: jlong
     routes:       Runtime -> ReportError then return 0, reporting failure -> abort
-    node(input):  Product over the example.Stamp object, Getter per part
-    node(output): Terminal over jlong, Identity
+    node(input):  Parts over the example.Stamp object, Getter per part
+    node(output): Whole over jlong, Identity
 Retained(fn:stamp_sum), with its metadata: Function example.stampSum,
     native JNINative.stampSum
 ```

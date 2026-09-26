@@ -13,7 +13,7 @@ node(each)  : produces the closure, failures {}
 
 the form the C frontend recorded for `fn:stamp_each`:
   symbol "stamp_each", extern "C", no context parameters, inputs [stamp, each],
-  one route: Binding -> abort, any C wire type on either side
+  one route: Binding -> abort
 ```
 
 ## Result

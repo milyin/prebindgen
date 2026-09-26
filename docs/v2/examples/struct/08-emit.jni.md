@@ -10,7 +10,7 @@ Owner: the JNI adapter's Kotlin writer
 ```text
 Retained(type:Stamp), read by the Kotlin writer, with
     metadata: DataClass example.Stamp
-    parts:    [secs, nanos], each through a jlong carrier of Kotlin type Long
+    parts:    [secs, nanos], each through a jlong wire type of Kotlin type Long
 ```
 
 ## Result

@@ -248,7 +248,7 @@ rather than print a type and test whether its text starts with `Option`.
 The types an adapter *authors* are outside the rule entirely. `*mut c_void`,
 `jlong`, a `repr(C)` aggregate the binding declares — these are the adapter's
 own output vocabulary rather than captured source syntax, so writing them as
-syntax during planning is what an adapter is for. That is why a [carrier](05-represent.md#describing-target-values-and-operations) a target
+syntax during planning is what an adapter is for. That is why a [wire type](05-represent.md#describing-target-values-and-operations) a target
 describes here holds a real `syn::Type`, while a source-side position stays a
 handle to the model. The rule constrains where a fact may come *from*, not which
 types may be spelled.

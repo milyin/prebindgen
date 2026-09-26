@@ -11,7 +11,7 @@ The retained callback and the frozen plan of the function taking it:
 
 ```text
 Retained     { output: callback:impl Fn(i64)+Send+Sync+'static, output_value: node(each) }
-               carrier: the callable carrier, with its argument carriers as members
+               wire type: the callable wire type, with its argument wire types as members
 FunctionPlan { declaration: fn:stamp_each,
                instrs: <convert stamp, capture each and build the closure, call source::stamp_each> }
 ```

@@ -389,8 +389,8 @@
       "defined": "stages/05-represent.md#represent-and-compose-values"
     },
     {
-      "term": "carrier",
-      "match": "carriers?",
+      "term": "wire type",
+      "match": "wire types?",
       "defined": "stages/05-represent.md#describing-target-values-and-operations"
     },
     {

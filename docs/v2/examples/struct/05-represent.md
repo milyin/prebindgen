@@ -13,7 +13,7 @@ The [selection][struct_select] for the struct, with its leaves already planned:
 Stamp, IntoRust, relation Stamp.fields
   +-- secs  -> node(i64, IntoRust)     // finished: identity conversion
   +-- nanos -> node(i64, IntoRust)     // the same node
-representation: the Type(Stamp) rule's — Product { via: Fields, carrier, read }
+representation: the Type(Stamp) rule's — Parts { via: Fields, wire_type, read }
 ```
 
 ## Result
@@ -22,18 +22,18 @@ representation: the Type(Stamp) rule's — Product { via: Fields, carrier, read 
 node(Stamp, IntoRust) {
     relation:       Stamp.fields
     representation: the Stamp rule's
-    carrier:        this target's Stamp carrier
+    wire type:        this target's Stamp wire type
     children:       [ node(i64, IntoRust) as "secs",
                       node(i64, IntoRust) as "nanos" ]
-    body:           apply read to carrier, for secs  -> convert -> local
-                    apply read to carrier, for nanos -> convert -> local
+    body:           apply read to wire type, for secs  -> convert -> local
+                    apply read to wire type, for nanos -> convert -> local
                     construct source::Stamp { secs, nanos }
 }
 ```
 
 With both children finished, the registry composes the struct from its
 [representation](../../stages/05-represent.md#represent-and-compose-values):
-the [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+the [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
 that holds a `Stamp` on the target's side — a C aggregate or a JVM object
 here — and the `read`
 [primitive](../../stages/05-represent.md#represent-and-compose-values), applied
@@ -51,15 +51,18 @@ operation. The owned result borrows neither input.
 
 ## Checks
 
-- Each member's carrier is one the Stamp carrier holds as a member; a part
-  resolving to another wire type refuses the struct where the member is.
+- Each member's wire type is of a kind the `Stamp` wire type's kind can have
+  as a part; a part resolving to any other kind refuses the struct where the
+  member is.
 - Construction follows declaration order, and a read that fails stops the body
   before the construction: no `Stamp` is built from a partial set of fields.
 - The node is recorded only once its children exist, so its identity — type,
   direction, representation, children — is complete when it is cached and
   another struct with the same identity shares it.
-- This is the struct entering Rust. Leaving Rust needs a construction
-  operation a `Product` does not have, and is a reported skip.
+- This is the struct entering Rust. `Parts` is an into-Rust representation;
+  leaving Rust needs a construction operation the registry does not have, so
+  the frontends state `OutRepresentation::struct_unsupported` for the type, and
+  a `Stamp` leaving Rust is a reported skip.
 
 ## Language variants
 

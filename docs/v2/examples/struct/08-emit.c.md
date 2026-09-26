@@ -8,15 +8,15 @@ Owner: the common Rust writer, then `cbindgen`
 ## Input
 
 ```text
-Retained(type:Stamp), whose root node's carrier is fed to the C writer:
-    CarrierFeed { carrier: Stamp (Aggregate, c_name "Stamp"),
+Retained(type:Stamp), whose root node's wire type is fed to the C writer:
+    WireTypeFeed { wire_type: Stamp (Aggregate, c_name "Stamp"),
                   members: [ secs: i64, nanos: i64 ] }
 ```
 
 ## Result
 
 What the C writer returns for that
-[carrier](../../stages/05-represent.md#describing-target-values-and-operations), in the generated C Rust module
+[wire type](../../stages/05-represent.md#describing-target-values-and-operations), in the generated C Rust module
 (`c.rs`):
 
 ```rust

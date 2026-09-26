@@ -6,7 +6,7 @@
 //! one `external fun` per emitted function on the harness object, and a public
 //! function calling each. What a class or a function is called is the output
 //! metadata the binding recorded; what each property or parameter is spelled
-//! as is the metadata of the carrier the plan resolved it to. Rendering goes
+//! as is the Kotlin type of the wire type the plan resolved it to. Rendering goes
 //! through `kotlin-codegen`, as v1's does, so the output is validated Kotlin
 //! and lands in the same generator-owned tree.
 //!
@@ -56,10 +56,8 @@ pub(super) fn write(
     // How Kotlin spells the value a planned conversion carries.
     let kotlin = |node: NodeId| -> KotlinType {
         binding
-            .carrier_of(generation.value(node).carrier)
-            .meta
-            .kotlin
-            .clone()
+            .wire_type_of(generation.value(node).wire_type)
+            .kotlin()
     };
 
     for retained in generation.retained() {
@@ -69,7 +67,7 @@ pub(super) fn write(
         };
         match meta {
             // A data class, one property per field, each spelled as the
-            // carrier its field resolved to.
+            // wire type its field resolved to.
             JniOutput::DataClass { package, class } => {
                 let root = generation.value(retained.inputs[0]);
                 let mut properties =

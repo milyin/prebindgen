@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use prebindgen_flat::{flat::Flat, Conditioned, RustEmitter};
 
 use crate::{
-    binding::{Binding, Scope},
+    binding::{Binding, ReprId, Scope},
     decl::Declaration,
     outcome::{EngineError, Skip},
     plan::{FunctionPlan, Retained, ValuePlan},
@@ -35,7 +35,7 @@ pub struct Generation<T: Target> {
     target: &'static str,
     binding: Binding<T>,
     skipped: Vec<(Declaration, Skip)>,
-    unused_rules: Vec<Scope>,
+    unused_rules: Vec<(Scope, ReprId)>,
     values: Vec<ValuePlan>,
     retained: Vec<Retained>,
     functions: Vec<FunctionPlan<T::Op>>,
@@ -62,7 +62,7 @@ impl<T: Target> Generation<T> {
         target: &'static str,
         binding: Binding<T>,
         skipped: Vec<(Declaration, Skip)>,
-        unused_rules: Vec<Scope>,
+        unused_rules: Vec<(Scope, ReprId)>,
         values: Vec<ValuePlan>,
         retained: Vec<Retained>,
         functions: Vec<FunctionPlan<T::Op>>,
@@ -155,7 +155,7 @@ impl<T: Target> Generation<T> {
     /// The type rules no planned value was covered by, in the order the
     /// binding recorded them. Not an error: a type rule is a default for many
     /// values, and a scalar table covers kinds a binding may never mention.
-    pub fn unused_rules(&self) -> &[Scope] {
+    pub fn unused_rules(&self) -> &[(Scope, ReprId)] {
         &self.unused_rules
     }
 

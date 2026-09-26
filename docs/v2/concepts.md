@@ -178,25 +178,23 @@ A relation says nothing about a C struct or Kotlin object: it describes the
 source-side work.
 See [What a relation is](stages/04-select.md#what-a-relation-is).
 
-### Carrier
+### Wire type
 
-A Rust type the binding allows to hold a value during conversion: a wrapper
-argument, wrapper return or intermediate value in generated Rust. In the JNI
-example, the `Stamp` object reference is one carrier and the `jlong` a getter
-returns is another. The frontend declares each one as a `WireType`: the Rust
-type, which of the adapter's few wire types it is, for an aggregate which
-wire types its members may be, and the metadata the target's writers need — a
-C name, a JVM descriptor. Two carriers may share a
-Rust type and differ in metadata, as two `JObject`s of different classes do.
-Where a carrier may appear is stated by what holds it: a function form lists
-the wire types its wrapper parameters may be, so an internal temporary need
-not be legal as an exported parameter. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
+The type of one value on the boundary, as both sides see it: its Rust type,
+and what the foreign side reads it as. In the JNI example, the `Stamp` object
+reference is one wire type and the `jlong` a getter returns is another. Each
+target's wire types are its own enum, one variant per wire kind — C's `I64`,
+`Pointer`, `Aggregate`; JNI's `Long`, `Handle`, `Object` — holding only what
+that kind needs, such as a C name or a Kotlin class. Two wire types may share
+a Rust type, as two `JObject`s of different classes do. Where a wire type may
+appear is a fact about the target, stated per kind: which kinds each kind can
+have as its parts, and which a wrapper can take and return. See [Describing target values and operations](stages/05-represent.md#describing-target-values-and-operations).
 
 ### Representation
 
-How the values a conversion rule covers cross: which carrier holds them,
+How the values a conversion rule covers cross: which wire type holds them,
 which relation they are read through, and the operations that read and build
-the carrier. C uses a `repr(C)` struct whose members can be read directly.
+the wire type. C uses a `repr(C)` struct whose members can be read directly.
 JNI uses a JVM object whose properties are read by getter calls. Both can serve
 the same source-side struct relation, but need different access operations.
 A type may have several — `Stamp` as a C struct and as a handle — so the
@@ -233,7 +231,7 @@ See [Represent and compose values](stages/05-represent.md#represent-and-compose-
 
 A generated Rust unit an operation needs beside its own text. The JNI
 error-reporting helper is an example; the C-compatible `Stamp` type is not
-one, since it is a carrier's declaration, written once per carrier. Giving
+one, since it is a wire type's declaration, written once per wire type. Giving
 each unit a name lets the engine collect dependencies and avoid emitting the
 same helper repeatedly. This is a build-time dependency, not a runtime resource
 that needs cleanup. Some design sketches use the word more broadly for

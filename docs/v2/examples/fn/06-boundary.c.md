@@ -13,7 +13,7 @@ node(output) : produces i64, failures {}
 
 the form the C frontend recorded for `fn:stamp_sum`:
   symbol "stamp_sum", extern "C", no context parameters, inputs [stamp],
-  one route: Binding -> abort, any C wire type on either side
+  one route: Binding -> abort
 ```
 
 ## Result
@@ -21,8 +21,8 @@ the form the C frontend recorded for `fn:stamp_sum`:
 ```text
 FunctionPlan {
     abi, symbol: extern "C", "stamp_sum",
-    params:      [ stamp: Stamp -> node(input) ],   // typed as node(input)'s carrier
-    ret:         i64                                // node(output)'s carrier
+    params:      [ stamp: Stamp -> node(input) ],   // typed as node(input)'s wire type
+    ret:         i64                                // node(output)'s wire type
     routes:      [ Binding -> abort ],              // unused: nothing here can fail
 }
 ```
@@ -46,7 +46,7 @@ pub extern "C" fn stamp_sum(stamp: Stamp) -> i64
   The symbol and calling convention come from the function form the C
   frontend recorded for this declaration, [as the request cell shows][fn_requests_c].
   The parameter's type is not the form's: it is the
-  [carrier](../../stages/05-represent.md#describing-target-values-and-operations)
+  [wire type](../../stages/05-represent.md#describing-target-values-and-operations)
   its conversion resolved to, so the two cannot disagree.
 - An out-parameter form would require an additional delivery implementation;
   the current V2 increment supports only a wrapper return or no value.
