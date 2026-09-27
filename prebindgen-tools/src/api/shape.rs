@@ -91,33 +91,60 @@ pub enum Shape<'t, S> {
     Out(&'t TypeRef),
 }
 
-/// Classify one outer layer of `ty` for an adapter to lower.
+/// Describe one outer layer of a source type for a language adapter.
 ///
-/// This is the common first step in deciding how a source value crosses a
-/// binding boundary. It describes the source shape and attaches an adapter
-/// setting when available. It does not choose wire types, generate conversion
-/// code, inspect a declared struct's fields, or validate all nested types.
+/// Pass the [`TypeRef`] being converted and a closure that answers which
+/// named types this adapter has declared. The closure receives a type name
+/// such as `"Payload"` and returns the adapter's setting for it, or `None`.
+/// The adapter supplies this `lookup` closure from its declarations. It can
+/// pass `|name| settings.get(name)` to borrow a setting from a map.
 ///
-/// # Recursing over a type
+/// # Walking into child types
 ///
-/// For `Option<Vec<Payload>>`, the first call returns [`Shape::Option`] with
-/// a reference to `Vec<Payload>`. Classifying that child returns [`Shape::Seq`]
-/// with `holding: Holding::Owned` and the element `Payload`. Only a call on
-/// that element consults `lookup("Payload")`.
+/// An adapter can get `ty` from a function parameter in the flat model, then
+/// call `shape(ty, lookup)` and match the returned [`Shape`]. Some variants
+/// hold a child [`TypeRef`]; call `shape` again with that child and the same
+/// closure. This example shows each call for `Option<Vec<Payload>>`:
 ///
-/// The adapter matches each returned shape, chooses what that layer means
-/// for its boundary, and recursively handles the children it needs. For
-/// example, a sequence may become a pointer and length in C, or a JVM array
-/// in JNI. Successfully classifying the outer layer does not imply the
-/// adapter supports the whole type.
+/// ```
+/// use std::collections::HashMap;
+/// use prebindgen::SourceLocation;
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{shape, Access, Holding, Shape};
 ///
-/// # Looking up declarations
+/// let source = syn::parse_file(
+///     "pub struct Payload; pub fn send(value: Option<Vec<Payload>>) {}"
+/// ).unwrap();
+/// let flat = Flat::builder()
+///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
+///     .build().unwrap();
+/// let ty = &flat.function("send").unwrap().params[0].ty;
+/// let settings = HashMap::from([("Payload".to_owned(), "opaque handle")]);
+/// let lookup = |name: &str| settings.get(name).copied();
 ///
-/// `lookup` maps a named type's flat name to the adapter's own setting `S`.
-/// It can return a reference, for example `|name| settings.get(name)`;
-/// settings do not need to be cloned. The name alone is supplied, without
-/// generic arguments or borrow information. Keep `ty` if the adapter needs
-/// those details beyond what the returned shape carries.
+/// let Shape::Option(inner) = shape(ty, lookup).unwrap() else { panic!() };
+/// let Shape::Seq { elem, holding: Holding::Owned } = shape(inner, lookup).unwrap()
+///     else { panic!() };
+/// assert!(matches!(
+///     shape(elem, lookup).unwrap(),
+///     Shape::Declared {
+///         name: "Payload", setting: "opaque handle", access: Access::Owned
+///     }
+/// ));
+/// ```
+///
+/// The first two calls inspect the `Option` and `Vec` layers; neither calls
+/// `lookup`. The third reaches `Payload`, calls `lookup("Payload")`, and
+/// returns [`Shape::Declared`] with that setting. The adapter decides how
+/// to represent each layer on its boundary and which children to visit.
+/// A successful call describes only the current layer; it does not establish
+/// that the adapter can convert the complete type.
+///
+/// # Named types
+///
+/// `lookup` receives only the flat name, without generic arguments or
+/// borrow information. The original `ty` remains available if the adapter
+/// needs those details beyond what the returned shape carries.
 ///
 /// For a named `T`, `&T`, or `&mut T`, a setting produces
 /// [`Shape::Declared`] with [`Access::Owned`], [`Access::Shared`], or
