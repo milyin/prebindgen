@@ -485,169 +485,188 @@
 <a href=#485 id=485 data-nosnippet>485</a>/// for that inner type. This keeps the adapter's policy in one recursive
 <a href=#486 id=486 data-nosnippet>486</a>/// match rather than in the flat model.
 <a href=#487 id=487 data-nosnippet>487</a>///
-<a href=#488 id=488 data-nosnippet>488</a>/// ```
-<a href=#489 id=489 data-nosnippet>489</a>/// use prebindgen::SourceLocation;
-<a href=#490 id=490 data-nosnippet>490</a>/// use prebindgen_tools::{flat::Flat, shape, Access, Shape};
-<a href=#491 id=491 data-nosnippet>491</a>/// let source = syn::parse_file("pub struct Payload; pub fn send(value: Option&lt;&amp;Payload&gt;) {}").unwrap();
-<a href=#492 id=492 data-nosnippet>492</a>/// let flat = Flat::builder()
-<a href=#493 id=493 data-nosnippet>493</a>///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
-<a href=#494 id=494 data-nosnippet>494</a>///     .build().unwrap();
-<a href=#495 id=495 data-nosnippet>495</a>/// let ty = &amp;flat.function("send").unwrap().params[0].ty;
-<a href=#496 id=496 data-nosnippet>496</a>/// let Shape::Option(inner) = shape(ty, |name| (name == "Payload").then_some("handle"))
-<a href=#497 id=497 data-nosnippet>497</a>///     .unwrap() else { panic!("expected Option") };
-<a href=#498 id=498 data-nosnippet>498</a>/// assert!(matches!(
-<a href=#499 id=499 data-nosnippet>499</a>///     shape(inner, |name| (name == "Payload").then_some("handle")).unwrap(),
-<a href=#500 id=500 data-nosnippet>500</a>///     Shape::Declared { setting: "handle", access: Access::Shared, .. }
-<a href=#501 id=501 data-nosnippet>501</a>/// ));
-<a href=#502 id=502 data-nosnippet>502</a>/// ```
-<a href=#503 id=503 data-nosnippet>503</a></span><span class="kw">pub mod </span>shape {
-<a href=#504 id=504 data-nosnippet>504</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::shape::{shape, Access, Holding, Shape};
-<a href=#505 id=505 data-nosnippet>505</a>}
-<a href=#506 id=506 data-nosnippet>506</a>
-<a href=#507 id=507 data-nosnippet>507</a><span class="doccomment">/// Wires and the conversions between wires and source values.
-<a href=#508 id=508 data-nosnippet>508</a>///
-<a href=#509 id=509 data-nosnippet>509</a>/// A **wire** is one parameter, field or return slot of the generated
-<a href=#510 id=510 data-nosnippet>510</a>/// boundary, typed in the generated Rust file: `jlong`, `*const c_char`,
-<a href=#511 id=511 data-nosnippet>511</a>/// `payload_t`. A source value crosses as zero or more wires, and which
-<a href=#512 id=512 data-nosnippet>512</a>/// ones is the adapter's decision; these types only carry the decision and
-<a href=#513 id=513 data-nosnippet>513</a>/// compose it.
-<a href=#514 id=514 data-nosnippet>514</a>///
-<a href=#515 id=515 data-nosnippet>515</a>/// * [`Input`] turns wires into a source value — a parameter on its way into
-<a href=#516 id=516 data-nosnippet>516</a>///   the source function, a field of a struct arriving from the foreign side.
-<a href=#517 id=517 data-nosnippet>517</a>/// * [`Output`] turns a source value into wires — a return value, a callback
-<a href=#518 id=518 data-nosnippet>518</a>///   argument, a field of a struct leaving.
-<a href=#519 id=519 data-nosnippet>519</a>///
-<a href=#520 id=520 data-nosnippet>520</a>/// Both carry an expression. A **fallible** one may use `?` on a
-<a href=#521 id=521 data-nosnippet>521</a>/// `Result&lt;_, String&gt;`; whoever places it decides where the error goes (see
-<a href=#522 id=522 data-nosnippet>522</a>/// [`Input::result`]). Generated conversion helpers follow the same
-<a href=#523 id=523 data-nosnippet>523</a>/// convention, so a converter written for one position composes into another.
-<a href=#524 id=524 data-nosnippet>524</a>///
-<a href=#525 id=525 data-nosnippet>525</a>/// ## Example: one value on two wires
-<a href=#526 id=526 data-nosnippet>526</a>///
-<a href=#527 id=527 data-nosnippet>527</a>/// A `u64` can arrive as two `u32` words. [`Input`] keeps the expression together with
-<a href=#528 id=528 data-nosnippet>528</a>/// the two [`Wire`] declarations so [`FunctionWriter`]
-<a href=#529 id=529 data-nosnippet>529</a>/// can place and evaluate them in the right order:
-<a href=#530 id=530 data-nosnippet>530</a>///
-<a href=#531 id=531 data-nosnippet>531</a>/// ```
-<a href=#532 id=532 data-nosnippet>532</a>/// use prebindgen_tools::{Input, Output, Wire, ident};
-<a href=#533 id=533 data-nosnippet>533</a>/// use quote::quote;
-<a href=#534 id=534 data-nosnippet>534</a>///
-<a href=#535 id=535 data-nosnippet>535</a>/// let hi = Wire::new(ident!(hi), quote!(u32));
-<a href=#536 id=536 data-nosnippet>536</a>/// let lo = Wire::new(ident!(lo), quote!(u32));
-<a href=#537 id=537 data-nosnippet>537</a>/// let input = Input::new(vec![hi, lo], quote!(((hi as u64) &lt;&lt; 32) | lo as u64));
-<a href=#538 id=538 data-nosnippet>538</a>/// assert_eq!(input.wires.len(), 2);
-<a href=#539 id=539 data-nosnippet>539</a>/// assert!(input.result().to_string().contains("Ok"));
-<a href=#540 id=540 data-nosnippet>540</a>///
-<a href=#541 id=541 data-nosnippet>541</a>/// let output = Output::new(
-<a href=#542 id=542 data-nosnippet>542</a>///     vec![Wire::new(ident!(hi), quote!(u32)),
-<a href=#543 id=543 data-nosnippet>543</a>///          Wire::new(ident!(lo), quote!(u32))],
-<a href=#544 id=544 data-nosnippet>544</a>///     quote!(((value &gt;&gt; 32) as u32, value as u32)),
-<a href=#545 id=545 data-nosnippet>545</a>/// );
-<a href=#546 id=546 data-nosnippet>546</a>/// assert_eq!(output.pattern().to_string(), "(hi , lo)");
-<a href=#547 id=547 data-nosnippet>547</a>/// ```
-<a href=#548 id=548 data-nosnippet>548</a>///
-<a href=#549 id=549 data-nosnippet>549</a>/// For a fallible step, use [`Input::and_then`] or [`Output::fallible`]
-<a href=#550 id=550 data-nosnippet>550</a>/// and place [`Input::result`] or [`Output::result`] at the point whose
-<a href=#551 id=551 data-nosnippet>551</a>/// error policy applies. The writer only understands `Result&lt;_, String&gt;`;
-<a href=#552 id=552 data-nosnippet>552</a>/// the adapter supplies the actual fallback in
-<a href=#553 id=553 data-nosnippet>553</a>/// [`FunctionCallbacks::fail`].
-<a href=#554 id=554 data-nosnippet>554</a></span><span class="kw">pub mod </span>wire {
-<a href=#555 id=555 data-nosnippet>555</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::wire::{result_expr, Input, Output, Wire};
-<a href=#556 id=556 data-nosnippet>556</a>}
-<a href=#557 id=557 data-nosnippet>557</a>
-<a href=#558 id=558 data-nosnippet>558</a><span class="kw">pub use crate</span>::{
-<a href=#559 id=559 data-nosnippet>559</a>    api::check_supported,
-<a href=#560 id=560 data-nosnippet>560</a>    closure::{ClosureCallbacks, ClosureWriter},
-<a href=#561 id=561 data-nosnippet>561</a>    convert::{Conversion, FnRef, ResolvedConversion, Stage, Via},
-<a href=#562 id=562 data-nosnippet>562</a>    file::RustFile,
-<a href=#563 id=563 data-nosnippet>563</a>    function::{FunctionCallbacks, FunctionWriter, Return},
-<a href=#564 id=564 data-nosnippet>564</a>    qualify::Qualifier,
-<a href=#565 id=565 data-nosnippet>565</a>    record::{
-<a href=#566 id=566 data-nosnippet>566</a>        record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
-<a href=#567 id=567 data-nosnippet>567</a>        SumWriter,
-<a href=#568 id=568 data-nosnippet>568</a>    },
-<a href=#569 id=569 data-nosnippet>569</a>    shape::{shape, Access, Holding, Shape},
-<a href=#570 id=570 data-nosnippet>570</a>    wire::{Input, Output, Wire},
-<a href=#571 id=571 data-nosnippet>571</a>};
-<a href=#572 id=572 data-nosnippet>572</a>
-<a href=#573 id=573 data-nosnippet>573</a><span class="doccomment">/// `fun!(name)` / `fun!(crate::local)` — a function reference.
-<a href=#574 id=574 data-nosnippet>574</a></span><span class="attr">#[macro_export]
-<a href=#575 id=575 data-nosnippet>575</a></span><span class="macro">macro_rules!</span> fun {
-<a href=#576 id=576 data-nosnippet>576</a>    ($(<span class="macro-nonterminal">$path</span>:tt)+) =&gt; {
-<a href=#577 id=577 data-nosnippet>577</a>        <span class="macro-nonterminal">$crate::convert::FnRef::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$path</span>)+))
-<a href=#578 id=578 data-nosnippet>578</a>    };
-<a href=#579 id=579 data-nosnippet>579</a>}
-<a href=#580 id=580 data-nosnippet>580</a>
-<a href=#581 id=581 data-nosnippet>581</a><span class="doccomment">/// `convert!(Type)` — start a conversion declaration.
-<a href=#582 id=582 data-nosnippet>582</a></span><span class="attr">#[macro_export]
-<a href=#583 id=583 data-nosnippet>583</a></span><span class="macro">macro_rules!</span> convert {
-<a href=#584 id=584 data-nosnippet>584</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; {
-<a href=#585 id=585 data-nosnippet>585</a>        <span class="macro-nonterminal">$crate::convert::Conversion::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+))
-<a href=#586 id=586 data-nosnippet>586</a>    };
-<a href=#587 id=587 data-nosnippet>587</a>}
-<a href=#588 id=588 data-nosnippet>588</a>
-<a href=#589 id=589 data-nosnippet>589</a><span class="doccomment">/// `from!(Repr)` — the input stage is `From&lt;Repr&gt;` on the source type.
-<a href=#590 id=590 data-nosnippet>590</a></span><span class="attr">#[macro_export]
-<a href=#591 id=591 data-nosnippet>591</a></span><span class="macro">macro_rules!</span> from {
-<a href=#592 id=592 data-nosnippet>592</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::From</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#593 id=593 data-nosnippet>593</a>}
-<a href=#594 id=594 data-nosnippet>594</a>
-<a href=#595 id=595 data-nosnippet>595</a><span class="doccomment">/// `into!(Repr)` — the output stage is `Into&lt;Repr&gt;` on the source type.
-<a href=#596 id=596 data-nosnippet>596</a></span><span class="attr">#[macro_export]
-<a href=#597 id=597 data-nosnippet>597</a></span><span class="macro">macro_rules!</span> into {
-<a href=#598 id=598 data-nosnippet>598</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::Into</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#599 id=599 data-nosnippet>599</a>}
-<a href=#600 id=600 data-nosnippet>600</a>
-<a href=#601 id=601 data-nosnippet>601</a><span class="doccomment">/// `try_from!(Repr)` — the input stage is `TryFrom&lt;Repr&gt;` on the source type.
-<a href=#602 id=602 data-nosnippet>602</a></span><span class="attr">#[macro_export]
-<a href=#603 id=603 data-nosnippet>603</a></span><span class="macro">macro_rules!</span> try_from {
-<a href=#604 id=604 data-nosnippet>604</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryFrom</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#605 id=605 data-nosnippet>605</a>}
-<a href=#606 id=606 data-nosnippet>606</a>
-<a href=#607 id=607 data-nosnippet>607</a><span class="doccomment">/// `try_into!(Repr)` — the output stage is `TryInto&lt;Repr&gt;` on the source type.
-<a href=#608 id=608 data-nosnippet>608</a></span><span class="attr">#[macro_export]
-<a href=#609 id=609 data-nosnippet>609</a></span><span class="macro">macro_rules!</span> try_into {
-<a href=#610 id=610 data-nosnippet>610</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryInto</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#611 id=611 data-nosnippet>611</a>}
-<a href=#612 id=612 data-nosnippet>612</a>
-<a href=#613 id=613 data-nosnippet>613</a><span class="doccomment">/// `sig!((a: A, b: B) -&gt; R)` — a signature, for a binding-local function.
-<a href=#614 id=614 data-nosnippet>614</a></span><span class="attr">#[macro_export]
-<a href=#615 id=615 data-nosnippet>615</a></span><span class="macro">macro_rules!</span> sig {
-<a href=#616 id=616 data-nosnippet>616</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>:tt)+) =&gt; {
-<a href=#617 id=617 data-nosnippet>617</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>)+)
-<a href=#618 id=618 data-nosnippet>618</a>    };
-<a href=#619 id=619 data-nosnippet>619</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>)) =&gt; {
-<a href=#620 id=620 data-nosnippet>620</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>))
-<a href=#621 id=621 data-nosnippet>621</a>    };
-<a href=#622 id=622 data-nosnippet>622</a>}
-<a href=#623 id=623 data-nosnippet>623</a>
-<a href=#624 id=624 data-nosnippet>624</a><span class="doccomment">/// `ty!(T)` — a `syn::Type`.
-<a href=#625 id=625 data-nosnippet>625</a></span><span class="attr">#[macro_export]
-<a href=#626 id=626 data-nosnippet>626</a></span><span class="macro">macro_rules!</span> ty {
-<a href=#627 id=627 data-nosnippet>627</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__t: <span class="macro-nonterminal">$crate::__syn::Type </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __t } };
-<a href=#628 id=628 data-nosnippet>628</a>}
-<a href=#629 id=629 data-nosnippet>629</a>
-<a href=#630 id=630 data-nosnippet>630</a><span class="doccomment">/// `path!(a::b)` — a `syn::Path`.
-<a href=#631 id=631 data-nosnippet>631</a></span><span class="attr">#[macro_export]
-<a href=#632 id=632 data-nosnippet>632</a></span><span class="macro">macro_rules!</span> path {
-<a href=#633 id=633 data-nosnippet>633</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__p: <span class="macro-nonterminal">$crate::__syn::Path </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __p } };
-<a href=#634 id=634 data-nosnippet>634</a>}
-<a href=#635 id=635 data-nosnippet>635</a>
-<a href=#636 id=636 data-nosnippet>636</a><span class="doccomment">/// `expr!(e)` — a `syn::Expr`.
-<a href=#637 id=637 data-nosnippet>637</a></span><span class="attr">#[macro_export]
-<a href=#638 id=638 data-nosnippet>638</a></span><span class="macro">macro_rules!</span> expr {
-<a href=#639 id=639 data-nosnippet>639</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__e: <span class="macro-nonterminal">$crate::__syn::Expr </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __e } };
-<a href=#640 id=640 data-nosnippet>640</a>}
-<a href=#641 id=641 data-nosnippet>641</a>
-<a href=#642 id=642 data-nosnippet>642</a><span class="doccomment">/// `ident!(name)` — a `syn::Ident`.
-<a href=#643 id=643 data-nosnippet>643</a></span><span class="attr">#[macro_export]
-<a href=#644 id=644 data-nosnippet>644</a></span><span class="macro">macro_rules!</span> ident {
-<a href=#645 id=645 data-nosnippet>645</a>    (<span class="macro-nonterminal">$i</span>:ident) =&gt; {{
-<a href=#646 id=646 data-nosnippet>646</a>        <span class="kw">let </span>__i: <span class="macro-nonterminal">$crate::__syn::Ident </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="macro-nonterminal">$i</span>);
-<a href=#647 id=647 data-nosnippet>647</a>        __i
-<a href=#648 id=648 data-nosnippet>648</a>    }};
-<a href=#649 id=649 data-nosnippet>649</a>}
-<a href=#650 id=650 data-nosnippet>650</a>
-<a href=#651 id=651 data-nosnippet>651</a><span class="attr">#[cfg(test)]
-<a href=#652 id=652 data-nosnippet>652</a></span><span class="kw">mod </span>tests;
+<a href=#488 id=488 data-nosnippet>488</a>/// A shape describes source structure; the adapter uses it to build an
+<a href=#489 id=489 data-nosnippet>489</a>/// [`Input`] or [`Output`] for its chosen wire representation. A named type
+<a href=#490 id=490 data-nosnippet>490</a>/// can use an adapter-specific setting (for example, an opaque handle
+<a href=#491 id=491 data-nosnippet>491</a>/// declaration), while containers expose child types for further calls.
+<a href=#492 id=492 data-nosnippet>492</a>/// [`Access`] describes ownership or borrowing of a value; [`Holding`]
+<a href=#493 id=493 data-nosnippet>493</a>/// distinguishes owned sequences, slices, borrowed vectors, and `Cow`.
+<a href=#494 id=494 data-nosnippet>494</a>///
+<a href=#495 id=495 data-nosnippet>495</a>/// [`shape()`] documents the full lookup rules, the special handling of
+<a href=#496 id=496 data-nosnippet>496</a>/// `String` and common borrows, and which unsupported forms return errors.
+<a href=#497 id=497 data-nosnippet>497</a>/// A successful call only classifies the current layer: an adapter must
+<a href=#498 id=498 data-nosnippet>498</a>/// still handle undeclared names and errors encountered in its children.
+<a href=#499 id=499 data-nosnippet>499</a>///
+<a href=#500 id=500 data-nosnippet>500</a>/// ```
+<a href=#501 id=501 data-nosnippet>501</a>/// use prebindgen::SourceLocation;
+<a href=#502 id=502 data-nosnippet>502</a>/// use prebindgen_tools::{flat::Flat, shape, Access, Shape};
+<a href=#503 id=503 data-nosnippet>503</a>/// let source = syn::parse_file("pub struct Payload; pub fn send(value: Option&lt;&amp;Payload&gt;) {}").unwrap();
+<a href=#504 id=504 data-nosnippet>504</a>/// let flat = Flat::builder()
+<a href=#505 id=505 data-nosnippet>505</a>///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
+<a href=#506 id=506 data-nosnippet>506</a>///     .build().unwrap();
+<a href=#507 id=507 data-nosnippet>507</a>/// let ty = &amp;flat.function("send").unwrap().params[0].ty;
+<a href=#508 id=508 data-nosnippet>508</a>/// // The Option layer exposes its child without looking up Payload yet.
+<a href=#509 id=509 data-nosnippet>509</a>/// let Shape::Option(inner) = shape::&lt;&amp;str&gt;(ty, |_| panic!("no lookup at this layer"))
+<a href=#510 id=510 data-nosnippet>510</a>///     .unwrap() else { panic!("expected Option") };
+<a href=#511 id=511 data-nosnippet>511</a>/// // The child is &amp;Payload: its declaration and borrow are reported together.
+<a href=#512 id=512 data-nosnippet>512</a>/// assert!(matches!(
+<a href=#513 id=513 data-nosnippet>513</a>///     shape(inner, |name| (name == "Payload").then_some("handle")).unwrap(),
+<a href=#514 id=514 data-nosnippet>514</a>///     Shape::Declared { setting: "handle", access: Access::Shared, .. }
+<a href=#515 id=515 data-nosnippet>515</a>/// ));
+<a href=#516 id=516 data-nosnippet>516</a>/// // Missing adapter configuration is a shape the adapter must handle.
+<a href=#517 id=517 data-nosnippet>517</a>/// assert!(matches!(
+<a href=#518 id=518 data-nosnippet>518</a>///     shape::&lt;()&gt;(inner, |_| None).unwrap(),
+<a href=#519 id=519 data-nosnippet>519</a>///     Shape::Undeclared("Payload")
+<a href=#520 id=520 data-nosnippet>520</a>/// ));
+<a href=#521 id=521 data-nosnippet>521</a>/// ```
+<a href=#522 id=522 data-nosnippet>522</a></span><span class="kw">pub mod </span>shape {
+<a href=#523 id=523 data-nosnippet>523</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::shape::{shape, Access, Holding, Shape};
+<a href=#524 id=524 data-nosnippet>524</a>}
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a><span class="doccomment">/// Wires and the conversions between wires and source values.
+<a href=#527 id=527 data-nosnippet>527</a>///
+<a href=#528 id=528 data-nosnippet>528</a>/// A **wire** is one parameter, field or return slot of the generated
+<a href=#529 id=529 data-nosnippet>529</a>/// boundary, typed in the generated Rust file: `jlong`, `*const c_char`,
+<a href=#530 id=530 data-nosnippet>530</a>/// `payload_t`. A source value crosses as zero or more wires, and which
+<a href=#531 id=531 data-nosnippet>531</a>/// ones is the adapter's decision; these types only carry the decision and
+<a href=#532 id=532 data-nosnippet>532</a>/// compose it.
+<a href=#533 id=533 data-nosnippet>533</a>///
+<a href=#534 id=534 data-nosnippet>534</a>/// * [`Input`] turns wires into a source value — a parameter on its way into
+<a href=#535 id=535 data-nosnippet>535</a>///   the source function, a field of a struct arriving from the foreign side.
+<a href=#536 id=536 data-nosnippet>536</a>/// * [`Output`] turns a source value into wires — a return value, a callback
+<a href=#537 id=537 data-nosnippet>537</a>///   argument, a field of a struct leaving.
+<a href=#538 id=538 data-nosnippet>538</a>///
+<a href=#539 id=539 data-nosnippet>539</a>/// Both carry an expression. A **fallible** one may use `?` on a
+<a href=#540 id=540 data-nosnippet>540</a>/// `Result&lt;_, String&gt;`; whoever places it decides where the error goes (see
+<a href=#541 id=541 data-nosnippet>541</a>/// [`Input::result`]). Generated conversion helpers follow the same
+<a href=#542 id=542 data-nosnippet>542</a>/// convention, so a converter written for one position composes into another.
+<a href=#543 id=543 data-nosnippet>543</a>///
+<a href=#544 id=544 data-nosnippet>544</a>/// ## Example: one value on two wires
+<a href=#545 id=545 data-nosnippet>545</a>///
+<a href=#546 id=546 data-nosnippet>546</a>/// A `u64` can arrive as two `u32` words. [`Input`] keeps the expression together with
+<a href=#547 id=547 data-nosnippet>547</a>/// the two [`Wire`] declarations so [`FunctionWriter`]
+<a href=#548 id=548 data-nosnippet>548</a>/// can place and evaluate them in the right order:
+<a href=#549 id=549 data-nosnippet>549</a>///
+<a href=#550 id=550 data-nosnippet>550</a>/// ```
+<a href=#551 id=551 data-nosnippet>551</a>/// use prebindgen_tools::{Input, Output, Wire, ident};
+<a href=#552 id=552 data-nosnippet>552</a>/// use quote::quote;
+<a href=#553 id=553 data-nosnippet>553</a>///
+<a href=#554 id=554 data-nosnippet>554</a>/// let hi = Wire::new(ident!(hi), quote!(u32));
+<a href=#555 id=555 data-nosnippet>555</a>/// let lo = Wire::new(ident!(lo), quote!(u32));
+<a href=#556 id=556 data-nosnippet>556</a>/// let input = Input::new(vec![hi, lo], quote!(((hi as u64) &lt;&lt; 32) | lo as u64));
+<a href=#557 id=557 data-nosnippet>557</a>/// assert_eq!(input.wires.len(), 2);
+<a href=#558 id=558 data-nosnippet>558</a>/// assert!(input.result().to_string().contains("Ok"));
+<a href=#559 id=559 data-nosnippet>559</a>///
+<a href=#560 id=560 data-nosnippet>560</a>/// let output = Output::new(
+<a href=#561 id=561 data-nosnippet>561</a>///     vec![Wire::new(ident!(hi), quote!(u32)),
+<a href=#562 id=562 data-nosnippet>562</a>///          Wire::new(ident!(lo), quote!(u32))],
+<a href=#563 id=563 data-nosnippet>563</a>///     quote!(((value &gt;&gt; 32) as u32, value as u32)),
+<a href=#564 id=564 data-nosnippet>564</a>/// );
+<a href=#565 id=565 data-nosnippet>565</a>/// assert_eq!(output.pattern().to_string(), "(hi , lo)");
+<a href=#566 id=566 data-nosnippet>566</a>/// ```
+<a href=#567 id=567 data-nosnippet>567</a>///
+<a href=#568 id=568 data-nosnippet>568</a>/// For a fallible step, use [`Input::and_then`] or [`Output::fallible`]
+<a href=#569 id=569 data-nosnippet>569</a>/// and place [`Input::result`] or [`Output::result`] at the point whose
+<a href=#570 id=570 data-nosnippet>570</a>/// error policy applies. The writer only understands `Result&lt;_, String&gt;`;
+<a href=#571 id=571 data-nosnippet>571</a>/// the adapter supplies the actual fallback in
+<a href=#572 id=572 data-nosnippet>572</a>/// [`FunctionCallbacks::fail`].
+<a href=#573 id=573 data-nosnippet>573</a></span><span class="kw">pub mod </span>wire {
+<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::wire::{result_expr, Input, Output, Wire};
+<a href=#575 id=575 data-nosnippet>575</a>}
+<a href=#576 id=576 data-nosnippet>576</a>
+<a href=#577 id=577 data-nosnippet>577</a><span class="kw">pub use crate</span>::{
+<a href=#578 id=578 data-nosnippet>578</a>    api::check_supported,
+<a href=#579 id=579 data-nosnippet>579</a>    closure::{ClosureCallbacks, ClosureWriter},
+<a href=#580 id=580 data-nosnippet>580</a>    convert::{Conversion, FnRef, ResolvedConversion, Stage, Via},
+<a href=#581 id=581 data-nosnippet>581</a>    file::RustFile,
+<a href=#582 id=582 data-nosnippet>582</a>    function::{FunctionCallbacks, FunctionWriter, Return},
+<a href=#583 id=583 data-nosnippet>583</a>    qualify::Qualifier,
+<a href=#584 id=584 data-nosnippet>584</a>    record::{
+<a href=#585 id=585 data-nosnippet>585</a>        record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
+<a href=#586 id=586 data-nosnippet>586</a>        SumWriter,
+<a href=#587 id=587 data-nosnippet>587</a>    },
+<a href=#588 id=588 data-nosnippet>588</a>    shape::{shape, Access, Holding, Shape},
+<a href=#589 id=589 data-nosnippet>589</a>    wire::{Input, Output, Wire},
+<a href=#590 id=590 data-nosnippet>590</a>};
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a><span class="doccomment">/// `fun!(name)` / `fun!(crate::local)` — a function reference.
+<a href=#593 id=593 data-nosnippet>593</a></span><span class="attr">#[macro_export]
+<a href=#594 id=594 data-nosnippet>594</a></span><span class="macro">macro_rules!</span> fun {
+<a href=#595 id=595 data-nosnippet>595</a>    ($(<span class="macro-nonterminal">$path</span>:tt)+) =&gt; {
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="macro-nonterminal">$crate::convert::FnRef::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$path</span>)+))
+<a href=#597 id=597 data-nosnippet>597</a>    };
+<a href=#598 id=598 data-nosnippet>598</a>}
+<a href=#599 id=599 data-nosnippet>599</a>
+<a href=#600 id=600 data-nosnippet>600</a><span class="doccomment">/// `convert!(Type)` — start a conversion declaration.
+<a href=#601 id=601 data-nosnippet>601</a></span><span class="attr">#[macro_export]
+<a href=#602 id=602 data-nosnippet>602</a></span><span class="macro">macro_rules!</span> convert {
+<a href=#603 id=603 data-nosnippet>603</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; {
+<a href=#604 id=604 data-nosnippet>604</a>        <span class="macro-nonterminal">$crate::convert::Conversion::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+))
+<a href=#605 id=605 data-nosnippet>605</a>    };
+<a href=#606 id=606 data-nosnippet>606</a>}
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a><span class="doccomment">/// `from!(Repr)` — the input stage is `From&lt;Repr&gt;` on the source type.
+<a href=#609 id=609 data-nosnippet>609</a></span><span class="attr">#[macro_export]
+<a href=#610 id=610 data-nosnippet>610</a></span><span class="macro">macro_rules!</span> from {
+<a href=#611 id=611 data-nosnippet>611</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::From</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#612 id=612 data-nosnippet>612</a>}
+<a href=#613 id=613 data-nosnippet>613</a>
+<a href=#614 id=614 data-nosnippet>614</a><span class="doccomment">/// `into!(Repr)` — the output stage is `Into&lt;Repr&gt;` on the source type.
+<a href=#615 id=615 data-nosnippet>615</a></span><span class="attr">#[macro_export]
+<a href=#616 id=616 data-nosnippet>616</a></span><span class="macro">macro_rules!</span> into {
+<a href=#617 id=617 data-nosnippet>617</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::Into</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#618 id=618 data-nosnippet>618</a>}
+<a href=#619 id=619 data-nosnippet>619</a>
+<a href=#620 id=620 data-nosnippet>620</a><span class="doccomment">/// `try_from!(Repr)` — the input stage is `TryFrom&lt;Repr&gt;` on the source type.
+<a href=#621 id=621 data-nosnippet>621</a></span><span class="attr">#[macro_export]
+<a href=#622 id=622 data-nosnippet>622</a></span><span class="macro">macro_rules!</span> try_from {
+<a href=#623 id=623 data-nosnippet>623</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryFrom</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#624 id=624 data-nosnippet>624</a>}
+<a href=#625 id=625 data-nosnippet>625</a>
+<a href=#626 id=626 data-nosnippet>626</a><span class="doccomment">/// `try_into!(Repr)` — the output stage is `TryInto&lt;Repr&gt;` on the source type.
+<a href=#627 id=627 data-nosnippet>627</a></span><span class="attr">#[macro_export]
+<a href=#628 id=628 data-nosnippet>628</a></span><span class="macro">macro_rules!</span> try_into {
+<a href=#629 id=629 data-nosnippet>629</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryInto</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#630 id=630 data-nosnippet>630</a>}
+<a href=#631 id=631 data-nosnippet>631</a>
+<a href=#632 id=632 data-nosnippet>632</a><span class="doccomment">/// `sig!((a: A, b: B) -&gt; R)` — a signature, for a binding-local function.
+<a href=#633 id=633 data-nosnippet>633</a></span><span class="attr">#[macro_export]
+<a href=#634 id=634 data-nosnippet>634</a></span><span class="macro">macro_rules!</span> sig {
+<a href=#635 id=635 data-nosnippet>635</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>:tt)+) =&gt; {
+<a href=#636 id=636 data-nosnippet>636</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>)+)
+<a href=#637 id=637 data-nosnippet>637</a>    };
+<a href=#638 id=638 data-nosnippet>638</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>)) =&gt; {
+<a href=#639 id=639 data-nosnippet>639</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>))
+<a href=#640 id=640 data-nosnippet>640</a>    };
+<a href=#641 id=641 data-nosnippet>641</a>}
+<a href=#642 id=642 data-nosnippet>642</a>
+<a href=#643 id=643 data-nosnippet>643</a><span class="doccomment">/// `ty!(T)` — a `syn::Type`.
+<a href=#644 id=644 data-nosnippet>644</a></span><span class="attr">#[macro_export]
+<a href=#645 id=645 data-nosnippet>645</a></span><span class="macro">macro_rules!</span> ty {
+<a href=#646 id=646 data-nosnippet>646</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__t: <span class="macro-nonterminal">$crate::__syn::Type </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __t } };
+<a href=#647 id=647 data-nosnippet>647</a>}
+<a href=#648 id=648 data-nosnippet>648</a>
+<a href=#649 id=649 data-nosnippet>649</a><span class="doccomment">/// `path!(a::b)` — a `syn::Path`.
+<a href=#650 id=650 data-nosnippet>650</a></span><span class="attr">#[macro_export]
+<a href=#651 id=651 data-nosnippet>651</a></span><span class="macro">macro_rules!</span> path {
+<a href=#652 id=652 data-nosnippet>652</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__p: <span class="macro-nonterminal">$crate::__syn::Path </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __p } };
+<a href=#653 id=653 data-nosnippet>653</a>}
+<a href=#654 id=654 data-nosnippet>654</a>
+<a href=#655 id=655 data-nosnippet>655</a><span class="doccomment">/// `expr!(e)` — a `syn::Expr`.
+<a href=#656 id=656 data-nosnippet>656</a></span><span class="attr">#[macro_export]
+<a href=#657 id=657 data-nosnippet>657</a></span><span class="macro">macro_rules!</span> expr {
+<a href=#658 id=658 data-nosnippet>658</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__e: <span class="macro-nonterminal">$crate::__syn::Expr </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __e } };
+<a href=#659 id=659 data-nosnippet>659</a>}
+<a href=#660 id=660 data-nosnippet>660</a>
+<a href=#661 id=661 data-nosnippet>661</a><span class="doccomment">/// `ident!(name)` — a `syn::Ident`.
+<a href=#662 id=662 data-nosnippet>662</a></span><span class="attr">#[macro_export]
+<a href=#663 id=663 data-nosnippet>663</a></span><span class="macro">macro_rules!</span> ident {
+<a href=#664 id=664 data-nosnippet>664</a>    (<span class="macro-nonterminal">$i</span>:ident) =&gt; {{
+<a href=#665 id=665 data-nosnippet>665</a>        <span class="kw">let </span>__i: <span class="macro-nonterminal">$crate::__syn::Ident </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="macro-nonterminal">$i</span>);
+<a href=#666 id=666 data-nosnippet>666</a>        __i
+<a href=#667 id=667 data-nosnippet>667</a>    }};
+<a href=#668 id=668 data-nosnippet>668</a>}
+<a href=#669 id=669 data-nosnippet>669</a>
+<a href=#670 id=670 data-nosnippet>670</a><span class="attr">#[cfg(test)]
+<a href=#671 id=671 data-nosnippet>671</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
