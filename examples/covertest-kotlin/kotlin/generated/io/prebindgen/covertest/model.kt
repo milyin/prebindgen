@@ -627,7 +627,7 @@ public fun readingSeries(n: Int, onError: io.prebindgen.covertest.JniErrorHandle
     return __ret as List<io.prebindgen.covertest.model.Reading>
 }
 
-public fun readingEach(n: Int, sink: io.prebindgen.covertest.ReadingCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
+public fun readingEach(n: Int, sink: io.prebindgen.covertest.model.ReadingCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.CovNative.readingEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -642,7 +642,7 @@ public fun lookupOf(count: Long, total: Double, onError: io.prebindgen.covertest
     return __ret as io.prebindgen.covertest.model.Lookup
 }
 
-public fun lookupEach(n: Long, total: Double, sink: io.prebindgen.covertest.LookupCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
+public fun lookupEach(n: Long, total: Double, sink: io.prebindgen.covertest.model.LookupCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.CovNative.lookupEach(n, total, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -665,7 +665,7 @@ public fun dossierNew(note: Long, tag: Long, count: Long, total: Double, onError
     return __ret as io.prebindgen.covertest.Dossier
 }
 
-public fun reportEach(n: Long, sink: io.prebindgen.covertest.ReportCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
+public fun reportEach(n: Long, sink: io.prebindgen.covertest.model.ReportCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.CovNative.reportEach(n, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -673,14 +673,14 @@ public fun reportEach(n: Long, sink: io.prebindgen.covertest.ReportCallback, onE
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> probeNew(seq: Long, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.ProbeBuilder<R>): R {
+public fun <R> probeNew(seq: Long, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.model.ProbeBuilder<R>): R {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.CovNative.probeNew(seq, count, total, build.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as R
 }
 
-public fun probeEach(n: Long, total: Double, sink: io.prebindgen.covertest.ProbeCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
+public fun probeEach(n: Long, total: Double, sink: io.prebindgen.covertest.model.ProbeCallback, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.CovNative.probeEach(n, total, sink.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -695,7 +695,7 @@ public fun ledgerEach(n: Long, sink: io.prebindgen.covertest.LedgerCallback, onE
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> spanHolderNew(seq: Long, requiredMs: ULong, delayMs: Long, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SpanHolderBuilder<R>): R {
+public fun <R> spanHolderNew(seq: Long, requiredMs: ULong, delayMs: Long, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.model.SpanHolderBuilder<R>): R {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.CovNative.spanHolderNew(seq, requiredMs.toLong(), delayMs, build.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
@@ -822,7 +822,7 @@ public fun refVecIdSum(ps: List<io.prebindgen.covertest.Payload>, onError: io.pr
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> boxedLatest(a: io.prebindgen.covertest.analytics.SummaryVault, onError: io.prebindgen.covertest.JniErrorHandler<R?>, build: io.prebindgen.covertest.SummaryBuilder<R>): R? {
+public fun <R> boxedLatest(a: io.prebindgen.covertest.analytics.SummaryVault, onError: io.prebindgen.covertest.JniErrorHandler<R?>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R? {
     if (a.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.withSortedHandleLocks(a) {
@@ -1005,4 +1005,97 @@ public fun durationOutOfRange(onError: io.prebindgen.covertest.JniErrorHandler<U
     val __ret = io.prebindgen.covertest.CovNative.durationOutOfRange(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret?.let { __o0 -> __o0.toULong() }
+}
+
+public fun interface ReadingCallbackRaw {
+    public fun run(a0Tag: Int, a0ExactV0: Long, a0RangeLow: Long, a0RangeHigh: Long, a0LabeledV0: String?, a0LabeledV1: Int, a0CompanionV0: Long)
+}
+
+public fun interface ReadingCallback {
+    public fun run(reading: io.prebindgen.covertest.model.Reading)
+
+    public fun asRaw(): ReadingCallbackRaw =
+        ReadingCallbackRaw { a0Tag, a0ExactV0, a0RangeLow, a0RangeHigh, a0LabeledV0, a0LabeledV1, a0CompanionV0 ->
+                val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Reading.Missing; 1 -> io.prebindgen.covertest.model.Reading.Exact(a0ExactV0); 2 -> io.prebindgen.covertest.model.Reading.Range(a0RangeLow, a0RangeHigh); 3 -> io.prebindgen.covertest.model.Reading.Tagged(a0LabeledV0!!, io.prebindgen.covertest.model.Priority.fromInt(a0LabeledV1)); 4 -> io.prebindgen.covertest.model.Reading.Companion(a0CompanionV0); else -> throw IllegalArgumentException("Reading: invalid tag $a0Tag") }
+            run(__p0)
+        }
+}
+
+public fun interface LookupCallbackRaw {
+    public fun run(a0Tag: Int, a0FoundV0: Long, a0FailedV0: String?)
+}
+
+public fun interface LookupCallback {
+    public fun run(lookup: io.prebindgen.covertest.model.Lookup)
+
+    public fun asRaw(): LookupCallbackRaw =
+        LookupCallbackRaw { a0Tag, a0FoundV0, a0FailedV0 ->
+                val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0FoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0FailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0Tag") }
+            try {
+                run(__p0)
+            } finally {
+                __p0.close()
+            }
+        }
+}
+
+public fun interface ReportCallbackRaw {
+    public fun run(a0SummaryCount: Long, a0SummaryTotal: Double, a0TakenPresent: Boolean, a0TakenSecs: Long, a0TakenNanos: Long, a0OriginSecs: Long, a0OriginNanos: Long, a0OutcomeTag: Int, a0OutcomeFoundV0: Long, a0OutcomeFailedV0: String?, a0Label: String)
+}
+
+public fun interface ReportCallback {
+    public fun run(reportSummaryCount: Long, reportSummaryTotal: Double, reportTaken: io.prebindgen.covertest.model.Stamp?, reportOriginSecs: Long, reportOriginNanos: Long, reportOutcome: io.prebindgen.covertest.model.Lookup, reportLabel: String)
+
+    public fun asRaw(): ReportCallbackRaw =
+        ReportCallbackRaw { a0SummaryCount, a0SummaryTotal, a0TakenPresent, a0TakenSecs, a0TakenNanos, a0OriginSecs, a0OriginNanos, a0OutcomeTag, a0OutcomeFoundV0, a0OutcomeFailedV0, a0Label ->
+                val __p0 = a0SummaryCount
+            val __p1 = a0SummaryTotal
+            val __p2 = (if (a0TakenPresent) io.prebindgen.covertest.model.Stamp(a0TakenSecs, a0TakenNanos) else null)
+            val __p3 = a0OriginSecs
+            val __p4 = a0OriginNanos
+            val __p5 = when (a0OutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0OutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0OutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0OutcomeTag") }
+            val __p6 = a0Label
+            run(__p0, __p1, __p2, __p3, __p4, __p5, __p6)
+        }
+}
+
+public fun interface ProbeBuilderRaw<out R> {
+    public fun run(rSeq: Long, rOutcomePresent: Boolean, rOutcomeTag: Int, rOutcomeFoundV0: Long, rOutcomeFailedV0: String?): R
+}
+
+public fun interface ProbeBuilder<out R> {
+    public fun run(seq: Long, outcome: io.prebindgen.covertest.model.Lookup?): R
+
+    public fun asRaw(): ProbeBuilderRaw<R> =
+        ProbeBuilderRaw<R> { rSeq, rOutcomePresent, rOutcomeTag, rOutcomeFoundV0, rOutcomeFailedV0 ->
+            run(rSeq, (if (rOutcomePresent) when (rOutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(rOutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(rOutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $rOutcomeTag") } else null))
+        }
+}
+
+public fun interface ProbeCallbackRaw {
+    public fun run(a0Seq: Long, a0OutcomePresent: Boolean, a0OutcomeTag: Int, a0OutcomeFoundV0: Long, a0OutcomeFailedV0: String?)
+}
+
+public fun interface ProbeCallback {
+    public fun run(probeSeq: Long, probeOutcome: io.prebindgen.covertest.model.Lookup?)
+
+    public fun asRaw(): ProbeCallbackRaw =
+        ProbeCallbackRaw { a0Seq, a0OutcomePresent, a0OutcomeTag, a0OutcomeFoundV0, a0OutcomeFailedV0 ->
+                val __p0 = a0Seq
+            val __p1 = (if (a0OutcomePresent) when (a0OutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0OutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0OutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0OutcomeTag") } else null)
+            run(__p0, __p1)
+        }
+}
+
+public fun interface SpanHolderBuilderRaw<out R> {
+    public fun run(rSpanPresent: Boolean, rSpanRequired: Long, rSpanDelay: Long?): R
+}
+
+public fun interface SpanHolderBuilder<out R> {
+    public fun run(spanRequired: ULong?, spanDelay: ULong?): R
+
+    public fun asRaw(): SpanHolderBuilderRaw<R> =
+        SpanHolderBuilderRaw<R> { rSpanPresent, rSpanRequired, rSpanDelay ->
+            run((if (rSpanPresent) rSpanRequired.toULong() else null), (if (rSpanPresent) rSpanDelay?.let { __o5 -> __o5.toULong() } else null))
+        }
 }

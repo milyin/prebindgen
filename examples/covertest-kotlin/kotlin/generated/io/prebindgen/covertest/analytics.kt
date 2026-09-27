@@ -108,7 +108,7 @@ public class SummaryVault(initialPtr: Long) : io.prebindgen.covertest.NativeHand
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> storageSummary(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R {
+public fun <R> storageSummary(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.withSortedHandleLocks(s) {
@@ -180,7 +180,7 @@ public fun summaryTotalRaw(s: io.prebindgen.covertest.analytics.Summary, onError
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> storageSummaryFull(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryStorageSummaryFullBuilder<R>): R {
+public fun <R> storageSummaryFull(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryStorageSummaryFullBuilder<R>): R {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.withSortedHandleLocks(s) {
@@ -191,7 +191,7 @@ public fun <R> storageSummaryFull(s: io.prebindgen.covertest.Storage, onError: i
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> storageSummaryProbe(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryStorageSummaryProbeBuilder<R>): R {
+public fun <R> storageSummaryProbe(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryStorageSummaryProbeBuilder<R>): R {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.withSortedHandleLocks(s) {
@@ -257,7 +257,7 @@ public fun summaryPrefer(primary: io.prebindgen.covertest.analytics.Summary, fal
     summaryPrefer(1, null, null, primary, 1, null, null, fallback, onError)
 
 @Suppress("UNCHECKED_CAST")
-public fun <R> summaryMerge(primarySel: Int, primary00: Long?, primary01: Double?, primary1: io.prebindgen.covertest.analytics.Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: io.prebindgen.covertest.analytics.Summary?, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R {
+public fun <R> summaryMerge(primarySel: Int, primary00: Long?, primary01: Double?, primary1: io.prebindgen.covertest.analytics.Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: io.prebindgen.covertest.analytics.Summary?, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R {
     if (((primary1?.ptr ?: 0L) and -2L) != 0L && ((primary1?.ptr ?: 0L) and -2L) == ((fallback1?.ptr ?: 0L) and -2L)) return onError.run("Aliasing arguments: 'primary1' and 'fallback1' are the same native resource; a consumed handle may not be passed twice in one call.")
     if (primary1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     if (fallback1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
@@ -276,16 +276,16 @@ public fun <R> summaryMerge(primarySel: Int, primary00: Long?, primary01: Double
     return __ret as R
 }
 
-public fun <R> summaryMerge(primaryCount: Long, primaryTotal: Double, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primaryCount: Long, primaryTotal: Double, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R =
     summaryMerge(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError, build)
 
-public fun <R> summaryMerge(primaryCount: Long, primaryTotal: Double, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primaryCount: Long, primaryTotal: Double, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R =
     summaryMerge(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError, build)
 
-public fun <R> summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R =
     summaryMerge(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError, build)
 
-public fun <R> summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R =
     summaryMerge(1, null, null, primary, 1, null, null, fallback, onError, build)
 
 public fun summaryTotalOpt(sSel: Int, s00: Long?, s01: Double?, s1: io.prebindgen.covertest.analytics.Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double {
@@ -302,9 +302,9 @@ public fun summaryTotalOpt(sSel: Int, s00: Long?, s01: Double?, s1: io.prebindge
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <A> summarySeries(count: Long, start: Long, acc: A, onError: io.prebindgen.covertest.JniErrorHandler<A>, fold: io.prebindgen.covertest.SummaryFolder<A>): A {
+public fun <A> summarySeries(count: Long, start: Long, acc: A, onError: io.prebindgen.covertest.JniErrorHandler<A>, fold: io.prebindgen.covertest.analytics.SummaryFolder<A>): A {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.CovNative.summarySeries(count, start, io.prebindgen.covertest.SummaryFolderColumns { n, __c_rCount, __c_rTotal ->
+    val __ret = io.prebindgen.covertest.CovNative.summarySeries(count, start, io.prebindgen.covertest.analytics.SummaryFolderColumns { n, __c_rCount, __c_rTotal ->
             var __a = acc
             for (__i in 0 until n) {
                 val rCount = __c_rCount[__i]
@@ -318,9 +318,9 @@ public fun <A> summarySeries(count: Long, start: Long, acc: A, onError: io.prebi
 }
 
 @Suppress("UNCHECKED_CAST")
-public fun <A> summarySeriesOpt(count: Long, start: Long, acc: A, onError: io.prebindgen.covertest.JniErrorHandler<A?>, fold: io.prebindgen.covertest.SummaryFolder<A>): A? {
+public fun <A> summarySeriesOpt(count: Long, start: Long, acc: A, onError: io.prebindgen.covertest.JniErrorHandler<A?>, fold: io.prebindgen.covertest.analytics.SummaryFolder<A>): A? {
     val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.CovNative.summarySeriesOpt(count, start, io.prebindgen.covertest.SummaryFolderColumns { n, __c_rCount, __c_rTotal ->
+    val __ret = io.prebindgen.covertest.CovNative.summarySeriesOpt(count, start, io.prebindgen.covertest.analytics.SummaryFolderColumns { n, __c_rCount, __c_rTotal ->
             var __a = acc
             for (__i in 0 until n) {
                 val rCount = __c_rCount[__i]
@@ -372,4 +372,51 @@ public fun archiveLatest(a: io.prebindgen.covertest.analytics.SummaryVault, onEr
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret?.let { __o0 -> io.prebindgen.covertest.analytics.Summary(__o0) }
+}
+
+public fun interface SummaryBuilderRaw<out R> {
+    public fun run(rCount: Long, rTotal: Double): R
+}
+
+public fun interface SummaryBuilder<out R> {
+    public fun run(count: Long, total: Double): R
+
+    public fun asRaw(): SummaryBuilderRaw<R> =
+        SummaryBuilderRaw<R> { rCount, rTotal ->
+            run(rCount, rTotal)
+        }
+}
+
+public fun interface SummaryStorageSummaryFullBuilderRaw<out R> {
+    public fun run(rCount: Long, rTotal: Double, rHandle: Long): R
+}
+
+public fun interface SummaryStorageSummaryFullBuilder<out R> {
+    public fun run(count: Long, total: Double, handle: io.prebindgen.covertest.analytics.Summary): R
+
+    public fun asRaw(): SummaryStorageSummaryFullBuilderRaw<R> =
+        SummaryStorageSummaryFullBuilderRaw<R> { rCount, rTotal, rHandle ->
+            run(rCount, rTotal, io.prebindgen.covertest.analytics.Summary(rHandle))
+        }
+}
+
+public fun interface SummaryStorageSummaryProbeBuilderRaw<out R> {
+    public fun run(rCount: Long, rTotal: Double, rHandle: Long?): R
+}
+
+public fun interface SummaryStorageSummaryProbeBuilder<out R> {
+    public fun run(count: Long, total: Double, handle: io.prebindgen.covertest.analytics.Summary?): R
+
+    public fun asRaw(): SummaryStorageSummaryProbeBuilderRaw<R> =
+        SummaryStorageSummaryProbeBuilderRaw<R> { rCount, rTotal, rHandle ->
+            run(rCount, rTotal, rHandle?.let { __o2 -> io.prebindgen.covertest.analytics.Summary(__o2) })
+        }
+}
+
+public fun interface SummaryFolder<A> {
+    public fun run(acc: A, count: Long, total: Double): A
+}
+
+public fun interface SummaryFolderColumns {
+    public fun run(n: Int, rCount: LongArray, rTotal: DoubleArray): Any?
 }

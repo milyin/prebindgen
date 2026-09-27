@@ -440,44 +440,12 @@ internal val __sink_Vec_Reading: __Sink_Vec_Reading = __Sink_Vec_Reading { n, ta
     List(n) { __i0 -> when (tag[__i0]) { 0 -> io.prebindgen.covertest.model.Reading.Missing; 1 -> io.prebindgen.covertest.model.Reading.Exact(exactV0[__i0]); 2 -> io.prebindgen.covertest.model.Reading.Range(rangeLow[__i0], rangeHigh[__i0]); 3 -> io.prebindgen.covertest.model.Reading.Tagged((labeledV0[__i0] as String?)!!, io.prebindgen.covertest.model.Priority.fromInt(labeledV1[__i0])); 4 -> io.prebindgen.covertest.model.Reading.Companion(companionV0[__i0]); else -> throw IllegalArgumentException("Reading: invalid tag $tag[__i0]") } }
 }
 
-public fun interface ReadingCallbackRaw {
-    public fun run(a0Tag: Int, a0ExactV0: Long, a0RangeLow: Long, a0RangeHigh: Long, a0LabeledV0: String?, a0LabeledV1: Int, a0CompanionV0: Long)
-}
-
-public fun interface ReadingCallback {
-    public fun run(reading: io.prebindgen.covertest.model.Reading)
-
-    public fun asRaw(): ReadingCallbackRaw =
-        ReadingCallbackRaw { a0Tag, a0ExactV0, a0RangeLow, a0RangeHigh, a0LabeledV0, a0LabeledV1, a0CompanionV0 ->
-                val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Reading.Missing; 1 -> io.prebindgen.covertest.model.Reading.Exact(a0ExactV0); 2 -> io.prebindgen.covertest.model.Reading.Range(a0RangeLow, a0RangeHigh); 3 -> io.prebindgen.covertest.model.Reading.Tagged(a0LabeledV0!!, io.prebindgen.covertest.model.Priority.fromInt(a0LabeledV1)); 4 -> io.prebindgen.covertest.model.Reading.Companion(a0CompanionV0); else -> throw IllegalArgumentException("Reading: invalid tag $a0Tag") }
-            run(__p0)
-        }
-}
-
 public fun interface __Sink_Lookup {
     public fun run(tag: Int, foundV0: Long, failedV0: String?): Any?
 }
 
 internal val __sink_Lookup: __Sink_Lookup = __Sink_Lookup { tag, foundV0, failedV0 ->
     when (tag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(foundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(failedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
-}
-
-public fun interface LookupCallbackRaw {
-    public fun run(a0Tag: Int, a0FoundV0: Long, a0FailedV0: String?)
-}
-
-public fun interface LookupCallback {
-    public fun run(lookup: io.prebindgen.covertest.model.Lookup)
-
-    public fun asRaw(): LookupCallbackRaw =
-        LookupCallbackRaw { a0Tag, a0FoundV0, a0FailedV0 ->
-                val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0FoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0FailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0Tag") }
-            try {
-                run(__p0)
-            } finally {
-                __p0.close()
-            }
-        }
 }
 
 public fun interface __Sink_Verdict {
@@ -494,62 +462,6 @@ public fun interface __Sink_Dossier {
 
 internal val __sink_Dossier: __Sink_Dossier = __Sink_Dossier { note, holderTag, holderSummary ->
     io.prebindgen.covertest.Dossier(note, io.prebindgen.covertest.Holder(holderTag, io.prebindgen.covertest.analytics.Summary(holderSummary)))
-}
-
-public fun interface ReportCallbackRaw {
-    public fun run(a0SummaryCount: Long, a0SummaryTotal: Double, a0TakenPresent: Boolean, a0TakenSecs: Long, a0TakenNanos: Long, a0OriginSecs: Long, a0OriginNanos: Long, a0OutcomeTag: Int, a0OutcomeFoundV0: Long, a0OutcomeFailedV0: String?, a0Label: String)
-}
-
-public fun interface ReportCallback {
-    public fun run(reportSummaryCount: Long, reportSummaryTotal: Double, reportTaken: io.prebindgen.covertest.model.Stamp?, reportOriginSecs: Long, reportOriginNanos: Long, reportOutcome: io.prebindgen.covertest.model.Lookup, reportLabel: String)
-
-    public fun asRaw(): ReportCallbackRaw =
-        ReportCallbackRaw { a0SummaryCount, a0SummaryTotal, a0TakenPresent, a0TakenSecs, a0TakenNanos, a0OriginSecs, a0OriginNanos, a0OutcomeTag, a0OutcomeFoundV0, a0OutcomeFailedV0, a0Label ->
-                val __p0 = a0SummaryCount
-            val __p1 = a0SummaryTotal
-            val __p2 = (if (a0TakenPresent) io.prebindgen.covertest.model.Stamp(a0TakenSecs, a0TakenNanos) else null)
-            val __p3 = a0OriginSecs
-            val __p4 = a0OriginNanos
-            val __p5 = when (a0OutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0OutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0OutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0OutcomeTag") }
-            val __p6 = a0Label
-            try {
-                run(__p0, __p1, __p2, __p3, __p4, __p5, __p6)
-            } finally {
-                __p5.close()
-            }
-        }
-}
-
-public fun interface ProbeBuilderRaw<out R> {
-    public fun run(rSeq: Long, rOutcomePresent: Boolean, rOutcomeTag: Int, rOutcomeFoundV0: Long, rOutcomeFailedV0: String?): R
-}
-
-public fun interface ProbeBuilder<out R> {
-    public fun run(seq: Long, outcome: io.prebindgen.covertest.model.Lookup?): R
-
-    public fun asRaw(): ProbeBuilderRaw<R> =
-        ProbeBuilderRaw<R> { rSeq, rOutcomePresent, rOutcomeTag, rOutcomeFoundV0, rOutcomeFailedV0 ->
-            run(rSeq, (if (rOutcomePresent) when (rOutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(rOutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(rOutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $rOutcomeTag") } else null))
-        }
-}
-
-public fun interface ProbeCallbackRaw {
-    public fun run(a0Seq: Long, a0OutcomePresent: Boolean, a0OutcomeTag: Int, a0OutcomeFoundV0: Long, a0OutcomeFailedV0: String?)
-}
-
-public fun interface ProbeCallback {
-    public fun run(probeSeq: Long, probeOutcome: io.prebindgen.covertest.model.Lookup?)
-
-    public fun asRaw(): ProbeCallbackRaw =
-        ProbeCallbackRaw { a0Seq, a0OutcomePresent, a0OutcomeTag, a0OutcomeFoundV0, a0OutcomeFailedV0 ->
-                val __p0 = a0Seq
-            val __p1 = (if (a0OutcomePresent) when (a0OutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0OutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0OutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0OutcomeTag") } else null)
-            try {
-                run(__p0, __p1)
-            } finally {
-                __p1?.close()
-            }
-        }
 }
 
 public fun interface LedgerCallbackRaw {
@@ -575,38 +487,7 @@ public fun interface LedgerCallback {
             val __p11 = (if (a0ArchivedPresent) a0ArchivedOriginNanos else null)
             val __p12 = (if (a0ArchivedPresent) when (a0ArchivedOutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0ArchivedOutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0ArchivedOutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0ArchivedOutcomeTag") } else null)
             val __p13 = (if (a0ArchivedPresent) a0ArchivedLabel!! else null)
-            try {
-                run(__p0, __p1, __p2, __p3, __p4, __p5, __p6, __p7, __p8, __p9, __p10, __p11, __p12, __p13)
-            } finally {
-                __p5?.close()
-                __p12?.close()
-            }
-        }
-}
-
-public fun interface SpanHolderBuilderRaw<out R> {
-    public fun run(rSpanPresent: Boolean, rSpanRequired: Long, rSpanDelay: Long?): R
-}
-
-public fun interface SpanHolderBuilder<out R> {
-    public fun run(spanRequired: ULong?, spanDelay: ULong?): R
-
-    public fun asRaw(): SpanHolderBuilderRaw<R> =
-        SpanHolderBuilderRaw<R> { rSpanPresent, rSpanRequired, rSpanDelay ->
-            run((if (rSpanPresent) rSpanRequired.toULong() else null), (if (rSpanPresent) rSpanDelay?.let { __o5 -> __o5.toULong() } else null))
-        }
-}
-
-public fun interface SummaryBuilderRaw<out R> {
-    public fun run(rCount: Long, rTotal: Double): R
-}
-
-public fun interface SummaryBuilder<out R> {
-    public fun run(count: Long, total: Double): R
-
-    public fun asRaw(): SummaryBuilderRaw<R> =
-        SummaryBuilderRaw<R> { rCount, rTotal ->
-            run(rCount, rTotal)
+            run(__p0, __p1, __p2, __p3, __p4, __p5, __p6, __p7, __p8, __p9, __p10, __p11, __p12, __p13)
         }
 }
 
@@ -721,40 +602,6 @@ public fun interface DurationCallback {
                 val __p0 = a0.toULong()
             run(__p0)
         }
-}
-
-public fun interface SummaryStorageSummaryFullBuilderRaw<out R> {
-    public fun run(rCount: Long, rTotal: Double, rHandle: Long): R
-}
-
-public fun interface SummaryStorageSummaryFullBuilder<out R> {
-    public fun run(count: Long, total: Double, handle: io.prebindgen.covertest.analytics.Summary): R
-
-    public fun asRaw(): SummaryStorageSummaryFullBuilderRaw<R> =
-        SummaryStorageSummaryFullBuilderRaw<R> { rCount, rTotal, rHandle ->
-            run(rCount, rTotal, io.prebindgen.covertest.analytics.Summary(rHandle))
-        }
-}
-
-public fun interface SummaryStorageSummaryProbeBuilderRaw<out R> {
-    public fun run(rCount: Long, rTotal: Double, rHandle: Long?): R
-}
-
-public fun interface SummaryStorageSummaryProbeBuilder<out R> {
-    public fun run(count: Long, total: Double, handle: io.prebindgen.covertest.analytics.Summary?): R
-
-    public fun asRaw(): SummaryStorageSummaryProbeBuilderRaw<R> =
-        SummaryStorageSummaryProbeBuilderRaw<R> { rCount, rTotal, rHandle ->
-            run(rCount, rTotal, rHandle?.let { __o2 -> io.prebindgen.covertest.analytics.Summary(__o2) })
-        }
-}
-
-public fun interface SummaryFolder<A> {
-    public fun run(acc: A, count: Long, total: Double): A
-}
-
-public fun interface SummaryFolderColumns {
-    public fun run(n: Int, rCount: LongArray, rTotal: DoubleArray): Any?
 }
 
 public fun interface __Sink_Option_Payload {
@@ -936,21 +783,21 @@ internal object CovNative {
 
     external fun readingSeries(n: Int, sink: Any, errorSink: Any): Any?
 
-    external fun readingEach(n: Int, sink: io.prebindgen.covertest.ReadingCallbackRaw, errorSink: Any)
+    external fun readingEach(n: Int, sink: io.prebindgen.covertest.model.ReadingCallbackRaw, errorSink: Any)
 
     external fun lookupOf(count: Long, total: Double, sink: Any, errorSink: Any): Any?
 
-    external fun lookupEach(n: Long, total: Double, sink: io.prebindgen.covertest.LookupCallbackRaw, errorSink: Any)
+    external fun lookupEach(n: Long, total: Double, sink: io.prebindgen.covertest.model.LookupCallbackRaw, errorSink: Any)
 
     external fun verdictNew(id: Long, count: Long, total: Double, sink: Any, errorSink: Any): Any?
 
     external fun dossierNew(note: Long, tag: Long, count: Long, total: Double, sink: Any, errorSink: Any): Any?
 
-    external fun reportEach(n: Long, sink: io.prebindgen.covertest.ReportCallbackRaw, errorSink: Any)
+    external fun reportEach(n: Long, sink: io.prebindgen.covertest.model.ReportCallbackRaw, errorSink: Any)
 
     external fun probeNew(seq: Long, count: Long, total: Double, sink: Any, errorSink: Any): Any?
 
-    external fun probeEach(n: Long, total: Double, sink: io.prebindgen.covertest.ProbeCallbackRaw, errorSink: Any)
+    external fun probeEach(n: Long, total: Double, sink: io.prebindgen.covertest.model.ProbeCallbackRaw, errorSink: Any)
 
     external fun ledgerEach(n: Long, sink: io.prebindgen.covertest.LedgerCallbackRaw, errorSink: Any)
 
@@ -1095,4 +942,14 @@ internal object CovNative {
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun stringNew(s: String, errorSink: Any): String
+
+    external fun tagDescribe(t00: String, errorSink: Any): String
+
+    external fun tagDescribeOpt(t00: String?, errorSink: Any): String
+
+    external fun tagDefaultOpt(tSel: Int, errorSink: Any): String
+
+    external fun tagWithOpt(tSel: Int, t00: String?, errorSink: Any): String
+
+    external fun tagPick(label: String, sink: Any, errorSink: Any): Any?
 }

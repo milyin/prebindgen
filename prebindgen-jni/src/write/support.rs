@@ -121,7 +121,11 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
 pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
     let base = plan.base_pkg.clone();
     Ok(match s {
-        Support::Callback(ty) => (base, callback(plan, ty)?),
+        Support::Callback(ty) => {
+            let fqn = plan.callback_fqn(ty)?;
+            let pkg = fqn.rsplit_once('.').map_or(base, |(p, _)| p.to_string());
+            (pkg, callback(plan, ty)?)
+        }
         Support::Sink { ty, base: b } => {
             let leaves = plan.leaves(ty, Dir::Out)?;
             let raws: Vec<String> = leaves.iter().map(raw_name).collect();
@@ -137,6 +141,7 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
             )
         }
         Support::Builder {
+            pkg,
             name,
             params,
             leaves,
@@ -148,7 +153,7 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
                 .collect::<Vec<_>>()
                 .join(", ");
             (
-                base,
+                pkg.clone(),
                 format!(
                     "public fun interface {name}Raw<out R> {{\n    public fun run({}): R\n}}\n\n\
                      public fun interface {name}<out R> {{\n    public fun run({}): R\n\n\
@@ -160,6 +165,7 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
             )
         }
         Support::Folder {
+            pkg,
             name,
             columns,
             params,
@@ -172,7 +178,7 @@ pub(crate) fn support(plan: &Plan, s: &Support) -> Res<(String, String)> {
                 .join(", ");
             let sep = if cols.is_empty() { "" } else { ", " };
             (
-                base,
+                pkg.clone(),
                 format!(
                     "public fun interface {name}<A> {{\n    public fun run(acc: A, {}): A\n}}\n\n\
                      public fun interface {columns} {{\n    public fun run(n: Int{sep}{cols}): Any?\n}}\n",

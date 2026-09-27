@@ -25,6 +25,7 @@ pub struct JniGenBuilder {
     pub(crate) data_hook: Option<NameHook>,
     pub(crate) enum_hook: Option<NameHook>,
     pub(crate) method_hook: Option<MethodHook>,
+    pub(crate) iface_hook: Option<NameHook>,
     pub(crate) handle_locks: bool,
     pub(crate) packages: Vec<PackageDecl>,
     pub(crate) converts: Vec<ConvertDecl>,
@@ -60,6 +61,7 @@ impl JniGenBuilder {
             data_hook: None,
             enum_hook: None,
             method_hook: None,
+            iface_hook: None,
             handle_locks: true,
             packages: Vec::new(),
             converts: Vec::new(),
@@ -139,6 +141,14 @@ impl JniGenBuilder {
     /// An enum class's Kotlin name: `(package, RustName)`.
     pub fn set_enum_name_mangle(mut self, f: impl Fn(&str, &str) -> String + 'static) -> Self {
         self.enum_hook = Some(Box::new(f));
+        self
+    }
+
+    /// The name of a class's `.interface()` interface: `(package,
+    /// ClassName)`, which must differ from the class name. Default: the
+    /// class name plus `Api`. An `.interface_name(..)` overrides it.
+    pub fn set_interface_name_mangle(mut self, f: impl Fn(&str, &str) -> String + 'static) -> Self {
+        self.iface_hook = Some(Box::new(f));
         self
     }
 
