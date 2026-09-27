@@ -27,9 +27,9 @@ things follow from that, and they shape everything below:
 | 3 | `prebindgen-jni-runtime` | `jni` only |
 | 4 | `prebindgen-proc-macro` | `prebindgen` |
 | 5 | `prebindgen-flat` | `prebindgen` |
-| 6 | `prebindgen-registry` | `prebindgen-flat`, `prebindgen` |
-| 7 | `prebindgen-c` | `prebindgen-registry`, `prebindgen-c-runtime` |
-| 8 | `prebindgen-jni` | `prebindgen-registry`, `prebindgen-jni-runtime`, `kotlin-codegen` |
+| 6 | `prebindgen-tools` | `prebindgen-flat`, `prebindgen` |
+| 7 | `prebindgen-c` | `prebindgen-tools`, `prebindgen` |
+| 8 | `prebindgen-jni` | `prebindgen-tools`, `prebindgen` |
 
 1–3 have no workspace dependencies and may go in any order among themselves.
 Every crate after them needs its predecessors live on crates.io first, so wait
@@ -40,15 +40,6 @@ so metadata breakage — a missing description or license, a path dependency wit
 no version — surfaces on the PR that causes it rather than at release time. It
 tolerates the "dependency not yet published" error, which says nothing about
 the crate under test.
-
-### External prerequisite
-
-[`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) lives in its own
-repo with its own release cycle and is consumed from crates.io like any other
-dependency. `prebindgen-jni` can only be published against a `kotlin-codegen`
-version that is already on the registry; if a release needs unreleased
-`kotlin-codegen` changes, release that crate first, following
-[its own `RELEASING.md`](https://github.com/milyin/kotlin-codegen/blob/main/RELEASING.md).
 
 ## First publication: 0.5.0
 

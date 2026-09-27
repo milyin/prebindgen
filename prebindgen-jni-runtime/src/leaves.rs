@@ -50,14 +50,78 @@ macro_rules! prim_array {
     };
 }
 
-prim_array!(read_booleans, write_booleans, jboolean, JBooleanArray, get_boolean_array_region, new_boolean_array, set_boolean_array_region);
-prim_array!(read_bytes, write_bytes, jbyte, JByteArray, get_byte_array_region, new_byte_array, set_byte_array_region);
-prim_array!(read_chars, write_chars, jchar, JCharArray, get_char_array_region, new_char_array, set_char_array_region);
-prim_array!(read_shorts, write_shorts, jshort, JShortArray, get_short_array_region, new_short_array, set_short_array_region);
-prim_array!(read_ints, write_ints, jint, JIntArray, get_int_array_region, new_int_array, set_int_array_region);
-prim_array!(read_longs, write_longs, jlong, JLongArray, get_long_array_region, new_long_array, set_long_array_region);
-prim_array!(read_floats, write_floats, jfloat, JFloatArray, get_float_array_region, new_float_array, set_float_array_region);
-prim_array!(read_doubles, write_doubles, jdouble, JDoubleArray, get_double_array_region, new_double_array, set_double_array_region);
+prim_array!(
+    read_booleans,
+    write_booleans,
+    jboolean,
+    JBooleanArray,
+    get_boolean_array_region,
+    new_boolean_array,
+    set_boolean_array_region
+);
+prim_array!(
+    read_bytes,
+    write_bytes,
+    jbyte,
+    JByteArray,
+    get_byte_array_region,
+    new_byte_array,
+    set_byte_array_region
+);
+prim_array!(
+    read_chars,
+    write_chars,
+    jchar,
+    JCharArray,
+    get_char_array_region,
+    new_char_array,
+    set_char_array_region
+);
+prim_array!(
+    read_shorts,
+    write_shorts,
+    jshort,
+    JShortArray,
+    get_short_array_region,
+    new_short_array,
+    set_short_array_region
+);
+prim_array!(
+    read_ints,
+    write_ints,
+    jint,
+    JIntArray,
+    get_int_array_region,
+    new_int_array,
+    set_int_array_region
+);
+prim_array!(
+    read_longs,
+    write_longs,
+    jlong,
+    JLongArray,
+    get_long_array_region,
+    new_long_array,
+    set_long_array_region
+);
+prim_array!(
+    read_floats,
+    write_floats,
+    jfloat,
+    JFloatArray,
+    get_float_array_region,
+    new_float_array,
+    set_float_array_region
+);
+prim_array!(
+    read_doubles,
+    write_doubles,
+    jdouble,
+    JDoubleArray,
+    get_double_array_region,
+    new_double_array,
+    set_double_array_region
+);
 
 /// A `ByteArray` as bytes.
 pub fn read_u8s(env: &mut JNIEnv, obj: &JObject) -> Result<Vec<u8>, String> {
@@ -147,7 +211,9 @@ pub fn read_string(env: &mut JNIEnv, obj: &JObject) -> Result<String, String> {
 
 /// A new Java `String`.
 pub fn new_string<'l>(env: &mut JNIEnv<'l>, s: &str) -> Result<JObject<'l>, String> {
-    env.new_string(s).map(Into::into).map_err(jerr("new String"))
+    env.new_string(s)
+        .map(Into::into)
+        .map_err(jerr("new String"))
 }
 
 /// A value an argument either owns or borrows — what a parameter that may
@@ -195,7 +261,9 @@ impl Upcall {
         let method = env
             .get_method_id(&class, method, descr)
             .map_err(|e| format!("resolve callback {method}{descr}: {e}"))?;
-        let obj = env.new_global_ref(obj).map_err(jerr("global-ref callback"))?;
+        let obj = env
+            .new_global_ref(obj)
+            .map_err(jerr("global-ref callback"))?;
         Ok(Self {
             vm,
             obj,

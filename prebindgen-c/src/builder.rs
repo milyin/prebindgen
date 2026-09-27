@@ -107,7 +107,9 @@ impl CbindgenBuilder {
 
     /// The items of a dependency this crate renames in `Cargo.toml`.
     pub fn source_named<P: AsRef<std::path::Path>>(mut self, dir: P, crate_name: &str) -> Self {
-        let source = prebindgen::Source::builder(dir).crate_name(crate_name).build();
+        let source = prebindgen::Source::builder(dir)
+            .crate_name(crate_name)
+            .build();
         self.items.extend(source.items_all());
         self
     }
@@ -197,7 +199,12 @@ impl CbindgenBuilder {
 
     /// A `#[repr(C)]` struct crossing by reinterpretation of its memory.
     pub fn repr_c_struct(self, ty: syn::Type) -> Self {
-        self.push_type(ty, TypeKind::ReprC { assume_valid: false })
+        self.push_type(
+            ty,
+            TypeKind::ReprC {
+                assume_valid: false,
+            },
+        )
     }
 
     /// On the last `repr_c_struct`: accept restricted-validity fields

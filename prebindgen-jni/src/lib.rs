@@ -60,11 +60,10 @@ pub use decl::{
     ExpandParamDecl, ExpandReturnDecl, FieldsDecl, FunctionDecl, IgnoreDecl, PackageDecl,
     PtrClassDecl, SealedClassDecl, VariantDecl,
 };
-pub use prebindgen_tools::{expr, from, ident, into, path, sig, try_from, try_into, ty};
-use prebindgen_tools::{file::write_if_changed, RustFile};
-
 #[doc(hidden)]
 pub use prebindgen_tools::__syn;
+pub use prebindgen_tools::{expr, from, ident, into, path, sig, try_from, try_into, ty};
+use prebindgen_tools::{file::write_if_changed, RustFile};
 
 /// A generation failure.
 #[derive(Debug, Clone)]
@@ -144,3 +143,6 @@ fn remove_stale(dir: &Path, keep: &[PathBuf]) -> std::io::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

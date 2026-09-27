@@ -14,10 +14,20 @@ use super::{
 };
 use crate::decl::{ConstDecl, ConstSource};
 
+/// Content equality for an array-backed field: `(equals, hashCode,
+/// toString)` templates over `$a` / `$b`.
+type ArrayEq = (String, String, String);
+
 fn indent(text: &str, by: usize) -> String {
     let pad = " ".repeat(by);
     text.lines()
-        .map(|l| if l.is_empty() { String::new() } else { format!("{pad}{l}") })
+        .map(|l| {
+            if l.is_empty() {
+                String::new()
+            } else {
+                format!("{pad}{l}")
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -168,7 +178,8 @@ impl<'a> Gen<'a> {
         for m in &c.constructors.clone() {
             ctors.push(self.member(c, m, true)?);
         }
-        self.report.push(format!("- class `{}` ({})", c.fqn(), kind_label(&c.kind)));
+        self.report
+            .push(format!("- class `{}` ({})", c.fqn(), kind_label(&c.kind)));
         let text = match &c.kind {
             ClassKind::Ptr { gc } => {
                 self.rust_free_ptr(c);
@@ -208,7 +219,13 @@ impl<'a> Gen<'a> {
         format!("public interface {name}{extends} {{\n{body}\n}}\n\n")
     }
 
-    fn ptr_class(&mut self, c: &Rc<Class>, gc: bool, methods: &[String], ctors: &[String]) -> String {
+    fn ptr_class(
+        &mut self,
+        c: &Rc<Class>,
+        gc: bool,
+        methods: &[String],
+        ctors: &[String],
+    ) -> String {
         let name = &c.name;
         let base = self.base_pkg.clone();
         let parent = if gc {
@@ -236,8 +253,16 @@ impl<'a> Gen<'a> {
         ];
         members.extend(self.iface_members.get(&c.rust).cloned().unwrap_or_default());
         let iface = self.iface_decl(c, " : AutoCloseable", members);
-        let methods = methods.iter().map(|m| indent(m, 4)).collect::<Vec<_>>().join("\n\n");
-        let ctors = ctors.iter().map(|m| indent(m, 8)).collect::<Vec<_>>().join("\n\n");
+        let methods = methods
+            .iter()
+            .map(|m| indent(m, 4))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let ctors = ctors
+            .iter()
+            .map(|m| indent(m, 8))
+            .collect::<Vec<_>>()
+            .join("\n\n");
         format!(
             "{iface}public class {name}(initialPtr: Long){} {{\n{lifecycle}\n{methods}\n\n    public companion object {{\n        @JvmStatic\n        external fun freePtr(ptr: Long)\n\n{ctors}\n    }}\n}}\n",
             self.supertypes(c, &[parent])
@@ -275,7 +300,10 @@ impl<'a> Gen<'a> {
         let iface = self.iface_decl(c, "", iface_members);
         let mut body = Vec::new();
         if owns {
-            body.push(format!("    override fun close() {{\n        {}\n    }}", closes.join("\n        ")));
+            body.push(format!(
+                "    override fun close() {{\n        {}\n    }}",
+                closes.join("\n        ")
+            ));
         }
         if arrays.iter().any(|(_, a)| a.is_some()) {
             body.push(self.array_members(name, &arrays));
@@ -287,7 +315,10 @@ impl<'a> Gen<'a> {
             args.join(", ")
         );
         let ctors = ctors.iter().map(|m| indent(m, 8)).collect::<Vec<_>>();
-        let companion = std::iter::once(from_parts).chain(ctors).collect::<Vec<_>>().join("\n\n");
+        let companion = std::iter::once(from_parts)
+            .chain(ctors)
+            .collect::<Vec<_>>()
+            .join("\n\n");
         Ok(format!(
             "{iface}public data class {name}({}){} {{\n{}\n\n    public companion object {{\n{companion}\n    }}\n}}\n",
             props.join(", "),
@@ -298,15 +329,15 @@ impl<'a> Gen<'a> {
 
     /// How a field compares when it is array-backed: `Some((eq, hash, show))`
     /// templates over `$a` / `$b`, or `None` for ordinary equality.
-    fn array_eq(&self, ty: &prebindgen_tools::flat::flat::TypeRef) -> Res<Option<(String, String, String)>> {
+    fn array_eq(&self, ty: &prebindgen_tools::flat::flat::TypeRef) -> Res<Option<ArrayEq>> {
         Ok(match self.kind(ty)? {
             Kind::Bytes(_) | Kind::Array { .. } => Some((
                 "$a.contentEquals($b)".to_string(),
                 "$a.contentHashCode()".to_string(),
                 "${$a.contentToString()}".to_string(),
             )),
-            Kind::Seq { elem, .. } => match self.array_eq(elem)? {
-                Some((eq, hash, show)) => Some((
+            Kind::Seq { elem, .. } => self.array_eq(elem)?.map(|(eq, hash, show)| {
+                (
                     format!(
                         "($a.size == $b.size && $a.indices.all {{ __i -> val __x = $a[__i]; val __y = $b[__i]; {} }})",
                         eq.replace("$a", "__x").replace("$b", "__y")
@@ -316,22 +347,20 @@ impl<'a> Gen<'a> {
                         "${{$a.joinToString(\", \", \"[\", \"]\") {{ __e -> \"{}\" }}}}",
                         show.replace("$a", "__e")
                     ),
-                )),
-                None => None,
-            },
-            Kind::Option(inner) => match self.array_eq(inner)? {
-                Some((eq, hash, show)) => Some((
+                )
+            }),
+            Kind::Option(inner) => self.array_eq(inner)?.map(|(eq, hash, show)| {
+                (
                     format!("(if ($a == null || $b == null) $a === $b else {})", eq.replace("$a", "$a!!").replace("$b", "$b!!")),
                     format!("($a?.let {{ {} }} ?: 0)", hash.replace("$a", "it")),
                     show,
-                )),
-                None => None,
-            },
+                )
+            }),
             _ => None,
         })
     }
 
-    fn array_members(&self, name: &str, fields: &[(String, Option<(String, String, String)>)]) -> String {
+    fn array_members(&self, name: &str, fields: &[(String, Option<ArrayEq>)]) -> String {
         let eqs = fields
             .iter()
             .map(|(p, a)| match a {
@@ -347,7 +376,10 @@ impl<'a> Gen<'a> {
                 None => format!("{p}.hashCode()"),
             })
             .collect();
-        let mut hash = format!("        var result = {}\n", hashes.first().cloned().unwrap_or("0".into()));
+        let mut hash = format!(
+            "        var result = {}\n",
+            hashes.first().cloned().unwrap_or("0".into())
+        );
         for h in hashes.iter().skip(1) {
             hash.push_str(&format!("        result = 31 * result + {h}\n"));
         }
@@ -405,12 +437,18 @@ impl<'a> Gen<'a> {
                 if closes.is_empty() {
                     "        override fun close() {\n        }".to_string()
                 } else {
-                    format!("        override fun close() {{\n            {}\n        }}", closes.join("\n            "))
+                    format!(
+                        "        override fun close() {{\n            {}\n        }}",
+                        closes.join("\n            ")
+                    )
                 }
             };
             if alt.fields.is_empty() {
                 if owns {
-                    variants.push(format!("    public data object {vname} : {name} {{\n{}\n    }}", close_body(Vec::new())));
+                    variants.push(format!(
+                        "    public data object {vname} : {name} {{\n{}\n    }}",
+                        close_body(Vec::new())
+                    ));
                 } else {
                     variants.push(format!("    public data object {vname} : {name}"));
                 }
@@ -435,12 +473,25 @@ impl<'a> Gen<'a> {
                 from_params.push(format!("{fp}: {t}"));
                 args.push(fp);
             }
-            let body = if owns { format!(" {{\n{}\n    }}", close_body(closes)) } else { String::new() };
-            variants.push(format!("    public data class {vname}({}) : {name}{body}", props.join(", ")));
+            let body = if owns {
+                format!(" {{\n{}\n    }}", close_body(closes))
+            } else {
+                String::new()
+            };
+            variants.push(format!(
+                "    public data class {vname}({}) : {name}{body}",
+                props.join(", ")
+            ));
             arms.push(format!("{i} -> {vname}({})", args.join(", ")));
         }
-        arms.push(format!("else -> throw IllegalArgumentException(\"{name}: invalid tag $tag\")"));
-        let companion = if companion_clash { "companion object Companion_" } else { "companion object" };
+        arms.push(format!(
+            "else -> throw IllegalArgumentException(\"{name}: invalid tag $tag\")"
+        ));
+        let companion = if companion_clash {
+            "companion object Companion_"
+        } else {
+            "companion object"
+        };
         let mut supers = Vec::new();
         if owns {
             supers.push("AutoCloseable".to_string());
@@ -463,10 +514,9 @@ impl<'a> Gen<'a> {
         let getter = format!("constGet{}", names::pascal(&vname.to_lowercase()));
         let (func, callee, kt_fn): (Function, proc_macro2::TokenStream, String) = match &c.source {
             ConstSource::Const => {
-                let k = self
-                    .flat
-                    .constant(&c.name)
-                    .ok_or_else(|| crate::Error(format!("`{vname}` is not a #[prebindgen] const")))?;
+                let k = self.flat.constant(&c.name).ok_or_else(|| {
+                    crate::Error(format!("`{vname}` is not a #[prebindgen] const"))
+                })?;
                 let f = Function::synthetic_getter(names::ident(&getter), k.ty.clone());
                 let path = self.q.path(&c.name);
                 (f, quote!(#path), getter.clone())
@@ -477,12 +527,18 @@ impl<'a> Gen<'a> {
                 (f, quote!(#callee()), n)
             }
             ConstSource::With(ty, path) => {
-                let t = self.flat.classify(ty).map_err(|e| crate::Error(e.to_string()))?;
+                let t = self
+                    .flat
+                    .classify(ty)
+                    .map_err(|e| crate::Error(e.to_string()))?;
                 let f = Function::synthetic_getter(names::ident(&getter), t);
                 (f, quote!(#path()), getter.clone())
             }
             ConstSource::Expr(ty, expr) => {
-                let t = self.flat.classify(ty).map_err(|e| crate::Error(e.to_string()))?;
+                let t = self
+                    .flat
+                    .classify(ty)
+                    .map_err(|e| crate::Error(e.to_string()))?;
                 let f = Function::synthetic_getter(names::ident(&getter), t);
                 let mut modules: Vec<String> = self
                     .flat
@@ -502,7 +558,13 @@ impl<'a> Gen<'a> {
         let mut decl = crate::decl::FunctionDecl::new(syn::parse_quote!(__const));
         decl.name = Some(kt_fn.clone());
         let call = callee.clone();
-        let bound = self.bind(decl, func.clone(), quote!(__unused), Placement::Package(pkg.to_string()), kt_fn.clone())?;
+        let bound = self.bind(
+            decl,
+            func.clone(),
+            quote!(__unused),
+            Placement::Package,
+            kt_fn.clone(),
+        )?;
         let bound = Bound {
             callee: quote!(#call),
             ..bound

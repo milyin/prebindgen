@@ -149,10 +149,10 @@ public fun storageMatchesSummary(s: io.prebindgen.covertest.Storage, expectedSel
     return __ret
 }
 
-public fun  storageMatchesSummary(s: io.prebindgen.covertest.Storage, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
+public fun storageMatchesSummary(s: io.prebindgen.covertest.Storage, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
     storageMatchesSummary(s, 0, count, total, null, onError)
 
-public fun  storageMatchesSummary(s: io.prebindgen.covertest.Storage, expected: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
+public fun storageMatchesSummary(s: io.prebindgen.covertest.Storage, expected: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
     storageMatchesSummary(s, 1, null, null, expected, onError)
 
 public fun storageSummaryHandle(s: io.prebindgen.covertest.Storage, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.analytics.Summary>): io.prebindgen.covertest.analytics.Summary {
@@ -219,10 +219,10 @@ public fun storageExpectSummary(s: io.prebindgen.covertest.Storage, expectedSel:
     return __ret
 }
 
-public fun  storageExpectSummary(s: io.prebindgen.covertest.Storage, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
+public fun storageExpectSummary(s: io.prebindgen.covertest.Storage, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
     storageExpectSummary(s, 0, count, total, null, onError)
 
-public fun  storageExpectSummary(s: io.prebindgen.covertest.Storage, expected: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
+public fun storageExpectSummary(s: io.prebindgen.covertest.Storage, expected: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean =
     storageExpectSummary(s, 1, null, null, expected, onError)
 
 public fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, primary1: io.prebindgen.covertest.analytics.Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: io.prebindgen.covertest.analytics.Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long {
@@ -244,16 +244,16 @@ public fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, 
     return __ret
 }
 
-public fun  summaryPrefer(primaryCount: Long, primaryTotal: Double, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
+public fun summaryPrefer(primaryCount: Long, primaryTotal: Double, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
     summaryPrefer(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError)
 
-public fun  summaryPrefer(primaryCount: Long, primaryTotal: Double, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
+public fun summaryPrefer(primaryCount: Long, primaryTotal: Double, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
     summaryPrefer(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError)
 
-public fun  summaryPrefer(primary: io.prebindgen.covertest.analytics.Summary, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
+public fun summaryPrefer(primary: io.prebindgen.covertest.analytics.Summary, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
     summaryPrefer(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError)
 
-public fun  summaryPrefer(primary: io.prebindgen.covertest.analytics.Summary, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
+public fun summaryPrefer(primary: io.prebindgen.covertest.analytics.Summary, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long =
     summaryPrefer(1, null, null, primary, 1, null, null, fallback, onError)
 
 @Suppress("UNCHECKED_CAST")
@@ -276,16 +276,16 @@ public fun <R> summaryMerge(primarySel: Int, primary00: Long?, primary01: Double
     return __ret as R
 }
 
-public fun <R>  summaryMerge(primaryCount: Long, primaryTotal: Double, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primaryCount: Long, primaryTotal: Double, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
     summaryMerge(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError, build)
 
-public fun <R>  summaryMerge(primaryCount: Long, primaryTotal: Double, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primaryCount: Long, primaryTotal: Double, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
     summaryMerge(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError, build)
 
-public fun <R>  summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallbackCount: Long, fallbackTotal: Double, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
     summaryMerge(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError, build)
 
-public fun <R>  summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
+public fun <R> summaryMerge(primary: io.prebindgen.covertest.analytics.Summary, fallback: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.SummaryBuilder<R>): R =
     summaryMerge(1, null, null, primary, 1, null, null, fallback, onError, build)
 
 public fun summaryTotalOpt(sSel: Int, s00: Long?, s01: Double?, s1: io.prebindgen.covertest.analytics.Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double {
@@ -358,10 +358,10 @@ public fun archiveStore(a: io.prebindgen.covertest.analytics.SummaryVault, sSel:
     return Unit
 }
 
-public fun  archiveStore(a: io.prebindgen.covertest.analytics.SummaryVault, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit =
+public fun archiveStore(a: io.prebindgen.covertest.analytics.SummaryVault, count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit =
     archiveStore(a, 0, count, total, null, onError)
 
-public fun  archiveStore(a: io.prebindgen.covertest.analytics.SummaryVault, s: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit =
+public fun archiveStore(a: io.prebindgen.covertest.analytics.SummaryVault, s: io.prebindgen.covertest.analytics.Summary, onError: io.prebindgen.covertest.JniErrorHandler<Unit>): Unit =
     archiveStore(a, 1, null, null, s, onError)
 
 public fun archiveLatest(a: io.prebindgen.covertest.analytics.SummaryVault, onError: io.prebindgen.covertest.JniErrorHandler<io.prebindgen.covertest.analytics.Summary?>): io.prebindgen.covertest.analytics.Summary? {

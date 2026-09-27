@@ -120,6 +120,7 @@ pub struct ExpandParamDecl {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)] // build-script data, a handful per binding
 pub(crate) enum ParamVariant {
     Build(FunctionDecl),
     Handle,
@@ -155,6 +156,7 @@ pub struct ExpandReturnDecl {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)] // build-script data, a handful per binding
 pub(crate) enum ReturnField {
     /// A field computed by a getter.
     Getter(FunctionDecl),
@@ -488,6 +490,7 @@ pub struct ConstDecl {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)] // build-script data, a handful per binding
 pub(crate) enum ConstSource {
     /// The `#[prebindgen]` const of the same name.
     Const,

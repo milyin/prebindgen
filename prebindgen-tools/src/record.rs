@@ -54,12 +54,20 @@ impl<'a> Record<'a> {
 
     /// The pattern binding each field to the matching ident in `binds`.
     pub fn pattern(&self, head: &TokenStream, binds: &[syn::Ident]) -> TokenStream {
-        self.construct(head, &binds.iter().map(|b| b.to_token_stream()).collect::<Vec<_>>())
+        self.construct(
+            head,
+            &binds
+                .iter()
+                .map(|b| b.to_token_stream())
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Fresh binding names for the fields: `__f0`, `__f1`, …
     pub fn binds(&self) -> Vec<syn::Ident> {
-        (0..self.fields().len()).map(|i| format_ident!("__f{}", i)).collect()
+        (0..self.fields().len())
+            .map(|i| format_ident!("__f{}", i))
+            .collect()
     }
 
     fn shape(&self, head: &TokenStream, parts: &[TokenStream]) -> TokenStream {

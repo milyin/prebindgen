@@ -19,7 +19,9 @@
 use std::rc::Rc;
 
 use prebindgen_tools::{
-    flat::flat::{Alternative, Field, ScalarKind, Struct, Type as FlatType, TypeKind, TypeRef, Variant},
+    flat::flat::{
+        Alternative, Field, ScalarKind, Struct, Type as FlatType, TypeKind, TypeRef, Variant,
+    },
     names, record_in, record_out, Input, Output, Record, Wire,
 };
 use proc_macro2::TokenStream;
@@ -139,9 +141,34 @@ fn array_prim(k: ScalarKind) -> Prim {
 
 /// Kotlin's hard keywords, which a generated name must escape.
 const KT_KEYWORDS: &[&str] = &[
-    "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in",
-    "interface", "is", "null", "object", "package", "return", "super", "this", "throw", "true",
-    "try", "typealias", "typeof", "val", "var", "when", "while",
+    "as",
+    "break",
+    "class",
+    "continue",
+    "do",
+    "else",
+    "false",
+    "for",
+    "fun",
+    "if",
+    "in",
+    "interface",
+    "is",
+    "null",
+    "object",
+    "package",
+    "return",
+    "super",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typealias",
+    "typeof",
+    "val",
+    "var",
+    "when",
+    "while",
 ];
 
 /// A Kotlin identifier, escaped when it is a keyword.
@@ -277,7 +304,11 @@ impl<'a> Gen<'a> {
                     named(
                         self,
                         &id.name,
-                        if *mutable { Borrow::Mut } else { Borrow::Shared },
+                        if *mutable {
+                            Borrow::Mut
+                        } else {
+                            Borrow::Shared
+                        },
                     )?
                 }
                 _ => Kind::Ref {
@@ -287,7 +318,9 @@ impl<'a> Gen<'a> {
             },
             TypeKind::Named { id, .. } => named(self, &id.name, Borrow::Own)?,
             TypeKind::Callback { args } => Kind::Callback(args),
-            TypeKind::Fallible { .. } => return err(format!("`{ty}`: `Result` crosses only as a result")),
+            TypeKind::Fallible { .. } => {
+                return err(format!("`{ty}`: `Result` crosses only as a result"))
+            }
             TypeKind::Uninit(_) => return err(format!("`{ty}` has no JVM representation")),
         })
     }
@@ -378,12 +411,15 @@ impl<'a> Gen<'a> {
             Kind::Str(_) => "String".to_string(),
             Kind::Bytes(_) => "ByteArray".to_string(),
             Kind::Array { elem, .. } => array_prim(elem).kt_array(),
-            Kind::Handle { class, .. } | Kind::Enum(class) | Kind::Record(class, _) | Kind::Sum(class, _) => {
-                class.fqn()
-            }
+            Kind::Handle { class, .. }
+            | Kind::Enum(class)
+            | Kind::Record(class, _)
+            | Kind::Sum(class, _) => class.fqn(),
             Kind::Option(inner) => format!("{}?", self.kt_type(inner)?),
             Kind::Seq { elem, .. } => format!("List<{}>", self.kt_type(elem)?),
-            Kind::Ref { inner, .. } | Kind::Boxed(inner) | Kind::Cow(inner) => self.kt_type(inner)?,
+            Kind::Ref { inner, .. } | Kind::Boxed(inner) | Kind::Cow(inner) => {
+                self.kt_type(inner)?
+            }
             Kind::Converted(c) => self.kt_type(self.conv_repr(&c, Dir::In)?)?,
             Kind::Callback(_) => self.callback_fqn(ty)?,
         })
@@ -456,7 +492,11 @@ impl<'a> Gen<'a> {
                     arms.push("null -> 0".to_string());
                 }
                 for (i, alt) in v.alternatives.iter().enumerate() {
-                    arms.push(format!("is {}.{} -> {i}", class.fqn(), alt_kt_name(&class, alt)));
+                    arms.push(format!(
+                        "is {}.{} -> {i}",
+                        class.fqn(),
+                        alt_kt_name(&class, alt)
+                    ));
                 }
                 let mut out = vec![format!("when ({expr}) {{ {} }}", arms.join("; "))];
                 for alt in &v.alternatives {
@@ -493,7 +533,9 @@ impl<'a> Gen<'a> {
                 let elem_exprs = self.kt_encode(elem, &e, false, &mut elem_cx, consumed)?;
                 cx.counter = elem_cx.counter;
                 if !elem_cx.handles.is_empty() {
-                    return err(format!("`{ty}`: a sequence of handles cannot cross into Rust"));
+                    return err(format!(
+                        "`{ty}`: a sequence of handles cannot cross into Rust"
+                    ));
                 }
                 let mut pre = vec![
                     format!("val {list} = {expr}"),
@@ -516,7 +558,11 @@ impl<'a> Gen<'a> {
                 }
                 let mut body = elem_cx.prelude;
                 body.extend(fills);
-                let src = if nullable { format!("{list}!!") } else { list.clone() };
+                let src = if nullable {
+                    format!("{list}!!")
+                } else {
+                    list.clone()
+                };
                 let guard = if nullable {
                     format!("if ({list} != null) ")
                 } else {
@@ -534,7 +580,9 @@ impl<'a> Gen<'a> {
             Kind::Ref { inner, .. } | Kind::Boxed(inner) | Kind::Cow(inner) => {
                 self.kt_encode(inner, expr, nullable, cx, consumed)?
             }
-            Kind::Converted(c) => self.kt_encode(self.conv_repr(&c, Dir::In)?, expr, nullable, cx, consumed)?,
+            Kind::Converted(c) => {
+                self.kt_encode(self.conv_repr(&c, Dir::In)?, expr, nullable, cx, consumed)?
+            }
             Kind::Callback(_) => vec![if nullable {
                 format!("{expr}?.asRaw()")
             } else {
@@ -549,8 +597,20 @@ impl<'a> Gen<'a> {
     /// expressions. `gated` marks leaves whose object values Kotlin sees as
     /// nullable although the value itself is present (an alternative's
     /// group, an optional's inner value).
-    pub(crate) fn kt_decode(&self, ty: &TypeRef, leaves: &[String], gated: bool, depth: usize) -> Res<String> {
-        let bang = |e: &str| if gated { format!("{e}!!") } else { e.to_string() };
+    pub(crate) fn kt_decode(
+        &self,
+        ty: &TypeRef,
+        leaves: &[String],
+        gated: bool,
+        depth: usize,
+    ) -> Res<String> {
+        let bang = |e: &str| {
+            if gated {
+                format!("{e}!!")
+            } else {
+                e.to_string()
+            }
+        };
         Ok(match self.kind(ty)? {
             Kind::Unit => "Unit".to_string(),
             Kind::Scalar(ScalarKind::U64) => format!("{}.toULong()", leaves[0]),
@@ -596,7 +656,7 @@ impl<'a> Gen<'a> {
                 let inner_leaves = self.leaves(inner, Dir::Out)?;
                 if inner_leaves.len() == 1 {
                     let it = format!("__o{depth}");
-                    let d = self.kt_decode(inner, &[it.clone()], false, depth + 1)?;
+                    let d = self.kt_decode(inner, std::slice::from_ref(&it), false, depth + 1)?;
                     if d == it {
                         leaves[0].clone()
                     } else {
@@ -626,7 +686,9 @@ impl<'a> Gen<'a> {
             Kind::Ref { inner, .. } | Kind::Boxed(inner) | Kind::Cow(inner) => {
                 self.kt_decode(inner, leaves, gated, depth)?
             }
-            Kind::Converted(c) => self.kt_decode(self.conv_repr(&c, Dir::Out)?, leaves, gated, depth)?,
+            Kind::Converted(c) => {
+                self.kt_decode(self.conv_repr(&c, Dir::Out)?, leaves, gated, depth)?
+            }
             Kind::Callback(_) => return err(format!("`{ty}`: a callback cannot leave Rust")),
         })
     }
@@ -704,7 +766,9 @@ impl<'a> Gen<'a> {
             Kind::Enum(class) => {
                 let t = self.q.path(&names::ident(&class.rust));
                 let arms = self.enum_arms(&class)?;
-                let pats = arms.iter().map(|(n, d)| quote!(#d => ::core::result::Result::Ok(#t::#n)));
+                let pats = arms
+                    .iter()
+                    .map(|(n, d)| quote!(#d => ::core::result::Result::Ok(#t::#n)));
                 let msg = format!("invalid value {{}} for enum `{}`", class.rust);
                 Input::fallible(
                     wires(self)?,
@@ -729,7 +793,11 @@ impl<'a> Gen<'a> {
                     let aseg = names::snake(&names::bare(&alt.name));
                     let mut parts = Vec::new();
                     for f in &alt.fields {
-                        parts.push(self.rs_decode(&f.ty, &join(root, &join(&aseg, &field_seg(f))), depth)?);
+                        parts.push(self.rs_decode(
+                            &f.ty,
+                            &join(root, &join(&aseg, &field_seg(f))),
+                            depth,
+                        )?);
                     }
                     let an = &alt.name;
                     let built = record_in(Record::Alt(alt), &quote!(#head::#an), parts);
@@ -755,7 +823,11 @@ impl<'a> Gen<'a> {
                 } else {
                     let present = leaf_ident(root, "_present");
                     let i = self.rs_decode(inner, root, depth)?;
-                    Input::optional(Some(Wire::new(present.clone(), Prim::Z.rs())), quote!((#present != 0)), i)
+                    Input::optional(
+                        Some(Wire::new(present.clone(), Prim::Z.rs())),
+                        quote!((#present != 0)),
+                        i,
+                    )
                 }
             }
             Kind::Seq { elem, form } => {
@@ -780,7 +852,9 @@ impl<'a> Gen<'a> {
                             binds.push(quote!(let #local = #buf[__i];));
                         }
                         None => {
-                            binds.push(quote!(let #local = #rt::object_array_get(env, &#col, __i)?;));
+                            binds.push(
+                                quote!(let #local = #rt::object_array_get(env, &#col, __i)?;),
+                            );
                             drops.push(quote!(#rt::drop_local(env, #local);));
                         }
                     }
@@ -812,11 +886,10 @@ impl<'a> Gen<'a> {
                 .rs_decode(inner, root, depth)?
                 .map(|e| quote!(::std::borrow::Cow::Owned(#e))),
             Kind::Converted(c) => {
-                let stage = c
-                    .resolved
-                    .input
-                    .as_ref()
-                    .ok_or_else(|| crate::Error(format!("convert!({}) has no input", c.name)))?;
+                let stage =
+                    c.resolved.input.as_ref().ok_or_else(|| {
+                        crate::Error(format!("convert!({}) has no input", c.name))
+                    })?;
                 let repr = self.rs_decode(&stage.repr, root, depth)?;
                 let r = format_ident!("__r{}", depth);
                 let check = self.domain_check(&c, &r);
@@ -842,9 +915,12 @@ impl<'a> Gen<'a> {
         let Some(FlatType::Enum(e)) = self.flat.declared_type(&class.rust) else {
             return err(format!("`{}` is not a fieldless enum", class.rust));
         };
-        let values = e
-            .discriminant_values()
-            .map_err(|v| crate::Error(format!("`{}::{v}`: discriminant is not a literal", class.rust)))?;
+        let values = e.discriminant_values().map_err(|v| {
+            crate::Error(format!(
+                "`{}::{v}`: discriminant is not a literal",
+                class.rust
+            ))
+        })?;
         Ok(values
             .into_iter()
             .map(|(n, d)| (n.clone(), proc_macro2::Literal::i32_unsuffixed(d as i32)))
@@ -865,7 +941,13 @@ impl<'a> Gen<'a> {
 
     /// A value of `ty` (the expression `value`, owned) → its output wires,
     /// named under `root`.
-    pub(crate) fn rs_encode(&self, ty: &TypeRef, value: TokenStream, root: &str, depth: usize) -> Res<Output> {
+    pub(crate) fn rs_encode(
+        &self,
+        ty: &TypeRef,
+        value: TokenStream,
+        root: &str,
+        depth: usize,
+    ) -> Res<Output> {
         let rt = rt();
         let single = |g: &Self, e: TokenStream, fallible: bool| -> Res<Output> {
             let leaves = g.leaves(ty, Dir::Out)?;
@@ -942,7 +1024,11 @@ impl<'a> Gen<'a> {
                     let mut g = Vec::new();
                     for f in &alt.fields {
                         let seg = join(root, &join(&aseg, &field_seg(f)));
-                        g.extend(self.leaves(&f.ty, Dir::Out)?.into_iter().map(|l| l.under(&seg)));
+                        g.extend(
+                            self.leaves(&f.ty, Dir::Out)?
+                                .into_iter()
+                                .map(|l| l.under(&seg)),
+                        );
                     }
                     groups.push(g);
                 }
@@ -1015,7 +1101,8 @@ impl<'a> Gen<'a> {
                     let present = leaf_ident(root, "_present");
                     let mut wires = vec![Wire::new(present, Prim::Z.rs())];
                     wires.extend(inner_out.wires.clone());
-                    let defaults: Vec<TokenStream> = inner_leaves.iter().map(Leaf::rs_default).collect();
+                    let defaults: Vec<TokenStream> =
+                        inner_leaves.iter().map(Leaf::rs_default).collect();
                     let bind = inner_out.bind();
                     let vals = inner_out.values();
                     let names: Vec<&syn::Ident> = inner_out.wires.iter().map(|w| &w.name).collect();
@@ -1083,17 +1170,19 @@ impl<'a> Gen<'a> {
                     }),
                 )
             }
-            Kind::Ref { inner, .. } => {
-                self.rs_encode(inner, quote!(::core::clone::Clone::clone(#value)), root, depth)?
-            }
+            Kind::Ref { inner, .. } => self.rs_encode(
+                inner,
+                quote!(::core::clone::Clone::clone(#value)),
+                root,
+                depth,
+            )?,
             Kind::Boxed(inner) => self.rs_encode(inner, quote!((*#value)), root, depth)?,
             Kind::Cow(inner) => self.rs_encode(inner, quote!(#value.into_owned()), root, depth)?,
             Kind::Converted(c) => {
-                let stage = c
-                    .resolved
-                    .output
-                    .as_ref()
-                    .ok_or_else(|| crate::Error(format!("convert!({}) has no output", c.name)))?;
+                let stage =
+                    c.resolved.output.as_ref().ok_or_else(|| {
+                        crate::Error(format!("convert!({}) has no output", c.name))
+                    })?;
                 let r = format_ident!("__r{}", depth);
                 let applied = stage.apply(&self.q, &c.resolved.target, &value);
                 let check = self.domain_check(&c, &r);
@@ -1131,9 +1220,11 @@ impl<'a> Gen<'a> {
                 }
                 any
             }
-            Kind::Option(t) | Kind::Seq { elem: t, .. } | Kind::Ref { inner: t, .. } | Kind::Boxed(t) | Kind::Cow(t) => {
-                self.owns_handle(t)?
-            }
+            Kind::Option(t)
+            | Kind::Seq { elem: t, .. }
+            | Kind::Ref { inner: t, .. }
+            | Kind::Boxed(t)
+            | Kind::Cow(t) => self.owns_handle(t)?,
             _ => false,
         })
     }

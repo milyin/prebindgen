@@ -157,7 +157,7 @@ fn allow() -> TokenStream {
 
 impl<'a> Gen<'a> {
     fn run(&mut self) -> Res<()> {
-        self.check_unsupported()?;
+        prebindgen_tools::check_supported(self.flat).map_err(Error)?;
         self.prelude();
         self.index_types()?;
         for c in &self.b.conversions {
@@ -172,7 +172,8 @@ impl<'a> Gen<'a> {
                 .classify(&cb.ty)
                 .map_err(|e| Error(format!("callback `{}`: {e}", cb.ty.to_token_stream())))?;
             if let Some(base) = &cb.base {
-                self.callback_bases.insert(t.key().as_str().to_string(), base.clone());
+                self.callback_bases
+                    .insert(t.key().as_str().to_string(), base.clone());
             }
         }
         // Declared types, in declaration order.
@@ -181,7 +182,10 @@ impl<'a> Gen<'a> {
             self.emit_type(&name)?;
         }
         for cb in self.b.callbacks.clone() {
-            let t = self.flat.classify(&cb.ty).map_err(|e| Error(e.to_string()))?;
+            let t = self
+                .flat
+                .classify(&cb.ty)
+                .map_err(|e| Error(e.to_string()))?;
             self.closure_struct(&t)?;
         }
         for f in self.b.functions.clone() {
@@ -195,28 +199,6 @@ impl<'a> Gen<'a> {
         }
         self.file.guards(self.flat);
         Ok(())
-    }
-
-    /// A declared item the model refused is an error; the rest may be
-    /// unsupported without consequence, since nothing asks for them.
-    fn check_unsupported(&self) -> Res<()> {
-        let declared: Vec<String> = self
-            .b
-            .functions
-            .iter()
-            .map(|f| f.name.to_string())
-            .collect();
-        let bad: Vec<String> = self
-            .flat
-            .unsupported()
-            .filter(|u| u.name.as_ref().is_some_and(|n| declared.contains(&n.to_string())))
-            .map(|u| format!("{}", u.error))
-            .collect();
-        if bad.is_empty() {
-            Ok(())
-        } else {
-            err(bad.join("\n"))
-        }
     }
 
     fn prelude(&mut self) {
@@ -274,7 +256,8 @@ impl<'a> Gen<'a> {
             .flat
             .classify(ty)
             .map_err(|e| Error(format!("`{}`: {e}", ty.to_token_stream())))?;
-        type_name(&t).ok_or_else(|| Error(format!("`{}` is not a named type", ty.to_token_stream())))
+        type_name(&t)
+            .ok_or_else(|| Error(format!("`{}` is not a named type", ty.to_token_stream())))
     }
 
     fn index_types(&mut self) -> Res<()> {
@@ -653,7 +636,9 @@ impl<'a> Gen<'a> {
         assume_valid: bool,
     ) -> Res<TokenStream> {
         let refuse = |why: &str| {
-            err(format!("repr_c_struct `{owner}`: field `{field}` ({ty}) {why}"))
+            err(format!(
+                "repr_c_struct `{owner}`: field `{field}` ({ty}) {why}"
+            ))
         };
         Ok(match ty.kind() {
             TypeKind::Scalar(ScalarKind::Bool) if !assume_valid => {
@@ -730,10 +715,14 @@ impl<'a> Gen<'a> {
         Ok(match ty.kind() {
             TypeKind::Scalar(ScalarKind::Bool) => Val {
                 wire: quote!(::core::mem::MaybeUninit<bool>),
-                input: Some(Conv::new(false, |v| {
-                    quote!((::core::ptr::read(#v.as_ptr() as *const u8) != 0))
-                })),
-                output: Some(Conv::new(false, |v| quote!(::core::mem::MaybeUninit::new(#v)))),
+                input: Some(Conv::new(
+                    false,
+                    |v| quote!((::core::ptr::read(#v.as_ptr() as *const u8) != 0)),
+                )),
+                output: Some(Conv::new(
+                    false,
+                    |v| quote!(::core::mem::MaybeUninit::new(#v)),
+                )),
                 release: None,
             },
             TypeKind::Scalar(k) => {
@@ -790,9 +779,10 @@ impl<'a> Gen<'a> {
                     DeclKind::Enum => Val {
                         wire: quote!(::core::mem::MaybeUninit<#c>),
                         input: Some(Conv::new(true, move |v| quote!(#fin(#v)?))),
-                        output: Some(Conv::new(false, move |v| {
-                            quote!(::core::mem::MaybeUninit::new(#fout(#v)))
-                        })),
+                        output: Some(Conv::new(
+                            false,
+                            move |v| quote!(::core::mem::MaybeUninit::new(#fout(#v))),
+                        )),
                         release: None,
                     },
                     DeclKind::Union => {
@@ -843,9 +833,10 @@ impl<'a> Gen<'a> {
                                     *::std::boxed::Box::from_raw(__p as *mut #src)
                                 })
                             })),
-                            output: Some(Conv::new(false, move |v| {
-                                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c2)
-                            })),
+                            output: Some(Conv::new(
+                                false,
+                                move |v| quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c2),
+                            )),
                             release: Some(Rc::new(move |p| {
                                 quote! { #drop_name(#p); #p = ::core::ptr::null_mut(); }
                             })),
@@ -903,9 +894,10 @@ impl<'a> Gen<'a> {
                 // so the conversion does not hold the qualifier.
                 let placeholder = format_ident!("__cbg_repr");
                 let applied = stage.apply(&q, &target, &placeholder.to_token_stream());
-                out.input = Some(rin.then(&Conv::new(stage.fallible, move |v| {
-                    quote!({ let #placeholder = #v; #applied })
-                })));
+                out.input = Some(rin.then(&Conv::new(
+                    stage.fallible,
+                    move |v| quote!({ let #placeholder = #v; #applied }),
+                )));
             }
         }
         if let Some(stage) = &conv.output {
@@ -916,15 +908,19 @@ impl<'a> Gen<'a> {
                 let placeholder = format_ident!("__cbg_value");
                 let applied = stage.apply(&q, &target, &placeholder.to_token_stream());
                 out.output = Some(
-                    Conv::new(stage.fallible, move |v| {
-                        quote!({ let #placeholder = #v; #applied })
-                    })
+                    Conv::new(
+                        stage.fallible,
+                        move |v| quote!({ let #placeholder = #v; #applied }),
+                    )
                     .then(&rout),
                 );
             }
         }
         if out.wire.is_empty() {
-            return err(format!("convert!({}) declares neither direction", conv.target));
+            return err(format!(
+                "convert!({}) declares neither direction",
+                conv.target
+            ));
         }
         Ok(out)
     }
@@ -1019,9 +1015,14 @@ impl<'a> Gen<'a> {
         let mut handles: Vec<(&Param, String, Use)> = Vec::new();
         for p in &func.params {
             let (inner, u) = match p.ty.kind() {
-                TypeKind::Ref { mutable, inner, .. } => {
-                    (&**inner, if *mutable { Use::Exclusive } else { Use::Shared })
-                }
+                TypeKind::Ref { mutable, inner, .. } => (
+                    &**inner,
+                    if *mutable {
+                        Use::Exclusive
+                    } else {
+                        Use::Shared
+                    },
+                ),
                 _ => (&p.ty, Use::Consumed),
             };
             if let Some(d) = self.decl(inner) {
@@ -1088,7 +1089,9 @@ impl<'a> Gen<'a> {
                 }
                 return #default;
             }},
-            _ => quote!({ panic!("{}", #e); }),
+            _ => quote!({
+                panic!("{}", #e);
+            }),
         }
     }
 
@@ -1170,7 +1173,11 @@ impl<'a> Gen<'a> {
                     let input = v
                         .input
                         .ok_or_else(|| Error(format!("`{ty}` cannot cross into Rust")))?;
-                    let pass = if *mutable { quote!(&mut #name) } else { quote!(&#name) };
+                    let pass = if *mutable {
+                        quote!(&mut #name)
+                    } else {
+                        quote!(&#name)
+                    };
                     let expr = input.apply(name);
                     let w = Wire::new(name.clone(), v.wire);
                     Ok(if input.fallible {
@@ -1202,7 +1209,12 @@ impl<'a> Gen<'a> {
                 Ok(Input::new(vec![Wire::new(name.clone(), c)], closure))
             }
             TypeKind::Optional(inner) => {
-                if let TypeKind::Ref { mutable: false, inner: t, .. } = inner.kind() {
+                if let TypeKind::Ref {
+                    mutable: false,
+                    inner: t,
+                    ..
+                } = inner.kind()
+                {
                     if let Some(d) = self.decl(t) {
                         if matches!(d.kind, DeclKind::Opaque) {
                             let (c, src) = (&d.c_name, self.source_type(&d.name.to_string()));
@@ -1213,7 +1225,9 @@ impl<'a> Gen<'a> {
                         }
                     }
                 }
-                err(format!("parameter `{name}`: `{ty}` has no C representation"))
+                err(format!(
+                    "parameter `{name}`: `{ty}` has no C representation"
+                ))
             }
             TypeKind::Named { .. } => {
                 if let Some(d) = self.decl(ty) {
@@ -1247,7 +1261,9 @@ impl<'a> Gen<'a> {
                 self.emit_type(&d.name.to_string())?;
                 Ok(d)
             }
-            _ => err(format!("`{ty}` must be a declared repr_c_struct or opaque_ptr here")),
+            _ => err(format!(
+                "`{ty}` must be a declared repr_c_struct or opaque_ptr here"
+            )),
         }
     }
 
@@ -1271,10 +1287,14 @@ impl<'a> Gen<'a> {
         let r = result_ident();
         if let TypeKind::Fallible { ok, err: e } = ty.kind() {
             let Some(ed) = self.decl(e) else {
-                return err(format!("`{e}`: the error type must be declared `.opaque_error(..)`"));
+                return err(format!(
+                    "`{e}`: the error type must be declared `.opaque_error(..)`"
+                ));
             };
             let DeclKind::OpaqueError { .. } = ed.kind else {
-                return err(format!("`{e}`: the error type must be declared `.opaque_error(..)`"));
+                return err(format!(
+                    "`{e}`: the error type must be declared `.opaque_error(..)`"
+                ));
             };
             self.emit_type(&ed.name.to_string())?;
             let fout = format_ident!("__cbg_out_{}", ed.name);
@@ -1357,14 +1377,19 @@ impl<'a> Gen<'a> {
             let c = d.c_name.clone();
             return Ok(Some((
                 quote!(*mut #c),
-                Conv::new(false, move |v| {
-                    quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c)
-                }),
+                Conv::new(
+                    false,
+                    move |v| quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
+                ),
             )));
         }
         if let TypeKind::Optional(inner) = ty.kind() {
             let (inner, clone) = match inner.kind() {
-                TypeKind::Ref { mutable: false, inner, .. } => (&**inner, true),
+                TypeKind::Ref {
+                    mutable: false,
+                    inner,
+                    ..
+                } => (&**inner, true),
                 _ => (&**inner, false),
             };
             if let Some(d) = opaque(self, inner)? {
@@ -1372,7 +1397,11 @@ impl<'a> Gen<'a> {
                 return Ok(Some((
                     quote!(*mut #c),
                     Conv::new(false, move |v| {
-                        let val = if clone { quote!(::core::clone::Clone::clone(__x)) } else { quote!(__x) };
+                        let val = if clone {
+                            quote!(::core::clone::Clone::clone(__x))
+                        } else {
+                            quote!(__x)
+                        };
                         quote!(match #v {
                             ::core::option::Option::Some(__x) => ::std::boxed::Box::into_raw(::std::boxed::Box::new(#val)) as *mut #c,
                             ::core::option::Option::None => ::core::ptr::null_mut(),
@@ -1410,7 +1439,9 @@ impl<'a> Gen<'a> {
             .output
             .ok_or_else(|| Error(format!("`{ty}` cannot cross out of Rust")))?;
         if out.fallible {
-            return err(format!("`{ty}`: a fallible output conversion needs a Result return"));
+            return err(format!(
+                "`{ty}`: a fallible output conversion needs a Result return"
+            ));
         }
         Ok((v.wire, out))
     }
@@ -1438,7 +1469,10 @@ impl<'a> Gen<'a> {
                     },
                 })
             }
-            TypeKind::Optional(inner) if !matches!(inner.kind(), TypeKind::Ref { .. }) && self.pointer_out(ty)?.is_none() => {
+            TypeKind::Optional(inner)
+                if !matches!(inner.kind(), TypeKind::Ref { .. })
+                    && self.pointer_out(ty)?.is_none() =>
+            {
                 if let TypeKind::Vec(elem) = inner.kind() {
                     self.needs_free = true;
                     let (wire, conv) = self.array_elem(elem)?;
@@ -1508,7 +1542,10 @@ impl<'a> Gen<'a> {
         };
         let bases: Vec<String> = match self.callback_bases.get(&key) {
             Some(b) => vec![b.clone()],
-            None => args.iter().map(|a| names::snake(&names::mangle(a))).collect(),
+            None => args
+                .iter()
+                .map(|a| names::snake(&names::mangle(a)))
+                .collect(),
         };
         let name = match &self.b.mangle_callback {
             Some(f) => f(&bases),
@@ -1568,13 +1605,21 @@ impl<'a> Gen<'a> {
     /// An argument handed to a C callback.
     fn cb_arg(&mut self, index: usize, ty: &TypeRef, value: &TokenStream) -> Res<Output> {
         let n = format_ident!("__w{}", index);
-        if let TypeKind::Ref { mutable: false, inner, .. } = ty.kind() {
+        if let TypeKind::Ref {
+            mutable: false,
+            inner,
+            ..
+        } = ty.kind()
+        {
             if let TypeKind::Slice(elem) = inner.kind() {
                 let d = self.pointee(elem)?;
                 let c = &d.c_name;
                 let len = format_ident!("__w{}_len", index);
                 return Ok(Output::new(
-                    vec![Wire::new(n, quote!(*const #c)), Wire::new(len, quote!(usize))],
+                    vec![
+                        Wire::new(n, quote!(*const #c)),
+                        Wire::new(len, quote!(usize)),
+                    ],
                     quote!((#value.as_ptr() as *const #c, #value.len())),
                 ));
             }
@@ -1646,11 +1691,18 @@ struct UnionFields<'g, 'a>(&'g mut Gen<'a>);
 impl FieldCallbacks for UnionFields<'_, '_> {
     type Error = Error;
 
-    fn field_in(&mut self, owner: &syn::Ident, field: &prebindgen_tools::flat::flat::Field) -> Res<Input> {
+    fn field_in(
+        &mut self,
+        owner: &syn::Ident,
+        field: &prebindgen_tools::flat::flat::Field,
+    ) -> Res<Input> {
         let v = self.0.val(&field.ty)?;
         let name = format_ident!("__f{}", field.index);
         let conv = v.input.ok_or_else(|| {
-            Error(format!("`{owner}`: field `{}` cannot cross into Rust", field.index))
+            Error(format!(
+                "`{owner}`: field `{}` cannot cross into Rust",
+                field.index
+            ))
         })?;
         let expr = conv.apply(&name);
         let w = Wire::new(name, v.wire);
@@ -1670,7 +1722,10 @@ impl FieldCallbacks for UnionFields<'_, '_> {
         let v = self.0.val(&field.ty)?;
         let name = format_ident!("__f{}", field.index);
         let conv = v.output.ok_or_else(|| {
-            Error(format!("`{owner}`: field `{}` cannot cross out of Rust", field.index))
+            Error(format!(
+                "`{owner}`: field `{}` cannot cross out of Rust",
+                field.index
+            ))
         })?;
         Ok(Output::single(Wire::new(name, v.wire), conv.apply(value)))
     }
@@ -1689,12 +1744,16 @@ fn field_wire_name(field: &prebindgen_tools::flat::flat::Field) -> syn::Ident {
 impl FieldCallbacks for DataFields<'_, '_> {
     type Error = Error;
 
-    fn field_in(&mut self, owner: &syn::Ident, field: &prebindgen_tools::flat::flat::Field) -> Res<Input> {
+    fn field_in(
+        &mut self,
+        owner: &syn::Ident,
+        field: &prebindgen_tools::flat::flat::Field,
+    ) -> Res<Input> {
         let v = self.0.val(&field.ty)?;
         let name = field_wire_name(field);
-        let conv = v.input.ok_or_else(|| {
-            Error(format!("`{owner}`: field `{name}` cannot cross into Rust"))
-        })?;
+        let conv = v
+            .input
+            .ok_or_else(|| Error(format!("`{owner}`: field `{name}` cannot cross into Rust")))?;
         let expr = conv.apply(&name);
         let w = Wire::new(name, v.wire);
         Ok(if conv.fallible {
@@ -1713,7 +1772,9 @@ impl FieldCallbacks for DataFields<'_, '_> {
         let v = self.0.val(&field.ty)?;
         let name = field_wire_name(field);
         let conv = v.output.ok_or_else(|| {
-            Error(format!("`{owner}`: field `{name}` cannot cross out of Rust"))
+            Error(format!(
+                "`{owner}`: field `{name}` cannot cross out of Rust"
+            ))
         })?;
         Ok(Output::single(Wire::new(name, v.wire), conv.apply(value)))
     }

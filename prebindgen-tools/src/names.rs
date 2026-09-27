@@ -10,7 +10,8 @@ pub fn ident(name: &str) -> syn::Ident {
     if let Some(raw) = name.strip_prefix("r#") {
         return syn::Ident::new_raw(raw, Span::call_site());
     }
-    syn::parse_str::<syn::Ident>(name).unwrap_or_else(|_| syn::Ident::new_raw(name, Span::call_site()))
+    syn::parse_str::<syn::Ident>(name)
+        .unwrap_or_else(|_| syn::Ident::new_raw(name, Span::call_site()))
 }
 
 /// The bare name of an identifier: `r#type` → `type`.
@@ -30,7 +31,8 @@ pub fn snake(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     for (i, &c) in chars.iter().enumerate() {
         if c.is_uppercase() {
-            let prev_lower = i > 0 && (chars[i - 1].is_lowercase() || chars[i - 1].is_ascii_digit());
+            let prev_lower =
+                i > 0 && (chars[i - 1].is_lowercase() || chars[i - 1].is_ascii_digit());
             let next_lower = chars.get(i + 1).is_some_and(|n| n.is_lowercase());
             let prev_upper = i > 0 && chars[i - 1].is_uppercase();
             if i > 0 && (prev_lower || (prev_upper && next_lower)) && !out.ends_with('_') {

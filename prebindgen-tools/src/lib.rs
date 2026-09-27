@@ -44,7 +44,7 @@
 //! * [`Qualifier`] — names a flat item from generated code
 //!   (`Payload` → `perftest_flat::Payload`).
 //! * [`names`] — case conversion and identifier helpers.
-//! * [`convert`] — the `convert!` vocabulary: a source type that crosses as
+//! * [`mod@convert`] — the `convert!` vocabulary: a source type that crosses as
 //!   another type through functions or `From`/`TryFrom` impls.
 
 pub mod closure;
@@ -57,6 +57,8 @@ pub mod record;
 pub mod wire;
 
 pub use prebindgen_flat as flat;
+#[doc(hidden)]
+pub use syn as __syn;
 
 pub use crate::{
     closure::{ClosureCallbacks, ClosureWriter},
@@ -64,9 +66,28 @@ pub use crate::{
     file::RustFile,
     function::{FunctionCallbacks, FunctionWriter, Return},
     qualify::Qualifier,
-    record::{record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror, SumWriter},
+    record::{
+        record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
+        SumWriter,
+    },
     wire::{Input, Output, Wire},
 };
 
-#[doc(hidden)]
-pub use syn as __syn;
+/// Refuse a model the frontend could not read in full: every
+/// [`Unsupported`](flat::flat::Element::Unsupported) element, reported at
+/// once. An adapter calls this before looking at any declaration, so a
+/// binding is built against the whole source or not at all.
+pub fn check_supported(flat: &flat::Flat) -> Result<(), String> {
+    let bad: Vec<String> = flat.unsupported().map(|u| u.error.to_string()).collect();
+    if bad.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the source declares items the flat model cannot express:\n  {}",
+            bad.join("\n  ")
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests;

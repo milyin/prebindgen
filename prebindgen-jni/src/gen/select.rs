@@ -10,14 +10,14 @@
 use std::rc::Rc;
 
 use prebindgen_tools::{
-    flat::flat::{Function, Param as FlatParam, TypeKind, TypeRef},
+    flat::flat::{Function, Param as FlatParam, TypeKind},
     names, Input, Wire,
 };
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 
 use super::{
-    codec::{kt_ident, leaf_ident, Borrow, KtEnc, Kind},
+    codec::{kt_ident, leaf_ident, Borrow, KtEnc},
     err,
     leaf::{Leaf, LeafTy, Prim},
     Class, Gen, Res,
@@ -36,6 +36,7 @@ pub(crate) struct Selector {
 }
 
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)] // one per selector variant
 pub(crate) enum SelVariant {
     Build { func: Function, callee: TokenStream },
     Handle,
@@ -53,7 +54,11 @@ impl<'a> Gen<'a> {
             _ => (&param.ty, false),
         };
         let (core, borrow) = match core.kind() {
-            TypeKind::Ref { inner, mutable: false, .. } => (&**inner, Borrow::Shared),
+            TypeKind::Ref {
+                inner,
+                mutable: false,
+                ..
+            } => (&**inner, Borrow::Shared),
             TypeKind::Ref { mutable: true, .. } => return Ok(None),
             _ => (core, Borrow::Own),
         };
@@ -71,7 +76,10 @@ impl<'a> Gen<'a> {
             return Ok(None);
         }
         let Some(class) = self.classes.get(&id.name).cloned() else {
-            return err(format!("`{}`: an input expansion needs a declared class", id.name));
+            return err(format!(
+                "`{}`: an input expansion needs a declared class",
+                id.name
+            ));
         };
         let mut variants = Vec::new();
         for v in &decl.variants {
@@ -155,7 +163,13 @@ impl<'a> Gen<'a> {
         Ok(out)
     }
 
-    fn kt_encode_handle(&self, class: &Rc<Class>, expr: &str, consumed: bool, cx: &mut KtEnc) -> Vec<String> {
+    fn kt_encode_handle(
+        &self,
+        class: &Rc<Class>,
+        expr: &str,
+        consumed: bool,
+        cx: &mut KtEnc,
+    ) -> Vec<String> {
         cx.handles.push(super::codec::HandleSite {
             expr: expr.to_string(),
             nullable: true,
@@ -279,7 +293,10 @@ impl<'a> Gen<'a> {
                                         if i == vi {
                                             let pn = names::bare(&fp.name);
                                             let n = if prefix_names {
-                                                kt_ident(&names::camel(&format!("{}_{pn}", names::bare(&s.param.name))))
+                                                kt_ident(&names::camel(&format!(
+                                                    "{}_{pn}",
+                                                    names::bare(&s.param.name)
+                                                )))
                                             } else {
                                                 kt_ident(&names::camel(&pn))
                                             };
@@ -314,7 +331,7 @@ impl<'a> Gen<'a> {
                 args.push(n.clone());
             }
             out.push(format!(
-                "{head} {name}({}): {ret} =\n    {name}({})\n",
+                "{head}{name}({}): {ret} =\n    {name}({})\n",
                 sig.join(", "),
                 args.join(", ")
             ));
@@ -338,4 +355,3 @@ fn nullable(t: String) -> String {
         format!("{t}?")
     }
 }
-

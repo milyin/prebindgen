@@ -243,13 +243,6 @@ impl Leaf {
         }
     }
 
-    pub(crate) fn kt_default(&self) -> String {
-        match &self.ty {
-            LeafTy::Prim(p) => p.kt_default().to_string(),
-            _ => "null".to_string(),
-        }
-    }
-
     /// The `jvalue` carrying `v`.
     pub(crate) fn jvalue(&self, v: &TokenStream) -> TokenStream {
         match &self.ty {

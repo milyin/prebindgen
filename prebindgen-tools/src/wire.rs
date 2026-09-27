@@ -110,7 +110,10 @@ impl Input {
 
     /// Several inputs side by side: their wires concatenated, their values
     /// handed to `combine` in order.
-    pub fn combine(parts: Vec<Input>, combine: impl FnOnce(Vec<TokenStream>) -> TokenStream) -> Self {
+    pub fn combine(
+        parts: Vec<Input>,
+        combine: impl FnOnce(Vec<TokenStream>) -> TokenStream,
+    ) -> Self {
         let fallible = parts.iter().any(|p| p.fallible);
         let mut wires = Vec::new();
         let mut exprs = Vec::new();

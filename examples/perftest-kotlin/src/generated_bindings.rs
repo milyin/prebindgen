@@ -710,391 +710,406 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_largeObjectI
 >(
     __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    value_left_left_left_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_left_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_left_right_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_left_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_left_right_right_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_left_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_left_right_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_left_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_left_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_left_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_left_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_left_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_right_left_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_right_left_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_right_right_left_value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    value_right_right_right_right_right_right_value: ::prebindgen_jni_runtime::jni::sys::jlong,
+    value__packJ: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
     __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
 ) -> ::prebindgen_jni_runtime::jni::sys::jlong {
     let mut __env = __env;
     let env = &mut __env;
-    let value = perftest_flat::ObjectBoundary64Object {
-        left: perftest_flat::ObjectBoundary32 {
-            left: perftest_flat::ObjectBoundary16 {
-                left: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_left_left_left_value,
+    let value = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok({
+            let __value__packJ = ::prebindgen_jni_runtime::read_longs(
+                env,
+                &value__packJ,
+            )?;
+            let value_left_left_left_left_left_left_value = __value__packJ[0usize];
+            let value_left_left_left_left_left_right_value = __value__packJ[1usize];
+            let value_left_left_left_left_right_left_value = __value__packJ[2usize];
+            let value_left_left_left_left_right_right_value = __value__packJ[3usize];
+            let value_left_left_left_right_left_left_value = __value__packJ[4usize];
+            let value_left_left_left_right_left_right_value = __value__packJ[5usize];
+            let value_left_left_left_right_right_left_value = __value__packJ[6usize];
+            let value_left_left_left_right_right_right_value = __value__packJ[7usize];
+            let value_left_left_right_left_left_left_value = __value__packJ[8usize];
+            let value_left_left_right_left_left_right_value = __value__packJ[9usize];
+            let value_left_left_right_left_right_left_value = __value__packJ[10usize];
+            let value_left_left_right_left_right_right_value = __value__packJ[11usize];
+            let value_left_left_right_right_left_left_value = __value__packJ[12usize];
+            let value_left_left_right_right_left_right_value = __value__packJ[13usize];
+            let value_left_left_right_right_right_left_value = __value__packJ[14usize];
+            let value_left_left_right_right_right_right_value = __value__packJ[15usize];
+            let value_left_right_left_left_left_left_value = __value__packJ[16usize];
+            let value_left_right_left_left_left_right_value = __value__packJ[17usize];
+            let value_left_right_left_left_right_left_value = __value__packJ[18usize];
+            let value_left_right_left_left_right_right_value = __value__packJ[19usize];
+            let value_left_right_left_right_left_left_value = __value__packJ[20usize];
+            let value_left_right_left_right_left_right_value = __value__packJ[21usize];
+            let value_left_right_left_right_right_left_value = __value__packJ[22usize];
+            let value_left_right_left_right_right_right_value = __value__packJ[23usize];
+            let value_left_right_right_left_left_left_value = __value__packJ[24usize];
+            let value_left_right_right_left_left_right_value = __value__packJ[25usize];
+            let value_left_right_right_left_right_left_value = __value__packJ[26usize];
+            let value_left_right_right_left_right_right_value = __value__packJ[27usize];
+            let value_left_right_right_right_left_left_value = __value__packJ[28usize];
+            let value_left_right_right_right_left_right_value = __value__packJ[29usize];
+            let value_left_right_right_right_right_left_value = __value__packJ[30usize];
+            let value_left_right_right_right_right_right_value = __value__packJ[31usize];
+            let value_right_left_left_left_left_left_value = __value__packJ[32usize];
+            let value_right_left_left_left_left_right_value = __value__packJ[33usize];
+            let value_right_left_left_left_right_left_value = __value__packJ[34usize];
+            let value_right_left_left_left_right_right_value = __value__packJ[35usize];
+            let value_right_left_left_right_left_left_value = __value__packJ[36usize];
+            let value_right_left_left_right_left_right_value = __value__packJ[37usize];
+            let value_right_left_left_right_right_left_value = __value__packJ[38usize];
+            let value_right_left_left_right_right_right_value = __value__packJ[39usize];
+            let value_right_left_right_left_left_left_value = __value__packJ[40usize];
+            let value_right_left_right_left_left_right_value = __value__packJ[41usize];
+            let value_right_left_right_left_right_left_value = __value__packJ[42usize];
+            let value_right_left_right_left_right_right_value = __value__packJ[43usize];
+            let value_right_left_right_right_left_left_value = __value__packJ[44usize];
+            let value_right_left_right_right_left_right_value = __value__packJ[45usize];
+            let value_right_left_right_right_right_left_value = __value__packJ[46usize];
+            let value_right_left_right_right_right_right_value = __value__packJ[47usize];
+            let value_right_right_left_left_left_left_value = __value__packJ[48usize];
+            let value_right_right_left_left_left_right_value = __value__packJ[49usize];
+            let value_right_right_left_left_right_left_value = __value__packJ[50usize];
+            let value_right_right_left_left_right_right_value = __value__packJ[51usize];
+            let value_right_right_left_right_left_left_value = __value__packJ[52usize];
+            let value_right_right_left_right_left_right_value = __value__packJ[53usize];
+            let value_right_right_left_right_right_left_value = __value__packJ[54usize];
+            let value_right_right_left_right_right_right_value = __value__packJ[55usize];
+            let value_right_right_right_left_left_left_value = __value__packJ[56usize];
+            let value_right_right_right_left_left_right_value = __value__packJ[57usize];
+            let value_right_right_right_left_right_left_value = __value__packJ[58usize];
+            let value_right_right_right_left_right_right_value = __value__packJ[59usize];
+            let value_right_right_right_right_left_left_value = __value__packJ[60usize];
+            let value_right_right_right_right_left_right_value = __value__packJ[61usize];
+            let value_right_right_right_right_right_left_value = __value__packJ[62usize];
+            let value_right_right_right_right_right_right_value = __value__packJ[63usize];
+            perftest_flat::ObjectBoundary64Object {
+                left: perftest_flat::ObjectBoundary32 {
+                    left: perftest_flat::ObjectBoundary16 {
+                        left: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_left_right_right_right_value,
-                            },
-                        },
-                    },
-                },
-                right: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_left_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_left_right_right_right_right_value,
-                            },
-                        },
-                    },
-                },
-            },
-            right: perftest_flat::ObjectBoundary16 {
-                left: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_left_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_left_right_right_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_left_right_right_right_value,
+                                    },
+                                },
                             },
                         },
-                    },
-                },
-                right: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_left_left_left_value,
+                        right: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_left_right_right_right_right_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_left_right_right_right_right_value,
+                                    },
+                                },
                             },
                         },
                     },
-                },
-            },
-        },
-        right: perftest_flat::ObjectBoundary32 {
-            left: perftest_flat::ObjectBoundary16 {
-                left: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_left_left_left_value,
+                    right: perftest_flat::ObjectBoundary16 {
+                        left: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_left_right_right_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_left_right_right_right_value,
+                                    },
+                                },
                             },
                         },
-                    },
-                },
-                right: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_left_left_left_value,
+                        right: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_left_right_right_right_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_left_right_right_right_right_right_value,
+                                    },
+                                },
                             },
                         },
                     },
                 },
-            },
-            right: perftest_flat::ObjectBoundary16 {
-                left: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_left_left_left_value,
+                right: perftest_flat::ObjectBoundary32 {
+                    left: perftest_flat::ObjectBoundary16 {
+                        left: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_left_left_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_left_right_right_right_value,
+                                    },
+                                },
                             },
                         },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_left_right_left_value,
+                        right: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_left_right_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_left_right_right_right_right_value,
+                                    },
+                                },
                             },
                         },
                     },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_right_left_left_value,
+                    right: perftest_flat::ObjectBoundary16 {
+                        left: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_right_left_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_left_right_right_right_value,
+                                    },
+                                },
                             },
                         },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_right_right_left_value,
+                        right: perftest_flat::ObjectBoundary8 {
+                            left: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_left_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_left_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_left_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_left_right_right_value,
+                                    },
+                                },
                             },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_left_right_right_right_value,
+                            right: perftest_flat::ObjectBoundary4 {
+                                left: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_right_left_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_right_left_right_value,
+                                    },
+                                },
+                                right: perftest_flat::ObjectBoundary2 {
+                                    left: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_right_right_left_value,
+                                    },
+                                    right: perftest_flat::ObjectBoundaryLeaf {
+                                        value: value_right_right_right_right_right_right_value,
+                                    },
+                                },
                             },
                         },
                     },
                 },
-                right: perftest_flat::ObjectBoundary8 {
-                    left: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_left_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_left_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_left_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_left_right_right_value,
-                            },
-                        },
-                    },
-                    right: perftest_flat::ObjectBoundary4 {
-                        left: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_right_left_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_right_left_right_value,
-                            },
-                        },
-                        right: perftest_flat::ObjectBoundary2 {
-                            left: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_right_right_left_value,
-                            },
-                            right: perftest_flat::ObjectBoundaryLeaf {
-                                value: value_right_right_right_right_right_right_value,
-                            },
-                        },
-                    },
-                },
-            },
-        },
+            }
+        })
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return 0;
+        }
     };
     let __result = perftest_flat::large_object_input_sum(&value);
     let __r: ::core::result::Result<

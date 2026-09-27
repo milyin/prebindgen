@@ -99,7 +99,8 @@
 
 use prebindgen_jni::{
     constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
-    fun, into, matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant, JniGen,
+    fun, into, matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant,
+    JniGen,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -366,7 +367,7 @@ fn main() {
                         // Binding-local INSTANCE METHOD and COMPANION
                         // CONSTRUCTOR (`fun!(crate::…).sig(sig!(…))`): fns
                         // defined in THIS crate (src/lib.rs), no source-crate
-                        // item — same member machinery as registry fns.
+                        // item — same member machinery as source fns.
                         // NO .name(): the strip-class-prefix method hook
                         // derives `mean` from the path's LAST segment
                         // (`summary_mean` on `Summary` → strip → `mean`) —
@@ -375,7 +376,7 @@ fn main() {
                         // FALLIBLE binding-local constructor: the sig's
                         // `Result<Summary, String>` return is the error
                         // channel — a negative count routes the Err message
-                        // to onError, exactly like a registry fn's Result.
+                        // to onError, exactly like a source fn's Result.
                         .constructor(
                             fun!(crate::summary_from_mean)
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
@@ -787,7 +788,7 @@ fn main() {
         .ignore(fun!(storage_put_by_read_and_update));
 
     // Two prebindgen sources: the flat crate plus the binding-side helper crate
-    // (conversion fns for `convert!`). The registry records each fn's origin from
+    // (conversion fns for `convert!`). The adapter records each fn's origin from
     // the `SourceLocation` stamps so generated calls qualify with the defining
     // crate (`perftest_flat::…` vs `cov_helpers::…`). The helper dependency is
     // RENAMED in Cargo.toml (`cov_helpers = { package = "covertest-helpers", .. }`),

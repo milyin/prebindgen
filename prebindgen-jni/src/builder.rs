@@ -75,7 +75,9 @@ impl JniGenBuilder {
 
     /// The items of a dependency renamed in `Cargo.toml` to `crate_name`.
     pub fn source_named<P: AsRef<std::path::Path>>(mut self, dir: P, crate_name: &str) -> Self {
-        let source = prebindgen::Source::builder(dir).crate_name(crate_name).build();
+        let source = prebindgen::Source::builder(dir)
+            .crate_name(crate_name)
+            .build();
         self.items.extend(source.items_all());
         self
     }
@@ -125,7 +127,10 @@ impl JniGenBuilder {
     }
 
     /// A data or sealed class's Kotlin name: `(package, RustName)`.
-    pub fn set_data_class_name_mangle(mut self, f: impl Fn(&str, &str) -> String + 'static) -> Self {
+    pub fn set_data_class_name_mangle(
+        mut self,
+        f: impl Fn(&str, &str) -> String + 'static,
+    ) -> Self {
         self.data_hook = Some(Box::new(f));
         self
     }

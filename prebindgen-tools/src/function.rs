@@ -75,6 +75,9 @@ pub trait FunctionCallbacks {
     fn fail(&mut self, func: &Function, ret: &Return) -> TokenStream;
 }
 
+/// Builds the call expression from the callee and the arguments.
+type CallFn<'f> = Box<dyn Fn(&TokenStream, &[TokenStream]) -> TokenStream + 'f>;
+
 /// Writes one wrapper around a flat [`Function`].
 pub struct FunctionWriter<'f> {
     func: &'f Function,
@@ -88,7 +91,7 @@ pub struct FunctionWriter<'f> {
     leading: Vec<Wire>,
     trailing: Vec<Wire>,
     prologue: TokenStream,
-    call: Option<Box<dyn Fn(&TokenStream, &[TokenStream]) -> TokenStream + 'f>>,
+    call: Option<CallFn<'f>>,
 }
 
 impl<'f> FunctionWriter<'f> {
@@ -169,7 +172,10 @@ impl<'f> FunctionWriter<'f> {
 
     /// Replace the call expression. `f` gets the callee and the arguments as
     /// they would be passed.
-    pub fn call_with(mut self, f: impl Fn(&TokenStream, &[TokenStream]) -> TokenStream + 'f) -> Self {
+    pub fn call_with(
+        mut self,
+        f: impl Fn(&TokenStream, &[TokenStream]) -> TokenStream + 'f,
+    ) -> Self {
         self.call = Some(Box::new(f));
         self
     }

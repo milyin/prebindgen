@@ -179,7 +179,10 @@ pub struct Stage {
 #[derive(Clone, Debug)]
 enum How {
     /// Call a function; `by_ref` when it takes its argument by reference.
-    Call { fun: FnRef, by_ref: bool },
+    Call {
+        fun: FnRef,
+        by_ref: bool,
+    },
     From(TypeRef),
     Into(TypeRef),
     TryFrom(TypeRef),
@@ -195,9 +198,10 @@ impl Stage {
         Ok(match via {
             Via::Fn(fun) => {
                 let f = fun.resolve(flat)?;
-                let param = f.params.first().ok_or_else(|| {
-                    format!("conversion fn `{}` takes no argument", fun.name())
-                })?;
+                let param = f
+                    .params
+                    .first()
+                    .ok_or_else(|| format!("conversion fn `{}` takes no argument", fun.name()))?;
                 let (ret, fallible) = match f.ret.kind() {
                     TypeKind::Fallible { ok, .. } => ((**ok).clone(), true),
                     _ => (f.ret.clone(), false),
@@ -226,19 +230,35 @@ impl Stage {
             }
             Via::From(t) => {
                 let r = classify(t)?;
-                Stage { repr: r.clone(), fallible: false, how: How::From(r) }
+                Stage {
+                    repr: r.clone(),
+                    fallible: false,
+                    how: How::From(r),
+                }
             }
             Via::Into(t) => {
                 let r = classify(t)?;
-                Stage { repr: r.clone(), fallible: false, how: How::Into(r) }
+                Stage {
+                    repr: r.clone(),
+                    fallible: false,
+                    how: How::Into(r),
+                }
             }
             Via::TryFrom(t) => {
                 let r = classify(t)?;
-                Stage { repr: r.clone(), fallible: true, how: How::TryFrom(r) }
+                Stage {
+                    repr: r.clone(),
+                    fallible: true,
+                    how: How::TryFrom(r),
+                }
             }
             Via::TryInto(t) => {
                 let r = classify(t)?;
-                Stage { repr: r.clone(), fallible: true, how: How::TryInto(r) }
+                Stage {
+                    repr: r.clone(),
+                    fallible: true,
+                    how: How::TryInto(r),
+                }
             }
         })
     }

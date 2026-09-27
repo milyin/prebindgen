@@ -63,10 +63,10 @@ mod gen;
 use std::path::{Path, PathBuf};
 
 pub use builder::CbindgenBuilder;
+use prebindgen_tools::RustFile;
 pub use prebindgen_tools::{
     convert, expr, from, fun, into, path, sig, try_from, try_into, ty, Conversion, FnRef, Via,
 };
-use prebindgen_tools::RustFile;
 
 /// A generation failure: a declaration the model cannot satisfy.
 #[derive(Debug, Clone)]
@@ -101,3 +101,6 @@ impl Cbindgen {
         self.file.write(path)
     }
 }
+
+#[cfg(test)]
+mod tests;

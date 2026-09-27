@@ -14,12 +14,12 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 use super::{
-    codec::{kt_ident, Dir, Form, HandleSite, KtEnc, Kind},
+    codec::{kt_ident, Dir, Form, HandleSite, Kind, KtEnc},
     deliver::{raw_name, Delivery, Param},
     err,
     leaf::{method_desc, Leaf, LeafTy},
     rust::jni_symbol,
-    select::{SigParam, Selector},
+    select::{Selector, SigParam},
     Bound, Class, ClassKind, Gen, Placement, Res,
 };
 use crate::decl::ExpandReturnDecl;
@@ -37,7 +37,10 @@ pub(crate) enum PPlan {
 pub(crate) enum RPlan {
     Unit,
     /// One leaf, returned as the extern's own result.
-    Direct { ty: TypeRef, leaf: Leaf },
+    Direct {
+        ty: TypeRef,
+        leaf: Leaf,
+    },
     /// Several leaves, handed to a sink whose result the extern returns.
     Sink {
         ty: TypeRef,
@@ -47,17 +50,14 @@ pub(crate) enum RPlan {
     },
     /// Delivered to a caller-supplied builder (`R`), `null` when absent.
     Builder {
-        ty: TypeRef,
         whole: TypeRef,
         exp: Option<ExpandReturnDecl>,
         optional: bool,
         iface: String,
-        params: Vec<Param>,
         leaves: Vec<Leaf>,
     },
     /// A sequence folded by a caller-supplied folder (`A`), `null` when absent.
     Fold {
-        ty: TypeRef,
         whole: TypeRef,
         exp: Option<ExpandReturnDecl>,
         optional: bool,
@@ -69,6 +69,7 @@ pub(crate) enum RPlan {
 }
 
 /// How an `Err` crosses.
+#[allow(clippy::large_enum_variant)] // one per bound function
 pub(crate) enum EPlan {
     None,
     /// Displayed into the binding-error channel.
@@ -76,7 +77,6 @@ pub(crate) enum EPlan {
     /// Delivered to a typed error handler.
     Domain {
         ty: TypeRef,
-        class: Rc<Class>,
         handler: String,
         capture: String,
         raw_iface: String,
@@ -106,7 +106,12 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let pname = names::bare(&p.name);
-            let explicit = b.decl.params.iter().find(|(n, _)| *n == pname).map(|(_, d)| d);
+            let explicit = b
+                .decl
+                .params
+                .iter()
+                .find(|(n, _)| *n == pname)
+                .map(|(_, d)| d);
             match self.selector(p, explicit)? {
                 Some(s) => {
                     let split = b.decl.splits.contains(&pname);
@@ -131,8 +136,14 @@ impl<'a> Gen<'a> {
             }
         }
         for s in &b.decl.splits {
-            if !params.iter().any(|p| matches!(p, PPlan::Selector(sel, _) if names::bare(&sel.param.name) == *s)) {
-                return err(format!("`{}`: `.split_on_param(\"{s}\")` names no selector parameter", f.name));
+            if !params
+                .iter()
+                .any(|p| matches!(p, PPlan::Selector(sel, _) if names::bare(&sel.param.name) == *s))
+            {
+                return err(format!(
+                    "`{}`: `.split_on_param(\"{s}\")` names no selector parameter",
+                    f.name
+                ));
             }
         }
         // The JVM caps a method's arguments at 255 slots (the holder object
@@ -177,7 +188,8 @@ impl<'a> Gen<'a> {
         let explicit = b.decl.ret.as_ref();
         // A constructor returns its own class as itself, never expanded.
         if let Placement::Constructor(c) = &b.placement {
-            let own = |t: &TypeRef| matches!(t.kind(), TypeKind::Named { id, .. } if id.name == c.rust);
+            let own =
+                |t: &TypeRef| matches!(t.kind(), TypeKind::Named { id, .. } if id.name == c.rust);
             if explicit.is_none() && own(ty) {
                 let leaves = self.leaves(ty, Dir::Out)?;
                 return Ok(RPlan::Direct {
@@ -225,7 +237,6 @@ impl<'a> Gen<'a> {
                 let columns_iface = format!("{}.{tname}{suffix}FolderColumns", self.base_pkg);
                 self.ensure_folder(&iface, &columns_iface, &d)?;
                 return Ok(RPlan::Fold {
-                    ty: core.clone(),
                     whole: ty.clone(),
                     exp: Some(e),
                     optional,
@@ -238,12 +249,10 @@ impl<'a> Gen<'a> {
             let iface = format!("{}.{tname}{suffix}Builder", self.base_pkg);
             self.ensure_builder(&iface, &d)?;
             return Ok(RPlan::Builder {
-                ty: core.clone(),
                 whole: ty.clone(),
                 exp: Some(e),
                 optional,
                 iface,
-                params: d.params,
                 leaves: d.leaves,
             });
         }
@@ -272,7 +281,10 @@ impl<'a> Gen<'a> {
             return Ok(EPlan::Binding);
         }
         let Some(class) = self.classes.get(&id.name).cloned() else {
-            return err(format!("`{}`: an error with an output expansion needs a declared class", id.name));
+            return err(format!(
+                "`{}`: an error with an output expansion needs a declared class",
+                id.name
+            ));
         };
         let handler = format!("{}.{}Handler", class.pkg, id.name);
         let raw_iface = format!("{handler}Raw");
@@ -281,7 +293,6 @@ impl<'a> Gen<'a> {
         self.ensure_error_handler(&class, &handler, &raw_iface, &capture, &d)?;
         Ok(EPlan::Domain {
             ty: e.clone(),
-            class,
             handler,
             capture,
             raw_iface,
@@ -324,7 +335,12 @@ impl<'a> Gen<'a> {
             return Ok(());
         }
         let name = iface.rsplit('.').next().unwrap();
-        let sig = d.params.iter().map(|p| format!("{}: {}", p.name, p.kt)).collect::<Vec<_>>().join(", ");
+        let sig = d
+            .params
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.kt))
+            .collect::<Vec<_>>()
+            .join(", ");
         let raws: Vec<String> = d.leaves.iter().map(raw_name).collect();
         let raw_sig = d
             .leaves
@@ -333,8 +349,17 @@ impl<'a> Gen<'a> {
             .map(|(l, n)| format!("{n}: {}", l.kt_raw()))
             .collect::<Vec<_>>()
             .join(", ");
-        let args = d.params.iter().map(|p| p.decode.clone()).collect::<Vec<_>>().join(", ");
-        let lambda = if raws.is_empty() { String::new() } else { format!(" {} ->", raws.join(", ")) };
+        let args = d
+            .params
+            .iter()
+            .map(|p| p.decode.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let lambda = if raws.is_empty() {
+            String::new()
+        } else {
+            format!(" {} ->", raws.join(", "))
+        };
         let text = format!(
             "public fun interface {name}Raw<out R> {{\n    public fun run({raw_sig}): R\n}}\n\n\
              public fun interface {name}<out R> {{\n    public fun run({sig}): R\n\n\
@@ -351,7 +376,12 @@ impl<'a> Gen<'a> {
         }
         let name = iface.rsplit('.').next().unwrap();
         let cname = columns.rsplit('.').next().unwrap();
-        let sig = d.params.iter().map(|p| format!("{}: {}", p.name, p.kt)).collect::<Vec<_>>().join(", ");
+        let sig = d
+            .params
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.kt))
+            .collect::<Vec<_>>()
+            .join(", ");
         let cols = d
             .leaves
             .iter()
@@ -382,7 +412,12 @@ impl<'a> Gen<'a> {
         let name = handler.rsplit('.').next().unwrap();
         let raw = raw_iface.rsplit('.').next().unwrap();
         let cap = capture.rsplit('.').next().unwrap();
-        let sig = d.params.iter().map(|p| format!("{}: {}", p.name, p.kt)).collect::<Vec<_>>().join(", ");
+        let sig = d
+            .params
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.kt))
+            .collect::<Vec<_>>()
+            .join(", ");
         let raws: Vec<String> = d.leaves.iter().map(raw_name).collect();
         let raw_sig = d
             .leaves
@@ -402,8 +437,16 @@ impl<'a> Gen<'a> {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        let assigns = raws.iter().map(|n| format!("this.{n} = {n}")).collect::<Vec<_>>().join("; ");
-        let resets = raws.iter().map(|n| format!("c.{n} = null")).collect::<Vec<_>>().join("; ");
+        let assigns = raws
+            .iter()
+            .map(|n| format!("this.{n} = {n}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let resets = raws
+            .iter()
+            .map(|n| format!("c.{n} = null"))
+            .collect::<Vec<_>>()
+            .join("; ");
         let text = format!(
             "public fun interface {name}<out R> {{\n    public fun run({sig}): R\n}}\n\n\
              public fun interface {raw} {{\n    public fun run({raw_sig})\n}}\n\n\
@@ -443,7 +486,11 @@ impl<'a> Gen<'a> {
                 .collect()),
             PPlan::Value(fp, true) => {
                 let root = names::bare(&fp.name);
-                let leaves: Vec<Leaf> = self.leaves(&fp.ty, Dir::In)?.into_iter().map(|l| l.under(&root)).collect();
+                let leaves: Vec<Leaf> = self
+                    .leaves(&fp.ty, Dir::In)?
+                    .into_iter()
+                    .map(|l| l.under(&root))
+                    .collect();
                 Ok(super::pack::packed_leaves(&root, &leaves))
             }
             PPlan::Selector(s, _) => self.selector_leaves(s),
@@ -452,7 +499,10 @@ impl<'a> Gen<'a> {
 
     /// The extern's trailing object parameters: sink, error sink, domain sink.
     fn trailing(&self, plan: &FnPlan) -> Vec<(&'static str, bool)> {
-        let sink = matches!(plan.ret, RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. });
+        let sink = matches!(
+            plan.ret,
+            RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. }
+        );
         let mut v = Vec::new();
         if sink {
             v.push(("sink", true));
@@ -524,7 +574,6 @@ impl<'a> Gen<'a> {
     /// The Rust encoding of a successful value per the return plan, as
     /// statements ending in `Ok(<return wire>)` inside a `Result` closure.
     fn rust_ret_value(&self, plan: &RPlan, value: TokenStream) -> Res<TokenStream> {
-        let rt = quote!(::prebindgen_jni_runtime);
         Ok(match plan {
             RPlan::Unit => quote!({ let _ = #value; ::core::result::Result::Ok(()) }),
             RPlan::Direct { ty, leaf } => {
@@ -550,7 +599,7 @@ impl<'a> Gen<'a> {
                 ..
             } => {
                 let iface = format!("{iface}Raw");
-                self.layered(whole, value, false, &mut |g, t, v| {
+                self.layered(whole, value, &mut |g, t, v| {
                     let x = format_ident!("__x");
                     let d = g.deliver(t, x.to_token_stream(), "r", "", exp.as_ref(), &[], false, 1)?;
                     let call = call_sink(&d.output, leaves, &iface);
@@ -563,7 +612,7 @@ impl<'a> Gen<'a> {
                 columns_iface,
                 leaves,
                 ..
-            } => self.layered(whole, value, true, &mut |g, t, v| {
+            } => self.layered(whole, value, &mut |g, t, v| {
                 let TypeKind::Vec(elem) = t.kind() else {
                     return err(format!("`{t}`: a folded result must be a `Vec`"));
                 };
@@ -576,10 +625,6 @@ impl<'a> Gen<'a> {
                 Ok(quote!({ let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(#v).collect(); #call }))
             })?,
         })
-        .map(|t: TokenStream| {
-            let _ = &rt;
-            t
-        })
     }
 
     /// Walk the layers a builder or folder absorbs — `Box`, the first
@@ -589,13 +634,12 @@ impl<'a> Gen<'a> {
         &self,
         ty: &TypeRef,
         value: TokenStream,
-        fold: bool,
         core: &mut dyn FnMut(&Self, &TypeRef, TokenStream) -> Res<TokenStream>,
     ) -> Res<TokenStream> {
         match ty.kind() {
-            TypeKind::Boxed(t) => self.layered(t, quote!((*#value)), fold, core),
+            TypeKind::Boxed(t) => self.layered(t, quote!((*#value)), core),
             TypeKind::Optional(t) => {
-                let inner = self.layered_inner(t, quote!(__some), fold, core)?;
+                let inner = self.layered_inner(t, quote!(__some), core)?;
                 Ok(quote!(match #value {
                     ::core::option::Option::Some(__some) => #inner,
                     ::core::option::Option::None => ::core::result::Result::Ok(::core::ptr::null_mut()),
@@ -610,17 +654,22 @@ impl<'a> Gen<'a> {
         &self,
         ty: &TypeRef,
         value: TokenStream,
-        fold: bool,
         core: &mut dyn FnMut(&Self, &TypeRef, TokenStream) -> Res<TokenStream>,
     ) -> Res<TokenStream> {
         match ty.kind() {
-            TypeKind::Boxed(t) => self.layered_inner(t, quote!((*#value)), fold, core),
+            TypeKind::Boxed(t) => self.layered_inner(t, quote!((*#value)), core),
             _ => core(self, ty, value),
         }
     }
 
     /// Columns of a sequence of deliveries: a count and one array per leaf.
-    fn columns(&self, elem: &Output, leaves: &[Leaf], x: &syn::Ident, items: TokenStream) -> Res<Output> {
+    fn columns(
+        &self,
+        elem: &Output,
+        leaves: &[Leaf],
+        x: &syn::Ident,
+        items: TokenStream,
+    ) -> Res<Output> {
         let rt = quote!(::prebindgen_jni_runtime);
         let mut setup = Vec::new();
         let mut pushes = Vec::new();
@@ -663,7 +712,9 @@ impl<'a> Gen<'a> {
     fn rust_error(&self, plan: &EPlan) -> Res<TokenStream> {
         Ok(match plan {
             EPlan::None => quote!(unreachable!()),
-            EPlan::Binding => quote!(::core::result::Result::Err(::std::string::ToString::to_string(&__e))),
+            EPlan::Binding => quote!(::core::result::Result::Err(
+                ::std::string::ToString::to_string(&__e)
+            )),
             EPlan::Domain {
                 ty,
                 raw_iface,
@@ -699,11 +750,19 @@ impl<'a> Gen<'a> {
             RPlan::Unit => ("Unit".to_string(), String::new()),
             RPlan::Direct { ty, .. } | RPlan::Sink { ty, .. } => (self.kt_type(ty)?, String::new()),
             RPlan::Builder { optional, .. } => (
-                if *optional { "R?".to_string() } else { "R".to_string() },
+                if *optional {
+                    "R?".to_string()
+                } else {
+                    "R".to_string()
+                },
                 "<R> ".to_string(),
             ),
             RPlan::Fold { optional, .. } => (
-                if *optional { "A?".to_string() } else { "A".to_string() },
+                if *optional {
+                    "A?".to_string()
+                } else {
+                    "A".to_string()
+                },
                 "<A> ".to_string(),
             ),
         })
@@ -816,9 +875,17 @@ impl<'a> Gen<'a> {
         let fail = |msg: &str| format!("return {binding_handler}.run(\"{msg}\")");
         for h in &handles {
             if h.nullable {
-                pre.push(format!("if ({}?.isClosed() == true) {}", h.expr, fail("Operation on a closed native handle.")));
+                pre.push(format!(
+                    "if ({}?.isClosed() == true) {}",
+                    h.expr,
+                    fail("Operation on a closed native handle.")
+                ));
             } else {
-                pre.push(format!("if ({}.isClosed()) {}", h.expr, fail("Operation on a closed native handle.")));
+                pre.push(format!(
+                    "if ({}.isClosed()) {}",
+                    h.expr,
+                    fail("Operation on a closed native handle.")
+                ));
             }
         }
         let consumed: Vec<&HandleSite> = handles.iter().filter(|h| h.consumed).collect();
@@ -827,8 +894,16 @@ impl<'a> Gen<'a> {
                 if a.class.rust != c.class.rust {
                     continue;
                 }
-                let pa = if a.nullable { format!("({}?.ptr ?: 0L)", a.expr) } else { format!("{}.ptr", a.expr) };
-                let pc = if c.nullable { format!("({}?.ptr ?: 0L)", c.expr) } else { format!("{}.ptr", c.expr) };
+                let pa = if a.nullable {
+                    format!("({}?.ptr ?: 0L)", a.expr)
+                } else {
+                    format!("{}.ptr", a.expr)
+                };
+                let pc = if c.nullable {
+                    format!("({}?.ptr ?: 0L)", c.expr)
+                } else {
+                    format!("{}.ptr", c.expr)
+                };
                 pre.insert(
                     0,
                     format!(
@@ -855,7 +930,11 @@ impl<'a> Gen<'a> {
         if self.b.handle_locks && !handles.is_empty() {
             let base = &self.base_pkg;
             if handles.iter().all(|h| !h.nullable) && handles.len() <= 3 {
-                let hs = handles.iter().map(|h| h.expr.clone()).collect::<Vec<_>>().join(", ");
+                let hs = handles
+                    .iter()
+                    .map(|h| h.expr.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 call = format!("{base}.withSortedHandleLocks({hs}) {{\n        {call}\n    }}");
             } else {
                 let adds = handles
@@ -878,12 +957,17 @@ impl<'a> Gen<'a> {
         // Body.
         let mut body = pre;
         body.extend(cx.prelude.iter().cloned());
-        body.push(format!("val __bcap = {}.JniErrorHandlerCapture.acquire()", self.base_pkg));
+        body.push(format!(
+            "val __bcap = {}.JniErrorHandlerCapture.acquire()",
+            self.base_pkg
+        ));
         if let EPlan::Domain { capture, .. } = &plan.err {
             body.push(format!("val __dcap = {capture}.acquire()"));
         }
         body.push(format!("val __ret = {call}"));
-        body.push(format!("if (__bcap.failed) return {binding_handler}.run(__bcap.ze0)"));
+        body.push(format!(
+            "if (__bcap.failed) return {binding_handler}.run(__bcap.ze0)"
+        ));
         if let EPlan::Domain { params, leaves, .. } = &plan.err {
             let raws: Vec<String> = leaves.iter().map(raw_name).collect();
             let mut decodes: Vec<String> = params.iter().map(|p| p.decode.clone()).collect();
@@ -914,18 +998,27 @@ impl<'a> Gen<'a> {
         let ret_expr = match &plan.ret {
             RPlan::Unit => "Unit".to_string(),
             RPlan::Direct { ty, .. } => self.kt_decode(ty, &["__ret".to_string()], false, 0)?,
-            RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. } => format!("__ret as {ret}"),
+            RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. } => {
+                format!("__ret as {ret}")
+            }
         };
         body.push(format!("return {ret_expr}"));
 
         // Signature.
-        let is_member = !matches!(b.placement, Placement::Package(_));
+        let is_member = !matches!(b.placement, Placement::Package);
         let overriding = match &b.placement {
             Placement::Method(c) => c.iface.is_some(),
             _ => false,
         };
-        let vis = if overriding { "public override" } else { "public" };
-        let suppress = if matches!(plan.ret, RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. }) {
+        let vis = if overriding {
+            "public override"
+        } else {
+            "public"
+        };
+        let suppress = if matches!(
+            plan.ret,
+            RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. }
+        ) {
             "@Suppress(\"UNCHECKED_CAST\")\n"
         } else {
             ""
@@ -952,7 +1045,10 @@ impl<'a> Gen<'a> {
         );
         // Split overloads.
         if sig.iter().any(|p| matches!(p, SigParam::Split(_))) {
-            let splits = sig.iter().filter(|p| matches!(p, SigParam::Split(_))).count();
+            let splits = sig
+                .iter()
+                .filter(|p| matches!(p, SigParam::Split(_)))
+                .count();
             let head = format!("public fun {generics}");
             for o in self.split_overloads(&head, &b.kt_name, &sig, &tail, &ret, splits > 1)? {
                 text.push('\n');
@@ -962,8 +1058,15 @@ impl<'a> Gen<'a> {
         if let Some(c) = this_class {
             // Record the interface member signature.
             if c.iface.is_some() {
-                let header = format!("fun {generics}{}({}): {ret}", b.kt_name, sig_strs.join(", "));
-                self.iface_members.entry(c.rust.clone()).or_default().push(header);
+                let header = format!(
+                    "fun {generics}{}({}): {ret}",
+                    b.kt_name,
+                    sig_strs.join(", ")
+                );
+                self.iface_members
+                    .entry(c.rust.clone())
+                    .or_default()
+                    .push(header);
             }
         }
         let _ = is_member;
@@ -1026,13 +1129,19 @@ impl FunctionCallbacks for RustCb<'_, '_> {
                 }
                 let name = &fp.name;
                 Ok(match self.g.kind(&fp.ty)? {
-                    Kind::Str(Form::Slice) | Kind::Bytes(Form::Slice) | Kind::Bytes(Form::RefVec) => {
-                        input.with_pass(quote!(&#name))
-                    }
-                    Kind::Seq { form: Form::Slice | Form::RefVec, .. } => input.with_pass(quote!(&#name)),
+                    Kind::Str(Form::Slice)
+                    | Kind::Bytes(Form::Slice)
+                    | Kind::Bytes(Form::RefVec) => input.with_pass(quote!(&#name)),
+                    Kind::Seq {
+                        form: Form::Slice | Form::RefVec,
+                        ..
+                    } => input.with_pass(quote!(&#name)),
                     Kind::Ref { mutable: false, .. } => input.with_pass(quote!(&#name)),
                     Kind::Ref { mutable: true, .. } => {
-                        return err(format!("`{}`: a `&mut` value parameter cannot cross from Kotlin", fp.name))
+                        return err(format!(
+                            "`{}`: a `&mut` value parameter cannot cross from Kotlin",
+                            fp.name
+                        ))
                     }
                     _ => input,
                 })
@@ -1057,12 +1166,24 @@ impl FunctionCallbacks for RustCb<'_, '_> {
             RPlan::Unit => (None, quote!(())),
             RPlan::Direct { leaf, .. } => match leaf.prim() {
                 Some(p) => (Some(p.rs()), p.rs_default()),
-                None => (Some(quote!(::prebindgen_jni_runtime::jni::sys::jobject)), quote!(::core::ptr::null_mut())),
+                None => (
+                    Some(quote!(::prebindgen_jni_runtime::jni::sys::jobject)),
+                    quote!(::core::ptr::null_mut()),
+                ),
             },
-            _ => (Some(quote!(::prebindgen_jni_runtime::jni::sys::jobject)), quote!(::core::ptr::null_mut())),
+            _ => (
+                Some(quote!(::prebindgen_jni_runtime::jni::sys::jobject)),
+                quote!(::core::ptr::null_mut()),
+            ),
         };
-        let wires = if matches!(self.plan.ret, RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. }) {
-            vec![Wire::new(format_ident!("__sink"), quote!(::prebindgen_jni_runtime::jni::objects::JObject<'a>))]
+        let wires = if matches!(
+            self.plan.ret,
+            RPlan::Sink { .. } | RPlan::Builder { .. } | RPlan::Fold { .. }
+        ) {
+            vec![Wire::new(
+                format_ident!("__sink"),
+                quote!(::prebindgen_jni_runtime::jni::objects::JObject<'a>),
+            )]
         } else {
             Vec::new()
         };
@@ -1091,7 +1212,9 @@ impl FunctionCallbacks for RustCb<'_, '_> {
         let default = match &ret.ty {
             None => quote!(()),
             Some(t) if t.to_string().contains("jobject") => quote!(::core::ptr::null_mut()),
-            Some(t) if t.to_string().contains("jdouble") || t.to_string().contains("jfloat") => quote!(0.0),
+            Some(t) if t.to_string().contains("jdouble") || t.to_string().contains("jfloat") => {
+                quote!(0.0)
+            }
             Some(_) => quote!(0),
         };
         quote!({

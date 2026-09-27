@@ -32,7 +32,12 @@ pub trait ClosureCallbacks {
     type Error;
 
     /// The wires argument `index` (of type `ty`, held in `value`) leaves on.
-    fn arg(&mut self, index: usize, ty: &TypeRef, value: &TokenStream) -> Result<Output, Self::Error>;
+    fn arg(
+        &mut self,
+        index: usize,
+        ty: &TypeRef,
+        value: &TokenStream,
+    ) -> Result<Output, Self::Error>;
 }
 
 /// Writes one closure expression.
@@ -76,7 +81,9 @@ impl<'a> ClosureWriter<'a> {
 
     /// The argument names the closure binds: `__a0`, `__a1`, …
     pub fn arg_names(&self) -> Vec<syn::Ident> {
-        (0..self.args.len()).map(|i| format_ident!("__a{}", i)).collect()
+        (0..self.args.len())
+            .map(|i| format_ident!("__a{}", i))
+            .collect()
     }
 
     /// Write the closure. `invoke` gets each argument's output (already

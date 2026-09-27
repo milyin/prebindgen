@@ -9,7 +9,16 @@ use quote::{format_ident, quote};
 
 use super::leaf::{join, Leaf, LeafTy, Prim};
 
-const ORDER: [Prim; 8] = [Prim::Z, Prim::B, Prim::C, Prim::S, Prim::I, Prim::J, Prim::F, Prim::D];
+const ORDER: [Prim; 8] = [
+    Prim::Z,
+    Prim::B,
+    Prim::C,
+    Prim::S,
+    Prim::I,
+    Prim::J,
+    Prim::F,
+    Prim::D,
+];
 
 /// The groups: each primitive kind present, then objects; with the leaf
 /// indices in each.
@@ -39,7 +48,10 @@ fn groups(leaves: &[Leaf]) -> Vec<(Option<Prim>, Vec<usize>)> {
 }
 
 fn group_name(root: &str, p: Option<Prim>) -> String {
-    join(root, &format!("_pack{}", p.map(|p| p.desc()).unwrap_or("L")))
+    join(
+        root,
+        &format!("_pack{}", p.map(|p| p.desc()).unwrap_or("L")),
+    )
 }
 
 /// The packed leaves standing for `leaves` (rooted at `root`).
@@ -62,7 +74,11 @@ pub(crate) fn pack_kotlin(leaves: &[Leaf], exprs: &[String]) -> Vec<String> {
     groups(leaves)
         .into_iter()
         .map(|(p, idx)| {
-            let items = idx.iter().map(|&i| exprs[i].clone()).collect::<Vec<_>>().join(", ");
+            let items = idx
+                .iter()
+                .map(|&i| exprs[i].clone())
+                .collect::<Vec<_>>()
+                .join(", ");
             match p {
                 Some(p) => format!("{}Of({items})", lower_first(&p.kt_array())),
                 None => format!("arrayOf<Any?>({items})"),

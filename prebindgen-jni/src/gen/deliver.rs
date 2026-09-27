@@ -124,14 +124,21 @@ impl<'a> Gen<'a> {
                 let x_value = if borrowed { quote!(&#x) } else { quote!(#x) };
                 let mut g = gates.to_vec();
                 g.push(raw_name(&present));
-                let inner_d = self.deliver(inner, x_value, root, name, explicit, &g, false, depth + 1)?;
-                let defaults: Vec<TokenStream> = inner_d.leaves.iter().map(Leaf::rs_default).collect();
+                let inner_d =
+                    self.deliver(inner, x_value, root, name, explicit, &g, false, depth + 1)?;
+                let defaults: Vec<TokenStream> =
+                    inner_d.leaves.iter().map(Leaf::rs_default).collect();
                 let bind = inner_d.output.bind();
-                let names: Vec<&syn::Ident> = inner_d.output.wires.iter().map(|w| &w.name).collect();
+                let names: Vec<&syn::Ident> =
+                    inner_d.output.wires.iter().map(|w| &w.name).collect();
                 let pw = super::codec::leaf_ident(root, "_present");
                 let mut wires = vec![Wire::new(pw, present.rs())];
                 wires.extend(inner_d.output.wires.clone());
-                let scrutinee = if borrowed { quote!(#v.as_ref()) } else { v.clone() };
+                let scrutinee = if borrowed {
+                    quote!(#v.as_ref())
+                } else {
+                    v.clone()
+                };
                 let out = Output {
                     wires,
                     expr: quote!(match #scrutinee {
@@ -267,7 +274,9 @@ impl<'a> Gen<'a> {
                     let (func, callee) = self.resolve_fn(&g.fun)?;
                     let fname = g.name.clone().unwrap_or_else(|| {
                         let n = names::bare(&func.name);
-                        n.strip_prefix(&format!("{type_snake}_")).unwrap_or(&n).to_string()
+                        n.strip_prefix(&format!("{type_snake}_"))
+                            .unwrap_or(&n)
+                            .to_string()
                     });
                     let arg = match func.params.first().map(|p| p.ty.kind()) {
                         Some(TypeKind::Ref { .. }) if borrowed => quote!(#v),
@@ -307,15 +316,21 @@ impl<'a> Gen<'a> {
                     } else {
                         quote!(#v)
                     };
-                    let d = self.plain(ty, handle, &join(root, "handle"), &join(name, "handle"), gates, depth + 1)?;
+                    let d = self.plain(
+                        ty,
+                        handle,
+                        &join(root, "handle"),
+                        &join(name, "handle"),
+                        gates,
+                        depth + 1,
+                    )?;
                     deferred.push(parts.len());
                     parts.push(d);
                 }
                 ReturnField::Form { fun, consume } => {
-                    let f = self
-                        .flat
-                        .function(fun)
-                        .ok_or_else(|| crate::Error(format!("`{fun}` is not a #[prebindgen] function")))?;
+                    let f = self.flat.function(fun).ok_or_else(|| {
+                        crate::Error(format!("`{fun}` is not a #[prebindgen] function"))
+                    })?;
                     let callee = self.q.path(fun);
                     let arg = match (consume, borrowed) {
                         (true, true) => quote!(::core::clone::Clone::clone(#v)),
@@ -332,7 +347,15 @@ impl<'a> Gen<'a> {
                     };
                     let sv = format_ident!("__s{}", depth);
                     prelude.extend(quote!(let #sv = #callee(#arg);));
-                    let d = self.fields_of(&f.ret, s, sv.to_token_stream(), root, name, gates, depth + 1)?;
+                    let d = self.fields_of(
+                        &f.ret,
+                        s,
+                        sv.to_token_stream(),
+                        root,
+                        name,
+                        gates,
+                        depth + 1,
+                    )?;
                     parts.push(d);
                 }
             }
@@ -348,16 +371,28 @@ impl<'a> Gen<'a> {
             .enumerate()
             .map(|(i, a)| {
                 let name = self.arg_name(a, i);
-                self.deliver(a, format_ident!("__a{}", i).to_token_stream(), &format!("a{i}"), &name, None, &[], false, 1)
+                self.deliver(
+                    a,
+                    format_ident!("__a{}", i).to_token_stream(),
+                    &format!("a{i}"),
+                    &name,
+                    None,
+                    &[],
+                    false,
+                    1,
+                )
             })
             .collect()
     }
 
     fn arg_name(&self, ty: &TypeRef, i: usize) -> String {
         match self.kind(ty) {
-            Ok(Kind::Handle { class, .. } | Kind::Enum(class) | Kind::Record(class, _) | Kind::Sum(class, _)) => {
-                names::snake(&class.rust)
-            }
+            Ok(
+                Kind::Handle { class, .. }
+                | Kind::Enum(class)
+                | Kind::Record(class, _)
+                | Kind::Sum(class, _),
+            ) => names::snake(&class.rust),
             Ok(Kind::Converted(c)) => names::snake(&c.name),
             Ok(Kind::Scalar(k)) => k.as_str().to_string(),
             _ => format!("arg{i}"),
@@ -387,31 +422,55 @@ impl<'a> Gen<'a> {
         if args.is_empty() {
             return Ok("Unit".to_string());
         }
-        Ok(args.iter().map(|a| self.type_base(a)).collect::<Vec<_>>().join(""))
+        Ok(args
+            .iter()
+            .map(|a| self.type_base(a))
+            .collect::<Vec<_>>()
+            .join(""))
     }
 
     /// The user-facing callback interface of `ty`.
     pub(crate) fn callback_fqn(&self, ty: &TypeRef) -> Res<String> {
-        Ok(format!("{}.{}Callback", self.base_pkg, self.callback_base(ty)?))
+        Ok(format!(
+            "{}.{}Callback",
+            self.base_pkg,
+            self.callback_base(ty)?
+        ))
     }
 
     /// The raw callback interface of `ty`, the one Rust invokes.
     pub(crate) fn callback_raw_fqn(&self, ty: &TypeRef) -> Res<String> {
-        Ok(format!("{}.{}CallbackRaw", self.base_pkg, self.callback_base(ty)?))
+        Ok(format!(
+            "{}.{}CallbackRaw",
+            self.base_pkg,
+            self.callback_base(ty)?
+        ))
     }
 
     /// The Rust closure a callback object becomes.
-    pub(crate) fn callback_closure(&self, ty: &TypeRef, args: &[TypeRef], w: &syn::Ident) -> Res<TokenStream> {
+    pub(crate) fn callback_closure(
+        &self,
+        ty: &TypeRef,
+        args: &[TypeRef],
+        w: &syn::Ident,
+    ) -> Res<TokenStream> {
         let deliveries = self.callback_args(args)?;
         let leaves: Vec<Leaf> = deliveries.iter().flat_map(|d| d.leaves.clone()).collect();
         let desc = method_desc(&leaves, "V");
         let frame = 32 + leaves.len() as i32 * 2;
-        let arg_names: Vec<syn::Ident> = (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
+        let arg_names: Vec<syn::Ident> =
+            (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
         let arg_tys: Vec<TokenStream> = args.iter().map(|a| self.q.ty_elided(a)).collect();
         let binds: Vec<TokenStream> = deliveries.iter().map(|d| d.output.bind()).collect();
         let values: Vec<TokenStream> = deliveries
             .iter()
-            .flat_map(|d| d.output.wires.iter().zip(&d.leaves).map(|(wr, l)| l.jvalue(&wr.name.to_token_stream())))
+            .flat_map(|d| {
+                d.output
+                    .wires
+                    .iter()
+                    .zip(&d.leaves)
+                    .map(|(wr, l)| l.jvalue(&wr.name.to_token_stream()))
+            })
             .collect();
         let what = format!("callback {ty}");
         Ok(quote!({
@@ -452,17 +511,28 @@ impl<'a> Gen<'a> {
             .map(|l| format!("{}: {}", raw_name(l), l.kt_raw()))
             .collect::<Vec<_>>()
             .join(", ");
-        let raw_args = leaves.iter().map(|l| raw_name(l)).collect::<Vec<_>>().join(", ");
+        let raw_args = leaves
+            .iter()
+            .map(|l| raw_name(l))
+            .collect::<Vec<_>>()
+            .join(", ");
         let locals: Vec<String> = params
             .iter()
             .enumerate()
             .map(|(i, p)| format!("        val __p{i} = {}", p.decode))
             .collect();
-        let call_args = (0..params.len()).map(|i| format!("__p{i}")).collect::<Vec<_>>().join(", ");
+        let call_args = (0..params.len())
+            .map(|i| format!("__p{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
         let closes: Vec<String> = params
             .iter()
             .enumerate()
-            .filter_map(|(i, p)| p.close.as_ref().map(|c| c.replacen(&p.name, &format!("__p{i}"), 1)))
+            .filter_map(|(i, p)| {
+                p.close
+                    .as_ref()
+                    .map(|c| c.replacen(&p.name, &format!("__p{i}"), 1))
+            })
             .collect();
         let body = if closes.is_empty() {
             format!("{}\n        run({call_args})", locals.join("\n"))

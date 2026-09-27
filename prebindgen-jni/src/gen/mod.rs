@@ -20,7 +20,6 @@ pub(crate) mod rust;
 pub(crate) mod select;
 
 use std::{
-    cell::Cell,
     collections::{BTreeMap, HashMap, HashSet},
     rc::Rc,
 };
@@ -87,7 +86,7 @@ pub(crate) struct Conv {
 /// Where a function lands in Kotlin.
 #[derive(Clone)]
 pub(crate) enum Placement {
-    Package(String),
+    Package,
     Method(Rc<Class>),
     Constructor(Rc<Class>),
 }
@@ -126,7 +125,6 @@ pub(crate) struct Gen<'a> {
     pub report: Vec<String>,
     /// Set while writing a getter whose callee expression is the value.
     pub valued: bool,
-    tmp: Cell<usize>,
 }
 
 pub(crate) fn generate(b: &JniGenBuilder, flat: &Flat) -> Res<Generation> {
@@ -148,12 +146,12 @@ pub(crate) fn generate(b: &JniGenBuilder, flat: &Flat) -> Res<Generation> {
         iface_members: HashMap::new(),
         report: Vec::new(),
         valued: false,
-        tmp: Cell::new(0),
     };
     g.harness = match &b.harness_hook {
         Some(f) => f("JNINative"),
         None => "JNINative".to_string(),
     };
+    prebindgen_tools::check_supported(flat).map_err(Error)?;
     g.resolve()?;
     g.run()?;
     let kotlin = g.kt_files();
@@ -165,13 +163,6 @@ pub(crate) fn generate(b: &JniGenBuilder, flat: &Flat) -> Res<Generation> {
 }
 
 impl<'a> Gen<'a> {
-    /// A fresh suffix for a generated temporary.
-    pub(crate) fn fresh(&self) -> usize {
-        let n = self.tmp.get();
-        self.tmp.set(n + 1);
-        n
-    }
-
     pub(crate) fn pkg_fqn(&self, sub: &str) -> String {
         match (self.base_pkg.is_empty(), sub.is_empty()) {
             (_, true) => self.base_pkg.clone(),
@@ -239,9 +230,10 @@ impl<'a> Gen<'a> {
                     ),
                 };
                 let rust = type_name(ty)?;
-                let element = self.flat.declared_type(&rust).ok_or_else(|| {
-                    Error(format!("`{rust}` is not a #[prebindgen] type"))
-                })?;
+                let element = self
+                    .flat
+                    .declared_type(&rust)
+                    .ok_or_else(|| Error(format!("`{rust}` is not a #[prebindgen] type")))?;
                 match (&kind, element) {
                     (ClassKind::Ptr { .. }, _) => {}
                     (ClassKind::Data { .. }, FlatType::Struct(_)) => {}
@@ -327,7 +319,7 @@ impl<'a> Gen<'a> {
                     (None, Some(h)) => h(&pkg, &camel),
                     (None, None) => camel,
                 };
-                let bound = self.bind(f.clone(), func, callee, Placement::Package(pkg.clone()), kt_name)?;
+                let bound = self.bind(f.clone(), func, callee, Placement::Package, kt_name)?;
                 let text = self.function(&bound)?;
                 self.kt_push(&pkg, text);
             }
@@ -423,17 +415,23 @@ impl<'a> Gen<'a> {
             }
         }
         for c in &self.b.converts {
-            for v in [&c.conversion.input, &c.conversion.output].into_iter().flatten() {
+            for v in [&c.conversion.input, &c.conversion.output]
+                .into_iter()
+                .flatten()
+            {
                 if let prebindgen_tools::Via::Fn(f) = v {
                     bound.insert(names::bare(f.name()));
                 }
             }
         }
-        for f in self.flat.functions() {
-            let n = names::bare(&f.name);
-            if bound.contains(&n) || self.b.ignores.iter().any(|i| (i.0)(&n)) {
-                continue;
-            }
+        let mut unbound: Vec<String> = self
+            .flat
+            .functions()
+            .map(|f| names::bare(&f.name))
+            .filter(|n| !bound.contains(n) && !self.b.ignores.iter().any(|i| (i.0)(n)))
+            .collect();
+        unbound.sort();
+        for n in unbound {
             println!("cargo:warning=prebindgen-jni: skipping undeclared function `{n}`");
         }
     }
