@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["result_expr"],"struct":["Input","Output","Wire"]};
