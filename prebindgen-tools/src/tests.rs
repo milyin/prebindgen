@@ -183,7 +183,7 @@ fn unsupported_items_refuse_the_model() {
 fn shape_reads_one_layer_with_the_adapters_declaration() {
     use prebindgen_flat::flat::{TypeKind, TypeRef};
 
-    use crate::{shape, Access, Holding, Shape};
+    use crate::{shape, Access, SequenceKind, Shape, TextKind};
     let flat = model(
         r#"
         pub struct Payload { pub id: i64 }
@@ -214,11 +214,18 @@ fn shape_reads_one_layer_with_the_adapters_declaration() {
             ..
         } if Access::of(ty) == Access::Exclusive
     ));
-    assert!(matches!(at(2), Shape::Str(Holding::Borrowed)));
+    assert!(matches!(
+        at(2),
+        Shape::Str {
+            kind: TextKind::Str,
+            access: Access::Shared
+        }
+    ));
     assert!(matches!(
         at(3),
         Shape::Seq {
-            holding: Holding::BorrowedVec,
+            kind: SequenceKind::Vec,
+            access: Access::Shared,
             ..
         }
     ));
@@ -231,7 +238,7 @@ fn shape_reads_one_layer_with_the_adapters_declaration() {
 fn shape_declared_can_override_a_complete_generic_type() {
     use prebindgen_flat::flat::{TypeKind, TypeRef};
 
-    use crate::{shape, Access, Holding, Shape};
+    use crate::{shape, Access, SequenceKind, Shape, TextKind};
 
     let flat = model(
         "pub fn f(bytes: Vec<u8>, numbers: Vec<i64>, borrowed: &Vec<u8>, text: String, borrowed_text: &String) {}",
@@ -257,7 +264,11 @@ fn shape_declared_can_override_a_complete_generic_type() {
     ));
     assert!(matches!(
         shape(numbers, declared).unwrap(),
-        Shape::Seq { .. }
+        Shape::Seq {
+            kind: SequenceKind::Vec,
+            access: Access::Owned,
+            ..
+        }
     ));
     assert!(matches!(
         shape(borrowed, declared).unwrap(),
@@ -284,10 +295,83 @@ fn shape_declared_can_override_a_complete_generic_type() {
     ));
     assert!(matches!(
         shape::<()>(text, |_| None).unwrap(),
-        Shape::Str(Holding::Owned)
+        Shape::Str {
+            kind: TextKind::String,
+            access: Access::Owned
+        }
     ));
     assert!(matches!(
         shape::<()>(borrowed_text, |_| None).unwrap(),
-        Shape::Ref { .. }
+        Shape::Str {
+            kind: TextKind::String,
+            access: Access::Shared
+        }
     ));
+}
+
+#[test]
+fn shape_keeps_container_kind_independent_of_access() {
+    use crate::{shape, Access, SequenceKind, Shape, TextKind};
+    let flat = model("");
+    for (container, text, sequence) in [
+        ("String", Some(TextKind::String), None),
+        ("str", Some(TextKind::Str), None),
+        ("Vec<u8>", None, Some(SequenceKind::Vec)),
+        ("[u8]", None, Some(SequenceKind::Slice)),
+    ] {
+        for (prefix, expected_access) in [
+            ("", Access::Owned),
+            ("&", Access::Shared),
+            ("&mut ", Access::Exclusive),
+        ] {
+            let syntax = syn::parse_str(&format!("{prefix}{container}")).unwrap();
+            let ty = flat.classify(&syntax).unwrap();
+            let shape = shape::<()>(&ty, |_| None).unwrap();
+            match shape {
+                Shape::Str { kind, access } => {
+                    assert_eq!(Some(kind), text);
+                    assert_eq!(access, expected_access);
+                }
+                Shape::Seq { kind, access, elem } => {
+                    assert_eq!(Some(kind), sequence);
+                    assert_eq!(access, expected_access);
+                    assert_eq!(elem.to_string(), "u8");
+                }
+                other => panic!("unexpected shape for {ty}: {other:?}"),
+            }
+        }
+    }
+}
+
+#[test]
+fn shape_keeps_cow_as_a_wrapper_and_string_declaration_precedence() {
+    use prebindgen_flat::flat::TypeKind;
+
+    use crate::{shape, Access, Shape};
+    let flat = model("");
+    for syntax in [
+        syn::parse_quote!(Cow<'static, str>),
+        syn::parse_quote!(Cow<'static, [u8]>),
+    ] {
+        let ty = flat.classify(&syntax).unwrap();
+        let Shape::Cow(inner) = shape::<()>(&ty, |_| None).unwrap() else {
+            panic!("expected Cow")
+        };
+        assert!(matches!(inner.kind(), TypeKind::Str | TypeKind::Slice(_)));
+        assert!(
+            shape::<()>(inner, |_| None).is_ok(),
+            "unsized Cow child is classifiable"
+        );
+    }
+    for (syntax, expected) in [
+        (syn::parse_quote!(String), Access::Owned),
+        (syn::parse_quote!(&String), Access::Shared),
+        (syn::parse_quote!(&mut String), Access::Exclusive),
+    ] {
+        let ty = flat.classify(&syntax).unwrap();
+        assert!(
+            matches!(shape(&ty, |candidate| matches!(candidate.kind(), TypeKind::String).then_some(7)).unwrap(),
+            Shape::Declared { ty: declared_ty, declaration: 7 } if Access::of(declared_ty) == expected)
+        );
+    }
 }

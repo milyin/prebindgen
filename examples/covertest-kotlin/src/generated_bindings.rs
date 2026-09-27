@@ -13685,6 +13685,261 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagPick<'a>
         }
     }
 }
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowText<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    text: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    borrowed: ::prebindgen_jni_runtime::jni::sys::jboolean,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let text = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::std::borrow::Cow::Owned(::prebindgen_jni_runtime::read_string(env, &text)?),
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let borrowed = (borrowed != 0);
+    let __result = perftest_flat::cow_text(text, borrowed);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_string(
+            env,
+            ::core::convert::AsRef::<str>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowBytes<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    bytes: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    borrowed: ::prebindgen_jni_runtime::jni::sys::jboolean,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let bytes = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::std::borrow::Cow::Owned(::prebindgen_jni_runtime::read_u8s(env, &bytes)?),
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let borrowed = (borrowed != 0);
+    let __result = perftest_flat::cow_bytes(bytes, borrowed);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::write_u8s(
+            env,
+            ::core::convert::AsRef::<[u8]>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowNumbers<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    values__n: ::prebindgen_jni_runtime::jni::sys::jint,
+    values: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    borrowed: ::prebindgen_jni_runtime::jni::sys::jboolean,
+    __sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let values = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::std::borrow::Cow::Owned({
+                let __n = values__n as usize;
+                let __c0_0 = ::prebindgen_jni_runtime::read_longs(env, &values)?;
+                let mut __v = ::std::vec::Vec::with_capacity(__n);
+                for __i in 0..__n {
+                    let __e0 = __c0_0[__i];
+                    let __x = ::core::result::Result::<
+                        _,
+                        ::std::string::String,
+                    >::Ok(__e0);
+                    __v.push(__x?);
+                }
+                __v
+            }),
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let borrowed = (borrowed != 0);
+    let __result = perftest_flat::cow_numbers(values, borrowed);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let (r__n, r) = {
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result.into_owned(),
+                )
+                .collect();
+            let __n = __items.len();
+            let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
+            for (__i, __x1) in __items.into_iter().enumerate() {
+                let __e1 = (__x1 as ::prebindgen_jni_runtime::jni::sys::jlong);
+                __c1_0.push(__e1);
+            }
+            (__n as i32, ::prebindgen_jni_runtime::write_longs(env, &__c1_0)?)
+        };
+        static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+        let __o = __S
+            .call_object(
+                env,
+                "io/prebindgen/covertest/__Sink_Cow_slice_i64",
+                "run",
+                "(I[J)Ljava/lang/Object;",
+                &__sink,
+                &[
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        i: r__n,
+                    },
+                    ::prebindgen_jni_runtime::jni::sys::jvalue {
+                        l: r.as_raw(),
+                    },
+                ],
+            )?;
+        ::core::result::Result::Ok(__o.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_cowBytesBox<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    bytes: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let bytes = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::std::borrow::Cow::Owned(::prebindgen_jni_runtime::read_u8s(env, &bytes)?),
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = perftest_flat::cow_bytes_box(bytes);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r_bytes = {
+            let perftest_flat::CowBytes { bytes: __f0 } = __result;
+            let r_bytes = ::prebindgen_jni_runtime::write_u8s(
+                env,
+                ::core::convert::AsRef::<[u8]>::as_ref(&__f0),
+            )?;
+            r_bytes
+        };
+        ::core::result::Result::Ok(r_bytes.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
 const _: () = {
     konst::assertc_eq!(
         perftest_flat::FEATURES, "",

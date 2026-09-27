@@ -488,8 +488,9 @@ pub mod record {
 /// [`Input`] or [`Output`] for its chosen wire representation. An adapter
 /// can declare a type such as `Vec<u8>` as a whole, while an undeclared
 /// container exposes child types for further calls.
-/// [`Access`] describes ownership or borrowing of a value; [`Holding`]
-/// distinguishes owned sequences, slices, borrowed vectors, and `Cow`.
+/// [`Access`] describes by-value use or borrowing; [`SequenceKind`] and
+/// [`TextKind`] identify the source container independently of access.
+/// `Cow` remains an explicit wrapper around its inner type.
 ///
 /// [`shape()`] documents declaration precedence, the handling of common
 /// borrows, and which unsupported forms return errors.
@@ -524,7 +525,7 @@ pub mod record {
 /// ));
 /// ```
 pub mod shape {
-    pub use crate::api::shape::{shape, Access, Holding, Shape};
+    pub use crate::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
 }
 
 /// Wires and the conversions between wires and source values.
@@ -589,7 +590,7 @@ pub use crate::{
         record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
         SumWriter,
     },
-    shape::{shape, Access, Holding, Shape},
+    shape::{shape, Access, SequenceKind, Shape, TextKind},
     wire::{Input, Output, Wire},
 };
 

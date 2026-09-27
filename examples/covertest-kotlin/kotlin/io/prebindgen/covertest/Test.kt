@@ -1,5 +1,10 @@
 package io.prebindgen.covertest
 
+import io.prebindgen.covertest.cow.cowText
+import io.prebindgen.covertest.cow.cowBytes
+import io.prebindgen.covertest.cow.cowNumbers
+import io.prebindgen.covertest.cow.cowBytesBox
+
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryVault
 import io.prebindgen.covertest.analytics.archiveLatest
@@ -1924,6 +1929,23 @@ fun main() {
         // The value form's `label` arrives renamed `title`; `note` does not
         // cross at all, so the builder takes two parameters.
         check(tagPick("hello", boom) { title, size -> "$title/$size" } == "hello/5")
+    }
+
+    section("Cow text, bytes, and sequences preserve both ownership cases") {
+        check(cowText("héllo", false, boom) == "héllo")
+        check(cowText("", false, boom) == "")
+        check(cowText("ignored", true, boom) == "borrowed")
+        val bytes = byteArrayOf(0, -128, -1)
+        check(cowBytes(bytes, false, boom).contentEquals(bytes))
+        check(cowBytes(byteArrayOf(), true, boom).contentEquals(bytes))
+        check(cowBytes(byteArrayOf(), false, boom).isEmpty())
+        check(cowNumbers(listOf(7L, -8L), false, boom) == listOf(7L, -8L))
+        check(cowNumbers(emptyList(), true, boom) == listOf(1L, -2L, 3L))
+        check(cowNumbers(emptyList(), false, boom).isEmpty())
+        val a = cowBytesBox(bytes, boom)
+        val b = cowBytesBox(bytes.copyOf(), boom)
+        check(a == b && a.hashCode() == b.hashCode())
+        check(a.bytes.contentEquals(bytes))
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")

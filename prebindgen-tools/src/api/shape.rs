@@ -3,7 +3,8 @@ use prebindgen_flat::flat::{ScalarKind, TypeKind, TypeRef};
 /// How a value is held where it appears.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
-    /// By value: the callee owns it.
+    /// By value. This describes access, not whether the type is sized or
+    /// supported at a binding boundary.
     Owned,
     /// `&T`.
     Shared,
@@ -22,17 +23,35 @@ impl Access {
     }
 }
 
-/// How a run of values (text or a sequence) is held.
+/// The source text container, independently of how it is accessed.
+///
+/// [`Shape::Str`] pairs this kind with [`Access`]. For example, `&String`
+/// has [`TextKind::String`] + [`Access::Shared`], while `&str` has
+/// [`TextKind::Str`] + [`Access::Shared`]. A by-value `String` keeps
+/// [`TextKind::String`] and uses [`Access::Owned`]; `&mut String` uses
+/// [`Access::Exclusive`]. Borrowing changes access, not the container kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Holding {
-    /// `String`, `Vec<T>`.
-    Owned,
-    /// `&str`, `&[T]`.
-    Borrowed,
-    /// `&Vec<T>`.
-    BorrowedVec,
-    /// `Cow<str>`, `Cow<[T]>`.
-    Cow,
+pub enum TextKind {
+    /// The growable, owned string container.
+    String,
+    /// The unsized string slice.
+    Str,
+}
+
+/// The source sequence container, independently of how it is accessed.
+///
+/// [`Shape::Seq`] pairs this kind with [`Access`] and an element type. For
+/// example, `&Vec<T>` has [`SequenceKind::Vec`] + [`Access::Shared`], while
+/// `&[T]` has [`SequenceKind::Slice`] + [`Access::Shared`]. A by-value
+/// `Vec<T>` keeps [`SequenceKind::Vec`] and uses [`Access::Owned`];
+/// `&mut Vec<T>` uses [`Access::Exclusive`]. Borrowing changes access, not
+/// the container kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SequenceKind {
+    /// The growable vector container.
+    Vec,
+    /// The unsized slice.
+    Slice,
 }
 
 /// The outer layer of a model type, with any declaration the adapter made for it.
@@ -47,14 +66,21 @@ pub enum Shape<'t, D> {
     Unit,
     /// A primitive.
     Scalar(ScalarKind),
-    /// `String`, `&str`, `Cow<str>`.
-    Str(Holding),
-    /// `Vec<T>`, `&[T]`, `&Vec<T>`, `Cow<[T]>`.
+    /// A string container or string slice, by value or borrowed.
+    Str {
+        /// Whether the source names `String` or `str`.
+        kind: TextKind,
+        /// By value, shared borrow, or exclusive borrow.
+        access: Access,
+    },
+    /// A vector or slice, by value or borrowed.
     Seq {
         /// The sequence element to lower recursively.
         elem: &'t TypeRef,
-        /// Whether the sequence is owned, borrowed, or held in a `Cow`.
-        holding: Holding,
+        /// Whether the source names `Vec<T>` or `[T]`.
+        kind: SequenceKind,
+        /// By value, shared borrow, or exclusive borrow.
+        access: Access,
     },
     /// `[T; N]`.
     Array {
@@ -67,7 +93,7 @@ pub enum Shape<'t, D> {
     Option(&'t TypeRef),
     /// `Box<T>`.
     Boxed(&'t TypeRef),
-    /// `Cow<T>` over anything but `str` or a slice.
+    /// `Cow<T>`, including `Cow<str>` and `Cow<[T]>`. The child is `T`.
     Cow(&'t TypeRef),
     /// A borrow of anything [`Shape::Str`], [`Shape::Seq`] and
     /// [`Shape::Declared`] do not cover.
@@ -110,9 +136,8 @@ pub enum Shape<'t, D> {
 /// `shape` asks about the exact `ty` first. For a borrow with no exact
 /// declaration, it also asks about the borrowed inner type, so a declaration
 /// for `Payload` still covers `&Payload`. An exact declaration for
-/// `&Payload` takes precedence. Unsupported bare `str`, slices, and
-/// `MaybeUninit<T>`, and the `&mut MaybeUninit<T>` output slot, are handled
-/// before the callback.
+/// `&Payload` takes precedence. Bare `MaybeUninit<T>` and the
+/// `&mut MaybeUninit<T>` output slot are handled before the callback.
 ///
 /// # Walking into child types
 ///
@@ -125,7 +150,7 @@ pub enum Shape<'t, D> {
 /// use std::collections::HashMap;
 /// use prebindgen::SourceLocation;
 /// use prebindgen_flat::Flat;
-/// use prebindgen_tools::{shape, Holding, Shape};
+/// use prebindgen_tools::{shape, Access, SequenceKind, Shape};
 ///
 /// let source = syn::parse_file(
 ///     "pub struct Payload; pub fn send(value: Option<Vec<Payload>>, bytes: Vec<u8>) {}"
@@ -144,7 +169,7 @@ pub enum Shape<'t, D> {
 /// };
 ///
 /// let Shape::Option(inner) = shape(ty, shape_declared).unwrap() else { panic!() };
-/// let Shape::Seq { elem, holding: Holding::Owned } = shape(inner, shape_declared).unwrap()
+/// let Shape::Seq { elem, kind: SequenceKind::Vec, access: Access::Owned } = shape(inner, shape_declared).unwrap()
 ///     else { panic!() };
 /// assert!(matches!(
 ///     shape(elem, shape_declared).unwrap(),
@@ -170,41 +195,39 @@ pub enum Shape<'t, D> {
 /// A successful call describes only the current layer; it does not establish
 /// that the adapter can convert the complete type.
 ///
-/// # Fallbacks
+/// # Container kind and access
 ///
-/// Without an adapter declaration, a named `T`, `&T`, or `&mut T` returns
-/// [`Shape::Undeclared`] with its name. This means the adapter has no
-/// declaration for the source type; the adapter decides whether to reject it.
-/// Without a declaration, `String` is [`Shape::Str`] with [`Holding::Owned`],
-/// whereas `&String` and `&mut String` are [`Shape::Ref`].
-///
-/// # Borrows and containers
-///
-/// Several common combinations are returned as a single shape:
+/// Without an adapter declaration, container kinds and access remain explicit:
 ///
 /// | Source type | Shape |
 /// |---|---|
-/// | `&str` | `Str(Borrowed)` |
-/// | `Vec<T>` | `Seq { elem: T, holding: Owned }` |
-/// | `&[T]` | `Seq { elem: T, holding: Borrowed }` |
-/// | `&Vec<T>` | `Seq { elem: T, holding: BorrowedVec }` |
-/// | `Cow<str>` / `Cow<[T]>` | `Str(Cow)` / `Seq { elem: T, holding: Cow }` |
+/// | `String` | `Str { kind: String, access: Owned }` |
+/// | `&String` | `Str { kind: String, access: Shared }` |
+/// | `&str` | `Str { kind: Str, access: Shared }` |
+/// | `Vec<T>` | `Seq { elem: T, kind: Vec, access: Owned }` |
+/// | `&Vec<T>` | `Seq { elem: T, kind: Vec, access: Shared }` |
+/// | `&[T]` | `Seq { elem: T, kind: Slice, access: Shared }` |
+/// | `&mut [T]` | `Seq { elem: T, kind: Slice, access: Exclusive }` |
+/// | `Cow<str>` / `Cow<[T]>` | `Cow(str)` / `Cow([T])` |
 /// | `[T; N]` | `Array { elem: T, len: N }`, using the resolved length |
 /// | `&mut MaybeUninit<T>` | `Out(T)`, a slot the callee fills |
 ///
-/// Other borrows, including `&mut str`, `&mut [T]`, and `&mut Vec<T>`,
-/// remain [`Shape::Ref`] with their inner type and access. `Option`, `Box`,
-/// other `Cow` types, `Result`, and callbacks expose their children without
-/// visiting them. Lifetimes are not represented in `Shape`; the original
-/// [`TypeRef`] remains available to the caller.
+/// Mutable borrows of `String`, `str`, `Vec<T>`, and `[T]` have the same
+/// container kind as shared borrows, with [`Access::Exclusive`]. `Cow`
+/// remains a wrapper: its runtime ownership is not an access mode.
+/// `Option`, `Box`, `Cow`, `Result`, and callbacks expose their children
+/// without visiting them. Lifetimes remain on the original [`TypeRef`].
+///
+/// Bare `str` and `[T]` classify as unsized containers with [`Access::Owned`].
+/// This lets an adapter inspect a `Cow` child without inventing another type.
+/// It does not make those types valid by-value parameters: the adapter must
+/// reject unsupported uses, including mutable containers it cannot implement.
 ///
 /// # Errors
 ///
-/// A bare `str`, bare slice `[T]`, or bare `MaybeUninit<T>` returns an error
-/// explaining the supported form. The `&mut MaybeUninit<T>` case above is
-/// recognized before its inner type is visited. A different borrow such as
-/// `&MaybeUninit<T>` initially returns `Ref`; classifying its child then
-/// encounters the bare-`MaybeUninit` error.
+/// Bare `MaybeUninit<T>` is refused; only `&mut MaybeUninit<T>` is recognized
+/// as an output slot. A different borrow initially returns `Ref`; visiting
+/// its child then encounters the bare-`MaybeUninit` error.
 ///
 /// See the [`shape` module](mod@crate::shape) for a runnable recursive example.
 pub fn shape<D>(
@@ -212,10 +235,6 @@ pub fn shape<D>(
     shape_declared: impl Fn(&TypeRef) -> Option<D>,
 ) -> Result<Shape<'_, D>, String> {
     match ty.kind() {
-        TypeKind::Str => return Err("a bare `str` cannot cross; use `&str` or `String`".into()),
-        TypeKind::Slice(_) => {
-            return Err("a bare slice cannot cross; use `&[T]` or `Vec<T>`".into())
-        }
         TypeKind::Uninit(_) => {
             return Err("`MaybeUninit<T>` crosses only as `&mut MaybeUninit<T>`".into())
         }
@@ -234,10 +253,7 @@ pub fn shape<D>(
         return Ok(Shape::Declared { ty, declaration });
     }
     if let TypeKind::Ref { inner, .. } = ty.kind() {
-        if !matches!(
-            inner.kind(),
-            TypeKind::Str | TypeKind::Slice(_) | TypeKind::Uninit(_)
-        ) {
+        if !matches!(inner.kind(), TypeKind::Uninit(_)) {
             if let Some(declaration) = shape_declared(inner) {
                 return Ok(Shape::Declared { ty, declaration });
             }
@@ -246,44 +262,62 @@ pub fn shape<D>(
     Ok(match ty.kind() {
         TypeKind::Unit => Shape::Unit,
         TypeKind::Scalar(k) => Shape::Scalar(*k),
-        TypeKind::String => Shape::Str(Holding::Owned),
+        TypeKind::String => Shape::Str {
+            kind: TextKind::String,
+            access: Access::Owned,
+        },
+        TypeKind::Str => Shape::Str {
+            kind: TextKind::Str,
+            access: Access::Owned,
+        },
+        TypeKind::Slice(elem) => Shape::Seq {
+            elem,
+            kind: SequenceKind::Slice,
+            access: Access::Owned,
+        },
         TypeKind::Optional(t) => Shape::Option(t),
         TypeKind::Vec(t) => Shape::Seq {
             elem: t,
-            holding: Holding::Owned,
+            kind: SequenceKind::Vec,
+            access: Access::Owned,
         },
         TypeKind::Array { elem, extent } => Shape::Array {
             elem,
             len: extent.value,
         },
         TypeKind::Boxed(t) => Shape::Boxed(t),
-        TypeKind::Cow { inner, .. } => match inner.kind() {
-            TypeKind::Str => Shape::Str(Holding::Cow),
-            TypeKind::Slice(e) => Shape::Seq {
-                elem: e,
-                holding: Holding::Cow,
-            },
-            _ => Shape::Cow(inner),
-        },
+        TypeKind::Cow { inner, .. } => Shape::Cow(inner),
         TypeKind::Ref { mutable, inner, .. } => {
             let access = Access::of(ty);
             match inner.kind() {
-                TypeKind::Str if !mutable => Shape::Str(Holding::Borrowed),
-                TypeKind::Slice(e) if !mutable => Shape::Seq {
-                    elem: e,
-                    holding: Holding::Borrowed,
+                TypeKind::Str => Shape::Str {
+                    kind: TextKind::Str,
+                    access,
                 },
-                TypeKind::Vec(e) if !mutable => Shape::Seq {
-                    elem: e,
-                    holding: Holding::BorrowedVec,
+                TypeKind::Slice(elem) => Shape::Seq {
+                    elem,
+                    kind: SequenceKind::Slice,
+                    access,
                 },
-                TypeKind::Named { id, .. } => Shape::Undeclared(id.name.as_str()),
+                TypeKind::Vec(elem) => Shape::Seq {
+                    elem,
+                    kind: SequenceKind::Vec,
+                    access,
+                },
+                TypeKind::Uninit(t) if *mutable => Shape::Out(t),
+                TypeKind::Named { id, .. } => Shape::Undeclared(&id.name),
+                TypeKind::String => Shape::Str {
+                    kind: TextKind::String,
+                    access,
+                },
                 _ => Shape::Ref { inner, access },
             }
         }
-        TypeKind::Named { id, .. } => Shape::Undeclared(id.name.as_str()),
+        TypeKind::Named { id, .. } => Shape::Undeclared(&id.name),
         TypeKind::Callback { args } => Shape::Callback(args),
         TypeKind::Fallible { ok, err } => Shape::Result { ok, err },
-        TypeKind::Str | TypeKind::Slice(_) | TypeKind::Uninit(_) => unreachable!(),
+        TypeKind::Uninit(_) => {
+            return Err("`MaybeUninit<T>` crosses only as `&mut MaybeUninit<T>`".into())
+        }
     })
 }

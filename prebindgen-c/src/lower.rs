@@ -16,7 +16,8 @@
 
 use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef};
 use prebindgen_tools::{
-    function::result_ident, names, shape, Access, Holding, Input, Output, Return, Shape, Wire,
+    function::result_ident, names, shape, Access, Input, Output, Return, SequenceKind, Shape,
+    TextKind, Wire,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -74,7 +75,10 @@ impl<'f> Plan<'f> {
                 let id = names::ident(k.as_str());
                 Input::identity(Wire::new(w.clone(), quote!(#id)))
             }
-            Shape::Str(Holding::Owned) => Input::new(
+            Shape::Str {
+                kind: TextKind::String,
+                access: Access::Owned,
+            } => Input::new(
                 one(quote!(*mut ::core::ffi::c_char)),
                 quote!(if #w.is_null() {
                     ::std::string::String::new()
@@ -155,7 +159,10 @@ impl<'f> Plan<'f> {
                 let id = names::ident(k.as_str());
                 one(quote!(#id), v.clone())
             }
-            Shape::Str(Holding::Owned) => {
+            Shape::Str {
+                kind: TextKind::String,
+                access: Access::Owned,
+            } => {
                 self.require_free()?;
                 one(
                     quote!(*mut ::core::ffi::c_char),
@@ -217,7 +224,10 @@ impl<'f> Plan<'f> {
             #place = ::core::ptr::null_mut();
         };
         Ok(match self.shape(ty)? {
-            Shape::Str(Holding::Owned) => Some(free),
+            Shape::Str {
+                kind: TextKind::String,
+                access: Access::Owned,
+            } => Some(free),
             Shape::Boxed(inner) => self.release(inner, place)?,
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
@@ -297,7 +307,10 @@ impl<'f> Plan<'f> {
             Ok(input.with_pass(pass))
         };
         Ok(match self.shape(ty)? {
-            Shape::Str(Holding::Borrowed) => {
+            Shape::Str {
+                kind: TextKind::Str,
+                access: Access::Shared,
+            } => {
                 let (null, bad) = (
                     fail("null pointer passed for str argument"),
                     fail("invalid UTF-8 in str argument"),
@@ -313,7 +326,10 @@ impl<'f> Plan<'f> {
                     }),
                 )
             }
-            Shape::Str(Holding::Owned) => {
+            Shape::Str {
+                kind: TextKind::String,
+                access: Access::Owned,
+            } => {
                 let (null, bad) = (
                     fail("null pointer passed for String argument"),
                     fail("invalid UTF-8 in String argument"),
@@ -343,7 +359,8 @@ impl<'f> Plan<'f> {
             }
             Shape::Seq {
                 elem,
-                holding: Holding::Borrowed,
+                kind: SequenceKind::Slice,
+                access: Access::Shared,
             } => {
                 let t = self.pointee(elem)?;
                 let (c, src) = (&t.c, self.source(&t.rust.to_string()));
@@ -417,7 +434,11 @@ impl<'f> Plan<'f> {
             } if Access::of(declared_ty) != Access::Owned => {
                 borrowed_value(Access::of(declared_ty))?
             }
-            Shape::Ref { access, .. } => borrowed_value(access)?,
+            Shape::Str {
+                kind: TextKind::String,
+                access: access @ (Access::Shared | Access::Exclusive),
+            }
+            | Shape::Ref { access, .. } => borrowed_value(access)?,
             Shape::Callback(args) => {
                 let key = ty.key().as_str().to_string();
                 let c = self.closures[&key].clone();
@@ -569,7 +590,10 @@ impl<'f> Plan<'f> {
         v: &TokenStream,
     ) -> Res<Option<(TokenStream, TokenStream)>> {
         Ok(match self.shape(ty)? {
-            Shape::Str(Holding::Owned) => {
+            Shape::Str {
+                kind: TextKind::String,
+                access: Access::Owned,
+            } => {
                 self.require_free()?;
                 Some((
                     quote!(*mut ::core::ffi::c_char),
@@ -669,7 +693,8 @@ impl<'f> Plan<'f> {
             },
             Shape::Seq {
                 elem,
-                holding: Holding::Owned,
+                kind: SequenceKind::Vec,
+                access: Access::Owned,
             } => {
                 let (wire, e) = array(elem)?;
                 Return {
@@ -689,7 +714,8 @@ impl<'f> Plan<'f> {
             {
                 if let Shape::Seq {
                     elem,
-                    holding: Holding::Owned,
+                    kind: SequenceKind::Vec,
+                    access: Access::Owned,
                 } = self.shape(inner)?
                 {
                     let (wire, e) = array(elem)?;
@@ -752,7 +778,8 @@ impl<'f> Plan<'f> {
         match self.shape(ty)? {
             Shape::Seq {
                 elem,
-                holding: Holding::Borrowed,
+                kind: SequenceKind::Slice,
+                access: Access::Shared,
             } => {
                 let c = &self.pointee(elem)?.c;
                 let len = format_ident!("__w{}_len", index);

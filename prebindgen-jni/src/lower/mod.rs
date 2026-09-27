@@ -32,7 +32,7 @@ pub(crate) mod rust;
 pub(crate) mod select;
 
 use prebindgen_flat::flat::{Alternative, Field, ScalarKind, TypeKind, TypeRef};
-use prebindgen_tools::{names, shape, Access, Shape};
+use prebindgen_tools::{names, shape, Access, SequenceKind, Shape, TextKind};
 
 use self::leaf::{join, Leaf, LeafTy, Prim};
 use crate::plan::{err, Class, ClassKind, Conv, Plan, Res, Setting};
@@ -202,6 +202,32 @@ impl Plan<'_> {
                     access: Access::of(ty),
                 }
             }
+            Shape::Str {
+                kind: TextKind::Str,
+                access: Access::Owned,
+            }
+            | Shape::Seq {
+                kind: SequenceKind::Slice,
+                access: Access::Owned,
+                ..
+            } => {
+                return err(format!(
+                    "`{ty}`: an unsized value cannot cross by value; borrow it or use Cow"
+                ))
+            }
+            Shape::Str {
+                kind: TextKind::Str,
+                access: Access::Exclusive,
+            }
+            | Shape::Seq {
+                kind: SequenceKind::Slice,
+                access: Access::Exclusive,
+                ..
+            } => {
+                return err(format!(
+                    "`{ty}`: mutable unsized values have no JVM representation"
+                ))
+            }
             Shape::Undeclared(name) => {
                 return err(format!(
                     "`{name}` is not declared as a class or a conversion"
@@ -267,7 +293,7 @@ impl Plan<'_> {
         Ok(match self.shape(ty)? {
             Shape::Unit => Vec::new(),
             Shape::Scalar(k) => vec![Leaf::new(LeafTy::Prim(scalar_prim(k)))],
-            Shape::Str(_) => vec![Leaf::new(LeafTy::String)],
+            Shape::Str { .. } => vec![Leaf::new(LeafTy::String)],
             Shape::Seq { elem, .. } if is_u8(elem) => vec![Leaf::new(LeafTy::PrimArray(Prim::B))],
             Shape::Array { elem, .. } => match elem.kind() {
                 prebindgen_flat::flat::TypeKind::Scalar(k) => {
@@ -327,9 +353,8 @@ impl Plan<'_> {
                 out.extend(self.leaves(elem, dir)?.iter().map(Leaf::column));
                 out
             }
-            Shape::Ref { inner, .. } | Shape::Boxed(inner) | Shape::Cow(inner) => {
-                self.leaves(inner, dir)?
-            }
+            Shape::Ref { inner, .. } | Shape::Boxed(inner) => self.leaves(inner, dir)?,
+            Shape::Cow(inner) => self.leaves(&cow_view(inner), dir)?,
             Shape::Callback(_) => vec![Leaf::new(LeafTy::Callback(self.callback_raw_fqn(ty)?))],
             Shape::Undeclared(_) | Shape::Result { .. } | Shape::Out(_) => {
                 unreachable!("refused by shape")
@@ -344,7 +369,7 @@ impl Plan<'_> {
         Ok(match self.shape(ty)? {
             Shape::Unit => "Unit".to_string(),
             Shape::Scalar(k) => scalar_kt(k).to_string(),
-            Shape::Str(_) => "String".to_string(),
+            Shape::Str { .. } => "String".to_string(),
             Shape::Seq { elem, .. } if is_u8(elem) => "ByteArray".to_string(),
             Shape::Array { elem, .. } => match elem.kind() {
                 prebindgen_flat::flat::TypeKind::Scalar(k) => array_prim(*k).kt_array(),
@@ -356,9 +381,8 @@ impl Plan<'_> {
             },
             Shape::Option(inner) => format!("{}?", self.kt_type(inner)?),
             Shape::Seq { elem, .. } => format!("List<{}>", self.kt_type(elem)?),
-            Shape::Ref { inner, .. } | Shape::Boxed(inner) | Shape::Cow(inner) => {
-                self.kt_type(inner)?
-            }
+            Shape::Ref { inner, .. } | Shape::Boxed(inner) => self.kt_type(inner)?,
+            Shape::Cow(inner) => self.kt_type(&cow_view(inner))?,
             Shape::Callback(_) => self.callback_fqn(ty)?,
             Shape::Undeclared(_) | Shape::Result { .. } | Shape::Out(_) => {
                 unreachable!("refused by shape")
@@ -396,8 +420,8 @@ impl Plan<'_> {
             Shape::Option(t)
             | Shape::Seq { elem: t, .. }
             | Shape::Ref { inner: t, .. }
-            | Shape::Boxed(t)
-            | Shape::Cow(t) => self.owns_handle(t)?,
+            | Shape::Boxed(t) => self.owns_handle(t)?,
+            Shape::Cow(t) => self.owns_handle(&cow_view(t))?,
             _ => false,
         })
     }
@@ -409,4 +433,14 @@ pub(crate) fn is_u8(ty: &TypeRef) -> bool {
         ty.kind(),
         prebindgen_flat::flat::TypeKind::Scalar(ScalarKind::U8)
     )
+}
+
+/// A Cow's unsized target is viewed through a shared borrow when choosing its
+/// Kotlin type and leaves. This does not admit bare unsized boundary values.
+pub(crate) fn cow_view(inner: &TypeRef) -> std::borrow::Cow<'_, TypeRef> {
+    use prebindgen_flat::flat::TypeKind;
+    match inner.kind() {
+        TypeKind::Str | TypeKind::Slice(_) => std::borrow::Cow::Owned(inner.borrowed()),
+        _ => std::borrow::Cow::Borrowed(inner),
+    }
 }
