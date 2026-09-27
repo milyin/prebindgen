@@ -12,6 +12,17 @@ pub enum Access {
     Exclusive,
 }
 
+impl Access {
+    /// Whether `ty` is owned, shared, or exclusively borrowed at its outer layer.
+    pub fn of(ty: &TypeRef) -> Self {
+        match ty.kind() {
+            TypeKind::Ref { mutable: true, .. } => Self::Exclusive,
+            TypeKind::Ref { .. } => Self::Shared,
+            _ => Self::Owned,
+        }
+    }
+}
+
 /// The source text container, independently of how it is accessed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextKind {
@@ -30,14 +41,14 @@ pub enum SequenceKind {
     Slice,
 }
 
-/// The outer layer of a model type, with the adapter's setting for named types.
+/// The outer layer of a model type, with any declaration the adapter made for it.
 ///
 /// Returned by [`shape()`]. Child types borrow the input model; they have not
 /// been classified recursively. The adapter matches this enum to choose a
 /// representation and calls `shape()` on whichever children it needs.
-/// `S` is the adapter's own setting type, often a borrowed declaration.
+/// `D` is the adapter's declaration type, often borrowed from its registry.
 #[derive(Debug)]
-pub enum Shape<'t, S> {
+pub enum Shape<'t, D> {
     /// `()`.
     Unit,
     /// A primitive.
@@ -79,17 +90,14 @@ pub enum Shape<'t, S> {
         /// Shared or exclusive access.
         access: Access,
     },
-    /// A named type the adapter has a setting for, held by value or
-    /// borrowed.
+    /// A type the adapter declared, with its original ownership or borrow.
     Declared {
-        /// Name in the flat namespace.
-        name: &'t str,
-        /// The adapter's setting returned by the `lookup` callback to [`shape()`].
-        setting: S,
-        /// Whether this use owns or borrows the named type.
-        access: Access,
+        /// The original type, including generic arguments and any borrow.
+        ty: &'t TypeRef,
+        /// The adapter's declaration returned by `shape_declared`.
+        declaration: D,
     },
-    /// A named type the adapter has no setting for.
+    /// A named type for which the adapter returned no declaration.
     Undeclared(&'t str),
     /// `impl Fn(A, B)`.
     Callback(&'t [TypeRef]),
@@ -104,46 +112,79 @@ pub enum Shape<'t, S> {
     Out(&'t TypeRef),
 }
 
-/// Classify one outer layer of `ty` for an adapter to lower.
+/// Describe one outer layer of a source type for a language adapter.
 ///
-/// This is the common first step in deciding how a source value crosses a
-/// binding boundary. It describes the source shape and attaches an adapter
-/// setting when available. It does not choose wire types, generate conversion
-/// code, inspect a declared struct's fields, or validate all nested types.
+/// Pass the [`TypeRef`] being converted and `shape_declared`, a callback that
+/// returns the adapter's declaration for a type or `None`. The callback sees
+/// the complete type, so an adapter can distinguish `Vec<u8>` from
+/// `Vec<Payload>`. A returned declaration makes the result
+/// [`Shape::Declared`], which retains the original `ty`.
 ///
-/// # Recursing over a type
+/// `shape` asks about the exact `ty` first. For a borrow with no exact
+/// declaration, it also asks about the borrowed inner type, so a declaration
+/// for `Payload` still covers `&Payload`. An exact declaration for
+/// `&Payload` takes precedence. Bare `MaybeUninit<T>` and the
+/// `&mut MaybeUninit<T>` output slot are handled before the callback.
 ///
-/// For `Option<Vec<Payload>>`, the first call returns [`Shape::Option`] with
-/// a reference to `Vec<Payload>`. Classifying that child returns [`Shape::Seq`]
-/// with `kind: SequenceKind::Vec`, `access: Access::Owned`, and the
-/// element `Payload`. Only a call on
-/// that element consults `lookup("Payload")`.
+/// # Walking into child types
 ///
-/// The adapter matches each returned shape, chooses what that layer means
-/// for its boundary, and recursively handles the children it needs. For
-/// example, a sequence may become a pointer and length in C, or a JVM array
-/// in JNI. Successfully classifying the outer layer does not imply the
-/// adapter supports the whole type.
+/// An adapter can get `ty` from a function parameter in the flat model, then
+/// call `shape(ty, shape_declared)` and match the returned [`Shape`]. Some
+/// variants hold a child [`TypeRef`]; call `shape` again with that child and
+/// the same closure. This example shows each call for `Option<Vec<Payload>>`:
 ///
-/// # Looking up declarations
+/// ```
+/// use std::collections::HashMap;
+/// use prebindgen::SourceLocation;
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{shape, Access, SequenceKind, Shape};
 ///
-/// `lookup` maps a named type's flat name to the adapter's own setting `S`.
-/// It can return a reference, for example `|name| settings.get(name)`;
-/// settings do not need to be cloned. The name alone is supplied, without
-/// generic arguments or borrow information. Keep `ty` if the adapter needs
-/// those details beyond what the returned shape carries.
+/// let source = syn::parse_file(
+///     "pub struct Payload; pub fn send(value: Option<Vec<Payload>>, bytes: Vec<u8>) {}"
+/// ).unwrap();
+/// let flat = Flat::builder()
+///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
+///     .build().unwrap();
+/// let ty = &flat.function("send").unwrap().params[0].ty;
+/// let declarations = HashMap::from([("Payload".to_owned(), "opaque handle")]);
+/// let shape_declared = |candidate: &prebindgen_flat::flat::TypeRef| {
+///     match candidate.kind() {
+///         prebindgen_flat::flat::TypeKind::Named { id, .. } =>
+///             declarations.get(&id.name).copied(),
+///         _ => None,
+///     }
+/// };
 ///
-/// For a named `T`, `&T`, or `&mut T`, a setting produces
-/// [`Shape::Declared`] with [`Access::Owned`], [`Access::Shared`], or
-/// [`Access::Exclusive`], respectively. Without a setting the result is
-/// [`Shape::Undeclared`], not an error; that variant retains only the name.
-/// The adapter decides whether to reject an undeclared type.
+/// let Shape::Option(inner) = shape(ty, shape_declared).unwrap() else { panic!() };
+/// let Shape::Seq { elem, kind: SequenceKind::Vec, access: Access::Owned } = shape(inner, shape_declared).unwrap()
+///     else { panic!() };
+/// assert!(matches!(
+///     shape(elem, shape_declared).unwrap(),
+///     Shape::Declared {
+///         declaration: "opaque handle", ty: declared_ty
+///     } if std::ptr::eq(declared_ty, elem)
+/// ));
 ///
-/// `String` is also offered to `lookup`, including when borrowed. A setting
-/// takes precedence over its built-in text shape. Other built-in containers
-/// do not consult `lookup` at their outer layer.
+/// // A declaration may target a complete generic type, too.
+/// let bytes = &flat.function("send").unwrap().params[1].ty;
+/// let bytes_key = bytes.key();
+/// assert!(matches!(
+///     shape(bytes, |candidate| (candidate.key() == bytes_key).then_some("blob"))
+///         .unwrap(),
+///     Shape::Declared { ty, declaration: "blob" } if std::ptr::eq(ty, bytes)
+/// ));
+/// ```
+///
+/// The first two calls return built-in shapes because the callback returns
+/// `None` for `Option<Vec<Payload>>` and `Vec<Payload>`. The third returns
+/// [`Shape::Declared`] for `Payload`. The adapter decides how to represent
+/// each layer on its boundary and which children to visit.
+/// A successful call describes only the current layer; it does not establish
+/// that the adapter can convert the complete type.
 ///
 /// # Container kind and access
+///
+/// Without an adapter declaration, container kinds and access remain explicit:
 ///
 /// | Source type | Shape |
 /// |---|---|
@@ -176,31 +217,41 @@ pub enum Shape<'t, S> {
 /// its child then encounters the bare-`MaybeUninit` error.
 ///
 /// See the [`shape` module](mod@crate::shape) for a runnable recursive example.
-pub fn shape<'t, S>(
-    ty: &'t TypeRef,
-    lookup: impl Fn(&str) -> Option<S>,
-) -> Result<Shape<'t, S>, String> {
-    let named = |name: &'t str, access: Access| match lookup(name) {
-        Some(setting) => Shape::Declared {
-            name,
-            setting,
-            access,
-        },
-        None => Shape::Undeclared(name),
-    };
+pub fn shape<D>(
+    ty: &TypeRef,
+    shape_declared: impl Fn(&TypeRef) -> Option<D>,
+) -> Result<Shape<'_, D>, String> {
+    match ty.kind() {
+        TypeKind::Uninit(_) => {
+            return Err("`MaybeUninit<T>` crosses only as `&mut MaybeUninit<T>`".into())
+        }
+        TypeKind::Ref {
+            mutable: true,
+            inner,
+            ..
+        } => {
+            if let TypeKind::Uninit(t) = inner.kind() {
+                return Ok(Shape::Out(t));
+            }
+        }
+        _ => {}
+    }
+    if let Some(declaration) = shape_declared(ty) {
+        return Ok(Shape::Declared { ty, declaration });
+    }
+    if let TypeKind::Ref { inner, .. } = ty.kind() {
+        if !matches!(inner.kind(), TypeKind::Uninit(_)) {
+            if let Some(declaration) = shape_declared(inner) {
+                return Ok(Shape::Declared { ty, declaration });
+            }
+        }
+    }
     Ok(match ty.kind() {
         TypeKind::Unit => Shape::Unit,
         TypeKind::Scalar(k) => Shape::Scalar(*k),
-        TypeKind::String => match lookup("String") {
-            Some(setting) => Shape::Declared {
-                name: "String",
-                setting,
-                access: Access::Owned,
-            },
-            None => Shape::Str {
-                kind: TextKind::String,
-                access: Access::Owned,
-            },
+        TypeKind::String => Shape::Str {
+            kind: TextKind::String,
+            access: Access::Owned,
         },
         TypeKind::Str => Shape::Str {
             kind: TextKind::Str,
@@ -224,11 +275,7 @@ pub fn shape<'t, S>(
         TypeKind::Boxed(t) => Shape::Boxed(t),
         TypeKind::Cow { inner, .. } => Shape::Cow(inner),
         TypeKind::Ref { mutable, inner, .. } => {
-            let access = if *mutable {
-                Access::Exclusive
-            } else {
-                Access::Shared
-            };
+            let access = Access::of(ty);
             match inner.kind() {
                 TypeKind::Str => Shape::Str {
                     kind: TextKind::Str,
@@ -245,22 +292,15 @@ pub fn shape<'t, S>(
                     access,
                 },
                 TypeKind::Uninit(t) if *mutable => Shape::Out(t),
-                TypeKind::Named { id, .. } => named(&id.name, access),
-                TypeKind::String => match lookup("String") {
-                    Some(setting) => Shape::Declared {
-                        name: "String",
-                        setting,
-                        access,
-                    },
-                    None => Shape::Str {
-                        kind: TextKind::String,
-                        access,
-                    },
+                TypeKind::Named { id, .. } => Shape::Undeclared(&id.name),
+                TypeKind::String => Shape::Str {
+                    kind: TextKind::String,
+                    access,
                 },
                 _ => Shape::Ref { inner, access },
             }
         }
-        TypeKind::Named { id, .. } => named(&id.name, Access::Owned),
+        TypeKind::Named { id, .. } => Shape::Undeclared(&id.name),
         TypeKind::Callback { args } => Shape::Callback(args),
         TypeKind::Fallible { ok, err } => Shape::Result { ok, err },
         TypeKind::Uninit(_) => {

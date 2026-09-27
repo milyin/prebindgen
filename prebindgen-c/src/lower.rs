@@ -22,7 +22,7 @@ use prebindgen_tools::{
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
-use crate::plan::{err, CType, Kind, Plan, Res, Setting};
+use crate::plan::{declared_name, err, CType, Kind, Plan, Res, Setting};
 
 /// A result's delivery, plus what the wrapper returns when an input fails.
 pub(crate) struct CRet {
@@ -34,7 +34,12 @@ pub(crate) struct CRet {
 
 impl<'f> Plan<'f> {
     pub(crate) fn shape<'t>(&self, ty: &'t TypeRef) -> Res<Shape<'t, &Setting>> {
-        shape(ty, |n| self.setting(n)).map_err(|e| crate::Error(format!("`{ty}`: {e}")))
+        shape(ty, |candidate| match candidate.kind() {
+            TypeKind::Named { id, .. } => self.setting(&id.name),
+            TypeKind::String => self.setting("String"),
+            _ => None,
+        })
+        .map_err(|e| crate::Error(format!("`{ty}`: {e}")))
     }
 
     /// The source type a declared name spells.
@@ -84,56 +89,57 @@ impl<'f> Plan<'f> {
             Shape::Boxed(inner) => self
                 .value_in(inner, w)?
                 .map(|e| quote!(::std::boxed::Box::new(#e))),
-            Shape::Declared {
-                name,
-                setting,
-                access: Access::Owned,
-            } => match setting {
-                Setting::Converted(c) => {
-                    let Some(stage) = &c.input else {
-                        return err(format!("`{ty}` cannot cross into Rust"));
-                    };
-                    let repr = self.value_in(&stage.repr, w)?;
-                    stage.decode(
-                        &self.q,
-                        &c.target,
-                        repr,
-                        &format_ident!("__cbg_repr"),
-                        TokenStream::new(),
-                    )
-                }
-                Setting::Type(t) => {
-                    let (c, fin) = (&t.c, format_ident!("__cbg_in_{}", t.rust));
-                    match &t.kind {
-                        Kind::Enum | Kind::Union => Input::fallible(
-                            one(quote!(::core::mem::MaybeUninit<#c>)),
-                            quote!(#fin(#w)?),
-                        ),
-                        Kind::Data if self.data_in_fallible(name)? => {
-                            Input::fallible(one(quote!(#c)), quote!(#fin(#w)?))
+            Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
+                let name = declared_name(ty);
+                match declaration {
+                    Setting::Converted(c) => {
+                        let Some(stage) = &c.input else {
+                            return err(format!("`{ty}` cannot cross into Rust"));
+                        };
+                        let repr = self.value_in(&stage.repr, w)?;
+                        stage.decode(
+                            &self.q,
+                            &c.target,
+                            repr,
+                            &format_ident!("__cbg_repr"),
+                            TokenStream::new(),
+                        )
+                    }
+                    Setting::Type(t) => {
+                        let (c, fin) = (&t.c, format_ident!("__cbg_in_{}", t.rust));
+                        match &t.kind {
+                            Kind::Enum | Kind::Union => Input::fallible(
+                                one(quote!(::core::mem::MaybeUninit<#c>)),
+                                quote!(#fin(#w)?),
+                            ),
+                            Kind::Data if self.data_in_fallible(name)? => {
+                                Input::fallible(one(quote!(#c)), quote!(#fin(#w)?))
+                            }
+                            Kind::Data => Input::new(one(quote!(#c)), quote!(#fin(#w))),
+                            Kind::Opaque => {
+                                let src = self.source(name);
+                                let msg = format!("null {name} handle passed by value");
+                                Input::fallible(
+                                    one(quote!(*mut #c)),
+                                    quote!({
+                                        if #w.is_null() {
+                                            return ::core::result::Result::Err(::std::string::String::from(#msg));
+                                        }
+                                        *::std::boxed::Box::from_raw(#w as *mut #src)
+                                    }),
+                                )
+                            }
+                            Kind::ReprC { .. } => Input::new(
+                                one(quote!(#c)),
+                                quote!(<#c as ::prebindgen_c_runtime::Transmute>::into_rust(#w)),
+                            ),
+                            Kind::Error { .. } => {
+                                return err(format!("`{ty}` cannot cross into Rust"))
+                            }
                         }
-                        Kind::Data => Input::new(one(quote!(#c)), quote!(#fin(#w))),
-                        Kind::Opaque => {
-                            let src = self.source(name);
-                            let msg = format!("null {name} handle passed by value");
-                            Input::fallible(
-                                one(quote!(*mut #c)),
-                                quote!({
-                                    if #w.is_null() {
-                                        return ::core::result::Result::Err(::std::string::String::from(#msg));
-                                    }
-                                    *::std::boxed::Box::from_raw(#w as *mut #src)
-                                }),
-                            )
-                        }
-                        Kind::ReprC { .. } => Input::new(
-                            one(quote!(#c)),
-                            quote!(<#c as ::prebindgen_c_runtime::Transmute>::into_rust(#w)),
-                        ),
-                        Kind::Error { .. } => return err(format!("`{ty}` cannot cross into Rust")),
                     }
                 }
-            },
+            }
             Shape::Undeclared(name) => {
                 return err(format!("`{name}` is not declared to the C adapter"))
             }
@@ -164,44 +170,45 @@ impl<'f> Plan<'f> {
                 )
             }
             Shape::Boxed(inner) => self.value_out(inner, &quote!((*#v)), w)?,
-            Shape::Declared {
-                name,
-                setting,
-                access: Access::Owned,
-            } => match setting {
-                Setting::Converted(c) => {
-                    let Some(stage) = &c.output else {
-                        return err(format!("`{ty}` cannot cross out of Rust"));
-                    };
-                    let r = format_ident!("__cbg_value");
-                    let repr = self.value_out(&stage.repr, &r.to_token_stream(), w)?;
-                    stage.encode(&self.q, &c.target, v, &r, TokenStream::new(), repr)
-                }
-                Setting::Type(t) => {
-                    let (c, fout) = (&t.c, format_ident!("__cbg_out_{}", t.rust));
-                    match &t.kind {
-                        Kind::Enum => one(
-                            quote!(::core::mem::MaybeUninit<#c>),
-                            quote!(::core::mem::MaybeUninit::new(#fout(#v))),
-                        ),
-                        Kind::Union => one(quote!(::core::mem::MaybeUninit<#c>), quote!(#fout(#v))),
-                        Kind::Data => one(quote!(#c), quote!(#fout(#v))),
-                        Kind::Opaque => one(
-                            quote!(*mut #c),
-                            quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
-                        ),
-                        Kind::ReprC { .. } => one(
-                            quote!(#c),
-                            quote!(<#c as ::prebindgen_c_runtime::Transmute>::from_rust(#v)),
-                        ),
-                        Kind::Error { .. } => {
-                            self.require_free()?;
-                            let _ = name;
-                            one(quote!(*mut ::core::ffi::c_char), quote!(#fout(#v)))
+            Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
+                let name = declared_name(ty);
+                match declaration {
+                    Setting::Converted(c) => {
+                        let Some(stage) = &c.output else {
+                            return err(format!("`{ty}` cannot cross out of Rust"));
+                        };
+                        let r = format_ident!("__cbg_value");
+                        let repr = self.value_out(&stage.repr, &r.to_token_stream(), w)?;
+                        stage.encode(&self.q, &c.target, v, &r, TokenStream::new(), repr)
+                    }
+                    Setting::Type(t) => {
+                        let (c, fout) = (&t.c, format_ident!("__cbg_out_{}", t.rust));
+                        match &t.kind {
+                            Kind::Enum => one(
+                                quote!(::core::mem::MaybeUninit<#c>),
+                                quote!(::core::mem::MaybeUninit::new(#fout(#v))),
+                            ),
+                            Kind::Union => {
+                                one(quote!(::core::mem::MaybeUninit<#c>), quote!(#fout(#v)))
+                            }
+                            Kind::Data => one(quote!(#c), quote!(#fout(#v))),
+                            Kind::Opaque => one(
+                                quote!(*mut #c),
+                                quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
+                            ),
+                            Kind::ReprC { .. } => one(
+                                quote!(#c),
+                                quote!(<#c as ::prebindgen_c_runtime::Transmute>::from_rust(#v)),
+                            ),
+                            Kind::Error { .. } => {
+                                self.require_free()?;
+                                let _ = name;
+                                one(quote!(*mut ::core::ffi::c_char), quote!(#fout(#v)))
+                            }
                         }
                     }
                 }
-            },
+            }
             Shape::Undeclared(name) => {
                 return err(format!("`{name}` is not declared to the C adapter"))
             }
@@ -222,29 +229,28 @@ impl<'f> Plan<'f> {
                 access: Access::Owned,
             } => Some(free),
             Shape::Boxed(inner) => self.release(inner, place)?,
-            Shape::Declared {
-                name,
-                setting,
-                access: Access::Owned,
-            } => match setting {
-                Setting::Converted(c) => match c.output.as_ref().or(c.input.as_ref()) {
-                    Some(stage) => self.release(&stage.repr, place)?,
-                    None => None,
-                },
-                Setting::Type(t) => {
-                    let (d, frel) = (&t.drop, format_ident!("__cbg_release_{}", t.rust));
-                    match &t.kind {
-                        Kind::Enum => None,
-                        Kind::Union => self.owns(name)?.then(|| quote!(#d(&mut #place);)),
-                        Kind::Data => self.owns(name)?.then(|| quote!(#frel(&mut #place);)),
-                        Kind::Opaque => {
-                            Some(quote! { #d(#place); #place = ::core::ptr::null_mut(); })
+            Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
+                let name = declared_name(ty);
+                match declaration {
+                    Setting::Converted(c) => match c.output.as_ref().or(c.input.as_ref()) {
+                        Some(stage) => self.release(&stage.repr, place)?,
+                        None => None,
+                    },
+                    Setting::Type(t) => {
+                        let (d, frel) = (&t.drop, format_ident!("__cbg_release_{}", t.rust));
+                        match &t.kind {
+                            Kind::Enum => None,
+                            Kind::Union => self.owns(name)?.then(|| quote!(#d(&mut #place);)),
+                            Kind::Data => self.owns(name)?.then(|| quote!(#frel(&mut #place);)),
+                            Kind::Opaque => {
+                                Some(quote! { #d(#place); #place = ::core::ptr::null_mut(); })
+                            }
+                            Kind::ReprC { .. } => Some(quote!(#d(&mut #place);)),
+                            Kind::Error { .. } => Some(free),
                         }
-                        Kind::ReprC { .. } => Some(quote!(#d(&mut #place);)),
-                        Kind::Error { .. } => Some(free),
                     }
                 }
-            },
+            }
             _ => None,
         })
     }
@@ -288,6 +294,18 @@ impl<'f> Plan<'f> {
     pub(crate) fn param(&self, name: &syn::Ident, ty: &TypeRef) -> Res<Input> {
         let null = |what: &str| format!("null {what} pointer");
         let fail = |msg: &str| quote!(return ::core::result::Result::Err(::std::string::String::from(#msg)));
+        let borrowed_value = |access: Access| -> Res<Input> {
+            let TypeKind::Ref { inner, .. } = ty.kind() else {
+                unreachable!("borrowed shape without a borrowed type")
+            };
+            let input = self.value_in(inner, name)?;
+            let pass = if access == Access::Exclusive {
+                quote!(&mut #name)
+            } else {
+                quote!(&#name)
+            };
+            Ok(input.with_pass(pass))
+        };
         Ok(match self.shape(ty)? {
             Shape::Str {
                 kind: TextKind::Str,
@@ -360,16 +378,17 @@ impl<'f> Plan<'f> {
                 )
             }
             Shape::Declared {
-                name: tname,
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(
                         t @ CType {
                             kind: Kind::Opaque | Kind::ReprC { .. },
                             ..
                         },
                     ),
-                access: access @ (Access::Shared | Access::Exclusive),
-            } => {
+            } if Access::of(declared_ty) != Access::Owned => {
+                let tname = declared_name(declared_ty);
+                let access = Access::of(declared_ty);
                 let (c, src) = (&t.c, self.source(tname));
                 let null = fail(&null(tname));
                 let (ptr, r) = if access == Access::Exclusive {
@@ -386,16 +405,16 @@ impl<'f> Plan<'f> {
                 )
             }
             Shape::Declared {
-                name: tname,
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(
                         t @ CType {
                             kind: Kind::ReprC { .. },
                             ..
                         },
                     ),
-                access: Access::Owned,
-            } => {
+            } if Access::of(declared_ty) == Access::Owned => {
+                let tname = declared_name(declared_ty);
                 let c = &t.c;
                 let null = fail(&format!("null {tname} value passed by value"));
                 let graves = self.repr_c_graves(tname);
@@ -411,26 +430,15 @@ impl<'f> Plan<'f> {
             }
             // A borrow of a value: convert the value, lend it.
             Shape::Declared {
-                access: access @ (Access::Shared | Access::Exclusive),
-                ..
+                ty: declared_ty, ..
+            } if Access::of(declared_ty) != Access::Owned => {
+                borrowed_value(Access::of(declared_ty))?
             }
-            | Shape::Str {
+            Shape::Str {
                 kind: TextKind::String,
                 access: access @ (Access::Shared | Access::Exclusive),
             }
-            | Shape::Ref { access, .. } => {
-                let inner = match ty.kind() {
-                    TypeKind::Ref { inner, .. } => &**inner,
-                    _ => ty,
-                };
-                let input = self.value_in(inner, name)?;
-                let pass = if access == Access::Exclusive {
-                    quote!(&mut #name)
-                } else {
-                    quote!(&#name)
-                };
-                input.with_pass(pass)
-            }
+            | Shape::Ref { access, .. } => borrowed_value(access)?,
             Shape::Callback(args) => {
                 let key = ty.key().as_str().to_string();
                 let c = self.closures[&key].clone();
@@ -439,15 +447,15 @@ impl<'f> Plan<'f> {
             }
             Shape::Option(inner) => match self.shape(inner)? {
                 Shape::Declared {
-                    name: tname,
-                    setting:
+                    ty: declared_ty,
+                    declaration:
                         Setting::Type(
                             t @ CType {
                                 kind: Kind::Opaque, ..
                             },
                         ),
-                    access: Access::Shared,
-                } => {
+                } if Access::of(declared_ty) == Access::Shared => {
+                    let tname = declared_name(declared_ty);
                     let (c, src) = (&t.c, self.source(tname));
                     Input::new(
                         vec![Wire::new(name.clone(), quote!(*const #c))],
@@ -471,16 +479,16 @@ impl<'f> Plan<'f> {
     fn pointee(&self, ty: &TypeRef) -> Res<&CType> {
         match self.shape(ty)? {
             Shape::Declared {
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(
                         t @ CType {
                             kind: Kind::ReprC { .. } | Kind::Opaque,
                             ..
                         },
                     ),
-                access: Access::Owned,
                 ..
-            } => Ok(t),
+            } if Access::of(declared_ty) == Access::Owned => Ok(t),
             _ => err(format!(
                 "`{ty}` must be a declared repr_c_struct or opaque_ptr here"
             )),
@@ -513,14 +521,13 @@ impl<'f> Plan<'f> {
         };
         let ename = match self.shape(e)? {
             Shape::Declared {
-                name,
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(CType {
                         kind: Kind::Error { .. },
                         ..
                     }),
-                access: Access::Owned,
-            } => name,
+            } if Access::of(declared_ty) == Access::Owned => declared_name(declared_ty),
             _ => {
                 return err(format!(
                     "`{e}`: the error type must be declared `.opaque_error(..)`"
@@ -594,29 +601,30 @@ impl<'f> Plan<'f> {
                 ))
             }
             Shape::Declared {
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(CType {
                         kind: Kind::Opaque,
                         c,
                         ..
                     }),
-                access: Access::Owned,
                 ..
-            } => Some((
+            } if Access::of(declared_ty) == Access::Owned => Some((
                 quote!(*mut #c),
                 quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
             )),
             Shape::Option(inner) => match self.shape(inner)? {
                 Shape::Declared {
-                    setting:
+                    ty: declared_ty,
+                    declaration:
                         Setting::Type(CType {
                             kind: Kind::Opaque,
                             c,
                             ..
                         }),
-                    access: access @ (Access::Owned | Access::Shared),
                     ..
-                } => {
+                } if Access::of(declared_ty) != Access::Exclusive => {
+                    let access = Access::of(declared_ty);
                     let val = if access == Access::Shared {
                         quote!(::core::clone::Clone::clone(__x))
                     } else {
@@ -644,16 +652,16 @@ impl<'f> Plan<'f> {
         match self.shape(ty)? {
             Shape::Scalar(ScalarKind::Bool) => return Ok((quote!(bool), v.clone())),
             Shape::Declared {
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(CType {
                         kind: Kind::Enum,
                         c,
                         rust,
                         ..
                     }),
-                access: Access::Owned,
                 ..
-            } => {
+            } if Access::of(declared_ty) == Access::Owned => {
                 let fout = format_ident!("__cbg_out_{}", rust);
                 return Ok((quote!(#c), quote!(#fout(#v))));
             }
@@ -784,15 +792,15 @@ impl<'f> Plan<'f> {
                 ))
             }
             Shape::Declared {
-                name,
-                setting:
+                ty: declared_ty,
+                declaration:
                     Setting::Type(CType {
                         kind: Kind::ReprC { .. } | Kind::Opaque,
                         c,
                         ..
                     }),
-                access: Access::Shared,
-            } => {
+            } if Access::of(declared_ty) == Access::Shared => {
+                let name = declared_name(declared_ty);
                 let src = self.source(name);
                 Ok(Output::single(
                     Wire::new(n, quote!(*const #c)),

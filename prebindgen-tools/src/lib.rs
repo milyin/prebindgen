@@ -469,51 +469,54 @@ pub mod record {
     };
 }
 
-/// One level of a type's structure, read against the adapter's own settings.
+/// One level of a type's structure, with any adapter declaration for that type.
 ///
 /// An adapter lowers a type by recursion: it looks at the outermost layer,
 /// decides what that layer becomes on its boundary, and recurses into what
 /// the layer holds. [`shape()`] answers the first question the same way for
-/// every adapter — which layer this is, and, for a named type, the setting
-/// the adapter gave that type — so each adapter's recursion is one `match`
-/// over [`Shape`].
+/// every adapter. It first asks the adapter whether the complete type has a
+/// declaration, then returns a built-in shape when it does not. Each adapter
+/// recurses with one `match` over [`Shape`].
 ///
-/// For example, if the adapter has declared a binding for `Payload`, then
-/// `shape(&payload_type, |name| settings.get(name))` returns
-/// [`Shape::Declared`] with that setting. For `Option<Payload>`, it returns
-/// [`Shape::Option`] with the inner type; the adapter calls [`shape()`] again
-/// for that inner type. This keeps the adapter's policy in one recursive
-/// match rather than in the flat model.
+/// For example, `shape(&payload_type, shape_declared)` returns
+/// [`Shape::Declared`] when the callback returns a declaration for `Payload`.
+/// For `Option<Payload>`, it returns [`Shape::Option`] when the callback has
+/// no declaration for the whole option; the adapter then calls [`shape()`]
+/// on its inner type.
 ///
 /// A shape describes source structure; the adapter uses it to build an
-/// [`Input`] or [`Output`] for its chosen wire representation. A named type
-/// can use an adapter-specific setting (for example, an opaque handle
-/// declaration), while containers expose child types for further calls.
+/// [`Input`] or [`Output`] for its chosen wire representation. An adapter
+/// can declare a type such as `Vec<u8>` as a whole, while an undeclared
+/// container exposes child types for further calls.
 /// [`Access`] describes by-value use or borrowing; [`SequenceKind`] and
 /// [`TextKind`] identify the source container independently of access.
 /// `Cow` remains an explicit wrapper around its inner type.
 ///
-/// [`shape()`] documents the full lookup rules, the special handling of
-/// `String` and common borrows, and which unsupported forms return errors.
+/// [`shape()`] documents declaration precedence, the handling of common
+/// borrows, and which unsupported forms return errors.
 /// A successful call only classifies the current layer: an adapter must
 /// still handle undeclared names and errors encountered in its children.
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_flat::Flat;
+/// use prebindgen_flat::{Flat, flat::{TypeKind, TypeRef}};
 /// use prebindgen_tools::{shape, Access, Shape};
 /// let source = syn::parse_file("pub struct Payload; pub fn send(value: Option<&Payload>) {}").unwrap();
 /// let flat = Flat::builder()
 ///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
 ///     .build().unwrap();
 /// let ty = &flat.function("send").unwrap().params[0].ty;
-/// // The Option layer exposes its child without looking up Payload yet.
-/// let Shape::Option(inner) = shape::<&str>(ty, |_| panic!("no lookup at this layer"))
+/// // The callback has no declaration for the whole Option.
+/// let Shape::Option(inner) = shape::<&str>(ty, |_| None)
 ///     .unwrap() else { panic!("expected Option") };
-/// // The child is &Payload: its declaration and borrow are reported together.
+/// // The callback finds Payload inside the borrow; Declared retains &Payload.
 /// assert!(matches!(
-///     shape(inner, |name| (name == "Payload").then_some("handle")).unwrap(),
-///     Shape::Declared { setting: "handle", access: Access::Shared, .. }
+///     shape(inner, |candidate: &TypeRef| match candidate.kind() {
+///         TypeKind::Named { id, .. } if id.name == "Payload" => Some("handle"),
+///         _ => None,
+///     }).unwrap(),
+///     Shape::Declared { ty, declaration: "handle" }
+///         if std::ptr::eq(ty, inner) && Access::of(ty) == Access::Shared
 /// ));
 /// // Missing adapter configuration is a shape the adapter must handle.
 /// assert!(matches!(

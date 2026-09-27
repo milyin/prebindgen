@@ -66,9 +66,7 @@ impl Plan<'_> {
             }
             Shape::Str { .. } | Shape::Array { .. } => vec![expr.to_string()],
             Shape::Seq { elem, .. } if is_u8(elem) => vec![expr.to_string()],
-            Shape::Declared {
-                setting, access: a, ..
-            } => match setting {
+            Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => {
                     self.kt_encode(self.conv_repr(c, Dir::In)?, expr, nullable, cx, consumed)?
                 }
@@ -77,7 +75,7 @@ impl Plan<'_> {
                         cx.handles.push(HandleSite {
                             expr: expr.to_string(),
                             nullable,
-                            consumed: consumed && a == Access::Owned,
+                            consumed: consumed && Access::of(ty) == Access::Owned,
                             class: c.clone(),
                         });
                         vec![or_default(access(expr, "ptr"), "0L")]
@@ -213,7 +211,7 @@ impl Plan<'_> {
             Shape::Scalar(_) => leaves[0].clone(),
             Shape::Str { .. } | Shape::Array { .. } => bang(&leaves[0]),
             Shape::Seq { elem, .. } if is_u8(elem) => bang(&leaves[0]),
-            Shape::Declared { setting, .. } => match setting {
+            Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => {
                     self.kt_decode(self.conv_repr(c, Dir::Out)?, leaves, gated, depth)?
                 }

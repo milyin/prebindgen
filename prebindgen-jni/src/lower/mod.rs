@@ -31,11 +31,27 @@ pub(crate) mod pack;
 pub(crate) mod rust;
 pub(crate) mod select;
 
-use prebindgen_flat::flat::{Alternative, Field, ScalarKind, TypeRef};
+use prebindgen_flat::flat::{Alternative, Field, ScalarKind, TypeKind, TypeRef};
 use prebindgen_tools::{names, shape, Access, SequenceKind, Shape, TextKind};
 
 use self::leaf::{join, Leaf, LeafTy, Prim};
 use crate::plan::{err, Class, ClassKind, Conv, Plan, Res, Setting};
+
+fn bare_declared_name(ty: &TypeRef) -> Option<&str> {
+    match ty.kind() {
+        TypeKind::Named { id, .. } => Some(&id.name),
+        TypeKind::String => Some("String"),
+        _ => None,
+    }
+}
+
+fn declared_name(ty: &TypeRef) -> Option<&str> {
+    let core = match ty.kind() {
+        TypeKind::Ref { inner, .. } => inner.as_ref(),
+        _ => ty,
+    };
+    bare_declared_name(core)
+}
 
 /// Which way a value crosses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -171,17 +187,19 @@ impl Plan<'_> {
     /// class, a converted type) is a [`Shape::Ref`] over it: the value is
     /// decoded and lent. A handle keeps its [`Access`].
     pub(crate) fn shape<'t>(&self, ty: &'t TypeRef) -> Res<Shape<'t, &Setting>> {
-        let s =
-            shape(ty, |n| self.types.get(n)).map_err(|e| crate::Error(format!("`{ty}`: {e}")))?;
+        let s = shape(ty, |candidate| {
+            bare_declared_name(candidate).and_then(|name| self.types.get(name))
+        })
+        .map_err(|e| crate::Error(format!("`{ty}`: {e}")))?;
         Ok(match s {
             Shape::Declared {
-                setting,
-                access: access @ (Access::Shared | Access::Exclusive),
-                ..
-            } if !matches!(setting, Setting::Class(c) if matches!(c.kind, ClassKind::Ptr { .. })) => {
+                ty, declaration, ..
+            } if Access::of(ty) != Access::Owned
+                && !matches!(declaration, Setting::Class(c) if matches!(c.kind, ClassKind::Ptr { .. })) =>
+            {
                 Shape::Ref {
                     inner: ty.borrow_target().expect("a borrow"),
-                    access,
+                    access: Access::of(ty),
                 }
             }
             Shape::Str {
@@ -283,7 +301,7 @@ impl Plan<'_> {
                 }
                 _ => return err(format!("`{ty}`: only arrays of primitives cross")),
             },
-            Shape::Declared { setting, .. } => match setting {
+            Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => self.leaves(self.conv_repr(c, dir)?, dir)?,
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => vec![Leaf::new(LeafTy::Prim(Prim::J))],
@@ -357,7 +375,7 @@ impl Plan<'_> {
                 prebindgen_flat::flat::TypeKind::Scalar(k) => array_prim(*k).kt_array(),
                 _ => return err(format!("`{ty}`: only arrays of primitives cross")),
             },
-            Shape::Declared { setting, .. } => match setting {
+            Shape::Declared { declaration, .. } => match declaration {
                 Setting::Class(c) => c.fqn(),
                 Setting::Converted(c) => self.kt_type(self.conv_repr(c, Dir::In)?)?,
             },
@@ -377,11 +395,10 @@ impl Plan<'_> {
     pub(crate) fn owns_handle(&self, ty: &TypeRef) -> Res<bool> {
         Ok(match self.shape(ty)? {
             Shape::Declared {
-                setting: Setting::Class(c),
-                access,
+                declaration: Setting::Class(c),
                 ..
             } => match &c.kind {
-                ClassKind::Ptr { .. } => access != Access::Exclusive,
+                ClassKind::Ptr { .. } => Access::of(ty) != Access::Exclusive,
                 ClassKind::Data { .. } => {
                     let mut any = false;
                     for f in &self.struct_of(c)?.fields {
