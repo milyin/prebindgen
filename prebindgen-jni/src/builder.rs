@@ -165,9 +165,11 @@ impl JniGenBuilder {
     /// classes ([`ptr_class!`](crate::ptr_class), [`data_class!`](crate::data_class),
     /// [`enum_class!`](crate::enum_class), [`sealed_class!`](crate::sealed_class)),
     /// functions ([`fun!`](crate::fun)) and constants
-    /// ([`constant!`](crate::constant)). Every type a bound function uses must
-    /// be declared as a class or a conversion. `examples/covertest-kotlin/build.rs`
-    /// declares every kind.
+    /// ([`constant!`](crate::constant)). A source-defined type a bound function
+    /// uses must be declared as a class or a conversion; primitives, strings,
+    /// `Option`, `Vec`, arrays, borrows and callbacks need no declaration (see
+    /// [How values cross](crate#how-values-cross)).
+    /// `examples/covertest-kotlin/build.rs` declares every kind.
     pub fn package(mut self, p: PackageDecl) -> Self {
         self.packages.push(p);
         self

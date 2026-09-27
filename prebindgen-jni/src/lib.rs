@@ -28,15 +28,32 @@
 //! Generated Rust never touches a Kotlin object's fields. Every value crosses
 //! as a flat list of *leaves* — JNI primitives, strings, primitive arrays,
 //! object arrays — and the generated Kotlin takes objects apart and puts them
-//! back together:
+//! back together.
+//!
+//! Built-in shapes need no declaration:
+//!
+//! * integers, floats and `bool` are the matching Kotlin primitive (`u64` is
+//!   `ULong`; `u8`/`u16` widen to `Int`, `u32`/`usize` to `Long`);
+//! * `String`, `&str` and `Cow<str>` are a `String`;
+//! * `Vec<u8>`, `&[u8]` and `Cow<[u8]>` are a `ByteArray`, and `[T; N]` of a
+//!   primitive is the matching primitive array;
+//! * `Option<T>` is `T?`, and `Vec<T>` or `&[T]` is `List<T>`;
+//! * `&T`, `&mut T`, `Box<T>` and `Cow<T>` cross as `T`;
+//! * an `impl Fn(..)` parameter is a generated callback interface.
+//!
+//! A type the source crate defines must be declared, and its declaration
+//! chooses the representation:
 //!
 //! * a handle (`ptr_class!`) is its pointer, a `Long`;
 //! * an enum (`enum_class!`) is its value, an `Int`;
 //! * a data class (`data_class!`) is its fields' leaves side by side;
 //! * a sealed class (`sealed_class!`) is a tag plus every alternative's
 //!   fields;
-//! * `Option<T>` adds a presence flag (a single object leaf is just nullable);
-//! * `Vec<T>` is a count plus one array per leaf of `T`.
+//! * a converted type ([`JniGenBuilder::convert`]) crosses as its
+//!   representation type.
+//!
+//! On the leaves, `Option<T>` adds a presence flag (a single object leaf is
+//! just nullable), and `Vec<T>` is a count plus one array per leaf of `T`.
 //!
 //! A result with several leaves reaches Kotlin through one upcall to a
 //! generated sink that assembles it. `expand_return!` turns a result into
