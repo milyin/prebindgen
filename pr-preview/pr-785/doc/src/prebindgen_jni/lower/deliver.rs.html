@@ -147,7 +147,7 @@
 <a href=#147 id=147 data-nosnippet>147</a>        }
 <a href=#148 id=148 data-nosnippet>148</a>        <span class="kw">if </span>inline {
 <a href=#149 id=149 data-nosnippet>149</a>            <span class="kw">if let </span>Shape::Declared {
-<a href=#150 id=150 data-nosnippet>150</a>                setting: Setting::Class(c),
+<a href=#150 id=150 data-nosnippet>150</a>                declaration: Setting::Class(c),
 <a href=#151 id=151 data-nosnippet>151</a>                ..
 <a href=#152 id=152 data-nosnippet>152</a>            } = <span class="self">self</span>.shape(core)<span class="question-mark">?
 <a href=#153 id=153 data-nosnippet>153</a>            </span>{
@@ -382,185 +382,187 @@
 <a href=#382 id=382 data-nosnippet>382</a>
 <a href=#383 id=383 data-nosnippet>383</a>    <span class="kw">fn </span>callback_arg(<span class="kw-2">&amp;</span><span class="self">self</span>, i: usize, ty: <span class="kw-2">&amp;</span>TypeRef, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; Res&lt;Delivery&gt; {
 <a href=#384 id=384 data-nosnippet>384</a>        <span class="kw">let </span>name = <span class="kw">match </span><span class="self">self</span>.shape(ty) {
-<a href=#385 id=385 data-nosnippet>385</a>            <span class="prelude-val">Ok</span>(Shape::Declared { name, .. }) =&gt; names::snake(name),
-<a href=#386 id=386 data-nosnippet>386</a>            <span class="prelude-val">Ok</span>(Shape::Scalar(k)) =&gt; k.as_str().to_string(),
-<a href=#387 id=387 data-nosnippet>387</a>            <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"arg{i}"</span>),
-<a href=#388 id=388 data-nosnippet>388</a>        };
-<a href=#389 id=389 data-nosnippet>389</a>        <span class="self">self</span>.deliver(
-<a href=#390 id=390 data-nosnippet>390</a>            ty,
-<a href=#391 id=391 data-nosnippet>391</a>            value.clone(),
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"a{i}"</span>),
-<a href=#393 id=393 data-nosnippet>393</a>            <span class="kw-2">&amp;</span>name,
-<a href=#394 id=394 data-nosnippet>394</a>            <span class="prelude-val">None</span>,
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw-2">&amp;</span>[],
-<a href=#396 id=396 data-nosnippet>396</a>            <span class="bool-val">false</span>,
-<a href=#397 id=397 data-nosnippet>397</a>            <span class="number">1</span>,
-<a href=#398 id=398 data-nosnippet>398</a>        )
-<a href=#399 id=399 data-nosnippet>399</a>    }
-<a href=#400 id=400 data-nosnippet>400</a>
-<a href=#401 id=401 data-nosnippet>401</a>    <span class="kw">fn </span>callback_base(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;String&gt; {
-<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">let </span>TypeKind::Callback { args } = ty.kind() <span class="kw">else </span>{
-<a href=#403 id=403 data-nosnippet>403</a>            <span class="kw">return </span>err(<span class="macro">format!</span>(<span class="string">"`{ty}` is not a callback"</span>));
-<a href=#404 id=404 data-nosnippet>404</a>        };
-<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">if </span>args.is_empty() {
-<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="string">"Void"</span>.to_string());
-<a href=#407 id=407 data-nosnippet>407</a>        }
-<a href=#408 id=408 data-nosnippet>408</a>        <span class="prelude-val">Ok</span>(args.iter().map(type_base).collect())
-<a href=#409 id=409 data-nosnippet>409</a>    }
-<a href=#410 id=410 data-nosnippet>410</a>
-<a href=#411 id=411 data-nosnippet>411</a>    <span class="doccomment">/// The package of a callback type's interfaces: the class of its one
-<a href=#412 id=412 data-nosnippet>412</a>    /// argument, else the base package.
-<a href=#413 id=413 data-nosnippet>413</a>    </span><span class="kw">fn </span>callback_pkg(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; String {
-<a href=#414 id=414 data-nosnippet>414</a>        <span class="kw">if let </span>TypeKind::Callback { args } = ty.kind() {
-<a href=#415 id=415 data-nosnippet>415</a>            <span class="kw">if let </span>[arg] = args.as_slice() {
-<a href=#416 id=416 data-nosnippet>416</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(c) = core_name(arg).and_then(|n| <span class="self">self</span>.class(<span class="kw-2">&amp;</span>n)) {
-<a href=#417 id=417 data-nosnippet>417</a>                    <span class="kw">return </span>c.pkg.clone();
-<a href=#418 id=418 data-nosnippet>418</a>                }
-<a href=#419 id=419 data-nosnippet>419</a>            }
-<a href=#420 id=420 data-nosnippet>420</a>        }
-<a href=#421 id=421 data-nosnippet>421</a>        <span class="self">self</span>.base_pkg.clone()
-<a href=#422 id=422 data-nosnippet>422</a>    }
-<a href=#423 id=423 data-nosnippet>423</a>
-<a href=#424 id=424 data-nosnippet>424</a>    <span class="doccomment">/// The user-facing callback interface of `ty`.
-<a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;String&gt; {
-<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">let </span>(pkg, base) = (<span class="self">self</span>.callback_pkg(ty), <span class="self">self</span>.callback_base(ty)<span class="question-mark">?</span>);
-<a href=#427 id=427 data-nosnippet>427</a>        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{pkg}.{base}Callback"</span>))
-<a href=#428 id=428 data-nosnippet>428</a>    }
-<a href=#429 id=429 data-nosnippet>429</a>
-<a href=#430 id=430 data-nosnippet>430</a>    <span class="doccomment">/// The raw callback interface of `ty`, the one Rust invokes.
-<a href=#431 id=431 data-nosnippet>431</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_raw_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;String&gt; {
-<a href=#432 id=432 data-nosnippet>432</a>        <span class="kw">let </span>(pkg, base) = (<span class="self">self</span>.callback_pkg(ty), <span class="self">self</span>.callback_base(ty)<span class="question-mark">?</span>);
-<a href=#433 id=433 data-nosnippet>433</a>        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{pkg}.{base}CallbackRaw"</span>))
-<a href=#434 id=434 data-nosnippet>434</a>    }
-<a href=#435 id=435 data-nosnippet>435</a>
-<a href=#436 id=436 data-nosnippet>436</a>    <span class="doccomment">/// The Rust closure a callback object `w` becomes: every call delivers
-<a href=#437 id=437 data-nosnippet>437</a>    /// the arguments through one upcall.
-<a href=#438 id=438 data-nosnippet>438</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_closure(
-<a href=#439 id=439 data-nosnippet>439</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#440 id=440 data-nosnippet>440</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
-<a href=#441 id=441 data-nosnippet>441</a>        args: <span class="kw-2">&amp;</span>[TypeRef],
-<a href=#442 id=442 data-nosnippet>442</a>        w: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#443 id=443 data-nosnippet>443</a>    ) -&gt; Res&lt;TokenStream&gt; {
-<a href=#444 id=444 data-nosnippet>444</a>        <span class="kw">let </span>leaves: Vec&lt;Leaf&gt; = <span class="self">self
-<a href=#445 id=445 data-nosnippet>445</a>            </span>.callback_args(args)<span class="question-mark">?
-<a href=#446 id=446 data-nosnippet>446</a>            </span>.into_iter()
-<a href=#447 id=447 data-nosnippet>447</a>            .flat_map(|d| d.leaves)
-<a href=#448 id=448 data-nosnippet>448</a>            .collect();
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">let </span>desc = method_desc(<span class="kw-2">&amp;</span>leaves, <span class="string">"V"</span>);
-<a href=#450 id=450 data-nosnippet>450</a>        <span class="kw">let </span>frame = <span class="number">32 </span>+ leaves.len() <span class="kw">as </span>i32 * <span class="number">2</span>;
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">let </span>what = <span class="macro">format!</span>(<span class="string">"callback {ty}"</span>);
-<a href=#452 id=452 data-nosnippet>452</a>        ClosureWriter::new(args)
-<a href=#453 id=453 data-nosnippet>453</a>            .setup(<span class="macro">quote!</span>(<span class="kw">let </span>__up = ::prebindgen_jni_runtime::Upcall::new(env, <span class="kw-2">&amp;</span>#w, <span class="string">"run"</span>, #desc, #frame)<span class="question-mark">?</span>;))
-<a href=#454 id=454 data-nosnippet>454</a>            .on_error(<span class="macro">quote!</span>(::prebindgen_jni_runtime::report_callback_error(#what, <span class="kw-2">&amp;</span>__err);))
-<a href=#455 id=455 data-nosnippet>455</a>            .write(<span class="kw-2">&amp;</span><span class="self">self</span>.q, <span class="kw-2">&amp;mut </span>CallbackArgs(<span class="self">self</span>), |binds, outs| {
-<a href=#456 id=456 data-nosnippet>456</a>                <span class="kw">let </span>values = outs
-<a href=#457 id=457 data-nosnippet>457</a>                    .iter()
-<a href=#458 id=458 data-nosnippet>458</a>                    .flat_map(|o| <span class="kw-2">&amp;</span>o.wires)
-<a href=#459 id=459 data-nosnippet>459</a>                    .zip(<span class="kw-2">&amp;</span>leaves)
-<a href=#460 id=460 data-nosnippet>460</a>                    .map(|(wr, l)| l.jvalue(<span class="kw-2">&amp;</span>wr.name.to_token_stream()));
-<a href=#461 id=461 data-nosnippet>461</a>                <span class="macro">quote!</span> {
-<a href=#462 id=462 data-nosnippet>462</a>                    __up.call_void(|env| {
-<a href=#463 id=463 data-nosnippet>463</a>                        #binds
-<a href=#464 id=464 data-nosnippet>464</a>                        ::core::result::Result::Ok(<span class="macro">::std::vec!</span>[#(#values),<span class="kw-2">*</span>])
-<a href=#465 id=465 data-nosnippet>465</a>                    })<span class="question-mark">?</span>;
-<a href=#466 id=466 data-nosnippet>466</a>                }
-<a href=#467 id=467 data-nosnippet>467</a>            })
-<a href=#468 id=468 data-nosnippet>468</a>    }
-<a href=#469 id=469 data-nosnippet>469</a>}
-<a href=#470 id=470 data-nosnippet>470</a>
-<a href=#471 id=471 data-nosnippet>471</a><span class="doccomment">/// A callback's arguments, each delivered.
-<a href=#472 id=472 data-nosnippet>472</a></span><span class="kw">struct </span>CallbackArgs&lt;<span class="lifetime">'p</span>, <span class="lifetime">'f</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'p </span>Plan&lt;<span class="lifetime">'f</span>&gt;);
-<a href=#473 id=473 data-nosnippet>473</a>
-<a href=#474 id=474 data-nosnippet>474</a><span class="kw">impl </span>ClosureCallbacks <span class="kw">for </span>CallbackArgs&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
-<a href=#475 id=475 data-nosnippet>475</a>    <span class="kw">type </span>Error = <span class="kw">crate</span>::Error;
-<a href=#476 id=476 data-nosnippet>476</a>
-<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">fn </span>arg(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: usize, ty: <span class="kw-2">&amp;</span>TypeRef, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; Res&lt;Output&gt; {
-<a href=#478 id=478 data-nosnippet>478</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.callback_arg(index, ty, value)<span class="question-mark">?</span>.output)
-<a href=#479 id=479 data-nosnippet>479</a>    }
-<a href=#480 id=480 data-nosnippet>480</a>}
-<a href=#481 id=481 data-nosnippet>481</a>
-<a href=#482 id=482 data-nosnippet>482</a><span class="doccomment">/// The entry a value form declares for field `seg`.
-<a href=#483 id=483 data-nosnippet>483</a></span><span class="kw">fn </span>field_entry&lt;<span class="lifetime">'a</span>, T&gt;(list: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[(String, T)], seg: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>T&gt; {
-<a href=#484 id=484 data-nosnippet>484</a>    list.iter().find(|(n, <span class="kw">_</span>)| n == seg).map(|(<span class="kw">_</span>, v)| v)
-<a href=#485 id=485 data-nosnippet>485</a>}
-<a href=#486 id=486 data-nosnippet>486</a>
-<a href=#487 id=487 data-nosnippet>487</a><span class="doccomment">/// `ty` under its transparent layers and borrows: the core type, the value
-<a href=#488 id=488 data-nosnippet>488</a>/// expression reaching it, and whether that value is borrowed.
-<a href=#489 id=489 data-nosnippet>489</a></span><span class="kw">fn </span>peel(ty: <span class="kw-2">&amp;</span>TypeRef, value: TokenStream) -&gt; (<span class="kw-2">&amp;</span>TypeRef, TokenStream, bool) {
-<a href=#490 id=490 data-nosnippet>490</a>    <span class="kw">match </span>ty.kind() {
-<a href=#491 id=491 data-nosnippet>491</a>        TypeKind::Boxed(inner) =&gt; peel(inner, <span class="macro">quote!</span>((<span class="kw-2">*</span>#value))),
-<a href=#492 id=492 data-nosnippet>492</a>        TypeKind::Ref { inner, .. } =&gt; {
-<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">let </span>(t, v, <span class="kw">_</span>) = peel(inner, value);
-<a href=#494 id=494 data-nosnippet>494</a>            (t, v, <span class="bool-val">true</span>)
-<a href=#495 id=495 data-nosnippet>495</a>        }
-<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">_ </span>=&gt; (ty, value, <span class="bool-val">false</span>),
-<a href=#497 id=497 data-nosnippet>497</a>    }
-<a href=#498 id=498 data-nosnippet>498</a>}
-<a href=#499 id=499 data-nosnippet>499</a>
-<a href=#500 id=500 data-nosnippet>500</a><span class="doccomment">/// The base a callback interface is named from.
-<a href=#501 id=501 data-nosnippet>501</a></span><span class="kw">fn </span>type_base(ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; String {
-<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">match </span>ty.kind() {
-<a href=#503 id=503 data-nosnippet>503</a>        TypeKind::Named { id, .. } =&gt; id.name.clone(),
-<a href=#504 id=504 data-nosnippet>504</a>        TypeKind::Scalar(k) =&gt; k.as_str().to_string(),
-<a href=#505 id=505 data-nosnippet>505</a>        TypeKind::String | TypeKind::Str =&gt; <span class="string">"String"</span>.to_string(),
-<a href=#506 id=506 data-nosnippet>506</a>        TypeKind::Ref { inner, .. } | TypeKind::Boxed(inner) | TypeKind::Cow { inner, .. } =&gt; {
-<a href=#507 id=507 data-nosnippet>507</a>            type_base(inner)
-<a href=#508 id=508 data-nosnippet>508</a>        }
-<a href=#509 id=509 data-nosnippet>509</a>        TypeKind::Vec(e) | TypeKind::Slice(e) =&gt; <span class="macro">format!</span>(<span class="string">"{}List"</span>, type_base(e)),
-<a href=#510 id=510 data-nosnippet>510</a>        TypeKind::Optional(t) =&gt; <span class="macro">format!</span>(<span class="string">"Optional{}"</span>, type_base(t)),
-<a href=#511 id=511 data-nosnippet>511</a>        TypeKind::Array { elem, .. } =&gt; <span class="macro">format!</span>(<span class="string">"{}Array"</span>, type_base(elem)),
-<a href=#512 id=512 data-nosnippet>512</a>        <span class="kw">_ </span>=&gt; <span class="string">"Value"</span>.to_string(),
-<a href=#513 id=513 data-nosnippet>513</a>    }
-<a href=#514 id=514 data-nosnippet>514</a>}
-<a href=#515 id=515 data-nosnippet>515</a>
-<a href=#516 id=516 data-nosnippet>516</a><span class="doccomment">/// The named type under `Option`, `Box` and borrows.
-<a href=#517 id=517 data-nosnippet>517</a></span><span class="kw">fn </span>core_name(ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
-<a href=#518 id=518 data-nosnippet>518</a>    <span class="kw">match </span>ty.kind() {
-<a href=#519 id=519 data-nosnippet>519</a>        TypeKind::Named { id, .. } =&gt; <span class="prelude-val">Some</span>(id.name.clone()),
-<a href=#520 id=520 data-nosnippet>520</a>        TypeKind::Optional(t) | TypeKind::Boxed(t) | TypeKind::Ref { inner: t, .. } =&gt; core_name(t),
-<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#522 id=522 data-nosnippet>522</a>    }
-<a href=#523 id=523 data-nosnippet>523</a>}
-<a href=#524 id=524 data-nosnippet>524</a>
-<a href=#525 id=525 data-nosnippet>525</a><span class="doccomment">/// Deliveries side by side, bound in order except `deferred` (bound last —
-<a href=#526 id=526 data-nosnippet>526</a>/// they consume the value the others read), wires in declaration order.
-<a href=#527 id=527 data-nosnippet>527</a></span><span class="kw">fn </span>concat(prelude: TokenStream, parts: Vec&lt;Delivery&gt;, deferred: Vec&lt;usize&gt;) -&gt; Delivery {
-<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">let </span>fallible = parts.iter().any(|p| p.output.fallible);
-<a href=#529 id=529 data-nosnippet>529</a>    <span class="kw">let </span><span class="kw-2">mut </span>binds = Vec::new();
-<a href=#530 id=530 data-nosnippet>530</a>    <span class="kw">let </span><span class="kw-2">mut </span>late = Vec::new();
-<a href=#531 id=531 data-nosnippet>531</a>    <span class="kw">for </span>(i, p) <span class="kw">in </span>parts.iter().enumerate() {
-<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">if </span>deferred.contains(<span class="kw-2">&amp;</span>i) {
-<a href=#533 id=533 data-nosnippet>533</a>            late.push(p.output.bind());
-<a href=#534 id=534 data-nosnippet>534</a>        } <span class="kw">else </span>{
-<a href=#535 id=535 data-nosnippet>535</a>            binds.push(p.output.bind());
-<a href=#536 id=536 data-nosnippet>536</a>        }
-<a href=#537 id=537 data-nosnippet>537</a>    }
-<a href=#538 id=538 data-nosnippet>538</a>    <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
-<a href=#539 id=539 data-nosnippet>539</a>    <span class="kw">let </span><span class="kw-2">mut </span>leaves = Vec::new();
-<a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">let </span><span class="kw-2">mut </span>wires = Vec::new();
-<a href=#541 id=541 data-nosnippet>541</a>    <span class="kw">for </span>p <span class="kw">in </span>parts {
-<a href=#542 id=542 data-nosnippet>542</a>        <span class="comment">// A handle delivered as a field of a larger value is the receiver's
-<a href=#543 id=543 data-nosnippet>543</a>        // to keep; only a whole delivered value is closed after a callback.
-<a href=#544 id=544 data-nosnippet>544</a>        </span>params.extend(p.params.into_iter().map(|p| DParam { close: <span class="prelude-val">None</span>, ..p }));
-<a href=#545 id=545 data-nosnippet>545</a>        leaves.extend(p.leaves);
-<a href=#546 id=546 data-nosnippet>546</a>        wires.extend(p.output.wires);
-<a href=#547 id=547 data-nosnippet>547</a>    }
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">let </span>names: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = wires.iter().map(|w| <span class="kw-2">&amp;</span>w.name).collect();
-<a href=#549 id=549 data-nosnippet>549</a>    <span class="kw">let </span>tuple = <span class="kw">if </span>names.len() == <span class="number">1 </span>{
-<a href=#550 id=550 data-nosnippet>550</a>        <span class="kw">let </span>n = names[<span class="number">0</span>];
-<a href=#551 id=551 data-nosnippet>551</a>        <span class="macro">quote!</span>(#n)
-<a href=#552 id=552 data-nosnippet>552</a>    } <span class="kw">else </span>{
-<a href=#553 id=553 data-nosnippet>553</a>        <span class="macro">quote!</span>((#(#names),<span class="kw-2">*</span>))
-<a href=#554 id=554 data-nosnippet>554</a>    };
-<a href=#555 id=555 data-nosnippet>555</a>    <span class="kw">let </span>expr = <span class="macro">quote!</span>({ #prelude #(#binds)* #(#late)* #tuple });
-<a href=#556 id=556 data-nosnippet>556</a>    Delivery {
-<a href=#557 id=557 data-nosnippet>557</a>        params,
-<a href=#558 id=558 data-nosnippet>558</a>        leaves,
-<a href=#559 id=559 data-nosnippet>559</a>        output: Output {
-<a href=#560 id=560 data-nosnippet>560</a>            wires,
-<a href=#561 id=561 data-nosnippet>561</a>            expr,
-<a href=#562 id=562 data-nosnippet>562</a>            fallible,
-<a href=#563 id=563 data-nosnippet>563</a>        },
-<a href=#564 id=564 data-nosnippet>564</a>    }
-<a href=#565 id=565 data-nosnippet>565</a>}
+<a href=#385 id=385 data-nosnippet>385</a>            <span class="prelude-val">Ok</span>(Shape::Declared { ty, .. }) =&gt; <span class="kw">super</span>::declared_name(ty)
+<a href=#386 id=386 data-nosnippet>386</a>                .map(names::snake)
+<a href=#387 id=387 data-nosnippet>387</a>                .unwrap_or_else(|| <span class="macro">format!</span>(<span class="string">"arg{i}"</span>)),
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="prelude-val">Ok</span>(Shape::Scalar(k)) =&gt; k.as_str().to_string(),
+<a href=#389 id=389 data-nosnippet>389</a>            <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"arg{i}"</span>),
+<a href=#390 id=390 data-nosnippet>390</a>        };
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="self">self</span>.deliver(
+<a href=#392 id=392 data-nosnippet>392</a>            ty,
+<a href=#393 id=393 data-nosnippet>393</a>            value.clone(),
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"a{i}"</span>),
+<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw-2">&amp;</span>name,
+<a href=#396 id=396 data-nosnippet>396</a>            <span class="prelude-val">None</span>,
+<a href=#397 id=397 data-nosnippet>397</a>            <span class="kw-2">&amp;</span>[],
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="bool-val">false</span>,
+<a href=#399 id=399 data-nosnippet>399</a>            <span class="number">1</span>,
+<a href=#400 id=400 data-nosnippet>400</a>        )
+<a href=#401 id=401 data-nosnippet>401</a>    }
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="kw">fn </span>callback_base(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;String&gt; {
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">let </span>TypeKind::Callback { args } = ty.kind() <span class="kw">else </span>{
+<a href=#405 id=405 data-nosnippet>405</a>            <span class="kw">return </span>err(<span class="macro">format!</span>(<span class="string">"`{ty}` is not a callback"</span>));
+<a href=#406 id=406 data-nosnippet>406</a>        };
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">if </span>args.is_empty() {
+<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="string">"Void"</span>.to_string());
+<a href=#409 id=409 data-nosnippet>409</a>        }
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="prelude-val">Ok</span>(args.iter().map(type_base).collect())
+<a href=#411 id=411 data-nosnippet>411</a>    }
+<a href=#412 id=412 data-nosnippet>412</a>
+<a href=#413 id=413 data-nosnippet>413</a>    <span class="doccomment">/// The package of a callback type's interfaces: the class of its one
+<a href=#414 id=414 data-nosnippet>414</a>    /// argument, else the base package.
+<a href=#415 id=415 data-nosnippet>415</a>    </span><span class="kw">fn </span>callback_pkg(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; String {
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">if let </span>TypeKind::Callback { args } = ty.kind() {
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw">if let </span>[arg] = args.as_slice() {
+<a href=#418 id=418 data-nosnippet>418</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(c) = core_name(arg).and_then(|n| <span class="self">self</span>.class(<span class="kw-2">&amp;</span>n)) {
+<a href=#419 id=419 data-nosnippet>419</a>                    <span class="kw">return </span>c.pkg.clone();
+<a href=#420 id=420 data-nosnippet>420</a>                }
+<a href=#421 id=421 data-nosnippet>421</a>            }
+<a href=#422 id=422 data-nosnippet>422</a>        }
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="self">self</span>.base_pkg.clone()
+<a href=#424 id=424 data-nosnippet>424</a>    }
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a>    <span class="doccomment">/// The user-facing callback interface of `ty`.
+<a href=#427 id=427 data-nosnippet>427</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;String&gt; {
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="kw">let </span>(pkg, base) = (<span class="self">self</span>.callback_pkg(ty), <span class="self">self</span>.callback_base(ty)<span class="question-mark">?</span>);
+<a href=#429 id=429 data-nosnippet>429</a>        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{pkg}.{base}Callback"</span>))
+<a href=#430 id=430 data-nosnippet>430</a>    }
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a>    <span class="doccomment">/// The raw callback interface of `ty`, the one Rust invokes.
+<a href=#433 id=433 data-nosnippet>433</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_raw_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;String&gt; {
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw">let </span>(pkg, base) = (<span class="self">self</span>.callback_pkg(ty), <span class="self">self</span>.callback_base(ty)<span class="question-mark">?</span>);
+<a href=#435 id=435 data-nosnippet>435</a>        <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{pkg}.{base}CallbackRaw"</span>))
+<a href=#436 id=436 data-nosnippet>436</a>    }
+<a href=#437 id=437 data-nosnippet>437</a>
+<a href=#438 id=438 data-nosnippet>438</a>    <span class="doccomment">/// The Rust closure a callback object `w` becomes: every call delivers
+<a href=#439 id=439 data-nosnippet>439</a>    /// the arguments through one upcall.
+<a href=#440 id=440 data-nosnippet>440</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>callback_closure(
+<a href=#441 id=441 data-nosnippet>441</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#442 id=442 data-nosnippet>442</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#443 id=443 data-nosnippet>443</a>        args: <span class="kw-2">&amp;</span>[TypeRef],
+<a href=#444 id=444 data-nosnippet>444</a>        w: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#445 id=445 data-nosnippet>445</a>    ) -&gt; Res&lt;TokenStream&gt; {
+<a href=#446 id=446 data-nosnippet>446</a>        <span class="kw">let </span>leaves: Vec&lt;Leaf&gt; = <span class="self">self
+<a href=#447 id=447 data-nosnippet>447</a>            </span>.callback_args(args)<span class="question-mark">?
+<a href=#448 id=448 data-nosnippet>448</a>            </span>.into_iter()
+<a href=#449 id=449 data-nosnippet>449</a>            .flat_map(|d| d.leaves)
+<a href=#450 id=450 data-nosnippet>450</a>            .collect();
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">let </span>desc = method_desc(<span class="kw-2">&amp;</span>leaves, <span class="string">"V"</span>);
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="kw">let </span>frame = <span class="number">32 </span>+ leaves.len() <span class="kw">as </span>i32 * <span class="number">2</span>;
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="kw">let </span>what = <span class="macro">format!</span>(<span class="string">"callback {ty}"</span>);
+<a href=#454 id=454 data-nosnippet>454</a>        ClosureWriter::new(args)
+<a href=#455 id=455 data-nosnippet>455</a>            .setup(<span class="macro">quote!</span>(<span class="kw">let </span>__up = ::prebindgen_jni_runtime::Upcall::new(env, <span class="kw-2">&amp;</span>#w, <span class="string">"run"</span>, #desc, #frame)<span class="question-mark">?</span>;))
+<a href=#456 id=456 data-nosnippet>456</a>            .on_error(<span class="macro">quote!</span>(::prebindgen_jni_runtime::report_callback_error(#what, <span class="kw-2">&amp;</span>__err);))
+<a href=#457 id=457 data-nosnippet>457</a>            .write(<span class="kw-2">&amp;</span><span class="self">self</span>.q, <span class="kw-2">&amp;mut </span>CallbackArgs(<span class="self">self</span>), |binds, outs| {
+<a href=#458 id=458 data-nosnippet>458</a>                <span class="kw">let </span>values = outs
+<a href=#459 id=459 data-nosnippet>459</a>                    .iter()
+<a href=#460 id=460 data-nosnippet>460</a>                    .flat_map(|o| <span class="kw-2">&amp;</span>o.wires)
+<a href=#461 id=461 data-nosnippet>461</a>                    .zip(<span class="kw-2">&amp;</span>leaves)
+<a href=#462 id=462 data-nosnippet>462</a>                    .map(|(wr, l)| l.jvalue(<span class="kw-2">&amp;</span>wr.name.to_token_stream()));
+<a href=#463 id=463 data-nosnippet>463</a>                <span class="macro">quote!</span> {
+<a href=#464 id=464 data-nosnippet>464</a>                    __up.call_void(|env| {
+<a href=#465 id=465 data-nosnippet>465</a>                        #binds
+<a href=#466 id=466 data-nosnippet>466</a>                        ::core::result::Result::Ok(<span class="macro">::std::vec!</span>[#(#values),<span class="kw-2">*</span>])
+<a href=#467 id=467 data-nosnippet>467</a>                    })<span class="question-mark">?</span>;
+<a href=#468 id=468 data-nosnippet>468</a>                }
+<a href=#469 id=469 data-nosnippet>469</a>            })
+<a href=#470 id=470 data-nosnippet>470</a>    }
+<a href=#471 id=471 data-nosnippet>471</a>}
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a><span class="doccomment">/// A callback's arguments, each delivered.
+<a href=#474 id=474 data-nosnippet>474</a></span><span class="kw">struct </span>CallbackArgs&lt;<span class="lifetime">'p</span>, <span class="lifetime">'f</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'p </span>Plan&lt;<span class="lifetime">'f</span>&gt;);
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a><span class="kw">impl </span>ClosureCallbacks <span class="kw">for </span>CallbackArgs&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
+<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">type </span>Error = <span class="kw">crate</span>::Error;
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a>    <span class="kw">fn </span>arg(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: usize, ty: <span class="kw-2">&amp;</span>TypeRef, value: <span class="kw-2">&amp;</span>TokenStream) -&gt; Res&lt;Output&gt; {
+<a href=#480 id=480 data-nosnippet>480</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.callback_arg(index, ty, value)<span class="question-mark">?</span>.output)
+<a href=#481 id=481 data-nosnippet>481</a>    }
+<a href=#482 id=482 data-nosnippet>482</a>}
+<a href=#483 id=483 data-nosnippet>483</a>
+<a href=#484 id=484 data-nosnippet>484</a><span class="doccomment">/// The entry a value form declares for field `seg`.
+<a href=#485 id=485 data-nosnippet>485</a></span><span class="kw">fn </span>field_entry&lt;<span class="lifetime">'a</span>, T&gt;(list: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[(String, T)], seg: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>T&gt; {
+<a href=#486 id=486 data-nosnippet>486</a>    list.iter().find(|(n, <span class="kw">_</span>)| n == seg).map(|(<span class="kw">_</span>, v)| v)
+<a href=#487 id=487 data-nosnippet>487</a>}
+<a href=#488 id=488 data-nosnippet>488</a>
+<a href=#489 id=489 data-nosnippet>489</a><span class="doccomment">/// `ty` under its transparent layers and borrows: the core type, the value
+<a href=#490 id=490 data-nosnippet>490</a>/// expression reaching it, and whether that value is borrowed.
+<a href=#491 id=491 data-nosnippet>491</a></span><span class="kw">fn </span>peel(ty: <span class="kw-2">&amp;</span>TypeRef, value: TokenStream) -&gt; (<span class="kw-2">&amp;</span>TypeRef, TokenStream, bool) {
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">match </span>ty.kind() {
+<a href=#493 id=493 data-nosnippet>493</a>        TypeKind::Boxed(inner) =&gt; peel(inner, <span class="macro">quote!</span>((<span class="kw-2">*</span>#value))),
+<a href=#494 id=494 data-nosnippet>494</a>        TypeKind::Ref { inner, .. } =&gt; {
+<a href=#495 id=495 data-nosnippet>495</a>            <span class="kw">let </span>(t, v, <span class="kw">_</span>) = peel(inner, value);
+<a href=#496 id=496 data-nosnippet>496</a>            (t, v, <span class="bool-val">true</span>)
+<a href=#497 id=497 data-nosnippet>497</a>        }
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="kw">_ </span>=&gt; (ty, value, <span class="bool-val">false</span>),
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>}
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a><span class="doccomment">/// The base a callback interface is named from.
+<a href=#503 id=503 data-nosnippet>503</a></span><span class="kw">fn </span>type_base(ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; String {
+<a href=#504 id=504 data-nosnippet>504</a>    <span class="kw">match </span>ty.kind() {
+<a href=#505 id=505 data-nosnippet>505</a>        TypeKind::Named { id, .. } =&gt; id.name.clone(),
+<a href=#506 id=506 data-nosnippet>506</a>        TypeKind::Scalar(k) =&gt; k.as_str().to_string(),
+<a href=#507 id=507 data-nosnippet>507</a>        TypeKind::String | TypeKind::Str =&gt; <span class="string">"String"</span>.to_string(),
+<a href=#508 id=508 data-nosnippet>508</a>        TypeKind::Ref { inner, .. } | TypeKind::Boxed(inner) | TypeKind::Cow { inner, .. } =&gt; {
+<a href=#509 id=509 data-nosnippet>509</a>            type_base(inner)
+<a href=#510 id=510 data-nosnippet>510</a>        }
+<a href=#511 id=511 data-nosnippet>511</a>        TypeKind::Vec(e) | TypeKind::Slice(e) =&gt; <span class="macro">format!</span>(<span class="string">"{}List"</span>, type_base(e)),
+<a href=#512 id=512 data-nosnippet>512</a>        TypeKind::Optional(t) =&gt; <span class="macro">format!</span>(<span class="string">"Optional{}"</span>, type_base(t)),
+<a href=#513 id=513 data-nosnippet>513</a>        TypeKind::Array { elem, .. } =&gt; <span class="macro">format!</span>(<span class="string">"{}Array"</span>, type_base(elem)),
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="kw">_ </span>=&gt; <span class="string">"Value"</span>.to_string(),
+<a href=#515 id=515 data-nosnippet>515</a>    }
+<a href=#516 id=516 data-nosnippet>516</a>}
+<a href=#517 id=517 data-nosnippet>517</a>
+<a href=#518 id=518 data-nosnippet>518</a><span class="doccomment">/// The named type under `Option`, `Box` and borrows.
+<a href=#519 id=519 data-nosnippet>519</a></span><span class="kw">fn </span>core_name(ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">match </span>ty.kind() {
+<a href=#521 id=521 data-nosnippet>521</a>        TypeKind::Named { id, .. } =&gt; <span class="prelude-val">Some</span>(id.name.clone()),
+<a href=#522 id=522 data-nosnippet>522</a>        TypeKind::Optional(t) | TypeKind::Boxed(t) | TypeKind::Ref { inner: t, .. } =&gt; core_name(t),
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#524 id=524 data-nosnippet>524</a>    }
+<a href=#525 id=525 data-nosnippet>525</a>}
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a><span class="doccomment">/// Deliveries side by side, bound in order except `deferred` (bound last —
+<a href=#528 id=528 data-nosnippet>528</a>/// they consume the value the others read), wires in declaration order.
+<a href=#529 id=529 data-nosnippet>529</a></span><span class="kw">fn </span>concat(prelude: TokenStream, parts: Vec&lt;Delivery&gt;, deferred: Vec&lt;usize&gt;) -&gt; Delivery {
+<a href=#530 id=530 data-nosnippet>530</a>    <span class="kw">let </span>fallible = parts.iter().any(|p| p.output.fallible);
+<a href=#531 id=531 data-nosnippet>531</a>    <span class="kw">let </span><span class="kw-2">mut </span>binds = Vec::new();
+<a href=#532 id=532 data-nosnippet>532</a>    <span class="kw">let </span><span class="kw-2">mut </span>late = Vec::new();
+<a href=#533 id=533 data-nosnippet>533</a>    <span class="kw">for </span>(i, p) <span class="kw">in </span>parts.iter().enumerate() {
+<a href=#534 id=534 data-nosnippet>534</a>        <span class="kw">if </span>deferred.contains(<span class="kw-2">&amp;</span>i) {
+<a href=#535 id=535 data-nosnippet>535</a>            late.push(p.output.bind());
+<a href=#536 id=536 data-nosnippet>536</a>        } <span class="kw">else </span>{
+<a href=#537 id=537 data-nosnippet>537</a>            binds.push(p.output.bind());
+<a href=#538 id=538 data-nosnippet>538</a>        }
+<a href=#539 id=539 data-nosnippet>539</a>    }
+<a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
+<a href=#541 id=541 data-nosnippet>541</a>    <span class="kw">let </span><span class="kw-2">mut </span>leaves = Vec::new();
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">let </span><span class="kw-2">mut </span>wires = Vec::new();
+<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">for </span>p <span class="kw">in </span>parts {
+<a href=#544 id=544 data-nosnippet>544</a>        <span class="comment">// A handle delivered as a field of a larger value is the receiver's
+<a href=#545 id=545 data-nosnippet>545</a>        // to keep; only a whole delivered value is closed after a callback.
+<a href=#546 id=546 data-nosnippet>546</a>        </span>params.extend(p.params.into_iter().map(|p| DParam { close: <span class="prelude-val">None</span>, ..p }));
+<a href=#547 id=547 data-nosnippet>547</a>        leaves.extend(p.leaves);
+<a href=#548 id=548 data-nosnippet>548</a>        wires.extend(p.output.wires);
+<a href=#549 id=549 data-nosnippet>549</a>    }
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="kw">let </span>names: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = wires.iter().map(|w| <span class="kw-2">&amp;</span>w.name).collect();
+<a href=#551 id=551 data-nosnippet>551</a>    <span class="kw">let </span>tuple = <span class="kw">if </span>names.len() == <span class="number">1 </span>{
+<a href=#552 id=552 data-nosnippet>552</a>        <span class="kw">let </span>n = names[<span class="number">0</span>];
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="macro">quote!</span>(#n)
+<a href=#554 id=554 data-nosnippet>554</a>    } <span class="kw">else </span>{
+<a href=#555 id=555 data-nosnippet>555</a>        <span class="macro">quote!</span>((#(#names),<span class="kw-2">*</span>))
+<a href=#556 id=556 data-nosnippet>556</a>    };
+<a href=#557 id=557 data-nosnippet>557</a>    <span class="kw">let </span>expr = <span class="macro">quote!</span>({ #prelude #(#binds)* #(#late)* #tuple });
+<a href=#558 id=558 data-nosnippet>558</a>    Delivery {
+<a href=#559 id=559 data-nosnippet>559</a>        params,
+<a href=#560 id=560 data-nosnippet>560</a>        leaves,
+<a href=#561 id=561 data-nosnippet>561</a>        output: Output {
+<a href=#562 id=562 data-nosnippet>562</a>            wires,
+<a href=#563 id=563 data-nosnippet>563</a>            expr,
+<a href=#564 id=564 data-nosnippet>564</a>            fallible,
+<a href=#565 id=565 data-nosnippet>565</a>        },
+<a href=#566 id=566 data-nosnippet>566</a>    }
+<a href=#567 id=567 data-nosnippet>567</a>}
 </code></pre></div></section></main></body></html>

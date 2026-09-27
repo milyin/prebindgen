@@ -13,7 +13,7 @@
 <a href=#13 id=13 data-nosnippet>13</a>
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use crate</span>::{
 <a href=#15 id=15 data-nosnippet>15</a>    lower::CRet,
-<a href=#16 id=16 data-nosnippet>16</a>    plan::{err, CType, Item, Kind, Plan, Res, Setting},
+<a href=#16 id=16 data-nosnippet>16</a>    plan::{declared_name, err, CType, Item, Kind, Plan, Res, Setting},
 <a href=#17 id=17 data-nosnippet>17</a>    Error,
 <a href=#18 id=18 data-nosnippet>18</a>};
 <a href=#19 id=19 data-nosnippet>19</a>
@@ -452,15 +452,15 @@
 <a href=#452 id=452 data-nosnippet>452</a>    };
 <a href=#453 id=453 data-nosnippet>453</a>    <span class="kw">let </span>opaque = |t: <span class="kw-2">&amp;</span>TypeRef| <span class="kw">match </span>plan.shape(t) {
 <a href=#454 id=454 data-nosnippet>454</a>        <span class="prelude-val">Ok</span>(Shape::Declared {
-<a href=#455 id=455 data-nosnippet>455</a>            setting:
-<a href=#456 id=456 data-nosnippet>456</a>                Setting::Type(CType {
-<a href=#457 id=457 data-nosnippet>457</a>                    kind: Kind::Opaque,
-<a href=#458 id=458 data-nosnippet>458</a>                    c,
-<a href=#459 id=459 data-nosnippet>459</a>                    ..
-<a href=#460 id=460 data-nosnippet>460</a>                }),
-<a href=#461 id=461 data-nosnippet>461</a>            access: Access::Owned,
+<a href=#455 id=455 data-nosnippet>455</a>            ty: declared_ty,
+<a href=#456 id=456 data-nosnippet>456</a>            declaration:
+<a href=#457 id=457 data-nosnippet>457</a>                Setting::Type(CType {
+<a href=#458 id=458 data-nosnippet>458</a>                    kind: Kind::Opaque,
+<a href=#459 id=459 data-nosnippet>459</a>                    c,
+<a href=#460 id=460 data-nosnippet>460</a>                    ..
+<a href=#461 id=461 data-nosnippet>461</a>                }),
 <a href=#462 id=462 data-nosnippet>462</a>            ..
-<a href=#463 id=463 data-nosnippet>463</a>        }) =&gt; <span class="prelude-val">Some</span>(c.clone()),
+<a href=#463 id=463 data-nosnippet>463</a>        }) <span class="kw">if </span>Access::of(declared_ty) == Access::Owned =&gt; <span class="prelude-val">Some</span>(c.clone()),
 <a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
 <a href=#465 id=465 data-nosnippet>465</a>    };
 <a href=#466 id=466 data-nosnippet>466</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>ty.kind() {
@@ -492,10 +492,10 @@
 <a href=#492 id=492 data-nosnippet>492</a>        },
 <a href=#493 id=493 data-nosnippet>493</a>        TypeKind::Named { .. } =&gt; <span class="kw">match </span>plan.shape(ty)<span class="question-mark">? </span>{
 <a href=#494 id=494 data-nosnippet>494</a>            Shape::Declared {
-<a href=#495 id=495 data-nosnippet>495</a>                setting: Setting::Type(t),
-<a href=#496 id=496 data-nosnippet>496</a>                access: Access::Owned,
+<a href=#495 id=495 data-nosnippet>495</a>                ty: declared_ty,
+<a href=#496 id=496 data-nosnippet>496</a>                declaration: Setting::Type(t),
 <a href=#497 id=497 data-nosnippet>497</a>                ..
-<a href=#498 id=498 data-nosnippet>498</a>            } =&gt; <span class="kw">match </span>t.kind {
+<a href=#498 id=498 data-nosnippet>498</a>            } <span class="kw">if </span>Access::of(declared_ty) == Access::Owned =&gt; <span class="kw">match </span>t.kind {
 <a href=#499 id=499 data-nosnippet>499</a>                Kind::ReprC { .. } =&gt; t.c.to_token_stream(),
 <a href=#500 id=500 data-nosnippet>500</a>                Kind::Enum <span class="kw">if </span>assume_valid =&gt; t.c.to_token_stream(),
 <a href=#501 id=501 data-nosnippet>501</a>                <span class="kw">_ </span>=&gt; <span class="kw">return </span>refuse(<span class="string">"is not a representable field"</span>),
@@ -586,74 +586,73 @@
 <a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">let </span><span class="kw-2">mut </span>handles = Vec::new();
 <a href=#587 id=587 data-nosnippet>587</a>    <span class="kw">for </span>p <span class="kw">in </span><span class="kw-2">&amp;</span>func.params {
 <a href=#588 id=588 data-nosnippet>588</a>        <span class="kw">if let </span>Shape::Declared {
-<a href=#589 id=589 data-nosnippet>589</a>            name,
-<a href=#590 id=590 data-nosnippet>590</a>            setting:
+<a href=#589 id=589 data-nosnippet>589</a>            ty,
+<a href=#590 id=590 data-nosnippet>590</a>            declaration:
 <a href=#591 id=591 data-nosnippet>591</a>                Setting::Type(CType {
 <a href=#592 id=592 data-nosnippet>592</a>                    kind: Kind::Opaque | Kind::ReprC { .. },
 <a href=#593 id=593 data-nosnippet>593</a>                    ..
 <a href=#594 id=594 data-nosnippet>594</a>                }),
-<a href=#595 id=595 data-nosnippet>595</a>            access,
-<a href=#596 id=596 data-nosnippet>596</a>        } = plan.shape(<span class="kw-2">&amp;</span>p.ty)<span class="question-mark">?
-<a href=#597 id=597 data-nosnippet>597</a>        </span>{
-<a href=#598 id=598 data-nosnippet>598</a>            handles.push((<span class="kw-2">&amp;</span>p.name, name, access));
-<a href=#599 id=599 data-nosnippet>599</a>        }
-<a href=#600 id=600 data-nosnippet>600</a>    }
-<a href=#601 id=601 data-nosnippet>601</a>    <span class="kw">let </span>e = error_ident();
-<a href=#602 id=602 data-nosnippet>602</a>    <span class="kw">let </span><span class="kw-2">mut </span>checks = Vec::new();
-<a href=#603 id=603 data-nosnippet>603</a>    <span class="kw">for </span>(i, (a, ta, ua)) <span class="kw">in </span>handles.iter().enumerate() {
-<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">for </span>(b, tb, ub) <span class="kw">in </span><span class="kw-2">&amp;</span>handles[i + <span class="number">1</span>..] {
-<a href=#605 id=605 data-nosnippet>605</a>            <span class="kw">if </span>ta != tb || (<span class="kw-2">*</span>ua == Access::Shared &amp;&amp; <span class="kw-2">*</span>ub == Access::Shared) {
-<a href=#606 id=606 data-nosnippet>606</a>                <span class="kw">continue</span>;
-<a href=#607 id=607 data-nosnippet>607</a>            }
-<a href=#608 id=608 data-nosnippet>608</a>            <span class="kw">let </span>msg = <span class="macro">format!</span>(
-<a href=#609 id=609 data-nosnippet>609</a>                <span class="string">"aliasing arguments: `{a}` ({}) and `{b}` ({}) are the same `{ta}` — a consumed \
-<a href=#610 id=610 data-nosnippet>610</a>                 or exclusively-borrowed resource may not be named twice in one call"</span>,
-<a href=#611 id=611 data-nosnippet>611</a>                label(<span class="kw-2">*</span>ua),
-<a href=#612 id=612 data-nosnippet>612</a>                label(<span class="kw-2">*</span>ub)
-<a href=#613 id=613 data-nosnippet>613</a>            );
-<a href=#614 id=614 data-nosnippet>614</a>            checks.push(<span class="macro">quote!</span> {
-<a href=#615 id=615 data-nosnippet>615</a>                <span class="kw">if </span>!(#a <span class="kw">as </span><span class="kw-2">*const </span>()).is_null() &amp;&amp; (#a <span class="kw">as </span><span class="kw-2">*const </span>()) == (#b <span class="kw">as </span><span class="kw-2">*const </span>()) {
-<a href=#616 id=616 data-nosnippet>616</a>                    <span class="kw">let </span>#e = ::std::string::String::from(#msg);
-<a href=#617 id=617 data-nosnippet>617</a>                    #fail
-<a href=#618 id=618 data-nosnippet>618</a>                }
-<a href=#619 id=619 data-nosnippet>619</a>            });
-<a href=#620 id=620 data-nosnippet>620</a>        }
-<a href=#621 id=621 data-nosnippet>621</a>    }
-<a href=#622 id=622 data-nosnippet>622</a>    <span class="prelude-val">Ok</span>(checks.into_iter().collect())
-<a href=#623 id=623 data-nosnippet>623</a>}
-<a href=#624 id=624 data-nosnippet>624</a>
-<a href=#625 id=625 data-nosnippet>625</a><span class="doccomment">/// The C adapter's answers for one function.
-<a href=#626 id=626 data-nosnippet>626</a></span><span class="kw">struct </span>FunctionCb&lt;<span class="lifetime">'p</span>, <span class="lifetime">'f</span>&gt; {
-<a href=#627 id=627 data-nosnippet>627</a>    plan: <span class="kw-2">&amp;</span><span class="lifetime">'p </span>Plan&lt;<span class="lifetime">'f</span>&gt;,
-<a href=#628 id=628 data-nosnippet>628</a>    func: <span class="kw-2">&amp;</span><span class="lifetime">'p </span>Function,
-<a href=#629 id=629 data-nosnippet>629</a>    panic: bool,
-<a href=#630 id=630 data-nosnippet>630</a>    <span class="doccomment">/// The result's delivery, decided before the wrapper is written: the
-<a href=#631 id=631 data-nosnippet>631</a>    /// failure route depends on it.
-<a href=#632 id=632 data-nosnippet>632</a>    </span>ret: CRet,
-<a href=#633 id=633 data-nosnippet>633</a>}
-<a href=#634 id=634 data-nosnippet>634</a>
-<a href=#635 id=635 data-nosnippet>635</a><span class="kw">impl </span>FunctionCallbacks <span class="kw">for </span>FunctionCb&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
-<a href=#636 id=636 data-nosnippet>636</a>    <span class="kw">type </span>Error = Error;
-<a href=#637 id=637 data-nosnippet>637</a>
-<a href=#638 id=638 data-nosnippet>638</a>    <span class="kw">fn </span>ret(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _ret: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;Return&gt; {
-<a href=#639 id=639 data-nosnippet>639</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.ret.ret.clone())
-<a href=#640 id=640 data-nosnippet>640</a>    }
-<a href=#641 id=641 data-nosnippet>641</a>
-<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">fn </span>param(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>syn::Ident, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;Input&gt; {
-<a href=#643 id=643 data-nosnippet>643</a>        <span class="kw">let </span>input = <span class="self">self</span>.plan.param(name, ty)<span class="question-mark">?</span>;
-<a href=#644 id=644 data-nosnippet>644</a>        <span class="kw">if </span>input.fallible &amp;&amp; <span class="self">self</span>.ret.on_error.is_none() &amp;&amp; !<span class="self">self</span>.panic {
-<a href=#645 id=645 data-nosnippet>645</a>            <span class="kw">return </span>err(<span class="macro">format!</span>(
-<a href=#646 id=646 data-nosnippet>646</a>                <span class="string">"function `{}`: parameter `{name}` ({ty}) can fail to convert (a null pointer, an \
-<a href=#647 id=647 data-nosnippet>647</a>                 invalid value) and the function has no error channel: declare it `.panic()` or \
-<a href=#648 id=648 data-nosnippet>648</a>                 return `Result`"</span>,
-<a href=#649 id=649 data-nosnippet>649</a>                <span class="self">self</span>.func.name
-<a href=#650 id=650 data-nosnippet>650</a>            ));
-<a href=#651 id=651 data-nosnippet>651</a>        }
-<a href=#652 id=652 data-nosnippet>652</a>        <span class="prelude-val">Ok</span>(input)
-<a href=#653 id=653 data-nosnippet>653</a>    }
-<a href=#654 id=654 data-nosnippet>654</a>
-<a href=#655 id=655 data-nosnippet>655</a>    <span class="kw">fn </span>fail(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _ret: <span class="kw-2">&amp;</span>Return) -&gt; TokenStream {
-<a href=#656 id=656 data-nosnippet>656</a>        fail(<span class="kw-2">&amp;</span><span class="self">self</span>.ret)
-<a href=#657 id=657 data-nosnippet>657</a>    }
-<a href=#658 id=658 data-nosnippet>658</a>}
+<a href=#595 id=595 data-nosnippet>595</a>        } = plan.shape(<span class="kw-2">&amp;</span>p.ty)<span class="question-mark">?
+<a href=#596 id=596 data-nosnippet>596</a>        </span>{
+<a href=#597 id=597 data-nosnippet>597</a>            handles.push((<span class="kw-2">&amp;</span>p.name, declared_name(ty), Access::of(ty)));
+<a href=#598 id=598 data-nosnippet>598</a>        }
+<a href=#599 id=599 data-nosnippet>599</a>    }
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">let </span>e = error_ident();
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="kw">let </span><span class="kw-2">mut </span>checks = Vec::new();
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="kw">for </span>(i, (a, ta, ua)) <span class="kw">in </span>handles.iter().enumerate() {
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">for </span>(b, tb, ub) <span class="kw">in </span><span class="kw-2">&amp;</span>handles[i + <span class="number">1</span>..] {
+<a href=#604 id=604 data-nosnippet>604</a>            <span class="kw">if </span>ta != tb || (<span class="kw-2">*</span>ua == Access::Shared &amp;&amp; <span class="kw-2">*</span>ub == Access::Shared) {
+<a href=#605 id=605 data-nosnippet>605</a>                <span class="kw">continue</span>;
+<a href=#606 id=606 data-nosnippet>606</a>            }
+<a href=#607 id=607 data-nosnippet>607</a>            <span class="kw">let </span>msg = <span class="macro">format!</span>(
+<a href=#608 id=608 data-nosnippet>608</a>                <span class="string">"aliasing arguments: `{a}` ({}) and `{b}` ({}) are the same `{ta}` — a consumed \
+<a href=#609 id=609 data-nosnippet>609</a>                 or exclusively-borrowed resource may not be named twice in one call"</span>,
+<a href=#610 id=610 data-nosnippet>610</a>                label(<span class="kw-2">*</span>ua),
+<a href=#611 id=611 data-nosnippet>611</a>                label(<span class="kw-2">*</span>ub)
+<a href=#612 id=612 data-nosnippet>612</a>            );
+<a href=#613 id=613 data-nosnippet>613</a>            checks.push(<span class="macro">quote!</span> {
+<a href=#614 id=614 data-nosnippet>614</a>                <span class="kw">if </span>!(#a <span class="kw">as </span><span class="kw-2">*const </span>()).is_null() &amp;&amp; (#a <span class="kw">as </span><span class="kw-2">*const </span>()) == (#b <span class="kw">as </span><span class="kw-2">*const </span>()) {
+<a href=#615 id=615 data-nosnippet>615</a>                    <span class="kw">let </span>#e = ::std::string::String::from(#msg);
+<a href=#616 id=616 data-nosnippet>616</a>                    #fail
+<a href=#617 id=617 data-nosnippet>617</a>                }
+<a href=#618 id=618 data-nosnippet>618</a>            });
+<a href=#619 id=619 data-nosnippet>619</a>        }
+<a href=#620 id=620 data-nosnippet>620</a>    }
+<a href=#621 id=621 data-nosnippet>621</a>    <span class="prelude-val">Ok</span>(checks.into_iter().collect())
+<a href=#622 id=622 data-nosnippet>622</a>}
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a><span class="doccomment">/// The C adapter's answers for one function.
+<a href=#625 id=625 data-nosnippet>625</a></span><span class="kw">struct </span>FunctionCb&lt;<span class="lifetime">'p</span>, <span class="lifetime">'f</span>&gt; {
+<a href=#626 id=626 data-nosnippet>626</a>    plan: <span class="kw-2">&amp;</span><span class="lifetime">'p </span>Plan&lt;<span class="lifetime">'f</span>&gt;,
+<a href=#627 id=627 data-nosnippet>627</a>    func: <span class="kw-2">&amp;</span><span class="lifetime">'p </span>Function,
+<a href=#628 id=628 data-nosnippet>628</a>    panic: bool,
+<a href=#629 id=629 data-nosnippet>629</a>    <span class="doccomment">/// The result's delivery, decided before the wrapper is written: the
+<a href=#630 id=630 data-nosnippet>630</a>    /// failure route depends on it.
+<a href=#631 id=631 data-nosnippet>631</a>    </span>ret: CRet,
+<a href=#632 id=632 data-nosnippet>632</a>}
+<a href=#633 id=633 data-nosnippet>633</a>
+<a href=#634 id=634 data-nosnippet>634</a><span class="kw">impl </span>FunctionCallbacks <span class="kw">for </span>FunctionCb&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
+<a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">type </span>Error = Error;
+<a href=#636 id=636 data-nosnippet>636</a>
+<a href=#637 id=637 data-nosnippet>637</a>    <span class="kw">fn </span>ret(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _ret: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;Return&gt; {
+<a href=#638 id=638 data-nosnippet>638</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.ret.ret.clone())
+<a href=#639 id=639 data-nosnippet>639</a>    }
+<a href=#640 id=640 data-nosnippet>640</a>
+<a href=#641 id=641 data-nosnippet>641</a>    <span class="kw">fn </span>param(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>syn::Ident, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;Input&gt; {
+<a href=#642 id=642 data-nosnippet>642</a>        <span class="kw">let </span>input = <span class="self">self</span>.plan.param(name, ty)<span class="question-mark">?</span>;
+<a href=#643 id=643 data-nosnippet>643</a>        <span class="kw">if </span>input.fallible &amp;&amp; <span class="self">self</span>.ret.on_error.is_none() &amp;&amp; !<span class="self">self</span>.panic {
+<a href=#644 id=644 data-nosnippet>644</a>            <span class="kw">return </span>err(<span class="macro">format!</span>(
+<a href=#645 id=645 data-nosnippet>645</a>                <span class="string">"function `{}`: parameter `{name}` ({ty}) can fail to convert (a null pointer, an \
+<a href=#646 id=646 data-nosnippet>646</a>                 invalid value) and the function has no error channel: declare it `.panic()` or \
+<a href=#647 id=647 data-nosnippet>647</a>                 return `Result`"</span>,
+<a href=#648 id=648 data-nosnippet>648</a>                <span class="self">self</span>.func.name
+<a href=#649 id=649 data-nosnippet>649</a>            ));
+<a href=#650 id=650 data-nosnippet>650</a>        }
+<a href=#651 id=651 data-nosnippet>651</a>        <span class="prelude-val">Ok</span>(input)
+<a href=#652 id=652 data-nosnippet>652</a>    }
+<a href=#653 id=653 data-nosnippet>653</a>
+<a href=#654 id=654 data-nosnippet>654</a>    <span class="kw">fn </span>fail(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _ret: <span class="kw-2">&amp;</span>Return) -&gt; TokenStream {
+<a href=#655 id=655 data-nosnippet>655</a>        fail(<span class="kw-2">&amp;</span><span class="self">self</span>.ret)
+<a href=#656 id=656 data-nosnippet>656</a>    }
+<a href=#657 id=657 data-nosnippet>657</a>}
 </code></pre></div></section></main></body></html>

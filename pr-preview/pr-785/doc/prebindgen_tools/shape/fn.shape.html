@@ -1,75 +1,75 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Describe one outer layer of a source type for a language adapter."><title>shape in prebindgen_tools::shape - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">shape</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">shape</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#walking-into-child-types" title="Walking into child types">Walking into child types</a></li><li><a href="#named-types" title="Named types">Named types</a></li><li><a href="#borrows-and-containers" title="Borrows and containers">Borrows and containers</a></li><li><a href="#errors" title="Errors">Errors</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In prebindgen_<wbr>tools::<wbr>shape</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_tools</a>::<wbr><a href="index.html">shape</a></div><h1>Function <span class="fn">shape</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_tools/api/shape.rs.html#204-285">Source</a> </span></div><pre class="rust item-decl"><code>pub fn shape&lt;'t, S&gt;(
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Describe one outer layer of a source type for a language adapter."><title>shape in prebindgen_tools::shape - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">shape</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">shape</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#walking-into-child-types" title="Walking into child types">Walking into child types</a></li><li><a href="#fallbacks" title="Fallbacks">Fallbacks</a></li><li><a href="#borrows-and-containers" title="Borrows and containers">Borrows and containers</a></li><li><a href="#errors" title="Errors">Errors</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In prebindgen_<wbr>tools::<wbr>shape</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_tools</a>::<wbr><a href="index.html">shape</a></div><h1>Function <span class="fn">shape</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_tools/api/shape.rs.html#210-289">Source</a> </span></div><pre class="rust item-decl"><code>pub fn shape&lt;'t, D&gt;(
     ty: &amp;'t <a class="struct" href="../../prebindgen_flat/flat/ty/struct.TypeRef.html" title="struct prebindgen_flat::flat::ty::TypeRef">TypeRef</a>,
-    declared_setting: impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;S&gt;,
-) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.Shape.html" title="enum prebindgen_tools::shape::Shape">Shape</a>&lt;'t, S&gt;, <a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Describe one outer layer of a source type for a language adapter.</p>
-<p>Pass the <a href="../../prebindgen_flat/flat/ty/struct.TypeRef.html" title="struct prebindgen_flat::flat::ty::TypeRef"><code>TypeRef</code></a> being converted and a closure that answers which
-named types this adapter has declared. The closure receives a type name
-such as <code>"Payload"</code> and returns the adapter’s setting for it, or <code>None</code>.
-The adapter supplies this <code>declared_setting</code> closure from its declarations.
-It can pass <code>|name| settings.get(name)</code> to borrow a setting from a map.
-When the closure returns <code>Some(setting)</code>, <code>shape</code> returns
-<a href="enum.Shape.html#variant.Declared" title="variant prebindgen_tools::shape::Shape::Declared"><code>Shape::Declared</code></a> with that setting.</p>
-<p>The <code>&amp;str</code> passed to the closure comes from <code>ty</code>. For a named type,
-<a href="../../prebindgen_flat/flat/ty/enum.TypeKind.html#variant.Named" title="variant prebindgen_flat::flat::ty::TypeKind::Named"><code>TypeKind::Named</code></a> holds a <a href="../../prebindgen_flat/flat/ty/struct.TypeId.html" title="struct prebindgen_flat::flat::ty::TypeId"><code>TypeId</code></a>,
-and <code>shape</code> passes <code>id.name.as_str()</code>. For <code>&amp;T</code> or <code>&amp;mut T</code>, it reads the
-name from the borrowed inner type. <code>String</code> has no <code>TypeId</code>, so <code>shape</code>
-passes the literal <code>"String"</code> when it checks for an adapter setting.</p>
+    shape_declared: impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;<a class="struct" href="../../prebindgen_flat/flat/ty/struct.TypeRef.html" title="struct prebindgen_flat::flat::ty::TypeRef">TypeRef</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;D&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.Shape.html" title="enum prebindgen_tools::shape::Shape">Shape</a>&lt;'t, D&gt;, <a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Describe one outer layer of a source type for a language adapter.</p>
+<p>Pass the <a href="../../prebindgen_flat/flat/ty/struct.TypeRef.html" title="struct prebindgen_flat::flat::ty::TypeRef"><code>TypeRef</code></a> being converted and <code>shape_declared</code>, a callback that
+returns the adapter’s declaration for a type or <code>None</code>. The callback sees
+the complete type, so an adapter can distinguish <code>Vec&lt;u8&gt;</code> from
+<code>Vec&lt;Payload&gt;</code>. A returned declaration makes the result
+<a href="enum.Shape.html#variant.Declared" title="variant prebindgen_tools::shape::Shape::Declared"><code>Shape::Declared</code></a>, which retains the original <code>ty</code>.</p>
+<p><code>shape</code> asks about the exact <code>ty</code> first. For a borrow with no exact
+declaration, it also asks about the borrowed inner type, so a declaration
+for <code>Payload</code> still covers <code>&amp;Payload</code>. An exact declaration for
+<code>&amp;Payload</code> takes precedence. Unsupported bare <code>str</code>, slices, and
+<code>MaybeUninit&lt;T&gt;</code>, and the <code>&amp;mut MaybeUninit&lt;T&gt;</code> output slot, are handled
+before the callback.</p>
 <h2 id="walking-into-child-types"><a class="doc-anchor" href="#walking-into-child-types">§</a>Walking into child types</h2>
 <p>An adapter can get <code>ty</code> from a function parameter in the flat model, then
-call <code>shape(ty, declared_setting)</code> and match the returned <a href="enum.Shape.html" title="enum prebindgen_tools::shape::Shape"><code>Shape</code></a>. Some
+call <code>shape(ty, shape_declared)</code> and match the returned <a href="enum.Shape.html" title="enum prebindgen_tools::shape::Shape"><code>Shape</code></a>. Some
 variants hold a child <a href="../../prebindgen_flat/flat/ty/struct.TypeRef.html" title="struct prebindgen_flat::flat::ty::TypeRef"><code>TypeRef</code></a>; call <code>shape</code> again with that child and
 the same closure. This example shows each call for <code>Option&lt;Vec&lt;Payload&gt;&gt;</code>:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>prebindgen::SourceLocation;
 <span class="kw">use </span>prebindgen_flat::Flat;
-<span class="kw">use </span>prebindgen_tools::{shape, Access, Holding, Shape};
+<span class="kw">use </span>prebindgen_tools::{shape, Holding, Shape};
 
 <span class="kw">let </span>source = syn::parse_file(
-    <span class="string">"pub struct Payload; pub fn send(value: Option&lt;Vec&lt;Payload&gt;&gt;) {}"
+    <span class="string">"pub struct Payload; pub fn send(value: Option&lt;Vec&lt;Payload&gt;&gt;, bytes: Vec&lt;u8&gt;) {}"
 </span>).unwrap();
 <span class="kw">let </span>flat = Flat::builder()
     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
     .build().unwrap();
 <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>flat.function(<span class="string">"send"</span>).unwrap().params[<span class="number">0</span>].ty;
-<span class="kw">let </span>settings = HashMap::from([(<span class="string">"Payload"</span>.to_owned(), <span class="string">"opaque handle"</span>)]);
-<span class="kw">let </span>declared_setting = |name: <span class="kw-2">&amp;</span>str| {
-    <span class="macro">assert_eq!</span>(name, <span class="string">"Payload"</span>); <span class="comment">// from the named layer's TypeId
-    </span>settings.get(name).copied()
+<span class="kw">let </span>declarations = HashMap::from([(<span class="string">"Payload"</span>.to_owned(), <span class="string">"opaque handle"</span>)]);
+<span class="kw">let </span>shape_declared = |candidate: <span class="kw-2">&amp;</span>prebindgen_flat::flat::TypeRef| {
+    <span class="kw">match </span>candidate.kind() {
+        prebindgen_flat::flat::TypeKind::Named { id, .. } =&gt;
+            declarations.get(<span class="kw-2">&amp;</span>id.name).copied(),
+        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+    }
 };
 
-<span class="kw">let </span>Shape::Option(inner) = shape(ty, declared_setting).unwrap() <span class="kw">else </span>{ <span class="macro">panic!</span>() };
-<span class="kw">let </span>Shape::Seq { elem, holding: Holding::Owned } = shape(inner, declared_setting).unwrap()
+<span class="kw">let </span>Shape::Option(inner) = shape(ty, shape_declared).unwrap() <span class="kw">else </span>{ <span class="macro">panic!</span>() };
+<span class="kw">let </span>Shape::Seq { elem, holding: Holding::Owned } = shape(inner, shape_declared).unwrap()
     <span class="kw">else </span>{ <span class="macro">panic!</span>() };
 <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-    shape(elem, declared_setting).unwrap(),
+    shape(elem, shape_declared).unwrap(),
     Shape::Declared {
-        name: <span class="string">"Payload"</span>, setting: <span class="string">"opaque handle"</span>, access: Access::Owned
-    }
+        declaration: <span class="string">"opaque handle"</span>, ty: declared_ty
+    } <span class="kw">if </span>std::ptr::eq(declared_ty, elem)
+));
+
+<span class="comment">// A declaration may target a complete generic type, too.
+</span><span class="kw">let </span>bytes = <span class="kw-2">&amp;</span>flat.function(<span class="string">"send"</span>).unwrap().params[<span class="number">1</span>].ty;
+<span class="kw">let </span>bytes_key = bytes.key();
+<span class="macro">assert!</span>(<span class="macro">matches!</span>(
+    shape(bytes, |candidate| (candidate.key() == bytes_key).then_some(<span class="string">"blob"</span>))
+        .unwrap(),
+    Shape::Declared { ty, declaration: <span class="string">"blob" </span>} <span class="kw">if </span>std::ptr::eq(ty, bytes)
 ));</code></pre></div>
-<p>The first two calls inspect the <code>Option</code> and <code>Vec</code> layers; neither calls
-<code>declared_setting</code>. The third reaches <code>Payload</code>, calls
-<code>declared_setting("Payload")</code>, and returns <a href="enum.Shape.html#variant.Declared" title="variant prebindgen_tools::shape::Shape::Declared"><code>Shape::Declared</code></a> with that
-setting. The adapter decides how to represent each layer on its boundary
-and which children to visit.
+<p>The first two calls return built-in shapes because the callback returns
+<code>None</code> for <code>Option&lt;Vec&lt;Payload&gt;&gt;</code> and <code>Vec&lt;Payload&gt;</code>. The third returns
+<a href="enum.Shape.html#variant.Declared" title="variant prebindgen_tools::shape::Shape::Declared"><code>Shape::Declared</code></a> for <code>Payload</code>. The adapter decides how to represent
+each layer on its boundary and which children to visit.
 A successful call describes only the current layer; it does not establish
 that the adapter can convert the complete type.</p>
-<h2 id="named-types"><a class="doc-anchor" href="#named-types">§</a>Named types</h2>
-<p><code>declared_setting</code> receives only the flat name, without generic arguments
-or borrow information. <a href="../../prebindgen_flat/flat/ty/struct.TypeId.html" title="struct prebindgen_flat::flat::ty::TypeId"><code>TypeId</code></a> adds no
-other identity here. The original <code>ty</code> remains available if the adapter
-needs further details.</p>
-<p>For a named <code>T</code>, <code>&amp;T</code>, or <code>&amp;mut T</code>, a setting produces
-<a href="enum.Shape.html#variant.Declared" title="variant prebindgen_tools::shape::Shape::Declared"><code>Shape::Declared</code></a> with <a href="enum.Access.html#variant.Owned" title="variant prebindgen_tools::shape::Access::Owned"><code>Access::Owned</code></a>, <a href="enum.Access.html#variant.Shared" title="variant prebindgen_tools::shape::Access::Shared"><code>Access::Shared</code></a>, or
-<a href="enum.Access.html#variant.Exclusive" title="variant prebindgen_tools::shape::Access::Exclusive"><code>Access::Exclusive</code></a>, respectively. Without a setting the result is
-<a href="enum.Shape.html#variant.Undeclared" title="variant prebindgen_tools::shape::Shape::Undeclared"><code>Shape::Undeclared</code></a>, not an error; that variant retains only the name.
-Here, “undeclared” means the adapter has no setting for the source type.
-The adapter decides whether to reject it.</p>
-<p><code>String</code> is also offered to <code>declared_setting</code>, allowing an explicit
-declaration to take precedence over built-in text handling. Without it,
-<code>String</code> is <a href="enum.Shape.html#variant.Str" title="variant prebindgen_tools::shape::Shape::Str"><code>Shape::Str</code></a> with <a href="enum.Holding.html#variant.Owned" title="variant prebindgen_tools::shape::Holding::Owned"><code>Holding::Owned</code></a>, whereas <code>&amp;String</code> and
-<code>&amp;mut String</code> are <a href="enum.Shape.html#variant.Ref" title="variant prebindgen_tools::shape::Shape::Ref"><code>Shape::Ref</code></a>. Other built-in containers do not consult
-<code>declared_setting</code> at their outer layer.</p>
+<h2 id="fallbacks"><a class="doc-anchor" href="#fallbacks">§</a>Fallbacks</h2>
+<p>Without an adapter declaration, a named <code>T</code>, <code>&amp;T</code>, or <code>&amp;mut T</code> returns
+<a href="enum.Shape.html#variant.Undeclared" title="variant prebindgen_tools::shape::Shape::Undeclared"><code>Shape::Undeclared</code></a> with its name. This means the adapter has no
+declaration for the source type; the adapter decides whether to reject it.
+Without a declaration, <code>String</code> is <a href="enum.Shape.html#variant.Str" title="variant prebindgen_tools::shape::Shape::Str"><code>Shape::Str</code></a> with <a href="enum.Holding.html#variant.Owned" title="variant prebindgen_tools::shape::Holding::Owned"><code>Holding::Owned</code></a>,
+whereas <code>&amp;String</code> and <code>&amp;mut String</code> are <a href="enum.Shape.html#variant.Ref" title="variant prebindgen_tools::shape::Shape::Ref"><code>Shape::Ref</code></a>.</p>
 <h2 id="borrows-and-containers"><a class="doc-anchor" href="#borrows-and-containers">§</a>Borrows and containers</h2>
 <p>Several common combinations are returned as a single shape:</p>
 <div><table><thead><tr><th>Source type</th><th>Shape</th></tr></thead><tbody>
