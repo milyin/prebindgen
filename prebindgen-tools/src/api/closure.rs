@@ -1,27 +1,3 @@
-//! The closure writer: a Rust `impl Fn(..)` built over a foreign callback.
-//!
-//! A source function taking `impl Fn(A, B) + Send + Sync + 'static` needs a
-//! Rust closure that, on every call, turns `A` and `B` into wires and hands
-//! them to the foreign side. The shape is fixed; the adapter supplies the
-//! pieces:
-//!
-//! ```text
-//! {
-//!     <setup>                                  // once, when the closure is built
-//!     move |__a0: A, __a1: B| {
-//!         let __res = (|| -> Result<(), String> {
-//!             <invoke>                         // binds each argument's wires, calls the foreign side
-//!             Ok(())
-//!         })();
-//!         if let Err(__err) = __res { <on_error> }
-//!     }
-//! }
-//! ```
-//!
-//! `invoke` receives the arguments' bindings rather than having them placed
-//! ahead of it, so an adapter can run them inside a scope of its own — a
-//! JNI frame whose environment the conversions use.
-
 use prebindgen_flat::flat::TypeRef;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};

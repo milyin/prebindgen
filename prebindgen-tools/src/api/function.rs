@@ -1,26 +1,3 @@
-//! The function wrapper writer.
-//!
-//! A wrapper is one exported function that receives wires, converts them to
-//! the source function's arguments, calls it, and hands the result back as
-//! wires:
-//!
-//! ```text
-//! <attrs>
-//! pub unsafe extern "C" fn <name><generics>(<leading>, <param wires>, <return wires>, <trailing>) -> <return type> {
-//!     <prologue>
-//!     let <param> = <param input>;          // on failure: <fail>
-//!     ...
-//!     let __result = <callee>(<params>);
-//!     <return body>
-//! }
-//! ```
-//!
-//! The writer owns the shape; the adapter owns every decision, through
-//! [`FunctionCallbacks`]: which wires a parameter becomes and how they turn
-//! back into the argument, which wires the result leaves on, and what the
-//! wrapper does when a conversion fails. The builder methods customize the
-//! header and the fixed parts of the body.
-
 use prebindgen_flat::flat::{Function, TypeRef};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};

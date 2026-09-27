@@ -1,5 +1,3 @@
-//! Identifier and case helpers shared by every adapter.
-
 use prebindgen_flat::flat::{GenericArg, TypeKind, TypeRef};
 use proc_macro2::Span;
 
