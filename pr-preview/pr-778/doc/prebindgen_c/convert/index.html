@@ -13,8 +13,8 @@ error is reported through its <code>Display</code>.</p>
 both directions before lowering a use of <code>Millis</code>:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
-<span class="kw">use </span>prebindgen_tools::{convert, fun, flat::Flat, Input, Output,
-    Qualifier, Wire, ident};
+<span class="kw">use </span>prebindgen_flat::Flat;
+<span class="kw">use </span>prebindgen_tools::{convert, fun, Input, Output, Qualifier, Wire, ident};
 <span class="kw">use </span>quote::quote;
 <span class="kw">let </span>source = syn::parse_file(<span class="string">r#"
     pub struct Millis(pub u64);

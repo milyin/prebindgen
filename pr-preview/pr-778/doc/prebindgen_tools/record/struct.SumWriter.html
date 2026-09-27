@@ -4,8 +4,8 @@ Supply one <a href="../wire/struct.Wire.html" title="struct prebindgen_tools::wi
 payload still matches the source alternative’s field shape.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
-<span class="kw">use </span>prebindgen_tools::{flat::{Flat, flat::{Field, Type}},
-    FieldCallbacks, Input, Output, SumWriter, Wire, ident};
+<span class="kw">use </span>prebindgen_flat::{Flat, flat::{Field, Type}};
+<span class="kw">use </span>prebindgen_tools::{FieldCallbacks, Input, Output, SumWriter, Wire, ident};
 <span class="kw">use </span>proc_macro2::TokenStream;
 <span class="kw">use </span>quote::{format_ident, quote};
 

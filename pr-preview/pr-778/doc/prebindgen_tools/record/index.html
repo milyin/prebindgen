@@ -19,8 +19,9 @@ source’s named or tuple form. A callback would normally produce the field
 inputs while recursing through <a href="../shape/fn.shape.html" title="fn prebindgen_tools::shape::shape"><code>shape()</code></a>.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
-<span class="kw">use </span>prebindgen_tools::{flat::Flat, flat::flat::{Field, Type},
-    FieldCallbacks, Input, Output, Record, StructWriter, Wire, ident, record_in};
+<span class="kw">use </span>prebindgen_flat::{Flat, flat::{Field, Type}};
+<span class="kw">use </span>prebindgen_tools::{FieldCallbacks, Input, Output, Record, StructWriter, Wire,
+    ident, record_in};
 <span class="kw">use </span>proc_macro2::TokenStream;
 <span class="kw">use </span>quote::quote;
 
