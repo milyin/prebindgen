@@ -11,11 +11,14 @@ use crate::wire::{Input, Output, Wire};
 /// delimiters.
 #[derive(Clone, Copy)]
 pub enum Record<'a> {
+    /// A source struct's fields and delimiters.
     Struct(&'a Struct),
+    /// One sum alternative's fields and delimiters.
     Alt(&'a Alternative),
 }
 
 impl<'a> Record<'a> {
+    /// Fields in source order. [`record_in`] and [`record_out`] preserve it.
     pub fn fields(&self) -> &'a [Field] {
         match self {
             Record::Struct(s) => &s.fields,
@@ -64,6 +67,7 @@ impl<'a> Record<'a> {
 
 /// The adapter's decision for one field.
 pub trait FieldCallbacks {
+    /// Why this adapter could not lower a field.
     type Error;
 
     /// The wires `field` arrives on, and how they rebuild it.
@@ -98,6 +102,10 @@ pub fn record_out<E>(
 }
 
 /// A `#[repr(C)]`-style mirror of a source struct and its two conversions.
+///
+/// Add [`Self::def`] to a [`RustFile`](crate::RustFile). The [`Self::input`]
+/// and [`Self::output`] expressions refer to a mirror or source value named
+/// `v`, respectively; embed them in the adapter's conversion functions.
 pub struct StructMirror {
     /// The mirror's definition.
     pub def: TokenStream,
@@ -135,6 +143,8 @@ impl<'s> StructWriter<'s> {
         self
     }
 
+    /// Ask `cb` for each field's input and output, then return the mirror
+    /// definition and conversions. See [`StructMirror`] for how to place them.
     pub fn write<C: FieldCallbacks>(self, cb: &mut C) -> Result<StructMirror, C::Error> {
         let record = Record::Struct(self.source);
         let mut ins = Vec::new();
@@ -185,7 +195,11 @@ impl<'s> StructWriter<'s> {
 }
 
 /// A mirror of a source sum: an enum whose alternatives carry the wires.
+///
+/// Add [`Self::def`] to a [`RustFile`](crate::RustFile). The input and output
+/// expressions refer to a value named `v`, just as in [`StructMirror`].
 pub struct SumMirror {
+    /// The mirror enum definition.
     pub def: TokenStream,
     /// Per alternative, its payload wires.
     pub alternatives: Vec<Vec<Wire>>,
@@ -196,6 +210,42 @@ pub struct SumMirror {
 }
 
 /// Writes a mirror enum for a source sum.
+///
+/// Each alternative retains the source's unit, tuple, or named-field form.
+/// Supply one [`Wire`] per field through [`FieldCallbacks`] so the mirror's
+/// payload still matches the source alternative's field shape.
+///
+/// ```
+/// use prebindgen::SourceLocation;
+/// use prebindgen_tools::{flat::{Flat, flat::{Field, Type}},
+///     FieldCallbacks, Input, Output, SumWriter, Wire, ident};
+/// use proc_macro2::TokenStream;
+/// use quote::{format_ident, quote};
+///
+/// let item = syn::parse_quote!(pub enum Code { Empty, Number(i32) });
+/// let flat = Flat::builder()
+///     .items([(item, SourceLocation::default())])
+///     .build().unwrap();
+/// let Some(Type::Variant(code)) = flat.declared_type("Code") else { panic!() };
+/// struct Scalar;
+/// impl FieldCallbacks for Scalar {
+///     type Error = String;
+///     fn field_in(&mut self, field: &Field) -> Result<Input, String> {
+///         Ok(Input::identity(Wire::new(format_ident!("w{}", field.index), quote!(i32))))
+///     }
+///     fn field_out(&mut self, field: &Field, value: &TokenStream)
+///         -> Result<Output, String> {
+///         Ok(Output::single(
+///             Wire::new(format_ident!("w{}", field.index), quote!(i32)), value
+///         ))
+///     }
+/// }
+/// let mirror = SumWriter::new(code, quote!(Code), ident!(CodeWire))
+///     .write(&mut Scalar).unwrap();
+/// assert!(mirror.def.to_string().contains("enum CodeWire"));
+/// assert_eq!(mirror.alternatives[0].len(), 0);
+/// assert_eq!(mirror.alternatives[1].len(), 1);
+/// ```
 pub struct SumWriter<'v> {
     source: &'v Variant,
     name: syn::Ident,
@@ -204,6 +254,8 @@ pub struct SumWriter<'v> {
 }
 
 impl<'v> SumWriter<'v> {
+    /// A mirror of `source` (named by `source_path` in generated code),
+    /// called `name`.
     pub fn new(source: &'v Variant, source_path: impl ToTokens, name: syn::Ident) -> Self {
         Self {
             source,
@@ -213,11 +265,15 @@ impl<'v> SumWriter<'v> {
         }
     }
 
+    /// An attribute on the mirror enum, such as `#[repr(C)]`.
     pub fn attr(mut self, attr: impl ToTokens) -> Self {
         self.attrs.push(attr.to_token_stream());
         self
     }
 
+    /// Ask `cb` about each alternative's fields and return the mirror
+    /// definition and conversions. See [`SumMirror`] for how to place them.
+    /// Each field must lower to one wire for the mirror's field shape.
     pub fn write<C: FieldCallbacks>(self, cb: &mut C) -> Result<SumMirror, C::Error> {
         let name = &self.name;
         let src = &self.source_path;

@@ -5,11 +5,14 @@ use quote::{quote, ToTokens};
 /// file spells it.
 #[derive(Clone, Debug)]
 pub struct Wire {
+    /// The generated Rust binding name for this slot.
     pub name: syn::Ident,
+    /// The Rust type written at the boundary.
     pub ty: TokenStream,
 }
 
 impl Wire {
+    /// Define one named boundary slot. Use [`Self::decl`] to render `name: ty`.
     pub fn new(name: syn::Ident, ty: impl ToTokens) -> Self {
         Self {
             name,
@@ -141,6 +144,7 @@ pub struct Output {
 }
 
 impl Output {
+    /// An infallible source-value-to-wires conversion.
     pub fn new(wires: Vec<Wire>, expr: impl ToTokens) -> Self {
         Self {
             wires,
@@ -149,6 +153,7 @@ impl Output {
         }
     }
 
+    /// A conversion whose expression uses `?` on `Result<_, String>`.
     pub fn fallible(wires: Vec<Wire>, expr: impl ToTokens) -> Self {
         Self {
             fallible: true,

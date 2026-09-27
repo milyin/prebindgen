@@ -34,9 +34,19 @@ pub enum Shape<'t, S> {
     /// `String`, `&str`, `Cow<str>`.
     Str(Holding),
     /// `Vec<T>`, `&[T]`, `&Vec<T>`, `Cow<[T]>`.
-    Seq { elem: &'t TypeRef, holding: Holding },
+    Seq {
+        /// The sequence element to lower recursively.
+        elem: &'t TypeRef,
+        /// Whether the sequence is owned, borrowed, or held in a `Cow`.
+        holding: Holding,
+    },
     /// `[T; N]`.
-    Array { elem: &'t TypeRef, len: usize },
+    Array {
+        /// The array element to lower recursively.
+        elem: &'t TypeRef,
+        /// The fixed number of elements.
+        len: usize,
+    },
     /// `Option<T>`.
     Option(&'t TypeRef),
     /// `Box<T>`.
@@ -45,12 +55,20 @@ pub enum Shape<'t, S> {
     Cow(&'t TypeRef),
     /// A borrow of anything [`Shape::Str`], [`Shape::Seq`] and
     /// [`Shape::Declared`] do not cover.
-    Ref { inner: &'t TypeRef, access: Access },
+    Ref {
+        /// The referenced type to lower recursively.
+        inner: &'t TypeRef,
+        /// Shared or exclusive access.
+        access: Access,
+    },
     /// A named type the adapter has a setting for, held by value or
     /// borrowed.
     Declared {
+        /// Name in the flat namespace.
         name: &'t str,
+        /// The adapter's setting returned by the `lookup` callback to [`shape`].
         setting: S,
+        /// Whether this use owns or borrows the named type.
         access: Access,
     },
     /// A named type the adapter has no setting for.
@@ -58,7 +76,12 @@ pub enum Shape<'t, S> {
     /// `impl Fn(A, B)`.
     Callback(&'t [TypeRef]),
     /// `Result<T, E>`.
-    Result { ok: &'t TypeRef, err: &'t TypeRef },
+    Result {
+        /// Successful value to lower recursively.
+        ok: &'t TypeRef,
+        /// Error value to lower recursively.
+        err: &'t TypeRef,
+    },
     /// `&mut MaybeUninit<T>`: a slot the callee fills.
     Out(&'t TypeRef),
 }

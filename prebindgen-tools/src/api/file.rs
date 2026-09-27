@@ -10,6 +10,8 @@ pub struct RustFile {
 }
 
 impl RustFile {
+    /// Start an empty generated file. Push items in the order they must
+    /// appear in the output.
     pub fn new() -> Self {
         Self::default()
     }
@@ -44,7 +46,8 @@ impl RustFile {
 
     /// Write the file to `path` (relative paths land in `OUT_DIR`), touching
     /// it only when the content changed so an `include!` does not trigger a
-    /// rebuild loop. Returns the absolute path written.
+    /// rebuild loop. Returns the resolved path written; outside a build script
+    /// it can remain relative when `OUT_DIR` is unset.
     pub fn write(&self, path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
         let path = resolve_out_path(path.as_ref());
         write_if_changed(&path, &self.render())?;

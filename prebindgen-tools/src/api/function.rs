@@ -37,6 +37,7 @@ pub fn error_ident() -> syn::Ident {
 
 /// The adapter's decisions for one wrapper.
 pub trait FunctionCallbacks {
+    /// Why the adapter could not lower a parameter or return value.
     type Error;
 
     /// How the result of type `ret` leaves the wrapper. Called first.
@@ -157,7 +158,14 @@ impl<'f> FunctionWriter<'f> {
         self
     }
 
-    /// Write the wrapper.
+    /// Write the wrapper. The callback order is [`FunctionCallbacks::ret`],
+    /// then [`FunctionCallbacks::param`] for each source parameter, then
+    /// [`FunctionCallbacks::fail`]. Return policy comes first because an
+    /// input conversion may fail before the source call runs.
+    ///
+    /// The emitted body runs the prologue, converts inputs in source order,
+    /// calls the callee, and runs [`Return::body`]. A fallible [`Input`]
+    /// reaches `fail` with its message bound to [`ERROR`].
     pub fn write<C: FunctionCallbacks>(self, cb: &mut C) -> Result<TokenStream, C::Error> {
         let func = self.func;
         // The result first: how a failed input is reported depends on it.

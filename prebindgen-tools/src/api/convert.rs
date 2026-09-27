@@ -11,11 +11,16 @@ use crate::{Input, Output, Qualifier};
 /// binding-local path with its signature stated.
 #[derive(Clone, Debug)]
 pub struct FnRef {
+    /// Path to call in generated Rust; a bare name without [`Self::sig`]
+    /// refers to a captured flat function.
     pub path: syn::Path,
+    /// Signature supplied for a function outside the flat model.
     pub sig: Option<syn::Signature>,
 }
 
 impl FnRef {
+    /// Create a reference to a flat function or a binding-local function.
+    /// Supply [`Self::sig`] for the latter before [`Self::resolve`].
     pub fn new(path: syn::Path) -> Self {
         Self { path, sig: None }
     }
@@ -75,10 +80,15 @@ fn path_string(p: &syn::Path) -> String {
 /// How one direction of a conversion is carried out.
 #[derive(Clone, Debug)]
 pub enum Via {
+    /// Call a source or binding-local function; see [`FnRef`].
     Fn(FnRef),
+    /// Use `Source::from(Repr)` for input conversion.
     From(syn::Type),
+    /// Use `Source::into(Repr)` for output conversion.
     Into(syn::Type),
+    /// Use `Source::try_from(Repr)` for fallible input conversion.
     TryFrom(syn::Type),
+    /// Use `Source::try_into(Repr)` for fallible output conversion.
     TryInto(syn::Type),
 }
 
@@ -91,12 +101,16 @@ impl From<FnRef> for Via {
 /// A declared conversion for one source type.
 #[derive(Clone, Debug)]
 pub struct Conversion {
+    /// The source type that will cross as a representation type.
     pub ty: syn::Type,
+    /// Representation to source; `None` leaves this direction undeclared.
     pub input: Option<Via>,
+    /// Source to representation; `None` leaves this direction undeclared.
     pub output: Option<Via>,
 }
 
 impl Conversion {
+    /// Start a declaration for `ty`; the [`convert!`](crate::convert!) macro is shorthand.
     pub fn new(ty: syn::Type) -> Self {
         Self {
             ty,
