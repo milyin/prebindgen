@@ -24,6 +24,12 @@ impl Access {
 }
 
 /// The source text container, independently of how it is accessed.
+///
+/// [`Shape::Str`] pairs this kind with [`Access`]. For example, `&String`
+/// has [`TextKind::String`] + [`Access::Shared`], while `&str` has
+/// [`TextKind::Str`] + [`Access::Shared`]. A by-value `String` keeps
+/// [`TextKind::String`] and uses [`Access::Owned`]; `&mut String` uses
+/// [`Access::Exclusive`]. Borrowing changes access, not the container kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextKind {
     /// The growable, owned string container.
@@ -33,6 +39,13 @@ pub enum TextKind {
 }
 
 /// The source sequence container, independently of how it is accessed.
+///
+/// [`Shape::Seq`] pairs this kind with [`Access`] and an element type. For
+/// example, `&Vec<T>` has [`SequenceKind::Vec`] + [`Access::Shared`], while
+/// `&[T]` has [`SequenceKind::Slice`] + [`Access::Shared`]. A by-value
+/// `Vec<T>` keeps [`SequenceKind::Vec`] and uses [`Access::Owned`];
+/// `&mut Vec<T>` uses [`Access::Exclusive`]. Borrowing changes access, not
+/// the container kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SequenceKind {
     /// The growable vector container.
