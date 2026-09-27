@@ -6,6 +6,7 @@ use crate::{wire::Output, Qualifier};
 
 /// The adapter's decision for one closure argument.
 pub trait ClosureCallbacks {
+    /// Why an argument could not be lowered.
     type Error;
 
     /// The wires argument `index` (of type `ty`, held in `value`) leaves on.
@@ -57,7 +58,8 @@ impl<'a> ClosureWriter<'a> {
     /// Write the closure. `invoke` gets the statements binding every
     /// argument's wires and the arguments' outputs, and produces the
     /// statements that place the bindings and call the foreign side; they may
-    /// use `?`.
+    /// use `?`. The adapter must insert those bindings into the returned
+    /// statements; the writer does not insert them separately.
     pub fn write<C: ClosureCallbacks>(
         self,
         q: &Qualifier<'_>,
