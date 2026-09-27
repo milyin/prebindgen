@@ -7,9 +7,9 @@
 //! only want bindings normally use the `prebindgen-c` or `prebindgen-jni`
 //! adapter crate instead.
 //!
-//! An adapter reads the flat model of what `#[prebindgen]` captured
-//! ([`flat`], re-exported from `prebindgen-flat`), turns its build script's
-//! declarations into a plan of the elements to bind, and then writes each
+//! An adapter reads what `#[prebindgen]` captured as [`Flat`](prebindgen_flat::Flat), the
+//! source model from `prebindgen-flat` (re-exported here as `flat`). It turns
+//! its build script's declarations into a plan of the elements to bind, then writes each
 //! element: the Rust wrapper through a generator here, and whatever the
 //! destination language needs beside it (Kotlin text, for the JNI adapter)
 //! itself. The generators hold no shared plan: each writes one element from
@@ -19,7 +19,7 @@
 //!
 //! ## Follow one element
 //!
-//! 1. Read the captured model as [`flat::Flat`]. Reject unsupported source
+//! 1. Read the captured model as [`Flat`](prebindgen_flat::Flat). Reject unsupported source
 //!    items with [`check_supported`]. Use [`Qualifier`] when generated Rust
 //!    refers back to a source item.
 //! 2. For each declared item, choose a generator below. Its callback trait
@@ -40,9 +40,9 @@
 //!
 //! | Generator | Writes | Callbacks |
 //! |---|---|---|
-//! | [`FunctionWriter`] | an exported wrapper around a [`Function`](flat::flat::Function) | [`FunctionCallbacks`]: the result's return type, out-wires and body; each parameter's wires and wire→value [`Input`]; the failure fragment |
-//! | [`StructWriter`] | a mirror struct of a [`Struct`](flat::flat::Struct), with both conversions | [`FieldCallbacks`]: each field's wires, both directions |
-//! | [`SumWriter`] | a mirror enum of a [`Variant`](flat::flat::Variant), with both conversions | [`FieldCallbacks`] |
+//! | [`FunctionWriter`] | an exported wrapper around a [`Function`](prebindgen_flat::flat::Function) | [`FunctionCallbacks`]: the result's return type, out-wires and body; each parameter's wires and wire→value [`Input`]; the failure fragment |
+//! | [`StructWriter`] | a mirror struct of a [`Struct`](prebindgen_flat::flat::Struct), with both conversions | [`FieldCallbacks`]: each field's wires, both directions |
+//! | [`SumWriter`] | a mirror enum of a [`Variant`](prebindgen_flat::flat::Variant), with both conversions | [`FieldCallbacks`] |
 //! | [`ClosureWriter`] | an `impl Fn(..)` closure over a foreign callback | [`ClosureCallbacks`]: each argument's wires ([`Output`]) |
 //!
 //! The generators expect **final** wire types: how a `Vec<Payload>` becomes
@@ -306,7 +306,7 @@ pub mod file {
 /// header and the fixed parts of the body.
 ///
 /// The [crate example](crate#small-complete-example) builds one wrapper from
-/// an in-memory [`flat::Flat`]. In an adapter, the
+/// an in-memory [`Flat`](prebindgen_flat::Flat). In an adapter, the
 /// callback's [`FunctionCallbacks::param`] can call
 /// [`shape()`](crate::shape()), convert its result into an [`Input`], and let
 /// [`FunctionWriter::write`] place the wires and conversion at the call site.
