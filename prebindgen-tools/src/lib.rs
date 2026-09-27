@@ -485,6 +485,18 @@ pub mod record {
 /// for that inner type. This keeps the adapter's policy in one recursive
 /// match rather than in the flat model.
 ///
+/// A shape describes source structure; the adapter uses it to build an
+/// [`Input`] or [`Output`] for its chosen wire representation. A named type
+/// can use an adapter-specific setting (for example, an opaque handle
+/// declaration), while containers expose child types for further calls.
+/// [`Access`] describes ownership or borrowing of a value; [`Holding`]
+/// distinguishes owned sequences, slices, borrowed vectors, and `Cow`.
+///
+/// [`shape()`] documents the full lookup rules, the special handling of
+/// `String` and common borrows, and which unsupported forms return errors.
+/// A successful call only classifies the current layer: an adapter must
+/// still handle undeclared names and errors encountered in its children.
+///
 /// ```
 /// use prebindgen::SourceLocation;
 /// use prebindgen_tools::{flat::Flat, shape, Access, Shape};
@@ -493,11 +505,18 @@ pub mod record {
 ///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
 ///     .build().unwrap();
 /// let ty = &flat.function("send").unwrap().params[0].ty;
-/// let Shape::Option(inner) = shape(ty, |name| (name == "Payload").then_some("handle"))
+/// // The Option layer exposes its child without looking up Payload yet.
+/// let Shape::Option(inner) = shape::<&str>(ty, |_| panic!("no lookup at this layer"))
 ///     .unwrap() else { panic!("expected Option") };
+/// // The child is &Payload: its declaration and borrow are reported together.
 /// assert!(matches!(
 ///     shape(inner, |name| (name == "Payload").then_some("handle")).unwrap(),
 ///     Shape::Declared { setting: "handle", access: Access::Shared, .. }
+/// ));
+/// // Missing adapter configuration is a shape the adapter must handle.
+/// assert!(matches!(
+///     shape::<()>(inner, |_| None).unwrap(),
+///     Shape::Undeclared("Payload")
 /// ));
 /// ```
 pub mod shape {
