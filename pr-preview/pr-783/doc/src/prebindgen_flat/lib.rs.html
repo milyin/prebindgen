@@ -2,19 +2,20 @@
 <a href=#2 id=2 data-nosnippet>2</a>//!
 <a href=#3 id=3 data-nosnippet>3</a>//! The flat model a prebindgen language adapter reads.
 <a href=#4 id=4 data-nosnippet>4</a>//!
-<a href=#5 id=5 data-nosnippet>5</a>//! [`flat::Flat::builder`] parses `(syn::Item, [`SourceLocation`](prebindgen::SourceLocation))`
-<a href=#6 id=6 data-nosnippet>6</a>//! records — read through [`prebindgen::Source`] — into one flat
-<a href=#7 id=7 data-nosnippet>7</a>//! namespace: the language-agnostic index of everything a `#[prebindgen]`
-<a href=#8 id=8 data-nosnippet>8</a>//! source crate declared. A language adapter (`prebindgen-c`,
-<a href=#9 id=9 data-nosnippet>9</a>//! `prebindgen-jni`) walks the elements it was asked to bind and writes the
-<a href=#10 id=10 data-nosnippet>10</a>//! binding through `prebindgen-tools`.
-<a href=#11 id=11 data-nosnippet>11</a>
-<a href=#12 id=12 data-nosnippet>12</a>/// The capability to render captured Rust syntax, for code whose job is
-<a href=#13 id=13 data-nosnippet>13</a>/// producing Rust.
-<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub use </span><span class="kw">crate</span>::flat::emit::Emit;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub mod </span>flat;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub mod </span>shape;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub mod </span>types_util;
-<a href=#18 id=18 data-nosnippet>18</a>
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">pub use </span><span class="self">self</span>::flat::{Element, Flat, TypeKey, TypeKeyParseError};
+<a href=#5 id=5 data-nosnippet>5</a>//! [`flat::Flat::builder`] parses `(syn::Item, SourceLocation)` records —
+<a href=#6 id=6 data-nosnippet>6</a>//! read through [`prebindgen::Source`], each item with its
+<a href=#7 id=7 data-nosnippet>7</a>//! [`SourceLocation`](prebindgen::SourceLocation) — into one flat
+<a href=#8 id=8 data-nosnippet>8</a>//! namespace: the language-agnostic index of everything a `#[prebindgen]`
+<a href=#9 id=9 data-nosnippet>9</a>//! source crate declared. A language adapter (`prebindgen-c`,
+<a href=#10 id=10 data-nosnippet>10</a>//! `prebindgen-jni`) walks the elements it was asked to bind and writes the
+<a href=#11 id=11 data-nosnippet>11</a>//! binding through `prebindgen-tools`.
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a>/// The capability to render captured Rust syntax, for code whose job is
+<a href=#14 id=14 data-nosnippet>14</a>/// producing Rust.
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">pub use </span><span class="kw">crate</span>::flat::emit::Emit;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub mod </span>flat;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub mod </span>shape;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">pub mod </span>types_util;
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">pub use </span><span class="self">self</span>::flat::{Element, Flat, TypeKey, TypeKeyParseError};
 </code></pre></div></section></main></body></html>
