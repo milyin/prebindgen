@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ERROR","RESULT"],"fn":["error_ident","result_ident"],"struct":["FunctionWriter","Return"],"trait":["FunctionCallbacks"]};
