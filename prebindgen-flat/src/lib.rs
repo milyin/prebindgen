@@ -2,8 +2,9 @@
 //!
 //! The flat model a prebindgen language adapter reads.
 //!
-//! [`flat::Flat::builder`] parses `(syn::Item, [`SourceLocation`](prebindgen::SourceLocation))`
-//! records — read through [`prebindgen::Source`] — into one flat
+//! [`flat::Flat::builder`] parses `(syn::Item, SourceLocation)` records —
+//! read through [`prebindgen::Source`], each item with its
+//! [`SourceLocation`](prebindgen::SourceLocation) — into one flat
 //! namespace: the language-agnostic index of everything a `#[prebindgen]`
 //! source crate declared. A language adapter (`prebindgen-c`,
 //! `prebindgen-jni`) walks the elements it was asked to bind and writes the
