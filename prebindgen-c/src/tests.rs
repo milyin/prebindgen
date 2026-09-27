@@ -133,3 +133,31 @@ fn a_string_result_needs_a_free_function() {
         .unwrap();
     assert!(err.0.contains("free_memory_function"), "{}", err.0);
 }
+
+#[test]
+fn slice_inputs_do_not_accept_vector_references() {
+    for (ty, accepted) in [
+        ("&[Point]", true),
+        ("&Vec<Point>", false),
+        ("&mut [Point]", false),
+        ("&mut Vec<Point>", false),
+        ("[Point]", false),
+    ] {
+        let source = syn::parse_file(&format!(
+            "pub struct Point {{ pub x: i64 }} pub fn inspect(x: {ty}) {{}}"
+        ))
+        .unwrap();
+        let result = Cbindgen::builder()
+            .items(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, SourceLocation::default())),
+            )
+            .repr_c_struct(pq!(Point))
+            .function(pq!(inspect))
+            .panic()
+            .build();
+        assert_eq!(result.is_ok(), accepted, "{ty}: {:?}", result.err());
+    }
+}

@@ -3,7 +3,8 @@
 
 use prebindgen_flat::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_tools::{
-    names, record_in, record_out, Access, Holding, Input, Output, Record, Shape, Wire,
+    names, record_in, record_out, Access, Input, Output, Record, SequenceKind, Shape, TextKind,
+    Wire,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -23,6 +24,18 @@ impl Plan<'_> {
     /// Wires → a value of `ty`. The wires are the input leaves of `ty`, named
     /// under `root`; `depth` keeps nested locals apart.
     pub(crate) fn rs_decode(&self, ty: &TypeRef, root: &str, depth: usize) -> Res<Input> {
+        self.rs_decode_shape(ty, self.shape(ty)?, root, depth)
+    }
+
+    // The Cow container chooses an owned codec for its unsized child; `ty`
+    // remains the actual boundary type used to obtain its wire list.
+    fn rs_decode_shape(
+        &self,
+        ty: &TypeRef,
+        shape: Shape<'_, &Setting>,
+        root: &str,
+        depth: usize,
+    ) -> Res<Input> {
         let rt = rt();
         let wires = || -> Res<Vec<Wire>> {
             Ok(self
@@ -32,11 +45,7 @@ impl Plan<'_> {
                 .collect())
         };
         let w = leaf_ident(root, "");
-        let owned = |input: Input, holding: Holding| match holding {
-            Holding::Cow => input.map(|e| quote!(::std::borrow::Cow::Owned(#e))),
-            _ => input,
-        };
-        Ok(match self.shape(ty)? {
+        Ok(match shape {
             Shape::Unit => Input::new(Vec::new(), quote!(())),
             Shape::Scalar(k) => {
                 let wires = wires()?;
@@ -55,14 +64,10 @@ impl Plan<'_> {
                     _ => Input::new(wires, quote!(#w)),
                 }
             }
-            Shape::Str(holding) => owned(
-                Input::fallible(wires()?, quote!(#rt::read_string(env, &#w)?)),
-                holding,
-            ),
-            Shape::Seq { elem, holding } if is_u8(elem) => owned(
-                Input::fallible(wires()?, quote!(#rt::read_u8s(env, &#w)?)),
-                holding,
-            ),
+            Shape::Str { .. } => Input::fallible(wires()?, quote!(#rt::read_string(env, &#w)?)),
+            Shape::Seq { elem, .. } if is_u8(elem) => {
+                Input::fallible(wires()?, quote!(#rt::read_u8s(env, &#w)?))
+            }
             Shape::Array { elem, len } => {
                 let TypeKind::Scalar(k) = elem.kind() else {
                     return err(format!("`{ty}`: only arrays of primitives cross"));
@@ -167,7 +172,7 @@ impl Plan<'_> {
                     )
                 }
             }
-            Shape::Seq { elem, holding } => {
+            Shape::Seq { elem, .. } => {
                 let n = leaf_ident(root, "_n");
                 let er = format!("__e{depth}");
                 let elem_in = self.rs_decode(elem, &er, depth + 1)?;
@@ -195,32 +200,51 @@ impl Plan<'_> {
                     }
                 }
                 let e = elem_in.result();
-                owned(
-                    Input::fallible(
-                        wires,
-                        quote!({
-                            let __n = #n as usize;
-                            #(#reads)*
-                            let mut __v = ::std::vec::Vec::with_capacity(__n);
-                            for __i in 0..__n {
-                                #(#binds)*
-                                let __x = #e;
-                                #(#drops)*
-                                __v.push(__x?);
-                            }
-                            __v
-                        }),
-                    ),
-                    holding,
+                Input::fallible(
+                    wires,
+                    quote!({
+                        let __n = #n as usize;
+                        #(#reads)*
+                        let mut __v = ::std::vec::Vec::with_capacity(__n);
+                        for __i in 0..__n {
+                            #(#binds)*
+                            let __x = #e;
+                            #(#drops)*
+                            __v.push(__x?);
+                        }
+                        __v
+                    }),
                 )
             }
             Shape::Ref { inner, .. } => self.rs_decode(inner, root, depth)?,
             Shape::Boxed(inner) => self
                 .rs_decode(inner, root, depth)?
                 .map(|e| quote!(::std::boxed::Box::new(#e))),
-            Shape::Cow(inner) => self
-                .rs_decode(inner, root, depth)?
-                .map(|e| quote!(::std::borrow::Cow::Owned(#e))),
+            Shape::Cow(inner) => {
+                let input = match inner.kind() {
+                    TypeKind::Str => self.rs_decode_shape(
+                        ty,
+                        Shape::Str {
+                            kind: TextKind::String,
+                            access: Access::Owned,
+                        },
+                        root,
+                        depth,
+                    )?,
+                    TypeKind::Slice(elem) => self.rs_decode_shape(
+                        ty,
+                        Shape::Seq {
+                            elem,
+                            kind: SequenceKind::Vec,
+                            access: Access::Owned,
+                        },
+                        root,
+                        depth,
+                    )?,
+                    _ => self.rs_decode(inner, root, depth)?,
+                };
+                input.map(|e| quote!(::std::borrow::Cow::Owned(#e)))
+            }
             Shape::Callback(args) => {
                 Input::fallible(wires()?, self.callback_closure(ty, args, &w)?)
             }
@@ -239,6 +263,17 @@ impl Plan<'_> {
         root: &str,
         depth: usize,
     ) -> Res<Output> {
+        self.rs_encode_shape(ty, self.shape(ty)?, value, root, depth)
+    }
+
+    fn rs_encode_shape(
+        &self,
+        ty: &TypeRef,
+        shape: Shape<'_, &Setting>,
+        value: TokenStream,
+        root: &str,
+        depth: usize,
+    ) -> Res<Output> {
         let rt = rt();
         let single = |e: TokenStream, fallible: bool| -> Res<Output> {
             let leaves = self.leaves(ty, Dir::Out)?;
@@ -249,7 +284,7 @@ impl Plan<'_> {
                 Output::single(w, e)
             })
         };
-        Ok(match self.shape(ty)? {
+        Ok(match shape {
             Shape::Unit => Output::none(value),
             Shape::Scalar(k) => {
                 let p = scalar_prim(k).rs();
@@ -259,7 +294,7 @@ impl Plan<'_> {
                 };
                 single(e, false)?
             }
-            Shape::Str(_) => single(
+            Shape::Str { .. } => single(
                 quote!(#rt::new_string(env, ::core::convert::AsRef::<str>::as_ref(&#value))?),
                 true,
             )?,
@@ -373,7 +408,7 @@ impl Plan<'_> {
                     }
                 }
             }
-            Shape::Seq { elem, holding } => {
+            Shape::Seq { elem, access, .. } => {
                 let n = leaf_ident(root, "_n");
                 let er = format!("__e{depth}");
                 let x = format_ident!("__x{}", depth);
@@ -400,12 +435,9 @@ impl Plan<'_> {
                         }
                     }
                 }
-                let iter = match holding {
-                    Holding::Owned => quote!(::core::iter::IntoIterator::into_iter(#value)),
-                    Holding::Cow => {
-                        quote!(::core::iter::IntoIterator::into_iter(#value.into_owned()))
-                    }
-                    Holding::Borrowed | Holding::BorrowedVec => quote!(#value.iter().cloned()),
+                let iter = match access {
+                    Access::Owned => quote!(::core::iter::IntoIterator::into_iter(#value)),
+                    Access::Shared | Access::Exclusive => quote!(#value.iter().cloned()),
                 };
                 let bind = elem_out.bind();
                 Output::fallible(
@@ -429,7 +461,39 @@ impl Plan<'_> {
                 depth,
             )?,
             Shape::Boxed(inner) => self.rs_encode(inner, quote!((*#value)), root, depth)?,
-            Shape::Cow(inner) => self.rs_encode(inner, quote!(#value.into_owned()), root, depth)?,
+            Shape::Cow(inner) => match inner.kind() {
+                TypeKind::Str => self.rs_encode_shape(
+                    ty,
+                    Shape::Str {
+                        kind: TextKind::Str,
+                        access: Access::Shared,
+                    },
+                    value,
+                    root,
+                    depth,
+                )?,
+                TypeKind::Slice(elem) => {
+                    // Bytes can be read directly through AsRef; other elements
+                    // are consumed from the owned Cow payload, as before.
+                    let value = if is_u8(elem) {
+                        value
+                    } else {
+                        quote!(#value.into_owned())
+                    };
+                    self.rs_encode_shape(
+                        ty,
+                        Shape::Seq {
+                            elem,
+                            kind: SequenceKind::Vec,
+                            access: Access::Owned,
+                        },
+                        value,
+                        root,
+                        depth,
+                    )?
+                }
+                _ => self.rs_encode(inner, quote!(#value.into_owned()), root, depth)?,
+            },
             Shape::Callback(_) => return err(format!("`{ty}`: a callback cannot leave Rust")),
             Shape::Undeclared(_) | Shape::Result { .. } | Shape::Out(_) => {
                 unreachable!("refused by shape")

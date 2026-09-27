@@ -223,6 +223,11 @@ fn array_eq(plan: &Plan, ty: &TypeRef) -> Res<Option<ArrayEq>> {
                 ),
             )
         }),
+        Shape::Cow(inner) => match inner.kind() {
+            prebindgen_flat::flat::TypeKind::Str | prebindgen_flat::flat::TypeKind::Slice(_) =>
+                array_eq(plan, &crate::lower::cow_view(inner))?,
+            _ => None,
+        },
         Shape::Option(inner) => array_eq(plan, inner)?.map(|(eq, hash, show)| {
             (
                 format!(

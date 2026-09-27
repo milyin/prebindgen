@@ -5,7 +5,7 @@
 use prebindgen_flat::flat::{TypeKind, TypeRef};
 use prebindgen_tools::{
     function::{error_ident, result_ident},
-    names, FunctionCallbacks, FunctionWriter, Holding, Input, Output, Return, Shape, Wire,
+    names, Access, FunctionCallbacks, FunctionWriter, Input, Output, Return, Shape, Wire,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
@@ -150,16 +150,27 @@ impl FunctionCallbacks for RustCb<'_, '_> {
         }
         // A borrowed parameter lends the decoded value.
         Ok(match plan.shape(&fp.ty)? {
-            Shape::Str(Holding::Borrowed)
+            Shape::Str {
+                access: Access::Shared,
+                ..
+            }
             | Shape::Seq {
-                holding: Holding::Borrowed | Holding::BorrowedVec,
+                access: Access::Shared,
                 ..
             }
             | Shape::Ref {
                 access: prebindgen_tools::Access::Shared,
                 ..
             } => input.with_pass(quote!(&#name)),
-            Shape::Ref { .. } => {
+            Shape::Ref { .. }
+            | Shape::Str {
+                access: Access::Exclusive,
+                ..
+            }
+            | Shape::Seq {
+                access: Access::Exclusive,
+                ..
+            } => {
                 return err(format!(
                     "`{name}`: a `&mut` value parameter cannot cross from Kotlin"
                 ))

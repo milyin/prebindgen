@@ -690,6 +690,14 @@ internal val __sink_Vec_String: __Sink_Vec_String = __Sink_Vec_String { n, value
     List(n) { __i0 -> (value[__i0] as String) }
 }
 
+public fun interface __Sink_Cow_slice_i64 {
+    public fun run(n: Int, value: LongArray): Any?
+}
+
+internal val __sink_Cow_slice_i64: __Sink_Cow_slice_i64 = __Sink_Cow_slice_i64 { n, value ->
+    List(n) { __i0 -> value[__i0] }
+}
+
 internal object CovNative {
     init {
         io.prebindgen.covertest.NativeLibrary.ensureLoaded()
@@ -952,4 +960,12 @@ internal object CovNative {
     external fun tagWithOpt(tSel: Int, t00: String?, errorSink: Any): String
 
     external fun tagPick(label: String, sink: Any, errorSink: Any): Any?
+
+    external fun cowText(text: String, borrowed: Boolean, errorSink: Any): String
+
+    external fun cowBytes(bytes: ByteArray, borrowed: Boolean, errorSink: Any): ByteArray
+
+    external fun cowNumbers(valuesN: Int, values: LongArray, borrowed: Boolean, sink: Any, errorSink: Any): Any?
+
+    external fun cowBytesBox(bytes: ByteArray, errorSink: Any): ByteArray
 }

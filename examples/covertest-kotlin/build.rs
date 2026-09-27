@@ -810,6 +810,14 @@ fn main() {
                     ),
                 ),
         )
+        .package(
+            package!("cow")
+                .class(data_class!(CowBytes))
+                .fun(fun!(cow_text))
+                .fun(fun!(cow_bytes))
+                .fun(fun!(cow_numbers))
+                .fun(fun!(cow_bytes_box)),
+        )
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

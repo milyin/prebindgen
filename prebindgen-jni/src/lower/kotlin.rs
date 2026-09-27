@@ -64,7 +64,7 @@ impl Plan<'_> {
                 };
                 vec![or_default(e, scalar_prim(k).kt_default())]
             }
-            Shape::Str(_) | Shape::Array { .. } => vec![expr.to_string()],
+            Shape::Str { .. } | Shape::Array { .. } => vec![expr.to_string()],
             Shape::Seq { elem, .. } if is_u8(elem) => vec![expr.to_string()],
             Shape::Declared {
                 setting, access: a, ..
@@ -176,8 +176,11 @@ impl Plan<'_> {
                 out.extend(cols);
                 out
             }
-            Shape::Ref { inner, .. } | Shape::Boxed(inner) | Shape::Cow(inner) => {
+            Shape::Ref { inner, .. } | Shape::Boxed(inner) => {
                 self.kt_encode(inner, expr, nullable, cx, consumed)?
+            }
+            Shape::Cow(inner) => {
+                self.kt_encode(&super::cow_view(inner), expr, nullable, cx, consumed)?
             }
             Shape::Callback(_) => vec![access(expr, "asRaw()")],
             Shape::Undeclared(_) | Shape::Result { .. } | Shape::Out(_) => {
@@ -208,7 +211,7 @@ impl Plan<'_> {
             Shape::Unit => "Unit".to_string(),
             Shape::Scalar(ScalarKind::U64) => format!("{}.toULong()", leaves[0]),
             Shape::Scalar(_) => leaves[0].clone(),
-            Shape::Str(_) | Shape::Array { .. } => bang(&leaves[0]),
+            Shape::Str { .. } | Shape::Array { .. } => bang(&leaves[0]),
             Shape::Seq { elem, .. } if is_u8(elem) => bang(&leaves[0]),
             Shape::Declared { setting, .. } => match setting {
                 Setting::Converted(c) => {
@@ -288,9 +291,10 @@ impl Plan<'_> {
                 let d = self.kt_decode(elem, &items, false, depth + 1)?;
                 format!("List({n}) {{ {i} -> {d} }}")
             }
-            Shape::Ref { inner, .. } | Shape::Boxed(inner) | Shape::Cow(inner) => {
+            Shape::Ref { inner, .. } | Shape::Boxed(inner) => {
                 self.kt_decode(inner, leaves, gated, depth)?
             }
+            Shape::Cow(inner) => self.kt_decode(&super::cow_view(inner), leaves, gated, depth)?,
             Shape::Callback(_) => return err(format!("`{ty}`: a callback cannot leave Rust")),
             Shape::Undeclared(_) | Shape::Result { .. } | Shape::Out(_) => {
                 unreachable!("refused by shape")
@@ -302,6 +306,11 @@ impl Plan<'_> {
     pub(crate) fn kt_close(&self, ty: &TypeRef, expr: &str) -> Res<Option<String>> {
         if !self.owns_handle(ty)? {
             return Ok(None);
+        }
+        if let Shape::Cow(inner) = self.shape(ty)? {
+            if matches!(inner.kind(), prebindgen_flat::flat::TypeKind::Slice(_)) {
+                return self.kt_close(&super::cow_view(inner), expr);
+            }
         }
         Ok(Some(match self.shape(ty)? {
             Shape::Option(_) => format!("{expr}?.close()"),

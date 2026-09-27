@@ -243,3 +243,36 @@ fn value_form_overrides_name_real_fields() {
         .0;
     assert!(ctor.contains("the struct has no field `typo`"), "{ctor}");
 }
+
+#[test]
+fn sequence_inputs_preserve_supported_access() {
+    for (ty, accepted) in [
+        ("Vec<u8>", true),
+        ("&Vec<u8>", true),
+        ("&[u8]", true),
+        ("&mut Vec<u8>", false),
+        ("&mut [u8]", false),
+        ("[u8]", false),
+        ("String", true),
+        ("&String", true),
+        ("&str", true),
+        ("&mut String", false),
+        ("&mut str", false),
+        ("str", false),
+        ("Cow<'static, str>", true),
+        ("Cow<'static, [u8]>", true),
+    ] {
+        let source = syn::parse_file(&format!("pub fn inspect(x: {ty}) {{}}")).unwrap();
+        let result = JniGen::builder()
+            .items(
+                source
+                    .items
+                    .into_iter()
+                    .map(|item| (item, SourceLocation::default())),
+            )
+            .set_package_prefix("io.test")
+            .package(package!().fun(fun!(inspect)))
+            .build();
+        assert_eq!(result.is_ok(), accepted, "{ty}: {:?}", result.err());
+    }
+}
