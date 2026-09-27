@@ -21,7 +21,7 @@ use super::{
     leaf_ident, Dir,
 };
 use crate::{
-    decl::{ExpandReturnDecl, ReturnField},
+    decl::{ExpandReturnDecl, FieldsDecl, ReturnField},
     plan::{err, ClassKind, Plan, Res, Setting},
 };
 
@@ -100,6 +100,14 @@ impl Plan<'_> {
         inline: bool,
         depth: usize,
     ) -> Res<Delivery> {
+        // An expansion with no fields drops the value: nothing crosses.
+        if explicit.is_some_and(|e| e.fields.is_empty()) {
+            return Ok(Delivery {
+                params: Vec::new(),
+                leaves: Vec::new(),
+                output: Output::none(value),
+            });
+        }
         let (core, v, borrowed) = peel(ty, value.clone());
         // An optional value whose inner type expands: one presence gate.
         if let TypeKind::Optional(inner) = core.kind() {
@@ -151,11 +159,31 @@ impl Plan<'_> {
                     } else {
                         v
                     };
-                    return self.fields_of(self.struct_of(c)?, v, root, name, gates, depth);
+                    return self.fields_of(self.struct_of(c)?, None, v, root, name, gates, depth);
                 }
             }
         }
         self.plain(ty, value, root, name, gates, depth)
+    }
+
+    /// Whether `ty` is an enum (`Some(false)`) or an optional enum
+    /// (`Some(true)`), under borrows and boxes.
+    fn enum_value(&self, ty: &TypeRef) -> Res<Option<bool>> {
+        let is_enum = |t: &TypeRef| {
+            let (core, _, _) = peel(t, TokenStream::new());
+            matches!(core.kind(), TypeKind::Named { id, .. }
+                if matches!(self.class(&id.name).map(|c| &c.kind), Some(ClassKind::Enum)))
+        };
+        let (core, _, _) = peel(ty, TokenStream::new());
+        if is_enum(core) {
+            return Ok(Some(false));
+        }
+        if let TypeKind::Optional(inner) = core.kind() {
+            if is_enum(inner) {
+                return Ok(Some(true));
+            }
+        }
+        Ok(None)
     }
 
     /// One typed parameter.
@@ -178,7 +206,12 @@ impl Plan<'_> {
             })
             .collect();
         let raws: Vec<String> = leaves.iter().map(raw_name).collect();
-        let decode = gate(gates, self.kt_decode(ty, &raws, gated, depth)?);
+        // An enum reaches a delivered parameter as its value, an `Int`.
+        let as_int = self.enum_value(ty)?;
+        let decode = match as_int {
+            Some(_) => gate(gates, raws[0].clone()),
+            None => gate(gates, self.kt_decode(ty, &raws, gated, depth)?),
+        };
         let pname = kt_ident(&names::camel(if name.is_empty() { "value" } else { name }));
         let close = self.kt_close(ty, &pname)?.map(|c| {
             if gated && !c.contains("?.") {
@@ -190,7 +223,11 @@ impl Plan<'_> {
         Ok(Delivery {
             params: vec![DParam {
                 name: pname,
-                kt: nullable(self.kt_type(ty)?, gated),
+                kt: match as_int {
+                    Some(true) => "Int?".to_string(),
+                    Some(false) => nullable("Int".to_string(), gated),
+                    None => nullable(self.kt_type(ty)?, gated),
+                },
                 decode,
                 close,
             }],
@@ -199,10 +236,13 @@ impl Plan<'_> {
         })
     }
 
-    /// The fields of a struct value, each delivered (inlining data classes).
+    /// The fields of a struct value, each delivered (inlining data classes),
+    /// with the per-field expansions and names of a value form.
+    #[allow(clippy::too_many_arguments)]
     fn fields_of(
         &self,
         s: &Struct,
+        form: Option<&FieldsDecl>,
         value: TokenStream,
         root: &str,
         name: &str,
@@ -217,12 +257,17 @@ impl Plan<'_> {
         let mut parts = Vec::new();
         for (f, b) in s.fields.iter().zip(&binds) {
             let seg = field_seg(f);
+            let explicit = form.and_then(|d| field_entry(&d.overrides, &seg));
+            let pname = match form.and_then(|d| field_entry(&d.names, &seg)) {
+                Some(n) => n.clone(),
+                None => join(name, &seg),
+            };
             parts.push(self.deliver(
                 &f.ty,
                 b.to_token_stream(),
                 &join(root, &seg),
-                &join(name, &seg),
-                None,
+                &pname,
+                explicit,
                 gates,
                 true,
                 depth + 1,
@@ -291,7 +336,8 @@ impl Plan<'_> {
                     deferred.push(parts.len());
                     parts.push(self.plain(ty, handle, &r, &n, gates, depth + 1)?);
                 }
-                ReturnField::Form { fun, consume } => {
+                ReturnField::Form { form, consume } => {
+                    let fun = &form.fun;
                     let f = self.flat.function(fun).ok_or_else(|| {
                         crate::Error(format!("`{fun}` is not a #[prebindgen] function"))
                     })?;
@@ -313,6 +359,7 @@ impl Plan<'_> {
                     prelude.extend(quote!(let #sv = #callee(#arg);));
                     parts.push(self.fields_of(
                         s,
+                        Some(form),
                         sv.to_token_stream(),
                         root,
                         name,
@@ -358,27 +405,34 @@ impl Plan<'_> {
             return err(format!("`{ty}` is not a callback"));
         };
         if args.is_empty() {
-            return Ok("Unit".to_string());
+            return Ok("Void".to_string());
         }
         Ok(args.iter().map(type_base).collect())
     }
 
+    /// The package of a callback type's interfaces: the class of its one
+    /// argument, else the base package.
+    fn callback_pkg(&self, ty: &TypeRef) -> String {
+        if let TypeKind::Callback { args } = ty.kind() {
+            if let [arg] = args.as_slice() {
+                if let Some(c) = core_name(arg).and_then(|n| self.class(&n)) {
+                    return c.pkg.clone();
+                }
+            }
+        }
+        self.base_pkg.clone()
+    }
+
     /// The user-facing callback interface of `ty`.
     pub(crate) fn callback_fqn(&self, ty: &TypeRef) -> Res<String> {
-        Ok(format!(
-            "{}.{}Callback",
-            self.base_pkg,
-            self.callback_base(ty)?
-        ))
+        let (pkg, base) = (self.callback_pkg(ty), self.callback_base(ty)?);
+        Ok(format!("{pkg}.{base}Callback"))
     }
 
     /// The raw callback interface of `ty`, the one Rust invokes.
     pub(crate) fn callback_raw_fqn(&self, ty: &TypeRef) -> Res<String> {
-        Ok(format!(
-            "{}.{}CallbackRaw",
-            self.base_pkg,
-            self.callback_base(ty)?
-        ))
+        let (pkg, base) = (self.callback_pkg(ty), self.callback_base(ty)?);
+        Ok(format!("{pkg}.{base}CallbackRaw"))
     }
 
     /// The Rust closure a callback object `w` becomes: every call delivers
@@ -425,6 +479,11 @@ impl ClosureCallbacks for CallbackArgs<'_, '_> {
     fn arg(&mut self, index: usize, ty: &TypeRef, value: &TokenStream) -> Res<Output> {
         Ok(self.0.callback_arg(index, ty, value)?.output)
     }
+}
+
+/// The entry a value form declares for field `seg`.
+fn field_entry<'a, T>(list: &'a [(String, T)], seg: &str) -> Option<&'a T> {
+    list.iter().find(|(n, _)| n == seg).map(|(_, v)| v)
 }
 
 /// `ty` under its transparent layers and borrows: the core type, the value
@@ -482,7 +541,9 @@ fn concat(prelude: TokenStream, parts: Vec<Delivery>, deferred: Vec<usize>) -> D
     let mut leaves = Vec::new();
     let mut wires = Vec::new();
     for p in parts {
-        params.extend(p.params);
+        // A handle delivered as a field of a larger value is the receiver's
+        // to keep; only a whole delivered value is closed after a callback.
+        params.extend(p.params.into_iter().map(|p| DParam { close: None, ..p }));
         leaves.extend(p.leaves);
         wires.extend(p.output.wires);
     }

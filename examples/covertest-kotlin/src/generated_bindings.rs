@@ -4838,7 +4838,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeNew<'a
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/ProbeBuilderRaw",
+                    "io/prebindgen/covertest/model/ProbeBuilderRaw",
                     "run",
                     "(JZIJLjava/lang/String;)Ljava/lang/Object;",
                     &__sink,
@@ -5676,7 +5676,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_spanHolderN
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/SpanHolderBuilderRaw",
+                    "io/prebindgen/covertest/model/SpanHolderBuilderRaw",
                     "run",
                     "(ZJLjava/lang/Long;)Ljava/lang/Object;",
                     &__sink,
@@ -6610,7 +6610,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_boxedLatest
                 let __o = __S
                     .call_object(
                         env,
-                        "io/prebindgen/covertest/SummaryBuilderRaw",
+                        "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
                         "run",
                         "(JD)Ljava/lang/Object;",
                         &__sink,
@@ -10173,7 +10173,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/SummaryBuilderRaw",
+                    "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
                     "run",
                     "(JD)Ljava/lang/Object;",
                     &__sink,
@@ -10561,7 +10561,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/SummaryStorageSummaryFullBuilderRaw",
+                    "io/prebindgen/covertest/analytics/SummaryStorageSummaryFullBuilderRaw",
                     "run",
                     "(JDJ)Ljava/lang/Object;",
                     &__sink,
@@ -10655,7 +10655,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageSumm
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/SummaryStorageSummaryProbeBuilderRaw",
+                    "io/prebindgen/covertest/analytics/SummaryStorageSummaryProbeBuilderRaw",
                     "run",
                     "(JDLjava/lang/Long;)Ljava/lang/Object;",
                     &__sink,
@@ -11098,7 +11098,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryMerg
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/SummaryBuilderRaw",
+                    "io/prebindgen/covertest/analytics/SummaryBuilderRaw",
                     "run",
                     "(JD)Ljava/lang/Object;",
                     &__sink,
@@ -11284,7 +11284,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summarySeri
             let __o = __S
                 .call_object(
                     env,
-                    "io/prebindgen/covertest/SummaryFolderColumns",
+                    "io/prebindgen/covertest/analytics/SummaryFolderColumns",
                     "run",
                     "(I[J[D)Ljava/lang/Object;",
                     &__sink,
@@ -11375,7 +11375,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summarySeri
                 let __o = __S
                     .call_object(
                         env,
-                        "io/prebindgen/covertest/SummaryFolderColumns",
+                        "io/prebindgen/covertest/analytics/SummaryFolderColumns",
                         "run",
                         "(I[J[D)Ljava/lang/Object;",
                         &__sink,

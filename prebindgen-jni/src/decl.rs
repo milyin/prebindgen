@@ -32,6 +32,12 @@ impl FunctionDecl {
         }
     }
 
+    /// A binding-local function by path, `fun!(crate::f)`; state its
+    /// signature with [`Self::sig`].
+    pub fn new_local(path: syn::Path) -> Self {
+        Self::new(path)
+    }
+
     /// State the signature of a binding-local function.
     pub fn sig(mut self, sig: syn::Signature) -> Self {
         self.fun = self.fun.sig(sig);
@@ -153,6 +159,14 @@ impl ExpandParamDecl {
         self.variants.push(ParamVariant::Handle);
         self
     }
+
+    /// Accepted for declarations that opt out of typed overloads. The
+    /// adapter checks no splittability up front, so there is nothing to
+    /// opt out of: a function that splits such a parameter gets the
+    /// overloads Kotlin then accepts or refuses.
+    pub fn no_split(self) -> Self {
+        self
+    }
 }
 
 /// How a result of a type is delivered: as a list of fields handed to a
@@ -172,7 +186,7 @@ pub(crate) enum ReturnField {
     Handle,
     /// Every field of a value form, by a function returning a struct;
     /// `consume` when the function takes the value by value.
-    Form { fun: syn::Ident, consume: bool },
+    Form { form: FieldsDecl, consume: bool },
 }
 
 impl ExpandReturnDecl {
@@ -198,7 +212,7 @@ impl ExpandReturnDecl {
     /// Every field of the struct `form` returns from a borrow of the value.
     pub fn fields(mut self, form: FieldsDecl) -> Self {
         self.fields.push(ReturnField::Form {
-            fun: form.0,
+            form,
             consume: false,
         });
         self
@@ -207,7 +221,7 @@ impl ExpandReturnDecl {
     /// Every field of the struct `form` returns by consuming the value.
     pub fn fields_self_into(mut self, form: FieldsDecl) -> Self {
         self.fields.push(ReturnField::Form {
-            fun: form.0,
+            form,
             consume: true,
         });
         self
@@ -216,11 +230,35 @@ impl ExpandReturnDecl {
 
 /// A value-form accessor, for [`ExpandReturnDecl::fields`]: `fields!(f)`.
 #[derive(Clone, Debug)]
-pub struct FieldsDecl(pub(crate) syn::Ident);
+pub struct FieldsDecl {
+    pub(crate) fun: syn::Ident,
+    /// Per-field output expansions, replacing the field type's own.
+    pub(crate) overrides: Vec<(String, ExpandReturnDecl)>,
+    /// Per-field Kotlin names.
+    pub(crate) names: Vec<(String, String)>,
+}
 
 impl FieldsDecl {
-    pub fn new(f: syn::Ident) -> Self {
-        Self(f)
+    pub fn new(fun: syn::Ident) -> Self {
+        Self {
+            fun,
+            overrides: Vec::new(),
+            names: Vec::new(),
+        }
+    }
+
+    /// Deliver one field through `decl` instead of its type's own
+    /// expansion. A `decl` with no fields drops the field: it does not cross.
+    pub fn field(mut self, field: impl AsRef<str>, decl: ExpandReturnDecl) -> Self {
+        self.overrides.push((field.as_ref().to_string(), decl));
+        self
+    }
+
+    /// The Kotlin name of one field's parameter, verbatim.
+    pub fn name(mut self, field: impl AsRef<str>, kotlin_name: impl Into<String>) -> Self {
+        self.names
+            .push((field.as_ref().to_string(), kotlin_name.into()));
+        self
     }
 }
 
@@ -467,21 +505,45 @@ pub enum ClassDecl {
     Sealed(SealedClassDecl),
 }
 
+impl From<syn::Type> for PtrClassDecl {
+    fn from(ty: syn::Type) -> Self {
+        Self::new(ty)
+    }
+}
+
 impl From<PtrClassDecl> for ClassDecl {
     fn from(d: PtrClassDecl) -> Self {
         ClassDecl::Ptr(d)
     }
 }
+impl From<syn::Type> for DataClassDecl {
+    fn from(ty: syn::Type) -> Self {
+        Self::new(ty)
+    }
+}
+
 impl From<DataClassDecl> for ClassDecl {
     fn from(d: DataClassDecl) -> Self {
         ClassDecl::Data(d)
     }
 }
+impl From<syn::Type> for EnumClassDecl {
+    fn from(ty: syn::Type) -> Self {
+        Self::new(ty)
+    }
+}
+
 impl From<EnumClassDecl> for ClassDecl {
     fn from(d: EnumClassDecl) -> Self {
         ClassDecl::Enum(d)
     }
 }
+impl From<syn::Type> for SealedClassDecl {
+    fn from(ty: syn::Type) -> Self {
+        Self::new(ty)
+    }
+}
+
 impl From<SealedClassDecl> for ClassDecl {
     fn from(d: SealedClassDecl) -> Self {
         ClassDecl::Sealed(d)
@@ -494,6 +556,8 @@ impl From<SealedClassDecl> for ClassDecl {
 #[derive(Clone, Debug)]
 pub struct ConstDecl {
     pub(crate) name: syn::Ident,
+    /// The Kotlin `val` name, when not the subject's.
+    pub(crate) val_name: Option<String>,
     pub(crate) source: ConstSource,
 }
 
@@ -514,8 +578,24 @@ impl ConstDecl {
     pub fn new(name: syn::Ident) -> Self {
         Self {
             name,
+            val_name: None,
             source: ConstSource::Const,
         }
+    }
+
+    /// [`constant!`](crate::constant) with the name built at run time, for
+    /// declaration loops: `ConstDecl::named(format!("ENCODING_{n}"))`.
+    pub fn named(name: impl AsRef<str>) -> Self {
+        let name = name.as_ref();
+        let ident = syn::parse_str(name)
+            .unwrap_or_else(|e| panic!("constant name `{name}` is not an identifier: {e}"));
+        Self::new(ident)
+    }
+
+    /// The Kotlin `val` name, verbatim (default: the subject's name).
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.val_name = Some(name.into());
+        self
     }
 
     /// The value of a nullary `#[prebindgen]` function.
@@ -589,6 +669,20 @@ impl std::fmt::Debug for IgnoreDecl {
 impl From<FunctionDecl> for IgnoreDecl {
     fn from(f: FunctionDecl) -> Self {
         let name = f.rust_name();
+        IgnoreDecl(Arc::new(move |n| n == name))
+    }
+}
+
+impl From<syn::Type> for IgnoreDecl {
+    fn from(ty: syn::Type) -> Self {
+        let name = quote::ToTokens::to_token_stream(&ty).to_string();
+        IgnoreDecl(Arc::new(move |n| n == name))
+    }
+}
+
+impl From<ConstDecl> for IgnoreDecl {
+    fn from(c: ConstDecl) -> Self {
+        let name = prebindgen_tools::names::bare(&c.name);
         IgnoreDecl(Arc::new(move |n| n == name))
     }
 }

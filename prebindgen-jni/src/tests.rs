@@ -26,6 +26,15 @@ const SRC: &str = r#"
     pub fn sum_new(count: i64) -> Sum { todo!() }
     pub fn sum_count(s: &Sum) -> i64 { todo!() }
     pub fn sum_use(s: Sum) -> i64 { todo!() }
+    pub type Error = inner::Error;
+    pub type Blob = inner::Blob;
+    pub fn error_message(e: &Error) -> String { todo!() }
+    pub fn sum_try(count: i64) -> Result<Sum, Error> { todo!() }
+    pub fn store_sum_raw(s: &Store) -> Sum { todo!() }
+    pub fn blob_new(bytes: Vec<u8>) -> Blob { todo!() }
+    pub fn blob_put(s: &Store, b: Blob, extra: Option<Blob>) { todo!() }
+    pub fn store_watch(s: &Store, on_close: impl Fn() + Send + Sync + 'static) { todo!() }
+    pub const LIMIT: i64 = 3;
 "#;
 
 fn builder() -> JniGenBuilder {
@@ -124,7 +133,7 @@ fn expansions_shape_the_surface() {
     assert!(kt.contains("public fun <R> storeSum(s: io.test.Store, onError: io.test.JniErrorHandler<R>, build: io.test.SumBuilder<R>): R"), "{kt}");
     assert!(kt.contains("public fun interface SumBuilder<out R>"));
     // An expanded parameter takes a selector, plus one overload per variant.
-    assert!(kt.contains("public fun sumUse(sSel: Int, s00: Long?, s1: io.test.Sum?, onError: io.test.JniErrorHandler<Long>): Long"));
+    assert!(kt.contains("public fun sumUse(sSel: Int, s0: Long?, s1: io.test.Sum?, onError: io.test.JniErrorHandler<Long>): Long"), "{kt}");
     assert!(kt.contains("public fun sumUse(count: Long, onError: io.test.JniErrorHandler<Long>): Long =\n    sumUse(0, count, null, onError)"), "{kt}");
     assert!(kt.contains(
         "public fun sumUse(s: io.test.Sum, onError: io.test.JniErrorHandler<Long>): Long ="
@@ -147,4 +156,42 @@ fn undeclared_types_are_refused() {
         .err()
         .unwrap();
     assert!(err.0.contains("`Store` is not declared"), "{}", err.0);
+}
+
+#[test]
+fn zenoh_shaped_declarations() {
+    let g = builder()
+        // A type-level expansion: `sum_count` reads its field, so it is an
+        // accessor and returns the value itself; so does a fallible
+        // function returning the type.
+        .expand(expand_return!(Sum).field(fun!(sum_count)).field_self())
+        // An error type with no class: its handler is in the base package.
+        .expand(expand_return!(Error).field(fun!(error_message).name("message")))
+        // A single constructor and no handle variant: no selector.
+        .expand(expand_param!(Blob).variant(fun!(blob_new)))
+        .package(
+            package!()
+                .class(ptr_class!(Blob))
+                .fun(fun!(sum_count))
+                .fun(fun!(sum_try))
+                .fun(fun!(blob_put))
+                .fun(fun!(store_watch))
+                .constant(crate::ConstDecl::named("LIMIT").name("MAX")),
+        )
+        .build()
+        .unwrap();
+    let kt = kotlin(&g);
+    assert!(
+        kt.contains(
+            "public fun sumCount(s: io.test.Sum, onError: io.test.JniErrorHandler<Long>): Long"
+        ),
+        "{kt}"
+    );
+    assert!(kt.contains("public fun sumTry(count: Long, onBindingError: io.test.JniErrorHandler<io.test.Sum>, onError: io.test.ErrorHandler<io.test.Sum>): io.test.Sum"), "{kt}");
+    assert!(kt.contains("public fun interface ErrorHandler<out R>"));
+    assert!(kt.contains("public fun blobPut(s: io.test.Store, b: ByteArray, extra: ByteArray?, onError: io.test.JniErrorHandler<Unit>): Unit"), "{kt}");
+    // A callback with no arguments.
+    assert!(kt.contains("public fun interface VoidCallback"));
+    // A constant built at run time, renamed.
+    assert!(kt.contains("public val MAX: Long by lazy"), "{kt}");
 }

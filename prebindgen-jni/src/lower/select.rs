@@ -6,6 +6,10 @@
 //! or the handle itself. Rust builds the value with the constructor, or
 //! takes (or borrows) the handle. `split_on_param` adds one typed overload
 //! per variant.
+//!
+//! An expansion with a single constructor and no handle variant is
+//! *direct*: there is nothing to choose, so Kotlin passes the constructor's
+//! arguments as the parameter and no selector crosses.
 
 use std::rc::Rc;
 
@@ -44,6 +48,23 @@ pub(crate) struct Selector {
 pub(crate) enum SelVariant {
     Build { func: Function, callee: TokenStream },
     Handle,
+}
+
+impl Selector {
+    /// A single constructor and nothing else: no selector crosses.
+    pub(crate) fn is_direct(&self) -> bool {
+        matches!(self.variants.as_slice(), [SelVariant::Build { .. }])
+    }
+}
+
+/// The Kotlin name of argument `j` of variant `i` of selector parameter
+/// `p`: `p1` for a one-argument constructor, `p01`, `p02` otherwise.
+fn arg_name(p: &str, i: usize, j: usize, arity: usize) -> String {
+    if arity == 1 {
+        format!("{p}{i}")
+    } else {
+        format!("{p}{i}{j}")
+    }
 }
 
 impl Plan<'_> {
@@ -102,13 +123,27 @@ impl Plan<'_> {
     /// The Kotlin parameters of a selector: `pSel`, then each variant's.
     pub(crate) fn selector_params(&self, s: &Selector) -> Res<Vec<(String, String)>> {
         let p = kt_ident(&names::camel(&names::bare(&s.param.name)));
+        if let [SelVariant::Build { func, .. }] = s.variants.as_slice() {
+            let n = func.params.len();
+            return func
+                .params
+                .iter()
+                .enumerate()
+                .map(|(j, fp)| {
+                    let name = if n == 1 { p.clone() } else { format!("{p}{j}") };
+                    let t = self.kt_type(&fp.ty)?;
+                    Ok((name, if s.optional { nullable(t) } else { t }))
+                })
+                .collect();
+        }
         let mut out = vec![(format!("{p}Sel"), "Int".to_string())];
         for (i, v) in s.variants.iter().enumerate() {
             match v {
                 SelVariant::Build { func, .. } => {
+                    let n = func.params.len();
                     for (j, fp) in func.params.iter().enumerate() {
                         let t = self.kt_type(&fp.ty)?;
-                        out.push((format!("{p}{i}{j}"), nullable(t)));
+                        out.push((arg_name(&p, i, j, n), nullable(t)));
                     }
                 }
                 SelVariant::Handle => out.push((format!("{p}{i}"), format!("{}?", s.class.fqn()))),
@@ -120,12 +155,15 @@ impl Plan<'_> {
     /// The raw leaves of a selector.
     pub(crate) fn selector_leaves(&self, s: &Selector) -> Res<Vec<Leaf>> {
         let root = names::bare(&s.param.name);
-        let mut out = vec![Leaf::new(LeafTy::Prim(Prim::I)).under(&format!("{root}_sel"))];
+        let mut out = Vec::new();
+        if !s.is_direct() {
+            out.push(Leaf::new(LeafTy::Prim(Prim::I)).under(&format!("{root}_sel")));
+        }
         for (i, v) in s.variants.iter().enumerate() {
             match v {
                 SelVariant::Build { func, .. } => {
                     for (j, fp) in func.params.iter().enumerate() {
-                        let opt = fp.ty.optional();
+                        let opt = self.variant_arg_ty(s, &fp.ty);
                         out.extend(
                             self.leaves(&opt, Dir::In)?
                                 .into_iter()
@@ -144,13 +182,36 @@ impl Plan<'_> {
     /// Kotlin leaf expressions for a selector, from its Kotlin parameters.
     pub(crate) fn selector_encode(&self, s: &Selector, cx: &mut KtEnc) -> Res<Vec<String>> {
         let p = kt_ident(&names::camel(&names::bare(&s.param.name)));
+        if s.is_direct() {
+            let names: Vec<String> = self
+                .selector_params(s)?
+                .into_iter()
+                .map(|(n, _)| n)
+                .collect();
+            let [SelVariant::Build { func, .. }] = s.variants.as_slice() else {
+                unreachable!("a direct selector");
+            };
+            let mut out = Vec::new();
+            for (fp, n) in func.params.iter().zip(&names) {
+                let ty = self.variant_arg_ty(s, &fp.ty);
+                out.extend(self.kt_encode(&ty, n, false, cx, true)?);
+            }
+            return Ok(out);
+        }
         let mut out = vec![format!("{p}Sel")];
         for (i, v) in s.variants.iter().enumerate() {
             match v {
                 SelVariant::Build { func, .. } => {
+                    let n = func.params.len();
                     for (j, fp) in func.params.iter().enumerate() {
-                        let opt = fp.ty.optional();
-                        out.extend(self.kt_encode(&opt, &format!("{p}{i}{j}"), false, cx, true)?);
+                        let opt = self.variant_arg_ty(s, &fp.ty);
+                        out.extend(self.kt_encode(
+                            &opt,
+                            &arg_name(&p, i, j, n),
+                            false,
+                            cx,
+                            true,
+                        )?);
                     }
                 }
                 SelVariant::Handle => {
@@ -178,8 +239,75 @@ impl Plan<'_> {
         vec![format!("({expr}?.ptr ?: 0L)")]
     }
 
+    /// How argument type `ty` of a variant crosses: optional, unless the
+    /// selector is direct and not optional itself.
+    fn variant_arg_ty(
+        &self,
+        s: &Selector,
+        ty: &prebindgen_tools::flat::flat::TypeRef,
+    ) -> prebindgen_tools::flat::flat::TypeRef {
+        let already = matches!(ty.kind(), TypeKind::Optional(_));
+        if already || (s.is_direct() && !s.optional) {
+            ty.clone()
+        } else {
+            ty.optional()
+        }
+    }
+
+    /// The Rust input of a direct selector: the constructor called on its
+    /// arguments (`None` when an optional parameter's are absent).
+    fn direct_input(&self, s: &Selector, func: &Function, callee: &TokenStream) -> Res<Input> {
+        let root = names::bare(&s.param.name);
+        let mut wires = Vec::new();
+        let mut args = Vec::new();
+        let mut binds = Vec::new();
+        for (j, fp) in func.params.iter().enumerate() {
+            let ty = self.variant_arg_ty(s, &fp.ty);
+            let input = self.rs_decode(&ty, &format!("{root}_0{j}"), 0)?;
+            wires.extend(input.wires.clone());
+            let e = input.result();
+            let a = quote::format_ident!("__a{}", j);
+            binds.push(quote!(let #a = #e?;));
+            args.push(a);
+        }
+        let call = |args: &[syn::Ident]| match func.ret.kind() {
+            TypeKind::Fallible { .. } => {
+                quote!(#callee(#(#args),*).map_err(|__e| ::std::string::ToString::to_string(&__e))?)
+            }
+            _ => quote!(#callee(#(#args),*)),
+        };
+        let built = call(&args);
+        let wrap = |b: TokenStream| match s.access {
+            Access::Owned => b,
+            _ => quote!(::prebindgen_jni_runtime::MaybeOwned::Owned(#b)),
+        };
+        let expr = if s.optional {
+            let some = wrap(built);
+            quote!({
+                #(#binds)*
+                match (#(#args,)*) {
+                    (#(::core::option::Option::Some(#args),)*) => ::core::option::Option::Some(#some),
+                    _ => ::core::option::Option::None,
+                }
+            })
+        } else {
+            let v = wrap(built);
+            quote!({ #(#binds)* #v })
+        };
+        let name = &s.param.name;
+        let input = Input::fallible(wires, expr);
+        Ok(match (s.access, s.optional) {
+            (Access::Owned, _) => input,
+            (_, false) => input.with_pass(quote!(&*#name)),
+            (_, true) => input.with_pass(quote!(#name.as_deref())),
+        })
+    }
+
     /// The Rust input of a selector parameter.
     pub(crate) fn selector_input(&self, s: &Selector) -> Res<Input> {
+        if let [SelVariant::Build { func, callee }] = s.variants.as_slice() {
+            return self.direct_input(s, func, callee);
+        }
         let root = names::bare(&s.param.name);
         let sel = leaf_ident(&root, "sel");
         let t = self.q.path(&names::ident(&s.class.rust));
@@ -190,11 +318,16 @@ impl Plan<'_> {
                 SelVariant::Build { func, callee } => {
                     let mut args = Vec::new();
                     for (j, fp) in func.params.iter().enumerate() {
-                        let opt = fp.ty.optional();
                         let r = format!("{root}_{i}{j}");
-                        let input = self.rs_decode(&opt, &r, 0)?;
+                        let input = self.rs_decode(&self.variant_arg_ty(s, &fp.ty), &r, 0)?;
                         wires.extend(input.wires.clone());
                         let e = input.result();
+                        // An optional argument's `None` is its value, not a
+                        // missing argument.
+                        if let TypeKind::Optional(_) = fp.ty.kind() {
+                            args.push(quote!(#e?));
+                            continue;
+                        }
                         let pname = names::bare(&fp.name);
                         let msg = format!("missing argument `{pname}` for `{root}` variant {i}");
                         args.push(quote!(#e?.ok_or_else(|| ::std::string::String::from(#msg))?));

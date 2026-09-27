@@ -212,11 +212,13 @@ pub(crate) enum Support {
     /// that assembles it.
     Sink { ty: TypeRef, base: String },
     Builder {
+        pkg: String,
         name: String,
         params: Vec<DParam>,
         leaves: Vec<Leaf>,
     },
     Folder {
+        pkg: String,
         name: String,
         columns: String,
         params: Vec<DParam>,
@@ -277,6 +279,7 @@ impl<'f> Plan<'f> {
             ext_names: HashSet::new(),
             supports: Vec::new(),
             seen: HashSet::new(),
+            accessors: accessors(b),
         };
         let items = planner.items()?;
         let supports = planner.supports;
@@ -359,9 +362,17 @@ impl<'f> Plan<'f> {
                     (None, Some(f)) => f(&pkg, &rust),
                     (None, None) => rust.clone(),
                 };
-                let iface_name = iface
-                    .enabled
-                    .then(|| iface.name.clone().unwrap_or_else(|| format!("{name}Api")));
+                let iface_name = match (iface.enabled, &iface.name, &b.iface_hook) {
+                    (false, _, _) => None,
+                    (true, Some(n), _) => Some(n.clone()),
+                    (true, None, Some(f)) => Some(f(&pkg, &name)),
+                    (true, None, None) => Some(format!("{name}Api")),
+                };
+                if iface_name.as_deref() == Some(name.as_str()) {
+                    return err(format!(
+                        "`{rust}`: its interface cannot share the class name `{name}`"
+                    ));
+                }
                 let class = Class {
                     rust: rust.clone(),
                     kind,
@@ -472,6 +483,31 @@ impl<'f> Plan<'f> {
     }
 }
 
+/// The functions every output expansion — type-level or a function's own —
+/// reads a field through.
+fn accessors(b: &JniGenBuilder) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for e in &b.expands {
+        if let ExpandDecl::Return(r) = e {
+            ret_exp_fns(r, &mut out);
+        }
+    }
+    let decls = b.packages.iter().flat_map(|p| {
+        let members = p.classes.iter().flat_map(|c| match c {
+            ClassDecl::Ptr(d) => d.methods.iter().chain(&d.constructors).collect::<Vec<_>>(),
+            ClassDecl::Data(d) => d.methods.iter().chain(&d.constructors).collect(),
+            _ => Vec::new(),
+        });
+        p.funs.iter().chain(members)
+    });
+    for f in decls {
+        if let Some(r) = &f.ret {
+            ret_exp_fns(r, &mut out);
+        }
+    }
+    out
+}
+
 fn param_exp_fns(d: &ExpandParamDecl, bound: &mut HashSet<String>) {
     for v in &d.variants {
         if let ParamVariant::Build(f) = v {
@@ -486,8 +522,11 @@ fn ret_exp_fns(d: &ExpandReturnDecl, bound: &mut HashSet<String>) {
             ReturnField::Getter(g) => {
                 bound.insert(g.rust_name());
             }
-            ReturnField::Form { fun, .. } => {
-                bound.insert(fun.to_string());
+            ReturnField::Form { form, .. } => {
+                bound.insert(form.fun.to_string());
+                for (_, d) in &form.overrides {
+                    ret_exp_fns(d, bound);
+                }
             }
             ReturnField::Handle => {}
         }
@@ -518,6 +557,8 @@ struct Planner<'p, 'f> {
     supports: Vec<Support>,
     /// Support interfaces planned so far, by name.
     seen: HashSet<String>,
+    /// Functions an output expansion reads a field through.
+    accessors: HashSet<String>,
 }
 
 impl Planner<'_, '_> {
@@ -651,7 +692,7 @@ impl Planner<'_, '_> {
         )?;
         Ok(Item::Constant {
             pkg: pkg.to_string(),
-            name: vname,
+            name: c.val_name.clone().unwrap_or(vname),
             binding,
         })
     }
@@ -681,7 +722,7 @@ impl Planner<'_, '_> {
             TypeKind::Fallible { ok, err } => ((**ok).clone(), Some((**err).clone())),
             _ => (func.ret.clone(), None),
         };
-        let ret = self.ret(decl, &func, &placement, &ok)?;
+        let ret = self.ret(decl, &func, &placement, &ok, err_ty.is_some())?;
         let err = match err_ty {
             None => EPlan::None,
             Some(e) => self.err(&e)?,
@@ -723,7 +764,7 @@ impl Planner<'_, '_> {
                 .map(|(_, d)| d);
             match plan.selector(p, explicit)? {
                 Some(s) => {
-                    let split = decl.splits.contains(&pname);
+                    let split = decl.splits.contains(&pname) && !s.is_direct();
                     params.push(PPlan::Selector(s, split));
                 }
                 None => {
@@ -773,12 +814,17 @@ impl Planner<'_, '_> {
         Ok(params)
     }
 
+    /// How the success value leaves. A type's own output expansion applies
+    /// to a function returning the type, except to a function returning
+    /// `Result` (a fallible factory keeps its handle) and to an accessor
+    /// some expansion reads a field through (it is the field).
     fn ret(
         &mut self,
         decl: &FunctionDecl,
         f: &Function,
         placement: &Placement,
         ty: &TypeRef,
+        fallible: bool,
     ) -> Res<RPlan> {
         let plan = self.plan;
         if let TypeKind::Unit = ty.kind() {
@@ -815,7 +861,11 @@ impl Planner<'_, '_> {
             }
         }
         let bare = core.borrow_target().unwrap_or(core);
-        if let Some(e) = plan.expansion(bare, explicit).cloned() {
+        let expansion = match explicit {
+            None if fallible || self.accessors.contains(&names::bare(&f.name)) => None,
+            _ => plan.expansion(bare, explicit),
+        };
+        if let Some(e) = expansion.cloned() {
             let TypeKind::Named { id, .. } = bare.kind() else {
                 return err(format!("`{ty}`: an output expansion needs a named type"));
             };
@@ -827,12 +877,16 @@ impl Planner<'_, '_> {
                 String::new()
             };
             let d = plan.deliver(core, quote!(__x), "r", "", Some(&e), &[], false, 1)?;
-            let base = &plan.base_pkg;
+            // The interfaces live beside the type's class.
+            let base = &plan
+                .class(&tname)
+                .map_or(plan.base_pkg.clone(), |c| c.pkg.clone());
             if seq {
                 let iface = format!("{base}.{tname}{suffix}Folder");
                 let columns_iface = format!("{base}.{tname}{suffix}FolderColumns");
                 self.support(iface.clone(), || {
                     Ok(Support::Folder {
+                        pkg: base.clone(),
                         name: simple(&iface),
                         columns: simple(&columns_iface),
                         params: d.params.clone(),
@@ -852,6 +906,7 @@ impl Planner<'_, '_> {
             let iface = format!("{base}.{tname}{suffix}Builder");
             self.support(iface.clone(), || {
                 Ok(Support::Builder {
+                    pkg: base.clone(),
                     name: simple(&iface),
                     params: d.params.clone(),
                     leaves: d.leaves.clone(),
@@ -898,19 +953,19 @@ impl Planner<'_, '_> {
         if plan.expansion(e, None).is_none() {
             return Ok(EPlan::Binding);
         }
-        let Some(class) = plan.class(&id.name).cloned() else {
-            return err(format!(
-                "`{}`: an error with an output expansion needs a declared class",
-                id.name
-            ));
+        // An error type with no class is Rust-side only: its handler lives
+        // in the base package.
+        let pkg = match plan.class(&id.name) {
+            Some(class) => class.pkg.clone(),
+            None => plan.base_pkg.clone(),
         };
-        let handler = format!("{}.{}Handler", class.pkg, id.name);
+        let handler = format!("{pkg}.{}Handler", id.name);
         let raw_iface = format!("{handler}Raw");
         let capture = format!("{handler}Capture");
         let d = plan.deliver(e, quote!(__e), "e", "", None, &[], false, 1)?;
         self.support(handler.clone(), || {
             Ok(Support::ErrorHandler {
-                pkg: class.pkg.clone(),
+                pkg: pkg.clone(),
                 name: simple(&handler),
                 raw: simple(&raw_iface),
                 capture: simple(&capture),

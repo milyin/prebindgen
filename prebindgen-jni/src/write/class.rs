@@ -339,19 +339,28 @@ fn sealed_class(plan: &Plan, c: &Class) -> Res<String> {
         let mut props = Vec::new();
         let mut closes = Vec::new();
         let mut args = Vec::new();
+        let mut arrays = Vec::new();
         for f in &alt.fields {
             let p = kt_prop(f);
             let t = plan.kt_type(&f.ty)?;
             props.push(format!("public val {p}: {t}"));
             closes.extend(plan.kt_close(&f.ty, &p)?);
+            arrays.push((p.clone(), array_eq(plan, &f.ty)?));
             let fp = format!("{}_{}", names::snake(&names::bare(&alt.name)), field_seg(f));
             from_params.push(format!("{fp}: {t}"));
             args.push(fp);
         }
-        let body = if owns {
-            format!(" {{\n{}\n    }}", close_body(closes))
-        } else {
+        let mut members = Vec::new();
+        if owns {
+            members.push(close_body(closes));
+        }
+        if arrays.iter().any(|(_, a)| a.is_some()) {
+            members.push(indent(&array_members(&vname, &arrays), 4));
+        }
+        let body = if members.is_empty() {
             String::new()
+        } else {
+            format!(" {{\n{}\n    }}", members.join("\n\n"))
         };
         variants.push(format!(
             "    public data class {vname}({}) : {name}{body}",
