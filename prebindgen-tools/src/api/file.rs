@@ -1,5 +1,3 @@
-//! The generated Rust file.
-
 use std::path::{Path, PathBuf};
 
 use prebindgen_flat::{flat::Guard, Emit, Flat};

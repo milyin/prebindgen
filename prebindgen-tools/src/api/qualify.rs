@@ -1,11 +1,3 @@
-//! Naming source items from generated code.
-//!
-//! The flat model spells every type in the flat namespace — `Payload`,
-//! `Option<Vec<Payload>>` — because that is what the source crates wrote. The
-//! generated file lives in a different crate, so every item it names has to
-//! be reached through the crate that declared it: `perftest_flat::Payload`.
-//! [`Qualifier`] does that rewriting, for types and for item paths.
-
 use prebindgen_flat::{
     flat::{ExtentSource, GenericArg, TypeKind, TypeRef},
     Flat,

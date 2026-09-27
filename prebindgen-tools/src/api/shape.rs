@@ -1,12 +1,3 @@
-//! One level of a type's structure, read against the adapter's own settings.
-//!
-//! An adapter lowers a type by recursion: it looks at the outermost layer,
-//! decides what that layer becomes on its boundary, and recurses into what
-//! the layer holds. [`shape`] answers the first question the same way for
-//! every adapter — which layer this is, and, for a named type, the setting
-//! the adapter gave that type — so each adapter's recursion is one `match`
-//! over [`Shape`].
-
 use prebindgen_flat::flat::{ScalarKind, TypeKind, TypeRef};
 
 /// How a value is held where it appears.

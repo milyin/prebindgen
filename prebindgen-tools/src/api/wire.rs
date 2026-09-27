@@ -1,21 +1,3 @@
-//! Wires and the conversions between wires and source values.
-//!
-//! A **wire** is one parameter, field or return slot of the generated
-//! boundary, typed in the generated Rust file: `jlong`, `*const c_char`,
-//! `payload_t`. A source value crosses as zero or more wires, and which
-//! ones is the adapter's decision; these types only carry the decision and
-//! compose it.
-//!
-//! * [`Input`] turns wires into a source value — a parameter on its way into
-//!   the source function, a field of a struct arriving from the foreign side.
-//! * [`Output`] turns a source value into wires — a return value, a callback
-//!   argument, a field of a struct leaving.
-//!
-//! Both carry an expression. A **fallible** one may use `?` on a
-//! `Result<_, String>`; whoever places it decides where the error goes (see
-//! [`Input::result`]). Generated conversion helpers follow the same
-//! convention, so a converter written for one position composes into another.
-
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 

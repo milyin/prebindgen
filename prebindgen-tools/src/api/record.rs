@@ -1,20 +1,3 @@
-//! Records — structs and the alternatives of a sum — taken apart into their
-//! fields and put back together.
-//!
-//! Two uses, one mechanism:
-//!
-//! * **Decomposition** ([`record_in`], [`record_out`]): the record crosses as
-//!   the concatenation of its fields' wires, with no type of its own on the
-//!   boundary. Recursing into a field that is itself a record gives the
-//!   leaf-by-leaf crossing a JVM binding uses.
-//! * **Mirrors** ([`StructWriter`], [`SumWriter`]): the record crosses as a
-//!   generated type whose fields are the wires — a `#[repr(C)]` struct or
-//!   enum for C — plus the two conversions between it and the source type.
-//!
-//! Either way the adapter decides, per field, through [`FieldCallbacks`];
-//! the helpers here only handle the Rust shape of the record: named or
-//! positional fields, the delimiters the source wrote, the order.
-
 use prebindgen_flat::{
     flat::{Alternative, Field, Struct, Variant},
     Emit,
