@@ -22,8 +22,11 @@ jobs:
       - run: cargo +${{ matrix.rust }} clippy --workspace --all-targets -- -D warnings
       - if: matrix.rust == 'stable'
         run: cargo fmt --all -- --check
+      # Documents the published crates in dependency order, then checks the
+      # rendered links: rustdoc does not warn when a link into another crate
+      # fails to resolve. The Pages workflows build the site with this script.
       - if: matrix.rust == 'stable'
-        run: cargo doc --workspace --no-deps
+        run: ./site/build.sh site-build
         env:
           RUSTDOCFLAGS: -D warnings
   boundaries:
