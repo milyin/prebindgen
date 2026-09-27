@@ -7,9 +7,9 @@
 //! > opposite ends of the pipeline.
 //!
 //! ```text
-//! Source(s) ──items──> Flat ──Elements──> Registry ──> adapters
-//!   raw records          parse +               indexes       classify off `kind`
-//!   (syn::Item)          validate              elements      spell with `spell()`
+//! Source(s) ──items──> Flat ──Elements──> adapters
+//!   raw records          parse +               classify off `kind`
+//!   (syn::Item)          validate              spell with `spell()`
 //! ```
 //!
 //! [`FlatBuilder::source`] folds the first arrow in for the common case, so a build
@@ -43,9 +43,7 @@
 //! this module is a classifier, and issue #211 says classification lives here
 //! alone; the visibility is what makes that hold rather than a convention
 //! anyone has to remember. Code whose job *is* producing Rust reaches the
-//! syntax through [`Emit`](crate::Emit), which the registry pipeline
-//! (`prebindgen-registry`'s `write_rust`) hands only to the emission
-//! callbacks.
+//! syntax through [`Emit`](crate::Emit).
 //!
 //! # What earns a variant
 //!
@@ -132,8 +130,8 @@
 //! that wants to *inspect* what a source crate marked, refusals included, gets
 //! exactly that from [`Flat::unsupported`].
 //!
-//! `Registry` ingestion is where the diagnoses are raised.
-//! Building a registry from this model **fails if any element is
+//! An adapter is where the diagnoses are raised.
+//! Building a binding from this model **fails if any element is
 //! `Unsupported`** — all of them at once, so a source crate that needs migrating
 //! sees one list rather than one rebuild per item — and it fails before any
 //! adapter declaration is examined. A binding is built against a model the
@@ -174,8 +172,8 @@
 //! | `fn f(a: u8, ...)` | a function without the tail | the variadic arguments vanish |
 //! | `struct S<T>`, `fn f<T>()`, `struct S<const N: usize>` | `T` as a nominal reference | a parameter is indistinguishable from an item named `T` |
 //!
-//! All three are [`ItemError`]s, carried like any other refusal and raised at
-//! registry ingestion. A
+//! All three are [`ItemError`]s, carried like any other refusal and raised by
+//! the adapter. A
 //! **lifetime** binder is not among them: lifetimes are spelling, and the
 //! spelling already travels. Nor is `impl Trait` in argument position — Rust
 //! calls it an anonymous type parameter, but it is not a binder in the syntax,
@@ -453,7 +451,7 @@ impl FlatBuilder {
 /// holds, and [`Self::resolve`] hands it over. An item that named something the
 /// flat API does not declare is [`Element::Unsupported`] with
 /// [`ItemError::UnresolvedType`], exactly like every other refusal — carried
-/// here, raised by `Registry` ingestion.
+/// here, raised by the adapter.
 ///
 /// Resolving here rather than in the adapters is the point of #211: a dangling
 /// name used to surface much later as an unresolved-converter error, from
@@ -648,10 +646,7 @@ impl Flat {
     // Test-only since S42: `unit_enum`, `payload_enum`, `enum_alternatives` and
     // `declared_member_names` each ask the model which shape a declared enum is
     // and get the element that answers, so nothing in a built crate needs the
-    // item. The registry pipeline's own tests (now in the separate
-    // `prebindgen-registry` crate) still exercise it, which is why this is
-    // `pub` rather than `pub(crate)` — see `TypeRef`'s doc for
-    // why that seal is now a convention rather than a compiler check.
+    // item.
     #[allow(dead_code)]
     pub fn enum_item<N: Name + ?Sized>(&self, name: &N) -> Option<&syn::ItemEnum> {
         match self.declared_type(name)? {
@@ -713,27 +708,11 @@ impl Flat {
     /// `TypeRef`s computed at parse time — and re-deriving one from
     /// `spell()` is reasoning from the spelling, which is what `origin` is
     /// not for. This exists for the one case with no element behind it: a type a
-    /// build script declared, or one expansion composed. `ensure_entry` is its
-    /// only caller in the registry pipeline.
-    ///
-    /// Whoever asks is expected to keep the answer. The registry does: a reading is
-    /// taken once when a type-table cell is born, and lives in that cell — and
-    /// `Registry::reading` (in the registry layer above) hands
-    /// back only what is in one, so a second source of readings cannot reappear
-    /// here (#266).
+    /// build script declared — a class, a conversion's representation type, a
+    /// callback signature.
     ///
     /// `Err` means the spelling is outside the accepted grammar — a real diagnosis
-    /// about a type the *binding* built, not a cache miss.
-    ///
-    /// **`pub`, not `pub(crate)`.** The registry pipeline that is
-    /// this method's sole legitimate caller now lives in the separate
-    /// `prebindgen-registry` crate, so a module-path seal can no longer express
-    /// "the pipeline, and nothing else" — there is no path inside this crate for
-    /// it to name. The seal is now a documented convention (this doc comment)
-    /// rather than a compiler-enforced one; #280's intent (an adapter must not
-    /// mint a `TypeRef` from tokens of its own) is no longer structurally
-    /// guaranteed and would need a real API (e.g. a sealed trait token minted
-    /// only by `prebindgen-registry`) to restore.
+    /// about a type the *binding* named, not a cache miss.
     pub fn classify(&self, ty: &syn::Type) -> Result<TypeRef, UnsupportedType> {
         if let Some(indexed) = self.type_ref(ty) {
             return Ok(indexed.clone());
@@ -771,7 +750,7 @@ impl Flat {
     /// Every item the language could not express, with its diagnosis.
     ///
     /// Present in the model so a consumer can inspect what a source crate marked
-    /// — building a `Registry` from a model holding any of
+    /// — building a binding from a model holding any of
     /// these fails, and reports all of them. See the [module docs](self) on where
     /// acceptance is enforced.
     pub fn unsupported(&self) -> impl Iterator<Item = &Unsupported> {
@@ -784,8 +763,7 @@ impl Flat {
     /// Lower a function signature written outside the captured stream.
     ///
     /// For the **one input that does not come through this module**: a binding's
-    /// `local_functions`, whose signatures are written by hand in a build script
-    /// and inserted straight into the registry. Everything else was already
+    /// local functions, whose signatures are written by hand in a build script. Everything else was already
     /// lowered here, so this exists to keep the grammar decided in one place
     /// rather than re-checked at the far end.
     ///
@@ -821,9 +799,6 @@ impl Flat {
     /// Deliberately does **not** extend [`Self::source_modules`]: see that
     /// field's docs.
     ///
-    /// `pub`: its caller (`RegistryBuilder::fun`, on a binding-local
-    /// [`fun!`](https://docs.rs/prebindgen-registry/latest/prebindgen_registry/macro.fun.html)
-    /// path) now lives in the separate `prebindgen-registry` crate.
     pub fn add_local_function(&mut self, mut f: Function, crate_name: String) {
         f.origin.location = Rc::new(SourceLocation {
             crate_name: Some(crate_name),
@@ -961,7 +936,6 @@ fn first_unresolved(
 ///
 /// The callback grammar, and the language's alone: [`TypeKind::Callback`] is
 /// exactly what this accepts, so acceptance cannot drift from classification.
-/// The registry re-exports it for the consumers that have not migrated yet.
 pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
     let syn::Type::ImplTrait(it) = ty else {
         return None;

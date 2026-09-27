@@ -13,19 +13,10 @@ use quote::ToTokens;
 ///
 /// # A key is an identity, and nothing else
 ///
-/// It is what a table is indexed by. It is **not** a route to `syn::Type`: the
-/// only way to reach a type's syntax is
-/// `Conversions::reading` (in the registry layer above) followed by
-/// [`TypeRef`](super::TypeRef), because a
+/// It is what a table is indexed by. It is **not** a route to `syn::Type`: a
+/// type's syntax is reached through a [`TypeRef`](super::TypeRef), because a
 /// reading is what pairs a spelling with the classification that vouches for
 /// it.
-///
-/// This used to keep the parsed form beside the string and hand it out through
-/// `to_type()`, which let any holder of a key produce tokens for a type the
-/// model never classified — the same capability #280 sealed `TypeRef` against,
-/// granted by the key itself. A caller that wants tokens now has to have gotten
-/// them from somewhere that knows what they mean: the registry's reading, or
-/// the declaration that wrote them (#291).
 ///
 /// What a key can still answer about itself is what it is **called** —
 /// [`Self::as_str`], [`Self::ident`], [`Self::short_name`] — because a name is

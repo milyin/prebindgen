@@ -37,7 +37,6 @@
 //! | `expand_return!` `.fields(fields!(…))` (#213) | `Report` — boundary DERIVED from the value form instead of restated; covers every per-field rule (spliced `Summary`, inlined `Stamp`, `Option<data class>`, a sum with a handle payload, a plain leaf) |
 //! | `expand_return!` `.fields_self_into(fields!(…))` | `report_into_struct(r: Report)` — the CONSUMING value form: the value is given away and its fields MOVED out, so the clones the borrowing `report_to_struct` pays are not emitted at all |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
-//! | `JniGen::report()` (C7)               | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
@@ -98,10 +97,9 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen_jni::{
-    constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
-};
-use prebindgen_registry::{
-    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
+    constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
+    fun, into, matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant,
+    JniGen,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -368,7 +366,7 @@ fn main() {
                         // Binding-local INSTANCE METHOD and COMPANION
                         // CONSTRUCTOR (`fun!(crate::…).sig(sig!(…))`): fns
                         // defined in THIS crate (src/lib.rs), no source-crate
-                        // item — same member machinery as registry fns.
+                        // item — same member machinery as source fns.
                         // NO .name(): the strip-class-prefix method hook
                         // derives `mean` from the path's LAST segment
                         // (`summary_mean` on `Summary` → strip → `mean`) —
@@ -377,7 +375,7 @@ fn main() {
                         // FALLIBLE binding-local constructor: the sig's
                         // `Result<Summary, String>` return is the error
                         // channel — a negative count routes the Err message
-                        // to onError, exactly like a registry fn's Result.
+                        // to onError, exactly like a source fn's Result.
                         .constructor(
                             fun!(crate::summary_from_mean)
                                 .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
@@ -781,6 +779,45 @@ fn main() {
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
         .package(package!().fun(fun!(string_new)))
+        // Single-constructor input expansions: direct where the arguments
+        // can say the value is absent, a selector where they cannot; and a
+        // value form with one field renamed and one dropped.
+        .package(
+            package!("tags")
+                .class(ptr_class!(Tag))
+                .fun(
+                    fun!(tag_describe).expand_param("t", expand_param!(Tag).variant(fun!(tag_new))),
+                )
+                .fun(
+                    fun!(tag_describe_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_new))),
+                )
+                .fun(
+                    fun!(tag_default_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_default))),
+                )
+                .fun(
+                    fun!(tag_with_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_with))),
+                )
+                .fun(
+                    fun!(tag_pick).expand_return(
+                        expand_return!(Tag).fields(
+                            fields!(tag_parts)
+                                .name("label", "title")
+                                .field("note", expand_return!(Summary)),
+                        ),
+                    ),
+                ),
+        )
+        .package(
+            package!("cow")
+                .class(data_class!(CowBytes))
+                .fun(fun!(cow_text))
+                .fun(fun!(cow_bytes))
+                .fun(fun!(cow_numbers))
+                .fun(fun!(cow_bytes_box)),
+        )
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
@@ -789,7 +826,7 @@ fn main() {
         .ignore(fun!(storage_put_by_read_and_update));
 
     // Two prebindgen sources: the flat crate plus the binding-side helper crate
-    // (conversion fns for `convert!`). The registry records each fn's origin from
+    // (conversion fns for `convert!`). The adapter records each fn's origin from
     // the `SourceLocation` stamps so generated calls qualify with the defining
     // crate (`perftest_flat::…` vs `cov_helpers::…`). The helper dependency is
     // RENAMED in Cargo.toml (`cov_helpers = { package = "covertest-helpers", .. }`),
@@ -818,14 +855,4 @@ fn main() {
     for path in jni.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
-
-    // The resolved-surface report (C7): committed next to the regen so a
-    // decl's effect is reviewable in a PR without reading generated Kotlin.
-    std::fs::write(
-        std::path::Path::new(&crate_dir)
-            .join("kotlin")
-            .join("REPORT.md"),
-        jni.report(),
-    )
-    .expect("write REPORT.md");
 }

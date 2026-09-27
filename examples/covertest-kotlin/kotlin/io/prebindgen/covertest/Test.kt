@@ -1,5 +1,10 @@
 package io.prebindgen.covertest
 
+import io.prebindgen.covertest.cow.cowText
+import io.prebindgen.covertest.cow.cowBytes
+import io.prebindgen.covertest.cow.cowNumbers
+import io.prebindgen.covertest.cow.cowBytesBox
+
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryVault
 import io.prebindgen.covertest.analytics.archiveLatest
@@ -20,6 +25,11 @@ import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
+import io.prebindgen.covertest.tags.tagDefaultOpt
+import io.prebindgen.covertest.tags.tagDescribe
+import io.prebindgen.covertest.tags.tagDescribeOpt
+import io.prebindgen.covertest.tags.tagPick
+import io.prebindgen.covertest.tags.tagWithOpt
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Arrays
 import io.prebindgen.covertest.model.CacheConfig
@@ -171,6 +181,14 @@ private inline fun section(name: String, body: () -> Unit) {
 private fun payload(id: Long, seq: Int, value: Double, flag: Boolean, label: String?) =
     Payload(id, seq, value, flag, label)
 
+/** The position of a `Lookup` alternative, or null for no value at all. */
+private fun lookupTag(l: Lookup?): Int? = when (l) {
+    null -> null
+    Lookup.Absent -> 0
+    is Lookup.Found -> 1
+    is Lookup.Failed -> 2
+}
+
 fun main() {
     println("covertest-kotlin: exercising every JniGen feature")
 
@@ -243,19 +261,9 @@ fun main() {
     }
 
     // ── bounded custom representation: Rust keeps Option<Duration>, Kotlin
-    // sees ULong?, and JNI uses an invalid u64 bit pattern for null so the
-    // native carrier remains primitive long rather than JObject/boxed Long. ─
-    section("bounded Option<Duration> niche over raw Long") {
-        val native = CovNative::class.java.getDeclaredMethod(
-            "durationOptional",
-            java.lang.Long.TYPE,
-            Any::class.java,
-        )
-        check(native.parameterTypes[0] == java.lang.Long.TYPE)
-        check(native.returnType == java.lang.Long.TYPE) {
-            "bounded Option<Duration> must use a primitive Long JNI carrier"
-        }
-
+    // sees ULong?, and a value outside the declared domain is a binding error
+    // in either direction. ────────────────────────────────────────────────
+    section("bounded Option<Duration> domain over ULong") {
         check(durationOptional(null, boom) == null)
         check(durationOptional(0uL, boom) == 0uL)
         check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
@@ -267,22 +275,13 @@ fun main() {
         check(boxedDurationEcho(86_400_000uL, boom) == 86_400_000uL)
         check(boxedDurationEcho(0uL, boom) == 0uL)
 
-        // The data-class properties are semantic `ULong` / `ULong?`, while the
-        // native output factory receives primitive Longs (the optional one
-        // niche-encoded). The echo's explicit object input also executes the
-        // complete ULong -> Duration decoder.
+        // The data-class properties are semantic `ULong` / `ULong?`. The echo's
+        // explicit object input (`.jobject_input()`, packed on the wire) also
+        // executes the complete ULong -> Duration decoder.
         //
-        // `required` and `delay` take DIFFERENT emitter paths: `delay` rides
-        // the `Option<_>` wrapper, which composes its inner conversion chain
-        // itself, while `required` is a bare leaf the whole-object decoder and
-        // the leaf encoder each have to compose for. Both fields therefore
-        // have to round-trip, not just the nullable one.
-        val fromParts = DurationBoundary::class.java.getDeclaredMethod(
-            "fromParts",
-            java.lang.Long.TYPE,
-            java.lang.Long.TYPE,
-        )
-        check(fromParts.parameterTypes.all { it == java.lang.Long.TYPE })
+        // `required` and `delay` take different paths — `delay` rides the
+        // `Option<_>` layer, `required` is a bare converted leaf — so both
+        // fields have to round-trip, not just the nullable one.
         check(
             durationBoundaryEcho(DurationBoundary(0uL, null), boom) ==
                 DurationBoundary(0uL, null),
@@ -774,14 +773,13 @@ fun main() {
         kept[0].close()
         check(kept[0].isClosed())
 
-        // The same field at a BUILDER position, where the sum stays raw — so the
-        // absent case is readable as a null TAG, ahead of any variant.
-        val absentTag = probeNew(9L, -2L, 0.0, boom) { seq, tag, _, _ -> "$seq:$tag" }
-        check(absentTag == "9:null") { "an absent sum nulls its selector: $absentTag" }
-        // …and the exact collision the boxing exists to prevent: a PRESENT sum
-        // whose alternative is `Lookup.Absent` is tag `0`. A raw `jint` selector
-        // would have made these two calls indistinguishable.
-        val presentTag = probeNew(9L, 0L, 0.0, boom) { seq, tag, _, _ -> "$seq:$tag" }
+        // The same field at a BUILDER position, where the sum arrives typed as
+        // well — so the absent case reads as `null`, ahead of any variant.
+        val absentTag = probeNew(9L, -2L, 0.0, boom) { seq, outcome -> "$seq:${lookupTag(outcome)}" }
+        check(absentTag == "9:null") { "an absent sum is null: $absentTag" }
+        // …and the collision the boxing exists to prevent: a PRESENT sum whose
+        // alternative is `Lookup.Absent` (tag `0`) must not read as absent.
+        val presentTag = probeNew(9L, 0L, 0.0, boom) { seq, outcome -> "$seq:${lookupTag(outcome)}" }
         check(presentTag == "9:0") { "a present `Lookup.Absent` is tag 0, not null: $presentTag" }
     }
 
@@ -798,14 +796,16 @@ fun main() {
     // so JVM null can mean "no value here", which tag 0 cannot — that would
     // alias a real variant (`Lookup.Absent`) and lose the Option.
     section("value form reached through an Option (conditional hoist)") {
-        // At a BUILDER position the sum stays raw (tag + groups), so the tag is
-        // readable directly — which is how the absent case is pinned below.
+        // At a BUILDER position the sum arrives typed, and an absent report
+        // makes it `null` — which is how the absent case is pinned below.
         val rows = mutableListOf<String>()
         for (n in 0L..3L) {
-            val row = ledgerNew(n, boom) { fCount, _, _, _, _, fTag, fFound, _, fLabel,
-                                           aCount, _, _, _, _, aTag, aFound, _, aLabel ->
-                fFound?.close()
-                aFound?.close()
+            val row = ledgerNew(n, boom) { fCount, _, _, _, _, fOutcome, fLabel,
+                                           aCount, _, _, _, _, aOutcome, aLabel ->
+                fOutcome?.close()
+                aOutcome?.close()
+                val fTag = lookupTag(fOutcome)
+                val aTag = lookupTag(aOutcome)
                 val filed = if (fLabel == null) "-|$fTag" else "$fLabel/$fCount/$fTag"
                 val archived = if (aLabel == null) "-|$aTag" else "$aLabel/$aCount/$aTag"
                 "$filed $archived"
@@ -1559,6 +1559,20 @@ fun main() {
         val level64 = ObjectBoundary64(level32, level32)
         val level63 = ObjectBoundary63(level32, level16, level8, level4, level2, leaf)
         check(objectBoundaryValue(ObjectBoundary(level64, level63), boom) == 127L)
+
+        // A packed argument of the wrong length — only reachable by calling
+        // the extern directly — is a binding error, never a native crash.
+        // Both a primitive group and an object group are length-checked.
+        val shortLongs = JniErrorHandlerCapture.acquire()
+        CovNative.objectBoundaryValue(LongArray(3), shortLongs)
+        check(shortLongs.failed && shortLongs.ze0?.contains("expected 127 elements, got 3") == true) {
+            "a short packed primitive group must be a binding error, got: ${shortLongs.ze0}"
+        }
+        val shortObjects = JniErrorHandlerCapture.acquire()
+        CovNative.blobValueEcho(intArrayOf(0), longArrayOf(1L, 0L), arrayOf<Any?>(ByteArray(0)), Any(), shortObjects)
+        check(shortObjects.failed && shortObjects.ze0?.contains("expected 2 elements, got 1") == true) {
+            "a short packed object group must be a binding error, got: ${shortObjects.ze0}"
+        }
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────
@@ -1892,6 +1906,46 @@ fun main() {
         val p = Esc_Probe.escapeProbeNew(7L, boom)
         check(p.escapeProbeValue(boom) == 7L)
         p.close()
+    }
+
+    // ── single-constructor expansions + value-form field overrides ───────────
+    section("single-constructor expand_param (direct / selector) + fields! overrides") {
+        // One constructor, no handle variant: the parameter IS the
+        // constructor's argument, no selector crosses.
+        check(tagDescribe("abc", boom) == "abc")
+        // Optional, and the argument can be absent: still direct, `null`
+        // is `None`.
+        check(tagDescribeOpt(null, boom) == "none")
+        check(tagDescribeOpt("abc", boom) == "abc")
+        // Optional over a zero-argument constructor: nothing could say
+        // "absent", so the selector stays — `-1` is `None`.
+        check(tagDefaultOpt(-1, boom) == "none")
+        check(tagDefaultOpt(0, boom) == "default")
+        // Optional over a constructor whose argument is optional: `null`
+        // for the argument builds an unnamed tag, `-1` means no tag.
+        check(tagWithOpt(-1, null, boom) == "none")
+        check(tagWithOpt(0, null, boom) == "unnamed")
+        check(tagWithOpt(0, "x", boom) == "x")
+        // The value form's `label` arrives renamed `title`; `note` does not
+        // cross at all, so the builder takes two parameters.
+        check(tagPick("hello", boom) { title, size -> "$title/$size" } == "hello/5")
+    }
+
+    section("Cow text, bytes, and sequences preserve both ownership cases") {
+        check(cowText("héllo", false, boom) == "héllo")
+        check(cowText("", false, boom) == "")
+        check(cowText("ignored", true, boom) == "borrowed")
+        val bytes = byteArrayOf(0, -128, -1)
+        check(cowBytes(bytes, false, boom).contentEquals(bytes))
+        check(cowBytes(byteArrayOf(), true, boom).contentEquals(bytes))
+        check(cowBytes(byteArrayOf(), false, boom).isEmpty())
+        check(cowNumbers(listOf(7L, -8L), false, boom) == listOf(7L, -8L))
+        check(cowNumbers(emptyList(), true, boom) == listOf(1L, -2L, 3L))
+        check(cowNumbers(emptyList(), false, boom).isEmpty())
+        val a = cowBytesBox(bytes, boom)
+        val b = cowBytesBox(bytes.copyOf(), boom)
+        check(a == b && a.hashCode() == b.hashCode())
+        check(a.bytes.contentEquals(bytes))
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")

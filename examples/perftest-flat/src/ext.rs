@@ -2021,6 +2021,56 @@ pub fn ledger_each(n: i64, sink: impl Fn(Ledger) + Send + Sync + 'static) {
     }
 }
 
+/// Exercise both runtime ownership cases of a Cow text result.
+#[prebindgen]
+pub fn cow_text(text: std::borrow::Cow<'_, str>, borrowed: bool) -> std::borrow::Cow<'static, str> {
+    if borrowed {
+        std::borrow::Cow::Borrowed("borrowed")
+    } else {
+        std::borrow::Cow::Owned(text.into_owned())
+    }
+}
+
+/// Exercise the JNI byte-array codec inside an explicit Cow wrapper.
+#[prebindgen]
+pub fn cow_bytes(
+    bytes: std::borrow::Cow<'_, [u8]>,
+    borrowed: bool,
+) -> std::borrow::Cow<'static, [u8]> {
+    if borrowed {
+        std::borrow::Cow::Borrowed(&[0, 128, 255])
+    } else {
+        std::borrow::Cow::Owned(bytes.into_owned())
+    }
+}
+
+/// Exercise the general sequence codec inside an explicit Cow wrapper.
+#[prebindgen]
+pub fn cow_numbers(
+    values: std::borrow::Cow<'_, [i64]>,
+    borrowed: bool,
+) -> std::borrow::Cow<'static, [i64]> {
+    if borrowed {
+        std::borrow::Cow::Borrowed(&[1, -2, 3])
+    } else {
+        std::borrow::Cow::Owned(values.into_owned())
+    }
+}
+
+/// A Cow field still gives the Kotlin data class array-content equality.
+#[prebindgen]
+#[derive(Clone)]
+pub struct CowBytes {
+    pub bytes: std::borrow::Cow<'static, [u8]>,
+}
+
+#[prebindgen]
+pub fn cow_bytes_box(bytes: std::borrow::Cow<'_, [u8]>) -> CowBytes {
+    CowBytes {
+        bytes: std::borrow::Cow::Owned(bytes.into_owned()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

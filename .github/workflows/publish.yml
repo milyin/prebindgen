@@ -11,11 +11,9 @@ name: Publish to crates.io
 #   3. prebindgen-jni-runtime  (only `jni`)
 #   4. prebindgen-proc-macro   -> prebindgen
 #   5. prebindgen-flat         -> prebindgen
-#   6. prebindgen-registry     -> prebindgen-flat, prebindgen
-#   7. prebindgen-c            -> prebindgen-registry, prebindgen-c-runtime
-#   8. prebindgen-jni          -> prebindgen-registry, prebindgen-jni-runtime,
-#                                 and kotlin-codegen, which lives in its own
-#                                 repo and is already on crates.io
+#   6. prebindgen-tools        -> prebindgen-flat, prebindgen
+#   7. prebindgen-c            -> prebindgen-tools, prebindgen
+#   8. prebindgen-jni          -> prebindgen-tools, prebindgen
 #
 # `dry_run` runs every check and `cargo publish --dry-run`, then stops before
 # the registry is touched. It creates no tag and no release. Use it to rehearse
@@ -34,7 +32,7 @@ on:
           - prebindgen-jni-runtime
           - prebindgen-proc-macro
           - prebindgen-flat
-          - prebindgen-registry
+          - prebindgen-tools
           - prebindgen-c
           - prebindgen-jni
       version:

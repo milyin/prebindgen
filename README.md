@@ -2,13 +2,11 @@
 
 A tool for separating the implementation of FFI interfaces from language-specific binding generation, allowing each to reside in different crates.
 
-## Stability in 0.5
+## Stability
 
-The language-neutral pipeline (`prebindgen`, `prebindgen-flat`,
-`prebindgen-registry`) and the JNI/Kotlin `prebindgen-jni` adapter are
-supported public APIs in 0.5. `prebindgen-c` is always compiled — there is
-no feature gate — but it remains an experimental proof of concept and is not
-covered by the semver guarantee; its API may change in a minor release.
+The 0.7 line replaces the registry pipeline of 0.5 with adapter-driven
+generation (see [docs/architecture.md](docs/architecture.md)). Every crate is
+pre-1.0 and its API may change in a minor release.
 
 ## Problem
 
@@ -70,43 +68,40 @@ This repository is a Cargo workspace of eight crates, layered so a *source*
 crate and a *shipped binding library* each pull in only what they need: a
 source crate that just calls `init_prebindgen_out_dir()` depends on
 `prebindgen` alone, while a shipped binding library depends on a small
-runtime crate (~350 lines), not the generator.
+runtime crate, not the generator.
 
 | Crate | What it's for | Depends on |
 |---|---|---|
 | `prebindgen` | Base: reads what `#[prebindgen]` captured and hands out `(syn::Item, SourceLocation)` pairs via `Source` | — |
 | `prebindgen-proc-macro` | The `#[prebindgen]` macro itself | `prebindgen` |
 | `prebindgen-flat` | The flat model: parses the captured stream into one flat namespace | `prebindgen` |
-| `prebindgen-registry` | The language-agnostic pipeline: type resolution, boundary expansion, Rust emission | `prebindgen-flat`, `prebindgen` |
-| `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) — experimental proof of concept | `prebindgen-registry` |
-| `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-registry`, [`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) |
-| `prebindgen-c-runtime` | Leaf, ~65 lines, no deps — traits the generated C converters call at run time | — |
-| `prebindgen-jni-runtime` | Leaf, ~350 lines, only `jni` — helpers the generated JNI bindings call at run time | `jni` |
+| `prebindgen-tools` | Building blocks for language adapters: per-element generators, recursion helpers, source qualification, the generated-file writer | `prebindgen-flat`, `prebindgen` |
+| `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) | `prebindgen-tools` |
+| `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-tools` |
+| `prebindgen-c-runtime` | Leaf, no deps — traits the generated C code calls at run time | — |
+| `prebindgen-jni-runtime` | Leaf, only `jni` — helpers the generated JNI code calls at run time | `jni` |
 
-A binding crate's `build.rs` depends on a generator (`prebindgen-c` or
-`prebindgen-jni`, plus `prebindgen-registry`); the crate it builds depends on
-the matching runtime crate instead. The generator itself — `syn`, `quote`,
-`prettyplease`, and for JNI the `kotlin-codegen` emitter — never ends up in a
-shipped library's regular dependency graph.
+A binding crate's `build.rs` depends on an adapter (`prebindgen-c` or
+`prebindgen-jni`); the crate it builds depends on the matching runtime crate
+instead. The generator itself — `syn`, `quote`, `prettyplease` — never ends up
+in a shipped library's regular dependency graph.
 
-[`kotlin-codegen`](https://github.com/milyin/kotlin-codegen) is a
-general-purpose Kotlin source emitter, developed in a separate repo on its own
-release cycle and consumed by `prebindgen-jni` from
-[crates.io](https://crates.io/crates/kotlin-codegen) like any other dependency.
+An adapter resolves its build script's declarations against the flat model
+into a plan, then writes the plan element by element, calling a generator from
+`prebindgen-tools` for each Rust item. A generator asks the adapter, through a
+small callback trait, how each value crosses — how a parameter becomes wires
+and back, how a result leaves — and writes the wrapper function, mirror struct
+or closure around the answers.
 
 ## Usage
 
-### Stable core and JNI/Kotlin path
+### JNI/Kotlin path
 
-Use `prebindgen::Source` to collect annotated items, resolve them through
-`prebindgen-registry`'s `Registry`, then configure `prebindgen-jni`'s
-`JniGenBuilder` to emit Rust JNI wrappers and Kotlin sources. The
-[`covertest-kotlin`](examples/covertest-kotlin) example is the maintained,
-comprehensive reference for that supported flow; the smaller
-[`perftest-kotlin`](examples/perftest-kotlin) consumer shows a lean production
-configuration. A dedicated introductory JniGen guide is tracked in [#57].
-
-[#57]: https://github.com/milyin/prebindgen/issues/57
+Configure `prebindgen-jni`'s `JniGenBuilder` from `build.rs` to emit Rust JNI
+wrappers and Kotlin sources. The [`covertest-kotlin`](examples/covertest-kotlin)
+example is the comprehensive reference; the smaller
+[`perftest-kotlin`](examples/perftest-kotlin) consumer shows a lean
+configuration.
 
 ### 1. In the Common FFI Library Crate (e.g., `example-flat`)
 
@@ -149,31 +144,29 @@ fn main() {
 }
 ```
 
-### 2. Experimental C Binding Crate (e.g., `example-cbindgen`)
+### 2. C Binding Crate (e.g., `example-cbindgen`)
 
 Add the source FFI library and `prebindgen-c-runtime` as regular dependencies
-(the generated converters reference its traits at run time), and
-`prebindgen-registry` + `prebindgen-c` as build-dependencies to drive the
-experimental `CbindgenBuilder` adapter from `build.rs`:
+(the generated code references its traits at run time), and `prebindgen-c` as
+a build-dependency to drive the `CbindgenBuilder` adapter from `build.rs`:
 
 ```toml
 # example-cbindgen/Cargo.toml
 [dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.5"
-prebindgen-c-runtime = "0.5"   # the generated converters reference its traits
+prebindgen = "0.7"
+prebindgen-c-runtime = "0.7"   # the generated code references its traits
 konst = "0.3"                 # the generated file emits a konst feature guard
 
 [build-dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.5"
-prebindgen-registry = "0.5"
-prebindgen-c = "0.5"
+prebindgen = "0.7"
+prebindgen-c = "0.7"
 cbindgen = "0.29"
 syn = { version = "2", features = ["full"] }
 ```
 
-Declare which `#[prebindgen]`-marked items to export and how to name them, then let the adapter resolve types and emit the Rust file of `extern "C"` wrappers. Items are opt-in — only what you declare is generated.
+Declare which `#[prebindgen]`-marked items to export and how to name them, then let the adapter emit the Rust file of `extern "C"` wrappers. Items are opt-in — only what you declare is generated.
 
 ```rust
 // example-cbindgen/build.rs
@@ -193,7 +186,7 @@ fn main() {
         .function(pq!(calculator_new))
         .function(pq!(calculator_get_value)).panic();
 
-    // Resolve types, then write the Rust file of `extern "C"` wrappers.
+    // Generate, then write the Rust file of `extern "C"` wrappers.
     let bindings_file = cbindgen
         .build()
         .unwrap()
@@ -217,17 +210,17 @@ include!(concat!(env!("OUT_DIR"), "/example_flat.rs"));
 See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples):
 
 - **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
-- **example-cbindgen**: experimental C proof of concept using `prebindgen-c`'s `CbindgenBuilder` + cbindgen for C headers
+- **example-cbindgen**: C binding using `prebindgen-c`'s `CbindgenBuilder` + cbindgen for C headers; `c/smoke.c` checks it under ASan
 - **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
 - **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `prebindgen-jni` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
-- **emitcheck**: A binding with no JVM side whose only job is to *compile* the emitted Rust, for the type spellings the adapter unit tests reach and the examples above do not (`Box<Option<T>>`, `Cow<'_, str>`, …). Success is `cargo build`.
+- **emitcheck**: A binding with no JVM side whose only job is to *compile* the emitted Rust, for type spellings the other examples do not reach (`Box<Option<T>>`, `Cow<'_, str>`, …). Success is `cargo build`.
 
 ## Documentation
 
 - **prebindgen**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
 - **prebindgen-proc-macro**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)
 - **prebindgen-flat**: [docs.rs/prebindgen-flat](https://docs.rs/prebindgen-flat)
-- **prebindgen-registry**: [docs.rs/prebindgen-registry](https://docs.rs/prebindgen-registry)
+- **prebindgen-tools**: [docs.rs/prebindgen-tools](https://docs.rs/prebindgen-tools)
 - **prebindgen-c**: [docs.rs/prebindgen-c](https://docs.rs/prebindgen-c)
 - **prebindgen-jni**: [docs.rs/prebindgen-jni](https://docs.rs/prebindgen-jni)
 

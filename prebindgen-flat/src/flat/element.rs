@@ -37,7 +37,7 @@ pub enum Element {
     ///
     /// Indexed under its name so nothing else can claim it, with the diagnosis
     /// riding along. Parsing carries it; building a
-    /// `Registry` from a model holding one fails, reporting
+    /// binding from a model holding one fails, reporting
     /// every offender at once. See the [module docs](super) on where acceptance
     /// is enforced.
     Unsupported(Unsupported),
@@ -258,9 +258,7 @@ impl Struct {
     /// something needs a reading naming it.
     ///
     /// The alternative is composing one from the name at the call site, which
-    /// an adapter cannot do (minting is sealed to this crate) and which would
-    /// be phase-dependent if routed through the registry instead: a
-    /// decomposition is declared before anything is interned. The declaration
+    /// an adapter cannot do (minting is sealed to this crate). The declaration
     /// is the one thing that can always say. Same reasoning as
     /// [`Variant::type_ref`].
     pub fn type_ref(&self) -> &TypeRef {

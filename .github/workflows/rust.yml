@@ -74,11 +74,14 @@ jobs:
         path: prebindgen
     - name: Install Rust
       run: rustup toolchain install stable && rustup default stable
-    - name: Document every crate
+    # The site build documents the published crates in dependency order and
+    # then checks the rendered links: rustdoc does not warn when a link into
+    # another crate fails to resolve, so the warnings alone miss it.
+    - name: Document every crate and check the links
       working-directory: prebindgen
       env:
         RUSTDOCFLAGS: -D warnings
-      run: cargo doc --no-deps
+      run: ./site/build.sh site-build
 
   package:
     # Catch packaging breakage on the PR that causes it, not at release time.
@@ -100,7 +103,7 @@ jobs:
       working-directory: prebindgen
       run: |
         for crate in prebindgen prebindgen-c-runtime prebindgen-jni-runtime \
-                     prebindgen-proc-macro prebindgen-flat prebindgen-registry \
+                     prebindgen-proc-macro prebindgen-flat prebindgen-tools \
                      prebindgen-c prebindgen-jni; do
           echo "== $crate"
           # Unpublished sibling crates make `cargo package` fail on the

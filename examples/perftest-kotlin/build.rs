@@ -21,8 +21,7 @@
 //! `ObjectBoundary64` is recursively flattened, while its structural twin
 //! `ObjectBoundary64Object` uses `.jobject_input()`.
 
-use prebindgen_jni::{data_class, package, ptr_class, JniGen};
-use prebindgen_registry::fun;
+use prebindgen_jni::{data_class, fun, package, ptr_class, JniGen};
 
 fn main() {
     // Reads perftest-flat's `#[prebindgen]` output straight from its directory.
