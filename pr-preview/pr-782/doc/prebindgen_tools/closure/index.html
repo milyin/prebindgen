@@ -1,0 +1,54 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The closure writer: a Rust `impl Fn(..)` built over a foreign callback."><title>prebindgen_tools::closure - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module closure</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module closure</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate prebindgen_<wbr>tools</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_tools</a></div><h1>Module <span>closure</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_tools/lib.rs.html#202">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The closure writer: a Rust <code>impl Fn(..)</code> built over a foreign callback.</p>
+<p>A source function taking <code>impl Fn(A, B) + Send + Sync + 'static</code> needs a
+Rust closure that, on every call, turns <code>A</code> and <code>B</code> into wires and hands
+them to the foreign side. The shape is fixed; the adapter supplies the
+pieces:</p>
+<div class="example-wrap"><pre class="language-text"><code>{
+    &lt;setup&gt;                                  // once, when the closure is built
+    move |__a0: A, __a1: B| {
+        let __res = (|| -&gt; Result&lt;(), String&gt; {
+            &lt;invoke&gt;                         // binds each argument&#39;s wires, calls the foreign side
+            Ok(())
+        })();
+        if let Err(__err) = __res { &lt;on_error&gt; }
+    }
+}</code></pre></div>
+<p><code>invoke</code> receives the arguments’ bindings rather than having them placed
+ahead of it, so an adapter can run them inside a scope of its own — a
+JNI frame whose environment the conversions use.</p>
+<p>For instance, a callback taking <code>i64</code> can use
+<a href="../wire/struct.Output.html#method.single" title="associated function prebindgen_tools::wire::Output::single"><code>Output::single</code></a> to pass one integer wire. The
+adapter’s <code>invoke</code> closure then emits the foreign call using that wire;
+the writer supplies the Rust <code>move</code> closure, per-call error scope, and
+<a href="struct.ClosureWriter.html#method.on_error" title="method prebindgen_tools::closure::ClosureWriter::on_error"><code>ClosureWriter::on_error</code></a> path.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
+<span class="kw">use </span>prebindgen_tools::{flat::{Flat, flat::{TypeKind, TypeRef}},
+    ClosureCallbacks, ClosureWriter, Output, Qualifier, Wire};
+<span class="kw">use </span>proc_macro2::TokenStream;
+<span class="kw">use </span>quote::{format_ident, quote};
+
+<span class="kw">let </span>source = syn::parse_file(
+    <span class="string">"pub fn register(callback: impl Fn(i64) + Send + Sync + 'static) {}"
+</span>).unwrap();
+<span class="kw">let </span>flat = Flat::builder()
+    .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
+    .build().unwrap();
+<span class="kw">let </span>ty = <span class="kw-2">&amp;</span>flat.function(<span class="string">"register"</span>).unwrap().params[<span class="number">0</span>].ty;
+<span class="kw">let </span>TypeKind::Callback { args } = ty.kind() <span class="kw">else </span>{ <span class="macro">panic!</span>(<span class="string">"expected callback"</span>) };
+
+<span class="kw">struct </span>Scalar;
+<span class="kw">impl </span>ClosureCallbacks <span class="kw">for </span>Scalar {
+    <span class="kw">type </span>Error = String;
+    <span class="kw">fn </span>arg(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: usize, <span class="kw">_</span>: <span class="kw-2">&amp;</span>TypeRef, value: <span class="kw-2">&amp;</span>TokenStream)
+        -&gt; <span class="prelude-ty">Result</span>&lt;Output, String&gt; {
+        <span class="prelude-val">Ok</span>(Output::single(Wire::new(<span class="macro">format_ident!</span>(<span class="string">"w{index}"</span>), <span class="macro">quote!</span>(i64)), value))
+    }
+}
+<span class="kw">let </span>closure = ClosureWriter::new(args)
+    .on_error(<span class="macro">quote!</span>(<span class="macro">panic!</span>(<span class="string">"{__err}"</span>)))
+    .write(<span class="kw-2">&amp;</span>Qualifier::new(<span class="kw-2">&amp;</span>flat), <span class="kw-2">&amp;mut </span>Scalar, |bindings, outputs| {
+        <span class="kw">let </span>wire = <span class="kw-2">&amp;</span>outputs[<span class="number">0</span>].wires[<span class="number">0</span>].name;
+        <span class="macro">quote!</span>(#bindings foreign_callback(#wire);)
+    }).unwrap();
+<span class="macro">assert!</span>(closure.to_string().contains(<span class="string">"foreign_callback (w0)"</span>));</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ClosureWriter.html" title="struct prebindgen_tools::closure::ClosureWriter">Closure<wbr>Writer</a></dt><dd>Writes one closure expression.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.ClosureCallbacks.html" title="trait prebindgen_tools::closure::ClosureCallbacks">Closure<wbr>Callbacks</a></dt><dd>The adapter’s decision for one closure argument.</dd></dl></section></div></main></body></html>
