@@ -16,7 +16,7 @@ back into the argument, which wires the result leaves on, and what the
 wrapper does when a conversion fails. The builder methods customize the
 header and the fixed parts of the body.</p>
 <p>The <a href="../index.html#small-complete-example" title="mod prebindgen_tools">crate example</a> builds one wrapper from
-an in-memory [<code>flat::Flat</code>]. In an adapter, the
+an in-memory <a href="prebindgen_flat::Flat"><code>Flat</code></a>. In an adapter, the
 callback’s <a href="trait.FunctionCallbacks.html#tymethod.param" title="method prebindgen_tools::function::FunctionCallbacks::param"><code>FunctionCallbacks::param</code></a> can call
 <a href="../shape/fn.shape.html" title="fn prebindgen_tools::shape::shape"><code>shape()</code></a>, convert its result into an <a href="../wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a>, and let
 <a href="struct.FunctionWriter.html#method.write" title="method prebindgen_tools::function::FunctionWriter::write"><code>FunctionWriter::write</code></a> place the wires and conversion at the call site.</p>

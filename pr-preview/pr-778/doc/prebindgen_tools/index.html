@@ -2,9 +2,9 @@
 <p>Building blocks for a prebindgen <strong>language adapter</strong>. Applications that
 only want bindings normally use the <code>prebindgen-c</code> or <code>prebindgen-jni</code>
 adapter crate instead.</p>
-<p>An adapter reads the flat model of what <code>#[prebindgen]</code> captured
-([<code>flat</code>], re-exported from <code>prebindgen-flat</code>), turns its build script’s
-declarations into a plan of the elements to bind, and then writes each
+<p>An adapter reads what <code>#[prebindgen]</code> captured as <a href="prebindgen_flat::Flat"><code>Flat</code></a>, the
+source model from <code>prebindgen-flat</code> (re-exported here as <code>flat</code>). It turns
+its build script’s declarations into a plan of the elements to bind, then writes each
 element: the Rust wrapper through a generator here, and whatever the
 destination language needs beside it (Kotlin text, for the JNI adapter)
 itself. The generators hold no shared plan: each writes one element from
@@ -13,7 +13,7 @@ The adapter decides which source items to bind, their names, wire types,
 and error policy.</p>
 <h3 id="follow-one-element"><a class="doc-anchor" href="#follow-one-element">§</a>Follow one element</h3>
 <ol>
-<li>Read the captured model as [<code>flat::Flat</code>]. Reject unsupported source
+<li>Read the captured model as <a href="prebindgen_flat::Flat"><code>Flat</code></a>. Reject unsupported source
 items with <a href="fn.check_supported.html" title="fn prebindgen_tools::check_supported"><code>check_supported</code></a>. Use <a href="qualify/struct.Qualifier.html" title="struct prebindgen_tools::qualify::Qualifier"><code>Qualifier</code></a> when generated Rust
 refers back to a source item.</li>
 <li>For each declared item, choose a generator below. Its callback trait
@@ -31,9 +31,9 @@ files itself.</li>
 wraps and header customizations through a builder, and asks for the
 boundary of each value through a small callback trait:</p>
 <div><table><thead><tr><th>Generator</th><th>Writes</th><th>Callbacks</th></tr></thead><tbody>
-<tr><td><a href="function/struct.FunctionWriter.html" title="struct prebindgen_tools::function::FunctionWriter"><code>FunctionWriter</code></a></td><td>an exported wrapper around a <a href="flat::flat::Function"><code>Function</code></a></td><td><a href="function/trait.FunctionCallbacks.html" title="trait prebindgen_tools::function::FunctionCallbacks"><code>FunctionCallbacks</code></a>: the result’s return type, out-wires and body; each parameter’s wires and wire→value <a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a>; the failure fragment</td></tr>
-<tr><td><a href="record/struct.StructWriter.html" title="struct prebindgen_tools::record::StructWriter"><code>StructWriter</code></a></td><td>a mirror struct of a <a href="flat::flat::Struct"><code>Struct</code></a>, with both conversions</td><td><a href="record/trait.FieldCallbacks.html" title="trait prebindgen_tools::record::FieldCallbacks"><code>FieldCallbacks</code></a>: each field’s wires, both directions</td></tr>
-<tr><td><a href="record/struct.SumWriter.html" title="struct prebindgen_tools::record::SumWriter"><code>SumWriter</code></a></td><td>a mirror enum of a <a href="flat::flat::Variant"><code>Variant</code></a>, with both conversions</td><td><a href="record/trait.FieldCallbacks.html" title="trait prebindgen_tools::record::FieldCallbacks"><code>FieldCallbacks</code></a></td></tr>
+<tr><td><a href="function/struct.FunctionWriter.html" title="struct prebindgen_tools::function::FunctionWriter"><code>FunctionWriter</code></a></td><td>an exported wrapper around a <a href="prebindgen_flat::flat::Function"><code>Function</code></a></td><td><a href="function/trait.FunctionCallbacks.html" title="trait prebindgen_tools::function::FunctionCallbacks"><code>FunctionCallbacks</code></a>: the result’s return type, out-wires and body; each parameter’s wires and wire→value <a href="wire/struct.Input.html" title="struct prebindgen_tools::wire::Input"><code>Input</code></a>; the failure fragment</td></tr>
+<tr><td><a href="record/struct.StructWriter.html" title="struct prebindgen_tools::record::StructWriter"><code>StructWriter</code></a></td><td>a mirror struct of a <a href="prebindgen_flat::flat::Struct"><code>Struct</code></a>, with both conversions</td><td><a href="record/trait.FieldCallbacks.html" title="trait prebindgen_tools::record::FieldCallbacks"><code>FieldCallbacks</code></a>: each field’s wires, both directions</td></tr>
+<tr><td><a href="record/struct.SumWriter.html" title="struct prebindgen_tools::record::SumWriter"><code>SumWriter</code></a></td><td>a mirror enum of a <a href="prebindgen_flat::flat::Variant"><code>Variant</code></a>, with both conversions</td><td><a href="record/trait.FieldCallbacks.html" title="trait prebindgen_tools::record::FieldCallbacks"><code>FieldCallbacks</code></a></td></tr>
 <tr><td><a href="closure/struct.ClosureWriter.html" title="struct prebindgen_tools::closure::ClosureWriter"><code>ClosureWriter</code></a></td><td>an <code>impl Fn(..)</code> closure over a foreign callback</td><td><a href="closure/trait.ClosureCallbacks.html" title="trait prebindgen_tools::closure::ClosureCallbacks"><code>ClosureCallbacks</code></a>: each argument’s wires (<a href="wire/struct.Output.html" title="struct prebindgen_tools::wire::Output"><code>Output</code></a>)</td></tr>
 </tbody></table>
 </div>

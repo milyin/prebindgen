@@ -7,9 +7,9 @@
 <a href=#7 id=7 data-nosnippet>7</a>//! only want bindings normally use the `prebindgen-c` or `prebindgen-jni`
 <a href=#8 id=8 data-nosnippet>8</a>//! adapter crate instead.
 <a href=#9 id=9 data-nosnippet>9</a>//!
-<a href=#10 id=10 data-nosnippet>10</a>//! An adapter reads the flat model of what `#[prebindgen]` captured
-<a href=#11 id=11 data-nosnippet>11</a>//! ([`flat`], re-exported from `prebindgen-flat`), turns its build script's
-<a href=#12 id=12 data-nosnippet>12</a>//! declarations into a plan of the elements to bind, and then writes each
+<a href=#10 id=10 data-nosnippet>10</a>//! An adapter reads what `#[prebindgen]` captured as [`Flat`](prebindgen_flat::Flat), the
+<a href=#11 id=11 data-nosnippet>11</a>//! source model from `prebindgen-flat` (re-exported here as `flat`). It turns
+<a href=#12 id=12 data-nosnippet>12</a>//! its build script's declarations into a plan of the elements to bind, then writes each
 <a href=#13 id=13 data-nosnippet>13</a>//! element: the Rust wrapper through a generator here, and whatever the
 <a href=#14 id=14 data-nosnippet>14</a>//! destination language needs beside it (Kotlin text, for the JNI adapter)
 <a href=#15 id=15 data-nosnippet>15</a>//! itself. The generators hold no shared plan: each writes one element from
@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>//!
 <a href=#20 id=20 data-nosnippet>20</a>//! ## Follow one element
 <a href=#21 id=21 data-nosnippet>21</a>//!
-<a href=#22 id=22 data-nosnippet>22</a>//! 1. Read the captured model as [`flat::Flat`]. Reject unsupported source
+<a href=#22 id=22 data-nosnippet>22</a>//! 1. Read the captured model as [`Flat`](prebindgen_flat::Flat). Reject unsupported source
 <a href=#23 id=23 data-nosnippet>23</a>//!    items with [`check_supported`]. Use [`Qualifier`] when generated Rust
 <a href=#24 id=24 data-nosnippet>24</a>//!    refers back to a source item.
 <a href=#25 id=25 data-nosnippet>25</a>//! 2. For each declared item, choose a generator below. Its callback trait
@@ -40,9 +40,9 @@
 <a href=#40 id=40 data-nosnippet>40</a>//!
 <a href=#41 id=41 data-nosnippet>41</a>//! | Generator | Writes | Callbacks |
 <a href=#42 id=42 data-nosnippet>42</a>//! |---|---|---|
-<a href=#43 id=43 data-nosnippet>43</a>//! | [`FunctionWriter`] | an exported wrapper around a [`Function`](flat::flat::Function) | [`FunctionCallbacks`]: the result's return type, out-wires and body; each parameter's wires and wire→value [`Input`]; the failure fragment |
-<a href=#44 id=44 data-nosnippet>44</a>//! | [`StructWriter`] | a mirror struct of a [`Struct`](flat::flat::Struct), with both conversions | [`FieldCallbacks`]: each field's wires, both directions |
-<a href=#45 id=45 data-nosnippet>45</a>//! | [`SumWriter`] | a mirror enum of a [`Variant`](flat::flat::Variant), with both conversions | [`FieldCallbacks`] |
+<a href=#43 id=43 data-nosnippet>43</a>//! | [`FunctionWriter`] | an exported wrapper around a [`Function`](prebindgen_flat::flat::Function) | [`FunctionCallbacks`]: the result's return type, out-wires and body; each parameter's wires and wire→value [`Input`]; the failure fragment |
+<a href=#44 id=44 data-nosnippet>44</a>//! | [`StructWriter`] | a mirror struct of a [`Struct`](prebindgen_flat::flat::Struct), with both conversions | [`FieldCallbacks`]: each field's wires, both directions |
+<a href=#45 id=45 data-nosnippet>45</a>//! | [`SumWriter`] | a mirror enum of a [`Variant`](prebindgen_flat::flat::Variant), with both conversions | [`FieldCallbacks`] |
 <a href=#46 id=46 data-nosnippet>46</a>//! | [`ClosureWriter`] | an `impl Fn(..)` closure over a foreign callback | [`ClosureCallbacks`]: each argument's wires ([`Output`]) |
 <a href=#47 id=47 data-nosnippet>47</a>//!
 <a href=#48 id=48 data-nosnippet>48</a>//! The generators expect **final** wire types: how a `Vec&lt;Payload&gt;` becomes
@@ -306,7 +306,7 @@
 <a href=#306 id=306 data-nosnippet>306</a>/// header and the fixed parts of the body.
 <a href=#307 id=307 data-nosnippet>307</a>///
 <a href=#308 id=308 data-nosnippet>308</a>/// The [crate example](crate#small-complete-example) builds one wrapper from
-<a href=#309 id=309 data-nosnippet>309</a>/// an in-memory [`flat::Flat`]. In an adapter, the
+<a href=#309 id=309 data-nosnippet>309</a>/// an in-memory [`Flat`](prebindgen_flat::Flat). In an adapter, the
 <a href=#310 id=310 data-nosnippet>310</a>/// callback's [`FunctionCallbacks::param`] can call
 <a href=#311 id=311 data-nosnippet>311</a>/// [`shape()`](crate::shape()), convert its result into an [`Input`], and let
 <a href=#312 id=312 data-nosnippet>312</a>/// [`FunctionWriter::write`] place the wires and conversion at the call site.
