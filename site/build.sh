@@ -29,7 +29,7 @@ for c in "${crates[@]}"; do
   cargo doc --no-deps -p "$c"
 done
 
-site/check-links.sh target/doc "${crates[@]}"
+site/check-links.py target/doc "${crates[@]}"
 
 rm -rf "$out"
 mkdir -p "$out"
