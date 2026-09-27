@@ -98,10 +98,8 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen_jni::{
-    constant, data_class, enum_class, matching, package, ptr_class, sealed_class, variant, JniGen,
-};
-use prebindgen_registry::{
-    convert, expand_param, expand_return, expr, fields, from, fun, into, path, sig, try_from, ty,
+    constant, convert, data_class, enum_class, expand_param, expand_return, expr, fields, from,
+    fun, into, matching, package, path, ptr_class, sealed_class, sig, try_from, ty, variant, JniGen,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {

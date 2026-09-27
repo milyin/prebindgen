@@ -4,6 +4,7 @@ members = [
     "prebindgen-flat",
     "prebindgen-tools",
     "prebindgen-c",
+    "prebindgen-jni",
     "prebindgen-proc-macro",
     "prebindgen-jni-runtime",
     "prebindgen-c-runtime",
@@ -11,6 +12,10 @@ members = [
     "examples/example-flat",
     "examples/perftest-flat",
     "examples/perftest-c",
+    "examples/emitcheck",
+    "examples/perftest-kotlin",
+    "examples/covertest-helpers",
+    "examples/covertest-kotlin",
 ]
 resolver = "2"
 package.version = "0.5.0"
@@ -30,6 +35,7 @@ prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-flat = { path = "prebindgen-flat", version = "0.5.0" }
 prebindgen-tools = { path = "prebindgen-tools", version = "0.5.0" }
 prebindgen-c = { path = "prebindgen-c", version = "0.5.0" }
+prebindgen-jni = { path = "prebindgen-jni", version = "0.5.0" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }
 prebindgen-jni-runtime = { path = "prebindgen-jni-runtime", version = "0.5.0" }
 prebindgen-c-runtime = { path = "prebindgen-c-runtime", version = "0.5.0" }

@@ -14,9 +14,6 @@ rust-version = { workspace = true }
 [dependencies]
 prebindgen = { workspace = true }
 prebindgen-tools = { workspace = true }
-prebindgen-jni-runtime = { workspace = true }
-kotlin-codegen = { workspace = true }
-jni = "0.21.1"
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
