@@ -228,4 +228,18 @@ fn value_form_overrides_name_real_fields() {
         build(crate::fields!(store_parts).name("id", "a").name("id", "b")).expect("refused");
     assert!(twice.contains("declared twice"), "{twice}");
     assert!(build(crate::fields!(store_parts).name("id", "key")).is_none());
+    // A constructor's own expansion is checked too.
+    let ctor = JniGen::builder()
+        .items(items.clone())
+        .set_package_prefix("io.test")
+        .package(package!().class(
+            ptr_class!(Store).constructor(fun!(store_open).expand_return(
+                expand_return!(Store).fields(crate::fields!(store_parts).name("typo", "t")),
+            )),
+        ))
+        .build()
+        .err()
+        .expect("refused")
+        .0;
+    assert!(ctor.contains("the struct has no field `typo`"), "{ctor}");
 }

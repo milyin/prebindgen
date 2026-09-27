@@ -437,12 +437,12 @@ impl<'f> Plan<'f> {
         for p in &b.packages {
             decls.extend(p.funs.iter().filter_map(|f| f.ret.as_ref()));
             for c in &p.classes {
-                let members: &[FunctionDecl] = match c {
-                    ClassDecl::Ptr(d) => &d.methods,
-                    ClassDecl::Data(d) => &d.methods,
-                    _ => &[],
+                let (methods, ctors): (&[FunctionDecl], &[FunctionDecl]) = match c {
+                    ClassDecl::Ptr(d) => (&d.methods, &d.constructors),
+                    ClassDecl::Data(d) => (&d.methods, &d.constructors),
+                    _ => (&[], &[]),
                 };
-                decls.extend(members.iter().filter_map(|f| f.ret.as_ref()));
+                decls.extend(methods.iter().chain(ctors).filter_map(|f| f.ret.as_ref()));
             }
         }
         while let Some(d) = decls.pop() {
