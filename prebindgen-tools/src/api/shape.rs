@@ -101,6 +101,12 @@ pub enum Shape<'t, S> {
 /// When the closure returns `Some(setting)`, `shape` returns
 /// [`Shape::Declared`] with that setting.
 ///
+/// The `&str` passed to the closure comes from `ty`. For a named type,
+/// [`TypeKind::Named`] holds a [`TypeId`](prebindgen_flat::flat::TypeId),
+/// and `shape` passes `id.name.as_str()`. For `&T` or `&mut T`, it reads the
+/// name from the borrowed inner type. `String` has no `TypeId`, so `shape`
+/// passes the literal `"String"` when it checks for an adapter setting.
+///
 /// # Walking into child types
 ///
 /// An adapter can get `ty` from a function parameter in the flat model, then
@@ -122,7 +128,10 @@ pub enum Shape<'t, S> {
 ///     .build().unwrap();
 /// let ty = &flat.function("send").unwrap().params[0].ty;
 /// let settings = HashMap::from([("Payload".to_owned(), "opaque handle")]);
-/// let declared_setting = |name: &str| settings.get(name).copied();
+/// let declared_setting = |name: &str| {
+///     assert_eq!(name, "Payload"); // from the named layer's TypeId
+///     settings.get(name).copied()
+/// };
 ///
 /// let Shape::Option(inner) = shape(ty, declared_setting).unwrap() else { panic!() };
 /// let Shape::Seq { elem, holding: Holding::Owned } = shape(inner, declared_setting).unwrap()
@@ -146,9 +155,9 @@ pub enum Shape<'t, S> {
 /// # Named types
 ///
 /// `declared_setting` receives only the flat name, without generic arguments
-/// or borrow information. [`TypeId`](prebindgen_flat::flat::TypeId) contains
-/// that same name; `String` is also checked but has no `TypeId`. The original
-/// `ty` remains available if the adapter needs further details.
+/// or borrow information. [`TypeId`](prebindgen_flat::flat::TypeId) adds no
+/// other identity here. The original `ty` remains available if the adapter
+/// needs further details.
 ///
 /// For a named `T`, `&T`, or `&mut T`, a setting produces
 /// [`Shape::Declared`] with [`Access::Owned`], [`Access::Shared`], or
@@ -254,7 +263,7 @@ pub fn shape<'t, S>(
                     holding: Holding::BorrowedVec,
                 },
                 TypeKind::Uninit(t) if *mutable => Shape::Out(t),
-                TypeKind::Named { id, .. } => named(&id.name, access),
+                TypeKind::Named { id, .. } => named(id.name.as_str(), access),
                 TypeKind::String => match declared_setting("String") {
                     Some(setting) => Shape::Declared {
                         name: "String",
@@ -266,7 +275,7 @@ pub fn shape<'t, S>(
                 _ => Shape::Ref { inner, access },
             }
         }
-        TypeKind::Named { id, .. } => named(&id.name, Access::Owned),
+        TypeKind::Named { id, .. } => named(id.name.as_str(), Access::Owned),
         TypeKind::Callback { args } => Shape::Callback(args),
         TypeKind::Fallible { ok, err } => Shape::Result { ok, err },
         TypeKind::Uninit(_) => {
