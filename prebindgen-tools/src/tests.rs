@@ -35,6 +35,8 @@ const SRC: &str = r#"
     pub struct Millis(pub u64);
     pub fn millis_from(v: u64) -> Millis { Millis(v) }
     pub fn millis_to(m: &Millis) -> Result<u64, String> { Ok(m.0) }
+    pub fn millis_sum(a: u64, b: u64) -> Millis { Millis(a + b) }
+    pub fn millis_raw(v: u64) -> u64 { v }
 "#;
 
 fn norm(t: TokenStream) -> String {
@@ -154,6 +156,24 @@ fn conversions_resolve_both_directions() {
     assert!(output.fallible, "a Result-returning stage is fallible");
     let applied = norm(output.apply(&q, &conv.target, &quote!(v)));
     assert!(applied.starts_with("src_crate::millis_to(&v)"), "{applied}");
+}
+
+#[test]
+fn conversions_refuse_mismatched_functions() {
+    let flat = model(SRC);
+    let err = |c: crate::Conversion| c.resolve(&flat).expect_err("a refusal");
+    // Two arguments where one is called.
+    let e = err(crate::convert!(Millis).input(crate::fun!(millis_sum)));
+    assert!(e.contains("exactly one argument"), "{e}");
+    // An input stage that does not produce the converted type.
+    let e = err(crate::convert!(Millis).input(crate::fun!(millis_raw)));
+    assert!(e.contains("must return `Millis`"), "{e}");
+    // An output stage that does not take it.
+    let e = err(crate::convert!(Millis).output(crate::fun!(millis_raw)));
+    assert!(e.contains("must take `Millis`"), "{e}");
+    // A path outside the flat model needs its signature stated.
+    let e = err(crate::convert!(Millis).input(crate::fun!(crate::local::millis_from)));
+    assert!(e.contains(".sig("), "{e}");
 }
 
 #[test]

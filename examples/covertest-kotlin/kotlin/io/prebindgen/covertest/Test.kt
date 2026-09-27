@@ -1549,6 +1549,20 @@ fun main() {
         val level64 = ObjectBoundary64(level32, level32)
         val level63 = ObjectBoundary63(level32, level16, level8, level4, level2, leaf)
         check(objectBoundaryValue(ObjectBoundary(level64, level63), boom) == 127L)
+
+        // A packed argument of the wrong length — only reachable by calling
+        // the extern directly — is a binding error, never a native crash.
+        // Both a primitive group and an object group are length-checked.
+        val shortLongs = JniErrorHandlerCapture.acquire()
+        CovNative.objectBoundaryValue(LongArray(3), shortLongs)
+        check(shortLongs.failed && shortLongs.ze0?.contains("expected 127 elements, got 3") == true) {
+            "a short packed primitive group must be a binding error, got: ${shortLongs.ze0}"
+        }
+        val shortObjects = JniErrorHandlerCapture.acquire()
+        CovNative.blobValueEcho(intArrayOf(0), longArrayOf(1L, 0L), arrayOf<Any?>(ByteArray(0)), Any(), shortObjects)
+        check(shortObjects.failed && shortObjects.ze0?.contains("expected 2 elements, got 1") == true) {
+            "a short packed object group must be a binding error, got: ${shortObjects.ze0}"
+        }
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────

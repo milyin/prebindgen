@@ -44,6 +44,16 @@
 //! `expand_param!` lets a parameter be built from a constructor's arguments
 //! or passed as a handle, chosen by a selector.
 //!
+//! ## Where to start
+//!
+//! [`JniGenBuilder`] is the entry point: [`JniGenBuilder::package`] declares
+//! what Kotlin sees, [`JniGenBuilder::convert`] and
+//! [`JniGenBuilder::expand`] shape how types cross. The
+//! `examples/perftest-kotlin` build script is a small binding;
+//! `examples/covertest-kotlin/build.rs` uses every declaration, and its
+//! `Test.kt` shows the resulting Kotlin API in use. `docs/architecture.md` in
+//! the repository describes how the adapter is built.
+//!
 //! Every wrapper takes a `JniErrorHandler` last: a native call that cannot
 //! complete — a closed handle, an out-of-range value, a failed conversion, an
 //! `Err` with no typed handler — reports there instead of throwing.

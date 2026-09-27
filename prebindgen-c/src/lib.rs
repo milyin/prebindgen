@@ -27,10 +27,11 @@
 //! * **Opaque handle** ([`CbindgenBuilder::opaque_ptr`]): C holds `T *`, from
 //!   `Box::into_raw`, and frees it with the generated `<base>_drop`. A handle
 //!   taken by value is consumed; `&T` / `&mut T` arrive as `const T *` / `T *`.
-//! * **Enum** ([`CbindgenBuilder::enum_type`]): a `#[repr(C)]` mirror. An
-//!   inbound value arrives as `MaybeUninit<mirror>` — a C `enum` is an `int`
-//!   at the ABI, and one no variant has may not become a Rust enum — and its
-//!   discriminant is checked before the Rust value exists.
+//! * **Enum** ([`CbindgenBuilder::enum_type`]): a `#[repr(C)]` mirror. A C
+//!   `enum` is an `int` at the ABI, so C can pass a value no variant has, and
+//!   Rust must never hold such a value as an enum. An inbound enum therefore
+//!   arrives as `MaybeUninit<mirror>`, and its discriminant is checked before
+//!   the Rust value is created.
 //! * **Tagged union** ([`CbindgenBuilder::tagged_union`]): a `#[repr(C)]` enum
 //!   with payloads, which cbindgen renders as a tag and a `union`. The tag is
 //!   checked on the way in; `<base>_drop` releases the active arm's memory.

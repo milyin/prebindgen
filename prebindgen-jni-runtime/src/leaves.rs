@@ -146,6 +146,18 @@ pub fn fixed<T, const N: usize>(v: Vec<T>) -> Result<[T; N], String> {
         .map_err(|_| format!("fixed-size array decode: expected {N} elements, got {n}"))
 }
 
+/// A packed argument carries exactly `expected` elements, or the call is a
+/// binding error.
+pub fn check_packed(len: usize, expected: usize, what: &str) -> Result<(), String> {
+    if len == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "packed argument `{what}`: expected {expected} elements, got {len}"
+        ))
+    }
+}
+
 /// The length of an `Array<Any?>`.
 pub fn object_array_len(env: &mut JNIEnv, obj: &JObject) -> Result<usize, String> {
     if obj.is_null() {

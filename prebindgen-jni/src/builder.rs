@@ -159,16 +159,38 @@ impl JniGenBuilder {
         self
     }
 
+    /// Bind classes, functions and constants under one Kotlin package.
+    ///
+    /// Build the [`PackageDecl`] with [`package!`](crate::package) and add
+    /// classes ([`ptr_class!`](crate::ptr_class), [`data_class!`](crate::data_class),
+    /// [`enum_class!`](crate::enum_class), [`sealed_class!`](crate::sealed_class)),
+    /// functions ([`fun!`](crate::fun)) and constants
+    /// ([`constant!`](crate::constant)). Every type a bound function uses must
+    /// be declared as a class or a conversion. `examples/covertest-kotlin/build.rs`
+    /// declares every kind.
     pub fn package(mut self, p: PackageDecl) -> Self {
         self.packages.push(p);
         self
     }
 
+    /// Let a type cross as another type, through declared functions or
+    /// `From`/`TryFrom` impls: `convert!(Millis).input(fun!(from_raw)).output(fun!(to_raw))`.
+    /// Kotlin sees the representation type; see [`ConvertDecl`].
     pub fn convert(mut self, c: ConvertDecl) -> Self {
         self.converts.push(c);
         self
     }
 
+    /// Set a type's default boundary shape:
+    ///
+    /// * [`ExpandReturnDecl`](crate::ExpandReturnDecl) (`expand_return!`) — a result of the type is
+    ///   delivered as its fields to a caller-supplied builder (a folder for a
+    ///   `Vec`, the handler for an `Err`, the arguments of a callback);
+    /// * [`ExpandParamDecl`](crate::ExpandParamDecl) (`expand_param!`) — a parameter of the type is
+    ///   built by a constructor or passed as a handle, chosen by a selector.
+    ///
+    /// A function overrides either for itself with
+    /// [`FunctionDecl::expand_return`](crate::FunctionDecl::expand_return) / [`FunctionDecl::expand_param`](crate::FunctionDecl::expand_param).
     pub fn expand(mut self, e: impl Into<ExpandDecl>) -> Self {
         self.expands.push(e.into());
         self

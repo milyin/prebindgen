@@ -7961,6 +7961,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_objectBound
                 env,
                 &value__packJ,
             )?;
+            ::prebindgen_jni_runtime::check_packed(
+                __value__packJ.len(),
+                127usize,
+                "value__packJ",
+            )?;
             let value_left_left_left_left_left_left_left_value = __value__packJ[0usize];
             let value_left_left_left_left_left_left_right_value = __value__packJ[1usize];
             let value_left_left_left_left_left_right_left_value = __value__packJ[2usize];
@@ -9306,13 +9311,28 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_blobValueEc
                 env,
                 &value__packI,
             )?;
+            ::prebindgen_jni_runtime::check_packed(
+                __value__packI.len(),
+                1usize,
+                "value__packI",
+            )?;
             let value_chunks__n = __value__packI[0usize];
             let __value__packJ = ::prebindgen_jni_runtime::read_longs(
                 env,
                 &value__packJ,
             )?;
+            ::prebindgen_jni_runtime::check_packed(
+                __value__packJ.len(),
+                2usize,
+                "value__packJ",
+            )?;
             let value_stamp_secs = __value__packJ[0usize];
             let value_stamp_nanos = __value__packJ[1usize];
+            ::prebindgen_jni_runtime::check_packed(
+                ::prebindgen_jni_runtime::object_array_len(env, &value__packL)?,
+                2usize,
+                "value__packL",
+            )?;
             let value_id = ::prebindgen_jni_runtime::object_array_get(
                 env,
                 &value__packL,
@@ -9819,10 +9839,20 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationBou
                 env,
                 &value__packZ,
             )?;
+            ::prebindgen_jni_runtime::check_packed(
+                __value__packZ.len(),
+                1usize,
+                "value__packZ",
+            )?;
             let value_delay__present = __value__packZ[0usize];
             let __value__packJ = ::prebindgen_jni_runtime::read_longs(
                 env,
                 &value__packJ,
+            )?;
+            ::prebindgen_jni_runtime::check_packed(
+                __value__packJ.len(),
+                2usize,
+                "value__packJ",
             )?;
             let value_required = __value__packJ[0usize];
             let value_delay = __value__packJ[1usize];

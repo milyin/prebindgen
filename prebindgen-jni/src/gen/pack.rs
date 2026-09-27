@@ -112,18 +112,22 @@ pub(crate) fn pack_input(root: &str, leaves: &[Leaf], input: Input) -> Input {
             nullable: false,
         };
         wires.push(Wire::new(packed.clone(), leaf.rs()));
+        let expected = idx.len();
+        let what = group_name(root, p);
         match p {
             Some(p) => {
                 let (read, _) = p.array_helpers();
                 let read = format_ident!("{}", read);
                 let buf = format_ident!("__{}", packed);
                 stmts.push(quote!(let #buf = #rt::#read(env, &#packed)?;));
+                stmts.push(quote!(#rt::check_packed(#buf.len(), #expected, #what)?;));
                 for (k, &i) in idx.iter().enumerate() {
                     let n = &input.wires[i].name;
                     stmts.push(quote!(let #n = #buf[#k];));
                 }
             }
             None => {
+                stmts.push(quote!(#rt::check_packed(#rt::object_array_len(env, &#packed)?, #expected, #what)?;));
                 for (k, &i) in idx.iter().enumerate() {
                     let n = &input.wires[i].name;
                     stmts.push(quote!(let #n = #rt::object_array_get(env, &#packed, #k)?;));

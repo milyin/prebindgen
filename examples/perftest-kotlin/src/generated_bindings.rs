@@ -721,6 +721,11 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_largeObjectI
                 env,
                 &value__packJ,
             )?;
+            ::prebindgen_jni_runtime::check_packed(
+                __value__packJ.len(),
+                64usize,
+                "value__packJ",
+            )?;
             let value_left_left_left_left_left_left_value = __value__packJ[0usize];
             let value_left_left_left_left_left_right_value = __value__packJ[1usize];
             let value_left_left_left_left_right_left_value = __value__packJ[2usize];

@@ -60,6 +60,10 @@ impl FnRef {
                 flat.lower_signature(&item)
                     .map_err(|e| format!("`{}`: {e}", path_string(&self.path)))
             }
+            None if !self.is_flat() => Err(format!(
+                "`{}` is not a #[prebindgen] function: state its signature with `.sig(sig!(..))`",
+                path_string(&self.path)
+            )),
             None => flat
                 .function(self.name())
                 .cloned()
@@ -134,12 +138,12 @@ impl Conversion {
         let input = self
             .input
             .as_ref()
-            .map(|v| Stage::resolve(flat, v, Direction::In))
+            .map(|v| Stage::resolve(flat, v, &target, Direction::In))
             .transpose()?;
         let output = self
             .output
             .as_ref()
-            .map(|v| Stage::resolve(flat, v, Direction::Out))
+            .map(|v| Stage::resolve(flat, v, &target, Direction::Out))
             .transpose()?;
         Ok(ResolvedConversion {
             target,
@@ -190,7 +194,7 @@ enum How {
 }
 
 impl Stage {
-    fn resolve(flat: &Flat, via: &Via, dir: Direction) -> Result<Self, String> {
+    fn resolve(flat: &Flat, via: &Via, target: &TypeRef, dir: Direction) -> Result<Self, String> {
         let classify = |t: &syn::Type| {
             flat.classify(t)
                 .map_err(|e| format!("conversion type `{}`: {e}", t.to_token_stream()))
@@ -198,14 +202,36 @@ impl Stage {
         Ok(match via {
             Via::Fn(fun) => {
                 let f = fun.resolve(flat)?;
-                let param = f
-                    .params
-                    .first()
-                    .ok_or_else(|| format!("conversion fn `{}` takes no argument", fun.name()))?;
+                let name = path_string(&fun.path);
+                let [param] = f.params.as_slice() else {
+                    return Err(format!(
+                        "conversion fn `{name}` must take exactly one argument, takes {}",
+                        f.params.len()
+                    ));
+                };
                 let (ret, fallible) = match f.ret.kind() {
                     TypeKind::Fallible { ok, .. } => ((**ok).clone(), true),
                     _ => (f.ret.clone(), false),
                 };
+                // The side facing the converted type must be that type: an
+                // input stage returns it, an output stage takes it (or a
+                // borrow of it).
+                let facing = match dir {
+                    Direction::In => &ret,
+                    Direction::Out => match param.ty.kind() {
+                        TypeKind::Ref { inner, .. } => &**inner,
+                        _ => &param.ty,
+                    },
+                };
+                if facing.key() != target.key() {
+                    let (what, side) = match dir {
+                        Direction::In => ("input", "return"),
+                        Direction::Out => ("output", "take"),
+                    };
+                    return Err(format!(
+                        "{what} conversion fn `{name}` must {side} `{target}`, not `{facing}`"
+                    ));
+                }
                 match dir {
                     Direction::In => Stage {
                         repr: param.ty.clone(),

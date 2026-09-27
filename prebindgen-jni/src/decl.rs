@@ -45,19 +45,27 @@ impl FunctionDecl {
     }
 
     /// Emit typed overloads for each variant of this parameter's input
-    /// expansion, beside the selector form.
+    /// expansion ([`ExpandParamDecl`]), beside the selector form: one overload
+    /// takes the constructor's arguments, another the handle. The parameter
+    /// must have an input expansion (the type's own, or one given with
+    /// [`Self::expand_param`]); splitting several parameters emits every
+    /// combination.
     pub fn split_on_param(mut self, param: impl Into<String>) -> Self {
         self.splits.push(param.into());
         self
     }
 
-    /// Replace the type-level input expansion for one parameter.
+    /// Replace the type-level input expansion ([`ExpandParamDecl`]) for one
+    /// parameter. An expansion with only [`ExpandParamDecl::variant_self`]
+    /// makes the parameter a plain handle.
     pub fn expand_param(mut self, param: impl Into<String>, decl: ExpandParamDecl) -> Self {
         self.params.push((param.into(), decl));
         self
     }
 
-    /// Replace the type-level output expansion for the result.
+    /// Replace the type-level output expansion ([`ExpandReturnDecl`]) for the
+    /// result. An expansion with only [`ExpandReturnDecl::field_self`] makes
+    /// the result a plain handle.
     pub fn expand_return(mut self, decl: ExpandReturnDecl) -> Self {
         self.ret = Some(decl);
         self
