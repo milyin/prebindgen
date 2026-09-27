@@ -8,5 +8,43 @@ the conversion’s stages (<a href="struct.Stage.html#method.apply" title="metho
 stated signature) or a standard trait impl (<code>From</code>, <code>Into</code>, <code>TryFrom</code>,
 <code>TryInto</code>). A function returning <code>Result</code> makes its stage fallible; the
 error is reported through its <code>Display</code>.</p>
+<p>For example, given source functions <code>millis_from_raw(u64) -&gt; Millis</code> and
+<code>millis_to_raw(&amp;Millis) -&gt; Result&lt;u64, String&gt;</code>, an adapter can resolve
+both directions before lowering a use of <code>Millis</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
+<span class="kw">use </span>prebindgen_tools::{convert, fun, flat::Flat, Input, Output,
+    Qualifier, Wire, ident};
+<span class="kw">use </span>quote::quote;
+<span class="kw">let </span>source = syn::parse_file(<span class="string">r#"
+    pub struct Millis(pub u64);
+    pub fn millis_from_raw(raw: u64) -&gt; Millis { Millis(raw) }
+    pub fn millis_to_raw(value: &amp;Millis) -&gt; Result&lt;u64, String&gt; { Ok(value.0) }
+"#</span>).unwrap();
+<span class="kw">let </span>flat = Flat::builder()
+    .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
+    .build().unwrap();
+<span class="kw">let </span>conversion = <span class="macro">convert!</span>(Millis)
+    .input(<span class="macro">fun!</span>(millis_from_raw))
+    .output(<span class="macro">fun!</span>(millis_to_raw))
+    .resolve(<span class="kw-2">&amp;</span>flat).unwrap();
+<span class="kw">let </span>input = conversion.input.as_ref().unwrap();
+<span class="kw">let </span>output = conversion.output.as_ref().unwrap();
+<span class="comment">// Each stage's `repr` is u64; `output.fallible` is true.
+</span><span class="macro">assert_eq!</span>(input.repr.spell().to_string(), <span class="string">"u64"</span>);
+<span class="macro">assert!</span>(output.fallible);
+<span class="kw">let </span>q = Qualifier::new(<span class="kw-2">&amp;</span>flat);
+<span class="kw">let </span>decoded = input.decode(<span class="kw-2">&amp;</span>q, <span class="kw-2">&amp;</span>conversion.target,
+    Input::identity(Wire::new(<span class="macro">ident!</span>(raw), <span class="macro">quote!</span>(u64))),
+    <span class="kw-2">&amp;</span><span class="macro">ident!</span>(r), <span class="macro">quote!</span>());
+<span class="macro">assert_eq!</span>(decoded.wires.len(), <span class="number">1</span>);
+<span class="kw">let </span>encoded = output.encode(<span class="kw-2">&amp;</span>q, <span class="kw-2">&amp;</span>conversion.target, <span class="kw-2">&amp;</span><span class="macro">quote!</span>(value),
+    <span class="kw-2">&amp;</span><span class="macro">ident!</span>(r), <span class="macro">quote!</span>(),
+    Output::single(Wire::new(<span class="macro">ident!</span>(raw), <span class="macro">quote!</span>(u64)), <span class="macro">quote!</span>(r)));
+<span class="macro">assert!</span>(encoded.fallible);</code></pre></div>
+<p>An [<code>Input</code>] for <code>u64</code> is wrapped with <a href="struct.Stage.html#method.decode" title="method prebindgen_c::convert::Stage::decode"><code>Stage::decode</code></a>
+before the source call; an [<code>Output</code>] for <code>u64</code> is wrapped
+with <a href="struct.Stage.html#method.encode" title="method prebindgen_c::convert::Stage::encode"><code>Stage::encode</code></a> after it. A binding-local function can be named
+with <a href="../macro.fun.html" title="macro prebindgen_c::fun"><code>fun!</code></a> plus <a href="../struct.FnRef.html#method.sig" title="method prebindgen_c::FnRef::sig"><code>FnRef::sig</code></a>. See <a href="../enum.Via.html" title="enum prebindgen_c::Via"><code>Via</code></a> for trait-based alternatives.</p>
 </div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Conversion.html" title="struct prebindgen_c::convert::Conversion">Conversion</a></dt><dd>A declared conversion for one source type.</dd><dt><a class="struct" href="struct.FnRef.html" title="struct prebindgen_c::convert::FnRef">FnRef</a></dt><dd>A function a declaration refers to: a flat item by name, or a
 binding-local path with its signature stated.</dd><dt><a class="struct" href="struct.ResolvedConversion.html" title="struct prebindgen_c::convert::ResolvedConversion">Resolved<wbr>Conversion</a></dt><dd>A conversion resolved against the model.</dd><dt><a class="struct" href="struct.Stage.html" title="struct prebindgen_c::convert::Stage">Stage</a></dt><dd>One direction of a conversion.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.Via.html" title="enum prebindgen_c::convert::Via">Via</a></dt><dd>How one direction of a conversion is carried out.</dd></dl></section></div></main></body></html>
