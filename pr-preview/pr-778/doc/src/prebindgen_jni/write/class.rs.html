@@ -339,60 +339,69 @@
 <a href=#339 id=339 data-nosnippet>339</a>        <span class="kw">let </span><span class="kw-2">mut </span>props = Vec::new();
 <a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span><span class="kw-2">mut </span>closes = Vec::new();
 <a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">let </span><span class="kw-2">mut </span>args = Vec::new();
-<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">for </span>f <span class="kw">in </span><span class="kw-2">&amp;</span>alt.fields {
-<a href=#343 id=343 data-nosnippet>343</a>            <span class="kw">let </span>p = kt_prop(f);
-<a href=#344 id=344 data-nosnippet>344</a>            <span class="kw">let </span>t = plan.kt_type(<span class="kw-2">&amp;</span>f.ty)<span class="question-mark">?</span>;
-<a href=#345 id=345 data-nosnippet>345</a>            props.push(<span class="macro">format!</span>(<span class="string">"public val {p}: {t}"</span>));
-<a href=#346 id=346 data-nosnippet>346</a>            closes.extend(plan.kt_close(<span class="kw-2">&amp;</span>f.ty, <span class="kw-2">&amp;</span>p)<span class="question-mark">?</span>);
-<a href=#347 id=347 data-nosnippet>347</a>            <span class="kw">let </span>fp = <span class="macro">format!</span>(<span class="string">"{}_{}"</span>, names::snake(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>alt.name)), field_seg(f));
-<a href=#348 id=348 data-nosnippet>348</a>            from_params.push(<span class="macro">format!</span>(<span class="string">"{fp}: {t}"</span>));
-<a href=#349 id=349 data-nosnippet>349</a>            args.push(fp);
-<a href=#350 id=350 data-nosnippet>350</a>        }
-<a href=#351 id=351 data-nosnippet>351</a>        <span class="kw">let </span>body = <span class="kw">if </span>owns {
-<a href=#352 id=352 data-nosnippet>352</a>            <span class="macro">format!</span>(<span class="string">" {{\n{}\n    }}"</span>, close_body(closes))
-<a href=#353 id=353 data-nosnippet>353</a>        } <span class="kw">else </span>{
-<a href=#354 id=354 data-nosnippet>354</a>            String::new()
-<a href=#355 id=355 data-nosnippet>355</a>        };
-<a href=#356 id=356 data-nosnippet>356</a>        variants.push(<span class="macro">format!</span>(
-<a href=#357 id=357 data-nosnippet>357</a>            <span class="string">"    public data class {vname}({}) : {name}{body}"</span>,
-<a href=#358 id=358 data-nosnippet>358</a>            props.join(<span class="string">", "</span>)
-<a href=#359 id=359 data-nosnippet>359</a>        ));
-<a href=#360 id=360 data-nosnippet>360</a>        arms.push(<span class="macro">format!</span>(<span class="string">"{i} -&gt; {vname}({})"</span>, args.join(<span class="string">", "</span>)));
-<a href=#361 id=361 data-nosnippet>361</a>    }
-<a href=#362 id=362 data-nosnippet>362</a>    arms.push(<span class="macro">format!</span>(
-<a href=#363 id=363 data-nosnippet>363</a>        <span class="string">"else -&gt; throw IllegalArgumentException(\"{name}: invalid tag $tag\")"
-<a href=#364 id=364 data-nosnippet>364</a>    </span>));
-<a href=#365 id=365 data-nosnippet>365</a>    <span class="kw">let </span>companion = <span class="kw">if </span>companion_clash {
-<a href=#366 id=366 data-nosnippet>366</a>        <span class="string">"companion object Companion_"
-<a href=#367 id=367 data-nosnippet>367</a>    </span>} <span class="kw">else </span>{
-<a href=#368 id=368 data-nosnippet>368</a>        <span class="string">"companion object"
-<a href=#369 id=369 data-nosnippet>369</a>    </span>};
-<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">let </span>supers = <span class="kw">if </span>owns {
-<a href=#371 id=371 data-nosnippet>371</a>        <span class="macro">vec!</span>[<span class="string">"AutoCloseable"</span>.to_string()]
-<a href=#372 id=372 data-nosnippet>372</a>    } <span class="kw">else </span>{
-<a href=#373 id=373 data-nosnippet>373</a>        Vec::new()
-<a href=#374 id=374 data-nosnippet>374</a>    };
-<a href=#375 id=375 data-nosnippet>375</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="string">"public sealed interface {name}{} {{\n{}\n\n    public {companion} {{\n        @JvmStatic\n        public fun fromParts({}): {name} =\n            when (tag) {{\n                {}\n            }}\n    }}\n}}\n"</span>,
-<a href=#377 id=377 data-nosnippet>377</a>        supertypes(c, <span class="kw-2">&amp;</span>supers),
-<a href=#378 id=378 data-nosnippet>378</a>        variants.join(<span class="string">"\n\n"</span>),
-<a href=#379 id=379 data-nosnippet>379</a>        from_params.join(<span class="string">", "</span>),
-<a href=#380 id=380 data-nosnippet>380</a>        arms.join(<span class="string">"\n                "</span>)
-<a href=#381 id=381 data-nosnippet>381</a>    ))
-<a href=#382 id=382 data-nosnippet>382</a>}
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a><span class="doccomment">/// A constant: a private getter and a lazily initialized `val`.
-<a href=#385 id=385 data-nosnippet>385</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>constant(plan: <span class="kw-2">&amp;</span>Plan, out: <span class="kw-2">&amp;mut </span>Out, pkg: <span class="kw-2">&amp;</span>str, name: <span class="kw-2">&amp;</span>str, b: <span class="kw-2">&amp;</span>Binding) -&gt; Res&lt;()&gt; {
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">let </span>w = function(plan, out, b)<span class="question-mark">?</span>;
-<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">let </span>ty = plan.kt_type(<span class="kw-2">&amp;</span>b.func.ret)<span class="question-mark">?</span>;
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">let </span>private = w.text.replacen(<span class="string">"public fun"</span>, <span class="string">"private fun"</span>, <span class="number">1</span>);
-<a href=#389 id=389 data-nosnippet>389</a>    out.kt(
-<a href=#390 id=390 data-nosnippet>390</a>        pkg,
-<a href=#391 id=391 data-nosnippet>391</a>        <span class="macro">format!</span>(
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="string">"{private}\npublic val {name}: {ty} by lazy {{ {}({}.JniErrorHandler {{ je -&gt; error(je ?: \"const {name}: JNI getter failed\") }}) }}\n"</span>,
-<a href=#393 id=393 data-nosnippet>393</a>            b.kt_name, plan.base_pkg
-<a href=#394 id=394 data-nosnippet>394</a>        ),
-<a href=#395 id=395 data-nosnippet>395</a>    );
-<a href=#396 id=396 data-nosnippet>396</a>    <span class="prelude-val">Ok</span>(())
-<a href=#397 id=397 data-nosnippet>397</a>}
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let </span><span class="kw-2">mut </span>arrays = Vec::new();
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">for </span>f <span class="kw">in </span><span class="kw-2">&amp;</span>alt.fields {
+<a href=#344 id=344 data-nosnippet>344</a>            <span class="kw">let </span>p = kt_prop(f);
+<a href=#345 id=345 data-nosnippet>345</a>            <span class="kw">let </span>t = plan.kt_type(<span class="kw-2">&amp;</span>f.ty)<span class="question-mark">?</span>;
+<a href=#346 id=346 data-nosnippet>346</a>            props.push(<span class="macro">format!</span>(<span class="string">"public val {p}: {t}"</span>));
+<a href=#347 id=347 data-nosnippet>347</a>            closes.extend(plan.kt_close(<span class="kw-2">&amp;</span>f.ty, <span class="kw-2">&amp;</span>p)<span class="question-mark">?</span>);
+<a href=#348 id=348 data-nosnippet>348</a>            arrays.push((p.clone(), array_eq(plan, <span class="kw-2">&amp;</span>f.ty)<span class="question-mark">?</span>));
+<a href=#349 id=349 data-nosnippet>349</a>            <span class="kw">let </span>fp = <span class="macro">format!</span>(<span class="string">"{}_{}"</span>, names::snake(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>alt.name)), field_seg(f));
+<a href=#350 id=350 data-nosnippet>350</a>            from_params.push(<span class="macro">format!</span>(<span class="string">"{fp}: {t}"</span>));
+<a href=#351 id=351 data-nosnippet>351</a>            args.push(fp);
+<a href=#352 id=352 data-nosnippet>352</a>        }
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="kw">let </span><span class="kw-2">mut </span>members = Vec::new();
+<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw">if </span>owns {
+<a href=#355 id=355 data-nosnippet>355</a>            members.push(close_body(closes));
+<a href=#356 id=356 data-nosnippet>356</a>        }
+<a href=#357 id=357 data-nosnippet>357</a>        <span class="kw">if </span>arrays.iter().any(|(<span class="kw">_</span>, a)| a.is_some()) {
+<a href=#358 id=358 data-nosnippet>358</a>            members.push(indent(<span class="kw-2">&amp;</span>array_members(<span class="kw-2">&amp;</span>vname, <span class="kw-2">&amp;</span>arrays), <span class="number">4</span>));
+<a href=#359 id=359 data-nosnippet>359</a>        }
+<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">let </span>body = <span class="kw">if </span>members.is_empty() {
+<a href=#361 id=361 data-nosnippet>361</a>            String::new()
+<a href=#362 id=362 data-nosnippet>362</a>        } <span class="kw">else </span>{
+<a href=#363 id=363 data-nosnippet>363</a>            <span class="macro">format!</span>(<span class="string">" {{\n{}\n    }}"</span>, members.join(<span class="string">"\n\n"</span>))
+<a href=#364 id=364 data-nosnippet>364</a>        };
+<a href=#365 id=365 data-nosnippet>365</a>        variants.push(<span class="macro">format!</span>(
+<a href=#366 id=366 data-nosnippet>366</a>            <span class="string">"    public data class {vname}({}) : {name}{body}"</span>,
+<a href=#367 id=367 data-nosnippet>367</a>            props.join(<span class="string">", "</span>)
+<a href=#368 id=368 data-nosnippet>368</a>        ));
+<a href=#369 id=369 data-nosnippet>369</a>        arms.push(<span class="macro">format!</span>(<span class="string">"{i} -&gt; {vname}({})"</span>, args.join(<span class="string">", "</span>)));
+<a href=#370 id=370 data-nosnippet>370</a>    }
+<a href=#371 id=371 data-nosnippet>371</a>    arms.push(<span class="macro">format!</span>(
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="string">"else -&gt; throw IllegalArgumentException(\"{name}: invalid tag $tag\")"
+<a href=#373 id=373 data-nosnippet>373</a>    </span>));
+<a href=#374 id=374 data-nosnippet>374</a>    <span class="kw">let </span>companion = <span class="kw">if </span>companion_clash {
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="string">"companion object Companion_"
+<a href=#376 id=376 data-nosnippet>376</a>    </span>} <span class="kw">else </span>{
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="string">"companion object"
+<a href=#378 id=378 data-nosnippet>378</a>    </span>};
+<a href=#379 id=379 data-nosnippet>379</a>    <span class="kw">let </span>supers = <span class="kw">if </span>owns {
+<a href=#380 id=380 data-nosnippet>380</a>        <span class="macro">vec!</span>[<span class="string">"AutoCloseable"</span>.to_string()]
+<a href=#381 id=381 data-nosnippet>381</a>    } <span class="kw">else </span>{
+<a href=#382 id=382 data-nosnippet>382</a>        Vec::new()
+<a href=#383 id=383 data-nosnippet>383</a>    };
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="string">"public sealed interface {name}{} {{\n{}\n\n    public {companion} {{\n        @JvmStatic\n        public fun fromParts({}): {name} =\n            when (tag) {{\n                {}\n            }}\n    }}\n}}\n"</span>,
+<a href=#386 id=386 data-nosnippet>386</a>        supertypes(c, <span class="kw-2">&amp;</span>supers),
+<a href=#387 id=387 data-nosnippet>387</a>        variants.join(<span class="string">"\n\n"</span>),
+<a href=#388 id=388 data-nosnippet>388</a>        from_params.join(<span class="string">", "</span>),
+<a href=#389 id=389 data-nosnippet>389</a>        arms.join(<span class="string">"\n                "</span>)
+<a href=#390 id=390 data-nosnippet>390</a>    ))
+<a href=#391 id=391 data-nosnippet>391</a>}
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a><span class="doccomment">/// A constant: a private getter and a lazily initialized `val`.
+<a href=#394 id=394 data-nosnippet>394</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>constant(plan: <span class="kw-2">&amp;</span>Plan, out: <span class="kw-2">&amp;mut </span>Out, pkg: <span class="kw-2">&amp;</span>str, name: <span class="kw-2">&amp;</span>str, b: <span class="kw-2">&amp;</span>Binding) -&gt; Res&lt;()&gt; {
+<a href=#395 id=395 data-nosnippet>395</a>    <span class="kw">let </span>w = function(plan, out, b)<span class="question-mark">?</span>;
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">let </span>ty = plan.kt_type(<span class="kw-2">&amp;</span>b.func.ret)<span class="question-mark">?</span>;
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">let </span>private = w.text.replacen(<span class="string">"public fun"</span>, <span class="string">"private fun"</span>, <span class="number">1</span>);
+<a href=#398 id=398 data-nosnippet>398</a>    out.kt(
+<a href=#399 id=399 data-nosnippet>399</a>        pkg,
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="macro">format!</span>(
+<a href=#401 id=401 data-nosnippet>401</a>            <span class="string">"{private}\npublic val {name}: {ty} by lazy {{ {}({}.JniErrorHandler {{ je -&gt; error(je ?: \"const {name}: JNI getter failed\") }}) }}\n"</span>,
+<a href=#402 id=402 data-nosnippet>402</a>            b.kt_name, plan.base_pkg
+<a href=#403 id=403 data-nosnippet>403</a>        ),
+<a href=#404 id=404 data-nosnippet>404</a>    );
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="prelude-val">Ok</span>(())
+<a href=#406 id=406 data-nosnippet>406</a>}
 </code></pre></div></section></main></body></html>
