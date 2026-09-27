@@ -207,10 +207,10 @@ pub enum Shape<'t, D> {
 /// encounters the bare-`MaybeUninit` error.
 ///
 /// See the [`shape` module](mod@crate::shape) for a runnable recursive example.
-pub fn shape<'t, D>(
-    ty: &'t TypeRef,
+pub fn shape<D>(
+    ty: &TypeRef,
     shape_declared: impl Fn(&TypeRef) -> Option<D>,
-) -> Result<Shape<'t, D>, String> {
+) -> Result<Shape<'_, D>, String> {
     match ty.kind() {
         TypeKind::Str => return Err("a bare `str` cannot cross; use `&str` or `String`".into()),
         TypeKind::Slice(_) => {
