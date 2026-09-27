@@ -180,7 +180,9 @@ fn unsupported_items_refuse_the_model() {
 }
 
 #[test]
-fn shape_reads_one_layer_with_the_adapters_setting() {
+fn shape_reads_one_layer_with_the_adapters_declaration() {
+    use prebindgen_flat::flat::{TypeKind, TypeRef};
+
     use crate::{shape, Access, Holding, Shape};
     let flat = model(
         r#"
@@ -193,22 +195,24 @@ fn shape_reads_one_layer_with_the_adapters_setting() {
     let f = flat
         .function("f")
         .unwrap_or_else(|| panic!("{unsupported:?}"));
-    let lookup = |n: &str| (n == "Payload").then_some(7u8);
-    let at = |i: usize| shape(&f.params[i].ty, lookup).unwrap();
+    let shape_declared = |candidate: &TypeRef| match candidate.kind() {
+        TypeKind::Named { id, .. } if id.name == "Payload" => Some(7u8),
+        _ => None,
+    };
+    let at = |i: usize| shape(&f.params[i].ty, shape_declared).unwrap();
     assert!(matches!(
         at(0),
         Shape::Declared {
-            name: "Payload",
-            setting: 7,
-            access: Access::Shared
-        }
+            ty,
+            declaration: 7,
+        } if std::ptr::eq(ty, &f.params[0].ty) && Access::of(ty) == Access::Shared
     ));
     assert!(matches!(
         at(1),
         Shape::Declared {
-            access: Access::Exclusive,
+            ty,
             ..
-        }
+        } if Access::of(ty) == Access::Exclusive
     ));
     assert!(matches!(at(2), Shape::Str(Holding::Borrowed)));
     assert!(matches!(
@@ -221,4 +225,69 @@ fn shape_reads_one_layer_with_the_adapters_setting() {
     assert!(matches!(at(4), Shape::Option(_)));
     assert!(matches!(at(5), Shape::Undeclared("Other")));
     assert!(matches!(at(6), Shape::Out(_)));
+}
+
+#[test]
+fn shape_declared_can_override_a_complete_generic_type() {
+    use prebindgen_flat::flat::{TypeKind, TypeRef};
+
+    use crate::{shape, Access, Holding, Shape};
+
+    let flat = model(
+        "pub fn f(bytes: Vec<u8>, numbers: Vec<i64>, borrowed: &Vec<u8>, text: String, borrowed_text: &String) {}",
+    );
+    let f = flat.function("f").unwrap();
+    let bytes = &f.params[0].ty;
+    let numbers = &f.params[1].ty;
+    let borrowed = &f.params[2].ty;
+    let bytes_key = bytes.key();
+    let borrowed_key = borrowed.key();
+    let declared = |candidate: &TypeRef| {
+        if candidate.key() == borrowed_key {
+            Some("borrowed bytes")
+        } else if candidate.key() == bytes_key {
+            Some("bytes")
+        } else {
+            None
+        }
+    };
+    assert!(matches!(
+        shape(bytes, declared).unwrap(),
+        Shape::Declared { ty, declaration: "bytes" } if std::ptr::eq(ty, bytes)
+    ));
+    assert!(matches!(
+        shape(numbers, declared).unwrap(),
+        Shape::Seq { .. }
+    ));
+    assert!(matches!(
+        shape(borrowed, declared).unwrap(),
+        Shape::Declared { ty, declaration: "borrowed bytes" }
+            if std::ptr::eq(ty, borrowed) && Access::of(ty) == Access::Shared
+    ));
+    assert!(matches!(
+        shape(borrowed, |candidate| (candidate.key() == bytes_key).then_some("bytes")).unwrap(),
+        Shape::Declared { ty, declaration: "bytes" }
+            if std::ptr::eq(ty, borrowed) && Access::of(ty) == Access::Shared
+    ));
+
+    let text = &f.params[3].ty;
+    let borrowed_text = &f.params[4].ty;
+    let declared_text =
+        |candidate: &TypeRef| matches!(candidate.kind(), TypeKind::String).then_some("text");
+    assert!(matches!(
+        shape(text, declared_text).unwrap(),
+        Shape::Declared { ty, declaration: "text" } if std::ptr::eq(ty, text)
+    ));
+    assert!(matches!(
+        shape(borrowed_text, declared_text).unwrap(),
+        Shape::Declared { ty, declaration: "text" } if std::ptr::eq(ty, borrowed_text)
+    ));
+    assert!(matches!(
+        shape::<()>(text, |_| None).unwrap(),
+        Shape::Str(Holding::Owned)
+    ));
+    assert!(matches!(
+        shape::<()>(borrowed_text, |_| None).unwrap(),
+        Shape::Ref { .. }
+    ));
 }
