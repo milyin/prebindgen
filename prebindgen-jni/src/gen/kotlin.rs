@@ -159,12 +159,13 @@ impl<'a> Gen<'a> {
             Placement::Method(c.clone())
         };
         let bound = self.bind(f.clone(), func, callee, placement, kt_name)?;
-        self.report.push(format!(
+        let line = format!(
             "- `{}.{}` ← `{}`",
-            c.fqn(),
+            c.name,
             bound.kt_name,
             names::bare(&bound.func.name)
-        ));
+        );
+        self.report.push((c.pkg.clone(), line));
         self.function(&bound)
     }
 
@@ -178,8 +179,8 @@ impl<'a> Gen<'a> {
         for m in &c.constructors.clone() {
             ctors.push(self.member(c, m, true)?);
         }
-        self.report
-            .push(format!("- class `{}` ({})", c.fqn(), kind_label(&c.kind)));
+        let line = format!("- class `{}` ({})", c.name, kind_label(&c.kind));
+        self.report.push((c.pkg.clone(), line));
         let text = match &c.kind {
             ClassKind::Ptr { gc } => {
                 self.rust_free_ptr(c);
@@ -572,7 +573,8 @@ impl<'a> Gen<'a> {
         // The getter's value is the whole call expression, not a call of it.
         let text = self.function_valued(&bound)?;
         let ty = self.kt_type(&func.ret)?;
-        self.report.push(format!("- const `{pkg}.{vname}`: {ty}"));
+        self.report
+            .push((pkg.to_string(), format!("- `val {vname}: {ty}`")));
         let private = text.replacen("public fun", "private fun", 1);
         Ok(format!(
             "{private}\npublic val {vname}: {ty} by lazy {{ {kt_fn}({}.JniErrorHandler {{ je -> error(je ?: \"const {vname}: JNI getter failed\") }}) }}\n",

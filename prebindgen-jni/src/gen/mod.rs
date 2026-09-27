@@ -122,7 +122,8 @@ pub(crate) struct Gen<'a> {
     pub kt_claimed: HashSet<String>,
     /// Interface member headers per class (by Rust name).
     pub iface_members: HashMap<String, Vec<String>>,
-    pub report: Vec<String>,
+    /// Report lines, by Kotlin package.
+    pub report: Vec<(String, String)>,
     /// Set while writing a getter whose callee expression is the value.
     pub valued: bool,
 }
@@ -155,14 +156,31 @@ pub(crate) fn generate(b: &JniGenBuilder, flat: &Flat) -> Res<Generation> {
     g.resolve()?;
     g.run()?;
     let kotlin = g.kt_files();
+    let report = g.render_report();
     Ok(Generation {
         rust: g.rust,
         kotlin,
-        report: g.report.join("\n") + "\n",
+        report,
     })
 }
 
 impl<'a> Gen<'a> {
+    /// The report: what each Kotlin package binds, and from which Rust item.
+    fn render_report(&self) -> String {
+        let mut by_pkg: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (pkg, line) in &self.report {
+            by_pkg.entry(pkg).or_default().push(line);
+        }
+        let mut out = format!(
+            "# prebindgen-jni binding report\n\nBase package: `{}`\n",
+            self.base_pkg
+        );
+        for (pkg, lines) in by_pkg {
+            out.push_str(&format!("\n## package `{pkg}`\n\n{}\n", lines.join("\n")));
+        }
+        out
+    }
+
     pub(crate) fn pkg_fqn(&self, sub: &str) -> String {
         match (self.base_pkg.is_empty(), sub.is_empty()) {
             (_, true) => self.base_pkg.clone(),
@@ -320,6 +338,12 @@ impl<'a> Gen<'a> {
                     (None, None) => camel,
                 };
                 let bound = self.bind(f.clone(), func, callee, Placement::Package, kt_name)?;
+                let line = format!(
+                    "- `{}` ← `{}`",
+                    bound.kt_name,
+                    names::bare(&bound.func.name)
+                );
+                self.report.push((pkg.clone(), line));
                 let text = self.function(&bound)?;
                 self.kt_push(&pkg, text);
             }
