@@ -10,16 +10,17 @@
 //!     <setup>                                  // once, when the closure is built
 //!     move |__a0: A, __a1: B| {
 //!         let __res = (|| -> Result<(), String> {
-//!             <enter>                          // per call: attach a thread, …
-//!             let <wires of a0> = <arg output>;
-//!             let <wires of a1> = <arg output>;
-//!             <invoke>                         // call the foreign side
+//!             <invoke>                         // binds each argument's wires, calls the foreign side
 //!             Ok(())
 //!         })();
 //!         if let Err(__err) = __res { <on_error> }
 //!     }
 //! }
 //! ```
+//!
+//! `invoke` receives the arguments' bindings rather than having them placed
+//! ahead of it, so an adapter can run them inside a scope of its own — a
+//! JNI frame whose environment the conversions use.
 
 use prebindgen_flat::flat::TypeRef;
 use proc_macro2::TokenStream;
@@ -44,7 +45,6 @@ pub trait ClosureCallbacks {
 pub struct ClosureWriter<'a> {
     args: &'a [TypeRef],
     setup: TokenStream,
-    enter: TokenStream,
     on_error: TokenStream,
 }
 
@@ -54,7 +54,6 @@ impl<'a> ClosureWriter<'a> {
         Self {
             args,
             setup: TokenStream::new(),
-            enter: TokenStream::new(),
             on_error: TokenStream::new(),
         }
     }
@@ -63,13 +62,6 @@ impl<'a> ClosureWriter<'a> {
     /// are moved into it.
     pub fn setup(mut self, stmts: impl ToTokens) -> Self {
         self.setup.extend(stmts.to_token_stream());
-        self
-    }
-
-    /// Statements run at the start of every call, before the arguments are
-    /// converted. May use `?`.
-    pub fn enter(mut self, stmts: impl ToTokens) -> Self {
-        self.enter.extend(stmts.to_token_stream());
         self
     }
 
@@ -86,14 +78,15 @@ impl<'a> ClosureWriter<'a> {
             .collect()
     }
 
-    /// Write the closure. `invoke` gets each argument's output (already
-    /// bound to its wires) and produces the statements that call the foreign
-    /// side; they may use `?`.
+    /// Write the closure. `invoke` gets the statements binding every
+    /// argument's wires and the arguments' outputs, and produces the
+    /// statements that place the bindings and call the foreign side; they may
+    /// use `?`.
     pub fn write<C: ClosureCallbacks>(
         self,
         q: &Qualifier<'_>,
         cb: &mut C,
-        invoke: impl FnOnce(&[Output]) -> TokenStream,
+        invoke: impl FnOnce(TokenStream, &[Output]) -> TokenStream,
     ) -> Result<TokenStream, C::Error> {
         let names = self.arg_names();
         let mut outs = Vec::new();
@@ -101,15 +94,13 @@ impl<'a> ClosureWriter<'a> {
             outs.push(cb.arg(i, ty, &n.to_token_stream())?);
         }
         let tys = self.args.iter().map(|t| q.ty_elided(t));
-        let binds = outs.iter().map(Output::bind);
-        let invoke = invoke(&outs);
-        let (setup, enter, on_error) = (&self.setup, &self.enter, &self.on_error);
+        let binds: TokenStream = outs.iter().map(Output::bind).collect();
+        let invoke = invoke(binds, &outs);
+        let (setup, on_error) = (&self.setup, &self.on_error);
         Ok(quote! {{
             #setup
             move |#(#names: #tys),*| {
                 let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
-                    #enter
-                    #(#binds)*
                     #invoke
                     ::core::result::Result::Ok(())
                 })();

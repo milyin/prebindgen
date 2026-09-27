@@ -77,7 +77,9 @@
 
 mod builder;
 mod decl;
-mod gen;
+mod lower;
+mod plan;
+mod write;
 
 use std::path::{Path, PathBuf};
 
@@ -104,11 +106,10 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// The generated binding: the Rust file, the Kotlin sources and a report.
+/// The generated binding: the Rust file and the Kotlin sources.
 pub struct Generation {
     rust: RustFile,
     kotlin: Vec<(String, String)>,
-    report: String,
 }
 
 /// Marks a directory whose `.kt` files the generator owns.
@@ -151,11 +152,6 @@ impl Generation {
         }
         write_if_changed(&root.join(MARKER), "kotlin-codegen output v1\n")?;
         Ok(written)
-    }
-
-    /// A Markdown summary of the bound surface.
-    pub fn report(&self) -> String {
-        self.report.clone()
     }
 }
 

@@ -3,103 +3,43 @@
 
 package io.prebindgen.covertest.model
 
-public data class Annotated(val payload: io.prebindgen.covertest.Payload, val alternate: io.prebindgen.covertest.Payload?, val ttl: Long?, val priority: io.prebindgen.covertest.model.Priority?) {
+public interface PriorityKind {
+    val value: Int
+}
 
+public enum class Priority(public override val value: Int) : PriorityKind, io.prebindgen.covertest.Ranked {
+    LOW(0),
+    NORMAL(1),
+    HIGH(2);
 
     public companion object {
         @JvmStatic
-        public fun fromParts(payload: io.prebindgen.covertest.Payload, alternate: io.prebindgen.covertest.Payload?, ttl: Long?, priority: io.prebindgen.covertest.model.Priority?): Annotated = Annotated(payload, alternate, ttl, priority)
+        public fun fromInt(value: Int): Priority = entries.first { it.value == value }
     }
 }
 
-public data class Arrays(val bytes: ByteArray, val shorts: ShortArray, val ints: IntArray, val longs: LongArray, val doubles: DoubleArray, val flags: BooleanArray, val raw: LongArray) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Arrays) return false
-        return bytes.contentEquals(other.bytes) && shorts.contentEquals(other.shorts) && ints.contentEquals(other.ints) && longs.contentEquals(other.longs) && doubles.contentEquals(other.doubles) && flags.contentEquals(other.flags) && raw.contentEquals(other.raw)
-    }
+public sealed interface Reading {
+    public data object Missing : Reading
 
-    override fun hashCode(): Int {
-        var result = bytes.contentHashCode()
-        result = 31 * result + shorts.contentHashCode()
-        result = 31 * result + ints.contentHashCode()
-        result = 31 * result + longs.contentHashCode()
-        result = 31 * result + doubles.contentHashCode()
-        result = 31 * result + flags.contentHashCode()
-        result = 31 * result + raw.contentHashCode()
-        return result
-    }
+    public data class Exact(public val v0: Long) : Reading
 
-    override fun toString(): String = "Arrays(bytes=${bytes.contentToString()}, shorts=${shorts.contentToString()}, ints=${ints.contentToString()}, longs=${longs.contentToString()}, doubles=${doubles.contentToString()}, flags=${flags.contentToString()}, raw=${raw.contentToString()})"
+    public data class Range(public val low: Long, public val high: Long) : Reading
 
-    public companion object {
+    public data class Tagged(public val v0: String, public val v1: io.prebindgen.covertest.model.Priority) : Reading
+
+    public data class Companion(public val v0: Long) : Reading
+
+    public companion object Companion_ {
         @JvmStatic
-        public fun fromParts(bytes: ByteArray, shorts: ShortArray, ints: IntArray, longs: LongArray, doubles: DoubleArray, flags: BooleanArray, raw: LongArray): Arrays = Arrays(bytes, shorts, ints, longs, doubles, flags, raw)
-    }
-}
-
-public data class BlobValue(val stamp: io.prebindgen.covertest.model.Stamp, val id: ByteArray, val chunks: List<ByteArray>) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is BlobValue) return false
-        return stamp == other.stamp && id.contentEquals(other.id) && (chunks.size == other.chunks.size && chunks.indices.all { __i -> val __x = chunks[__i]; val __y = other.chunks[__i]; __x.contentEquals(__y) })
-    }
-
-    override fun hashCode(): Int {
-        var result = stamp.hashCode()
-        result = 31 * result + id.contentHashCode()
-        result = 31 * result + (chunks.fold(1) { __acc, __e -> 31 * __acc + __e.contentHashCode() })
-        return result
-    }
-
-    override fun toString(): String = "BlobValue(stamp=${stamp}, id=${id.contentToString()}, chunks=${chunks.joinToString(", ", "[", "]") { __e -> "${__e.contentToString()}" }})"
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(stamp: io.prebindgen.covertest.model.Stamp, id: ByteArray, chunks: List<ByteArray>): BlobValue = BlobValue(stamp, id, chunks)
-    }
-}
-
-public data class CacheConfig(val replies: io.prebindgen.covertest.model.RepliesConfig, val ttl: Long) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(replies: io.prebindgen.covertest.model.RepliesConfig, ttl: Long): CacheConfig = CacheConfig(replies, ttl)
-    }
-}
-
-public data class DurationBoundary(val required: ULong, val delay: ULong?) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(required: ULong, delay: ULong?): DurationBoundary = DurationBoundary(required, delay)
-    }
-}
-
-public sealed interface Hold {
-    public data object Indefinite : Hold
-
-    public data class For(public val v0: ULong) : Hold
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(tag: Int, for_v0: ULong): Hold =
+        public fun fromParts(tag: Int, exact_v0: Long, range_low: Long, range_high: Long, labeled_v0: String, labeled_v1: io.prebindgen.covertest.model.Priority, companion_v0: Long): Reading =
             when (tag) {
-                0 -> Indefinite
-                1 -> For(for_v0)
-                else -> throw IllegalArgumentException("Hold: invalid tag $tag")
+                0 -> Missing
+                1 -> Exact(exact_v0)
+                2 -> Range(range_low, range_high)
+                3 -> Tagged(labeled_v0, labeled_v1)
+                4 -> Companion(companion_v0)
+                else -> throw IllegalArgumentException("Reading: invalid tag $tag")
             }
-    }
-}
-
-public data class HoldPolicy(val hold: io.prebindgen.covertest.model.Hold, val grace: io.prebindgen.covertest.model.Hold?) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(hold: io.prebindgen.covertest.model.Hold, grace: io.prebindgen.covertest.model.Hold?): HoldPolicy = HoldPolicy(hold, grace)
     }
 }
 
@@ -132,185 +72,14 @@ public sealed interface Lookup : AutoCloseable {
     }
 }
 
-public sealed interface Marker {
-    public data object None_ : Marker
-
-    public data class Ranked(public val v0: io.prebindgen.covertest.model.Priority?) : Marker
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(tag: Int, ranked_v0: io.prebindgen.covertest.model.Priority?): Marker =
-            when (tag) {
-                0 -> None_
-                1 -> Ranked(ranked_v0)
-                else -> throw IllegalArgumentException("Marker: invalid tag $tag")
-            }
-    }
-}
-
-public data class ObjectBoundary(val left: io.prebindgen.covertest.model.ObjectBoundary64, val right: io.prebindgen.covertest.model.ObjectBoundary63) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary64, right: io.prebindgen.covertest.model.ObjectBoundary63): ObjectBoundary = ObjectBoundary(left, right)
-    }
-}
-
-public data class ObjectBoundary16(val left: io.prebindgen.covertest.model.ObjectBoundary8, val right: io.prebindgen.covertest.model.ObjectBoundary8) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary8, right: io.prebindgen.covertest.model.ObjectBoundary8): ObjectBoundary16 = ObjectBoundary16(left, right)
-    }
-}
-
-public data class ObjectBoundary2(val left: io.prebindgen.covertest.model.ObjectBoundaryLeaf, val right: io.prebindgen.covertest.model.ObjectBoundaryLeaf) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundaryLeaf, right: io.prebindgen.covertest.model.ObjectBoundaryLeaf): ObjectBoundary2 = ObjectBoundary2(left, right)
-    }
-}
-
-public data class ObjectBoundary32(val left: io.prebindgen.covertest.model.ObjectBoundary16, val right: io.prebindgen.covertest.model.ObjectBoundary16) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary16, right: io.prebindgen.covertest.model.ObjectBoundary16): ObjectBoundary32 = ObjectBoundary32(left, right)
-    }
-}
-
-public data class ObjectBoundary4(val left: io.prebindgen.covertest.model.ObjectBoundary2, val right: io.prebindgen.covertest.model.ObjectBoundary2) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary2, right: io.prebindgen.covertest.model.ObjectBoundary2): ObjectBoundary4 = ObjectBoundary4(left, right)
-    }
-}
-
-public data class ObjectBoundary63(val leaves32: io.prebindgen.covertest.model.ObjectBoundary32, val leaves16: io.prebindgen.covertest.model.ObjectBoundary16, val leaves8: io.prebindgen.covertest.model.ObjectBoundary8, val leaves4: io.prebindgen.covertest.model.ObjectBoundary4, val leaves2: io.prebindgen.covertest.model.ObjectBoundary2, val leaf: io.prebindgen.covertest.model.ObjectBoundaryLeaf) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(leaves32: io.prebindgen.covertest.model.ObjectBoundary32, leaves16: io.prebindgen.covertest.model.ObjectBoundary16, leaves8: io.prebindgen.covertest.model.ObjectBoundary8, leaves4: io.prebindgen.covertest.model.ObjectBoundary4, leaves2: io.prebindgen.covertest.model.ObjectBoundary2, leaf: io.prebindgen.covertest.model.ObjectBoundaryLeaf): ObjectBoundary63 = ObjectBoundary63(leaves32, leaves16, leaves8, leaves4, leaves2, leaf)
-    }
-}
-
-public data class ObjectBoundary64(val left: io.prebindgen.covertest.model.ObjectBoundary32, val right: io.prebindgen.covertest.model.ObjectBoundary32) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary32, right: io.prebindgen.covertest.model.ObjectBoundary32): ObjectBoundary64 = ObjectBoundary64(left, right)
-    }
-}
-
-public data class ObjectBoundary8(val left: io.prebindgen.covertest.model.ObjectBoundary4, val right: io.prebindgen.covertest.model.ObjectBoundary4) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary4, right: io.prebindgen.covertest.model.ObjectBoundary4): ObjectBoundary8 = ObjectBoundary8(left, right)
-    }
-}
-
-public data class ObjectBoundaryLeaf(val value: Long) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
-    }
-}
-
-public data class Observation(val id: Long, val reading: io.prebindgen.covertest.model.Reading, val fallback: io.prebindgen.covertest.model.Reading?, val note: String) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(id: Long, reading: io.prebindgen.covertest.model.Reading, fallback: io.prebindgen.covertest.model.Reading?, note: String): Observation = Observation(id, reading, fallback, note)
-    }
-}
-
-public interface PriorityKind {
-    val value: Int
-}
-
-public enum class Priority(public override val value: Int) : PriorityKind, io.prebindgen.covertest.Ranked {
-    LOW(0),
-    NORMAL(1),
-    HIGH(2);
-
-    public companion object {
-        @JvmStatic
-        public fun fromInt(value: Int): Priority = entries.first { it.value == value }
-    }
-}
-
-public class Probe(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
-    @Synchronized
+public data class Verdict(val id: Long, val outcome: io.prebindgen.covertest.model.Lookup) : AutoCloseable {
     override fun close() {
-        val p = ptr
-        if (p != 0L && (p and 1L) == 0L) {
-            ptr = p or 1L
-            freePtr(p)
-        }
+        outcome.close()
     }
-
-    @Synchronized
-    public fun take(): Probe {
-        val p = ptr
-        ptr = p or 1L
-        return Probe(p)
-    }
-
-
 
     public companion object {
         @JvmStatic
-        external fun freePtr(ptr: Long)
-
-
-    }
-}
-
-public sealed interface Reading {
-    public data object Missing : Reading
-
-    public data class Exact(public val v0: Long) : Reading
-
-    public data class Range(public val low: Long, public val high: Long) : Reading
-
-    public data class Tagged(public val v0: String, public val v1: io.prebindgen.covertest.model.Priority) : Reading
-
-    public data class Companion(public val v0: Long) : Reading
-
-    public companion object Companion_ {
-        @JvmStatic
-        public fun fromParts(tag: Int, exact_v0: Long, range_low: Long, range_high: Long, labeled_v0: String, labeled_v1: io.prebindgen.covertest.model.Priority, companion_v0: Long): Reading =
-            when (tag) {
-                0 -> Missing
-                1 -> Exact(exact_v0)
-                2 -> Range(range_low, range_high)
-                3 -> Tagged(labeled_v0, labeled_v1)
-                4 -> Companion(companion_v0)
-                else -> throw IllegalArgumentException("Reading: invalid tag $tag")
-            }
-    }
-}
-
-public data class RepliesConfig(val priority: io.prebindgen.covertest.model.Priority, val maxSamples: Long) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(priority: io.prebindgen.covertest.model.Priority, maxSamples: Long): RepliesConfig = RepliesConfig(priority, maxSamples)
+        public fun fromParts(id: Long, outcome: io.prebindgen.covertest.model.Lookup): Verdict = Verdict(id, outcome)
     }
 }
 
@@ -329,6 +98,33 @@ public class Report(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(ini
         val p = ptr
         ptr = p or 1L
         return Report(p)
+    }
+
+
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+
+
+    }
+}
+
+public class Probe(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Probe {
+        val p = ptr
+        ptr = p or 1L
+        return Probe(p)
     }
 
 
@@ -395,6 +191,191 @@ public class SpanHolder(initialPtr: Long) : io.prebindgen.covertest.NativeHandle
     }
 }
 
+public sealed interface Hold {
+    public data object Indefinite : Hold
+
+    public data class For(public val v0: ULong) : Hold
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, for_v0: ULong): Hold =
+            when (tag) {
+                0 -> Indefinite
+                1 -> For(for_v0)
+                else -> throw IllegalArgumentException("Hold: invalid tag $tag")
+            }
+    }
+}
+
+public data class HoldPolicy(val hold: io.prebindgen.covertest.model.Hold, val grace: io.prebindgen.covertest.model.Hold?) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(hold: io.prebindgen.covertest.model.Hold, grace: io.prebindgen.covertest.model.Hold?): HoldPolicy = HoldPolicy(hold, grace)
+    }
+}
+
+public data class Observation(val id: Long, val reading: io.prebindgen.covertest.model.Reading, val fallback: io.prebindgen.covertest.model.Reading?, val note: String) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: Long, reading: io.prebindgen.covertest.model.Reading, fallback: io.prebindgen.covertest.model.Reading?, note: String): Observation = Observation(id, reading, fallback, note)
+    }
+}
+
+public sealed interface Marker {
+    public data object None_ : Marker
+
+    public data class Ranked(public val v0: io.prebindgen.covertest.model.Priority?) : Marker
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, ranked_v0: io.prebindgen.covertest.model.Priority?): Marker =
+            when (tag) {
+                0 -> None_
+                1 -> Ranked(ranked_v0)
+                else -> throw IllegalArgumentException("Marker: invalid tag $tag")
+            }
+    }
+}
+
+public data class Tagged(val id: Long, val marker: io.prebindgen.covertest.model.Marker) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: Long, marker: io.prebindgen.covertest.model.Marker): Tagged = Tagged(id, marker)
+    }
+}
+
+public data class Annotated(val payload: io.prebindgen.covertest.Payload, val alternate: io.prebindgen.covertest.Payload?, val ttl: Long?, val priority: io.prebindgen.covertest.model.Priority?) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(payload: io.prebindgen.covertest.Payload, alternate: io.prebindgen.covertest.Payload?, ttl: Long?, priority: io.prebindgen.covertest.model.Priority?): Annotated = Annotated(payload, alternate, ttl, priority)
+    }
+}
+
+public data class RepliesConfig(val priority: io.prebindgen.covertest.model.Priority, val maxSamples: Long) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(priority: io.prebindgen.covertest.model.Priority, maxSamples: Long): RepliesConfig = RepliesConfig(priority, maxSamples)
+    }
+}
+
+public data class CacheConfig(val replies: io.prebindgen.covertest.model.RepliesConfig, val ttl: Long) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(replies: io.prebindgen.covertest.model.RepliesConfig, ttl: Long): CacheConfig = CacheConfig(replies, ttl)
+    }
+}
+
+public data class DurationBoundary(val required: ULong, val delay: ULong?) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(required: ULong, delay: ULong?): DurationBoundary = DurationBoundary(required, delay)
+    }
+}
+
+public data class ObjectBoundaryLeaf(val value: Long) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
+    }
+}
+
+public data class ObjectBoundary2(val left: io.prebindgen.covertest.model.ObjectBoundaryLeaf, val right: io.prebindgen.covertest.model.ObjectBoundaryLeaf) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundaryLeaf, right: io.prebindgen.covertest.model.ObjectBoundaryLeaf): ObjectBoundary2 = ObjectBoundary2(left, right)
+    }
+}
+
+public data class ObjectBoundary4(val left: io.prebindgen.covertest.model.ObjectBoundary2, val right: io.prebindgen.covertest.model.ObjectBoundary2) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary2, right: io.prebindgen.covertest.model.ObjectBoundary2): ObjectBoundary4 = ObjectBoundary4(left, right)
+    }
+}
+
+public data class ObjectBoundary8(val left: io.prebindgen.covertest.model.ObjectBoundary4, val right: io.prebindgen.covertest.model.ObjectBoundary4) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary4, right: io.prebindgen.covertest.model.ObjectBoundary4): ObjectBoundary8 = ObjectBoundary8(left, right)
+    }
+}
+
+public data class ObjectBoundary16(val left: io.prebindgen.covertest.model.ObjectBoundary8, val right: io.prebindgen.covertest.model.ObjectBoundary8) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary8, right: io.prebindgen.covertest.model.ObjectBoundary8): ObjectBoundary16 = ObjectBoundary16(left, right)
+    }
+}
+
+public data class ObjectBoundary32(val left: io.prebindgen.covertest.model.ObjectBoundary16, val right: io.prebindgen.covertest.model.ObjectBoundary16) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary16, right: io.prebindgen.covertest.model.ObjectBoundary16): ObjectBoundary32 = ObjectBoundary32(left, right)
+    }
+}
+
+public data class ObjectBoundary64(val left: io.prebindgen.covertest.model.ObjectBoundary32, val right: io.prebindgen.covertest.model.ObjectBoundary32) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary32, right: io.prebindgen.covertest.model.ObjectBoundary32): ObjectBoundary64 = ObjectBoundary64(left, right)
+    }
+}
+
+public data class ObjectBoundary63(val leaves32: io.prebindgen.covertest.model.ObjectBoundary32, val leaves16: io.prebindgen.covertest.model.ObjectBoundary16, val leaves8: io.prebindgen.covertest.model.ObjectBoundary8, val leaves4: io.prebindgen.covertest.model.ObjectBoundary4, val leaves2: io.prebindgen.covertest.model.ObjectBoundary2, val leaf: io.prebindgen.covertest.model.ObjectBoundaryLeaf) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(leaves32: io.prebindgen.covertest.model.ObjectBoundary32, leaves16: io.prebindgen.covertest.model.ObjectBoundary16, leaves8: io.prebindgen.covertest.model.ObjectBoundary8, leaves4: io.prebindgen.covertest.model.ObjectBoundary4, leaves2: io.prebindgen.covertest.model.ObjectBoundary2, leaf: io.prebindgen.covertest.model.ObjectBoundaryLeaf): ObjectBoundary63 = ObjectBoundary63(leaves32, leaves16, leaves8, leaves4, leaves2, leaf)
+    }
+}
+
+public data class ObjectBoundary(val left: io.prebindgen.covertest.model.ObjectBoundary64, val right: io.prebindgen.covertest.model.ObjectBoundary63) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.covertest.model.ObjectBoundary64, right: io.prebindgen.covertest.model.ObjectBoundary63): ObjectBoundary = ObjectBoundary(left, right)
+    }
+}
+
+public data class Unsigned(val byte: Int, val short: Int, val int: Long, val long: ULong, val maybeLong: ULong?) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?): Unsigned = Unsigned(byte, short, int, long, maybeLong)
+    }
+}
+
 public data class Stamp(val secs: Long, val nanos: Long) {
     public fun secs(onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long {
         val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
@@ -416,32 +397,51 @@ public data class Stamp(val secs: Long, val nanos: Long) {
     }
 }
 
-public data class Tagged(val id: Long, val marker: io.prebindgen.covertest.model.Marker) {
+public data class BlobValue(val stamp: io.prebindgen.covertest.model.Stamp, val id: ByteArray, val chunks: List<ByteArray>) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is BlobValue) return false
+        return stamp == other.stamp && id.contentEquals(other.id) && (chunks.size == other.chunks.size && chunks.indices.all { __i -> val __x = chunks[__i]; val __y = other.chunks[__i]; __x.contentEquals(__y) })
+    }
 
+    override fun hashCode(): Int {
+        var result = stamp.hashCode()
+        result = 31 * result + id.contentHashCode()
+        result = 31 * result + (chunks.fold(1) { __acc, __e -> 31 * __acc + __e.contentHashCode() })
+        return result
+    }
+
+    override fun toString(): String = "BlobValue(stamp=${stamp}, id=${id.contentToString()}, chunks=${chunks.joinToString(", ", "[", "]") { __e -> "${__e.contentToString()}" }})"
 
     public companion object {
         @JvmStatic
-        public fun fromParts(id: Long, marker: io.prebindgen.covertest.model.Marker): Tagged = Tagged(id, marker)
+        public fun fromParts(stamp: io.prebindgen.covertest.model.Stamp, id: ByteArray, chunks: List<ByteArray>): BlobValue = BlobValue(stamp, id, chunks)
     }
 }
 
-public data class Unsigned(val byte: Int, val short: Int, val int: Long, val long: ULong, val maybeLong: ULong?) {
+public data class Arrays(val bytes: ByteArray, val shorts: ShortArray, val ints: IntArray, val longs: LongArray, val doubles: DoubleArray, val flags: BooleanArray, val raw: LongArray) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Arrays) return false
+        return bytes.contentEquals(other.bytes) && shorts.contentEquals(other.shorts) && ints.contentEquals(other.ints) && longs.contentEquals(other.longs) && doubles.contentEquals(other.doubles) && flags.contentEquals(other.flags) && raw.contentEquals(other.raw)
+    }
 
+    override fun hashCode(): Int {
+        var result = bytes.contentHashCode()
+        result = 31 * result + shorts.contentHashCode()
+        result = 31 * result + ints.contentHashCode()
+        result = 31 * result + longs.contentHashCode()
+        result = 31 * result + doubles.contentHashCode()
+        result = 31 * result + flags.contentHashCode()
+        result = 31 * result + raw.contentHashCode()
+        return result
+    }
+
+    override fun toString(): String = "Arrays(bytes=${bytes.contentToString()}, shorts=${shorts.contentToString()}, ints=${ints.contentToString()}, longs=${longs.contentToString()}, doubles=${doubles.contentToString()}, flags=${flags.contentToString()}, raw=${raw.contentToString()})"
 
     public companion object {
         @JvmStatic
-        public fun fromParts(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?): Unsigned = Unsigned(byte, short, int, long, maybeLong)
-    }
-}
-
-public data class Verdict(val id: Long, val outcome: io.prebindgen.covertest.model.Lookup) : AutoCloseable {
-    override fun close() {
-        outcome.close()
-    }
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(id: Long, outcome: io.prebindgen.covertest.model.Lookup): Verdict = Verdict(id, outcome)
+        public fun fromParts(bytes: ByteArray, shorts: ShortArray, ints: IntArray, longs: LongArray, doubles: DoubleArray, flags: BooleanArray, raw: LongArray): Arrays = Arrays(bytes, shorts, ints, longs, doubles, flags, raw)
     }
 }
 

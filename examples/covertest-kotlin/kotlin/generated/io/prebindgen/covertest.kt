@@ -106,28 +106,6 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
     }
 }
 
-public data class Dossier(val note: Long, val holder: io.prebindgen.covertest.Holder) : AutoCloseable {
-    override fun close() {
-        holder.close()
-    }
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(note: Long, holder: io.prebindgen.covertest.Holder): Dossier = Dossier(note, holder)
-    }
-}
-
-public data class Holder(val tag: Long, val summary: io.prebindgen.covertest.analytics.Summary) : AutoCloseable {
-    override fun close() {
-        summary.close()
-    }
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(tag: Long, summary: io.prebindgen.covertest.analytics.Summary): Holder = Holder(tag, summary)
-    }
-}
-
 public interface PayloadApi {
     val id: Long
 
@@ -156,57 +134,34 @@ public data class Payload(override val id: Long, override val seq: Int, override
     }
 }
 
-public class PayloadHandler(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
-    @Synchronized
+public data class Holder(val tag: Long, val summary: io.prebindgen.covertest.analytics.Summary) : AutoCloseable {
     override fun close() {
-        val p = ptr
-        if (p != 0L && (p and 1L) == 0L) {
-            ptr = p or 1L
-            freePtr(p)
-        }
+        summary.close()
     }
-
-    @Synchronized
-    public fun take(): PayloadHandler {
-        val p = ptr
-        ptr = p or 1L
-        return PayloadHandler(p)
-    }
-
-
 
     public companion object {
         @JvmStatic
-        external fun freePtr(ptr: Long)
-
-
+        public fun fromParts(tag: Long, summary: io.prebindgen.covertest.analytics.Summary): Holder = Holder(tag, summary)
     }
 }
 
-public class PayloadVecHandler(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
-    @Synchronized
+public data class Dossier(val note: Long, val holder: io.prebindgen.covertest.Holder) : AutoCloseable {
     override fun close() {
-        val p = ptr
-        if (p != 0L && (p and 1L) == 0L) {
-            ptr = p or 1L
-            freePtr(p)
-        }
+        holder.close()
     }
 
-    @Synchronized
-    public fun take(): PayloadVecHandler {
-        val p = ptr
-        ptr = p or 1L
-        return PayloadVecHandler(p)
+    public companion object {
+        @JvmStatic
+        public fun fromParts(note: Long, holder: io.prebindgen.covertest.Holder): Dossier = Dossier(note, holder)
     }
+}
 
+public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?, val boxedEnum: io.prebindgen.covertest.model.Priority, val plainEnum: io.prebindgen.covertest.model.Priority) {
 
 
     public companion object {
         @JvmStatic
-        external fun freePtr(ptr: Long)
-
-
+        public fun fromParts(id: Long, boxed: Long?, plain: Long?, boxedEnum: io.prebindgen.covertest.model.Priority, plainEnum: io.prebindgen.covertest.model.Priority): WrappedFields = WrappedFields(id, boxed, plain, boxedEnum, plainEnum)
     }
 }
 
@@ -272,6 +227,33 @@ public class Storage(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(in
     }
 }
 
+public class PayloadHandler(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): PayloadHandler {
+        val p = ptr
+        ptr = p or 1L
+        return PayloadHandler(p)
+    }
+
+
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+
+
+    }
+}
+
 public class StorageHandler(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
@@ -299,12 +281,30 @@ public class StorageHandler(initialPtr: Long) : io.prebindgen.covertest.NativeHa
     }
 }
 
-public data class WrappedFields(val id: Long, val boxed: Long?, val plain: Long?, val boxedEnum: io.prebindgen.covertest.model.Priority, val plainEnum: io.prebindgen.covertest.model.Priority) {
+public class PayloadVecHandler(initialPtr: Long) : io.prebindgen.covertest.NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): PayloadVecHandler {
+        val p = ptr
+        ptr = p or 1L
+        return PayloadVecHandler(p)
+    }
+
 
 
     public companion object {
         @JvmStatic
-        public fun fromParts(id: Long, boxed: Long?, plain: Long?, boxedEnum: io.prebindgen.covertest.model.Priority, plainEnum: io.prebindgen.covertest.model.Priority): WrappedFields = WrappedFields(id, boxed, plain, boxedEnum, plainEnum)
+        external fun freePtr(ptr: Long)
+
+
     }
 }
 
@@ -352,6 +352,13 @@ private fun constGetCoverBanner(onError: io.prebindgen.covertest.JniErrorHandler
 }
 
 public val COVER_BANNER: String by lazy { constGetCoverBanner(io.prebindgen.covertest.JniErrorHandler { je -> error(je ?: "const COVER_BANNER: JNI getter failed") }) }
+
+public fun stringNew(s: String, onError: io.prebindgen.covertest.JniErrorHandler<String>): String {
+    val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
+    val __ret = io.prebindgen.covertest.CovNative.stringNew(s, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
 
 public fun interface __Sink_Stamp {
     public fun run(secs: Long, nanos: Long): Any?
@@ -442,7 +449,7 @@ public fun interface ReadingCallback {
 
     public fun asRaw(): ReadingCallbackRaw =
         ReadingCallbackRaw { a0Tag, a0ExactV0, a0RangeLow, a0RangeHigh, a0LabeledV0, a0LabeledV1, a0CompanionV0 ->
-            val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Reading.Missing; 1 -> io.prebindgen.covertest.model.Reading.Exact(a0ExactV0); 2 -> io.prebindgen.covertest.model.Reading.Range(a0RangeLow, a0RangeHigh); 3 -> io.prebindgen.covertest.model.Reading.Tagged(a0LabeledV0!!, io.prebindgen.covertest.model.Priority.fromInt(a0LabeledV1)); 4 -> io.prebindgen.covertest.model.Reading.Companion(a0CompanionV0); else -> throw IllegalArgumentException("Reading: invalid tag $a0Tag") }
+                val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Reading.Missing; 1 -> io.prebindgen.covertest.model.Reading.Exact(a0ExactV0); 2 -> io.prebindgen.covertest.model.Reading.Range(a0RangeLow, a0RangeHigh); 3 -> io.prebindgen.covertest.model.Reading.Tagged(a0LabeledV0!!, io.prebindgen.covertest.model.Priority.fromInt(a0LabeledV1)); 4 -> io.prebindgen.covertest.model.Reading.Companion(a0CompanionV0); else -> throw IllegalArgumentException("Reading: invalid tag $a0Tag") }
             run(__p0)
         }
 }
@@ -464,7 +471,7 @@ public fun interface LookupCallback {
 
     public fun asRaw(): LookupCallbackRaw =
         LookupCallbackRaw { a0Tag, a0FoundV0, a0FailedV0 ->
-            val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0FoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0FailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0Tag") }
+                val __p0 = when (a0Tag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0FoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0FailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0Tag") }
             try {
                 run(__p0)
             } finally {
@@ -498,7 +505,7 @@ public fun interface ReportCallback {
 
     public fun asRaw(): ReportCallbackRaw =
         ReportCallbackRaw { a0SummaryCount, a0SummaryTotal, a0TakenPresent, a0TakenSecs, a0TakenNanos, a0OriginSecs, a0OriginNanos, a0OutcomeTag, a0OutcomeFoundV0, a0OutcomeFailedV0, a0Label ->
-            val __p0 = a0SummaryCount
+                val __p0 = a0SummaryCount
             val __p1 = a0SummaryTotal
             val __p2 = (if (a0TakenPresent) io.prebindgen.covertest.model.Stamp(a0TakenSecs, a0TakenNanos) else null)
             val __p3 = a0OriginSecs
@@ -535,7 +542,7 @@ public fun interface ProbeCallback {
 
     public fun asRaw(): ProbeCallbackRaw =
         ProbeCallbackRaw { a0Seq, a0OutcomePresent, a0OutcomeTag, a0OutcomeFoundV0, a0OutcomeFailedV0 ->
-            val __p0 = a0Seq
+                val __p0 = a0Seq
             val __p1 = (if (a0OutcomePresent) when (a0OutcomeTag) { 0 -> io.prebindgen.covertest.model.Lookup.Absent; 1 -> io.prebindgen.covertest.model.Lookup.Found(io.prebindgen.covertest.analytics.Summary(a0OutcomeFoundV0)); 2 -> io.prebindgen.covertest.model.Lookup.Failed(a0OutcomeFailedV0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $a0OutcomeTag") } else null)
             try {
                 run(__p0, __p1)
@@ -554,7 +561,7 @@ public fun interface LedgerCallback {
 
     public fun asRaw(): LedgerCallbackRaw =
         LedgerCallbackRaw { a0FiledPresent, a0FiledSummaryCount, a0FiledSummaryTotal, a0FiledTakenPresent, a0FiledTakenSecs, a0FiledTakenNanos, a0FiledOriginSecs, a0FiledOriginNanos, a0FiledOutcomeTag, a0FiledOutcomeFoundV0, a0FiledOutcomeFailedV0, a0FiledLabel, a0ArchivedPresent, a0ArchivedSummaryCount, a0ArchivedSummaryTotal, a0ArchivedTakenPresent, a0ArchivedTakenSecs, a0ArchivedTakenNanos, a0ArchivedOriginSecs, a0ArchivedOriginNanos, a0ArchivedOutcomeTag, a0ArchivedOutcomeFoundV0, a0ArchivedOutcomeFailedV0, a0ArchivedLabel ->
-            val __p0 = (if (a0FiledPresent) a0FiledSummaryCount else null)
+                val __p0 = (if (a0FiledPresent) a0FiledSummaryCount else null)
             val __p1 = (if (a0FiledPresent) a0FiledSummaryTotal else null)
             val __p2 = (if (a0FiledPresent) (if (a0FiledTakenPresent) io.prebindgen.covertest.model.Stamp(a0FiledTakenSecs, a0FiledTakenNanos) else null) else null)
             val __p3 = (if (a0FiledPresent) a0FiledOriginSecs else null)
@@ -665,7 +672,7 @@ public fun interface u64Callback {
 
     public fun asRaw(): u64CallbackRaw =
         u64CallbackRaw { a0 ->
-            val __p0 = a0.toULong()
+                val __p0 = a0.toULong()
             run(__p0)
         }
 }
@@ -711,7 +718,7 @@ public fun interface DurationCallback {
 
     public fun asRaw(): DurationCallbackRaw =
         DurationCallbackRaw { a0 ->
-            val __p0 = a0.toULong()
+                val __p0 = a0.toULong()
             run(__p0)
         }
 }
@@ -775,7 +782,7 @@ public fun interface PayloadCallback {
 
     public fun asRaw(): PayloadCallbackRaw =
         PayloadCallbackRaw { a0Id, a0Seq, a0Value, a0Flag, a0Label ->
-            val __p0 = io.prebindgen.covertest.Payload(a0Id, a0Seq, a0Value, a0Flag, a0Label)
+                val __p0 = io.prebindgen.covertest.Payload(a0Id, a0Seq, a0Value, a0Flag, a0Label)
             run(__p0)
         }
 }
@@ -789,7 +796,7 @@ public fun interface PayloadListCallback {
 
     public fun asRaw(): PayloadListCallbackRaw =
         PayloadListCallbackRaw { a0N, a0Id, a0Seq, a0Value, a0Flag, a0Label ->
-            val __p0 = List(a0N) { __i1 -> io.prebindgen.covertest.Payload(a0Id[__i1], a0Seq[__i1], a0Value[__i1], a0Flag[__i1], (a0Label[__i1] as String?)) }
+                val __p0 = List(a0N) { __i1 -> io.prebindgen.covertest.Payload(a0Id[__i1], a0Seq[__i1], a0Value[__i1], a0Flag[__i1], (a0Label[__i1] as String?)) }
             run(__p0)
         }
 }
@@ -819,7 +826,7 @@ public fun interface StorageCallback {
 
     public fun asRaw(): StorageCallbackRaw =
         StorageCallbackRaw { a0 ->
-            val __p0 = io.prebindgen.covertest.Storage(a0)
+                val __p0 = io.prebindgen.covertest.Storage(a0)
             try {
                 run(__p0)
             } finally {
@@ -836,13 +843,6 @@ internal val __sink_Vec_String: __Sink_Vec_String = __Sink_Vec_String { n, value
     List(n) { __i0 -> (value[__i0] as String) }
 }
 
-public fun stringNew(s: String, onError: io.prebindgen.covertest.JniErrorHandler<String>): String {
-    val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.CovNative.stringNew(s, __bcap)
-    if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
-}
-
 internal object CovNative {
     init {
         io.prebindgen.covertest.NativeLibrary.ensureLoaded()
@@ -850,11 +850,11 @@ internal object CovNative {
 
     external fun payloadLabelLen(pId: Long, pSeq: Int, pValue: Double, pFlag: Boolean, pLabel: String?, errorSink: Any): Long?
 
-    external fun storageLen(s: Long, errorSink: Any): Long
+    external fun stampSecs(sSecs: Long, sNanos: Long, errorSink: Any): Long
 
-    external fun storageContains(s: Long, id: Long, errorSink: Any): Boolean
+    external fun stampNanos(sSecs: Long, sNanos: Long, errorSink: Any): Long
 
-    external fun storageWithPayload(payloadId: Long, payloadSeq: Int, payloadValue: Double, payloadFlag: Boolean, payloadLabel: String?, errorSink: Any): Long
+    external fun storageErrorMessage(e: Long, errorSink: Any): String
 
     external fun summaryCount(s: Long, errorSink: Any): Long
 
@@ -868,15 +868,11 @@ internal object CovNative {
 
     external fun summaryFromMean(count: Long, mean: Double, errorSink: Any): Long
 
-    external fun storageErrorMessage(e: Long, errorSink: Any): String
+    external fun storageLen(s: Long, errorSink: Any): Long
 
-    external fun escape_probe_value(p: Long, errorSink: Any): Long
+    external fun storageContains(s: Long, id: Long, errorSink: Any): Boolean
 
-    external fun escapeProbeNew(value: Long, errorSink: Any): Long
-
-    external fun stampSecs(sSecs: Long, sNanos: Long, errorSink: Any): Long
-
-    external fun stampNanos(sSecs: Long, sNanos: Long, errorSink: Any): Long
+    external fun storageWithPayload(payloadId: Long, payloadSeq: Int, payloadValue: Double, payloadFlag: Boolean, payloadLabel: String?, errorSink: Any): Long
 
     external fun constGetCoverMagic(errorSink: Any): Long
 
@@ -887,6 +883,10 @@ internal object CovNative {
     external fun constGetCoverVersion(errorSink: Any): String
 
     external fun constGetCoverBanner(errorSink: Any): String
+
+    external fun escape_probe_value(p: Long, errorSink: Any): Long
+
+    external fun escapeProbeNew(value: Long, errorSink: Any): Long
 
     external fun payloadPriority(pId: Long, pSeq: Int, pValue: Double, pFlag: Boolean, pLabel: String?, errorSink: Any): Int
 

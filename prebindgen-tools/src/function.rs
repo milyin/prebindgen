@@ -21,7 +21,7 @@
 //! wrapper does when a conversion fails. The builder methods customize the
 //! header and the fixed parts of the body.
 
-use prebindgen_flat::flat::{Function, Param, TypeRef};
+use prebindgen_flat::flat::{Function, TypeRef};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
@@ -62,17 +62,17 @@ pub fn error_ident() -> syn::Ident {
 pub trait FunctionCallbacks {
     type Error;
 
-    /// The wires `param` arrives on and how they become the argument.
-    /// Called after [`Self::ret`], in parameter order.
-    fn param(&mut self, func: &Function, param: &Param) -> Result<Input, Self::Error>;
-
     /// How the result of type `ret` leaves the wrapper. Called first.
-    fn ret(&mut self, func: &Function, ret: &TypeRef) -> Result<Return, Self::Error>;
+    fn ret(&mut self, ret: &TypeRef) -> Result<Return, Self::Error>;
+
+    /// The wires parameter `name` of type `ty` arrives on, and how they
+    /// become the argument. Called after [`Self::ret`], in parameter order.
+    fn param(&mut self, name: &syn::Ident, ty: &TypeRef) -> Result<Input, Self::Error>;
 
     /// Statements run when a parameter's conversion fails, with the message
     /// bound to [`ERROR`]. They must diverge — return from the wrapper or
-    /// panic. `ret` is what [`Self::ret`] returned, for the default value.
-    fn fail(&mut self, func: &Function, ret: &Return) -> TokenStream;
+    /// panic. `ret` is what [`Self::ret`] returned.
+    fn fail(&mut self, ret: &Return) -> TokenStream;
 }
 
 /// Builds the call expression from the callee and the arguments.
@@ -184,12 +184,12 @@ impl<'f> FunctionWriter<'f> {
     pub fn write<C: FunctionCallbacks>(self, cb: &mut C) -> Result<TokenStream, C::Error> {
         let func = self.func;
         // The result first: how a failed input is reported depends on it.
-        let ret = cb.ret(func, &func.ret)?;
+        let ret = cb.ret(&func.ret)?;
         let mut inputs = Vec::with_capacity(func.params.len());
         for p in &func.params {
-            inputs.push(cb.param(func, p)?);
+            inputs.push(cb.param(&p.name, &p.ty)?);
         }
-        let fail = cb.fail(func, &ret);
+        let fail = cb.fail(&ret);
 
         let mut params: Vec<TokenStream> = self.leading.iter().map(Wire::decl).collect();
         let mut stmts = Vec::new();

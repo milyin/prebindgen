@@ -3,41 +3,43 @@
 //! Building blocks for a prebindgen **language adapter**.
 //!
 //! An adapter reads the flat model of what `#[prebindgen]` captured
-//! ([`flat`], re-exported from `prebindgen-flat`) and writes everything a
-//! binding needs: the generated Rust file of exported wrappers, and whatever
-//! the destination language needs beside it (a C header comes from
-//! cbindgen; Kotlin sources come from the adapter itself). There is no
-//! pipeline between the model and the adapter: the adapter walks the
-//! elements it was asked to bind and decides, element by element, how each
-//! one crosses. This crate makes the writing part short.
+//! ([`flat`], re-exported from `prebindgen-flat`), turns its build script's
+//! declarations into a plan of the elements to bind, and then writes each
+//! element: the Rust wrapper through a generator here, and whatever the
+//! destination language needs beside it (Kotlin text, for the JNI adapter)
+//! itself. This crate holds no plan and no state across elements: every
+//! generator writes one element from what it is given.
 //!
-//! ## Wrapper writers
+//! ## Generators
 //!
-//! One writer per kind of generated item. Each takes the flat element it
-//! wraps, an optional new name and header customizations through a builder,
-//! and asks the adapter for every decision through a small callback trait:
+//! One generator per kind of Rust item. Each takes the flat element it
+//! wraps and header customizations through a builder, and asks for the
+//! boundary of each value through a small callback trait:
 //!
-//! | Writer | Wraps | Callbacks |
+//! | Generator | Writes | Callbacks |
 //! |---|---|---|
-//! | [`FunctionWriter`] | a [`Function`](flat::flat::Function) | [`FunctionCallbacks`]: parameter → wires + wire→source [`Input`]; return type → wire type, out-wires and the return body; the failure fragment |
-//! | [`StructWriter`] | a [`Struct`](flat::flat::Struct), as a mirror type | [`FieldCallbacks`]: field → wires, both directions |
-//! | [`SumWriter`] | a [`Variant`](flat::flat::Variant), as a mirror enum | [`FieldCallbacks`] |
-//! | [`ClosureWriter`] | an `impl Fn(..)` parameter | [`ClosureCallbacks`]: argument → wires ([`Output`]) |
+//! | [`FunctionWriter`] | an exported wrapper around a [`Function`](flat::flat::Function) | [`FunctionCallbacks`]: the result's return type, out-wires and body; each parameter's wires and wire→value [`Input`]; the failure fragment |
+//! | [`StructWriter`] | a mirror struct of a [`Struct`](flat::flat::Struct), with both conversions | [`FieldCallbacks`]: each field's wires, both directions |
+//! | [`SumWriter`] | a mirror enum of a [`Variant`](flat::flat::Variant), with both conversions | [`FieldCallbacks`] |
+//! | [`ClosureWriter`] | an `impl Fn(..)` closure over a foreign callback | [`ClosureCallbacks`]: each argument's wires ([`Output`]) |
 //!
-//! The writers expect **final** wire types: how a `Vec<Payload>` becomes a
-//! pointer and a length, or a `jobject`, is the adapter's decision, made in
-//! its callback.
+//! The generators expect **final** wire types: how a `Vec<Payload>` becomes
+//! a pointer and a length, or a count and a column per field, is the
+//! adapter's answer in its callback.
 //!
 //! ## Recursion
 //!
-//! Conversions compose. [`Input`] and [`Output`] carry an expression plus the
-//! wires it reads or produces, and combine: [`record_in`] / [`record_out`]
-//! decompose a struct or a sum alternative into its fields,
-//! [`Input::optional`] adds a presence test, [`Input::map`] wraps a value.
-//! A conversion that can fail uses `?` on `Result<_, String>` and is placed by
-//! whoever consumes it. [`RustFile::once`] emits a named helper at most once,
-//! so a recursive lowering can turn every type into one converter function
-//! and refer to it by name.
+//! A callback answers for a whole type by recursing over its structure.
+//! [`shape()`] reads one layer — an `Option`, a borrow, a sequence, a named
+//! type with the adapter's own setting for it — so every adapter's recursion
+//! is one `match` over [`Shape`]. The answers compose: [`Input`] and
+//! [`Output`] carry an expression plus the wires it reads or produces;
+//! [`record_in`] / [`record_out`] take a struct or a sum alternative apart
+//! into its fields; [`Input::optional`], [`Input::combine`] and
+//! [`Output::concat`] build the rest; [`Stage::decode`] / [`Stage::encode`]
+//! wrap a representation in a declared conversion. A conversion that can
+//! fail uses `?` on `Result<_, String>`, and whoever places it decides where
+//! the error goes.
 //!
 //! ## Everything else
 //!
@@ -46,6 +48,8 @@
 //! * [`names`] — case conversion and identifier helpers.
 //! * [`mod@convert`] — the `convert!` vocabulary: a source type that crosses as
 //!   another type through functions or `From`/`TryFrom` impls.
+//! * [`RustFile`] — the generated file: items in order, formatted, written
+//!   only when changed.
 
 pub mod closure;
 pub mod convert;
@@ -54,6 +58,7 @@ pub mod function;
 pub mod names;
 pub mod qualify;
 pub mod record;
+pub mod shape;
 pub mod wire;
 
 pub use prebindgen_flat as flat;
@@ -70,6 +75,7 @@ pub use crate::{
         record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
         SumWriter,
     },
+    shape::{shape, Access, Holding, Shape},
     wire::{Input, Output, Wire},
 };
 

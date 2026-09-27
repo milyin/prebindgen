@@ -28,24 +28,6 @@ fn __jni_signal(
             ],
         );
 }
-const _: () = {
-    konst::assertc_eq!(
-        perftest_flat::FEATURES, "",
-        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
-                        This usually happens if source crate is compiled with different feature set\n\
-                        for build dependencies and for library usage. You may need to explicitly set\n\
-                        the necessary features."
-    );
-};
-const _: () = {
-    konst::assertc_eq!(
-        cov_helpers::FEATURES, "",
-        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
-                        This usually happens if source crate is compiled with different feature set\n\
-                        for build dependencies and for library usage. You may need to explicitly set\n\
-                        the necessary features."
-    );
-};
 #[no_mangle]
 #[allow(
     non_snake_case,
@@ -122,29 +104,510 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadLabe
 }
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_PayloadHandler_freePtr(
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_Report_freePtr(
     _env: ::prebindgen_jni_runtime::jni::JNIEnv,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass,
     ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
 ) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::PayloadHandler>(ptr)
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Report>(ptr)
 }
 const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::PayloadHandler > () >= 2,
-    "`PayloadHandler`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+    ::core::mem::align_of:: < perftest_flat::Report > () >= 2,
+    "`Report`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
 );
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_PayloadVecHandler_freePtr(
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_Probe_freePtr(
     _env: ::prebindgen_jni_runtime::jni::JNIEnv,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass,
     ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
 ) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::PayloadVecHandler>(ptr)
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Probe>(ptr)
 }
 const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::PayloadVecHandler > () >= 2,
-    "`PayloadVecHandler`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+    ::core::mem::align_of:: < perftest_flat::Probe > () >= 2,
+    "`Probe`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_Span_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Span>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::Span > () >= 2,
+    "`Span`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_SpanHolder_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::SpanHolder>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::SpanHolder > () >= 2,
+    "`SpanHolder`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampSecs<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    s_secs: ::prebindgen_jni_runtime::jni::sys::jlong,
+    s_nanos: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let s = perftest_flat::Stamp {
+        secs: s_secs,
+        nanos: s_nanos,
+    };
+    let __result = perftest_flat::stamp_secs(&s);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampNanos<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    s_secs: ::prebindgen_jni_runtime::jni::sys::jlong,
+    s_nanos: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let s = perftest_flat::Stamp {
+        secs: s_secs,
+        nanos: s_nanos,
+    };
+    let __result = perftest_flat::stamp_nanos(&s);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageErrorMessage<
+    'a,
+>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    e: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let e = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::StorageError>(e)?,
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = perftest_flat::storage_error_message(e);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_string(
+            env,
+            ::core::convert::AsRef::<str>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_errors_StorageError_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::StorageError>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::StorageError > () >= 2,
+    "`StorageError`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryCount<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    s: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return 0;
+        }
+    };
+    let __result = perftest_flat::summary_count(s);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTotal<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    s: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jdouble {
+    let mut __env = __env;
+    let env = &mut __env;
+    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return 0.0f64;
+        }
+    };
+    let __result = perftest_flat::summary_total(s);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jdouble,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0.0f64
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    s: ::prebindgen_jni_runtime::jni::sys::jlong,
+    factor: ::prebindgen_jni_runtime::jni::sys::jdouble,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jdouble {
+    let mut __env = __env;
+    let env = &mut __env;
+    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return 0.0f64;
+        }
+    };
+    let factor = factor;
+    let __result = perftest_flat::summary_scaled(s, factor);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jdouble,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0.0f64
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryMean<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    s: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jdouble {
+    let mut __env = __env;
+    let env = &mut __env;
+    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return 0.0f64;
+        }
+    };
+    let __result = crate::summary_mean(s);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jdouble,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0.0f64
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    count: ::prebindgen_jni_runtime::jni::sys::jlong,
+    total: ::prebindgen_jni_runtime::jni::sys::jdouble,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let count = count;
+    let total = total;
+    let __result = perftest_flat::summary_new(count, total);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    count: ::prebindgen_jni_runtime::jni::sys::jlong,
+    mean: ::prebindgen_jni_runtime::jni::sys::jdouble,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let count = count;
+    let mean = mean;
+    let __result = crate::summary_from_mean(count, mean);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| match __result {
+        ::core::result::Result::Ok(__ok) => {
+            let r = ::prebindgen_jni_runtime::new_handle(__ok);
+            ::core::result::Result::Ok(r)
+        }
+        ::core::result::Result::Err(__e) => {
+            ::core::result::Result::Err(::std::string::ToString::to_string(&__e))
+        }
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_analytics_Summary_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Summary>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::Summary > () >= 2,
+    "`Summary`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_analytics_SummaryVault_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Archive>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::Archive > () >= 2,
+    "`Archive`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
 );
 #[no_mangle]
 #[allow(
@@ -325,6 +788,19 @@ const _: () = assert!(
 );
 #[no_mangle]
 #[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_PayloadHandler_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::PayloadHandler>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::PayloadHandler > () >= 2,
+    "`PayloadHandler`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(non_snake_case)]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_StorageHandler_freePtr(
     _env: ::prebindgen_jni_runtime::jni::JNIEnv,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass,
@@ -337,613 +813,18 @@ const _: () = assert!(
     "`StorageHandler`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
 );
 #[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryCount<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    s: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
-        ::core::result::Result::Ok(
-            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
-        )
-    })() {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            __jni_signal(env, &__error_sink, &__err);
-            return 0;
-        }
-    };
-    let __result = perftest_flat::summary_count(s);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTotal<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    s: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jdouble {
-    let mut __env = __env;
-    let env = &mut __env;
-    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
-        ::core::result::Result::Ok(
-            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
-        )
-    })() {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            __jni_signal(env, &__error_sink, &__err);
-            return 0.0;
-        }
-    };
-    let __result = perftest_flat::summary_total(s);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jdouble,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0.0f64
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    s: ::prebindgen_jni_runtime::jni::sys::jlong,
-    factor: ::prebindgen_jni_runtime::jni::sys::jdouble,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jdouble {
-    let mut __env = __env;
-    let env = &mut __env;
-    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
-        ::core::result::Result::Ok(
-            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
-        )
-    })() {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            __jni_signal(env, &__error_sink, &__err);
-            return 0.0;
-        }
-    };
-    let factor = factor;
-    let __result = perftest_flat::summary_scaled(s, factor);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jdouble,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0.0f64
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryMean<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    s: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jdouble {
-    let mut __env = __env;
-    let env = &mut __env;
-    let s = match (|| -> ::core::result::Result<_, ::std::string::String> {
-        ::core::result::Result::Ok(
-            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::Summary>(s)?,
-        )
-    })() {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            __jni_signal(env, &__error_sink, &__err);
-            return 0.0;
-        }
-    };
-    let __result = crate::summary_mean(s);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jdouble,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jdouble);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0.0f64
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    count: ::prebindgen_jni_runtime::jni::sys::jlong,
-    total: ::prebindgen_jni_runtime::jni::sys::jdouble,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let count = count;
-    let total = total;
-    let __result = perftest_flat::summary_new(count, total);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    count: ::prebindgen_jni_runtime::jni::sys::jlong,
-    mean: ::prebindgen_jni_runtime::jni::sys::jdouble,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let count = count;
-    let mean = mean;
-    let __result = crate::summary_from_mean(count, mean);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| match __result {
-        ::core::result::Result::Ok(__ok) => {
-            let r = ::prebindgen_jni_runtime::new_handle(__ok);
-            ::core::result::Result::Ok(r)
-        }
-        ::core::result::Result::Err(__e) => {
-            ::core::result::Result::Err(::std::string::ToString::to_string(&__e))
-        }
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
-#[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_analytics_Summary_freePtr(
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_PayloadVecHandler_freePtr(
     _env: ::prebindgen_jni_runtime::jni::JNIEnv,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass,
     ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
 ) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Summary>(ptr)
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::PayloadVecHandler>(ptr)
 }
 const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::Summary > () >= 2,
-    "`Summary`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+    ::core::mem::align_of:: < perftest_flat::PayloadVecHandler > () >= 2,
+    "`PayloadVecHandler`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
 );
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_analytics_SummaryVault_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Archive>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::Archive > () >= 2,
-    "`Archive`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageErrorMessage<
-    'a,
->(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    e: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jobject {
-    let mut __env = __env;
-    let env = &mut __env;
-    let e = match (|| -> ::core::result::Result<_, ::std::string::String> {
-        ::core::result::Result::Ok(
-            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::StorageError>(e)?,
-        )
-    })() {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            __jni_signal(env, &__error_sink, &__err);
-            return ::core::ptr::null_mut();
-        }
-    };
-    let __result = perftest_flat::storage_error_message(e);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jobject,
-        ::std::string::String,
-    > = (|| {
-        let r = ::prebindgen_jni_runtime::new_string(
-            env,
-            ::core::convert::AsRef::<str>::as_ref(&__result),
-        )?;
-        ::core::result::Result::Ok(r.into_raw())
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            ::core::ptr::null_mut()
-        }
-    }
-}
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_errors_StorageError_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::StorageError>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::StorageError > () >= 2,
-    "`StorageError`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_escape_1probe_1value<
-    'a,
->(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    p: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let p = match (|| -> ::core::result::Result<_, ::std::string::String> {
-        ::core::result::Result::Ok(
-            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::EscapeProbe>(p)?,
-        )
-    })() {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            __jni_signal(env, &__error_sink, &__err);
-            return 0;
-        }
-    };
-    let __result = perftest_flat::escape_probe_value(p);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_escapeProbeNew<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    value: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let value = value;
-    let __result = perftest_flat::escape_probe_new(value);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| {
-        let r = ::prebindgen_jni_runtime::new_handle(__result);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_esc_1pkg_Esc_1Probe_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::EscapeProbe>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::EscapeProbe > () >= 2,
-    "`EscapeProbe`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_Probe_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Probe>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::Probe > () >= 2,
-    "`Probe`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_Report_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Report>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::Report > () >= 2,
-    "`Report`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_Span_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Span>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::Span > () >= 2,
-    "`Span`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_model_SpanHolder_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::SpanHolder>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::SpanHolder > () >= 2,
-    "`SpanHolder`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampSecs<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    s_secs: ::prebindgen_jni_runtime::jni::sys::jlong,
-    s_nanos: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let s = perftest_flat::Stamp {
-        secs: s_secs,
-        nanos: s_nanos,
-    };
-    let __result = perftest_flat::stamp_secs(&s);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
-#[no_mangle]
-#[allow(
-    non_snake_case,
-    unused_mut,
-    unused_variables,
-    unused_braces,
-    unused_parens,
-    unused_unsafe,
-    dead_code,
-    clippy::all
-)]
-pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampNanos<'a>(
-    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
-    s_secs: ::prebindgen_jni_runtime::jni::sys::jlong,
-    s_nanos: ::prebindgen_jni_runtime::jni::sys::jlong,
-    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
-) -> ::prebindgen_jni_runtime::jni::sys::jlong {
-    let mut __env = __env;
-    let env = &mut __env;
-    let s = perftest_flat::Stamp {
-        secs: s_secs,
-        nanos: s_nanos,
-    };
-    let __result = perftest_flat::stamp_nanos(&s);
-    let __r: ::core::result::Result<
-        ::prebindgen_jni_runtime::jni::sys::jlong,
-        ::std::string::String,
-    > = (|| {
-        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
-        ::core::result::Result::Ok(r)
-    })();
-    match __r {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__err) => {
-            if !__err.is_empty() {
-                __jni_signal(env, &__error_sink, &__err);
-            }
-            0
-        }
-    }
-}
 #[no_mangle]
 #[allow(
     non_snake_case,
@@ -1150,6 +1031,107 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_constGetCov
         }
     }
 }
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_escape_1probe_1value<
+    'a,
+>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    p: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let p = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            ::prebindgen_jni_runtime::borrow_handle::<perftest_flat::EscapeProbe>(p)?,
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return 0;
+        }
+    };
+    let __result = perftest_flat::escape_probe_value(p);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_escapeProbeNew<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    value: ::prebindgen_jni_runtime::jni::sys::jlong,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let value = value;
+    let __result = perftest_flat::escape_probe_new(value);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_handle(__result);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_esc_1pkg_Esc_1Probe_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::EscapeProbe>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::EscapeProbe > () >= 2,
+    "`EscapeProbe`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
 #[no_mangle]
 #[allow(
     non_snake_case,
@@ -1454,8 +1436,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stampSeries
         ::std::string::String,
     > = (|| {
         let (r__n, r_secs, r_nanos) = {
-            let __it = ::core::iter::IntoIterator::into_iter(__result);
-            let __items: ::std::vec::Vec<_> = __it.collect();
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result,
+                )
+                .collect();
             let __n = __items.len();
             let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
             let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
@@ -1846,8 +1830,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_labelSeries
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __it = ::core::iter::IntoIterator::into_iter(__result);
-            let __items: ::std::vec::Vec<_> = __it.collect();
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result,
+                )
+                .collect();
             let __n = __items.len();
             let __c1_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
             for (__i, __x1) in __items.into_iter().enumerate() {
@@ -2705,7 +2691,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_annotatedPa
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__err) => {
             __jni_signal(env, &__error_sink, &__err);
-            return 0.0;
+            return 0.0f64;
         }
     };
     let __result = perftest_flat::annotated_payload_value(&a);
@@ -3853,8 +3839,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingSeri
             r_labeled_v1,
             r_companion_v0,
         ) = {
-            let __it = ::core::iter::IntoIterator::into_iter(__result);
-            let __items: ::std::vec::Vec<_> = __it.collect();
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result,
+                )
+                .collect();
             let __n = __items.len();
             let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
             let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
@@ -4040,8 +4028,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingEach
                 46i32,
             )?;
             move |__a0: perftest_flat::Reading| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (
                             a0__tag,
                             a0_exact_v0,
@@ -4130,11 +4118,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_readingEach
                                 { j : a0_companion_v0 }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Reading) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -4274,8 +4264,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_lookupEach<
                 38i32,
             )?;
             move |__a0: perftest_flat::Lookup| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (a0__tag, a0_found_v0, a0_failed_v0) = match __a0 {
                             perftest_flat::Lookup::Absent => {
                                 (
@@ -4310,11 +4300,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_lookupEach<
                                 a0_failed_v0.as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Lookup) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -4537,8 +4529,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_reportEach<
                 54i32,
             )?;
             move |__a0: perftest_flat::Report| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (
                             a0_summary_count,
                             a0_summary_total,
@@ -4690,11 +4682,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_reportEach<
                                 .as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Report) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -4912,8 +4906,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeEach<'
                 42i32,
             )?;
             move |__a0: perftest_flat::Probe| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (
                             a0_seq,
                             a0_outcome__present,
@@ -5018,11 +5012,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_probeEach<'
                                 a0_outcome_failed_v0.as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Probe) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -5080,8 +5076,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerEach<
                 80i32,
             )?;
             move |__a0: perftest_flat::Ledger| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (
                             a0_filed__present,
                             a0_filed_summary_count,
@@ -5553,11 +5549,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_ledgerEach<
                                 a0_archived_label.as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Ledger) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -9049,19 +9047,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedEmi
                 34i32,
             )?;
             move |__a0: u64| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let a0 = (__a0 as ::prebindgen_jni_runtime::jni::sys::jlong);
                         ::core::result::Result::Ok(
                             ::std::vec![
                                 ::prebindgen_jni_runtime::jni::sys::jvalue { j : a0 }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (u64) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -9113,8 +9113,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_unsignedSer
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __it = ::core::iter::IntoIterator::into_iter(__result);
-            let __items: ::std::vec::Vec<_> = __it.collect();
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result,
+                )
+                .collect();
             let __n = __items.len();
             let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
             for (__i, __x1) in __items.into_iter().enumerate() {
@@ -9230,8 +9232,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_blobValueNe
                 ::core::convert::AsRef::<[u8]>::as_ref(&__f1),
             )?;
             let (r_chunks__n, r_chunks) = {
-                let __it = ::core::iter::IntoIterator::into_iter(__f2);
-                let __items: ::std::vec::Vec<_> = __it.collect();
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __f2,
+                    )
+                    .collect();
                 let __n = __items.len();
                 let __c2_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
                 for (__i, __x2) in __items.into_iter().enumerate() {
@@ -9398,8 +9402,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_blobValueEc
                 ::core::convert::AsRef::<[u8]>::as_ref(&__f1),
             )?;
             let (r_chunks__n, r_chunks) = {
-                let __it = ::core::iter::IntoIterator::into_iter(__f2);
-                let __items: ::std::vec::Vec<_> = __it.collect();
+                let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                        __f2,
+                    )
+                    .collect();
                 let __n = __items.len();
                 let __c2_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
                 for (__i, __x2) in __items.into_iter().enumerate() {
@@ -10008,8 +10014,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationEmi
                 34i32,
             )?;
             move |__a0: perftest_flat::Duration| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let a0 = {
                             let __r1 = crate::duration_to_millis(__a0)
                                 .map_err(|__e| ::std::string::ToString::to_string(&__e))?;
@@ -10026,11 +10032,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_durationEmi
                                 ::prebindgen_jni_runtime::jni::sys::jvalue { j : a0 }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Duration) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -10479,7 +10487,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTota
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__err) => {
             __jni_signal(env, &__error_sink, &__err);
-            return 0.0;
+            return 0.0f64;
         }
     };
     let __result = perftest_flat::summary_total_raw(s);
@@ -11198,7 +11206,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryTota
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__err) => {
             __jni_signal(env, &__error_sink, &__err);
-            return 0.0;
+            return 0.0f64;
         }
     };
     let __result = cov_helpers::summary_total_opt(s.as_deref());
@@ -12037,8 +12045,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageGetV
         let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = match __result {
             ::core::option::Option::Some(__x1) => {
                 let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
-                    let __it = ::core::iter::IntoIterator::into_iter(__x1);
-                    let __items: ::std::vec::Vec<_> = __it.collect();
+                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                            __x1,
+                        )
+                        .collect();
                     let __n = __items.len();
                     let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
                     let mut __c2_1 = ::std::vec::Vec::with_capacity(__n);
@@ -12183,8 +12193,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadHand
                 42i32,
             )?;
             move |__a0: &perftest_flat::Payload| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
                             let perftest_flat::Payload {
                                 id: __f0,
@@ -12223,11 +12233,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadHand
                                 .as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (& Payload) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -12347,11 +12359,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadVecH
                 44i32,
             )?;
             move |__a0: &[perftest_flat::Payload]| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (a0__n, a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
-                            let __it = __a0.iter().cloned();
-                            let __items: ::std::vec::Vec<_> = __it.collect();
+                            let __items: ::std::vec::Vec<_> = __a0
+                                .iter()
+                                .cloned()
+                                .collect();
                             let __n = __items.len();
                             let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
                             let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
@@ -12429,11 +12443,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_payloadVecH
                                 .as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (& [Payload]) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -12731,8 +12747,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageShar
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __it = ::core::iter::IntoIterator::into_iter(__result);
-            let __items: ::std::vec::Vec<_> = __it.collect();
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result,
+                )
+                .collect();
             let __n = __items.len();
             let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
             for (__i, __x1) in __items.into_iter().enumerate() {
@@ -12803,8 +12821,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageShar
         let (r__present, r__n, r) = match __result {
             ::core::option::Option::Some(__x1) => {
                 let (r__n, r) = {
-                    let __it = ::core::iter::IntoIterator::into_iter(__x1);
-                    let __items: ::std::vec::Vec<_> = __it.collect();
+                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                            __x1,
+                        )
+                        .collect();
                     let __n = __items.len();
                     let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
                     for (__i, __x2) in __items.into_iter().enumerate() {
@@ -12882,19 +12902,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageHand
                 34i32,
             )?;
             move |__a0: perftest_flat::Storage| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let a0 = ::prebindgen_jni_runtime::new_handle(__a0);
                         ::core::result::Result::Ok(
                             ::std::vec![
                                 ::prebindgen_jni_runtime::jni::sys::jvalue { j : a0 }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (Storage) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -13080,8 +13102,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageLabe
         ::std::string::String,
     > = (|| {
         let (r__n, r) = {
-            let __it = ::core::iter::IntoIterator::into_iter(__result);
-            let __items: ::std::vec::Vec<_> = __it.collect();
+            let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                    __result,
+                )
+                .collect();
             let __n = __items.len();
             let __c1_0 = ::prebindgen_jni_runtime::new_object_array(env, __n)?;
             for (__i, __x1) in __items.into_iter().enumerate() {
@@ -13303,3 +13327,21 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stringNew<'
         }
     }
 }
+const _: () = {
+    konst::assertc_eq!(
+        perftest_flat::FEATURES, "",
+        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
+                        This usually happens if source crate is compiled with different feature set\n\
+                        for build dependencies and for library usage. You may need to explicitly set\n\
+                        the necessary features."
+    );
+};
+const _: () = {
+    konst::assertc_eq!(
+        cov_helpers::FEATURES, "",
+        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
+                        This usually happens if source crate is compiled with different feature set\n\
+                        for build dependencies and for library usage. You may need to explicitly set\n\
+                        the necessary features."
+    );
+};

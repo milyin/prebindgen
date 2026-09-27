@@ -1,24 +1,14 @@
 //! The generated Rust file.
 
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use prebindgen_flat::{flat::Guard, Emit, Flat};
 use proc_macro2::TokenStream;
 
-/// An ordered list of generated items, with keyed helpers emitted once.
-///
-/// Adapters push their exported items in declaration order and ask for
-/// shared helpers — one converter per type, one mirror per struct — through
-/// [`Self::once`], which is safe to call recursively: the key is claimed
-/// before the helper is built, so a helper that (directly or through another)
-/// needs itself just refers to it by name.
+/// The generated Rust file: items in the order they were pushed.
 #[derive(Default)]
 pub struct RustFile {
     items: Vec<TokenStream>,
-    claimed: HashSet<String>,
 }
 
 impl RustFile {
@@ -29,35 +19,6 @@ impl RustFile {
     /// Append an item.
     pub fn push(&mut self, item: TokenStream) {
         self.items.push(item);
-    }
-
-    /// Whether a helper under `key` has been claimed.
-    pub fn has(&self, key: &str) -> bool {
-        self.claimed.contains(key)
-    }
-
-    /// Claim `key`: `true` the first time, `false` after. For an adapter
-    /// whose helper builder needs more than the file — build the item after
-    /// a successful claim and [`push`](Self::push) it.
-    pub fn claim(&mut self, key: impl Into<String>) -> bool {
-        self.claimed.insert(key.into())
-    }
-
-    /// Emit the helper under `key` unless it was already claimed. `build`
-    /// runs at most once per key and may itself call `once` for the helpers
-    /// it depends on; those land in the file before this one.
-    pub fn once<E>(
-        &mut self,
-        key: impl Into<String>,
-        build: impl FnOnce(&mut Self) -> Result<TokenStream, E>,
-    ) -> Result<(), E> {
-        let key = key.into();
-        if !self.claimed.insert(key) {
-            return Ok(());
-        }
-        let item = build(self)?;
-        self.items.push(item);
-        Ok(())
     }
 
     /// Re-emit the source crates' feature guards (the `const _` items

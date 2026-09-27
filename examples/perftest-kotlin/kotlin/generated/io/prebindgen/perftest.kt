@@ -106,12 +106,21 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
     }
 }
 
-public data class ObjectBoundary16(val left: io.prebindgen.perftest.ObjectBoundary8, val right: io.prebindgen.perftest.ObjectBoundary8) {
+public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
 
 
     public companion object {
         @JvmStatic
-        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary8, right: io.prebindgen.perftest.ObjectBoundary8): ObjectBoundary16 = ObjectBoundary16(left, right)
+        public fun fromParts(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): Payload = Payload(id, seq, value, flag, label)
+    }
+}
+
+public data class ObjectBoundaryLeaf(val value: Long) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
     }
 }
 
@@ -124,21 +133,39 @@ public data class ObjectBoundary2(val left: io.prebindgen.perftest.ObjectBoundar
     }
 }
 
-public data class ObjectBoundary32(val left: io.prebindgen.perftest.ObjectBoundary16, val right: io.prebindgen.perftest.ObjectBoundary16) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary16, right: io.prebindgen.perftest.ObjectBoundary16): ObjectBoundary32 = ObjectBoundary32(left, right)
-    }
-}
-
 public data class ObjectBoundary4(val left: io.prebindgen.perftest.ObjectBoundary2, val right: io.prebindgen.perftest.ObjectBoundary2) {
 
 
     public companion object {
         @JvmStatic
         public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary2, right: io.prebindgen.perftest.ObjectBoundary2): ObjectBoundary4 = ObjectBoundary4(left, right)
+    }
+}
+
+public data class ObjectBoundary8(val left: io.prebindgen.perftest.ObjectBoundary4, val right: io.prebindgen.perftest.ObjectBoundary4) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary4, right: io.prebindgen.perftest.ObjectBoundary4): ObjectBoundary8 = ObjectBoundary8(left, right)
+    }
+}
+
+public data class ObjectBoundary16(val left: io.prebindgen.perftest.ObjectBoundary8, val right: io.prebindgen.perftest.ObjectBoundary8) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary8, right: io.prebindgen.perftest.ObjectBoundary8): ObjectBoundary16 = ObjectBoundary16(left, right)
+    }
+}
+
+public data class ObjectBoundary32(val left: io.prebindgen.perftest.ObjectBoundary16, val right: io.prebindgen.perftest.ObjectBoundary16) {
+
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary16, right: io.prebindgen.perftest.ObjectBoundary16): ObjectBoundary32 = ObjectBoundary32(left, right)
     }
 }
 
@@ -160,30 +187,30 @@ public data class ObjectBoundary64Object(val left: io.prebindgen.perftest.Object
     }
 }
 
-public data class ObjectBoundary8(val left: io.prebindgen.perftest.ObjectBoundary4, val right: io.prebindgen.perftest.ObjectBoundary4) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary4, right: io.prebindgen.perftest.ObjectBoundary4): ObjectBoundary8 = ObjectBoundary8(left, right)
+public class Storage(initialPtr: Long) : io.prebindgen.perftest.NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
     }
-}
 
-public data class ObjectBoundaryLeaf(val value: Long) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
+    @Synchronized
+    public fun take(): Storage {
+        val p = ptr
+        ptr = p or 1L
+        return Storage(p)
     }
-}
 
-public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
 
 
     public companion object {
         @JvmStatic
-        public fun fromParts(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): Payload = Payload(id, seq, value, flag, label)
+        external fun freePtr(ptr: Long)
+
+
     }
 }
 
@@ -229,33 +256,6 @@ public class PayloadVecHandler(initialPtr: Long) : io.prebindgen.perftest.Native
         val p = ptr
         ptr = p or 1L
         return PayloadVecHandler(p)
-    }
-
-
-
-    public companion object {
-        @JvmStatic
-        external fun freePtr(ptr: Long)
-
-
-    }
-}
-
-public class Storage(initialPtr: Long) : io.prebindgen.perftest.NativeHandle(initialPtr) {
-    @Synchronized
-    override fun close() {
-        val p = ptr
-        if (p != 0L && (p and 1L) == 0L) {
-            ptr = p or 1L
-            freePtr(p)
-        }
-    }
-
-    @Synchronized
-    public fun take(): Storage {
-        val p = ptr
-        ptr = p or 1L
-        return Storage(p)
     }
 
 
@@ -379,7 +379,7 @@ public fun interface PayloadCallback {
 
     public fun asRaw(): PayloadCallbackRaw =
         PayloadCallbackRaw { a0Id, a0Seq, a0Value, a0Flag, a0Label ->
-            val __p0 = io.prebindgen.perftest.Payload(a0Id, a0Seq, a0Value, a0Flag, a0Label)
+                val __p0 = io.prebindgen.perftest.Payload(a0Id, a0Seq, a0Value, a0Flag, a0Label)
             run(__p0)
         }
 }
@@ -401,7 +401,7 @@ public fun interface PayloadListCallback {
 
     public fun asRaw(): PayloadListCallbackRaw =
         PayloadListCallbackRaw { a0N, a0Id, a0Seq, a0Value, a0Flag, a0Label ->
-            val __p0 = List(a0N) { __i1 -> io.prebindgen.perftest.Payload(a0Id[__i1], a0Seq[__i1], a0Value[__i1], a0Flag[__i1], (a0Label[__i1] as String?)) }
+                val __p0 = List(a0N) { __i1 -> io.prebindgen.perftest.Payload(a0Id[__i1], a0Seq[__i1], a0Value[__i1], a0Flag[__i1], (a0Label[__i1] as String?)) }
             run(__p0)
         }
 }

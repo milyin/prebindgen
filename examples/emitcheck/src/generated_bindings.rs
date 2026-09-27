@@ -30,19 +30,6 @@ fn __jni_signal(
 }
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_ZKeyExpr_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<myflat::ZKeyExpr>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < myflat::ZKeyExpr > () >= 2,
-    "`ZKeyExpr`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(non_snake_case)]
 pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_ZSample_freePtr(
     _env: ::prebindgen_jni_runtime::jni::JNIEnv,
     _class: ::prebindgen_jni_runtime::jni::objects::JClass,
@@ -53,6 +40,19 @@ pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_ZSample_freePtr(
 const _: () = assert!(
     ::core::mem::align_of:: < myflat::ZSample > () >= 2,
     "`ZSample`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_ZKeyExpr_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<myflat::ZKeyExpr>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < myflat::ZKeyExpr > () >= 2,
+    "`ZKeyExpr`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
 );
 #[no_mangle]
 #[allow(
@@ -83,8 +83,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_JNINative_zSampleSub<
                 50i32,
             )?;
             move |__a0: myflat::ZSample| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (
                             a0_opt_plain__present,
                             a0_opt_plain_z_keyexpr_as_str,
@@ -231,11 +231,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_emitcheck_JNINative_zSampleSub<
                                 .as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (ZSample) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }

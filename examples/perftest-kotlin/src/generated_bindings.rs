@@ -28,15 +28,19 @@ fn __jni_signal(
             ],
         );
 }
-const _: () = {
-    konst::assertc_eq!(
-        perftest_flat::FEATURES, "",
-        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
-                        This usually happens if source crate is compiled with different feature set\n\
-                        for build dependencies and for library usage. You may need to explicitly set\n\
-                        the necessary features."
-    );
-};
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_perftest_Storage_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Storage>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < perftest_flat::Storage > () >= 2,
+    "`Storage`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "system" fn Java_io_prebindgen_perftest_PayloadHandler_freePtr(
@@ -62,19 +66,6 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_PayloadVecHandler_free
 const _: () = assert!(
     ::core::mem::align_of:: < perftest_flat::PayloadVecHandler > () >= 2,
     "`PayloadVecHandler`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
-);
-#[no_mangle]
-#[allow(non_snake_case)]
-pub unsafe extern "system" fn Java_io_prebindgen_perftest_Storage_freePtr(
-    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
-    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
-    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
-) {
-    ::prebindgen_jni_runtime::free_handle::<perftest_flat::Storage>(ptr)
-}
-const _: () = assert!(
-    ::core::mem::align_of:: < perftest_flat::Storage > () >= 2,
-    "`Storage`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
 );
 #[no_mangle]
 #[allow(
@@ -1464,8 +1455,8 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadHandl
                 42i32,
             )?;
             move |__a0: &perftest_flat::Payload| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
                             let perftest_flat::Payload {
                                 id: __f0,
@@ -1504,11 +1495,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadHandl
                                 .as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (& Payload) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -1734,8 +1727,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGetVe
         let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = match __result {
             ::core::option::Option::Some(__x1) => {
                 let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
-                    let __it = ::core::iter::IntoIterator::into_iter(__x1);
-                    let __items: ::std::vec::Vec<_> = __it.collect();
+                    let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
+                            __x1,
+                        )
+                        .collect();
                     let __n = __items.len();
                     let mut __c2_0 = ::std::vec::Vec::with_capacity(__n);
                     let mut __c2_1 = ::std::vec::Vec::with_capacity(__n);
@@ -1880,11 +1875,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadVecHa
                 44i32,
             )?;
             move |__a0: &[perftest_flat::Payload]| {
-                let __r = __up
-                    .call_void(|env| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
+                    __up.call_void(|env| {
                         let (a0__n, a0_id, a0_seq, a0_value, a0_flag, a0_label) = {
-                            let __it = __a0.iter().cloned();
-                            let __items: ::std::vec::Vec<_> = __it.collect();
+                            let __items: ::std::vec::Vec<_> = __a0
+                                .iter()
+                                .cloned()
+                                .collect();
                             let __n = __items.len();
                             let mut __c1_0 = ::std::vec::Vec::with_capacity(__n);
                             let mut __c1_1 = ::std::vec::Vec::with_capacity(__n);
@@ -1962,11 +1959,13 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadVecHa
                                 .as_raw() }
                             ],
                         )
-                    });
-                if let ::core::result::Result::Err(__e) = __r {
+                    })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
                     ::prebindgen_jni_runtime::report_callback_error(
                         "callback impl Fn (& [Payload]) + Send + Sync + 'static",
-                        &__e,
+                        &__err,
                     );
                 }
             }
@@ -2057,3 +2056,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageCallb
         }
     }
 }
+const _: () = {
+    konst::assertc_eq!(
+        perftest_flat::FEATURES, "",
+        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
+                        This usually happens if source crate is compiled with different feature set\n\
+                        for build dependencies and for library usage. You may need to explicitly set\n\
+                        the necessary features."
+    );
+};

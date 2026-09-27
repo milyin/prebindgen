@@ -1,10 +1,7 @@
 //! Unit tests over a small flat model.
 
 use prebindgen::SourceLocation;
-use prebindgen_flat::{
-    flat::{Function, Param, TypeRef},
-    Flat,
-};
+use prebindgen_flat::{flat::TypeRef, Flat};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
@@ -66,12 +63,11 @@ struct Identity;
 impl FunctionCallbacks for Identity {
     type Error = String;
 
-    fn param(&mut self, _f: &Function, p: &Param) -> Result<Input, String> {
-        let t = p.ty.spell();
-        Ok(Input::identity(Wire::new(p.name.clone(), t)))
+    fn param(&mut self, name: &syn::Ident, ty: &TypeRef) -> Result<Input, String> {
+        Ok(Input::identity(Wire::new(name.clone(), ty.spell())))
     }
 
-    fn ret(&mut self, _f: &Function, ret: &TypeRef) -> Result<Return, String> {
+    fn ret(&mut self, ret: &TypeRef) -> Result<Return, String> {
         let t = ret.spell();
         Ok(Return {
             ty: Some(t),
@@ -80,7 +76,7 @@ impl FunctionCallbacks for Identity {
         })
     }
 
-    fn fail(&mut self, _f: &Function, _ret: &Return) -> TokenStream {
+    fn fail(&mut self, _ret: &Return) -> TokenStream {
         quote!(panic!("{}", __err))
     }
 }
@@ -181,4 +177,48 @@ fn unsupported_items_refuse_the_model() {
     let flat = model("pub fn bad(x: *const u8) {}");
     assert!(crate::check_supported(&flat).is_err());
     assert!(crate::check_supported(&model(SRC)).is_ok());
+}
+
+#[test]
+fn shape_reads_one_layer_with_the_adapters_setting() {
+    use crate::{shape, Access, Holding, Shape};
+    let flat = model(
+        r#"
+        pub struct Payload { pub id: i64 }
+        pub type Other = inner::Other;
+        pub fn f(a: &Payload, b: &mut Payload, c: &str, d: &Vec<u8>, e: Option<Payload>, g: &Other, h: &mut MaybeUninit<Payload>) {}
+    "#,
+    );
+    let unsupported: Vec<String> = flat.unsupported().map(|u| u.error.to_string()).collect();
+    let f = flat
+        .function("f")
+        .unwrap_or_else(|| panic!("{unsupported:?}"));
+    let lookup = |n: &str| (n == "Payload").then_some(7u8);
+    let at = |i: usize| shape(&f.params[i].ty, lookup).unwrap();
+    assert!(matches!(
+        at(0),
+        Shape::Declared {
+            name: "Payload",
+            setting: 7,
+            access: Access::Shared
+        }
+    ));
+    assert!(matches!(
+        at(1),
+        Shape::Declared {
+            access: Access::Exclusive,
+            ..
+        }
+    ));
+    assert!(matches!(at(2), Shape::Str(Holding::Borrowed)));
+    assert!(matches!(
+        at(3),
+        Shape::Seq {
+            holding: Holding::BorrowedVec,
+            ..
+        }
+    ));
+    assert!(matches!(at(4), Shape::Option(_)));
+    assert!(matches!(at(5), Shape::Undeclared("Other")));
+    assert!(matches!(at(6), Shape::Out(_)));
 }

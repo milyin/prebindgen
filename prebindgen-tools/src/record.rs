@@ -83,17 +83,12 @@ impl<'a> Record<'a> {
 pub trait FieldCallbacks {
     type Error;
 
-    /// The wires `field` of `owner` arrives on, and how they rebuild it.
-    fn field_in(&mut self, owner: &syn::Ident, field: &Field) -> Result<Input, Self::Error>;
+    /// The wires `field` arrives on, and how they rebuild it.
+    fn field_in(&mut self, field: &Field) -> Result<Input, Self::Error>;
 
-    /// The wires `field` of `owner` leaves on, reading the field's value from
-    /// `value` (an owned binding).
-    fn field_out(
-        &mut self,
-        owner: &syn::Ident,
-        field: &Field,
-        value: &TokenStream,
-    ) -> Result<Output, Self::Error>;
+    /// The wires `field` leaves on, reading the field's value from `value`
+    /// (an owned binding).
+    fn field_out(&mut self, field: &Field, value: &TokenStream) -> Result<Output, Self::Error>;
 }
 
 /// A record rebuilt from its fields' inputs: wires concatenated in field
@@ -158,14 +153,13 @@ impl<'s> StructWriter<'s> {
     }
 
     pub fn write<C: FieldCallbacks>(self, cb: &mut C) -> Result<StructMirror, C::Error> {
-        let owner = &self.source.name;
         let record = Record::Struct(self.source);
         let mut ins = Vec::new();
         let mut outs = Vec::new();
         let binds = record.binds();
         for (f, b) in self.source.fields.iter().zip(&binds) {
-            ins.push(cb.field_in(owner, f)?);
-            outs.push(cb.field_out(owner, f, &b.to_token_stream())?);
+            ins.push(cb.field_in(f)?);
+            outs.push(cb.field_out(f, &b.to_token_stream())?);
         }
         let name = &self.name;
         let wires: Vec<Wire> = ins.iter().flat_map(|i| i.wires.clone()).collect();
@@ -242,7 +236,6 @@ impl<'v> SumWriter<'v> {
     }
 
     pub fn write<C: FieldCallbacks>(self, cb: &mut C) -> Result<SumMirror, C::Error> {
-        let owner = &self.source.name;
         let name = &self.name;
         let src = &self.source_path;
         let mut variants = Vec::new();
@@ -258,8 +251,8 @@ impl<'v> SumWriter<'v> {
             let mut ins = Vec::new();
             let mut outs = Vec::new();
             for (f, b) in alt.fields.iter().zip(&binds) {
-                ins.push(cb.field_in(owner, f)?);
-                outs.push(cb.field_out(owner, f, &b.to_token_stream())?);
+                ins.push(cb.field_in(f)?);
+                outs.push(cb.field_out(f, &b.to_token_stream())?);
             }
             // A mirror alternative has one mirror field per source field; a
             // field that needs several wires is kept whole as a tuple would

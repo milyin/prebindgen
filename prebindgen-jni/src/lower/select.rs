@@ -11,18 +11,21 @@ use std::rc::Rc;
 
 use prebindgen_tools::{
     flat::flat::{Function, Param as FlatParam, TypeKind},
-    names, Input, Wire,
+    names, shape, Access, Input, Shape, Wire,
 };
 use proc_macro2::TokenStream;
 use quote::quote;
 
 use super::{
-    codec::{kt_ident, leaf_ident, Borrow, KtEnc},
-    err,
+    kotlin::{HandleSite, KtEnc},
+    kt_ident,
     leaf::{Leaf, LeafTy, Prim},
-    Class, Gen, Res,
+    leaf_ident, Dir,
 };
-use crate::decl::{ExpandParamDecl, ParamVariant};
+use crate::{
+    decl::{ExpandParamDecl, ParamVariant},
+    plan::{err, Class, Plan, Res},
+};
 
 /// A resolved selector parameter.
 #[derive(Clone)]
@@ -32,7 +35,8 @@ pub(crate) struct Selector {
     pub variants: Vec<SelVariant>,
     /// `Option<..>`: selector `-1` is `None`.
     pub optional: bool,
-    pub borrow: Borrow,
+    /// How the callee takes the value.
+    pub access: Access,
 }
 
 #[derive(Clone)]
@@ -42,7 +46,7 @@ pub(crate) enum SelVariant {
     Handle,
 }
 
-impl Gen<'_> {
+impl Plan<'_> {
     /// The selector for `param`, if an input expansion applies to it.
     pub(crate) fn selector(
         &self,
@@ -53,21 +57,17 @@ impl Gen<'_> {
             TypeKind::Optional(inner) => (&**inner, true),
             _ => (&param.ty, false),
         };
-        let (core, borrow) = match core.kind() {
-            TypeKind::Ref {
-                inner,
-                mutable: false,
-                ..
-            } => (&**inner, Borrow::Shared),
-            TypeKind::Ref { mutable: true, .. } => return Ok(None),
-            _ => (core, Borrow::Own),
+        let (name, access) = match shape(core, |n| self.types.get(n)) {
+            Ok(Shape::Declared { name, access, .. }) => (name, access),
+            Ok(Shape::Undeclared(name)) => (name, Access::Owned),
+            _ => return Ok(None),
         };
-        let TypeKind::Named { id, .. } = core.kind() else {
+        if access == Access::Exclusive {
             return Ok(None);
-        };
+        }
         let decl = match explicit {
             Some(d) => d,
-            None => match self.param_exp.get(&id.name) {
+            None => match self.param_exp.get(name) {
                 Some(d) => d,
                 None => return Ok(None),
             },
@@ -75,19 +75,18 @@ impl Gen<'_> {
         if decl.variants.len() == 1 && matches!(decl.variants[0], ParamVariant::Handle) {
             return Ok(None);
         }
-        let Some(class) = self.classes.get(&id.name).cloned() else {
+        let Some(class) = self.class(name).cloned() else {
             return err(format!(
-                "`{}`: an input expansion needs a declared class",
-                id.name
+                "`{name}`: an input expansion needs a declared class"
             ));
         };
         let mut variants = Vec::new();
         for v in &decl.variants {
             variants.push(match v {
-                ParamVariant::Build(f) => {
-                    let (func, callee) = self.resolve_fn(&f.fun)?;
-                    SelVariant::Build { func, callee }
-                }
+                ParamVariant::Build(f) => SelVariant::Build {
+                    func: f.fun.resolve(self.flat).map_err(crate::Error)?,
+                    callee: f.fun.callee(&self.q),
+                },
                 ParamVariant::Handle => SelVariant::Handle,
             });
         }
@@ -96,7 +95,7 @@ impl Gen<'_> {
             class,
             variants,
             optional,
-            borrow,
+            access,
         }))
     }
 
@@ -128,7 +127,7 @@ impl Gen<'_> {
                     for (j, fp) in func.params.iter().enumerate() {
                         let opt = fp.ty.optional();
                         out.extend(
-                            self.leaves(&opt, super::codec::Dir::In)?
+                            self.leaves(&opt, Dir::In)?
                                 .into_iter()
                                 .map(|l| l.under(&format!("{root}_{i}{j}"))),
                         );
@@ -156,7 +155,7 @@ impl Gen<'_> {
                 }
                 SelVariant::Handle => {
                     let e = format!("{p}{i}");
-                    out.extend(self.kt_encode_handle(&s.class, &e, s.borrow == Borrow::Own, cx));
+                    out.extend(self.kt_encode_handle(&s.class, &e, s.access == Access::Owned, cx));
                 }
             }
         }
@@ -170,12 +169,11 @@ impl Gen<'_> {
         consumed: bool,
         cx: &mut KtEnc,
     ) -> Vec<String> {
-        cx.handles.push(super::codec::HandleSite {
+        cx.handles.push(HandleSite {
             expr: expr.to_string(),
             nullable: true,
             consumed,
             class: class.clone(),
-            label: expr.to_string(),
         });
         vec![format!("({expr}?.ptr ?: 0L)")]
     }
@@ -207,16 +205,16 @@ impl Gen<'_> {
                         }
                         _ => quote!(#callee(#(#args),*)),
                     };
-                    match s.borrow {
-                        Borrow::Own => built,
+                    match s.access {
+                        Access::Owned => built,
                         _ => quote!(::prebindgen_jni_runtime::MaybeOwned::Owned(#built)),
                     }
                 }
                 SelVariant::Handle => {
                     let w = leaf_ident(&root, &i.to_string());
                     wires.push(Wire::new(w.clone(), Prim::J.rs()));
-                    match s.borrow {
-                        Borrow::Own => quote!(::prebindgen_jni_runtime::take_handle::<#t>(#w)?),
+                    match s.access {
+                        Access::Owned => quote!(::prebindgen_jni_runtime::take_handle::<#t>(#w)?),
                         _ => quote!(::prebindgen_jni_runtime::MaybeOwned::Borrowed(
                             ::prebindgen_jni_runtime::borrow_handle::<#t>(#w)?
                         )),
@@ -240,8 +238,8 @@ impl Gen<'_> {
             __s => return ::core::result::Result::Err(::std::format!(#msg, __s)),
         });
         let input = Input::fallible(wires, expr);
-        Ok(match (s.borrow, s.optional) {
-            (Borrow::Own, _) => input,
+        Ok(match (s.access, s.optional) {
+            (Access::Owned, _) => input,
             (_, false) => input.with_pass(quote!(&*#name)),
             (_, true) => input.with_pass(quote!(#name.as_deref())),
         })

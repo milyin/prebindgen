@@ -59,7 +59,9 @@
 //! without one must be declared [`CbindgenBuilder::panic`].
 
 mod builder;
-mod gen;
+mod lower;
+mod plan;
+mod write;
 
 use std::path::{Path, PathBuf};
 

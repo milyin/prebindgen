@@ -75,7 +75,7 @@ runtime crate, not the generator.
 | `prebindgen` | Base: reads what `#[prebindgen]` captured and hands out `(syn::Item, SourceLocation)` pairs via `Source` | — |
 | `prebindgen-proc-macro` | The `#[prebindgen]` macro itself | `prebindgen` |
 | `prebindgen-flat` | The flat model: parses the captured stream into one flat namespace | `prebindgen` |
-| `prebindgen-tools` | Building blocks for language adapters: wrapper writers, conversion composition, source qualification, the generated-file writer | `prebindgen-flat`, `prebindgen` |
+| `prebindgen-tools` | Building blocks for language adapters: per-element generators, recursion helpers, source qualification, the generated-file writer | `prebindgen-flat`, `prebindgen` |
 | `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) | `prebindgen-tools` |
 | `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-tools` |
 | `prebindgen-c-runtime` | Leaf, no deps — traits the generated C code calls at run time | — |
@@ -86,11 +86,12 @@ A binding crate's `build.rs` depends on an adapter (`prebindgen-c` or
 instead. The generator itself — `syn`, `quote`, `prettyplease` — never ends up
 in a shipped library's regular dependency graph.
 
-An adapter reads the flat model and decides, element by element, how each item
-crosses; `prebindgen-tools` writes the Rust for it. A new language adapter
-implements a few callback traits — how a parameter becomes wires and back, how
-a result leaves — and gets wrapper functions, mirror structs and closures
-written for it.
+An adapter resolves its build script's declarations against the flat model
+into a plan, then writes the plan element by element, calling a generator from
+`prebindgen-tools` for each Rust item. A generator asks the adapter, through a
+small callback trait, how each value crosses — how a parameter becomes wires
+and back, how a result leaves — and writes the wrapper function, mirror struct
+or closure around the answers.
 
 ## Usage
 

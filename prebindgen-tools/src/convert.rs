@@ -18,7 +18,7 @@ use prebindgen_flat::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use crate::Qualifier;
+use crate::{Input, Output, Qualifier};
 
 /// A function a declaration refers to: a flat item by name, or a
 /// binding-local path with its signature stated.
@@ -325,6 +325,60 @@ impl Stage {
             quote!(#call.map_err(|__e| ::std::string::ToString::to_string(&__e))?)
         } else {
             call
+        }
+    }
+}
+
+impl Stage {
+    /// The function this stage calls, when it calls one.
+    pub fn function(&self) -> Option<&FnRef> {
+        match &self.how {
+            How::Call { fun, .. } => Some(fun),
+            _ => None,
+        }
+    }
+
+    /// This input stage over its representation's input: the wires `repr`
+    /// reads become the converted value. The representation is bound to `r`
+    /// and `check` (statements, possibly using `?`) runs on it first.
+    pub fn decode(
+        &self,
+        q: &Qualifier<'_>,
+        target: &TypeRef,
+        repr: Input,
+        r: &syn::Ident,
+        check: TokenStream,
+    ) -> Input {
+        let applied = self.apply(q, target, &r.to_token_stream());
+        let fallible = repr.fallible || self.fallible || !check.is_empty();
+        let e = repr.expr;
+        Input {
+            wires: repr.wires,
+            expr: quote!({ let #r = #e; #check #applied }),
+            fallible,
+            pass: None,
+        }
+    }
+
+    /// This output stage ahead of its representation's output: `value`
+    /// becomes the representation, bound to `r`, which `repr` reads. `check`
+    /// runs on it in between.
+    pub fn encode(
+        &self,
+        q: &Qualifier<'_>,
+        target: &TypeRef,
+        value: &TokenStream,
+        r: &syn::Ident,
+        check: TokenStream,
+        repr: Output,
+    ) -> Output {
+        let applied = self.apply(q, target, value);
+        let fallible = repr.fallible || self.fallible || !check.is_empty();
+        let e = &repr.expr;
+        Output {
+            wires: repr.wires.clone(),
+            expr: quote!({ let #r = #applied; #check #e }),
+            fallible,
         }
     }
 }

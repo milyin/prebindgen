@@ -5,7 +5,8 @@ use prebindgen_tools::flat::Flat;
 
 use crate::{
     decl::{ConvertDecl, ExpandDecl, IgnoreDecl, PackageDecl},
-    gen, Error, Generation,
+    plan::Plan,
+    write, Error, Generation,
 };
 
 pub(crate) type NameHook = Box<dyn Fn(&str, &str) -> String>;
@@ -210,6 +211,7 @@ impl JniGenBuilder {
             .items(self.items.clone())
             .build()
             .map_err(|e| Error(e.to_string()))?;
-        gen::generate(&self, &flat)
+        let plan = Plan::new(&self, &flat)?;
+        write::write(&plan)
     }
 }

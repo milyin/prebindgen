@@ -3,7 +3,7 @@
 use prebindgen::SourceLocation;
 use prebindgen_tools::{flat::Flat, Conversion};
 
-use crate::{gen, Cbindgen, Error};
+use crate::{plan::Plan, write, Cbindgen, Error};
 
 /// A name mangler over one component.
 pub(crate) type Mangle1 = Box<dyn Fn(&str) -> String>;
@@ -274,7 +274,9 @@ impl CbindgenBuilder {
             .items(self.items.clone())
             .build()
             .map_err(|e| Error(e.to_string()))?;
-        let file = gen::generate(&self, &flat)?;
-        Ok(Cbindgen { file })
+        let plan = Plan::new(&self, &flat)?;
+        Ok(Cbindgen {
+            file: write::write(&plan)?,
+        })
     }
 }

@@ -236,13 +236,14 @@ pub(crate) unsafe fn __cbg_in_Shape(
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         v.as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+    let __valid = (__tag as i64) >= 0 && (__tag as i64) < 4i64;
+    if !__valid {
         return ::core::result::Result::Err(
             ::std::format!("invalid tag {} for `shape_t` (expected 0..4)", __tag),
         );
     }
     let v = v.assume_init();
-    (|| -> ::core::result::Result<example_flat::Shape, ::std::string::String> {
+    (|| -> ::core::result::Result<_, ::std::string::String> {
         ::core::result::Result::Ok(
             match v {
                 shape_t::Empty => example_flat::Shape::Empty,
@@ -332,7 +333,8 @@ pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         (*this_).as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+    let __valid = (__tag as i64) >= 0 && (__tag as i64) < 4i64;
+    if !__valid {
         return;
     }
     match (*this_).assume_init_mut() {
@@ -373,7 +375,7 @@ pub struct drawing_t {
 pub(crate) unsafe fn __cbg_in_Drawing(
     v: drawing_t,
 ) -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
-    (|| -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
+    (|| -> ::core::result::Result<_, ::std::string::String> {
         ::core::result::Result::Ok({
             let drawing_t { id, shape } = v;
             example_flat::Drawing {
@@ -536,13 +538,14 @@ pub(crate) unsafe fn __cbg_in_Note(
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         v.as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 5i64) {
+    let __valid = (__tag as i64) >= 0 && (__tag as i64) < 5i64;
+    if !__valid {
         return ::core::result::Result::Err(
             ::std::format!("invalid tag {} for `note_t` (expected 0..5)", __tag),
         );
     }
     let v = v.assume_init();
-    (|| -> ::core::result::Result<example_flat::Note, ::std::string::String> {
+    (|| -> ::core::result::Result<_, ::std::string::String> {
         ::core::result::Result::Ok(
             match v {
                 note_t::Silent => example_flat::Note::Silent,
@@ -588,8 +591,8 @@ pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<
             }
             example_flat::Note::After(__f0) => {
                 let __f0 = {
-                    let __cbg_value = __f0;
-                    example_flat::millis_to_raw(&__cbg_value)
+                    let __cbg_value = example_flat::millis_to_raw(&__f0);
+                    __cbg_value
                 };
                 note_t::After(__f0)
             }
@@ -630,7 +633,8 @@ pub unsafe extern "C" fn note_drop(this_: *mut ::core::mem::MaybeUninit<note_t>)
     let __tag: ::core::ffi::c_int = ::core::ptr::read(
         (*this_).as_ptr() as *const ::core::ffi::c_int,
     );
-    if !((__tag as i64) >= 0 && (__tag as i64) < 5i64) {
+    let __valid = (__tag as i64) >= 0 && (__tag as i64) < 5i64;
+    if !__valid {
         return;
     }
     match (*this_).assume_init_mut() {
@@ -962,13 +966,12 @@ pub unsafe extern "C" fn calculator_merge(
     }
     let a = match (|| -> ::core::result::Result<_, ::std::string::String> {
         ::core::result::Result::Ok({
-            let __p = a;
-            if __p.is_null() {
+            if a.is_null() {
                 return ::core::result::Result::Err(
                     ::std::string::String::from("null Calculator handle passed by value"),
                 );
             }
-            *::std::boxed::Box::from_raw(__p as *mut example_flat::Calculator)
+            *::std::boxed::Box::from_raw(a as *mut example_flat::Calculator)
         })
     })() {
         ::core::result::Result::Ok(__v) => __v,
@@ -981,13 +984,12 @@ pub unsafe extern "C" fn calculator_merge(
     };
     let b = match (|| -> ::core::result::Result<_, ::std::string::String> {
         ::core::result::Result::Ok({
-            let __p = b;
-            if __p.is_null() {
+            if b.is_null() {
                 return ::core::result::Result::Err(
                     ::std::string::String::from("null Calculator handle passed by value"),
                 );
             }
-            *::std::boxed::Box::from_raw(__p as *mut example_flat::Calculator)
+            *::std::boxed::Box::from_raw(b as *mut example_flat::Calculator)
         })
     })() {
         ::core::result::Result::Ok(__v) => __v,
@@ -1042,13 +1044,12 @@ pub unsafe extern "C" fn calculator_absorb(
     }
     let a = match (|| -> ::core::result::Result<_, ::std::string::String> {
         ::core::result::Result::Ok({
-            let __p = a;
-            if __p.is_null() {
+            if a.is_null() {
                 return ::core::result::Result::Err(
                     ::std::string::String::from("null Calculator handle passed by value"),
                 );
             }
-            *::std::boxed::Box::from_raw(__p as *mut example_flat::Calculator)
+            *::std::boxed::Box::from_raw(a as *mut example_flat::Calculator)
         })
     })() {
         ::core::result::Result::Ok(__v) => __v,

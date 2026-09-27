@@ -1,5 +1,5 @@
-//! Output deliveries: a value handed to Kotlin as a *list of parameters* —
-//! a builder's, a callback's, an error handler's.
+//! Deliveries: a value handed to Kotlin as a *list of parameters* — a
+//! builder's, a callback's, an error handler's.
 //!
 //! A value delivers as one typed parameter unless its type has an output
 //! expansion (`expand_return!`): then it delivers as its fields, each field
@@ -10,22 +10,24 @@
 
 use prebindgen_tools::{
     flat::flat::{Struct, Type as FlatType, TypeKind, TypeRef},
-    names, Output, Record, Wire,
+    names, ClosureCallbacks, ClosureWriter, Output, Record, Shape, Wire,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 use super::{
-    codec::{kt_ident, Dir, Kind},
-    err,
-    leaf::{join, method_desc, Leaf},
-    Gen, Res,
+    field_seg, kt_ident,
+    leaf::{join, method_desc, Leaf, LeafTy, Prim},
+    leaf_ident, Dir,
 };
-use crate::decl::{ExpandReturnDecl, ReturnField};
+use crate::{
+    decl::{ExpandReturnDecl, ReturnField},
+    plan::{err, ClassKind, Plan, Res, Setting},
+};
 
 /// One Kotlin-visible parameter of a delivery.
 #[derive(Clone, Debug)]
-pub(crate) struct Param {
+pub(crate) struct DParam {
     pub name: String,
     pub kt: String,
     /// Builds the parameter's value from the raw leaves (named by
@@ -37,7 +39,7 @@ pub(crate) struct Param {
 
 /// A delivered value: its parameters, its raw leaves and the Rust encoding.
 pub(crate) struct Delivery {
-    pub params: Vec<Param>,
+    pub params: Vec<DParam>,
     pub leaves: Vec<Leaf>,
     pub output: Output,
 }
@@ -64,7 +66,7 @@ fn nullable(kt: String, gated: bool) -> String {
     }
 }
 
-impl Gen<'_> {
+impl Plan<'_> {
     /// The expansion that applies to a value of `ty`: the explicit one, else
     /// the type's own; `None` when it would only hand over the value itself.
     pub(crate) fn expansion<'e>(
@@ -84,7 +86,8 @@ impl Gen<'_> {
     }
 
     /// Deliver `value` (of `ty`) as parameters named under `name`, with raw
-    /// leaves under `root`.
+    /// leaves under `root`. `gates` are the presence flags every parameter
+    /// hangs on; `inline` spreads a data class's fields.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn deliver(
         &self,
@@ -102,28 +105,21 @@ impl Gen<'_> {
         if let TypeKind::Optional(inner) = core.kind() {
             let (inner_core, _, _) = peel(inner, quote!(__unused));
             if self.expansion(inner_core, explicit).is_some() {
-                let present = Leaf::new(super::leaf::LeafTy::Prim(super::leaf::Prim::Z))
-                    .under(&join(root, "_present"));
+                let present = Leaf::new(LeafTy::Prim(Prim::Z)).under(&join(root, "_present"));
                 let x = format_ident!("__x{}", depth);
                 let x_value = if borrowed { quote!(&#x) } else { quote!(#x) };
                 let mut g = gates.to_vec();
                 g.push(raw_name(&present));
                 let inner_d =
                     self.deliver(inner, x_value, root, name, explicit, &g, false, depth + 1)?;
-                let defaults: Vec<TokenStream> =
-                    inner_d.leaves.iter().map(Leaf::rs_default).collect();
+                let defaults = inner_d.leaves.iter().map(Leaf::rs_default);
                 let bind = inner_d.output.bind();
                 let names: Vec<&syn::Ident> =
                     inner_d.output.wires.iter().map(|w| &w.name).collect();
-                let pw = super::codec::leaf_ident(root, "_present");
-                let mut wires = vec![Wire::new(pw, present.rs())];
+                let mut wires = vec![Wire::new(leaf_ident(root, "_present"), present.rs())];
                 wires.extend(inner_d.output.wires.clone());
-                let scrutinee = if borrowed {
-                    quote!(#v.as_ref())
-                } else {
-                    v.clone()
-                };
-                let out = Output {
+                let scrutinee = if borrowed { quote!(#v.as_ref()) } else { v };
+                let output = Output {
                     wires,
                     expr: quote!(match #scrutinee {
                         ::core::option::Option::Some(#x) => { #bind (1u8, #(#names),*) }
@@ -136,7 +132,7 @@ impl Gen<'_> {
                 return Ok(Delivery {
                     params: inner_d.params,
                     leaves,
-                    output: out,
+                    output,
                 });
             }
         }
@@ -144,13 +140,19 @@ impl Gen<'_> {
             return self.expanded(core, e, v, borrowed, root, name, gates, depth);
         }
         if inline {
-            if let Ok(Kind::Record(_, s)) = self.kind(core) {
-                let v = if borrowed {
-                    quote!(::core::clone::Clone::clone(#v))
-                } else {
-                    v
-                };
-                return self.fields_of(core, s, v, root, name, gates, depth);
+            if let Shape::Declared {
+                setting: Setting::Class(c),
+                ..
+            } = self.shape(core)?
+            {
+                if let ClassKind::Data { .. } = c.kind {
+                    let v = if borrowed {
+                        quote!(::core::clone::Clone::clone(#v))
+                    } else {
+                        v
+                    };
+                    return self.fields_of(self.struct_of(c)?, v, root, name, gates, depth);
+                }
             }
         }
         self.plain(ty, value, root, name, gates, depth)
@@ -186,7 +188,7 @@ impl Gen<'_> {
             }
         });
         Ok(Delivery {
-            params: vec![Param {
+            params: vec![DParam {
                 name: pname,
                 kt: nullable(self.kt_type(ty)?, gated),
                 decode,
@@ -198,10 +200,8 @@ impl Gen<'_> {
     }
 
     /// The fields of a struct value, each delivered (inlining data classes).
-    #[allow(clippy::too_many_arguments)]
     fn fields_of(
         &self,
-        ty: &TypeRef,
         s: &Struct,
         value: TokenStream,
         root: &str,
@@ -210,15 +210,13 @@ impl Gen<'_> {
         depth: usize,
     ) -> Res<Delivery> {
         let head = self.q.path(&s.name);
-        let _ = ty;
-        let record = Record::Struct(s);
         let binds: Vec<syn::Ident> = (0..s.fields.len())
             .map(|i| format_ident!("__f{}_{}", depth, i))
             .collect();
-        let pat = record.pattern(&head, &binds);
+        let pat = Record::Struct(s).pattern(&head, &binds);
         let mut parts = Vec::new();
         for (f, b) in s.fields.iter().zip(&binds) {
-            let seg = super::codec::field_seg(f);
+            let seg = field_seg(f);
             parts.push(self.deliver(
                 &f.ty,
                 b.to_token_stream(),
@@ -255,7 +253,8 @@ impl Gen<'_> {
         for field in &e.fields {
             match field {
                 ReturnField::Getter(g) => {
-                    let (func, callee) = self.resolve_fn(&g.fun)?;
+                    let func = g.fun.resolve(self.flat).map_err(crate::Error)?;
+                    let callee = g.fun.callee(&self.q);
                     let fname = g.name.clone().unwrap_or_else(|| {
                         let n = names::bare(&func.name);
                         n.strip_prefix(&format!("{type_snake}_"))
@@ -270,29 +269,17 @@ impl Gen<'_> {
                         None => return err(format!("getter `{}` takes no argument", func.name)),
                     };
                     let seg = names::snake(&fname);
+                    let (r, n) = (join(root, &seg), join(name, &seg));
                     // A field of the expanded type itself is that value, not
                     // another expansion of it.
-                    if core_name(&func.ret).as_deref() == Some(type_name.as_str()) {
-                        parts.push(self.plain(
-                            &func.ret,
-                            quote!(#callee(#arg)),
-                            &join(root, &seg),
-                            &join(name, &seg),
-                            gates,
-                            depth + 1,
-                        )?);
-                        continue;
-                    }
-                    parts.push(self.deliver(
-                        &func.ret,
-                        quote!(#callee(#arg)),
-                        &join(root, &seg),
-                        &join(name, &seg),
-                        None,
-                        gates,
-                        false,
-                        depth + 1,
-                    )?);
+                    parts.push(
+                        if core_name(&func.ret).as_deref() == Some(type_name.as_str()) {
+                            self.plain(&func.ret, quote!(#callee(#arg)), &r, &n, gates, depth + 1)?
+                        } else {
+                            let call = quote!(#callee(#arg));
+                            self.deliver(&func.ret, call, &r, &n, None, gates, false, depth + 1)?
+                        },
+                    );
                 }
                 ReturnField::Handle => {
                     let handle = if borrowed {
@@ -300,16 +287,9 @@ impl Gen<'_> {
                     } else {
                         quote!(#v)
                     };
-                    let d = self.plain(
-                        ty,
-                        handle,
-                        &join(root, "handle"),
-                        &join(name, "handle"),
-                        gates,
-                        depth + 1,
-                    )?;
+                    let (r, n) = (join(root, "handle"), join(name, "handle"));
                     deferred.push(parts.len());
-                    parts.push(d);
+                    parts.push(self.plain(ty, handle, &r, &n, gates, depth + 1)?);
                 }
                 ReturnField::Form { fun, consume } => {
                     let f = self.flat.function(fun).ok_or_else(|| {
@@ -331,16 +311,14 @@ impl Gen<'_> {
                     };
                     let sv = format_ident!("__s{}", depth);
                     prelude.extend(quote!(let #sv = #callee(#arg);));
-                    let d = self.fields_of(
-                        &f.ret,
+                    parts.push(self.fields_of(
                         s,
                         sv.to_token_stream(),
                         root,
                         name,
                         gates,
                         depth + 1,
-                    )?;
-                    parts.push(d);
+                    )?);
                 }
             }
         }
@@ -353,34 +331,26 @@ impl Gen<'_> {
     pub(crate) fn callback_args(&self, args: &[TypeRef]) -> Res<Vec<Delivery>> {
         args.iter()
             .enumerate()
-            .map(|(i, a)| {
-                let name = self.arg_name(a, i);
-                self.deliver(
-                    a,
-                    format_ident!("__a{}", i).to_token_stream(),
-                    &format!("a{i}"),
-                    &name,
-                    None,
-                    &[],
-                    false,
-                    1,
-                )
-            })
+            .map(|(i, a)| self.callback_arg(i, a, &format_ident!("__a{}", i).to_token_stream()))
             .collect()
     }
 
-    fn arg_name(&self, ty: &TypeRef, i: usize) -> String {
-        match self.kind(ty) {
-            Ok(
-                Kind::Handle { class, .. }
-                | Kind::Enum(class)
-                | Kind::Record(class, _)
-                | Kind::Sum(class, _),
-            ) => names::snake(&class.rust),
-            Ok(Kind::Converted(c)) => names::snake(&c.name),
-            Ok(Kind::Scalar(k)) => k.as_str().to_string(),
+    fn callback_arg(&self, i: usize, ty: &TypeRef, value: &TokenStream) -> Res<Delivery> {
+        let name = match self.shape(ty) {
+            Ok(Shape::Declared { name, .. }) => names::snake(name),
+            Ok(Shape::Scalar(k)) => k.as_str().to_string(),
             _ => format!("arg{i}"),
-        }
+        };
+        self.deliver(
+            ty,
+            value.clone(),
+            &format!("a{i}"),
+            &name,
+            None,
+            &[],
+            false,
+            1,
+        )
     }
 
     fn callback_base(&self, ty: &TypeRef) -> Res<String> {
@@ -390,7 +360,7 @@ impl Gen<'_> {
         if args.is_empty() {
             return Ok("Unit".to_string());
         }
-        Ok(args.iter().map(type_base).collect::<Vec<_>>().join(""))
+        Ok(args.iter().map(type_base).collect())
     }
 
     /// The user-facing callback interface of `ty`.
@@ -411,116 +381,49 @@ impl Gen<'_> {
         ))
     }
 
-    /// The Rust closure a callback object becomes.
+    /// The Rust closure a callback object `w` becomes: every call delivers
+    /// the arguments through one upcall.
     pub(crate) fn callback_closure(
         &self,
         ty: &TypeRef,
         args: &[TypeRef],
         w: &syn::Ident,
     ) -> Res<TokenStream> {
-        let deliveries = self.callback_args(args)?;
-        let leaves: Vec<Leaf> = deliveries.iter().flat_map(|d| d.leaves.clone()).collect();
+        let leaves: Vec<Leaf> = self
+            .callback_args(args)?
+            .into_iter()
+            .flat_map(|d| d.leaves)
+            .collect();
         let desc = method_desc(&leaves, "V");
         let frame = 32 + leaves.len() as i32 * 2;
-        let arg_names: Vec<syn::Ident> =
-            (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
-        let arg_tys: Vec<TokenStream> = args.iter().map(|a| self.q.ty_elided(a)).collect();
-        let binds: Vec<TokenStream> = deliveries.iter().map(|d| d.output.bind()).collect();
-        let values: Vec<TokenStream> = deliveries
-            .iter()
-            .flat_map(|d| {
-                d.output
-                    .wires
-                    .iter()
-                    .zip(&d.leaves)
-                    .map(|(wr, l)| l.jvalue(&wr.name.to_token_stream()))
-            })
-            .collect();
         let what = format!("callback {ty}");
-        Ok(quote!({
-            let __up = ::prebindgen_jni_runtime::Upcall::new(env, &#w, "run", #desc, #frame)?;
-            move |#(#arg_names: #arg_tys),*| {
-                let __r = __up.call_void(|env| {
-                    #(#binds)*
-                    ::core::result::Result::Ok(::std::vec![#(#values),*])
-                });
-                if let ::core::result::Result::Err(__e) = __r {
-                    ::prebindgen_jni_runtime::report_callback_error(#what, &__e);
+        ClosureWriter::new(args)
+            .setup(quote!(let __up = ::prebindgen_jni_runtime::Upcall::new(env, &#w, "run", #desc, #frame)?;))
+            .on_error(quote!(::prebindgen_jni_runtime::report_callback_error(#what, &__err);))
+            .write(&self.q, &mut CallbackArgs(self), |binds, outs| {
+                let values = outs
+                    .iter()
+                    .flat_map(|o| &o.wires)
+                    .zip(&leaves)
+                    .map(|(wr, l)| l.jvalue(&wr.name.to_token_stream()));
+                quote! {
+                    __up.call_void(|env| {
+                        #binds
+                        ::core::result::Result::Ok(::std::vec![#(#values),*])
+                    })?;
                 }
-            }
-        }))
-    }
-
-    /// Emit the Kotlin interfaces of a callback type, once.
-    pub(crate) fn ensure_callback(&mut self, ty: &TypeRef) -> Res<()> {
-        let TypeKind::Callback { args } = ty.kind() else {
-            return Ok(());
-        };
-        let fqn = self.callback_fqn(ty)?;
-        if !self.kt_claimed.insert(fqn.clone()) {
-            return Ok(());
-        }
-        let name = fqn.rsplit('.').next().unwrap().to_string();
-        let raw = format!("{name}Raw");
-        let deliveries = self.callback_args(args)?;
-        let params: Vec<&Param> = deliveries.iter().flat_map(|d| &d.params).collect();
-        let leaves: Vec<&Leaf> = deliveries.iter().flat_map(|d| &d.leaves).collect();
-        let sig = params
-            .iter()
-            .map(|p| format!("{}: {}", p.name, p.kt))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let raw_sig = leaves
-            .iter()
-            .map(|l| format!("{}: {}", raw_name(l), l.kt_raw()))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let raw_args = leaves
-            .iter()
-            .map(|l| raw_name(l))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let locals: Vec<String> = params
-            .iter()
-            .enumerate()
-            .map(|(i, p)| format!("        val __p{i} = {}", p.decode))
-            .collect();
-        let call_args = (0..params.len())
-            .map(|i| format!("__p{i}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let closes: Vec<String> = params
-            .iter()
-            .enumerate()
-            .filter_map(|(i, p)| {
-                p.close
-                    .as_ref()
-                    .map(|c| c.replacen(&p.name, &format!("__p{i}"), 1))
             })
-            .collect();
-        let body = if closes.is_empty() {
-            format!("{}\n        run({call_args})", locals.join("\n"))
-        } else {
-            format!(
-                "{}\n        try {{\n            run({call_args})\n        }} finally {{\n            {}\n        }}",
-                locals.join("\n"),
-                closes.join("\n            ")
-            )
-        };
-        let lambda_params = if raw_args.is_empty() {
-            String::new()
-        } else {
-            format!(" {raw_args} ->")
-        };
-        let body = body.replace("\n        ", "\n            ");
-        let text = format!(
-            "public fun interface {raw} {{\n    public fun run({raw_sig})\n}}\n\n\
-             public fun interface {name} {{\n    public fun run({sig})\n\n\
-             \x20   public fun asRaw(): {raw} =\n        {raw} {{{lambda_params}\n    {body}\n        }}\n}}\n"
-        );
-        let pkg = self.base_pkg.clone();
-        self.kt_push(&pkg, text);
-        Ok(())
+    }
+}
+
+/// A callback's arguments, each delivered.
+struct CallbackArgs<'p, 'f>(&'p Plan<'f>);
+
+impl ClosureCallbacks for CallbackArgs<'_, '_> {
+    type Error = crate::Error;
+
+    fn arg(&mut self, index: usize, ty: &TypeRef, value: &TokenStream) -> Res<Output> {
+        Ok(self.0.callback_arg(index, ty, value)?.output)
     }
 }
 
@@ -566,8 +469,8 @@ fn core_name(ty: &TypeRef) -> Option<String> {
 /// they consume the value the others read), wires in declaration order.
 fn concat(prelude: TokenStream, parts: Vec<Delivery>, deferred: Vec<usize>) -> Delivery {
     let fallible = parts.iter().any(|p| p.output.fallible);
-    let mut binds: Vec<TokenStream> = Vec::new();
-    let mut late: Vec<TokenStream> = Vec::new();
+    let mut binds = Vec::new();
+    let mut late = Vec::new();
     for (i, p) in parts.iter().enumerate() {
         if deferred.contains(&i) {
             late.push(p.output.bind());
