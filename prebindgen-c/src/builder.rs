@@ -1,7 +1,8 @@
 //! The declaration surface a build script drives.
 
 use prebindgen::SourceLocation;
-use prebindgen_tools::{flat::Flat, Conversion};
+use prebindgen_flat::Flat;
+use prebindgen_tools::Conversion;
 
 use crate::{plan::Plan, write, Cbindgen, Error};
 

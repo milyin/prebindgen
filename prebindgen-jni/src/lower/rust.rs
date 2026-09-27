@@ -1,8 +1,8 @@
 //! The Rust side of the codec: wires rebuilt into a value, and a value
 //! taken apart into wires.
 
+use prebindgen_flat::flat::{ScalarKind, TypeKind, TypeRef};
 use prebindgen_tools::{
-    flat::flat::{ScalarKind, TypeKind, TypeRef},
     names, record_in, record_out, Access, Holding, Input, Output, Record, Shape, Wire,
 };
 use proc_macro2::TokenStream;

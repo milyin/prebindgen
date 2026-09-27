@@ -8,7 +8,7 @@
 //! adapter crate instead.
 //!
 //! An adapter reads what `#[prebindgen]` captured as [`Flat`](prebindgen_flat::Flat), the
-//! source model from `prebindgen-flat` (re-exported here as `flat`). It turns
+//! source model from `prebindgen-flat`, a dependency of the adapter's own. It turns
 //! its build script's declarations into a plan of the elements to bind, then writes each
 //! element: the Rust wrapper through a generator here, and whatever the
 //! destination language needs beside it (Kotlin text, for the JNI adapter)
@@ -84,9 +84,9 @@
 //!
 //! ```
 //! use prebindgen::SourceLocation;
-//! use prebindgen_tools::{flat::Flat, FunctionCallbacks, FunctionWriter,
+//! use prebindgen_flat::{flat::TypeRef, Flat};
+//! use prebindgen_tools::{FunctionCallbacks, FunctionWriter,
 //!     Input, Qualifier, Return, RustFile, Wire, check_supported};
-//! use prebindgen_tools::flat::flat::TypeRef;
 //! use proc_macro2::TokenStream;
 //! use quote::quote;
 //!
@@ -130,8 +130,6 @@
 // exported item explicitly, independently of the implementation layout.
 mod api;
 
-/// The flat source model read by language adapters.
-pub use prebindgen_flat as flat;
 // Exported macros must reach syn through this crate, including when an adapter
 // re-exports them. Keep this dependency export here with the rest of the API.
 #[doc(hidden)]
@@ -169,8 +167,8 @@ pub use syn as __syn;
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{flat::{Flat, flat::{TypeKind, TypeRef}},
-///     ClosureCallbacks, ClosureWriter, Output, Qualifier, Wire};
+/// use prebindgen_flat::{Flat, flat::{TypeKind, TypeRef}};
+/// use prebindgen_tools::{ClosureCallbacks, ClosureWriter, Output, Qualifier, Wire};
 /// use proc_macro2::TokenStream;
 /// use quote::{format_ident, quote};
 ///
@@ -222,8 +220,8 @@ pub mod closure {
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{convert, fun, flat::Flat, Input, Output,
-///     Qualifier, Wire, ident};
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{convert, fun, Input, Output, Qualifier, Wire, ident};
 /// use quote::quote;
 /// let source = syn::parse_file(r#"
 ///     pub struct Millis(pub u64);
@@ -367,7 +365,8 @@ pub mod names {
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{flat::Flat, Qualifier};
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::Qualifier;
 /// use quote::quote;
 ///
 /// let source = syn::parse_file(
@@ -422,8 +421,9 @@ pub mod qualify {
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{flat::Flat, flat::flat::{Field, Type},
-///     FieldCallbacks, Input, Output, Record, StructWriter, Wire, ident, record_in};
+/// use prebindgen_flat::{Flat, flat::{Field, Type}};
+/// use prebindgen_tools::{FieldCallbacks, Input, Output, Record, StructWriter, Wire,
+///     ident, record_in};
 /// use proc_macro2::TokenStream;
 /// use quote::quote;
 ///
@@ -499,7 +499,8 @@ pub mod record {
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{flat::Flat, shape, Access, Shape};
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{shape, Access, Shape};
 /// let source = syn::parse_file("pub struct Payload; pub fn send(value: Option<&Payload>) {}").unwrap();
 /// let flat = Flat::builder()
 ///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))

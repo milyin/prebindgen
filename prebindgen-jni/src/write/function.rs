@@ -2,8 +2,8 @@
 //! its Kotlin wrapper — all three read from the same [`Binding`], so the
 //! extern's parameter list and the declaration cannot disagree.
 
+use prebindgen_flat::flat::{TypeKind, TypeRef};
 use prebindgen_tools::{
-    flat::flat::{TypeKind, TypeRef},
     function::{error_ident, result_ident},
     names, FunctionCallbacks, FunctionWriter, Holding, Input, Output, Return, Shape, Wire,
 };

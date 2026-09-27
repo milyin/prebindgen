@@ -23,7 +23,8 @@ use quote::quote;
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{flat::Flat, Qualifier};
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::Qualifier;
 /// use quote::quote;
 ///
 /// let source = syn::parse_file(

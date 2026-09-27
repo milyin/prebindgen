@@ -1,6 +1,6 @@
 //! The Kotlin interfaces bindings share, and the runtime prelude.
 
-use prebindgen_tools::flat::flat::TypeKind;
+use prebindgen_flat::flat::TypeKind;
 
 use crate::{
     lower::{
@@ -264,7 +264,7 @@ fn lambda(raws: &[String]) -> String {
 
 /// A callback type's interfaces: the typed one the user implements, and
 /// the raw one Rust calls, into which `asRaw()` adapts it.
-fn callback(plan: &Plan, ty: &prebindgen_tools::flat::flat::TypeRef) -> Res<String> {
+fn callback(plan: &Plan, ty: &prebindgen_flat::flat::TypeRef) -> Res<String> {
     let TypeKind::Callback { args } = ty.kind() else {
         unreachable!("a callback type");
     };

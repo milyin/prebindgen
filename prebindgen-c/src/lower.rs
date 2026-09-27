@@ -14,10 +14,9 @@
 //! * a **callback argument** is lent for the duration of the call
 //!   ([`Plan::callback_arg`]).
 
+use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef};
 use prebindgen_tools::{
-    flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef},
-    function::result_ident,
-    names, shape, Access, Holding, Input, Output, Return, Shape, Wire,
+    function::result_ident, names, shape, Access, Holding, Input, Output, Return, Shape, Wire,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};

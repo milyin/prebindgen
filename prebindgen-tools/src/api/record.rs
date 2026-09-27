@@ -217,8 +217,8 @@ pub struct SumMirror {
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_tools::{flat::{Flat, flat::{Field, Type}},
-///     FieldCallbacks, Input, Output, SumWriter, Wire, ident};
+/// use prebindgen_flat::{Flat, flat::{Field, Type}};
+/// use prebindgen_tools::{FieldCallbacks, Input, Output, SumWriter, Wire, ident};
 /// use proc_macro2::TokenStream;
 /// use quote::{format_ident, quote};
 ///

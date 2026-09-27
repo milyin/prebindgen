@@ -20,13 +20,11 @@ use std::{
     rc::Rc,
 };
 
-use prebindgen_tools::{
-    flat::{
-        flat::{Function, Param, Type as FlatType, TypeKind, TypeRef},
-        Flat,
-    },
-    names, FnRef, Qualifier, ResolvedConversion,
+use prebindgen_flat::{
+    flat::{Function, Param, Type as FlatType, TypeKind, TypeRef},
+    Flat,
 };
+use prebindgen_tools::{names, FnRef, Qualifier, ResolvedConversion};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 

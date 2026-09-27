@@ -1,13 +1,12 @@
 //! Writing the plan: every element through its generator, in order.
 
+use prebindgen_flat::{
+    flat::{Field, Function, ScalarKind, Type as FlatType, TypeKind, TypeRef},
+    Emit,
+};
 use prebindgen_tools::{
-    flat::{
-        flat::{Field, Function, ScalarKind, Type as FlatType, TypeKind, TypeRef},
-        Emit,
-    },
-    function::error_ident,
-    names, Access, FieldCallbacks, FunctionCallbacks, FunctionWriter, Input, Output, Record,
-    Return, RustFile, Shape, StructWriter, SumWriter,
+    function::error_ident, names, Access, FieldCallbacks, FunctionCallbacks, FunctionWriter, Input,
+    Output, Record, Return, RustFile, Shape, StructWriter, SumWriter,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};

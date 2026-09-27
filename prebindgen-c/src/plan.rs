@@ -9,13 +9,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use prebindgen_tools::{
-    flat::{
-        flat::{Function, Type as FlatType, TypeKind, TypeRef},
-        Flat,
-    },
-    names, Qualifier, ResolvedConversion,
+use prebindgen_flat::{
+    flat::{Function, Type as FlatType, TypeKind, TypeRef},
+    Flat,
 };
+use prebindgen_tools::{names, Qualifier, ResolvedConversion};
 use quote::ToTokens;
 
 use crate::{
