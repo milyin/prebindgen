@@ -1,0 +1,41 @@
+name: Deploy docs site
+
+# Builds the static home page (site/) plus rustdoc for the published crates,
+# and pushes it to the gh-pages branch, which GitHub Pages serves.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Allow one concurrent deployment; don't cancel an in-progress production deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # No `path:` override here (unlike rust.yml): the deploy action below
+      # runs its own git commands from $GITHUB_WORKSPACE and has no notion of
+      # a nested repo root, so the checkout must land there directly.
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build site
+        run: ./site/build.sh site-build
+
+      - name: Deploy to gh-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: site-build
+          branch: gh-pages
+          # PR previews live under pr-preview/ on the same branch; a main
+          # deploy must not delete them.
+          clean-exclude: pr-preview/
+          force: false
