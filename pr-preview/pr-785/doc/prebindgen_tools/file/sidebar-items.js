@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["resolve_out_path","write_if_changed"],"struct":["RustFile"]};
