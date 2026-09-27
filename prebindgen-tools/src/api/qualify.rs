@@ -12,8 +12,41 @@ use quote::quote;
 /// [`ty`](Self::ty) recursively qualifies a type expression. Both return
 /// tokens for generated Rust without changing the model or choosing an ABI.
 ///
-/// See the [`qualify`](crate::qualify) module for path selection rules and a
-/// worked example, including nested containers and binding-local names.
+/// See the [qualification module](index.html) for path selection rules,
+/// including nested containers and binding-local names.
+///
+/// # Example: call a source function from generated Rust
+///
+/// Build a model with the source crate recorded on its items, then qualify
+/// both the function to call and its return type. The resulting tokens can
+/// be placed in a generated wrapper:
+///
+/// ```
+/// use prebindgen::SourceLocation;
+/// use prebindgen_tools::{flat::Flat, Qualifier};
+/// use quote::quote;
+///
+/// let source = syn::parse_file(
+///     "pub struct Payload; pub fn make() -> Payload { Payload }",
+/// ).unwrap();
+/// let location = SourceLocation {
+///     crate_name: Some("source-crate".into()),
+///     ..Default::default()
+/// };
+/// let flat = Flat::builder()
+///     .items(source.items.into_iter().map(|item| (item, location.clone())))
+///     .build().unwrap();
+/// let qualifier = Qualifier::new(&flat);
+/// let function = flat.function("make").unwrap();
+/// let callee = qualifier.path(&function.name);
+/// let return_type = qualifier.ty(&function.ret);
+/// let wrapper = quote! {
+///     pub fn make_wrapper() -> #return_type { #callee() }
+/// };
+/// assert_eq!(wrapper.to_string(), quote! {
+///     pub fn make_wrapper() -> source_crate::Payload { source_crate::make() }
+/// }.to_string());
+/// ```
 #[derive(Clone)]
 pub struct Qualifier<'a> {
     flat: &'a Flat,
