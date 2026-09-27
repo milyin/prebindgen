@@ -321,28 +321,77 @@ pub mod names {
     pub use crate::api::names::{bare, camel, ident, join, mangle, pascal, snake};
 }
 
-/// Naming source items from generated code.
+/// Naming source items from generated Rust code.
 ///
-/// The flat model spells every type in the flat namespace — `Payload`,
-/// `Option<Vec<Payload>>` — because that is what the source crates wrote. The
-/// generated file lives in a different crate, so every item it names has to
-/// be reached through the crate that declared it: `perftest_flat::Payload`.
-/// [`Qualifier`] does that rewriting, for types and for item paths.
+/// The flat model identifies a source item by its flat name, such as
+/// `Payload` or `make`. A binding's generated Rust usually lives in a
+/// different crate, where those names are not automatically in scope.
+/// [`Qualifier`] uses each item's source location to spell a path such as
+/// `source_crate::Payload` or `source_crate::make`. Use it when a wrapper
+/// calls a source function or a conversion names a source type.
+///
+/// ## Choosing a path
+///
+/// [`Qualifier::new`] borrows the model. For each known item,
+/// [`Qualifier::module_of`] reads the crate name recorded in its
+/// [`SourceLocation`](prebindgen::SourceLocation), converting hyphens to
+/// underscores for a Rust path. Items captured from different crates can
+/// therefore receive different prefixes from the same qualifier.
+///
+/// [`Qualifier::with_default_module`] supplies a fallback for **known items
+/// without a recorded crate name**, for example a model assembled directly
+/// from parsed syntax in a test. A recorded crate name takes precedence.
+/// A name absent from the model is left unchanged even when a fallback is
+/// configured; a known item with neither a crate name nor a fallback also
+/// keeps its bare name. The generated crate must be able to resolve the
+/// emitted paths: qualification does not add dependencies or imports, or
+/// discover Cargo dependency aliases.
+///
+/// ## Item paths and type expressions
+///
+/// * [`Qualifier::path`] qualifies one item name, such as the function a
+///   [`FunctionWriter`] will call.
+/// * [`Qualifier::ty`] walks a complete model type. For example,
+///   `Option<Vec<Payload>>` becomes
+///   `::core::option::Option<::std::vec::Vec<source_crate::Payload>>`.
+///   It qualifies named types inside generic arguments and containers, and
+///   named constants used as array lengths. Standard containers receive
+///   absolute `::core` or `::std` paths; scalar names such as `u32` stay as is.
+/// * [`Qualifier::ty_elided`] provides the same naming for positions such as
+///   closure arguments that cannot refer to a source lifetime parameter.
+///   Its method documentation lists which shapes it elides.
+///
+/// These methods return Rust tokens for the source value's type or path.
+/// The adapter still chooses the wire representation: qualifying
+/// `Payload` does not turn it into a pointer, handle, or mirror struct.
 ///
 /// ```
 /// use prebindgen::SourceLocation;
 /// use prebindgen_tools::{flat::Flat, Qualifier};
-/// let source = syn::parse_file("pub struct Payload; pub fn make() -> Payload { Payload }").unwrap();
+/// use quote::quote;
+///
+/// let source = syn::parse_file(
+///     "pub struct Payload; pub fn make() -> Option<Vec<Payload>> { None }",
+/// ).unwrap();
 /// let location = SourceLocation {
-///     crate_name: Some("source_crate".into()), ..Default::default()
+///     crate_name: Some("source-crate".into()), ..Default::default()
 /// };
 /// let flat = Flat::builder()
 ///     .items(source.items.into_iter().map(|item| (item, location.clone())))
 ///     .build().unwrap();
 /// let q = Qualifier::new(&flat);
 /// let function = flat.function("make").unwrap();
-/// assert_eq!(q.path(&function.name).to_string(), "source_crate :: make");
-/// assert_eq!(q.ty(&function.ret).to_string(), "source_crate :: Payload");
+/// assert_eq!(q.path(&function.name).to_string(), quote!(source_crate::make).to_string());
+/// let expected: syn::Type = syn::parse_quote!(
+///     ::core::option::Option<::std::vec::Vec<source_crate::Payload>>
+/// );
+/// assert_eq!(syn::parse2::<syn::Type>(q.ty(&function.ret)).unwrap(), expected);
+///
+/// // The fallback does not override the recorded source crate.
+/// let q = q.with_default_module(Some(syn::parse_quote!(crate::source)));
+/// assert_eq!(q.path(&function.name).to_string(), quote!(source_crate::make).to_string());
+/// // A binding-local helper absent from the model stays unqualified.
+/// assert_eq!(q.path(&syn::parse_quote!(local_helper)).to_string(), "local_helper");
 /// ```
 pub mod qualify {
     pub use crate::api::qualify::Qualifier;

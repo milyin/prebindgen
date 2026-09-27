@@ -5,7 +5,15 @@ use prebindgen_flat::{
 use proc_macro2::TokenStream;
 use quote::quote;
 
-/// Rewrites flat-namespace spellings into paths the generated crate can name.
+/// Spells source items and types as Rust paths usable from a binding crate.
+///
+/// The qualifier borrows a [`Flat`] model and reads the declaring crate from
+/// each item's source location. [`path`](Self::path) qualifies one item;
+/// [`ty`](Self::ty) recursively qualifies a type expression. Both return
+/// tokens for generated Rust without changing the model or choosing an ABI.
+///
+/// See the [`qualify`](crate::qualify) module for path selection rules and a
+/// worked example, including nested containers and binding-local names.
 #[derive(Clone)]
 pub struct Qualifier<'a> {
     flat: &'a Flat,
@@ -24,6 +32,9 @@ impl<'a> Qualifier<'a> {
 
     /// The module used for an item whose capture carries no crate name — a
     /// synthetic stream fed to [`Flat::builder`] without a stamp.
+    ///
+    /// A recorded crate name takes precedence. Unknown names never use this
+    /// fallback. Pass `None` to remove a previously configured fallback.
     pub fn with_default_module(mut self, module: Option<syn::Path>) -> Self {
         self.default_module = module;
         self
@@ -34,7 +45,12 @@ impl<'a> Qualifier<'a> {
         self.flat
     }
 
-    /// The module that declares `name`, if `name` is a flat item.
+    /// The source prefix for a known item: its recorded crate name (with
+    /// hyphens replaced by underscores), or the configured fallback if no
+    /// crate name was recorded.
+    ///
+    /// Returns `None` for an unknown name, a known item with no prefix, or
+    /// a recorded crate name that cannot be parsed as a Rust path.
     pub fn module_of(&self, name: &str) -> Option<syn::Path> {
         let element = self.flat.element(name)?;
         match &element.location().crate_name {
@@ -53,7 +69,12 @@ impl<'a> Qualifier<'a> {
         }
     }
 
-    /// `ty` spelled with every flat item qualified by its declaring crate.
+    /// Spell a model type with named items qualified by their source crate.
+    ///
+    /// Recurses into containers, borrows, generic type arguments, and callback
+    /// arguments. Named array lengths are qualified too. Standard types use
+    /// absolute `::core` or `::std` paths, and source lifetimes are retained.
+    /// The result still describes the source type, before ABI conversion.
     pub fn ty(&self, ty: &TypeRef) -> TokenStream {
         match ty.kind() {
             TypeKind::Scalar(k) => {
@@ -137,9 +158,16 @@ impl<'a> Qualifier<'a> {
         }
     }
 
-    /// `ty` with its lifetimes erased (`&'a T` → `&T`), for a position that
-    /// cannot name the source's lifetime parameters: a `let` annotation or a
-    /// closure argument in generated code.
+    /// Qualify a type while eliding lifetimes in supported borrowing shapes.
+    ///
+    /// Use for a `let` annotation or closure argument that cannot name the
+    /// source's lifetime parameters. References lose their explicit lifetime
+    /// (`&'a T` → `&T`); `Cow<'a, T>` becomes `Cow<'_, T>`. This recurses
+    /// through references, `Cow`, `Option`, `Vec`, `Box`, and slices.
+    ///
+    /// Other shapes delegate to [`ty`](Self::ty) unchanged. In particular,
+    /// this is not a general lifetime eraser for named generic arguments,
+    /// arrays, `Result`, or callback arguments.
     pub fn ty_elided(&self, ty: &TypeRef) -> TokenStream {
         match ty.kind() {
             TypeKind::Ref { mutable, inner, .. } => {
