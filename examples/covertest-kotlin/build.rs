@@ -779,6 +779,37 @@ fn main() {
         // Plain String return, declared in the BASE package (mirroring the
         // base-package classes).
         .package(package!().fun(fun!(string_new)))
+        // Single-constructor input expansions: direct where the arguments
+        // can say the value is absent, a selector where they cannot; and a
+        // value form with one field renamed and one dropped.
+        .package(
+            package!("tags")
+                .class(ptr_class!(Tag))
+                .fun(
+                    fun!(tag_describe).expand_param("t", expand_param!(Tag).variant(fun!(tag_new))),
+                )
+                .fun(
+                    fun!(tag_describe_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_new))),
+                )
+                .fun(
+                    fun!(tag_default_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_default))),
+                )
+                .fun(
+                    fun!(tag_with_opt)
+                        .expand_param("t", expand_param!(Tag).variant(fun!(tag_with))),
+                )
+                .fun(
+                    fun!(tag_pick).expand_return(
+                        expand_return!(Tag).fields(
+                            fields!(tag_parts)
+                                .name("label", "title")
+                                .field("note", expand_return!(Summary)),
+                        ),
+                    ),
+                ),
+        )
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.

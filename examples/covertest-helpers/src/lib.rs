@@ -18,7 +18,7 @@
 //! small helper crate like this one, consumed as both a normal and a build
 //! dependency (exactly like the flat crate).
 
-use perftest_flat::{summary_total, Millis, Summary};
+use perftest_flat::{summary_new, summary_total, Millis, Summary};
 use prebindgen_proc_macro::{features, prebindgen};
 
 /// Output directory with the prebindgen data of this crate.
@@ -67,4 +67,84 @@ pub fn summary_prefer(primary: Summary, fallback: Summary) -> i64 {
     } else {
         0
     }
+}
+
+/// A labelled handle, for the single-constructor input expansions and a
+/// value form with per-field overrides. covertest binds it in its `tags`
+/// package.
+#[prebindgen]
+pub struct Tag {
+    pub label: String,
+}
+
+/// The one constructor of the direct expansions.
+#[prebindgen]
+pub fn tag_new(label: String) -> Tag {
+    Tag { label }
+}
+
+/// A constructor with no arguments: an optional parameter built from it
+/// keeps its selector, since no argument could say the value is absent.
+#[prebindgen]
+pub fn tag_default() -> Tag {
+    Tag {
+        label: "default".to_string(),
+    }
+}
+
+/// A constructor whose argument is itself optional: `None` builds an
+/// unnamed tag, which is not the same as no tag.
+#[prebindgen]
+pub fn tag_with(label: Option<String>) -> Tag {
+    Tag {
+        label: label.unwrap_or_else(|| "unnamed".to_string()),
+    }
+}
+
+/// A tag's label.
+#[prebindgen]
+pub fn tag_describe(t: Tag) -> String {
+    t.label
+}
+
+/// A tag's label, or `none`.
+#[prebindgen]
+pub fn tag_describe_opt(t: Option<Tag>) -> String {
+    t.map_or_else(|| "none".to_string(), |t| t.label)
+}
+
+/// A tag's label, or `none`.
+#[prebindgen]
+pub fn tag_default_opt(t: Option<Tag>) -> String {
+    tag_describe_opt(t)
+}
+
+/// A tag's label, or `none`.
+#[prebindgen]
+pub fn tag_with_opt(t: Option<Tag>) -> String {
+    tag_describe_opt(t)
+}
+
+/// The value form of a [`Tag`]: covertest renames `label` and drops `note`.
+#[prebindgen]
+pub struct TagParts {
+    pub label: String,
+    pub size: i64,
+    pub note: Summary,
+}
+
+/// Read a tag's value form.
+#[prebindgen]
+pub fn tag_parts(t: &Tag) -> TagParts {
+    TagParts {
+        label: t.label.clone(),
+        size: t.label.len() as i64,
+        note: summary_new(0, 0.0),
+    }
+}
+
+/// A tag, returned through its value form.
+#[prebindgen]
+pub fn tag_pick(label: String) -> Tag {
+    Tag { label }
 }

@@ -254,7 +254,8 @@ impl FieldsDecl {
         self
     }
 
-    /// The Kotlin name of one field's parameter, verbatim.
+    /// The name of one field's parameter, in place of the field's own. It is
+    /// camel-cased like every derived name: `foo_bar` becomes `fooBar`.
     pub fn name(mut self, field: impl AsRef<str>, kotlin_name: impl Into<String>) -> Self {
         self.names
             .push((field.as_ref().to_string(), kotlin_name.into()));

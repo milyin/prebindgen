@@ -20,6 +20,11 @@ import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
+import io.prebindgen.covertest.tags.tagDefaultOpt
+import io.prebindgen.covertest.tags.tagDescribe
+import io.prebindgen.covertest.tags.tagDescribeOpt
+import io.prebindgen.covertest.tags.tagPick
+import io.prebindgen.covertest.tags.tagWithOpt
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Arrays
 import io.prebindgen.covertest.model.CacheConfig
@@ -1896,6 +1901,29 @@ fun main() {
         val p = Esc_Probe.escapeProbeNew(7L, boom)
         check(p.escapeProbeValue(boom) == 7L)
         p.close()
+    }
+
+    // ── single-constructor expansions + value-form field overrides ───────────
+    section("single-constructor expand_param (direct / selector) + fields! overrides") {
+        // One constructor, no handle variant: the parameter IS the
+        // constructor's argument, no selector crosses.
+        check(tagDescribe("abc", boom) == "abc")
+        // Optional, and the argument can be absent: still direct, `null`
+        // is `None`.
+        check(tagDescribeOpt(null, boom) == "none")
+        check(tagDescribeOpt("abc", boom) == "abc")
+        // Optional over a zero-argument constructor: nothing could say
+        // "absent", so the selector stays — `-1` is `None`.
+        check(tagDefaultOpt(-1, boom) == "none")
+        check(tagDefaultOpt(0, boom) == "default")
+        // Optional over a constructor whose argument is optional: `null`
+        // for the argument builds an unnamed tag, `-1` means no tag.
+        check(tagWithOpt(-1, null, boom) == "none")
+        check(tagWithOpt(0, null, boom) == "unnamed")
+        check(tagWithOpt(0, "x", boom) == "x")
+        // The value form's `label` arrives renamed `title`; `note` does not
+        // cross at all, so the builder takes two parameters.
+        check(tagPick("hello", boom) { title, size -> "$title/$size" } == "hello/5")
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")

@@ -195,3 +195,37 @@ fn zenoh_shaped_declarations() {
     // A constant built at run time, renamed.
     assert!(kt.contains("public val MAX: Long by lazy"), "{kt}");
 }
+
+#[test]
+fn value_form_overrides_name_real_fields() {
+    let src = r#"
+        pub type Store = inner::Store;
+        pub struct Parts { pub id: i64, pub name: String }
+        pub fn store_parts(s: &Store) -> Parts { todo!() }
+        pub fn store_open() -> Store { todo!() }
+    "#;
+    let items = syn::parse_file(src)
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|i| (i, SourceLocation::default()));
+    let build = |form: crate::FieldsDecl| {
+        JniGen::builder()
+            .items(items.clone())
+            .set_package_prefix("io.test")
+            .package(package!().class(ptr_class!(Store)).fun(fun!(store_open)))
+            .expand(expand_return!(Store).fields(form))
+            .build()
+            .err()
+            .map(|e| e.0)
+    };
+    let unknown = build(crate::fields!(store_parts).name("title", "t")).expect("refused");
+    assert!(
+        unknown.contains("the struct has no field `title`"),
+        "{unknown}"
+    );
+    let twice =
+        build(crate::fields!(store_parts).name("id", "a").name("id", "b")).expect("refused");
+    assert!(twice.contains("declared twice"), "{twice}");
+    assert!(build(crate::fields!(store_parts).name("id", "key")).is_none());
+}

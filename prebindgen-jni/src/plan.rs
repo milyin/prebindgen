@@ -273,6 +273,7 @@ impl<'f> Plan<'f> {
             supports: Vec::new(),
         };
         plan.declare_types(b)?;
+        plan.check_value_forms(b)?;
         let mut planner = Planner {
             plan: &plan,
             b,
@@ -417,6 +418,70 @@ impl<'f> Plan<'f> {
                 ExpandDecl::Return(r) => {
                     self.ret_exp.insert(type_name(&r.ty)?, r.clone());
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// Every `fields!(f)` field override and rename names a field of the
+    /// struct `f` returns, once.
+    fn check_value_forms(&self, b: &JniGenBuilder) -> Res<()> {
+        let mut decls: Vec<&ExpandReturnDecl> = b
+            .expands
+            .iter()
+            .filter_map(|e| match e {
+                ExpandDecl::Return(r) => Some(r),
+                ExpandDecl::Param(_) => None,
+            })
+            .collect();
+        for p in &b.packages {
+            decls.extend(p.funs.iter().filter_map(|f| f.ret.as_ref()));
+            for c in &p.classes {
+                let members: &[FunctionDecl] = match c {
+                    ClassDecl::Ptr(d) => &d.methods,
+                    ClassDecl::Data(d) => &d.methods,
+                    _ => &[],
+                };
+                decls.extend(members.iter().filter_map(|f| f.ret.as_ref()));
+            }
+        }
+        while let Some(d) = decls.pop() {
+            for field in &d.fields {
+                let ReturnField::Form { form, .. } = field else {
+                    continue;
+                };
+                let fields: Vec<String> = match self.flat.function(&form.fun).map(|f| f.ret.kind())
+                {
+                    Some(TypeKind::Named { id, .. }) => match self.flat.declared_type(&id.name) {
+                        Some(FlatType::Struct(s)) => {
+                            s.fields.iter().map(crate::lower::field_seg).collect()
+                        }
+                        _ => continue,
+                    },
+                    _ => continue,
+                };
+                let keys = form
+                    .overrides
+                    .iter()
+                    .map(|(n, _)| ("field", n))
+                    .chain(form.names.iter().map(|(n, _)| ("name", n)));
+                let mut seen = HashSet::new();
+                for (what, n) in keys {
+                    if !fields.contains(n) {
+                        return err(format!(
+                            "fields!({}).{what}(\"{n}\", ..): the struct has no field `{n}` (it has {})",
+                            form.fun,
+                            fields.join(", ")
+                        ));
+                    }
+                    if !seen.insert((what, n)) {
+                        return err(format!(
+                            "fields!({}).{what}(\"{n}\", ..): declared twice",
+                            form.fun
+                        ));
+                    }
+                }
+                decls.extend(form.overrides.iter().map(|(_, d)| d));
             }
         }
         Ok(())

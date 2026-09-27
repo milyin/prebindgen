@@ -942,4 +942,14 @@ internal object CovNative {
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun stringNew(s: String, errorSink: Any): String
+
+    external fun tagDescribe(t00: String, errorSink: Any): String
+
+    external fun tagDescribeOpt(t00: String?, errorSink: Any): String
+
+    external fun tagDefaultOpt(tSel: Int, errorSink: Any): String
+
+    external fun tagWithOpt(tSel: Int, t00: String?, errorSink: Any): String
+
+    external fun tagPick(label: String, sink: Any, errorSink: Any): Any?
 }

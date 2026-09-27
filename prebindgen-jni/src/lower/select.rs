@@ -9,7 +9,10 @@
 //!
 //! An expansion with a single constructor and no handle variant is
 //! *direct*: there is nothing to choose, so Kotlin passes the constructor's
-//! arguments as the parameter and no selector crosses.
+//! arguments as the parameter and no selector crosses. An optional
+//! parameter is direct only when its absence shows in the arguments — the
+//! constructor takes at least one, and none is itself optional; otherwise it
+//! keeps the selector, whose `-1` means `None`.
 
 use std::rc::Rc;
 
@@ -51,9 +54,19 @@ pub(crate) enum SelVariant {
 }
 
 impl Selector {
-    /// A single constructor and nothing else: no selector crosses.
+    /// A single constructor and nothing else, and — for an optional
+    /// parameter — arguments that can say the value is absent: no selector
+    /// crosses.
     pub(crate) fn is_direct(&self) -> bool {
-        matches!(self.variants.as_slice(), [SelVariant::Build { .. }])
+        let [SelVariant::Build { func, .. }] = self.variants.as_slice() else {
+            return false;
+        };
+        !self.optional
+            || (!func.params.is_empty()
+                && func
+                    .params
+                    .iter()
+                    .all(|p| !matches!(p.ty.kind(), TypeKind::Optional(_))))
     }
 }
 
@@ -123,7 +136,7 @@ impl Plan<'_> {
     /// The Kotlin parameters of a selector: `pSel`, then each variant's.
     pub(crate) fn selector_params(&self, s: &Selector) -> Res<Vec<(String, String)>> {
         let p = kt_ident(&names::camel(&names::bare(&s.param.name)));
-        if let [SelVariant::Build { func, .. }] = s.variants.as_slice() {
+        if let (true, [SelVariant::Build { func, .. }]) = (s.is_direct(), s.variants.as_slice()) {
             let n = func.params.len();
             return func
                 .params
@@ -305,7 +318,8 @@ impl Plan<'_> {
 
     /// The Rust input of a selector parameter.
     pub(crate) fn selector_input(&self, s: &Selector) -> Res<Input> {
-        if let [SelVariant::Build { func, callee }] = s.variants.as_slice() {
+        if let (true, [SelVariant::Build { func, callee }]) = (s.is_direct(), s.variants.as_slice())
+        {
             return self.direct_input(s, func, callee);
         }
         let root = names::bare(&s.param.name);

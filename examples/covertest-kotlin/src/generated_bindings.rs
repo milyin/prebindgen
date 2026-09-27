@@ -13327,6 +13327,364 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_stringNew<'
         }
     }
 }
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_tags_Tag_freePtr(
+    _env: ::prebindgen_jni_runtime::jni::JNIEnv,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass,
+    ptr: ::prebindgen_jni_runtime::jni::sys::jlong,
+) {
+    ::prebindgen_jni_runtime::free_handle::<cov_helpers::Tag>(ptr)
+}
+const _: () = assert!(
+    ::core::mem::align_of:: < cov_helpers::Tag > () >= 2,
+    "`Tag`: a handle type must have alignment >= 2 (bit 0 is the closed tag)"
+);
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagDescribe<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    t_00: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let t = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok({
+            let __a0 = (|| -> ::core::result::Result<_, ::std::string::String> {
+                ::core::result::Result::Ok(
+                    ::prebindgen_jni_runtime::read_string(env, &t_00)?,
+                )
+            })()?;
+            cov_helpers::tag_new(__a0)
+        })
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = cov_helpers::tag_describe(t);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_string(
+            env,
+            ::core::convert::AsRef::<str>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagDescribeOpt<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    t_00: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let t = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok({
+            let __a0 = (|| -> ::core::result::Result<_, ::std::string::String> {
+                ::core::result::Result::Ok(
+                    if !t_00.is_null() {
+                        ::core::option::Option::Some(
+                            ::prebindgen_jni_runtime::read_string(env, &t_00)?,
+                        )
+                    } else {
+                        ::core::option::Option::None
+                    },
+                )
+            })()?;
+            match (__a0,) {
+                (::core::option::Option::Some(__a0),) => {
+                    ::core::option::Option::Some(cov_helpers::tag_new(__a0))
+                }
+                _ => ::core::option::Option::None,
+            }
+        })
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = cov_helpers::tag_describe_opt(t);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_string(
+            env,
+            ::core::convert::AsRef::<str>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagDefaultOpt<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    t_sel: ::prebindgen_jni_runtime::jni::sys::jint,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let t = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            match t_sel {
+                0i32 => ::core::option::Option::Some(cov_helpers::tag_default()),
+                -1 => ::core::option::Option::None,
+                __s => {
+                    return ::core::result::Result::Err(
+                        ::std::format!("invalid selector {} for `t`", __s),
+                    );
+                }
+            },
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = cov_helpers::tag_default_opt(t);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_string(
+            env,
+            ::core::convert::AsRef::<str>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagWithOpt<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    t_sel: ::prebindgen_jni_runtime::jni::sys::jint,
+    t_00: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let t = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(
+            match t_sel {
+                0i32 => {
+                    ::core::option::Option::Some(
+                        cov_helpers::tag_with(
+                            (|| -> ::core::result::Result<_, ::std::string::String> {
+                                ::core::result::Result::Ok(
+                                    if !t_00.is_null() {
+                                        ::core::option::Option::Some(
+                                            ::prebindgen_jni_runtime::read_string(env, &t_00)?,
+                                        )
+                                    } else {
+                                        ::core::option::Option::None
+                                    },
+                                )
+                            })()?,
+                        ),
+                    )
+                }
+                -1 => ::core::option::Option::None,
+                __s => {
+                    return ::core::result::Result::Err(
+                        ::std::format!("invalid selector {} for `t`", __s),
+                    );
+                }
+            },
+        )
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = cov_helpers::tag_with_opt(t);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let r = ::prebindgen_jni_runtime::new_string(
+            env,
+            ::core::convert::AsRef::<str>::as_ref(&__result),
+        )?;
+        ::core::result::Result::Ok(r.into_raw())
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_tagPick<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    label: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jobject {
+    let mut __env = __env;
+    let env = &mut __env;
+    let label = match (|| -> ::core::result::Result<_, ::std::string::String> {
+        ::core::result::Result::Ok(::prebindgen_jni_runtime::read_string(env, &label)?)
+    })() {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            __jni_signal(env, &__error_sink, &__err);
+            return ::core::ptr::null_mut();
+        }
+    };
+    let __result = cov_helpers::tag_pick(label);
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jobject,
+        ::std::string::String,
+    > = (|| {
+        let __x = __result;
+        {
+            let (r_label, r_size) = {
+                let __v1 = __x;
+                let __s1 = cov_helpers::tag_parts(&__v1);
+                let (r_label, r_size) = {
+                    let cov_helpers::TagParts {
+                        label: __f2_0,
+                        size: __f2_1,
+                        note: __f2_2,
+                    } = __s1;
+                    let r_label = ::prebindgen_jni_runtime::new_string(
+                        env,
+                        ::core::convert::AsRef::<str>::as_ref(&__f2_0),
+                    )?;
+                    let r_size = (__f2_1 as ::prebindgen_jni_runtime::jni::sys::jlong);
+                    let () = {
+                        let _ = __f2_2;
+                    };
+                    (r_label, r_size)
+                };
+                (r_label, r_size)
+            };
+            static __S: ::prebindgen_jni_runtime::CachedIfaceMethod = ::prebindgen_jni_runtime::CachedIfaceMethod::new();
+            let __o = __S
+                .call_object(
+                    env,
+                    "io/prebindgen/covertest/tags/TagTagPickBuilderRaw",
+                    "run",
+                    "(Ljava/lang/String;J)Ljava/lang/Object;",
+                    &__sink,
+                    &[
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            l: r_label.as_raw(),
+                        },
+                        ::prebindgen_jni_runtime::jni::sys::jvalue {
+                            j: r_size,
+                        },
+                    ],
+                )?;
+            ::core::result::Result::Ok(__o.into_raw())
+        }
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            ::core::ptr::null_mut()
+        }
+    }
+}
 const _: () = {
     konst::assertc_eq!(
         perftest_flat::FEATURES, "",
