@@ -1,6 +1,7 @@
 //! Kotlin classes and constants.
 
-use prebindgen_tools::{flat::flat::TypeRef, names, Shape};
+use prebindgen_flat::flat::TypeRef;
+use prebindgen_tools::{names, Shape};
 use quote::format_ident;
 
 use super::{

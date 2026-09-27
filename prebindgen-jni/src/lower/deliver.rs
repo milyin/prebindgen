@@ -8,10 +8,8 @@
 //! class, typed otherwise. An optional value with an expansion delivers its
 //! fields gated by one presence flag: every one of them `null` when absent.
 
-use prebindgen_tools::{
-    flat::flat::{Struct, Type as FlatType, TypeKind, TypeRef},
-    names, ClosureCallbacks, ClosureWriter, Output, Record, Shape, Wire,
-};
+use prebindgen_flat::flat::{Struct, Type as FlatType, TypeKind, TypeRef};
+use prebindgen_tools::{names, ClosureCallbacks, ClosureWriter, Output, Record, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 

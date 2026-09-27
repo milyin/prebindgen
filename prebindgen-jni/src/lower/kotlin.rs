@@ -3,10 +3,8 @@
 
 use std::rc::Rc;
 
-use prebindgen_tools::{
-    flat::flat::{ScalarKind, TypeRef},
-    Access, Shape,
-};
+use prebindgen_flat::flat::{ScalarKind, TypeRef};
+use prebindgen_tools::{Access, Shape};
 
 use super::{alt_kt_name, is_u8, kt_prop, scalar_prim, Dir};
 use crate::plan::{err, Class, ClassKind, Plan, Res, Setting};

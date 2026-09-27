@@ -31,10 +31,8 @@ pub(crate) mod pack;
 pub(crate) mod rust;
 pub(crate) mod select;
 
-use prebindgen_tools::{
-    flat::flat::{Alternative, Field, ScalarKind, TypeRef},
-    names, shape, Access, Shape,
-};
+use prebindgen_flat::flat::{Alternative, Field, ScalarKind, TypeRef};
+use prebindgen_tools::{names, shape, Access, Shape};
 
 use self::leaf::{join, Leaf, LeafTy, Prim};
 use crate::plan::{err, Class, ClassKind, Conv, Plan, Res, Setting};
@@ -211,25 +209,24 @@ impl Plan<'_> {
     }
 
     /// The fields of a data class's struct.
-    pub(crate) fn struct_of(&self, c: &Class) -> Res<&prebindgen_tools::flat::flat::Struct> {
+    pub(crate) fn struct_of(&self, c: &Class) -> Res<&prebindgen_flat::flat::Struct> {
         match self.flat.declared_type(&c.rust) {
-            Some(prebindgen_tools::flat::flat::Type::Struct(s)) => Ok(s),
+            Some(prebindgen_flat::flat::Type::Struct(s)) => Ok(s),
             _ => err(format!("`{}` is not a struct", c.rust)),
         }
     }
 
     /// The alternatives of a sealed class's enum.
-    pub(crate) fn variant_of(&self, c: &Class) -> Res<&prebindgen_tools::flat::flat::Variant> {
+    pub(crate) fn variant_of(&self, c: &Class) -> Res<&prebindgen_flat::flat::Variant> {
         match self.flat.declared_type(&c.rust) {
-            Some(prebindgen_tools::flat::flat::Type::Variant(v)) => Ok(v),
+            Some(prebindgen_flat::flat::Type::Variant(v)) => Ok(v),
             _ => err(format!("`{}` is not a data-carrying enum", c.rust)),
         }
     }
 
     /// `(name, discriminant literal)` for each value of an enum class.
     pub(crate) fn enum_arms(&self, class: &Class) -> Res<Vec<(syn::Ident, proc_macro2::Literal)>> {
-        let Some(prebindgen_tools::flat::flat::Type::Enum(e)) =
-            self.flat.declared_type(&class.rust)
+        let Some(prebindgen_flat::flat::Type::Enum(e)) = self.flat.declared_type(&class.rust)
         else {
             return err(format!("`{}` is not a fieldless enum", class.rust));
         };
@@ -255,7 +252,7 @@ impl Plan<'_> {
             Shape::Str(_) => vec![Leaf::new(LeafTy::String)],
             Shape::Seq { elem, .. } if is_u8(elem) => vec![Leaf::new(LeafTy::PrimArray(Prim::B))],
             Shape::Array { elem, .. } => match elem.kind() {
-                prebindgen_tools::flat::flat::TypeKind::Scalar(k) => {
+                prebindgen_flat::flat::TypeKind::Scalar(k) => {
                     vec![Leaf::new(LeafTy::PrimArray(array_prim(*k)))]
                 }
                 _ => return err(format!("`{ty}`: only arrays of primitives cross")),
@@ -332,7 +329,7 @@ impl Plan<'_> {
             Shape::Str(_) => "String".to_string(),
             Shape::Seq { elem, .. } if is_u8(elem) => "ByteArray".to_string(),
             Shape::Array { elem, .. } => match elem.kind() {
-                prebindgen_tools::flat::flat::TypeKind::Scalar(k) => array_prim(*k).kt_array(),
+                prebindgen_flat::flat::TypeKind::Scalar(k) => array_prim(*k).kt_array(),
                 _ => return err(format!("`{ty}`: only arrays of primitives cross")),
             },
             Shape::Declared { setting, .. } => match setting {
@@ -393,6 +390,6 @@ impl Plan<'_> {
 pub(crate) fn is_u8(ty: &TypeRef) -> bool {
     matches!(
         ty.kind(),
-        prebindgen_tools::flat::flat::TypeKind::Scalar(ScalarKind::U8)
+        prebindgen_flat::flat::TypeKind::Scalar(ScalarKind::U8)
     )
 }

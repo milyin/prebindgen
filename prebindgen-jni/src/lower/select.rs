@@ -16,10 +16,8 @@
 
 use std::rc::Rc;
 
-use prebindgen_tools::{
-    flat::flat::{Function, Param as FlatParam, TypeKind},
-    names, shape, Access, Input, Shape, Wire,
-};
+use prebindgen_flat::flat::{Function, Param as FlatParam, TypeKind};
+use prebindgen_tools::{names, shape, Access, Input, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -257,8 +255,8 @@ impl Plan<'_> {
     fn variant_arg_ty(
         &self,
         s: &Selector,
-        ty: &prebindgen_tools::flat::flat::TypeRef,
-    ) -> prebindgen_tools::flat::flat::TypeRef {
+        ty: &prebindgen_flat::flat::TypeRef,
+    ) -> prebindgen_flat::flat::TypeRef {
         let already = matches!(ty.kind(), TypeKind::Optional(_));
         if already || (s.is_direct() && !s.optional) {
             ty.clone()

@@ -1,7 +1,7 @@
 //! The builder a build script drives.
 
 use prebindgen::SourceLocation;
-use prebindgen_tools::flat::Flat;
+use prebindgen_flat::Flat;
 
 use crate::{
     decl::{ConvertDecl, ExpandDecl, IgnoreDecl, PackageDecl},
