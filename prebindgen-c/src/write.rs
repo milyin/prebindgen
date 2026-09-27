@@ -13,7 +13,7 @@ use quote::{format_ident, quote, ToTokens};
 
 use crate::{
     lower::CRet,
-    plan::{err, CType, Item, Kind, Plan, Res, Setting},
+    plan::{declared_name, err, CType, Item, Kind, Plan, Res, Setting},
     Error,
 };
 
@@ -452,15 +452,15 @@ fn repr_c_field(
     };
     let opaque = |t: &TypeRef| match plan.shape(t) {
         Ok(Shape::Declared {
-            setting:
+            ty: declared_ty,
+            declaration:
                 Setting::Type(CType {
                     kind: Kind::Opaque,
                     c,
                     ..
                 }),
-            access: Access::Owned,
             ..
-        }) => Some(c.clone()),
+        }) if Access::of(declared_ty) == Access::Owned => Some(c.clone()),
         _ => None,
     };
     Ok(match ty.kind() {
@@ -492,10 +492,10 @@ fn repr_c_field(
         },
         TypeKind::Named { .. } => match plan.shape(ty)? {
             Shape::Declared {
-                setting: Setting::Type(t),
-                access: Access::Owned,
+                ty: declared_ty,
+                declaration: Setting::Type(t),
                 ..
-            } => match t.kind {
+            } if Access::of(declared_ty) == Access::Owned => match t.kind {
                 Kind::ReprC { .. } => t.c.to_token_stream(),
                 Kind::Enum if assume_valid => t.c.to_token_stream(),
                 _ => return refuse("is not a representable field"),
@@ -586,16 +586,15 @@ fn alias_preflight(plan: &Plan, func: &Function, fail: &TokenStream) -> Res<Toke
     let mut handles = Vec::new();
     for p in &func.params {
         if let Shape::Declared {
-            name,
-            setting:
+            ty,
+            declaration:
                 Setting::Type(CType {
                     kind: Kind::Opaque | Kind::ReprC { .. },
                     ..
                 }),
-            access,
         } = plan.shape(&p.ty)?
         {
-            handles.push((&p.name, name, access));
+            handles.push((&p.name, declared_name(ty), Access::of(ty)));
         }
     }
     let e = error_ident();

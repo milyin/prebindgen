@@ -147,7 +147,7 @@ impl Plan<'_> {
         }
         if inline {
             if let Shape::Declared {
-                setting: Setting::Class(c),
+                declaration: Setting::Class(c),
                 ..
             } = self.shape(core)?
             {
@@ -382,7 +382,9 @@ impl Plan<'_> {
 
     fn callback_arg(&self, i: usize, ty: &TypeRef, value: &TokenStream) -> Res<Delivery> {
         let name = match self.shape(ty) {
-            Ok(Shape::Declared { name, .. }) => names::snake(name),
+            Ok(Shape::Declared { ty, .. }) => super::declared_name(ty)
+                .map(names::snake)
+                .unwrap_or_else(|| format!("arg{i}")),
             Ok(Shape::Scalar(k)) => k.as_str().to_string(),
             _ => format!("arg{i}"),
         };

@@ -292,3 +292,16 @@ fn named(ty: &TypeRef) -> Option<String> {
         _ => None,
     }
 }
+
+/// The name of a type the C adapter can declare, including a borrowed use.
+pub(crate) fn declared_name(ty: &TypeRef) -> &str {
+    let core = match ty.kind() {
+        TypeKind::Ref { inner, .. } => inner.as_ref(),
+        _ => ty,
+    };
+    match core.kind() {
+        TypeKind::Named { id, .. } => &id.name,
+        TypeKind::String => "String",
+        _ => unreachable!("C declarations name only source types or String"),
+    }
+}

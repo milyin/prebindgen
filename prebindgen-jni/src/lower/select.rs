@@ -89,8 +89,13 @@ impl Plan<'_> {
             TypeKind::Optional(inner) => (&**inner, true),
             _ => (&param.ty, false),
         };
-        let (name, access) = match shape(core, |n| self.types.get(n)) {
-            Ok(Shape::Declared { name, access, .. }) => (name, access),
+        let (name, access) = match shape(core, |candidate| {
+            super::bare_declared_name(candidate).and_then(|name| self.types.get(name))
+        }) {
+            Ok(Shape::Declared { ty, .. }) => (
+                super::declared_name(ty).expect("a declared class name"),
+                Access::of(ty),
+            ),
             Ok(Shape::Undeclared(name)) => (name, Access::Owned),
             _ => return Ok(None),
         };

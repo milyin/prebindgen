@@ -36,6 +36,7 @@ impl Plan<'_> {
             Holding::Cow => input.map(|e| quote!(::std::borrow::Cow::Owned(#e))),
             _ => input,
         };
+        let access = Access::of(ty);
         Ok(match self.shape(ty)? {
             Shape::Unit => Input::new(Vec::new(), quote!(())),
             Shape::Scalar(k) => {
@@ -79,9 +80,7 @@ impl Plan<'_> {
                     quote!(#rt::fixed::<#t, #len>(#rt::#read(env, &#w)?.into_iter().map(|__x| #conv).collect())?),
                 )
             }
-            Shape::Declared {
-                setting, access, ..
-            } => match setting {
+            Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => {
                     let stage = c.resolved.input.as_ref().ok_or_else(|| {
                         crate::Error(format!("convert!({}) has no input", c.name))
@@ -249,6 +248,7 @@ impl Plan<'_> {
                 Output::single(w, e)
             })
         };
+        let access = Access::of(ty);
         Ok(match self.shape(ty)? {
             Shape::Unit => Output::none(value),
             Shape::Scalar(k) => {
@@ -284,9 +284,7 @@ impl Plan<'_> {
                     true,
                 )?
             }
-            Shape::Declared {
-                setting, access, ..
-            } => match setting {
+            Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => {
                     let stage = c.resolved.output.as_ref().ok_or_else(|| {
                         crate::Error(format!("convert!({}) has no output", c.name))
