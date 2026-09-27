@@ -207,10 +207,10 @@
 <a href=#207 id=207 data-nosnippet>207</a>/// encounters the bare-`MaybeUninit` error.
 <a href=#208 id=208 data-nosnippet>208</a>///
 <a href=#209 id=209 data-nosnippet>209</a>/// See the [`shape` module](mod@crate::shape) for a runnable recursive example.
-<a href=#210 id=210 data-nosnippet>210</a></span><span class="kw">pub fn </span>shape&lt;<span class="lifetime">'t</span>, D&gt;(
-<a href=#211 id=211 data-nosnippet>211</a>    ty: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>TypeRef,
+<a href=#210 id=210 data-nosnippet>210</a></span><span class="kw">pub fn </span>shape&lt;D&gt;(
+<a href=#211 id=211 data-nosnippet>211</a>    ty: <span class="kw-2">&amp;</span>TypeRef,
 <a href=#212 id=212 data-nosnippet>212</a>    shape_declared: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>TypeRef) -&gt; <span class="prelude-ty">Option</span>&lt;D&gt;,
-<a href=#213 id=213 data-nosnippet>213</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Shape&lt;<span class="lifetime">'t</span>, D&gt;, String&gt; {
+<a href=#213 id=213 data-nosnippet>213</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Shape&lt;<span class="lifetime">'_</span>, D&gt;, String&gt; {
 <a href=#214 id=214 data-nosnippet>214</a>    <span class="kw">match </span>ty.kind() {
 <a href=#215 id=215 data-nosnippet>215</a>        TypeKind::Str =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"a bare `str` cannot cross; use `&amp;str` or `String`"</span>.into()),
 <a href=#216 id=216 data-nosnippet>216</a>        TypeKind::Slice(<span class="kw">_</span>) =&gt; {
