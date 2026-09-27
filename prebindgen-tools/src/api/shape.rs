@@ -71,7 +71,7 @@ pub enum Shape<'t, S> {
     Declared {
         /// Name in the flat namespace.
         name: &'t str,
-        /// The adapter's setting returned by the `lookup` callback to [`shape()`].
+        /// The adapter's setting returned by the `declared_setting` callback to [`shape()`].
         setting: S,
         /// Whether this use owns or borrows the named type.
         access: Access,
@@ -96,15 +96,17 @@ pub enum Shape<'t, S> {
 /// Pass the [`TypeRef`] being converted and a closure that answers which
 /// named types this adapter has declared. The closure receives a type name
 /// such as `"Payload"` and returns the adapter's setting for it, or `None`.
-/// The adapter supplies this `lookup` closure from its declarations. It can
-/// pass `|name| settings.get(name)` to borrow a setting from a map.
+/// The adapter supplies this `declared_setting` closure from its declarations.
+/// It can pass `|name| settings.get(name)` to borrow a setting from a map.
+/// When the closure returns `Some(setting)`, `shape` returns
+/// [`Shape::Declared`] with that setting.
 ///
 /// # Walking into child types
 ///
 /// An adapter can get `ty` from a function parameter in the flat model, then
-/// call `shape(ty, lookup)` and match the returned [`Shape`]. Some variants
-/// hold a child [`TypeRef`]; call `shape` again with that child and the same
-/// closure. This example shows each call for `Option<Vec<Payload>>`:
+/// call `shape(ty, declared_setting)` and match the returned [`Shape`]. Some
+/// variants hold a child [`TypeRef`]; call `shape` again with that child and
+/// the same closure. This example shows each call for `Option<Vec<Payload>>`:
 ///
 /// ```
 /// use std::collections::HashMap;
@@ -120,13 +122,13 @@ pub enum Shape<'t, S> {
 ///     .build().unwrap();
 /// let ty = &flat.function("send").unwrap().params[0].ty;
 /// let settings = HashMap::from([("Payload".to_owned(), "opaque handle")]);
-/// let lookup = |name: &str| settings.get(name).copied();
+/// let declared_setting = |name: &str| settings.get(name).copied();
 ///
-/// let Shape::Option(inner) = shape(ty, lookup).unwrap() else { panic!() };
-/// let Shape::Seq { elem, holding: Holding::Owned } = shape(inner, lookup).unwrap()
+/// let Shape::Option(inner) = shape(ty, declared_setting).unwrap() else { panic!() };
+/// let Shape::Seq { elem, holding: Holding::Owned } = shape(inner, declared_setting).unwrap()
 ///     else { panic!() };
 /// assert!(matches!(
-///     shape(elem, lookup).unwrap(),
+///     shape(elem, declared_setting).unwrap(),
 ///     Shape::Declared {
 ///         name: "Payload", setting: "opaque handle", access: Access::Owned
 ///     }
@@ -134,29 +136,32 @@ pub enum Shape<'t, S> {
 /// ```
 ///
 /// The first two calls inspect the `Option` and `Vec` layers; neither calls
-/// `lookup`. The third reaches `Payload`, calls `lookup("Payload")`, and
-/// returns [`Shape::Declared`] with that setting. The adapter decides how
-/// to represent each layer on its boundary and which children to visit.
+/// `declared_setting`. The third reaches `Payload`, calls
+/// `declared_setting("Payload")`, and returns [`Shape::Declared`] with that
+/// setting. The adapter decides how to represent each layer on its boundary
+/// and which children to visit.
 /// A successful call describes only the current layer; it does not establish
 /// that the adapter can convert the complete type.
 ///
 /// # Named types
 ///
-/// `lookup` receives only the flat name, without generic arguments or
-/// borrow information. The original `ty` remains available if the adapter
-/// needs those details beyond what the returned shape carries.
+/// `declared_setting` receives only the flat name, without generic arguments
+/// or borrow information. [`TypeId`](prebindgen_flat::flat::TypeId) contains
+/// that same name; `String` is also checked but has no `TypeId`. The original
+/// `ty` remains available if the adapter needs further details.
 ///
 /// For a named `T`, `&T`, or `&mut T`, a setting produces
 /// [`Shape::Declared`] with [`Access::Owned`], [`Access::Shared`], or
 /// [`Access::Exclusive`], respectively. Without a setting the result is
 /// [`Shape::Undeclared`], not an error; that variant retains only the name.
-/// The adapter decides whether to reject an undeclared type.
+/// Here, "undeclared" means the adapter has no setting for the source type.
+/// The adapter decides whether to reject it.
 ///
-/// `String` is also offered to `lookup`, allowing an explicit declaration
-/// to take precedence over built-in text handling. Without that declaration,
+/// `String` is also offered to `declared_setting`, allowing an explicit
+/// declaration to take precedence over built-in text handling. Without it,
 /// `String` is [`Shape::Str`] with [`Holding::Owned`], whereas `&String` and
 /// `&mut String` are [`Shape::Ref`]. Other built-in containers do not consult
-/// `lookup` at their outer layer.
+/// `declared_setting` at their outer layer.
 ///
 /// # Borrows and containers
 ///
@@ -189,9 +194,9 @@ pub enum Shape<'t, S> {
 /// See the [`shape` module](mod@crate::shape) for a runnable recursive example.
 pub fn shape<'t, S>(
     ty: &'t TypeRef,
-    lookup: impl Fn(&str) -> Option<S>,
+    declared_setting: impl Fn(&str) -> Option<S>,
 ) -> Result<Shape<'t, S>, String> {
-    let named = |name: &'t str, access: Access| match lookup(name) {
+    let named = |name: &'t str, access: Access| match declared_setting(name) {
         Some(setting) => Shape::Declared {
             name,
             setting,
@@ -202,7 +207,7 @@ pub fn shape<'t, S>(
     Ok(match ty.kind() {
         TypeKind::Unit => Shape::Unit,
         TypeKind::Scalar(k) => Shape::Scalar(*k),
-        TypeKind::String => match lookup("String") {
+        TypeKind::String => match declared_setting("String") {
             Some(setting) => Shape::Declared {
                 name: "String",
                 setting,
@@ -250,7 +255,7 @@ pub fn shape<'t, S>(
                 },
                 TypeKind::Uninit(t) if *mutable => Shape::Out(t),
                 TypeKind::Named { id, .. } => named(&id.name, access),
-                TypeKind::String => match lookup("String") {
+                TypeKind::String => match declared_setting("String") {
                     Some(setting) => Shape::Declared {
                         name: "String",
                         setting,

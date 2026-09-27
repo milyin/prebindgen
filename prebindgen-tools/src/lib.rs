@@ -492,8 +492,9 @@ pub mod record {
 /// [`Access`] describes ownership or borrowing of a value; [`Holding`]
 /// distinguishes owned sequences, slices, borrowed vectors, and `Cow`.
 ///
-/// [`shape()`] documents the full lookup rules, the special handling of
-/// `String` and common borrows, and which unsupported forms return errors.
+/// [`shape()`] documents when it checks adapter declarations, the special
+/// handling of `String` and common borrows, and which unsupported forms
+/// return errors.
 /// A successful call only classifies the current layer: an adapter must
 /// still handle undeclared names and errors encountered in its children.
 ///
@@ -506,8 +507,8 @@ pub mod record {
 ///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
 ///     .build().unwrap();
 /// let ty = &flat.function("send").unwrap().params[0].ty;
-/// // The Option layer exposes its child without looking up Payload yet.
-/// let Shape::Option(inner) = shape::<&str>(ty, |_| panic!("no lookup at this layer"))
+/// // The Option layer exposes its child without consulting adapter declarations.
+/// let Shape::Option(inner) = shape::<&str>(ty, |_| panic!("no declaration check at this layer"))
 ///     .unwrap() else { panic!("expected Option") };
 /// // The child is &Payload: its declaration and borrow are reported together.
 /// assert!(matches!(
