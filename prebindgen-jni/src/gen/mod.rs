@@ -164,7 +164,7 @@ pub(crate) fn generate(b: &JniGenBuilder, flat: &Flat) -> Res<Generation> {
     })
 }
 
-impl<'a> Gen<'a> {
+impl Gen<'_> {
     /// The report: what each Kotlin package binds, and from which Rust item.
     fn render_report(&self) -> String {
         let mut by_pkg: BTreeMap<&str, Vec<&str>> = BTreeMap::new();

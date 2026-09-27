@@ -138,7 +138,7 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
 }
 "#;
 
-impl<'a> Gen<'a> {
+impl Gen<'_> {
     pub(crate) fn kotlin_prelude(&mut self) {
         let pkg = self.base_pkg.clone();
         self.kt_push(&pkg, PRELUDE.to_string());

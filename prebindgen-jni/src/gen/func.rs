@@ -91,7 +91,7 @@ pub(crate) struct FnPlan {
     pub err: EPlan,
 }
 
-impl<'a> Gen<'a> {
+impl Gen<'_> {
     /// Plan a bound function.
     pub(crate) fn plan(&mut self, b: &Bound) -> Res<FnPlan> {
         let f = &b.func;

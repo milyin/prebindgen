@@ -42,7 +42,7 @@ pub(crate) enum SelVariant {
     Handle,
 }
 
-impl<'a> Gen<'a> {
+impl Gen<'_> {
     /// The selector for `param`, if an input expansion applies to it.
     pub(crate) fn selector(
         &self,

@@ -37,7 +37,7 @@ pub(crate) fn jni_symbol(class_fqn: &str, method: &str) -> String {
     format!("Java_{class}_{}", jni_escape(method))
 }
 
-impl<'a> Gen<'a> {
+impl Gen<'_> {
     pub(crate) fn rust_prelude(&mut self) {
         let je = format!("{}/JniErrorHandler", self.base_pkg.replace('.', "/"));
         self.rust.push(quote! {

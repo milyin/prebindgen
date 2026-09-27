@@ -64,7 +64,7 @@ fn nullable(kt: String, gated: bool) -> String {
     }
 }
 
-impl<'a> Gen<'a> {
+impl Gen<'_> {
     /// The expansion that applies to a value of `ty`: the explicit one, else
     /// the type's own; `None` when it would only hand over the value itself.
     pub(crate) fn expansion<'e>(
@@ -83,22 +83,6 @@ impl<'a> Gen<'a> {
         (!identity).then_some(e)
     }
 
-    /// `ty` under its transparent layers and borrows: the core type, the
-    /// value expression reaching it, and whether that value is borrowed.
-    fn peel<'t>(&self, ty: &'t TypeRef, value: TokenStream) -> (&'t TypeRef, TokenStream, bool) {
-        match ty.kind() {
-            TypeKind::Boxed(inner) => {
-                let (t, v, b) = self.peel(inner, quote!((*#value)));
-                (t, v, b)
-            }
-            TypeKind::Ref { inner, .. } => {
-                let (t, v, _) = self.peel(inner, value);
-                (t, v, true)
-            }
-            _ => (ty, value, false),
-        }
-    }
-
     /// Deliver `value` (of `ty`) as parameters named under `name`, with raw
     /// leaves under `root`.
     #[allow(clippy::too_many_arguments)]
@@ -113,10 +97,10 @@ impl<'a> Gen<'a> {
         inline: bool,
         depth: usize,
     ) -> Res<Delivery> {
-        let (core, v, borrowed) = self.peel(ty, value.clone());
+        let (core, v, borrowed) = peel(ty, value.clone());
         // An optional value whose inner type expands: one presence gate.
         if let TypeKind::Optional(inner) = core.kind() {
-            let (inner_core, _, _) = self.peel(inner, quote!(__unused));
+            let (inner_core, _, _) = peel(inner, quote!(__unused));
             if self.expansion(inner_core, explicit).is_some() {
                 let present = Leaf::new(super::leaf::LeafTy::Prim(super::leaf::Prim::Z))
                     .under(&join(root, "_present"));
@@ -399,22 +383,6 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The base a callback interface is named from.
-    fn type_base(&self, ty: &TypeRef) -> String {
-        match ty.kind() {
-            TypeKind::Named { id, .. } => id.name.clone(),
-            TypeKind::Scalar(k) => k.as_str().to_string(),
-            TypeKind::String | TypeKind::Str => "String".to_string(),
-            TypeKind::Ref { inner, .. } | TypeKind::Boxed(inner) | TypeKind::Cow { inner, .. } => {
-                self.type_base(inner)
-            }
-            TypeKind::Vec(e) | TypeKind::Slice(e) => format!("{}List", self.type_base(e)),
-            TypeKind::Optional(t) => format!("Optional{}", self.type_base(t)),
-            TypeKind::Array { elem, .. } => format!("{}Array", self.type_base(elem)),
-            _ => "Value".to_string(),
-        }
-    }
-
     fn callback_base(&self, ty: &TypeRef) -> Res<String> {
         let TypeKind::Callback { args } = ty.kind() else {
             return err(format!("`{ty}` is not a callback"));
@@ -422,11 +390,7 @@ impl<'a> Gen<'a> {
         if args.is_empty() {
             return Ok("Unit".to_string());
         }
-        Ok(args
-            .iter()
-            .map(|a| self.type_base(a))
-            .collect::<Vec<_>>()
-            .join(""))
+        Ok(args.iter().map(type_base).collect::<Vec<_>>().join(""))
     }
 
     /// The user-facing callback interface of `ty`.
@@ -557,6 +521,35 @@ impl<'a> Gen<'a> {
         let pkg = self.base_pkg.clone();
         self.kt_push(&pkg, text);
         Ok(())
+    }
+}
+
+/// `ty` under its transparent layers and borrows: the core type, the value
+/// expression reaching it, and whether that value is borrowed.
+fn peel(ty: &TypeRef, value: TokenStream) -> (&TypeRef, TokenStream, bool) {
+    match ty.kind() {
+        TypeKind::Boxed(inner) => peel(inner, quote!((*#value))),
+        TypeKind::Ref { inner, .. } => {
+            let (t, v, _) = peel(inner, value);
+            (t, v, true)
+        }
+        _ => (ty, value, false),
+    }
+}
+
+/// The base a callback interface is named from.
+fn type_base(ty: &TypeRef) -> String {
+    match ty.kind() {
+        TypeKind::Named { id, .. } => id.name.clone(),
+        TypeKind::Scalar(k) => k.as_str().to_string(),
+        TypeKind::String | TypeKind::Str => "String".to_string(),
+        TypeKind::Ref { inner, .. } | TypeKind::Boxed(inner) | TypeKind::Cow { inner, .. } => {
+            type_base(inner)
+        }
+        TypeKind::Vec(e) | TypeKind::Slice(e) => format!("{}List", type_base(e)),
+        TypeKind::Optional(t) => format!("Optional{}", type_base(t)),
+        TypeKind::Array { elem, .. } => format!("{}Array", type_base(elem)),
+        _ => "Value".to_string(),
     }
 }
 
