@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Classify one outer layer of `ty` for an adapter to lower."><title>shape in prebindgen_tools::shape - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">shape</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">shape</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#recursing-over-a-type" title="Recursing over a type">Recursing over a type</a></li><li><a href="#looking-up-declarations" title="Looking up declarations">Looking up declarations</a></li><li><a href="#borrows-and-containers" title="Borrows and containers">Borrows and containers</a></li><li><a href="#errors" title="Errors">Errors</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In prebindgen_<wbr>tools::<wbr>shape</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_tools</a>::<wbr><a href="index.html">shape</a></div><h1>Function <span class="fn">shape</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_tools/api/shape.rs.html#163-244">Source</a> </span></div><pre class="rust item-decl"><code>pub fn shape&lt;'t, S&gt;(
+    ty: &amp;'t TypeRef,
+    lookup: impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/ops/function/trait.Fn.html" title="trait core::ops::function::Fn">Fn</a>(&amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;S&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.Shape.html" title="enum prebindgen_tools::shape::Shape">Shape</a>&lt;'t, S&gt;, <a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Classify one outer layer of <code>ty</code> for an adapter to lower.</p>
+<p>This is the common first step in deciding how a source value crosses a
+binding boundary. It describes the source shape and attaches an adapter
+setting when available. It does not choose wire types, generate conversion
+code, inspect a declared struct’s fields, or validate all nested types.</p>
+<h2 id="recursing-over-a-type"><a class="doc-anchor" href="#recursing-over-a-type">§</a>Recursing over a type</h2>
+<p>For <code>Option&lt;Vec&lt;Payload&gt;&gt;</code>, the first call returns <a href="enum.Shape.html#variant.Option" title="variant prebindgen_tools::shape::Shape::Option"><code>Shape::Option</code></a> with
+a reference to <code>Vec&lt;Payload&gt;</code>. Classifying that child returns <a href="enum.Shape.html#variant.Seq" title="variant prebindgen_tools::shape::Shape::Seq"><code>Shape::Seq</code></a>
+with <code>holding: Holding::Owned</code> and the element <code>Payload</code>. Only a call on
+that element consults <code>lookup("Payload")</code>.</p>
+<p>The adapter matches each returned shape, chooses what that layer means
+for its boundary, and recursively handles the children it needs. For
+example, a sequence may become a pointer and length in C, or a JVM array
+in JNI. Successfully classifying the outer layer does not imply the
+adapter supports the whole type.</p>
+<h2 id="looking-up-declarations"><a class="doc-anchor" href="#looking-up-declarations">§</a>Looking up declarations</h2>
+<p><code>lookup</code> maps a named type’s flat name to the adapter’s own setting <code>S</code>.
+It can return a reference, for example <code>|name| settings.get(name)</code>;
+settings do not need to be cloned. The name alone is supplied, without
+generic arguments or borrow information. Keep <code>ty</code> if the adapter needs
+those details beyond what the returned shape carries.</p>
+<p>For a named <code>T</code>, <code>&amp;T</code>, or <code>&amp;mut T</code>, a setting produces
+<a href="enum.Shape.html#variant.Declared" title="variant prebindgen_tools::shape::Shape::Declared"><code>Shape::Declared</code></a> with <a href="enum.Access.html#variant.Owned" title="variant prebindgen_tools::shape::Access::Owned"><code>Access::Owned</code></a>, <a href="enum.Access.html#variant.Shared" title="variant prebindgen_tools::shape::Access::Shared"><code>Access::Shared</code></a>, or
+<a href="enum.Access.html#variant.Exclusive" title="variant prebindgen_tools::shape::Access::Exclusive"><code>Access::Exclusive</code></a>, respectively. Without a setting the result is
+<a href="enum.Shape.html#variant.Undeclared" title="variant prebindgen_tools::shape::Shape::Undeclared"><code>Shape::Undeclared</code></a>, not an error; that variant retains only the name.
+The adapter decides whether to reject an undeclared type.</p>
+<p><code>String</code> is also offered to <code>lookup</code>, allowing an explicit declaration
+to take precedence over built-in text handling. Without that declaration,
+<code>String</code> is <a href="enum.Shape.html#variant.Str" title="variant prebindgen_tools::shape::Shape::Str"><code>Shape::Str</code></a> with <a href="enum.Holding.html#variant.Owned" title="variant prebindgen_tools::shape::Holding::Owned"><code>Holding::Owned</code></a>, whereas <code>&amp;String</code> and
+<code>&amp;mut String</code> are <a href="enum.Shape.html#variant.Ref" title="variant prebindgen_tools::shape::Shape::Ref"><code>Shape::Ref</code></a>. Other built-in containers do not consult
+<code>lookup</code> at their outer layer.</p>
+<h2 id="borrows-and-containers"><a class="doc-anchor" href="#borrows-and-containers">§</a>Borrows and containers</h2>
+<p>Several common combinations are returned as a single shape:</p>
+<div><table><thead><tr><th>Source type</th><th>Shape</th></tr></thead><tbody>
+<tr><td><code>&amp;str</code></td><td><code>Str(Borrowed)</code></td></tr>
+<tr><td><code>Vec&lt;T&gt;</code></td><td><code>Seq { elem: T, holding: Owned }</code></td></tr>
+<tr><td><code>&amp;[T]</code></td><td><code>Seq { elem: T, holding: Borrowed }</code></td></tr>
+<tr><td><code>&amp;Vec&lt;T&gt;</code></td><td><code>Seq { elem: T, holding: BorrowedVec }</code></td></tr>
+<tr><td><code>Cow&lt;str&gt;</code> / <code>Cow&lt;[T]&gt;</code></td><td><code>Str(Cow)</code> / <code>Seq { elem: T, holding: Cow }</code></td></tr>
+<tr><td><code>[T; N]</code></td><td><code>Array { elem: T, len: N }</code>, using the resolved length</td></tr>
+<tr><td><code>&amp;mut MaybeUninit&lt;T&gt;</code></td><td><code>Out(T)</code>, a slot the callee fills</td></tr>
+</tbody></table>
+</div>
+<p>Other borrows, including <code>&amp;mut str</code>, <code>&amp;mut [T]</code>, and <code>&amp;mut Vec&lt;T&gt;</code>,
+remain <a href="enum.Shape.html#variant.Ref" title="variant prebindgen_tools::shape::Shape::Ref"><code>Shape::Ref</code></a> with their inner type and access. <code>Option</code>, <code>Box</code>,
+other <code>Cow</code> types, <code>Result</code>, and callbacks expose their children without
+visiting them. Lifetimes are not represented in <code>Shape</code>; the original
+[<code>TypeRef</code>] remains available to the caller.</p>
+<h2 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h2>
+<p>A bare <code>str</code>, bare slice <code>[T]</code>, or bare <code>MaybeUninit&lt;T&gt;</code> returns an error
+explaining the supported form. The <code>&amp;mut MaybeUninit&lt;T&gt;</code> case above is
+recognized before its inner type is visited. A different borrow such as
+<code>&amp;MaybeUninit&lt;T&gt;</code> initially returns <code>Ref</code>; classifying its child then
+encounters the bare-<code>MaybeUninit</code> error.</p>
+<p>See the <a href="index.html" title="mod prebindgen_tools::shape"><code>shape</code> module</a> for a runnable recursive example.</p>
+</div></details></section></div></main></body></html>

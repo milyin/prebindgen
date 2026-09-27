@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Naming source items from generated Rust code."><title>prebindgen_tools::qualify - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="prebindgen_tools" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module qualify</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../prebindgen_tools/index.html">prebindgen_<wbr>tools</a><span class="version">0.7.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module qualify</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#choosing-a-path" title="Choosing a path">Choosing a path</a></li><li><a href="#item-paths-and-type-expressions" title="Item paths and type expressions">Item paths and type expressions</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate prebindgen_<wbr>tools</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">prebindgen_tools</a></div><h1>Module <span>qualify</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/prebindgen_tools/lib.rs.html#395">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Naming source items from generated Rust code.</p>
+<p>The flat model identifies a source item by its flat name, such as
+<code>Payload</code> or <code>make</code>. A binding’s generated Rust usually lives in a
+different crate, where those names are not automatically in scope.
+<a href="struct.Qualifier.html" title="struct prebindgen_tools::qualify::Qualifier"><code>Qualifier</code></a> uses each item’s source location to spell a path such as
+<code>source_crate::Payload</code> or <code>source_crate::make</code>. Use it when a wrapper
+calls a source function or a conversion names a source type.</p>
+<h3 id="choosing-a-path"><a class="doc-anchor" href="#choosing-a-path">§</a>Choosing a path</h3>
+<p><a href="struct.Qualifier.html#method.new" title="associated function prebindgen_tools::qualify::Qualifier::new"><code>Qualifier::new</code></a> borrows the model. For each known item,
+<a href="struct.Qualifier.html#method.module_of" title="method prebindgen_tools::qualify::Qualifier::module_of"><code>Qualifier::module_of</code></a> reads the crate name recorded in its
+<a href="prebindgen::SourceLocation"><code>SourceLocation</code></a>, converting hyphens to
+underscores for a Rust path. Items captured from different crates can
+therefore receive different prefixes from the same qualifier.</p>
+<p><a href="struct.Qualifier.html#method.with_default_module" title="method prebindgen_tools::qualify::Qualifier::with_default_module"><code>Qualifier::with_default_module</code></a> supplies a fallback for <strong>known items
+without a recorded crate name</strong>, for example a model assembled directly
+from parsed syntax in a test. A recorded crate name takes precedence.
+A name absent from the model is left unchanged even when a fallback is
+configured; a known item with neither a crate name nor a fallback also
+keeps its bare name. The generated crate must be able to resolve the
+emitted paths: qualification does not add dependencies or imports, or
+discover Cargo dependency aliases.</p>
+<h3 id="item-paths-and-type-expressions"><a class="doc-anchor" href="#item-paths-and-type-expressions">§</a>Item paths and type expressions</h3>
+<ul>
+<li><a href="struct.Qualifier.html#method.path" title="method prebindgen_tools::qualify::Qualifier::path"><code>Qualifier::path</code></a> qualifies one item name, such as the function a
+<a href="../function/struct.FunctionWriter.html" title="struct prebindgen_tools::function::FunctionWriter"><code>FunctionWriter</code></a> will call.</li>
+<li><a href="struct.Qualifier.html#method.ty" title="method prebindgen_tools::qualify::Qualifier::ty"><code>Qualifier::ty</code></a> walks a complete model type. For example,
+<code>Option&lt;Vec&lt;Payload&gt;&gt;</code> becomes
+<code>::core::option::Option&lt;::std::vec::Vec&lt;source_crate::Payload&gt;&gt;</code>.
+It qualifies named types inside generic arguments and containers, and
+named constants used as array lengths. Standard containers receive
+absolute <code>::core</code> or <code>::std</code> paths; scalar names such as <code>u32</code> stay as is.</li>
+<li><a href="struct.Qualifier.html#method.ty_elided" title="method prebindgen_tools::qualify::Qualifier::ty_elided"><code>Qualifier::ty_elided</code></a> provides the same naming for positions such as
+closure arguments that cannot refer to a source lifetime parameter.
+Its method documentation lists which shapes it elides.</li>
+</ul>
+<p>These methods return Rust tokens for the source value’s type or path.
+The adapter still chooses the wire representation: qualifying
+<code>Payload</code> does not turn it into a pointer, handle, or mirror struct.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>prebindgen::SourceLocation;
+<span class="kw">use </span>prebindgen_flat::Flat;
+<span class="kw">use </span>prebindgen_tools::Qualifier;
+<span class="kw">use </span>quote::quote;
+
+<span class="kw">let </span>source = syn::parse_file(
+    <span class="string">"pub struct Payload; pub fn make() -&gt; Option&lt;Vec&lt;Payload&gt;&gt; { None }"</span>,
+).unwrap();
+<span class="kw">let </span>location = SourceLocation {
+    crate_name: <span class="prelude-val">Some</span>(<span class="string">"source-crate"</span>.into()), ..Default::default()
+};
+<span class="kw">let </span>flat = Flat::builder()
+    .items(source.items.into_iter().map(|item| (item, location.clone())))
+    .build().unwrap();
+<span class="kw">let </span>q = Qualifier::new(<span class="kw-2">&amp;</span>flat);
+<span class="kw">let </span>function = flat.function(<span class="string">"make"</span>).unwrap();
+<span class="macro">assert_eq!</span>(q.path(<span class="kw-2">&amp;</span>function.name).to_string(), <span class="macro">quote!</span>(source_crate::make).to_string());
+<span class="kw">let </span>expected: syn::Type = <span class="macro">syn::parse_quote!</span>(
+    ::core::option::Option&lt;::std::vec::Vec&lt;source_crate::Payload&gt;&gt;
+);
+<span class="macro">assert_eq!</span>(syn::parse2::&lt;syn::Type&gt;(q.ty(<span class="kw-2">&amp;</span>function.ret)).unwrap(), expected);
+
+<span class="comment">// The fallback does not override the recorded source crate.
+</span><span class="kw">let </span>q = q.with_default_module(<span class="prelude-val">Some</span>(<span class="macro">syn::parse_quote!</span>(<span class="kw">crate</span>::source)));
+<span class="macro">assert_eq!</span>(q.path(<span class="kw-2">&amp;</span>function.name).to_string(), <span class="macro">quote!</span>(source_crate::make).to_string());
+<span class="comment">// A binding-local helper absent from the model stays unqualified.
+</span><span class="macro">assert_eq!</span>(q.path(<span class="kw-2">&amp;</span><span class="macro">syn::parse_quote!</span>(local_helper)).to_string(), <span class="string">"local_helper"</span>);</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Qualifier.html" title="struct prebindgen_tools::qualify::Qualifier">Qualifier</a></dt><dd>Spells source items and types as Rust paths usable from a binding crate.</dd></dl></section></div></main></body></html>
