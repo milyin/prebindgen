@@ -34,10 +34,16 @@ write        the plan written: each element through its generator, in order
 **The plan** holds two things. The *settings* say how each declared type
 crosses — for C an opaque handle, an enum or union mirror, a data or
 `repr(C)` struct, an error, or a conversion; for JNI a Kotlin class of some
-kind, or a conversion. The *items* are the elements to write, in declaration
-order, each with every decision about it already made: its exported name, and
-for JNI its Kotlin name, how each parameter crosses and how the result and the
-error leave. Every declaration error surfaces while the plan is made.
+kind, or a conversion. The *items* are the elements to write, each with every
+decision about it already made: its exported name, and for JNI its Kotlin
+name, how each parameter crosses and how the result and the error leave.
+Every declaration error surfaces while the plan is made.
+
+The items are grouped by kind, each kind in the order it was declared. C
+writes the declared types, then the callbacks' closure structs, then the
+functions. JNI goes package by package in declaration order, writing each
+package's classes (with their members), then its functions, then its
+constants; the shared Kotlin interfaces follow all packages.
 
 **Writing** walks the items and calls a generator for each. The generated Rust
 goes into one file; the JNI adapter writes the Kotlin for the same element

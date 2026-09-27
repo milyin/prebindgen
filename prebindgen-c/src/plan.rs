@@ -1,6 +1,7 @@
 //! The plan: the build script's declarations resolved against the flat
-//! model — the setting of every declared type, and the ordered list of
-//! elements to write.
+//! model — the setting of every declared type, and the list of elements to
+//! write: the declared types, then the callbacks' closure structs, then the
+//! functions, each kind in declaration order.
 //!
 //! Everything a declaration can get wrong is found here: a missing item, a
 //! kind that does not match the source, a conversion that does not fit.
@@ -58,7 +59,7 @@ pub(crate) enum Kind {
     ReprC { assume_valid: bool },
 }
 
-/// One element of the binding, in the order it is written.
+/// One element of the binding.
 #[allow(clippy::large_enum_variant)] // one per element
 pub(crate) enum Item {
     /// A declared type with a C spelling, by name.

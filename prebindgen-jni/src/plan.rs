@@ -5,8 +5,9 @@
 //! crosses — a Kotlin class of some kind, or a conversion — and what its
 //! default boundary shape is (`expand_param!`, `expand_return!`); the
 //! lowering in [`lower`](crate::lower) reads them. The **items** are the
-//! elements to write, in declaration order, each with every decision about
-//! it already made: its Kotlin and extern names, how each parameter crosses
+//! elements to write — package by package, each package's classes, then
+//! its functions, then its constants — each with every decision about it
+//! already made: its Kotlin and extern names, how each parameter crosses
 //! (a value, packed, a selector), how the result and the error leave. The
 //! Kotlin support interfaces those decisions need — callback, sink, builder,
 //! folder and error-handler interfaces — are planned alongside, once each.
@@ -185,7 +186,7 @@ pub(crate) struct Binding {
     pub err: EPlan,
 }
 
-/// One element of the binding, in declaration order.
+/// One element of the binding.
 pub(crate) enum Item {
     Class {
         class: Rc<Class>,
