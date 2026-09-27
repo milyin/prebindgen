@@ -7,23 +7,29 @@ set -euo pipefail
 out="${1:?usage: build.sh <out-dir>}"
 
 # The published workspace crates from .github/workflows/rust.yml. No examples/*.
+#
+# In dependency order, and documented one at a time: rustdoc links into
+# another crate only when that crate's `target/doc/<crate>/` exists before it
+# starts rendering. Documented together, a crate races its dependencies, and
+# every link and signature type pointing into one that is not written yet
+# renders as plain text, without a warning.
 crates=(
   prebindgen
+  prebindgen-c-runtime
+  prebindgen-jni-runtime
+  prebindgen-proc-macro
   prebindgen-flat
   prebindgen-tools
   prebindgen-c
   prebindgen-jni
-  prebindgen-proc-macro
-  prebindgen-c-runtime
-  prebindgen-jni-runtime
 )
 
-args=()
+rm -rf target/doc
 for c in "${crates[@]}"; do
-  args+=(-p "$c")
+  cargo doc --no-deps -p "$c"
 done
 
-cargo doc --no-deps "${args[@]}"
+site/check-links.sh target/doc "${crates[@]}"
 
 rm -rf "$out"
 mkdir -p "$out"

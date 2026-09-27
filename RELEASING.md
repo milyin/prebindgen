@@ -73,7 +73,7 @@ while still running the complete release from CI.
    cargo fmt --all -- --check \
      --config "unstable_features=true,imports_granularity=Crate,group_imports=StdExternalCrate"
    cargo clippy --all-targets --all-features -- -D warnings
-   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+   RUSTDOCFLAGS="-D warnings" ./site/build.sh site-build   # docs, then the rendered links
    cargo test --all --all-features
    ./examples/regen-check.sh
    cargo package -p <crate>
