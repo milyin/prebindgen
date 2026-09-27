@@ -1,9 +1,0 @@
-(function() {
-    const implementors = Object.fromEntries([["prebindgen",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.98.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen/enum.RustEdition.html\" title=\"enum prebindgen::RustEdition\">RustEdition</a>",0]]],["prebindgen_flat",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.98.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_flat/flat/enum.ScalarKind.html\" title=\"enum prebindgen_flat::flat::ScalarKind\">ScalarKind</a>",0]]],["prebindgen_tools",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.98.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_tools/shape/enum.Access.html\" title=\"enum prebindgen_tools::shape::Access\">Access</a>",0],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.98.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_tools/shape/enum.Holding.html\" title=\"enum prebindgen_tools::shape::Holding\">Holding</a>",0],["impl&lt;'a&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.98.1/core/marker/trait.Copy.html\" title=\"trait core::marker::Copy\">Copy</a> for <a class=\"enum\" href=\"prebindgen_tools/record/enum.Record.html\" title=\"enum prebindgen_tools::record::Record\">Record</a>&lt;'a&gt;",0]]]]);
-    if (window.register_implementors) {
-        window.register_implementors(implementors);
-    } else {
-        window.pending_implementors = implementors;
-    }
-})()
-//{"start":59,"fragment_lengths":[279,303,867]}
