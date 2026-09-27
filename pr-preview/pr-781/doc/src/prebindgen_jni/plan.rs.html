@@ -437,12 +437,12 @@
 <a href=#437 id=437 data-nosnippet>437</a>        <span class="kw">for </span>p <span class="kw">in </span><span class="kw-2">&amp;</span>b.packages {
 <a href=#438 id=438 data-nosnippet>438</a>            decls.extend(p.funs.iter().filter_map(|f| f.ret.as_ref()));
 <a href=#439 id=439 data-nosnippet>439</a>            <span class="kw">for </span>c <span class="kw">in </span><span class="kw-2">&amp;</span>p.classes {
-<a href=#440 id=440 data-nosnippet>440</a>                <span class="kw">let </span>members: <span class="kw-2">&amp;</span>[FunctionDecl] = <span class="kw">match </span>c {
-<a href=#441 id=441 data-nosnippet>441</a>                    ClassDecl::Ptr(d) =&gt; <span class="kw-2">&amp;</span>d.methods,
-<a href=#442 id=442 data-nosnippet>442</a>                    ClassDecl::Data(d) =&gt; <span class="kw-2">&amp;</span>d.methods,
-<a href=#443 id=443 data-nosnippet>443</a>                    <span class="kw">_ </span>=&gt; <span class="kw-2">&amp;</span>[],
+<a href=#440 id=440 data-nosnippet>440</a>                <span class="kw">let </span>(methods, ctors): (<span class="kw-2">&amp;</span>[FunctionDecl], <span class="kw-2">&amp;</span>[FunctionDecl]) = <span class="kw">match </span>c {
+<a href=#441 id=441 data-nosnippet>441</a>                    ClassDecl::Ptr(d) =&gt; (<span class="kw-2">&amp;</span>d.methods, <span class="kw-2">&amp;</span>d.constructors),
+<a href=#442 id=442 data-nosnippet>442</a>                    ClassDecl::Data(d) =&gt; (<span class="kw-2">&amp;</span>d.methods, <span class="kw-2">&amp;</span>d.constructors),
+<a href=#443 id=443 data-nosnippet>443</a>                    <span class="kw">_ </span>=&gt; (<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]),
 <a href=#444 id=444 data-nosnippet>444</a>                };
-<a href=#445 id=445 data-nosnippet>445</a>                decls.extend(members.iter().filter_map(|f| f.ret.as_ref()));
+<a href=#445 id=445 data-nosnippet>445</a>                decls.extend(methods.iter().chain(ctors).filter_map(|f| f.ret.as_ref()));
 <a href=#446 id=446 data-nosnippet>446</a>            }
 <a href=#447 id=447 data-nosnippet>447</a>        }
 <a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">while let </span><span class="prelude-val">Some</span>(d) = decls.pop() {
