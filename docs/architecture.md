@@ -7,7 +7,7 @@ language bindings:
 #[prebindgen] items ──► prebindgen::Source ──► prebindgen_flat::Flat ──► adapter ──► generated Rust (+ C header / Kotlin)
    (source crate)        captured records        the flat model          (prebindgen-c, prebindgen-jni)
                                                                             │
-                                                                            └── calls the generators in prebindgen-tools
+                                                                            └── uses type and conversion utilities in prebindgen-tools
 ```
 
 * **The flat model** (`prebindgen-flat`) is what a source crate declared: its
@@ -16,9 +16,9 @@ language bindings:
 * **An adapter** (`prebindgen-c`, `prebindgen-jni`) makes every decision. Its
   build-script builder collects declarations; the adapter turns them into a
   plan and writes the plan element by element.
-* **`prebindgen-tools`** holds the generators the adapter calls — one per kind
-  of Rust item — and the helpers its recursion uses. It keeps no state across
-  elements: a generator writes one element from what it is given.
+* **`prebindgen-tools`** provides type inspection, source naming, conversion
+  composition and generated-file utilities. Item generation belongs to the
+  adapters.
 
 ## An adapter
 
@@ -28,7 +28,7 @@ Both adapters have the same four parts:
 builder.rs   the build script's API: declarations, collected as given
 plan.rs      the declarations resolved against the flat model
 lower        how each type crosses, by recursion over its structure
-write        the plan written: each element through its generator, in order
+write        the plan written: each element in order
 ```
 
 **The plan** holds two things. The *settings* say how each declared type
@@ -45,34 +45,29 @@ functions. JNI goes package by package in declaration order, writing each
 package's classes (with their members), then its functions, then its
 constants; the shared Kotlin interfaces follow all packages.
 
-**Writing** walks the items and calls a generator for each. The generated Rust
+**Writing** walks the items and emits each using adapter-specific code. The generated Rust
 goes into one file; the JNI adapter writes the Kotlin for the same element
 into the file of its package. Nothing is emitted on demand, so nothing needs
 deduplicating while writing: a type is written where it is declared, and a
 Kotlin interface several functions share (a callback, sink, builder, folder
 or error handler) is planned once and written once.
 
-## Generators
+## Code generation
 
-A generator takes the flat element it wraps and header customizations
-through a builder, and asks for the boundary of each value through a callback
-trait:
+Each adapter generates its own wrappers, callback closures and destination
+representations. The C adapter builds C ABI signatures and mirror types; the
+JNI adapter builds JNI signatures and the corresponding Kotlin surface.
+Their code owns parameter evaluation order, source calls, return delivery,
+resource handling and failure policy.
 
-| Generator | Writes | The adapter's callback answers |
-|---|---|---|
-| `FunctionWriter` | an exported wrapper around a function | the result: the return type, extra out-wires and the return body (`Return`); each parameter: its wires and the wire→value conversion (`Input`); what a failed conversion does |
-| `StructWriter` | a mirror struct and both conversions | each field: its wires, both directions |
-| `SumWriter` | a mirror enum and both conversions | each field of each alternative, both directions |
-| `ClosureWriter` | an `impl Fn(..)` over a foreign callback | each argument: its wires (`Output`) |
-
-A callback gets only what it answers for — a parameter's name and type, a
-field, an argument — and returns final wire types. How a `Vec<Payload>`
-becomes a pointer and a length (C) or a count and one array per field (JNI)
-is the adapter's answer.
+`prebindgen-tools` provides conversion expressions and composition utilities,
+not item templates or writer callback traits. Adapters place `Input` and
+`Output` expressions directly into their generated code. This allows each
+boundary to choose its own layout and construction strategy.
 
 ## Recursion
 
-A callback answers for a whole type by recursing over its structure.
+An adapter lowers a whole type by recursing over its structure.
 `shape(ty, lookup)` reads one layer of a type: a scalar, text, a sequence and
 how it is held, an `Option`, a `Box`, a borrow, a callback, or a named type
 together with the adapter's setting for it and whether it is owned, shared or
@@ -118,7 +113,7 @@ handle, chosen by a selector.
 prebindgen              the base: Source, SourceLocation, the capture format
 prebindgen-proc-macro   #[prebindgen]
 prebindgen-flat         the flat model                          deps: prebindgen
-prebindgen-tools        generators, recursion helpers, output   deps: prebindgen-flat
+prebindgen-tools        type inspection, conversion composition, output   deps: prebindgen-flat
 prebindgen-c            C / cbindgen adapter                    deps: prebindgen-tools
 prebindgen-jni          JNI / Kotlin adapter                    deps: prebindgen-tools
 prebindgen-c-runtime    called by generated C code              no deps

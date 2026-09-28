@@ -15,14 +15,17 @@
 //!   ([`Plan::callback_arg`]).
 
 use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef};
-use prebindgen_tools::{
-    function::result_ident, names, shape, Access, Input, Output, Return, SequenceKind, Shape,
-    TextKind, Wire,
-};
+use prebindgen_tools::{names, shape, Access, Input, Output, SequenceKind, Shape, TextKind, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 use crate::plan::{declared_name, err, CType, Kind, Plan, Res, Setting};
+
+pub(crate) struct Return {
+    pub ty: Option<TokenStream>,
+    pub wires: Vec<Wire>,
+    pub body: TokenStream,
+}
 
 /// A result's delivery, plus what the wrapper returns when an input fails.
 pub(crate) struct CRet {
@@ -512,7 +515,7 @@ impl<'f> Plan<'f> {
 
     /// How a result of type `ty` leaves the wrapper.
     pub(crate) fn ret(&self, ty: &TypeRef) -> Res<CRet> {
-        let r = result_ident();
+        let r = format_ident!("__result");
         let Shape::Result { ok, err: e } = self.shape(ty)? else {
             return Ok(CRet {
                 ret: self.plain_ret(ty)?,
@@ -680,7 +683,7 @@ impl<'f> Plan<'f> {
     }
 
     fn plain_ret(&self, ty: &TypeRef) -> Res<Return> {
-        let r = result_ident();
+        let r = format_ident!("__result");
         let array = |elem: &TypeRef| -> Res<(TokenStream, TokenStream)> {
             self.require_free()?;
             self.ret_value(elem, &quote!(__e))
@@ -834,26 +837,28 @@ impl<'f> Plan<'f> {
             let __call = #name.call;
             let __ctx = ::std::sync::Arc::new(__Ctx { context: #name.context, drop: #name.drop });
         };
-        prebindgen_tools::ClosureWriter::new(args)
-            .setup(setup)
-            .write(&self.q, &mut CallbackArgs(self), |binds, outs| {
-                let values = outs.iter().flat_map(|o| o.wires.iter().map(|w| &w.name));
-                quote! {
+        let names: Vec<_> = (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
+        let tys = args.iter().map(|t| self.q.ty_elided(t));
+        let outs = args
+            .iter()
+            .zip(&names)
+            .enumerate()
+            .map(|(i, (ty, n))| self.callback_arg(i, ty, &n.to_token_stream()))
+            .collect::<Res<Vec<_>>>()?;
+        let binds: TokenStream = outs.iter().map(Output::bind).collect();
+        let values = outs.iter().flat_map(|o| o.wires.iter().map(|w| &w.name));
+        Ok(quote! {{
+            #setup
+            move |#(#names: #tys),*| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     #binds
                     if let ::core::option::Option::Some(__f) = __call {
                         unsafe { __f(#(#values,)* __ctx.context) }
                     }
-                }
-            })
-    }
-}
-
-struct CallbackArgs<'p, 'f>(&'p Plan<'f>);
-
-impl prebindgen_tools::ClosureCallbacks for CallbackArgs<'_, '_> {
-    type Error = crate::Error;
-
-    fn arg(&mut self, index: usize, ty: &TypeRef, value: &TokenStream) -> Res<Output> {
-        self.0.callback_arg(index, ty, value)
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res { }
+            }
+        }})
     }
 }

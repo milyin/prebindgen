@@ -3,10 +3,7 @@
 //! extern's parameter list and the declaration cannot disagree.
 
 use prebindgen_flat::flat::{TypeKind, TypeRef};
-use prebindgen_tools::{
-    function::{error_ident, result_ident},
-    names, Access, FunctionCallbacks, FunctionWriter, Input, Output, Return, Shape, Wire,
-};
+use prebindgen_tools::{names, Access, Input, Output, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
@@ -45,43 +42,71 @@ fn extern_rust(plan: &Plan, b: &Binding) -> Res<TokenStream> {
     let callee = match &b.callee {
         Callee::Call(c) | Callee::Value(c) => c.clone(),
     };
-    let mut w = FunctionWriter::new(&b.func, callee)
-        .name(format_ident!("{}", symbol))
-        .abi(Some("system"))
-        .generics(quote!(<'a>))
-        .attr(quote!(#[no_mangle]))
-        .attr(quote!(#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, unused_parens, unused_unsafe, dead_code, clippy::all)]))
-        .leading(Wire::new(
-            format_ident!("__env"),
-            quote!(::prebindgen_jni_runtime::jni::JNIEnv<'a>),
-        ))
-        .leading(Wire::new(
-            format_ident!("_class"),
-            quote!(::prebindgen_jni_runtime::jni::objects::JClass<'a>),
-        ))
-        .prologue(quote!(let mut __env = __env; let env = &mut __env;))
-        .trailing(Wire::new(format_ident!("__error_sink"), jobject.clone()));
-    if let Callee::Value(_) = b.callee {
-        w = w.call_with(|value, _| value.clone());
+    let mut cb = RustBoundary { plan, b };
+    let ret = cb.ret()?;
+    let fail = cb.fail();
+    let mut params = vec![
+        quote!(__env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>),
+        quote!(_class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>),
+    ];
+    let mut stmts = Vec::new();
+    let mut args = Vec::new();
+    for p in &b.func.params {
+        let name = &p.name;
+        let input = cb.param(name)?;
+        params.extend(input.wires.iter().map(Wire::decl));
+        if input.fallible {
+            let r = input.result();
+            stmts.push(quote!(let #name = match #r {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__err) => { #fail }
+            };));
+        } else {
+            let e = &input.expr;
+            stmts.push(quote!(let #name = #e;));
+        }
+        args.push(input.pass.clone().unwrap_or_else(|| quote!(#name)));
     }
+    params.extend(ret.wires.iter().map(Wire::decl));
+    params.push(quote!(__error_sink: #jobject));
     if let EPlan::Domain { .. } = b.err {
-        w = w.trailing(Wire::new(format_ident!("__domain_sink"), jobject));
+        params.push(quote!(__domain_sink: #jobject));
     }
-    w.write(&mut RustCb { plan, b })
+    let call = match b.callee {
+        Callee::Value(_) => callee,
+        Callee::Call(_) => quote!(#callee(#(#args),*)),
+    };
+    let name = format_ident!("{}", symbol);
+    let ret_ty = ret.ty.as_ref().map(|t| quote!(-> #t));
+    let body = ret.body;
+    Ok(quote! {
+        #[no_mangle]
+        #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, unused_parens, unused_unsafe, dead_code, clippy::all)]
+        pub unsafe extern "system" fn #name<'a>(#(#params),*) #ret_ty {
+            let mut __env = __env; let env = &mut __env;
+            #(#stmts)*
+            let __result = #call;
+            #body
+        }
+    })
+}
+
+struct Return {
+    ty: Option<TokenStream>,
+    wires: Vec<Wire>,
+    body: TokenStream,
 }
 
 /// The JNI adapter's answers for one extern.
-struct RustCb<'p, 'f> {
+struct RustBoundary<'p, 'f> {
     plan: &'p Plan<'f>,
     b: &'p Binding,
 }
 
-impl FunctionCallbacks for RustCb<'_, '_> {
-    type Error = crate::Error;
-
-    fn ret(&mut self, _ret: &TypeRef) -> Res<Return> {
+impl RustBoundary<'_, '_> {
+    fn ret(&mut self) -> Res<Return> {
         let (plan, b) = (self.plan, self.b);
-        let r = result_ident();
+        let r = format_ident!("__result");
         let whole = match &b.err {
             EPlan::None => rust_ret_value(plan, &b.ret, r.to_token_stream())?,
             e => {
@@ -103,7 +128,7 @@ impl FunctionCallbacks for RustCb<'_, '_> {
             Vec::new()
         };
         let rty = ty.clone().unwrap_or(quote!(()));
-        let e = error_ident();
+        let e = format_ident!("__err");
         Ok(Return {
             ty,
             wires,
@@ -122,7 +147,7 @@ impl FunctionCallbacks for RustCb<'_, '_> {
         })
     }
 
-    fn param(&mut self, name: &syn::Ident, _ty: &TypeRef) -> Res<Input> {
+    fn param(&mut self, name: &syn::Ident) -> Res<Input> {
         let plan = self.plan;
         let p = self
             .b
@@ -179,8 +204,8 @@ impl FunctionCallbacks for RustCb<'_, '_> {
         })
     }
 
-    fn fail(&mut self, _ret: &Return) -> TokenStream {
-        let e = error_ident();
+    fn fail(&mut self) -> TokenStream {
+        let e = format_ident!("__err");
         let (_, default) = ret_wire(&self.b.ret);
         quote!({
             __jni_signal(env, &__error_sink, &#e);
