@@ -149,8 +149,8 @@ pub mod names {
 ///
 /// ## Item paths and type expressions
 ///
-/// * [`Qualifier::path`] qualifies one item name, such as the function a
-///   the adapter will call.
+/// * [`Qualifier::path`] qualifies one item name, such as the function the
+///   adapter will call.
 /// * [`Qualifier::ty`] walks a complete model type. For example,
 ///   `Option<Vec<Payload>>` becomes
 ///   `::core::option::Option<::std::vec::Vec<source_crate::Payload>>`.

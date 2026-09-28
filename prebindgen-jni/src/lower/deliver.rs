@@ -486,7 +486,6 @@ impl Plan<'_> {
     }
 }
 
-/// A callback's arguments, each delivered.
 /// The entry a value form declares for field `seg`.
 fn field_entry<'a, T>(list: &'a [(String, T)], seg: &str) -> Option<&'a T> {
     list.iter().find(|(n, _)| n == seg).map(|(_, v)| v)
