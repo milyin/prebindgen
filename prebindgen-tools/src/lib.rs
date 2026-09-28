@@ -7,124 +7,26 @@
 //! only want bindings normally use the `prebindgen-c` or `prebindgen-jni`
 //! adapter crate instead.
 //!
-//! An adapter reads what `#[prebindgen]` captured as [`Flat`](prebindgen_flat::Flat), the
-//! source model from `prebindgen-flat`, a dependency of the adapter's own. It turns
-//! its build script's declarations into a plan of the elements to bind, then writes each
-//! element: the Rust wrapper through a generator here, and whatever the
-//! destination language needs beside it (Kotlin text, for the JNI adapter)
-//! itself. The generators hold no shared plan: each writes one element from
-//! what it is given. [`RustFile`] only collects the resulting Rust items.
-//! The adapter decides which source items to bind, their names, wire types,
-//! and error policy.
+//! An adapter reads the captured [`Flat`](prebindgen_flat::Flat) model,
+//! chooses representations, and generates its own Rust wrappers and foreign
+//! declarations. This crate supplies type inspection and conversion composition;
+//! the adapter owns signatures, layouts, calls, and error handling.
 //!
-//! ## Follow one element
+//! * [`shape()`] classifies one layer of a type, including adapter declarations.
+//!   The adapter decides which children to visit recursively.
+//! * [`Qualifier`] names source types and items in generated Rust.
+//! * [`Input`] and [`Output`] carry wires and conversion expressions.
+//!   [`Input::combine`], [`Input::optional`] and [`Output::concat`] compose them.
+//! * [`Record`], [`record_in`] and [`record_out`] construct and destructure
+//!   source structs and enum alternatives while preserving field order.
+//! * [`mod@convert`] resolves declared conversions; [`Stage::decode`] and
+//!   [`Stage::encode`] compose them with their representation's conversion.
+//! * [`RustFile`] collects, formats and writes the adapter's generated items.
 //!
-//! 1. Read the captured model as [`Flat`](prebindgen_flat::Flat). Reject unsupported source
-//!    items with [`check_supported`]. Use [`Qualifier`] when generated Rust
-//!    refers back to a source item.
-//! 2. For each declared item, choose a generator below. Its callback trait
-//!    asks the adapter how values cross the boundary. [`shape()`] and
-//!    [`Shape`] help a callback walk a type one layer at a time.
-//! 3. Describe incoming values with [`Input`] and outgoing values with
-//!    [`Output`]. Each contains its [`Wire`] slots and conversion expression.
-//!    [`Stage`] can wrap either direction in a declared conversion.
-//! 4. Push the generated Rust items into [`RustFile`], then
-//!    [`RustFile::write`] them. The adapter writes any destination-language
-//!    files itself.
-//!
-//! ## Generators
-//!
-//! One generator per kind of Rust item. Each takes the flat element it
-//! wraps and header customizations through a builder, and asks for the
-//! boundary of each value through a small callback trait:
-//!
-//! | Generator | Writes | Callbacks |
-//! |---|---|---|
-//! | [`FunctionWriter`] | an exported wrapper around a [`Function`](prebindgen_flat::flat::Function) | [`FunctionCallbacks`]: the result's return type, out-wires and body; each parameter's wires and wire→value [`Input`]; the failure fragment |
-//! | [`StructWriter`] | a mirror struct of a [`Struct`](prebindgen_flat::flat::Struct), with both conversions | [`FieldCallbacks`]: each field's wires, both directions |
-//! | [`SumWriter`] | a mirror enum of a [`Variant`](prebindgen_flat::flat::Variant), with both conversions | [`FieldCallbacks`] |
-//! | [`ClosureWriter`] | an `impl Fn(..)` closure over a foreign callback | [`ClosureCallbacks`]: each argument's wires ([`Output`]) |
-//!
-//! The generators expect **final** wire types: how a `Vec<Payload>` becomes
-//! a pointer and a length, or a count and a column per field, is the
-//! adapter's answer in its callback. Start at a generator's module page for
-//! the shape it writes and a worked example: [`function`], [`record`],
-//! [`closure`].
-//!
-//! ## Recursion
-//!
-//! A callback answers for a whole type by recursing over its structure.
-//! [`shape()`] reads one layer — an `Option`, a borrow, a sequence, a named
-//! type with the adapter's own setting for it — so every adapter's recursion
-//! is one `match` over [`Shape`]. The answers compose: [`Input`] and
-//! [`Output`] carry an expression plus the wires it reads or produces;
-//! [`record_in`] / [`record_out`] take a struct or a sum alternative apart
-//! into its fields; [`Input::optional`], [`Input::combine`] and
-//! [`Output::concat`] build the rest; [`Stage::decode`] / [`Stage::encode`]
-//! wrap a representation in a declared conversion. A conversion that can
-//! fail uses `?` on `Result<_, String>`, and whoever places it decides where
-//! the error goes.
-//!
-//! ## Everything else
-//!
-//! * [`Qualifier`] — names a flat item from generated code
-//!   (`Payload` → `perftest_flat::Payload`).
-//! * [`names`] — case conversion and identifier helpers.
-//! * [`mod@convert`] — the `convert!` vocabulary: a source type that crosses as
-//!   another type through functions or `From`/`TryFrom` impls.
-//! * [`RustFile`] — the generated file: items in order, formatted, written
-//!   only when changed.
-//!
-//! ## Small complete example
-//!
-//! This toy adapter keeps scalar parameters unchanged. Real C and JNI
-//! adapters provide different [`FunctionCallbacks`] and handle more
-//! [`Shape`] variants. The example uses an in-memory model so the path from
-//! a flat function to generated Rust is visible without a build script.
-//!
-//! ```
-//! use prebindgen::SourceLocation;
-//! use prebindgen_flat::{flat::TypeRef, Flat};
-//! use prebindgen_tools::{FunctionCallbacks, FunctionWriter,
-//!     Input, Qualifier, Return, RustFile, Wire, check_supported};
-//! use proc_macro2::TokenStream;
-//! use quote::quote;
-//!
-//! let source = syn::parse_file("pub fn double(n: i64) -> i64 { n * 2 }").unwrap();
-//! let location = SourceLocation {
-//!     crate_name: Some("source_crate".into()),
-//!     ..Default::default()
-//! };
-//! let flat = Flat::builder()
-//!     .items(source.items.into_iter().map(|item| (item, location.clone())))
-//!     .build().unwrap();
-//! check_supported(&flat).unwrap();
-//!
-//! struct Scalar;
-//! impl FunctionCallbacks for Scalar {
-//!     type Error = String;
-//!     fn param(&mut self, name: &syn::Ident, ty: &TypeRef) -> Result<Input, String> {
-//!         Ok(Input::identity(Wire::new(name.clone(), ty.spell())))
-//!     }
-//!     fn ret(&mut self, ret: &TypeRef) -> Result<Return, String> {
-//!         Ok(Return { ty: Some(ret.spell()), wires: vec![], body: quote!(__result) })
-//!     }
-//!     fn fail(&mut self, _: &Return) -> TokenStream {
-//!         quote!(panic!("{__err}"))
-//!     }
-//! }
-//!
-//! let function = flat.function("double").unwrap();
-//! let qualifier = Qualifier::new(&flat);
-//! let wrapper = FunctionWriter::new(function, qualifier.path(&function.name))
-//!     .abi(None).unsafety(false)
-//!     .write(&mut Scalar).unwrap();
-//! let mut file = RustFile::new();
-//! file.push(wrapper);
-//! let generated = file.render();
-//! assert!(generated.contains("fn double(n: i64) -> i64"));
-//! assert!(generated.contains("source_crate::double(n)"));
-//! ```
+//! Fallible conversions use `Result<_, String>`. The adapter places the
+//! expressions in an error scope and chooses how to report failures. Source
+//! function errors remain part of the source return value and are handled
+//! separately by the adapter.
 
 // Implementation modules are private. The public modules below select every
 // exported item explicitly, independently of the implementation layout.
@@ -134,72 +36,6 @@ mod api;
 // re-exports them. Keep this dependency export here with the rest of the API.
 #[doc(hidden)]
 pub use syn as __syn;
-
-/// The closure writer: a Rust `impl Fn(..)` built over a foreign callback.
-///
-/// A source function taking `impl Fn(A, B) + Send + Sync + 'static` needs a
-/// Rust closure that, on every call, turns `A` and `B` into wires and hands
-/// them to the foreign side. The shape is fixed; the adapter supplies the
-/// pieces:
-///
-/// ```text
-/// {
-///     <setup>                                  // once, when the closure is built
-///     move |__a0: A, __a1: B| {
-///         let __res = (|| -> Result<(), String> {
-///             <invoke>                         // binds each argument's wires, calls the foreign side
-///             Ok(())
-///         })();
-///         if let Err(__err) = __res { <on_error> }
-///     }
-/// }
-/// ```
-///
-/// `invoke` receives the arguments' bindings rather than having them placed
-/// ahead of it, so an adapter can run them inside a scope of its own — a
-/// JNI frame whose environment the conversions use.
-///
-/// For instance, a callback taking `i64` can use
-/// [`Output::single`](crate::Output::single) to pass one integer wire. The
-/// adapter's `invoke` closure then emits the foreign call using that wire;
-/// the writer supplies the Rust `move` closure, per-call error scope, and
-/// [`ClosureWriter::on_error`] path.
-///
-/// ```
-/// use prebindgen::SourceLocation;
-/// use prebindgen_flat::{Flat, flat::{TypeKind, TypeRef}};
-/// use prebindgen_tools::{ClosureCallbacks, ClosureWriter, Output, Qualifier, Wire};
-/// use proc_macro2::TokenStream;
-/// use quote::{format_ident, quote};
-///
-/// let source = syn::parse_file(
-///     "pub fn register(callback: impl Fn(i64) + Send + Sync + 'static) {}"
-/// ).unwrap();
-/// let flat = Flat::builder()
-///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
-///     .build().unwrap();
-/// let ty = &flat.function("register").unwrap().params[0].ty;
-/// let TypeKind::Callback { args } = ty.kind() else { panic!("expected callback") };
-///
-/// struct Scalar;
-/// impl ClosureCallbacks for Scalar {
-///     type Error = String;
-///     fn arg(&mut self, index: usize, _: &TypeRef, value: &TokenStream)
-///         -> Result<Output, String> {
-///         Ok(Output::single(Wire::new(format_ident!("w{index}"), quote!(i64)), value))
-///     }
-/// }
-/// let closure = ClosureWriter::new(args)
-///     .on_error(quote!(panic!("{__err}")))
-///     .write(&Qualifier::new(&flat), &mut Scalar, |bindings, outputs| {
-///         let wire = &outputs[0].wires[0].name;
-///         quote!(#bindings foreign_callback(#wire);)
-///     }).unwrap();
-/// assert!(closure.to_string().contains("foreign_callback (w0)"));
-/// ```
-pub mod closure {
-    pub use crate::api::closure::{ClosureCallbacks, ClosureWriter};
-}
 
 /// Custom conversions: a source type that crosses as another type.
 ///
@@ -280,40 +116,6 @@ pub mod file {
     pub use crate::api::file::{resolve_out_path, write_if_changed, RustFile};
 }
 
-/// The function wrapper writer.
-///
-/// A wrapper is one exported function that receives wires, converts them to
-/// the source function's arguments, calls it, and hands the result back as
-/// wires:
-///
-/// ```text
-/// <attrs>
-/// pub unsafe extern "C" fn <name><generics>(<leading>, <param wires>, <return wires>, <trailing>) -> <return type> {
-///     <prologue>
-///     let <param> = <param input>;          // on failure: <fail>
-///     ...
-///     let __result = <callee>(<params>);
-///     <return body>
-/// }
-/// ```
-///
-/// The writer owns the shape; the adapter owns every decision, through
-/// [`FunctionCallbacks`]: which wires a parameter becomes and how they turn
-/// back into the argument, which wires the result leaves on, and what the
-/// wrapper does when a conversion fails. The builder methods customize the
-/// header and the fixed parts of the body.
-///
-/// The [crate example](crate#small-complete-example) builds one wrapper from
-/// an in-memory [`Flat`](prebindgen_flat::Flat). In an adapter, the
-/// callback's [`FunctionCallbacks::param`] can call
-/// [`shape()`](crate::shape()), convert its result into an [`Input`], and let
-/// [`FunctionWriter::write`] place the wires and conversion at the call site.
-pub mod function {
-    pub use crate::api::function::{
-        error_ident, result_ident, FunctionCallbacks, FunctionWriter, Return, ERROR, RESULT,
-    };
-}
-
 /// Identifier and case helpers shared by every adapter.
 pub mod names {
     pub use crate::api::names::{bare, camel, ident, join, mangle, pascal, snake};
@@ -347,8 +149,8 @@ pub mod names {
 ///
 /// ## Item paths and type expressions
 ///
-/// * [`Qualifier::path`] qualifies one item name, such as the function a
-///   [`FunctionWriter`] will call.
+/// * [`Qualifier::path`] qualifies one item name, such as the function the
+///   adapter will call.
 /// * [`Qualifier::ty`] walks a complete model type. For example,
 ///   `Option<Vec<Payload>>` becomes
 ///   `::core::option::Option<::std::vec::Vec<source_crate::Payload>>`.
@@ -399,32 +201,21 @@ pub mod qualify {
 /// Records — structs and the alternatives of a sum — taken apart into their
 /// fields and put back together.
 ///
-/// Two uses, one mechanism:
-///
-/// * **Decomposition** ([`record_in`], [`record_out`]): the record crosses as
-///   the concatenation of its fields' wires, with no type of its own on the
-///   boundary. Recursing into a field that is itself a record gives the
-///   leaf-by-leaf crossing a JVM binding uses.
-/// * **Mirrors** ([`StructWriter`], [`SumWriter`]): the record crosses as a
-///   generated type whose fields are the wires — a `#[repr(C)]` struct or
-///   enum for C — plus the two conversions between it and the source type.
-///
-/// Either way the adapter decides, per field, through [`FieldCallbacks`];
-/// the helpers here only handle the Rust shape of the record: named or
-/// positional fields, the delimiters the source wrote, the order.
+/// The adapter chooses a representation independently of the source shape.
+/// These helpers construct and destructure source values, preserving named or
+/// positional fields, delimiters, and order. Each field may occupy several wires.
 ///
 /// ## Example: decompose a record
 ///
 /// [`record_in`] combines field inputs in source order and reconstructs the
-/// source's named or tuple form. A callback would normally produce the field
+/// source's named or tuple form. An adapter normally produces the field
 /// inputs while recursing through [`shape()`](crate::shape()).
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_flat::{Flat, flat::{Field, Type}};
-/// use prebindgen_tools::{FieldCallbacks, Input, Output, Record, StructWriter, Wire,
+/// use prebindgen_flat::{Flat, flat::Type};
+/// use prebindgen_tools::{Input, Record, Wire,
 ///     ident, record_in};
-/// use proc_macro2::TokenStream;
 /// use quote::quote;
 ///
 /// let item = syn::parse_quote!(pub struct Point { pub x: i32, pub y: i32 });
@@ -440,33 +231,9 @@ pub mod qualify {
 /// assert_eq!(input.wires.len(), 2);
 /// assert_eq!(input.expr.to_string(), "Point { x : x_wire , y : y_wire }");
 ///
-/// // A mirror uses the same field decisions to define a boundary struct
-/// // and the two conversions. Each conversion expression reads a local `v`.
-/// struct Scalar;
-/// impl FieldCallbacks for Scalar {
-///     type Error = String;
-///     fn field_in(&mut self, field: &Field) -> Result<Input, String> {
-///         Ok(Input::identity(Wire::new(field.name.clone().unwrap(), quote!(i32))))
-///     }
-///     fn field_out(&mut self, field: &Field, value: &TokenStream)
-///         -> Result<Output, String> {
-///         Ok(Output::single(
-///             Wire::new(field.name.clone().unwrap(), quote!(i32)), value
-///         ))
-///     }
-/// }
-/// let mirror = StructWriter::new(point, quote!(Point), ident!(PointWire))
-///     .attr(quote!(#[repr(C)]))
-///     .write(&mut Scalar).unwrap();
-/// assert_eq!(mirror.wires.len(), 2);
-/// assert!(mirror.def.to_string().contains("struct PointWire"));
-/// assert!(mirror.input.expr.to_string().contains("let PointWire"));
 /// ```
 pub mod record {
-    pub use crate::api::record::{
-        record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
-        SumWriter,
-    };
+    pub use crate::api::record::{record_in, record_out, Record};
 }
 
 /// One level of a type's structure, with any adapter declaration for that type.
@@ -549,7 +316,7 @@ pub mod shape {
 /// ## Example: one value on two wires
 ///
 /// A `u64` can arrive as two `u32` words. [`Input`] keeps the expression together with
-/// the two [`Wire`] declarations so [`FunctionWriter`]
+/// the two [`Wire`] declarations so the adapter
 /// can place and evaluate them in the right order:
 ///
 /// ```
@@ -572,24 +339,18 @@ pub mod shape {
 ///
 /// For a fallible step, use [`Input::and_then`] or [`Output::fallible`]
 /// and place [`Input::result`] or [`Output::result`] at the point whose
-/// error policy applies. The writer only understands `Result<_, String>`;
-/// the adapter supplies the actual fallback in
-/// [`FunctionCallbacks::fail`].
+/// error policy applies. The conversion error type is `String`; the adapter
+/// supplies the fallback or error delivery code.
 pub mod wire {
     pub use crate::api::wire::{result_expr, Input, Output, Wire};
 }
 
 pub use crate::{
     api::check_supported,
-    closure::{ClosureCallbacks, ClosureWriter},
     convert::{Conversion, FnRef, ResolvedConversion, Stage, Via},
     file::RustFile,
-    function::{FunctionCallbacks, FunctionWriter, Return},
     qualify::Qualifier,
-    record::{
-        record_in, record_out, FieldCallbacks, Record, StructMirror, StructWriter, SumMirror,
-        SumWriter,
-    },
+    record::{record_in, record_out, Record},
     shape::{shape, Access, SequenceKind, Shape, TextKind},
     wire::{Input, Output, Wire},
 };

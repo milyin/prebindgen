@@ -1,14 +1,11 @@
 //! Unit tests over a small flat model.
 
 use prebindgen::SourceLocation;
-use prebindgen_flat::{flat::TypeRef, Flat};
+use prebindgen_flat::Flat;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::{
-    record_in, record_out, FunctionCallbacks, FunctionWriter, Input, Output, Qualifier, Record,
-    Return, Wire,
-};
+use crate::{record_in, record_out, Input, Output, Qualifier, Record, Wire};
 
 fn model(src: &str) -> Flat {
     let loc = SourceLocation {
@@ -55,46 +52,6 @@ fn qualifier_names_items_by_their_crate() {
     );
     // A name the model does not know is left alone.
     assert_eq!(norm(q.path(&format_ident!("elsewhere"))), "elsewhere");
-}
-
-/// An adapter that passes every value as itself.
-struct Identity;
-
-impl FunctionCallbacks for Identity {
-    type Error = String;
-
-    fn param(&mut self, name: &syn::Ident, ty: &TypeRef) -> Result<Input, String> {
-        Ok(Input::identity(Wire::new(name.clone(), ty.spell())))
-    }
-
-    fn ret(&mut self, ret: &TypeRef) -> Result<Return, String> {
-        let t = ret.spell();
-        Ok(Return {
-            ty: Some(t),
-            wires: Vec::new(),
-            body: quote!(__result),
-        })
-    }
-
-    fn fail(&mut self, _ret: &Return) -> TokenStream {
-        quote!(panic!("{}", __err))
-    }
-}
-
-#[test]
-fn function_writer_assembles_a_wrapper() {
-    let flat = model(SRC);
-    let f = flat.function("payload_new").unwrap();
-    let q = Qualifier::new(&flat);
-    let item = FunctionWriter::new(f, q.path(&f.name))
-        .name(format_ident!("exported_new"))
-        .attr(quote!(#[no_mangle]))
-        .write(&mut Identity)
-        .unwrap();
-    let parsed: syn::ItemFn = syn::parse2(item.clone()).expect("a function");
-    assert_eq!(parsed.sig.ident, "exported_new");
-    assert_eq!(parsed.sig.inputs.len(), 2);
-    assert!(norm(item).contains("let__result=src_crate::payload_new(id,label);"));
 }
 
 #[test]

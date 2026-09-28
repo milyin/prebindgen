@@ -2,7 +2,7 @@
 name = "prebindgen-tools"
 version = { workspace = true }
 edition = { workspace = true }
-description = "Building blocks for prebindgen language adapters: wrapper writers, conversion composition and Rust output"
+description = "Building blocks for prebindgen language adapters: type inspection, conversion composition and Rust output"
 license = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
