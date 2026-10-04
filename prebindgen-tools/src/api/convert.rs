@@ -5,7 +5,7 @@ use prebindgen_flat::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use crate::{Input, Output, Qualifier};
+use crate::{Form, FormKind, Input, Output, Qualifier, WireType};
 
 /// A function a declaration refers to: a flat item by name, or a
 /// binding-local path with its signature stated.
@@ -174,6 +174,8 @@ enum Direction {
 /// One direction of a conversion.
 #[derive(Clone, Debug)]
 pub struct Stage {
+    /// The type being converted.
+    pub target: TypeRef,
     /// The representation type on the boundary side.
     pub repr: TypeRef,
     /// Whether the stage can fail.
@@ -235,6 +237,7 @@ impl Stage {
                 }
                 match dir {
                     Direction::In => Stage {
+                        target: target.clone(),
                         repr: param.ty.clone(),
                         fallible,
                         how: How::Call {
@@ -245,6 +248,7 @@ impl Stage {
                     Direction::Out => {
                         let by_ref = matches!(param.ty.kind(), TypeKind::Ref { .. });
                         Stage {
+                            target: target.clone(),
                             repr: ret,
                             fallible,
                             how: How::Call {
@@ -258,6 +262,7 @@ impl Stage {
             Via::From(t) => {
                 let r = classify(t)?;
                 Stage {
+                    target: target.clone(),
                     repr: r.clone(),
                     fallible: false,
                     how: How::From(r),
@@ -266,6 +271,7 @@ impl Stage {
             Via::Into(t) => {
                 let r = classify(t)?;
                 Stage {
+                    target: target.clone(),
                     repr: r.clone(),
                     fallible: false,
                     how: How::Into(r),
@@ -274,6 +280,7 @@ impl Stage {
             Via::TryFrom(t) => {
                 let r = classify(t)?;
                 Stage {
+                    target: target.clone(),
                     repr: r.clone(),
                     fallible: true,
                     how: How::TryFrom(r),
@@ -282,6 +289,7 @@ impl Stage {
             Via::TryInto(t) => {
                 let r = classify(t)?;
                 Stage {
+                    target: target.clone(),
                     repr: r.clone(),
                     fallible: true,
                     how: How::TryInto(r),
@@ -294,8 +302,8 @@ impl Stage {
     /// representation and the result the source type; for an output stage
     /// the other way round. A fallible stage produces an expression using
     /// `?` on a `Result<_, String>`.
-    pub fn apply(&self, q: &Qualifier<'_>, target: &TypeRef, value: &TokenStream) -> TokenStream {
-        let t = q.ty(target);
+    pub fn apply(&self, q: &Qualifier<'_>, value: &TokenStream) -> TokenStream {
+        let t = q.ty(&self.target);
         let call = match &self.how {
             How::Call { fun, by_ref } => {
                 let callee = fun.callee(q);
@@ -339,47 +347,39 @@ impl Stage {
         }
     }
 
-    /// This input stage over its representation's input: the wires `repr`
-    /// reads become the converted value. The representation is bound to `r`
-    /// and `check` (statements, possibly using `?`) runs on it first.
-    pub fn decode(
-        &self,
-        q: &Qualifier<'_>,
-        target: &TypeRef,
-        repr: Input,
-        r: &syn::Ident,
-        check: TokenStream,
-    ) -> Input {
-        let applied = self.apply(q, target, &r.to_token_stream());
-        let fallible = repr.fallible || self.fallible || !check.is_empty();
+    /// The converted value from its representation's input.
+    pub fn decode<W: WireType>(&self, q: &Qualifier<'_>, repr: Input<W>) -> Input<W> {
+        let applied = self.apply(q, &quote!(__repr));
         let e = repr.expr;
         Input {
-            wires: repr.wires,
-            expr: quote!({ let #r = #e; #check #applied }),
-            fallible,
-            pass: None,
+            form: self.via(repr.form),
+            expr: quote!({ let __repr = #e; #applied }),
+            fallible: repr.fallible || self.fallible,
         }
     }
 
-    /// This output stage ahead of its representation's output: `value`
-    /// becomes the representation, bound to `r`, which `repr` reads. `check`
-    /// runs on it in between.
-    pub fn encode(
+    /// The representation's output of the converted `value`. `repr` builds
+    /// it from the representation value it is given.
+    pub fn encode<W: WireType, E>(
         &self,
         q: &Qualifier<'_>,
-        target: &TypeRef,
         value: &TokenStream,
-        r: &syn::Ident,
-        check: TokenStream,
-        repr: Output,
-    ) -> Output {
-        let applied = self.apply(q, target, value);
-        let fallible = repr.fallible || self.fallible || !check.is_empty();
+        repr: impl FnOnce(TokenStream) -> Result<Output<W>, E>,
+    ) -> Result<Output<W>, E> {
+        let applied = self.apply(q, value);
+        let repr = repr(quote!(__repr))?;
         let e = &repr.expr;
-        Output {
-            wires: repr.wires.clone(),
-            expr: quote!({ let #r = #applied; #check #e }),
-            fallible,
+        Ok(Output {
+            expr: quote!({ let __repr = #applied; #e }),
+            fallible: repr.fallible || self.fallible,
+            form: self.via(repr.form),
+        })
+    }
+
+    fn via<W>(&self, repr: Form<W>) -> Form<W> {
+        Form {
+            ty: self.target.clone(),
+            kind: FormKind::Via(Box::new(repr)),
         }
     }
 }

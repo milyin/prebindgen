@@ -3,19 +3,19 @@ members = [
     "prebindgen",
     "prebindgen-flat",
     "prebindgen-tools",
-    "prebindgen-c",
-    "prebindgen-jni",
+    # "prebindgen-c", # tools API rewrite (#787 follow-up): not ported yet
+    # "prebindgen-jni", # tools API rewrite (#787 follow-up): not ported yet
     "prebindgen-proc-macro",
     "prebindgen-jni-runtime",
     "prebindgen-c-runtime",
-    "examples/example-cbindgen",
+    # "examples/example-cbindgen", # tools API rewrite (#787 follow-up): not ported yet
     "examples/example-flat",
     "examples/perftest-flat",
-    "examples/perftest-c",
-    "examples/emitcheck",
-    "examples/perftest-kotlin",
+    # "examples/perftest-c", # tools API rewrite (#787 follow-up): not ported yet
+    # "examples/emitcheck", # tools API rewrite (#787 follow-up): not ported yet
+    # "examples/perftest-kotlin", # tools API rewrite (#787 follow-up): not ported yet
     "examples/covertest-helpers",
-    "examples/covertest-kotlin",
+    # "examples/covertest-kotlin", # tools API rewrite (#787 follow-up): not ported yet
 ]
 resolver = "2"
 package.version = "0.7.0"
