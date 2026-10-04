@@ -20,8 +20,8 @@ crates=(
   prebindgen-proc-macro
   prebindgen-flat
   prebindgen-tools
-  prebindgen-c
-  prebindgen-jni
+  # prebindgen-c  # tools API rewrite (#787 follow-up): not ported yet
+  # prebindgen-jni
 )
 
 rm -rf target/doc
