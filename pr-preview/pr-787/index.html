@@ -19,6 +19,8 @@
 <body>
 <h1>prebindgen</h1>
 <p class="tagline">Generate idiomatic multi-language FFI bindings (C, Kotlin/JNI, …) from a single annotated Rust source.</p>
+<p>This branch prototypes the <a href="doc/prebindgen_tools/resolve/index.html">scoped type conversion API</a>.
+C and JNI generator migration is deferred; their documentation and integration jobs are temporarily disabled.</p>
 
 <ul>
   <li><a class="crate" href="doc/prebindgen/index.html">prebindgen</a>
@@ -27,10 +29,10 @@
     <span class="desc">The prebindgen flat model: the parser from captured #[prebindgen] records to a flat namespace of elements</span></li>
   <li><a class="crate" href="doc/prebindgen_tools/index.html">prebindgen-tools</a>
     <span class="desc">Shared binding-generation tools for prebindgen language adapters</span></li>
-  <li><a class="crate" href="doc/prebindgen_c/index.html">prebindgen-c</a>
-    <span class="desc">Experimental C / cbindgen binding generator for prebindgen</span></li>
-  <li><a class="crate" href="doc/prebindgen_jni/index.html">prebindgen-jni</a>
-    <span class="desc">JNI / Kotlin binding generator for prebindgen</span></li>
+  <li><span class="crate">prebindgen-c</span>
+    <span class="desc">C / cbindgen generator — migration deferred in this API prototype</span></li>
+  <li><span class="crate">prebindgen-jni</span>
+    <span class="desc">JNI / Kotlin generator — migration deferred in this API prototype</span></li>
   <li><a class="crate" href="doc/prebindgen_proc_macro/index.html">prebindgen-proc-macro</a>
     <span class="desc">Procedural macros for prebindgen - export FFI definitions for binding generation</span></li>
   <li><a class="crate" href="doc/prebindgen_c_runtime/index.html">prebindgen-c-runtime</a>
