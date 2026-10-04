@@ -131,7 +131,8 @@ impl Conversion {
         self
     }
 
-    /// Resolve both directions against the model.
+    /// Resolve both directions against the model. They must agree on the
+    /// representation type, and at least one must be declared.
     pub fn resolve(&self, flat: &Flat) -> Result<ResolvedConversion, String> {
         let target = flat
             .classify(&self.ty)
@@ -146,8 +147,24 @@ impl Conversion {
             .as_ref()
             .map(|v| Stage::resolve(flat, v, &target, Direction::Out))
             .transpose()?;
+        let repr = match (&input, &output) {
+            (Some(i), Some(o)) if i.repr.key() != o.repr.key() => {
+                return Err(format!(
+                    "convert!({target}): the input converts from `{}` but the output \
+                     converts to `{}`; both directions must use one representation type",
+                    i.repr, o.repr
+                ))
+            }
+            (Some(s), _) | (None, Some(s)) => s.repr.clone(),
+            (None, None) => {
+                return Err(format!(
+                    "convert!({target}) declares neither `.input(..)` nor `.output(..)`"
+                ))
+            }
+        };
         Ok(ResolvedConversion {
             target,
+            repr,
             input,
             output,
         })
@@ -155,7 +172,9 @@ impl Conversion {
 }
 
 /// A conversion resolved against the model: the source type crosses as
-/// a representation type, converted on the way in, on the way out, or both.
+/// its representation type, converted on the way in, on the way out, or
+/// both. Both directions share the representation, so the foreign side sees
+/// one type for the source type whichever way a value goes.
 ///
 /// The adapter lowers the representation like any other type, inside the
 /// closure it passes to [`Self::decode`] or [`Self::encode`]; the conversion
@@ -163,6 +182,7 @@ impl Conversion {
 #[derive(Clone, Debug)]
 pub struct ResolvedConversion {
     target: TypeRef,
+    repr: TypeRef,
     /// Representation → source.
     input: Option<Stage>,
     /// Source → representation.
@@ -170,14 +190,9 @@ pub struct ResolvedConversion {
 }
 
 impl ResolvedConversion {
-    /// The type a value arrives as, when the input direction is declared.
-    pub fn input_repr(&self) -> Option<&TypeRef> {
-        self.input.as_ref().map(|s| &s.repr)
-    }
-
-    /// The type a value leaves as, when the output direction is declared.
-    pub fn output_repr(&self) -> Option<&TypeRef> {
-        self.output.as_ref().map(|s| &s.repr)
+    /// The representation type: what the source type crosses as.
+    pub fn repr(&self) -> &TypeRef {
+        &self.repr
     }
 
     /// The source value from its representation. `repr` lowers the
@@ -189,7 +204,7 @@ impl ResolvedConversion {
         repr: impl FnOnce(&TypeRef) -> Result<Input<W>, E>,
     ) -> Result<Input<W>, E> {
         let stage = self.stage(&self.input, "input")?;
-        let repr = repr(&stage.repr)?;
+        let repr = repr(&self.repr)?;
         let applied = stage.apply(q, &quote!(__repr));
         let e = repr.expr;
         Ok(Input {
@@ -211,7 +226,7 @@ impl ResolvedConversion {
     ) -> Result<Output<W>, E> {
         let stage = self.stage(&self.output, "output")?;
         let applied = stage.apply(q, value);
-        let repr = repr(&stage.repr, quote!(__repr))?;
+        let repr = repr(&self.repr, quote!(__repr))?;
         let e = &repr.expr;
         Ok(Output {
             expr: quote!({ let __repr = #applied; #e }),

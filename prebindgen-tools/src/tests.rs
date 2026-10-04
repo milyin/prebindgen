@@ -66,8 +66,7 @@ fn conversions_resolve_both_directions() {
     let ty = |s: &str| flat.classify(&syn::parse_str(s).unwrap()).unwrap();
     let wire = || Wire::new(format_ident!("w"), Raw);
     let (millis, raw) = (ty("Millis"), ty("u64"));
-    assert_eq!(conv.input_repr().unwrap().key(), raw.key());
-    assert_eq!(conv.output_repr().unwrap().key(), raw.key());
+    assert_eq!(conv.repr().key(), raw.key());
 
     let input = conv
         .decode(&q, |r| Ok::<_, String>(Input::wire(r, wire(), quote!(w))))
@@ -138,6 +137,14 @@ fn conversions_refuse_mismatched_functions() {
     // An output stage that does not take it.
     let e = err(crate::convert!(Millis).output(crate::fun!(millis_raw)));
     assert!(e.contains("must take `Millis`"), "{e}");
+    // The two directions must agree on the representation.
+    let e = err(crate::convert!(Millis)
+        .input(crate::fun!(millis_from))
+        .output(crate::into!(i32)));
+    assert!(e.contains("one representation type"), "{e}");
+    // A conversion with no direction converts nothing.
+    let e = err(crate::convert!(Millis));
+    assert!(e.contains("declares neither"), "{e}");
     // A path outside the flat model needs its signature stated.
     let e = err(crate::convert!(Millis).input(crate::fun!(crate::local::millis_from)));
     assert!(e.contains(".sig("), "{e}");
