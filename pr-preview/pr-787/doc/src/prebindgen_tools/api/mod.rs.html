@@ -3,27 +3,24 @@
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>convert;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>file;
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>names;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>place;
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>plan;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>qualify;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>record;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>resolve;
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>shape;
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>wire;
-<a href=#13 id=13 data-nosnippet>13</a>
-<a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// Refuse a model the frontend could not read in full: every
-<a href=#15 id=15 data-nosnippet>15</a>/// [`Unsupported`](prebindgen_flat::flat::Element::Unsupported) element, reported at
-<a href=#16 id=16 data-nosnippet>16</a>/// once. An adapter calls this before looking at any declaration, so a
-<a href=#17 id=17 data-nosnippet>17</a>/// binding is built against the whole source or not at all.
-<a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub fn </span>check_supported(flat: <span class="kw-2">&amp;</span>prebindgen_flat::Flat) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">let </span>bad: Vec&lt;String&gt; = flat.unsupported().map(|u| u.error.to_string()).collect();
-<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">if </span>bad.is_empty() {
-<a href=#21 id=21 data-nosnippet>21</a>        <span class="prelude-val">Ok</span>(())
-<a href=#22 id=22 data-nosnippet>22</a>    } <span class="kw">else </span>{
-<a href=#23 id=23 data-nosnippet>23</a>        <span class="prelude-val">Err</span>(<span class="macro">format!</span>(
-<a href=#24 id=24 data-nosnippet>24</a>            <span class="string">"the source declares items the flat model cannot express:\n  {}"</span>,
-<a href=#25 id=25 data-nosnippet>25</a>            bad.join(<span class="string">"\n  "</span>)
-<a href=#26 id=26 data-nosnippet>26</a>        ))
-<a href=#27 id=27 data-nosnippet>27</a>    }
-<a href=#28 id=28 data-nosnippet>28</a>}
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>qualify;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>record;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>shape;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">mod </span>wire;
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="doccomment">/// Refuse a model the frontend could not read in full: every
+<a href=#12 id=12 data-nosnippet>12</a>/// [`Unsupported`](prebindgen_flat::flat::Element::Unsupported) element, reported at
+<a href=#13 id=13 data-nosnippet>13</a>/// once. An adapter calls this before looking at any declaration, so a
+<a href=#14 id=14 data-nosnippet>14</a>/// binding is built against the whole source or not at all.
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">pub fn </span>check_supported(flat: <span class="kw-2">&amp;</span>prebindgen_flat::Flat) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#16 id=16 data-nosnippet>16</a>    <span class="kw">let </span>bad: Vec&lt;String&gt; = flat.unsupported().map(|u| u.error.to_string()).collect();
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">if </span>bad.is_empty() {
+<a href=#18 id=18 data-nosnippet>18</a>        <span class="prelude-val">Ok</span>(())
+<a href=#19 id=19 data-nosnippet>19</a>    } <span class="kw">else </span>{
+<a href=#20 id=20 data-nosnippet>20</a>        <span class="prelude-val">Err</span>(<span class="macro">format!</span>(
+<a href=#21 id=21 data-nosnippet>21</a>            <span class="string">"the source declares items the flat model cannot express:\n  {}"</span>,
+<a href=#22 id=22 data-nosnippet>22</a>            bad.join(<span class="string">"\n  "</span>)
+<a href=#23 id=23 data-nosnippet>23</a>        ))
+<a href=#24 id=24 data-nosnippet>24</a>    }
+<a href=#25 id=25 data-nosnippet>25</a>}
 </code></pre></div></section></main></body></html>

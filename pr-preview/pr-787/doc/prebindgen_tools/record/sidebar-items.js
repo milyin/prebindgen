@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Record"]};
+window.SIDEBAR_ITEMS = {"enum":["Record"],"fn":["record_in","record_out"]};
