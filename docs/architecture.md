@@ -1,124 +1,85 @@
 # Architecture
 
-prebindgen turns the `#[prebindgen]` items of a flat Rust crate into
-language bindings:
+prebindgen reads captured `#[prebindgen]` Rust items into `prebindgen_flat::Flat`.
+A language generator chooses its binding surface and writes generated Rust plus
+the destination-language code that uses it.
 
-```
-#[prebindgen] items ──► prebindgen::Source ──► prebindgen_flat::Flat ──► adapter ──► generated Rust (+ C header / Kotlin)
-   (source crate)        captured records        the flat model          (prebindgen-c, prebindgen-jni)
-                                                                            │
-                                                                            └── uses type and conversion utilities in prebindgen-tools
-```
+This branch prototypes a new `prebindgen-tools` API. C and JNI migration is
+deferred: their workspace members, examples, documentation, and integration
+jobs are temporarily disabled. The tools API is reviewable in rustdoc and
+verified by a small adapter and compiled generated Rust.
 
-* **The flat model** (`prebindgen-flat`) is what a source crate declared: its
-  functions, structs, enums, sums, handles and constants, each type classified
-  once (`TypeKind`) and each item spellable back as Rust.
-* **An adapter** (`prebindgen-c`, `prebindgen-jni`) makes every decision. Its
-  build-script builder collects declarations; the adapter turns them into a
-  plan and writes the plan element by element.
-* **`prebindgen-tools`** provides type inspection, source naming, conversion
-  composition and generated-file utilities. Item generation belongs to the
-  adapters.
+## Generated elements
 
-## An adapter
+The generator owns elements and their placement. A generated element can wrap
+one flat element, group several, or be synthetic. Its kind need not match a
+flat element's kind: a function may become a destination constant. Tools does
+not prescribe function signatures, mirror layouts, or element writers.
 
-Both adapters have the same four parts:
+`Place` identifies an occurrence within a generator-assigned element. Its
+segments address parameters, fields, callback arguments, intermediate types,
+source elements within a group, or generator-specific parts.
 
-```
-builder.rs   the build script's API: declarations, collected as given
-plan.rs      the declarations resolved against the flat model
-lower        how each type crosses, by recursion over its structure
-write        the plan written: each element in order
+## Type relations
+
+The model is:
+
+```text
+flat type ⇄ representation type(s) ⇄ wire type(s)
 ```
 
-**The plan** holds two things. The *settings* say how each declared type
-crosses — for C an opaque handle, an enum or union mirror, a data or
-`repr(C)` struct, an error, or a conversion; for JNI a Kotlin class of some
-kind, or a conversion. The *items* are the elements to write, each with every
-decision about it already made: its exported name, and for JNI its Kotlin
-name, how each parameter crosses and how the result and the error leave.
-Every declaration error surfaces while the plan is made.
+Representation types are ordinary Rust types. A `convert!` declaration can
+convert `Millis` through `u64`; record helpers construct or decompose fields.
+Input and output paths are independent.
 
-The items are grouped by kind, each kind in the order it was declared. C
-writes the declared types, then the callbacks' closure structs, then the
-functions. JNI goes package by package in declaration order, writing each
-package's classes (with their members), then its functions, then its
-constants; the shared Kotlin interfaces follow all packages.
+Wire types are the generator's closed enum implementing `WireType`. Its
+variants include semantic information: the same ABI integer can carry a
+number, unsigned bits, or a handle of a particular class. `Wire<W>` pairs
+that type with a boundary slot name.
 
-**Writing** walks the items and emits each using adapter-specific code. The generated Rust
-goes into one file; the JNI adapter writes the Kotlin for the same element
-into the file of its package. Nothing is emitted on demand, so nothing needs
-deduplicating while writing: a type is written where it is declared, and a
-Kotlin interface several functions share (a callback, sink, builder, folder
-or error handler) is planned once and written once.
+## Resolving one element
 
-## Code generation
+A generator implements `ConversionPolicy`, declaring its wire enum, conversion
+rule type, and destination metadata type. `Resolver` holds directional defaults.
+The generator creates a `Scope` with the element's `Overrides`, then resolves
+each typed occurrence:
 
-Each adapter generates its own wrappers, callback closures and destination
-representations. The C adapter builds C ABI signatures and mirror types; the
-JNI adapter builds JNI signatures and the corresponding Kotlin surface.
-Their code owns parameter evaluation order, source calls, return delivery,
-resource handling and failure policy.
+1. The exact occurrence override, checked against its expected type/direction.
+2. An exact normalized type default in that direction.
+3. The policy's fallback.
 
-`prebindgen-tools` provides conversion expressions and composition utilities,
-not item templates or writer callback traits. Adapters place `Input` and
-`Output` expressions directly into their generated code. This allows each
-boundary to choose its own layout and construction strategy.
+Policy resolves children through the same scope and composes their conversions
+using `Input`, `Output`, and `Stage`. `Scope::finish` rejects unused overrides.
+Invalid explicit rules return errors; resolution never retries them as defaults.
+Conversion cycles and mismatched plan root types/directions are errors.
 
-## Recursion
+## Resolved plans
 
-An adapter lowers a whole type by recursing over its structure.
-`shape(ty, lookup)` reads one layer of a type: a scalar, text, a sequence and
-how it is held, an `Option`, a `Box`, a borrow, a callback, or a named type
-together with the adapter's setting for it and whether it is owned, shared or
-exclusive. Each adapter's lowering is one `match` over `Shape` per place — a
-parameter, a result, a struct field, a callback argument — recursing into
-what the layer holds.
+`ConversionPlan<W, M>` retains the selected directional Rust conversion, a
+shared `Form<W>` relation tree, and generator-specific destination metadata.
+The tree describes direct wires, intermediates, parts, optional values, sums,
+and adapter-written sequence loops. Metadata describes the destination value
+as a whole, such as its class or constructor; an adapter can retain child
+metadata in its own tree. Rust and destination generation consume the same
+plan rather than reselect defaults.
 
-The answers compose:
+`with_input` emits setup, binds the input once, and encloses the flat call.
+Backing storage and RAII guards remain alive through that call and unwind
+on errors. `emit_output` binds the source expression once and produces zero
+wires as `()`, one as a bare value, and several as a tuple. The generator
+chooses wire placement, error routing, and ownership transfer.
 
-* `Input` (wires → value) and `Output` (value → wires) carry an expression
-  and the wires it reads or produces. A fallible one uses `?` on
-  `Result<_, String>`; whoever places it decides where the error goes.
-* `record_in` / `record_out` take a struct or a sum alternative apart into
-  its fields, with the delimiters the source wrote.
-* `Input::optional`, `Input::combine` and `Output::concat` build the rest.
-* `Stage::decode` / `Stage::encode` wrap a representation's wires in a
-  declared conversion (`convert!`: functions or `From`/`TryFrom` impls).
-* `Qualifier` spells a flat type from the generated crate
-  (`Payload` → `perftest_flat::Payload`).
+Root input setup is supported. Flattening conditional child storage, automatic
+choice constructors, recursive forward declarations, and non-RAII cleanup are
+deferred. The generator allocates names across plans; tools validates duplicate
+wire names within each plan. Low-level combinators assert programmer-supplied
+record and conversion-stage endpoint compatibility. Arbitrary emitted Rust
+semantics and trait implementations still need compilation.
 
-## The two adapters
+## Verification and documentation
 
-**C** lowers each value to one C-ABI wire per slot. Opaque handles are boxed
-pointers with a typed destructor; enums and sums are `#[repr(C)]` mirrors
-validated on the way in (`MaybeUninit`, tag checks); data structs are mirrors
-converted field by field; `#[repr(C)]` structs are reinterpreted in place.
-Results lower to return values and out-parameters, and `Result` adds a
-`char **e` error slot.
-
-**JNI** lowers every value to *leaves* — JNI primitives, strings, primitive
-arrays, object arrays — and writes the Kotlin that assembles and takes apart
-the objects, so generated Rust never reads a Kotlin field. The same recursion
-yields the leaves and all four conversions (Kotlin encode/decode, Rust
-decode/encode); a result with several leaves reaches Kotlin through one sink
-upcall. Output expansions (`expand_return!`) deliver a value as its fields to
-a builder, folder, callback or error handler; input expansions
-(`expand_param!`) let a parameter be built by a constructor or passed as a
-handle, chosen by a selector.
-
-## Crates
-
-```
-prebindgen              the base: Source, SourceLocation, the capture format
-prebindgen-proc-macro   #[prebindgen]
-prebindgen-flat         the flat model                          deps: prebindgen
-prebindgen-tools        type inspection, conversion composition, output   deps: prebindgen-flat
-prebindgen-c            C / cbindgen adapter                    deps: prebindgen-tools
-prebindgen-jni          JNI / Kotlin adapter                    deps: prebindgen-tools
-prebindgen-c-runtime    called by generated C code              no deps
-prebindgen-jni-runtime  called by generated JNI code            deps: jni
-```
-
-A source crate depends on `prebindgen` alone; a shipped binding library on a
-runtime crate; only a binding crate's `build.rs` depends on an adapter.
+The `prebindgen_tools::resolve` rustdoc module contains a runnable public API
+walkthrough. Integration tests compile and run generated Rust for records,
+intermediate conversions, optional decomposition, single evaluation, and
+borrowed input storage with RAII cleanup on success and failure. These checks
+do not establish C/JNI parity; migration and runtime integration remain deferred.

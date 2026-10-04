@@ -3,30 +3,59 @@
 
 //! # prebindgen-tools
 //!
-//! Building blocks for a prebindgen **language adapter**. Applications that
-//! only want bindings normally use the `prebindgen-c` or `prebindgen-jni`
-//! adapter crate instead.
+//! Shared type conversion tools for a prebindgen **language generator**.
+//! This is an API prototype: the C and JNI generators are not ported yet.
 //!
-//! An adapter reads the captured [`Flat`](prebindgen_flat::Flat) model,
-//! chooses representations, and generates its own Rust wrappers and foreign
-//! declarations. This crate supplies type inspection and conversion composition;
-//! the adapter owns signatures, layouts, calls, and error handling.
+//! An adapter writes *generated elements* — functions, types, constants —
+//! around the elements of the [`Flat`](prebindgen_flat::Flat) model, plus the
+//! foreign code that uses them. Every generated element speaks only in the
+//! adapter's **wire types**: a closed set, one enum per adapter
+//! ([`WireType`]). The tools here are what every adapter needs to get a
+//! source type onto wires and back.
 //!
-//! * [`shape()`] classifies one layer of a type, including adapter declarations.
-//!   The adapter decides which children to visit recursively.
-//! * [`Qualifier`] names source types and items in generated Rust.
-//! * [`Input`] and [`Output`] carry wires and conversion expressions.
-//!   [`Input::combine`], [`Input::optional`] and [`Output::concat`] compose them.
-//! * [`Record`], [`record_in`] and [`record_out`] construct and destructure
-//!   source structs and enum alternatives while preserving field order.
-//! * [`mod@convert`] resolves declared conversions; [`Stage::decode`] and
-//!   [`Stage::encode`] compose them with their representation's conversion.
-//! * [`RustFile`] collects, formats and writes the adapter's generated items.
+//! ## The model
 //!
-//! Fallible conversions use `Result<_, String>`. The adapter places the
-//! expressions in an error scope and chooses how to report failures. Source
-//! function errors remain part of the source return value and are handled
-//! separately by the adapter.
+//! A source type at a [`Place`] — parameter `p` of `send`, field `x` of it —
+//! crosses in one of a few ways ([`FormKind`]):
+//!
+//! * **directly**, as one wire ([`Input::wire`]);
+//! * **converted** to another source type that crosses instead
+//!   ([`Stage::decode`], [`Stage::encode`]);
+//! * **taken apart** into parts that cross on their own: a record's fields
+//!   ([`Input::record`]), an optional's presence and value
+//!   ([`Input::optional`]), a sum's tag and alternatives ([`Input::sum`]),
+//!   a sequence ([`Input::seq`]).
+//!
+//! Lowering a value builds an [`Input`] (wires → value) or an [`Output`]
+//! (value → wires): the Rust expression *and* the [`Form`] tree recording
+//! which way each layer crossed. The foreign-side writer walks that tree,
+//! so it follows the decisions made — defaults and overrides alike — without
+//! making them again; what a single wire means is in the wire's own type.
+//!
+//! ## Resolving and writing an element
+//!
+//! 1. Implement [`ConversionPolicy`] with your wire enum, rule declarations,
+//!    and destination metadata. Register directional defaults on [`Resolver`].
+//! 2. Create a per-element [`Scope`] with its [`Overrides`]. For every typed
+//!    part, call [`Scope::resolve`] with its type, direction, and [`Place`].
+//! 3. Policy builds a [`ConversionPlan`] with shared [`Input`]/[`Output`]
+//!    combinators, resolving children through that same scope.
+//! 4. Generate destination code from the plan's [`Form`], wire semantics,
+//!    and metadata. Use [`ConversionPlan::with_input`] or
+//!    [`ConversionPlan::emit_output`] for Rust, then [`Scope::finish`] to
+//!    reject overrides that did not name a resolved part.
+//!
+//! Selection is occurrence override → exact type default → policy fallback.
+//! An override is checked against its expected type and direction. The generator
+//! owns generated elements: their kind may differ from the source, they can be
+//! synthetic, or they can group several source elements. See [`mod@resolve`]
+//! for a complete runnable example.
+//!
+//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
+//! collects and writes the generated Rust.
+//!
+//! Fallible conversions use `Result<_, String>`: an expression may use `?`,
+//! and the adapter decides where the error goes ([`Input::result`]).
 
 // Implementation modules are private. The public modules below select every
 // exported item explicitly, independently of the implementation layout.
@@ -50,47 +79,10 @@ pub use syn as __syn;
 /// `TryInto`). A function returning `Result` makes its stage fallible; the
 /// error is reported through its `Display`.
 ///
-/// For example, given source functions `millis_from_raw(u64) -> Millis` and
-/// `millis_to_raw(&Millis) -> Result<u64, String>`, an adapter can resolve
-/// both directions before lowering a use of `Millis`:
-///
-/// ```
-/// use prebindgen::SourceLocation;
-/// use prebindgen_flat::Flat;
-/// use prebindgen_tools::{convert, fun, Input, Output, Qualifier, Wire, ident};
-/// use quote::quote;
-/// let source = syn::parse_file(r#"
-///     pub struct Millis(pub u64);
-///     pub fn millis_from_raw(raw: u64) -> Millis { Millis(raw) }
-///     pub fn millis_to_raw(value: &Millis) -> Result<u64, String> { Ok(value.0) }
-/// "#).unwrap();
-/// let flat = Flat::builder()
-///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
-///     .build().unwrap();
-/// let conversion = convert!(Millis)
-///     .input(fun!(millis_from_raw))
-///     .output(fun!(millis_to_raw))
-///     .resolve(&flat).unwrap();
-/// let input = conversion.input.as_ref().unwrap();
-/// let output = conversion.output.as_ref().unwrap();
-/// // Each stage's `repr` is u64; `output.fallible` is true.
-/// assert_eq!(input.repr.spell().to_string(), "u64");
-/// assert!(output.fallible);
-/// let q = Qualifier::new(&flat);
-/// let decoded = input.decode(&q, &conversion.target,
-///     Input::identity(Wire::new(ident!(raw), quote!(u64))),
-///     &ident!(r), quote!());
-/// assert_eq!(decoded.wires.len(), 1);
-/// let encoded = output.encode(&q, &conversion.target, &quote!(value),
-///     &ident!(r), quote!(),
-///     Output::single(Wire::new(ident!(raw), quote!(u64)), quote!(r)));
-/// assert!(encoded.fallible);
-/// ```
-///
-/// An [`Input`] for `u64` is wrapped with [`Stage::decode`]
-/// before the source call; an [`Output`] for `u64` is wrapped
-/// with [`Stage::encode`] after it. A binding-local function can be named
-/// with [`fun!`](crate::fun!) plus [`FnRef::sig`]. See [`Via`] for trait-based alternatives.
+/// A resolved [`Stage`] composes with the lowering of its representation:
+/// [`Stage::decode`] wraps the representation's [`Input`], [`Stage::encode`]
+/// builds the representation's [`Output`] and wraps it. Either way the result's
+/// [`Form`] is [`FormKind::Via`] over the representation's form.
 pub mod convert {
     pub use crate::api::convert::{Conversion, FnRef, ResolvedConversion, Stage, Via};
 }
@@ -199,41 +191,27 @@ pub mod qualify {
 }
 
 /// Records — structs and the alternatives of a sum — taken apart into their
-/// fields and put back together.
-///
-/// The adapter chooses a representation independently of the source shape.
-/// These helpers construct and destructure source values, preserving named or
-/// positional fields, delimiters, and order. Each field may occupy several wires.
-///
-/// ## Example: decompose a record
-///
-/// [`record_in`] combines field inputs in source order and reconstructs the
-/// source's named or tuple form. An adapter normally produces the field
-/// inputs while recursing through [`shape()`](crate::shape()).
-///
-/// ```
-/// use prebindgen::SourceLocation;
-/// use prebindgen_flat::{Flat, flat::Type};
-/// use prebindgen_tools::{Input, Record, Wire,
-///     ident, record_in};
-/// use quote::quote;
-///
-/// let item = syn::parse_quote!(pub struct Point { pub x: i32, pub y: i32 });
-/// let flat = Flat::builder()
-///     .items([(item, SourceLocation::default())])
-///     .build().unwrap();
-/// let Some(Type::Struct(point)) = flat.declared_type("Point") else { panic!() };
-/// let fields = vec![
-///     Input::identity(Wire::new(ident!(x_wire), quote!(i32))),
-///     Input::identity(Wire::new(ident!(y_wire), quote!(i32))),
-/// ];
-/// let input = record_in(Record::Struct(point), &quote!(Point), fields);
-/// assert_eq!(input.wires.len(), 2);
-/// assert_eq!(input.expr.to_string(), "Point { x : x_wire , y : y_wire }");
-///
-/// ```
+/// fields and put back together, with the delimiters the source wrote.
+/// [`Input::record`] and [`Output::record`] use it; an adapter writing its own
+/// mirror does too.
 pub mod record {
-    pub use crate::api::record::{record_in, record_out, Record};
+    pub use crate::api::record::Record;
+}
+
+/// Places in an element, and the decisions made at them.
+pub mod place {
+    pub use crate::api::place::{Overrides, Place, Seg};
+}
+
+/// Directional conversion plans shared by the Rust and destination writers.
+pub mod plan {
+    pub use crate::api::plan::{ConversionPlan, Direction};
+}
+
+/// Type defaults, per-element scopes, and language-generator conversion policy.
+#[doc = include_str!("api/scoped_api.md")]
+pub mod resolve {
+    pub use crate::api::resolve::{ConversionPolicy, Resolver, Scope};
 }
 
 /// One level of a type's structure, with any adapter declaration for that type.
@@ -295,64 +273,47 @@ pub mod shape {
     pub use crate::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
 }
 
-/// Wires and the conversions between wires and source values.
-///
-/// A **wire** is one parameter, field or return slot of the generated
-/// boundary, typed in the generated Rust file: `jlong`, `*const c_char`,
-/// `payload_t`. A source value crosses as zero or more wires, and which
-/// ones is the adapter's decision; these types only carry the decision and
-/// compose it.
-///
-/// * [`Input`] turns wires into a source value — a parameter on its way into
-///   the source function, a field of a struct arriving from the foreign side.
-/// * [`Output`] turns a source value into wires — a return value, a callback
-///   argument, a field of a struct leaving.
-///
-/// Both carry an expression. A **fallible** one may use `?` on a
-/// `Result<_, String>`; whoever places it decides where the error goes (see
-/// [`Input::result`]). Generated conversion helpers follow the same
-/// convention, so a converter written for one position composes into another.
-///
-/// ## Example: one value on two wires
-///
-/// A `u64` can arrive as two `u32` words. [`Input`] keeps the expression together with
-/// the two [`Wire`] declarations so the adapter
-/// can place and evaluate them in the right order:
+/// Wires, the forms values take on them, and the conversions between.
 ///
 /// ```
-/// use prebindgen_tools::{Input, Output, Wire, ident};
+/// use prebindgen::SourceLocation;
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{Input, Place, Seg, Wire, WireType};
 /// use quote::quote;
 ///
-/// let hi = Wire::new(ident!(hi), quote!(u32));
-/// let lo = Wire::new(ident!(lo), quote!(u32));
-/// let input = Input::new(vec![hi, lo], quote!(((hi as u64) << 32) | lo as u64));
-/// assert_eq!(input.wires.len(), 2);
-/// assert!(input.result().to_string().contains("Ok"));
+/// // The adapter's closed set of wire types.
+/// #[derive(Clone, Debug)]
+/// enum W { Long { unsigned: bool } }
+/// impl WireType for W {
+///     fn rust_type(&self) -> syn::Type { syn::parse_quote!(i64) }
+/// }
 ///
-/// let output = Output::new(
-///     vec![Wire::new(ident!(hi), quote!(u32)),
-///          Wire::new(ident!(lo), quote!(u32))],
-///     quote!(((value >> 32) as u32, value as u32)),
-/// );
-/// assert_eq!(output.pattern().to_string(), "(hi , lo)");
+/// let source = syn::parse_file("pub fn send(n: u64) {}").unwrap();
+/// let flat = Flat::builder()
+///     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+///     .build().unwrap();
+/// let n = &flat.function("send").unwrap().params[0];
+/// let place = Place::new("send").at(Seg::Param("n".into()));
+/// let w = place.ident("");
+/// let input = Input::wire(&n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
+///     quote!(#w as u64));
+/// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");
 /// ```
-///
-/// For a fallible step, use [`Input::and_then`] or [`Output::fallible`]
-/// and place [`Input::result`] or [`Output::result`] at the point whose
-/// error policy applies. The conversion error type is `String`; the adapter
-/// supplies the fallback or error delivery code.
 pub mod wire {
-    pub use crate::api::wire::{result_expr, Input, Output, Wire};
+    pub use crate::api::wire::{result_expr, Form, FormKind, Input, Output, Wire, WireType};
 }
 
 pub use crate::{
     api::check_supported,
     convert::{Conversion, FnRef, ResolvedConversion, Stage, Via},
     file::RustFile,
+    place::{Overrides, Place, Seg},
+    plan::{ConversionPlan, Direction},
     qualify::Qualifier,
-    record::{record_in, record_out, Record},
+    record::Record,
+    resolve::{ConversionPolicy, Resolver, Scope},
     shape::{shape, Access, SequenceKind, Shape, TextKind},
-    wire::{Input, Output, Wire},
+    wire::{Form, FormKind, Input, Output, Wire, WireType},
 };
 
 /// `fun!(name)` / `fun!(crate::local)` — a function reference.

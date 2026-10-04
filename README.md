@@ -8,6 +8,12 @@ The 0.7 line replaces the registry pipeline of 0.5 with adapter-driven
 generation (see [docs/architecture.md](docs/architecture.md)). Every crate is
 pre-1.0 and its API may change in a minor release.
 
+This branch prototypes the scoped conversion API in `prebindgen-tools`.
+Start with its `resolve` rustdoc module for a runnable policy/default/override
+example. C and JNI generators and their integration jobs are temporarily
+disabled while their migration is deferred; this branch verifies the tools
+API with compiled generated Rust rather than claiming generator parity.
+
 ## Problem
 
 Making FFI (Foreign Function Interface) for a Rust library is not an easy task. This involves a large amount of boilerplate code that wraps the Rust API in `extern "C"` functions and `#[repr(C)]` structures.

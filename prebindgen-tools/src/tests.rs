@@ -5,7 +5,7 @@ use prebindgen_flat::Flat;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::{record_in, record_out, Input, Output, Qualifier, Record, Wire};
+use crate::Qualifier;
 
 fn model(src: &str) -> Flat {
     let loc = SourceLocation {
@@ -55,42 +55,6 @@ fn qualifier_names_items_by_their_crate() {
 }
 
 #[test]
-fn records_keep_the_source_delimiters() {
-    let flat = model(SRC);
-    let Some(prebindgen_flat::flat::Type::Struct(payload)) = flat.declared_type("Payload") else {
-        panic!("Payload is a struct");
-    };
-    let parts = payload
-        .fields
-        .iter()
-        .map(|f| Input::identity(Wire::new(format_ident!("w{}", f.index), quote!(u8))))
-        .collect();
-    let input = record_in(Record::Struct(payload), &quote!(Payload), parts);
-    assert_eq!(norm(input.expr), "Payload{id:w0,label:w1}");
-    assert_eq!(input.wires.len(), 2);
-
-    let Some(prebindgen_flat::flat::Type::Variant(shape)) = flat.declared_type("Shape") else {
-        panic!("Shape is a sum");
-    };
-    // A positional alternative is rebuilt positionally.
-    let circle = Record::Alt(&shape.alternatives[1]);
-    let input = record_in(
-        circle,
-        &quote!(Shape::Circle),
-        vec![Input::identity(Wire::new(format_ident!("r"), quote!(f64)))],
-    );
-    assert_eq!(norm(input.expr), "Shape::Circle(r)");
-    let rect = Record::Alt(&shape.alternatives[2]);
-    let out = record_out::<()>(rect, &quote!(Shape::Rect), &quote!(v), |f, b| {
-        let n = format_ident!("o_{}", f.name.as_ref().unwrap());
-        Ok(Output::single(Wire::new(n, quote!(f64)), b.clone()))
-    })
-    .unwrap();
-    assert_eq!(out.wires.len(), 2);
-    assert!(norm(out.expr).starts_with("{letShape::Rect{w:__f0,h:__f1}=v;"));
-}
-
-#[test]
 fn conversions_resolve_both_directions() {
     let flat = model(SRC);
     let conv = crate::convert!(Millis)
@@ -102,12 +66,12 @@ fn conversions_resolve_both_directions() {
     let input = conv.input.unwrap();
     assert!(!input.fallible);
     assert_eq!(
-        norm(input.apply(&q, &conv.target, &quote!(r))),
+        norm(input.apply(&q, &quote!(r))),
         "src_crate::millis_from(r)"
     );
     let output = conv.output.unwrap();
     assert!(output.fallible, "a Result-returning stage is fallible");
-    let applied = norm(output.apply(&q, &conv.target, &quote!(v)));
+    let applied = norm(output.apply(&q, &quote!(v)));
     assert!(applied.starts_with("src_crate::millis_to(&v)"), "{applied}");
 }
 

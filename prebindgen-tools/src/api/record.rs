@@ -3,9 +3,7 @@ use prebindgen_flat::{
     Emit,
 };
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens};
-
-use crate::wire::{Input, Output};
+use quote::{format_ident, ToTokens};
 
 /// A struct or one alternative of a sum: something with fields and
 /// delimiters.
@@ -18,7 +16,7 @@ pub enum Record<'a> {
 }
 
 impl<'a> Record<'a> {
-    /// Fields in source order. [`record_in`] and [`record_out`] preserve it.
+    /// Fields in source order.
     pub fn fields(&self) -> &'a [Field] {
         match self {
             Record::Struct(s) => &s.fields,
@@ -29,6 +27,11 @@ impl<'a> Record<'a> {
     /// `head { a: v0, b: v1 }` / `head(v0, v1)` / `head`, with the
     /// delimiters the source wrote.
     pub fn construct(&self, head: &TokenStream, values: &[TokenStream]) -> TokenStream {
+        assert_eq!(
+            self.fields().len(),
+            values.len(),
+            "record field count mismatch"
+        );
         let parts: Vec<TokenStream> = self
             .fields()
             .iter()
@@ -63,27 +66,4 @@ impl<'a> Record<'a> {
             Record::Alt(a) => emit.shape(*a, head.clone(), parts),
         }
     }
-}
-
-/// A record rebuilt from its fields' inputs: wires concatenated in field
-/// order, values placed into the record's constructor `head`.
-pub fn record_in(record: Record<'_>, head: &TokenStream, fields: Vec<Input>) -> Input {
-    Input::combine(fields, |values| record.construct(head, &values))
-}
-
-/// A record taken apart into its fields' outputs. `src` is the record
-/// value; `field` builds each field's output from the binding holding it.
-pub fn record_out<E>(
-    record: Record<'_>,
-    head: &TokenStream,
-    src: &TokenStream,
-    mut field: impl FnMut(&Field, &TokenStream) -> Result<Output, E>,
-) -> Result<Output, E> {
-    let binds = record.binds();
-    let mut parts = Vec::new();
-    for (f, b) in record.fields().iter().zip(&binds) {
-        parts.push(field(f, &b.to_token_stream())?);
-    }
-    let pat = record.pattern(head, &binds);
-    Ok(Output::concat(quote!(let #pat = #src;), parts))
 }
