@@ -133,9 +133,7 @@ impl Adapter<'_> {
                         Input::sum(&self.q, v, Wire::new(place.ident("tag"), Toy::Int), alts)
                     }
                     Decl::Convert(c) => {
-                        let stage = c.input.as_ref().ok_or("no input conversion")?;
-                        let repr = self.input(&stage.repr, &place.at(Seg::Repr))?;
-                        stage.decode(&self.q, repr)
+                        c.decode(&self.q, |repr| self.input(repr, &place.at(Seg::Repr)))?
                     }
                 };
                 match Access::of(dty) {
@@ -192,12 +190,9 @@ impl Adapter<'_> {
                             self.output(&f.ty, &at.at(Seg::field(f)), &b)
                         })?
                     }
-                    Decl::Convert(c) => {
-                        let stage = c.output.as_ref().ok_or("no output conversion")?;
-                        stage.encode(&self.q, v, |r| {
-                            self.output(&stage.repr, &place.at(Seg::Repr), &r)
-                        })?
-                    }
+                    Decl::Convert(c) => c.encode(&self.q, v, |repr, r| {
+                        self.output(repr, &place.at(Seg::Repr), &r)
+                    })?,
                 }
             }
             s => return Err(format!("`{ty}`: no toy form for {s:?}")),

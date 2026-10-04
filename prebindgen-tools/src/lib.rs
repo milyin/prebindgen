@@ -20,7 +20,7 @@
 //!
 //! * **directly**, as one wire ([`Input::wire`]);
 //! * **converted** to another source type that crosses instead
-//!   ([`Stage::decode`], [`Stage::encode`]);
+//!   ([`ResolvedConversion::decode`], [`ResolvedConversion::encode`]);
 //! * **taken apart** into parts that cross on their own: a record's fields
 //!   ([`Input::record`]), an optional's presence and value
 //!   ([`Input::optional`]), a sum's tag and alternatives ([`Input::sum`]),
@@ -62,21 +62,20 @@ pub use syn as __syn;
 ///
 /// `convert!(Millis).input(fun!(millis_from_raw)).output(fun!(millis_to_raw))`
 /// says that `Millis` never crosses as itself: it crosses as `u64` — the
-/// **representation** — and these two functions convert. The adapter lowers
-/// the representation like any other type and wraps the resulting wires in
-/// the conversion's stages ([`Stage::apply`]).
+/// **representation** — and these two functions convert.
 ///
-/// A stage is a function (a flat item, or a binding-local path with a
+/// Each direction is a function (a flat item, or a binding-local path with a
 /// stated signature) or a standard trait impl (`From`, `Into`, `TryFrom`,
-/// `TryInto`). A function returning `Result` makes its stage fallible; the
-/// error is reported through its `Display`.
+/// `TryInto`). A function returning `Result` makes its direction fallible;
+/// the error is reported through its `Display`.
 ///
-/// A resolved [`Stage`] composes with the lowering of its representation:
-/// [`Stage::decode`] wraps the representation's [`Input`], [`Stage::encode`]
-/// builds the representation's [`Output`] and wraps it. Either way the result's
-/// [`Form`] is [`FormKind::Via`] over the representation's form.
+/// [`Conversion::resolve`] checks the declaration against the model. The
+/// adapter lowers the representation like any other type, inside the closure
+/// it passes to [`ResolvedConversion::decode`] or
+/// [`ResolvedConversion::encode`]; the result's [`Form`] is
+/// [`FormKind::Via`] over the representation's form.
 pub mod convert {
-    pub use crate::api::convert::{Conversion, FnRef, ResolvedConversion, Stage, Via};
+    pub use crate::api::convert::{Conversion, FnRef, ResolvedConversion, Via};
 }
 
 /// The generated Rust file.
@@ -287,7 +286,7 @@ pub mod wire {
 
 pub use crate::{
     api::check_supported,
-    convert::{Conversion, FnRef, ResolvedConversion, Stage, Via},
+    convert::{Conversion, FnRef, ResolvedConversion, Via},
     file::RustFile,
     place::{Overrides, Place, Seg},
     qualify::Qualifier,

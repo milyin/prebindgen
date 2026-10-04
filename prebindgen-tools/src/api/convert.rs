@@ -154,15 +154,96 @@ impl Conversion {
     }
 }
 
-/// A conversion resolved against the model.
+/// A conversion resolved against the model: the source type crosses as
+/// a representation type, converted on the way in, on the way out, or both.
+///
+/// The adapter lowers the representation like any other type, inside the
+/// closure it passes to [`Self::decode`] or [`Self::encode`]; the conversion
+/// wraps the result and records it as [`FormKind::Via`].
 #[derive(Clone, Debug)]
 pub struct ResolvedConversion {
-    /// The source type being converted.
-    pub target: TypeRef,
+    target: TypeRef,
     /// Representation → source.
-    pub input: Option<Stage>,
+    input: Option<Stage>,
     /// Source → representation.
-    pub output: Option<Stage>,
+    output: Option<Stage>,
+}
+
+impl ResolvedConversion {
+    /// The type a value arrives as, when the input direction is declared.
+    pub fn input_repr(&self) -> Option<&TypeRef> {
+        self.input.as_ref().map(|s| &s.repr)
+    }
+
+    /// The type a value leaves as, when the output direction is declared.
+    pub fn output_repr(&self) -> Option<&TypeRef> {
+        self.output.as_ref().map(|s| &s.repr)
+    }
+
+    /// The source value from its representation. `repr` lowers the
+    /// representation type it is given; its input is converted here.
+    /// Fails when the conversion declares no input.
+    pub fn decode<W: WireType, E: From<String>>(
+        &self,
+        q: &Qualifier<'_>,
+        repr: impl FnOnce(&TypeRef) -> Result<Input<W>, E>,
+    ) -> Result<Input<W>, E> {
+        let stage = self.stage(&self.input, "input")?;
+        let repr = repr(&stage.repr)?;
+        let applied = stage.apply(q, &quote!(__repr));
+        let e = repr.expr;
+        Ok(Input {
+            form: self.via(repr.form),
+            expr: quote!({ let __repr = #e; #applied }),
+            fallible: repr.fallible || stage.fallible,
+        })
+    }
+
+    /// The source `value` sent out as its representation. `repr` lowers the
+    /// representation type it is given, reading the converted value from
+    /// the expression it is given. Fails when the conversion declares no
+    /// output.
+    pub fn encode<W: WireType, E: From<String>>(
+        &self,
+        q: &Qualifier<'_>,
+        value: &TokenStream,
+        repr: impl FnOnce(&TypeRef, TokenStream) -> Result<Output<W>, E>,
+    ) -> Result<Output<W>, E> {
+        let stage = self.stage(&self.output, "output")?;
+        let applied = stage.apply(q, value);
+        let repr = repr(&stage.repr, quote!(__repr))?;
+        let e = &repr.expr;
+        Ok(Output {
+            expr: quote!({ let __repr = #applied; #e }),
+            fallible: repr.fallible || stage.fallible,
+            form: self.via(repr.form),
+        })
+    }
+
+    /// The functions the conversion calls, so an adapter can count them as
+    /// used.
+    pub fn functions(&self) -> impl Iterator<Item = &FnRef> {
+        [&self.input, &self.output]
+            .into_iter()
+            .flatten()
+            .filter_map(|s| match &s.how {
+                How::Call { fun, .. } => Some(fun),
+                _ => None,
+            })
+    }
+
+    fn stage<'s>(&self, stage: &'s Option<Stage>, what: &str) -> Result<&'s Stage, String> {
+        stage
+            .as_ref()
+            .ok_or_else(|| format!("convert!({}) declares no {what}", self.target))
+    }
+
+    fn via<W>(&self, repr: Form<W>) -> Form<W> {
+        Form {
+            ty: self.target.clone(),
+            kind: FormKind::Via(Box::new(repr)),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -173,13 +254,13 @@ enum Direction {
 
 /// One direction of a conversion.
 #[derive(Clone, Debug)]
-pub struct Stage {
+struct Stage {
     /// The type being converted.
-    pub target: TypeRef,
+    target: TypeRef,
     /// The representation type on the boundary side.
-    pub repr: TypeRef,
+    repr: TypeRef,
     /// Whether the stage can fail.
-    pub fallible: bool,
+    fallible: bool,
     how: How,
 }
 
@@ -302,7 +383,7 @@ impl Stage {
     /// representation and the result the source type; for an output stage
     /// the other way round. A fallible stage produces an expression using
     /// `?` on a `Result<_, String>`.
-    pub fn apply(&self, q: &Qualifier<'_>, value: &TokenStream) -> TokenStream {
+    fn apply(&self, q: &Qualifier<'_>, value: &TokenStream) -> TokenStream {
         let t = q.ty(&self.target);
         let call = match &self.how {
             How::Call { fun, by_ref } => {
@@ -334,52 +415,6 @@ impl Stage {
             quote!(#call.map_err(|__e| ::std::string::ToString::to_string(&__e))?)
         } else {
             call
-        }
-    }
-}
-
-impl Stage {
-    /// The function this stage calls, when it calls one.
-    pub fn function(&self) -> Option<&FnRef> {
-        match &self.how {
-            How::Call { fun, .. } => Some(fun),
-            _ => None,
-        }
-    }
-
-    /// The converted value from its representation's input.
-    pub fn decode<W: WireType>(&self, q: &Qualifier<'_>, repr: Input<W>) -> Input<W> {
-        let applied = self.apply(q, &quote!(__repr));
-        let e = repr.expr;
-        Input {
-            form: self.via(repr.form),
-            expr: quote!({ let __repr = #e; #applied }),
-            fallible: repr.fallible || self.fallible,
-        }
-    }
-
-    /// The representation's output of the converted `value`. `repr` builds
-    /// it from the representation value it is given.
-    pub fn encode<W: WireType, E>(
-        &self,
-        q: &Qualifier<'_>,
-        value: &TokenStream,
-        repr: impl FnOnce(TokenStream) -> Result<Output<W>, E>,
-    ) -> Result<Output<W>, E> {
-        let applied = self.apply(q, value);
-        let repr = repr(quote!(__repr))?;
-        let e = &repr.expr;
-        Ok(Output {
-            expr: quote!({ let __repr = #applied; #e }),
-            fallible: repr.fallible || self.fallible,
-            form: self.via(repr.form),
-        })
-    }
-
-    fn via<W>(&self, repr: Form<W>) -> Form<W> {
-        Form {
-            ty: self.target.clone(),
-            kind: FormKind::Via(Box::new(repr)),
         }
     }
 }

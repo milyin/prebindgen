@@ -5,7 +5,7 @@ use prebindgen_flat::Flat;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::Qualifier;
+use crate::{FormKind, Input, Output, Qualifier, Wire, WireType};
 
 fn model(src: &str) -> Flat {
     let loc = SourceLocation {
@@ -63,16 +63,66 @@ fn conversions_resolve_both_directions() {
         .resolve(&flat)
         .unwrap();
     let q = Qualifier::new(&flat);
-    let input = conv.input.unwrap();
+    let ty = |s: &str| flat.classify(&syn::parse_str(s).unwrap()).unwrap();
+    let wire = || Wire::new(format_ident!("w"), Raw);
+    let (millis, raw) = (ty("Millis"), ty("u64"));
+    assert_eq!(conv.input_repr().unwrap().key(), raw.key());
+    assert_eq!(conv.output_repr().unwrap().key(), raw.key());
+
+    let input = conv
+        .decode(&q, |r| Ok::<_, String>(Input::wire(r, wire(), quote!(w))))
+        .unwrap();
     assert!(!input.fallible);
+    assert!(matches!(input.form.kind, FormKind::Via(_)));
     assert_eq!(
-        norm(input.apply(&q, &quote!(r))),
-        "src_crate::millis_from(r)"
+        norm(input.expr),
+        "{let__repr=w;src_crate::millis_from(__repr)}"
     );
-    let output = conv.output.unwrap();
-    assert!(output.fallible, "a Result-returning stage is fallible");
-    let applied = norm(output.apply(&q, &quote!(v)));
-    assert!(applied.starts_with("src_crate::millis_to(&v)"), "{applied}");
+
+    let output = conv
+        .encode(&q, &quote!(v), |r, e| {
+            Ok::<_, String>(Output::wire(r, wire(), e))
+        })
+        .unwrap();
+    assert!(output.fallible, "a Result-returning function is fallible");
+    assert_eq!(output.form.ty.key(), millis.key());
+    assert!(
+        norm(output.expr.clone()).starts_with("{let__repr=src_crate::millis_to(&v)"),
+        "{}",
+        output.expr
+    );
+    assert_eq!(
+        conv.functions()
+            .map(|f| f.name().to_string())
+            .collect::<Vec<_>>(),
+        ["millis_from", "millis_to"]
+    );
+
+    // A direction the declaration leaves out is an error at use.
+    let one_way = crate::convert!(Millis)
+        .input(crate::fun!(millis_from))
+        .resolve(&flat)
+        .unwrap();
+    let e = one_way
+        .encode(&q, &quote!(v), |r, e| {
+            Ok::<_, String>(Output::wire(r, wire(), e))
+        })
+        .expect_err("no output declared");
+    assert!(e.contains("declares no output"), "{e}");
+}
+
+/// A wire type for tests that only look at expressions.
+#[derive(Clone, Debug)]
+struct Raw;
+
+impl WireType for Raw {
+    fn rust(&self) -> TokenStream {
+        quote!(u64)
+    }
+
+    fn placeholder(&self) -> TokenStream {
+        quote!(0)
+    }
 }
 
 #[test]

@@ -78,13 +78,16 @@ what the layer holds.
 The answers compose:
 
 * `Input` (wires → value) and `Output` (value → wires) carry an expression
-  and the wires it reads or produces. A fallible one uses `?` on
-  `Result<_, String>`; whoever places it decides where the error goes.
-* `record_in` / `record_out` take a struct or a sum alternative apart into
-  its fields, with the delimiters the source wrote.
-* `Input::optional`, `Input::combine` and `Output::concat` build the rest.
-* `Stage::decode` / `Stage::encode` wrap a representation's wires in a
-  declared conversion (`convert!`: functions or `From`/`TryFrom` impls).
+  and a `Form`: the tree recording how each layer of the value crosses, whose
+  leaves are the wires, typed by the adapter's own `WireType` enum. A
+  fallible expression uses `?` on `Result<_, String>`; whoever places it
+  decides where the error goes.
+* `Input::wire`, `record`, `optional`, `sum`, `seq` and `parts` (and their
+  `Output` counterparts) build one layer each.
+* `ResolvedConversion::decode` / `encode` wrap a representation's lowering in
+  a declared conversion (`convert!`: functions or `From`/`TryFrom` impls).
+* `Place` names an occurrence of a type inside a generated element;
+  `Overrides` gives a type's default decision, replaced at chosen places.
 * `Qualifier` spells a flat type from the generated crate
   (`Payload` → `perftest_flat::Payload`).
 
