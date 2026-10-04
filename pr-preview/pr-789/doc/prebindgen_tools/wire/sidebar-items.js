@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FormKind"],"fn":["result_expr"],"struct":["Form","Input","Output","Wire"],"trait":["WireType"]};
