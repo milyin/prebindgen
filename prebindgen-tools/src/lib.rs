@@ -98,8 +98,8 @@
 //!
 //! // Each wire is named after where it sits in the element: the place of
 //! // parameter `n` gives the name `n`, the place of the result gives `ret`.
-//! let n_name: syn::Ident = element.at(Seg::Param("n".into())).ident("");
-//! let ret_name: syn::Ident = element.at(Seg::Return).ident("");
+//! let n_name: syn::Ident = element.at(Seg::Param("n".into())).ident();
+//! let ret_name: syn::Ident = element.at(Seg::Return).ident();
 //!
 //! // Build: one input for the parameter, one output for the result.
 //! let input = Input::wire(
@@ -391,7 +391,7 @@ pub mod shape {
 ///     .build().unwrap();
 /// let n = &flat.function("send").unwrap().params[0];
 /// let place = Place::new("send").at(Seg::Param("n".into()));
-/// let w = place.ident("");
+/// let w = place.ident();
 /// let input = Input::wire(&n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
 ///     quote!(#w as u64));
 /// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");

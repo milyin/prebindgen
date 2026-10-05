@@ -80,9 +80,17 @@ impl Place {
         p
     }
 
-    /// A wire name for this place: the path's segments joined by `_`, then
-    /// `suffix` (`p_x`, `p_x_present`).
-    pub fn ident(&self, suffix: &str) -> syn::Ident {
+    /// The name of the wire that carries the value at this place: the
+    /// path's segments joined by `_` (`p_x` for field `x` of parameter `p`).
+    pub fn ident(&self) -> syn::Ident {
+        self.ident_with_suffix("")
+    }
+
+    /// The name of an extra wire at this place that does not carry the value
+    /// itself, such as an option's presence flag or a sum's tag: the
+    /// [`ident`](Self::ident) name with `_` and `suffix` appended
+    /// (`p_x_present`).
+    pub fn ident_with_suffix(&self, suffix: &str) -> syn::Ident {
         let words = self.path.iter().filter_map(Seg::word);
         let name = words
             .chain((!suffix.is_empty()).then(|| suffix.to_string()))

@@ -70,7 +70,7 @@ impl Adapter<'_> {
     }
 
     fn input(&self, ty: &TypeRef, place: &Place) -> Result<Input<Toy>, String> {
-        let w = place.ident("");
+        let w = place.ident();
         let wire = |t: Toy| Wire::new(w.clone(), t);
         Ok(match shape(ty, |t| self.decls.get(place, t))? {
             Shape::Scalar(ScalarKind::I32) => Input::wire(ty, wire(Toy::Int), quote!(#w)),
@@ -78,7 +78,7 @@ impl Adapter<'_> {
                 Input::wire(ty, wire(Toy::Long { unsigned: true }), quote!((#w as u64)))
             }
             Shape::Option(inner) => {
-                let p = place.ident("present");
+                let p = place.ident_with_suffix("present");
                 let inner = self.input(inner, &place.at(Seg::Some))?;
                 Input::optional(
                     ty,
@@ -130,7 +130,12 @@ impl Adapter<'_> {
                                 .collect::<Result<_, _>>()?;
                             alts.push(fields);
                         }
-                        Input::sum(&self.q, v, Wire::new(place.ident("tag"), Toy::Int), alts)
+                        Input::sum(
+                            &self.q,
+                            v,
+                            Wire::new(place.ident_with_suffix("tag"), Toy::Int),
+                            alts,
+                        )
                     }
                     Decl::Convert(c) => {
                         Input::via(&self.q, c, |repr| self.input(repr, &place.at(Seg::Repr)))?
@@ -146,7 +151,7 @@ impl Adapter<'_> {
     }
 
     fn output(&self, ty: &TypeRef, place: &Place, v: &TokenStream) -> Result<Output<Toy>, String> {
-        let w = place.ident("");
+        let w = place.ident();
         let wire = |t: Toy| Wire::new(w.clone(), t);
         Ok(match shape(ty, |t| self.decls.get(place, t))? {
             Shape::Unit => Output::unit(ty, v),
@@ -155,7 +160,7 @@ impl Adapter<'_> {
                 Output::wire(ty, wire(Toy::Long { unsigned: true }), quote!((#v as i64)))
             }
             Shape::Option(inner) => {
-                let p = Wire::new(place.ident("present"), Toy::Flag);
+                let p = Wire::new(place.ident_with_suffix("present"), Toy::Flag);
                 Output::optional(ty, Some((p, quote!(1))), v, |x| {
                     self.output(inner, &place.at(Seg::Some), &x)
                 })?
@@ -184,7 +189,7 @@ impl Adapter<'_> {
                         else {
                             return Err(format!("`{name}` is not a sum"));
                         };
-                        let tag = Wire::new(place.ident("tag"), Toy::Int);
+                        let tag = Wire::new(place.ident_with_suffix("tag"), Toy::Int);
                         Output::sum(&self.q, sum, tag, v, |a, f, b| {
                             let at = place.at(Seg::Alt(names::bare(&a.name)));
                             self.output(&f.ty, &at.at(Seg::field(f)), &b)
