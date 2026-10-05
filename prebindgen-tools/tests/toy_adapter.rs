@@ -256,6 +256,7 @@ fn foreign(f: &Form<Toy>) -> String {
             format!("{} of {}", f.ty, alts.join(" | "))
         }
         FormKind::Seq { elem, .. } => format!("List<{}>", foreign(elem)),
+        FormKind::Packed { inner, .. } => foreign(inner),
     }
 }
 

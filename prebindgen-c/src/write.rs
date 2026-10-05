@@ -4,13 +4,16 @@ use prebindgen_flat::{
     flat::{Field, Function, ScalarKind, Type as FlatType, TypeKind, TypeRef},
     Emit,
 };
-use prebindgen_tools::{names, record_in, Access, Input, Output, Record, RustFile, Shape, Wire};
+use prebindgen_tools::{
+    names, wire::result_expr, Access, Input, Output, Record, RustFile, Seg, Shape, Wire, WireType,
+};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
 use crate::{
-    lower::CRet,
+    lower::{CRet, Param},
     plan::{declared_name, err, CType, Item, Kind, Plan, Res, Setting},
+    wire::CWire,
     Error,
 };
 
@@ -194,14 +197,14 @@ struct Fields<'p, 'f> {
 }
 
 impl Fields<'_, '_> {
-    fn field_in(&mut self, field: &Field) -> Res<Input> {
+    fn field_in(&mut self, field: &Field) -> Res<Input<CWire>> {
         let w = (self.wire)(field);
         self.plan
             .value_in(&field.ty, &w)
             .map_err(|e| Error(format!("`{}`: field `{w}`: {}", self.owner, e.0)))
     }
 
-    fn field_out(&mut self, field: &Field, value: &TokenStream) -> Res<Output> {
+    fn field_out(&mut self, field: &Field, value: &TokenStream) -> Res<Output<CWire>> {
         let w = (self.wire)(field);
         self.plan
             .value_out(&field.ty, value, &w)
@@ -516,7 +519,7 @@ fn closure_struct(plan: &Plan, ty: &TypeRef, name: &syn::Ident) -> Res<TokenStre
     let mut wires = Vec::new();
     for (i, a) in args.iter().enumerate() {
         let out = plan.callback_arg(i, a, &quote!(__x))?;
-        wires.extend(out.wires.into_iter().map(|w| w.ty));
+        wires.extend(out.wires().into_iter().map(|w| w.ty.rust()));
     }
     let allow = allow();
     Ok(quote! {
@@ -550,14 +553,14 @@ fn function(plan: &Plan, func: &Function, exported: &syn::Ident, panic: bool) ->
     let mut args = Vec::new();
     for p in &func.params {
         let name = &p.name;
-        let input = plan.param(name, &p.ty)?;
+        let Param { input, pass } = plan.param(name, &p.ty)?;
         if input.fallible && ret.on_error.is_none() && !panic {
             return err(format!(
                 "function `{}`: parameter `{name}` ({}) can fail to convert (a null pointer, an invalid value) and the function has no error channel: declare it `.panic()` or return `Result`",
                 func.name, p.ty
             ));
         }
-        params.extend(input.wires.iter().map(Wire::decl));
+        params.extend(input.wires().into_iter().map(Wire::decl));
         if input.fallible {
             let r = input.result();
             stmts.push(quote!(let #name = match #r {
@@ -568,11 +571,14 @@ fn function(plan: &Plan, func: &Function, exported: &syn::Ident, panic: bool) ->
             let e = &input.expr;
             stmts.push(quote!(let #name = #e;));
         }
-        args.push(input.pass.clone().unwrap_or_else(|| quote!(#name)));
+        args.push(pass.unwrap_or_else(|| quote!(#name)));
     }
     params.extend(ret.ret.wires.iter().map(Wire::decl));
     let body = &ret.ret.body;
-    let ret_ty = ret.ret.ty.as_ref().map(|t| quote!(-> #t));
+    let ret_ty = ret.ret.ty.as_ref().map(|t| {
+        let t = t.rust();
+        quote!(-> #t)
+    });
     let allow = allow();
     Ok(quote! {
         #[no_mangle]
@@ -666,7 +672,10 @@ fn struct_mirror(
         outs.push(cb.field_out(f, &b.to_token_stream())?);
     }
 
-    let wires: Vec<Wire> = ins.iter().flat_map(|i| i.wires.clone()).collect();
+    let wires: Vec<Wire<CWire>> = ins
+        .iter()
+        .flat_map(|i| i.wires().into_iter().cloned())
+        .collect();
     let decls = wires.iter().map(|w| {
         let d = w.decl();
         quote!(pub #d)
@@ -678,21 +687,18 @@ fn struct_mirror(
     };
     let wire_names: Vec<&syn::Ident> = wires.iter().map(|w| &w.name).collect();
     let head = source_path;
-    let rebuilt = record_in(record, head, ins);
-    let input = Input {
-        wires: Vec::new(),
+    let rebuilt = Input::record(&cb.plan.q, source, ins);
+    let input = Code {
         expr: {
             let e = &rebuilt.expr;
             quote!({ let #name { #(#wire_names),* } = v; #e })
         },
         fallible: rebuilt.fallible,
-        pass: None,
     };
     let pat = record.pattern(head, &binds);
     let fallible = outs.iter().any(|o| o.fallible);
     let out_binds: Vec<TokenStream> = outs.iter().map(Output::bind).collect();
-    let output = Output {
-        wires: Vec::new(),
+    let output = Code {
         expr: quote!({ let #pat = v; #(#out_binds)* #name { #(#wire_names),* } }),
         fallible,
     };
@@ -732,17 +738,23 @@ fn sum_mirror(
         // field that needs several wires is kept whole as a tuple would
         // lose the per-field names C sees, so it is refused here by
         // construction: the adapter hands one wire per field.
-        let wires: Vec<Wire> = ins.iter().flat_map(|i| i.wires.clone()).collect();
+        let wires: Vec<Wire<CWire>> = ins
+            .iter()
+            .flat_map(|i| i.wires().into_iter().cloned())
+            .collect();
         let mirror_head = quote!(#name::#aname);
         let source_head = quote!(#src::#aname);
         // Declaration: same delimiters as the source, wire types in place.
-        let tys: Vec<TokenStream> = wires.iter().map(|w| w.ty.clone()).collect();
+        let tys: Vec<TokenStream> = wires.iter().map(|w| w.ty.rust()).collect();
         let decl = record.construct(&quote!(#aname), &tys);
         variants.push(decl);
         // In: match the mirror alternative, binding its wires by name.
         let wire_binds: Vec<syn::Ident> = wires.iter().map(|w| w.name.clone()).collect();
         let mirror_pat = record.pattern(&mirror_head, &wire_binds);
-        let rebuilt = record_in(record, &source_head, ins);
+        let parts = alt.fields.iter().map(Seg::field).zip(ins).collect();
+        let rebuilt = Input::parts(source.type_ref(), parts, |values| {
+            record.construct(&source_head, &values)
+        });
         in_fallible |= rebuilt.fallible;
         let e = &rebuilt.expr;
         in_arms.push(quote!(#mirror_pat => #e));
@@ -763,29 +775,39 @@ fn sum_mirror(
     Ok(SumMirror {
         def,
         alternatives,
-        input: Input {
-            wires: Vec::new(),
+        input: Code {
             expr: quote!(match v { #(#in_arms),* }),
             fallible: in_fallible,
-            pass: None,
         },
-        output: Output {
-            wires: Vec::new(),
+        output: Code {
             expr: quote!(match v { #(#out_arms),* }),
             fallible: out_fallible,
         },
     })
 }
 
+/// A mirror's conversion to or from its source type: an expression over
+/// the mirror value `v`, which may use `?` on `Result<_, String>`.
+struct Code {
+    expr: TokenStream,
+    fallible: bool,
+}
+
+impl Code {
+    fn result(&self) -> TokenStream {
+        result_expr(&self.expr, self.fallible)
+    }
+}
+
 struct StructMirror {
     def: TokenStream,
-    wires: Vec<Wire>,
-    input: Input,
-    output: Output,
+    wires: Vec<Wire<CWire>>,
+    input: Code,
+    output: Code,
 }
 struct SumMirror {
-    alternatives: Vec<Vec<Wire>>,
+    alternatives: Vec<Vec<Wire<CWire>>>,
     def: TokenStream,
-    input: Input,
-    output: Output,
+    input: Code,
+    output: Code,
 }

@@ -15,16 +15,37 @@
 //!   ([`Plan::callback_arg`]).
 
 use prebindgen_flat::flat::{ScalarKind, Type as FlatType, TypeKind, TypeRef};
-use prebindgen_tools::{names, shape, Access, Input, Output, SequenceKind, Shape, TextKind, Wire};
+use prebindgen_tools::{
+    names, shape, Access, Form, FormKind, Input, Output, SequenceKind, Shape, TextKind, Wire,
+    WireType,
+};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
-use crate::plan::{declared_name, err, CType, Kind, Plan, Res, Setting};
+use crate::{
+    plan::{declared_name, err, CType, Kind, Plan, Res, Setting},
+    wire::CWire,
+};
 
 pub(crate) struct Return {
-    pub ty: Option<TokenStream>,
-    pub wires: Vec<Wire>,
+    pub ty: Option<CWire>,
+    pub wires: Vec<Wire<CWire>>,
     pub body: TokenStream,
+}
+
+/// A parameter's input, plus how the wrapper passes the bound value to the
+/// callee when not as is — `&s` for a borrow of a converted local.
+pub(crate) struct Param {
+    pub input: Input<CWire>,
+    pub pass: Option<TokenStream>,
+}
+
+/// The form of one element of a slice C lends in place.
+fn in_place(elem: &TypeRef, c: &syn::Ident) -> Form<CWire> {
+    Form {
+        ty: elem.clone(),
+        kind: FormKind::Wire(Wire::new(format_ident!("__elem"), CWire::Struct(c.clone()))),
+    }
 }
 
 /// A result's delivery, plus what the wrapper returns when an input fails.
@@ -67,22 +88,21 @@ impl<'f> Plan<'f> {
     // ── value slots ─────────────────────────────────────────────────────
 
     /// A value slot `w` → a value of `ty`.
-    pub(crate) fn value_in(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Input> {
-        let one = |t: TokenStream| vec![Wire::new(w.clone(), t)];
+    pub(crate) fn value_in(&self, ty: &TypeRef, w: &syn::Ident) -> Res<Input<CWire>> {
+        let one = |t: CWire| Wire::new(w.clone(), t);
         Ok(match self.shape(ty)? {
-            Shape::Scalar(ScalarKind::Bool) => Input::new(
-                one(quote!(::core::mem::MaybeUninit<bool>)),
+            Shape::Scalar(ScalarKind::Bool) => Input::wire(
+                ty,
+                one(CWire::BoolSlot),
                 quote!((::core::ptr::read(#w.as_ptr() as *const u8) != 0)),
             ),
-            Shape::Scalar(k) => {
-                let id = names::ident(k.as_str());
-                Input::identity(Wire::new(w.clone(), quote!(#id)))
-            }
+            Shape::Scalar(k) => Input::wire(ty, one(CWire::Scalar(k)), w),
             Shape::Str {
                 kind: TextKind::String,
                 access: Access::Owned,
-            } => Input::new(
-                one(quote!(*mut ::core::ffi::c_char)),
+            } => Input::wire(
+                ty,
+                one(CWire::c_str(true)),
                 quote!(if #w.is_null() {
                     ::std::string::String::new()
                 } else {
@@ -95,35 +115,27 @@ impl<'f> Plan<'f> {
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
-                    Setting::Converted(c) => {
-                        let Some(stage) = &c.input else {
-                            return err(format!("`{ty}` cannot cross into Rust"));
-                        };
-                        let repr = self.value_in(&stage.repr, w)?;
-                        stage.decode(
-                            &self.q,
-                            &c.target,
-                            repr,
-                            &format_ident!("__cbg_repr"),
-                            TokenStream::new(),
-                        )
-                    }
+                    Setting::Converted(c) => Input::via(&self.q, c, |repr| self.value_in(repr, w))?,
                     Setting::Type(t) => {
                         let (c, fin) = (&t.c, format_ident!("__cbg_in_{}", t.rust));
                         match &t.kind {
-                            Kind::Enum | Kind::Union => Input::fallible(
-                                one(quote!(::core::mem::MaybeUninit<#c>)),
-                                quote!(#fin(#w)?),
-                            ),
-                            Kind::Data if self.data_in_fallible(name)? => {
-                                Input::fallible(one(quote!(#c)), quote!(#fin(#w)?))
+                            Kind::Enum | Kind::Union => {
+                                Input::wire(ty, one(CWire::Uninit(c.clone())), quote!(#fin(#w)?))
+                                    .mark_fallible()
                             }
-                            Kind::Data => Input::new(one(quote!(#c)), quote!(#fin(#w))),
+                            Kind::Data if self.data_in_fallible(name)? => {
+                                Input::wire(ty, one(CWire::Struct(c.clone())), quote!(#fin(#w)?))
+                                    .mark_fallible()
+                            }
+                            Kind::Data => {
+                                Input::wire(ty, one(CWire::Struct(c.clone())), quote!(#fin(#w)))
+                            }
                             Kind::Opaque => {
                                 let src = self.source(name);
                                 let msg = format!("null {name} handle passed by value");
-                                Input::fallible(
-                                    one(quote!(*mut #c)),
+                                Input::wire(
+                                    ty,
+                                    one(CWire::ptr(true, CWire::Struct(c.clone()))),
                                     quote!({
                                         if #w.is_null() {
                                             return ::core::result::Result::Err(::std::string::String::from(#msg));
@@ -131,9 +143,11 @@ impl<'f> Plan<'f> {
                                         *::std::boxed::Box::from_raw(#w as *mut #src)
                                     }),
                                 )
+                                .mark_fallible()
                             }
-                            Kind::ReprC { .. } => Input::new(
-                                one(quote!(#c)),
+                            Kind::ReprC { .. } => Input::wire(
+                                ty,
+                                one(CWire::Struct(c.clone())),
                                 quote!(<#c as ::prebindgen_c_runtime::Transmute>::into_rust(#w)),
                             ),
                             Kind::Error { .. } => {
@@ -151,62 +165,53 @@ impl<'f> Plan<'f> {
     }
 
     /// A value of `ty` (the expression `v`) → a value slot `w`.
-    pub(crate) fn value_out(&self, ty: &TypeRef, v: &TokenStream, w: &syn::Ident) -> Res<Output> {
-        let one = |t: TokenStream, e: TokenStream| Output::single(Wire::new(w.clone(), t), e);
+    pub(crate) fn value_out(
+        &self,
+        ty: &TypeRef,
+        v: &TokenStream,
+        w: &syn::Ident,
+    ) -> Res<Output<CWire>> {
+        let one = |t: CWire, e: TokenStream| Output::wire(ty, Wire::new(w.clone(), t), e);
         Ok(match self.shape(ty)? {
-            Shape::Scalar(ScalarKind::Bool) => one(
-                quote!(::core::mem::MaybeUninit<bool>),
-                quote!(::core::mem::MaybeUninit::new(#v)),
-            ),
-            Shape::Scalar(k) => {
-                let id = names::ident(k.as_str());
-                one(quote!(#id), v.clone())
+            Shape::Scalar(ScalarKind::Bool) => {
+                one(CWire::BoolSlot, quote!(::core::mem::MaybeUninit::new(#v)))
             }
+            Shape::Scalar(k) => one(CWire::Scalar(k), v.clone()),
             Shape::Str {
                 kind: TextKind::String,
                 access: Access::Owned,
             } => {
                 self.require_free()?;
-                one(
-                    quote!(*mut ::core::ffi::c_char),
-                    quote!(__cbg_alloc_cstr(#v)),
-                )
+                one(CWire::c_str(true), quote!(__cbg_alloc_cstr(#v)))
             }
             Shape::Boxed(inner) => self.value_out(inner, &quote!((*#v)), w)?,
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
                     Setting::Converted(c) => {
-                        let Some(stage) = &c.output else {
-                            return err(format!("`{ty}` cannot cross out of Rust"));
-                        };
-                        let r = format_ident!("__cbg_value");
-                        let repr = self.value_out(&stage.repr, &r.to_token_stream(), w)?;
-                        stage.encode(&self.q, &c.target, v, &r, TokenStream::new(), repr)
+                        Output::via(&self.q, c, v, |repr, r| self.value_out(repr, &r, w))?
                     }
                     Setting::Type(t) => {
                         let (c, fout) = (&t.c, format_ident!("__cbg_out_{}", t.rust));
                         match &t.kind {
                             Kind::Enum => one(
-                                quote!(::core::mem::MaybeUninit<#c>),
+                                CWire::Uninit(c.clone()),
                                 quote!(::core::mem::MaybeUninit::new(#fout(#v))),
                             ),
-                            Kind::Union => {
-                                one(quote!(::core::mem::MaybeUninit<#c>), quote!(#fout(#v)))
-                            }
-                            Kind::Data => one(quote!(#c), quote!(#fout(#v))),
+                            Kind::Union => one(CWire::Uninit(c.clone()), quote!(#fout(#v))),
+                            Kind::Data => one(CWire::Struct(c.clone()), quote!(#fout(#v))),
                             Kind::Opaque => one(
-                                quote!(*mut #c),
+                                CWire::ptr(true, CWire::Struct(c.clone())),
                                 quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
                             ),
                             Kind::ReprC { .. } => one(
-                                quote!(#c),
+                                CWire::Struct(c.clone()),
                                 quote!(<#c as ::prebindgen_c_runtime::Transmute>::from_rust(#v)),
                             ),
                             Kind::Error { .. } => {
                                 self.require_free()?;
                                 let _ = name;
-                                one(quote!(*mut ::core::ffi::c_char), quote!(#fout(#v)))
+                                one(CWire::c_str(true), quote!(#fout(#v)))
                             }
                         }
                     }
@@ -235,10 +240,7 @@ impl<'f> Plan<'f> {
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
-                    Setting::Converted(c) => match c.output.as_ref().or(c.input.as_ref()) {
-                        Some(stage) => self.release(&stage.repr, place)?,
-                        None => None,
-                    },
+                    Setting::Converted(c) => self.release(c.repr(), place)?,
                     Setting::Type(t) => {
                         let (d, frel) = (&t.drop, format_ident!("__cbg_release_{}", t.rust));
                         match &t.kind {
@@ -294,10 +296,10 @@ impl<'f> Plan<'f> {
     // ── parameters ──────────────────────────────────────────────────────
 
     /// A parameter `name` of type `ty`.
-    pub(crate) fn param(&self, name: &syn::Ident, ty: &TypeRef) -> Res<Input> {
+    pub(crate) fn param(&self, name: &syn::Ident, ty: &TypeRef) -> Res<Param> {
         let null = |what: &str| format!("null {what} pointer");
         let fail = |msg: &str| quote!(return ::core::result::Result::Err(::std::string::String::from(#msg)));
-        let borrowed_value = |access: Access| -> Res<Input> {
+        let borrowed_value = |access: Access| -> Res<Param> {
             let TypeKind::Ref { inner, .. } = ty.kind() else {
                 unreachable!("borrowed shape without a borrowed type")
             };
@@ -307,9 +309,12 @@ impl<'f> Plan<'f> {
             } else {
                 quote!(&#name)
             };
-            Ok(input.with_pass(pass))
+            Ok(Param {
+                input,
+                pass: Some(pass),
+            })
         };
-        Ok(match self.shape(ty)? {
+        let input = match self.shape(ty)? {
             Shape::Str {
                 kind: TextKind::Str,
                 access: Access::Shared,
@@ -318,8 +323,9 @@ impl<'f> Plan<'f> {
                     fail("null pointer passed for str argument"),
                     fail("invalid UTF-8 in str argument"),
                 );
-                Input::fallible(
-                    vec![Wire::new(name.clone(), quote!(*const ::core::ffi::c_char))],
+                Input::wire(
+                    ty,
+                    Wire::new(name.clone(), CWire::c_str(false)),
                     quote!({
                         if #name.is_null() { #null; }
                         match ::std::ffi::CStr::from_ptr(#name).to_str() {
@@ -328,6 +334,7 @@ impl<'f> Plan<'f> {
                         }
                     }),
                 )
+                .mark_fallible()
             }
             Shape::Str {
                 kind: TextKind::String,
@@ -337,8 +344,9 @@ impl<'f> Plan<'f> {
                     fail("null pointer passed for String argument"),
                     fail("invalid UTF-8 in String argument"),
                 );
-                Input::fallible(
-                    vec![Wire::new(name.clone(), quote!(*const ::core::ffi::c_char))],
+                Input::wire(
+                    ty,
+                    Wire::new(name.clone(), CWire::c_str(false)),
                     quote!({
                         if #name.is_null() { #null; }
                         match ::std::ffi::CStr::from_ptr(#name).to_str() {
@@ -347,18 +355,21 @@ impl<'f> Plan<'f> {
                         }
                     }),
                 )
+                .mark_fallible()
             }
             Shape::Out(slot) => {
                 let t = self.pointee(slot)?;
                 let (c, src) = (&t.c, self.source(&t.rust.to_string()));
                 let null = fail(&null(&t.rust.to_string()));
-                Input::fallible(
-                    vec![Wire::new(name.clone(), quote!(*mut #c))],
+                Input::wire(
+                    ty,
+                    Wire::new(name.clone(), CWire::ptr(true, CWire::Struct(c.clone()))),
                     quote!({
                         if #name.is_null() { #null; }
                         &mut *(#name as *mut ::core::mem::MaybeUninit<#src>)
                     }),
                 )
+                .mark_fallible()
             }
             Shape::Seq {
                 elem,
@@ -368,11 +379,13 @@ impl<'f> Plan<'f> {
                 let t = self.pointee(elem)?;
                 let (c, src) = (&t.c, self.source(&t.rust.to_string()));
                 let len = names::join(name, "len");
-                Input::new(
+                Input::seq(
+                    ty,
                     vec![
-                        Wire::new(name.clone(), quote!(*const #c)),
-                        Wire::new(len.clone(), quote!(usize)),
+                        Wire::new(name.clone(), CWire::ptr(false, CWire::Struct(c.clone()))),
+                        Wire::new(len.clone(), CWire::Scalar(ScalarKind::Usize)),
                     ],
+                    in_place(elem, c),
                     quote!(if #name.is_null() || #len == 0 {
                         &[][..]
                     } else {
@@ -394,18 +407,22 @@ impl<'f> Plan<'f> {
                 let access = Access::of(declared_ty);
                 let (c, src) = (&t.c, self.source(tname));
                 let null = fail(&null(tname));
-                let (ptr, r) = if access == Access::Exclusive {
-                    (quote!(*mut #c), quote!(&mut *(#name as *mut #src)))
+                let exclusive = access == Access::Exclusive;
+                let r = if exclusive {
+                    quote!(&mut *(#name as *mut #src))
                 } else {
-                    (quote!(*const #c), quote!(&*(#name as *const #src)))
+                    quote!(&*(#name as *const #src))
                 };
-                Input::fallible(
-                    vec![Wire::new(name.clone(), ptr)],
+                let ptr = CWire::ptr(exclusive, CWire::Struct(c.clone()));
+                Input::wire(
+                    ty,
+                    Wire::new(name.clone(), ptr),
                     quote!({
                         if #name.is_null() { #null; }
                         #r
                     }),
                 )
+                .mark_fallible()
             }
             Shape::Declared {
                 ty: declared_ty,
@@ -421,8 +438,9 @@ impl<'f> Plan<'f> {
                 let c = &t.c;
                 let null = fail(&format!("null {tname} value passed by value"));
                 let graves = self.repr_c_graves(tname);
-                Input::fallible(
-                    vec![Wire::new(name.clone(), quote!(*mut #c))],
+                Input::wire(
+                    ty,
+                    Wire::new(name.clone(), CWire::ptr(true, CWire::Struct(c.clone()))),
                     quote!({
                         if #name.is_null() { #null; }
                         let __live = <#c as ::prebindgen_c_runtime::Transmute>::into_rust(::core::ptr::read(#name));
@@ -430,23 +448,24 @@ impl<'f> Plan<'f> {
                         __live
                     }),
                 )
+                .mark_fallible()
             }
             // A borrow of a value: convert the value, lend it.
             Shape::Declared {
                 ty: declared_ty, ..
             } if Access::of(declared_ty) != Access::Owned => {
-                borrowed_value(Access::of(declared_ty))?
+                return borrowed_value(Access::of(declared_ty))
             }
             Shape::Str {
                 kind: TextKind::String,
                 access: access @ (Access::Shared | Access::Exclusive),
             }
-            | Shape::Ref { access, .. } => borrowed_value(access)?,
+            | Shape::Ref { access, .. } => return borrowed_value(access),
             Shape::Callback(args) => {
                 let key = ty.key().as_str().to_string();
                 let c = self.closures[&key].clone();
                 let closure = self.closure(name, args)?;
-                Input::new(vec![Wire::new(name.clone(), c)], closure)
+                Input::wire(ty, Wire::new(name.clone(), CWire::Struct(c)), closure)
             }
             Shape::Option(inner) => match self.shape(inner)? {
                 Shape::Declared {
@@ -460,8 +479,9 @@ impl<'f> Plan<'f> {
                 } if Access::of(declared_ty) == Access::Shared => {
                     let tname = declared_name(declared_ty);
                     let (c, src) = (&t.c, self.source(tname));
-                    Input::new(
-                        vec![Wire::new(name.clone(), quote!(*const #c))],
+                    Input::wire(
+                        ty,
+                        Wire::new(name.clone(), CWire::ptr(false, CWire::Struct(c.clone()))),
                         quote!(if #name.is_null() { ::core::option::Option::None } else { ::core::option::Option::Some(&*(#name as *const #src)) }),
                     )
                 }
@@ -474,7 +494,8 @@ impl<'f> Plan<'f> {
             _ => self
                 .value_in(ty, name)
                 .map_err(|e| crate::Error(format!("parameter `{name}`: {}", e.0)))?,
-        })
+        };
+        Ok(Param { input, pass: None })
     }
 
     /// A type C passes by pointer: a declared `repr_c_struct` or opaque
@@ -539,12 +560,12 @@ impl<'f> Plan<'f> {
         };
         self.require_free()?;
         let fout = format_ident!("__cbg_out_{}", ename);
-        let e_wire = Wire::new(format_ident!("e"), quote!(*mut *mut ::core::ffi::c_char));
+        let e_wire = Wire::new(format_ident!("e"), CWire::ptr(true, CWire::c_str(true)));
         let set_e = quote!(if !e.is_null() { *e = #fout(__e); });
         if let TypeKind::Unit = ok.kind() {
             return Ok(CRet {
                 ret: Return {
-                    ty: Some(quote!(bool)),
+                    ty: Some(CWire::Bool),
                     wires: vec![e_wire],
                     body: quote!(match #r {
                         ::core::result::Result::Ok(()) => true,
@@ -568,10 +589,10 @@ impl<'f> Plan<'f> {
             });
         }
         let (wire, v) = self.ret_value(ok, &quote!(__v))?;
-        let out = Wire::new(format_ident!("out"), quote!(*mut #wire));
+        let out = Wire::new(format_ident!("out"), CWire::ptr(true, wire));
         Ok(CRet {
             ret: Return {
-                ty: Some(quote!(bool)),
+                ty: Some(CWire::Bool),
                 wires: vec![out, e_wire],
                 body: quote!(match #r {
                     ::core::result::Result::Ok(__v) => {
@@ -587,21 +608,14 @@ impl<'f> Plan<'f> {
 
     /// A result C receives as a pointer it owns, if `ty` is one: the wire
     /// type and the expression producing it from `v`.
-    fn pointer_out(
-        &self,
-        ty: &TypeRef,
-        v: &TokenStream,
-    ) -> Res<Option<(TokenStream, TokenStream)>> {
+    fn pointer_out(&self, ty: &TypeRef, v: &TokenStream) -> Res<Option<(CWire, TokenStream)>> {
         Ok(match self.shape(ty)? {
             Shape::Str {
                 kind: TextKind::String,
                 access: Access::Owned,
             } => {
                 self.require_free()?;
-                Some((
-                    quote!(*mut ::core::ffi::c_char),
-                    quote!(__cbg_alloc_cstr(#v)),
-                ))
+                Some((CWire::c_str(true), quote!(__cbg_alloc_cstr(#v))))
             }
             Shape::Declared {
                 ty: declared_ty,
@@ -613,7 +627,7 @@ impl<'f> Plan<'f> {
                     }),
                 ..
             } if Access::of(declared_ty) == Access::Owned => Some((
-                quote!(*mut #c),
+                CWire::ptr(true, CWire::Struct(c.clone())),
                 quote!(::std::boxed::Box::into_raw(::std::boxed::Box::new(#v)) as *mut #c),
             )),
             Shape::Option(inner) => match self.shape(inner)? {
@@ -634,7 +648,7 @@ impl<'f> Plan<'f> {
                         quote!(__x)
                     };
                     Some((
-                        quote!(*mut #c),
+                        CWire::ptr(true, CWire::Struct(c.clone())),
                         quote!(match #v {
                             ::core::option::Option::Some(__x) => ::std::boxed::Box::into_raw(::std::boxed::Box::new(#val)) as *mut #c,
                             ::core::option::Option::None => ::core::ptr::null_mut(),
@@ -649,11 +663,11 @@ impl<'f> Plan<'f> {
 
     /// A result delivered by value: its wire type, and the expression
     /// producing it from `v`.
-    fn ret_value(&self, ty: &TypeRef, v: &TokenStream) -> Res<(TokenStream, TokenStream)> {
+    fn ret_value(&self, ty: &TypeRef, v: &TokenStream) -> Res<(CWire, TokenStream)> {
         // A plain `bool` / enum leaves as itself: only an inbound value needs
         // the `MaybeUninit` guard.
         match self.shape(ty)? {
-            Shape::Scalar(ScalarKind::Bool) => return Ok((quote!(bool), v.clone())),
+            Shape::Scalar(ScalarKind::Bool) => return Ok((CWire::Bool, v.clone())),
             Shape::Declared {
                 ty: declared_ty,
                 declaration:
@@ -666,7 +680,7 @@ impl<'f> Plan<'f> {
                 ..
             } if Access::of(declared_ty) == Access::Owned => {
                 let fout = format_ident!("__cbg_out_{}", rust);
-                return Ok((quote!(#c), quote!(#fout(#v))));
+                return Ok((CWire::Struct(c.clone()), quote!(#fout(#v))));
             }
             _ => {}
         }
@@ -679,12 +693,13 @@ impl<'f> Plan<'f> {
                 "`{ty}`: a fallible output conversion needs a Result return"
             ));
         }
-        Ok((out.wires[0].ty.clone(), out.expr))
+        let wire = out.wires()[0].ty.clone();
+        Ok((wire, out.expr))
     }
 
     fn plain_ret(&self, ty: &TypeRef) -> Res<Return> {
         let r = format_ident!("__result");
-        let array = |elem: &TypeRef| -> Res<(TokenStream, TokenStream)> {
+        let array = |elem: &TypeRef| -> Res<(CWire, TokenStream)> {
             self.require_free()?;
             self.ret_value(elem, &quote!(__e))
         };
@@ -700,11 +715,15 @@ impl<'f> Plan<'f> {
                 access: Access::Owned,
             } => {
                 let (wire, e) = array(elem)?;
+                let elem_ty = wire.rust();
                 Return {
-                    ty: Some(quote!(*mut #wire)),
-                    wires: vec![Wire::new(format_ident!("len"), quote!(*mut usize))],
+                    ty: Some(CWire::ptr(true, wire)),
+                    wires: vec![Wire::new(
+                        format_ident!("len"),
+                        CWire::ptr(true, CWire::Scalar(ScalarKind::Usize)),
+                    )],
                     body: quote! {
-                        let __arr: ::std::vec::Vec<#wire> = #r.into_iter().map(|__e| #e).collect();
+                        let __arr: ::std::vec::Vec<#elem_ty> = #r.into_iter().map(|__e| #e).collect();
                         let (__p, __n) = __cbg_alloc_array(__arr);
                         if !len.is_null() { *len = __n; }
                         __p
@@ -722,16 +741,23 @@ impl<'f> Plan<'f> {
                 } = self.shape(inner)?
                 {
                     let (wire, e) = array(elem)?;
+                    let elem_ty = wire.rust();
                     return Ok(Return {
-                        ty: Some(quote!(bool)),
+                        ty: Some(CWire::Bool),
                         wires: vec![
-                            Wire::new(format_ident!("out"), quote!(*mut *mut #wire)),
-                            Wire::new(format_ident!("out_len"), quote!(*mut usize)),
+                            Wire::new(
+                                format_ident!("out"),
+                                CWire::ptr(true, CWire::ptr(true, wire)),
+                            ),
+                            Wire::new(
+                                format_ident!("out_len"),
+                                CWire::ptr(true, CWire::Scalar(ScalarKind::Usize)),
+                            ),
                         ],
                         body: quote! {
                             match #r {
                                 ::core::option::Option::Some(__v) => {
-                                    let __arr: ::std::vec::Vec<#wire> = __v.into_iter().map(|__e| #e).collect();
+                                    let __arr: ::std::vec::Vec<#elem_ty> = __v.into_iter().map(|__e| #e).collect();
                                     let (__p, __n) = __cbg_alloc_array(__arr);
                                     if !out.is_null() { *out = __p; }
                                     if !out_len.is_null() { *out_len = __n; }
@@ -744,8 +770,8 @@ impl<'f> Plan<'f> {
                 }
                 let (wire, v) = self.ret_value(inner, &quote!(__v))?;
                 Return {
-                    ty: Some(quote!(bool)),
-                    wires: vec![Wire::new(format_ident!("out"), quote!(*mut #wire))],
+                    ty: Some(CWire::Bool),
+                    wires: vec![Wire::new(format_ident!("out"), CWire::ptr(true, wire))],
                     body: quote! {
                         match #r {
                             ::core::option::Option::Some(__v) => {
@@ -776,7 +802,7 @@ impl<'f> Plan<'f> {
         index: usize,
         ty: &TypeRef,
         value: &TokenStream,
-    ) -> Res<Output> {
+    ) -> Res<Output<CWire>> {
         let n = format_ident!("__w{}", index);
         match self.shape(ty)? {
             Shape::Seq {
@@ -786,11 +812,13 @@ impl<'f> Plan<'f> {
             } => {
                 let c = &self.pointee(elem)?.c;
                 let len = format_ident!("__w{}_len", index);
-                Ok(Output::new(
+                Ok(Output::seq(
+                    ty,
                     vec![
-                        Wire::new(n, quote!(*const #c)),
-                        Wire::new(len, quote!(usize)),
+                        Wire::new(n, CWire::ptr(false, CWire::Struct(c.clone()))),
+                        Wire::new(len, CWire::Scalar(ScalarKind::Usize)),
                     ],
+                    in_place(elem, c),
                     quote!((#value.as_ptr() as *const #c, #value.len())),
                 ))
             }
@@ -805,14 +833,15 @@ impl<'f> Plan<'f> {
             } if Access::of(declared_ty) == Access::Shared => {
                 let name = declared_name(declared_ty);
                 let src = self.source(name);
-                Ok(Output::single(
-                    Wire::new(n, quote!(*const #c)),
+                Ok(Output::wire(
+                    ty,
+                    Wire::new(n, CWire::ptr(false, CWire::Struct(c.clone()))),
                     quote!(#value as *const #src as *const #c),
                 ))
             }
             _ => {
                 let (wire, e) = self.ret_value(ty, value)?;
-                Ok(Output::single(Wire::new(n, wire), e))
+                Ok(Output::wire(ty, Wire::new(n, wire), e))
             }
         }
     }
@@ -846,7 +875,10 @@ impl<'f> Plan<'f> {
             .map(|(i, (ty, n))| self.callback_arg(i, ty, &n.to_token_stream()))
             .collect::<Res<Vec<_>>>()?;
         let binds: TokenStream = outs.iter().map(Output::bind).collect();
-        let values = outs.iter().flat_map(|o| o.wires.iter().map(|w| &w.name));
+        let values: Vec<syn::Ident> = outs
+            .iter()
+            .flat_map(|o| o.wires().into_iter().map(|w| w.name.clone()))
+            .collect();
         Ok(quote! {{
             #setup
             move |#(#names: #tys),*| {

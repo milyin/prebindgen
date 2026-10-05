@@ -1198,7 +1198,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGet<'
         ::std::string::String,
     > = (|| {
         let (r__present, r_id, r_seq, r_value, r_flag, r_label) = match __result {
-            ::core::option::Option::Some(__x1) => {
+            ::core::option::Option::Some(__some) => {
                 let (r_id, r_seq, r_value, r_flag, r_label) = {
                     let perftest_flat::Payload {
                         id: __f0,
@@ -1206,17 +1206,18 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGet<'
                         value: __f2,
                         flag: __f3,
                         label: __f4,
-                    } = __x1;
+                    } = __some;
                     let r_id = (__f0 as ::prebindgen_jni_runtime::jni::sys::jlong);
                     let r_seq = (__f1 as ::prebindgen_jni_runtime::jni::sys::jint);
                     let r_value = (__f2 as ::prebindgen_jni_runtime::jni::sys::jdouble);
                     let r_flag = (__f3 as u8);
                     let r_label = match __f4 {
-                        ::core::option::Option::Some(__x3) => {
-                            ::prebindgen_jni_runtime::new_string(
+                        ::core::option::Option::Some(__some) => {
+                            let r_label = ::prebindgen_jni_runtime::new_string(
                                 env,
-                                ::core::convert::AsRef::<str>::as_ref(&(*__x3)),
-                            )?
+                                ::core::convert::AsRef::<str>::as_ref(&(*__some)),
+                            )?;
+                            r_label
                         }
                         ::core::option::Option::None => {
                             ::prebindgen_jni_runtime::jni::objects::JObject::null()
@@ -1228,7 +1229,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGet<'
             }
             ::core::option::Option::None => {
                 (
-                    0u8,
+                    0,
                     0,
                     0,
                     0.0f64,
@@ -1473,11 +1474,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadHandl
                                 as ::prebindgen_jni_runtime::jni::sys::jdouble);
                             let a0_flag = (__f3 as u8);
                             let a0_label = match __f4 {
-                                ::core::option::Option::Some(__x2) => {
-                                    ::prebindgen_jni_runtime::new_string(
+                                ::core::option::Option::Some(__some) => {
+                                    let a0_label = ::prebindgen_jni_runtime::new_string(
                                         env,
-                                        ::core::convert::AsRef::<str>::as_ref(&(*__x2)),
-                                    )?
+                                        ::core::convert::AsRef::<str>::as_ref(&(*__some)),
+                                    )?;
+                                    a0_label
                                 }
                                 ::core::option::Option::None => {
                                     ::prebindgen_jni_runtime::jni::objects::JObject::null()
@@ -1725,10 +1727,10 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGetVe
         ::std::string::String,
     > = (|| {
         let (r__present, r__n, r_id, r_seq, r_value, r_flag, r_label) = match __result {
-            ::core::option::Option::Some(__x1) => {
+            ::core::option::Option::Some(__some) => {
                 let (r__n, r_id, r_seq, r_value, r_flag, r_label) = {
                     let __items: ::std::vec::Vec<_> = ::core::iter::IntoIterator::into_iter(
-                            __x1,
+                            __some,
                         )
                         .collect();
                     let __n = __items.len();
@@ -1754,11 +1756,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGetVe
                                 as ::prebindgen_jni_runtime::jni::sys::jdouble);
                             let __e2_flag = (__f3 as u8);
                             let __e2_label = match __f4 {
-                                ::core::option::Option::Some(__x4) => {
-                                    ::prebindgen_jni_runtime::new_string(
+                                ::core::option::Option::Some(__some) => {
+                                    let __e2_label = ::prebindgen_jni_runtime::new_string(
                                         env,
-                                        ::core::convert::AsRef::<str>::as_ref(&(*__x4)),
-                                    )?
+                                        ::core::convert::AsRef::<str>::as_ref(&(*__some)),
+                                    )?;
+                                    __e2_label
                                 }
                                 ::core::option::Option::None => {
                                     ::prebindgen_jni_runtime::jni::objects::JObject::null()
@@ -1790,7 +1793,7 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_storageGetVe
             }
             ::core::option::Option::None => {
                 (
-                    0u8,
+                    0,
                     0,
                     ::prebindgen_jni_runtime::jni::objects::JObject::null(),
                     ::prebindgen_jni_runtime::jni::objects::JObject::null(),
@@ -1914,11 +1917,12 @@ pub unsafe extern "system" fn Java_io_prebindgen_perftest_JNINative_payloadVecHa
                                         as ::prebindgen_jni_runtime::jni::sys::jdouble);
                                     let __e1_flag = (__f3 as u8);
                                     let __e1_label = match __f4 {
-                                        ::core::option::Option::Some(__x3) => {
-                                            ::prebindgen_jni_runtime::new_string(
+                                        ::core::option::Option::Some(__some) => {
+                                            let __e1_label = ::prebindgen_jni_runtime::new_string(
                                                 env,
-                                                ::core::convert::AsRef::<str>::as_ref(&(*__x3)),
-                                            )?
+                                                ::core::convert::AsRef::<str>::as_ref(&(*__some)),
+                                            )?;
+                                            __e1_label
                                         }
                                         ::core::option::Option::None => {
                                             ::prebindgen_jni_runtime::jni::objects::JObject::null()

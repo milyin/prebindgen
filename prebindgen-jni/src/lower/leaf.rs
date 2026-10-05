@@ -275,6 +275,18 @@ impl Leaf {
     }
 }
 
+/// A leaf is the JNI adapter's wire type: what the Rust slot is, and what
+/// Kotlin makes of it.
+impl prebindgen_tools::WireType for Leaf {
+    fn rust(&self) -> TokenStream {
+        self.rs()
+    }
+
+    fn placeholder(&self) -> TokenStream {
+        self.rs_default()
+    }
+}
+
 /// `a_b`, or whichever part is non-empty.
 pub(crate) fn join(a: &str, b: &str) -> String {
     match (a.is_empty(), b.is_empty()) {

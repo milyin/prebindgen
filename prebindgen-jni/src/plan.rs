@@ -391,9 +391,9 @@ impl<'f> Plan<'f> {
         }
         for c in &b.converts {
             let resolved = c.conversion.resolve(self.flat).map_err(Error)?;
-            let name = match resolved.target.kind() {
+            let name = match resolved.target().kind() {
                 TypeKind::Named { id, .. } => id.name.clone(),
-                _ => return err(format!("convert!({}) must name a type", resolved.target)),
+                _ => return err(format!("convert!({}) must name a type", resolved.target())),
             };
             let conv = Conv {
                 name: name.clone(),

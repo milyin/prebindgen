@@ -17,7 +17,7 @@
 use std::rc::Rc;
 
 use prebindgen_flat::flat::{Function, Param as FlatParam, TypeKind};
-use prebindgen_tools::{names, shape, Access, Input, Shape, Wire};
+use prebindgen_tools::{names, shape, Access, Form, FormKind, Input, Seg, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -25,7 +25,7 @@ use super::{
     kotlin::{HandleSite, KtEnc},
     kt_ident,
     leaf::{Leaf, LeafTy, Prim},
-    leaf_ident, Dir,
+    leaf_ident, Dir, Param,
 };
 use crate::{
     decl::{ExpandParamDecl, ParamVariant},
@@ -272,16 +272,16 @@ impl Plan<'_> {
 
     /// The Rust input of a direct selector: the constructor called on its
     /// arguments (`None` when an optional parameter's are absent).
-    fn direct_input(&self, s: &Selector, func: &Function, callee: &TokenStream) -> Res<Input> {
+    fn direct_input(&self, s: &Selector, func: &Function, callee: &TokenStream) -> Res<Param> {
         let root = names::bare(&s.param.name);
-        let mut wires = Vec::new();
+        let mut parts = Vec::new();
         let mut args = Vec::new();
         let mut binds = Vec::new();
         for (j, fp) in func.params.iter().enumerate() {
             let ty = self.variant_arg_ty(s, &fp.ty);
             let input = self.rs_decode(&ty, &format!("{root}_0{j}"), 0)?;
-            wires.extend(input.wires.clone());
             let e = input.result();
+            parts.push((Seg::Param(names::bare(&fp.name)), input.form));
             let a = quote::format_ident!("__a{}", j);
             binds.push(quote!(let #a = #e?;));
             args.push(a);
@@ -310,17 +310,16 @@ impl Plan<'_> {
             let v = wrap(built);
             quote!({ #(#binds)* #v })
         };
-        let name = &s.param.name;
-        let input = Input::fallible(wires, expr);
-        Ok(match (s.access, s.optional) {
-            (Access::Owned, _) => input,
-            (_, false) => input.with_pass(quote!(&*#name)),
-            (_, true) => input.with_pass(quote!(#name.as_deref())),
-        })
+        // The parameter is built from the constructor's arguments.
+        let form = Form {
+            ty: s.param.ty.clone(),
+            kind: FormKind::Parts(parts),
+        };
+        Ok(selector_param(s, form, expr))
     }
 
     /// The Rust input of a selector parameter.
-    pub(crate) fn selector_input(&self, s: &Selector) -> Res<Input> {
+    pub(crate) fn selector_input(&self, s: &Selector) -> Res<Param> {
         if let (true, [SelVariant::Build { func, callee }]) = (s.is_direct(), s.variants.as_slice())
         {
             return self.direct_input(s, func, callee);
@@ -328,17 +327,19 @@ impl Plan<'_> {
         let root = names::bare(&s.param.name);
         let sel = leaf_ident(&root, "sel");
         let t = self.q.path(&names::ident(&s.class.rust));
-        let mut wires = vec![Wire::new(sel.clone(), Prim::I.rs())];
+        let tag = Wire::new(sel.clone(), Leaf::new(LeafTy::Prim(Prim::I)));
+        let mut alts = Vec::new();
         let mut arms = Vec::new();
         for (i, v) in s.variants.iter().enumerate() {
             let body = match v {
                 SelVariant::Build { func, callee } => {
                     let mut args = Vec::new();
+                    let mut parts = Vec::new();
                     for (j, fp) in func.params.iter().enumerate() {
                         let r = format!("{root}_{i}{j}");
                         let input = self.rs_decode(&self.variant_arg_ty(s, &fp.ty), &r, 0)?;
-                        wires.extend(input.wires.clone());
                         let e = input.result();
+                        parts.push((Seg::Param(names::bare(&fp.name)), input.form));
                         // An optional argument's `None` is its value, not a
                         // missing argument.
                         if let TypeKind::Optional(_) = fp.ty.kind() {
@@ -355,6 +356,7 @@ impl Plan<'_> {
                         }
                         _ => quote!(#callee(#(#args),*)),
                     };
+                    alts.push(parts);
                     match s.access {
                         Access::Owned => built,
                         _ => quote!(::prebindgen_jni_runtime::MaybeOwned::Owned(#built)),
@@ -362,7 +364,13 @@ impl Plan<'_> {
                 }
                 SelVariant::Handle => {
                     let w = leaf_ident(&root, &i.to_string());
-                    wires.push(Wire::new(w.clone(), Prim::J.rs()));
+                    // The value itself, as an existing handle.
+                    let handle = Wire::new(w.clone(), Leaf::new(LeafTy::Prim(Prim::J)));
+                    let form = Form {
+                        ty: s.param.ty.clone(),
+                        kind: FormKind::Wire(handle),
+                    };
+                    alts.push(vec![(Seg::Param("self".into()), form)]);
                     match s.access {
                         Access::Owned => quote!(::prebindgen_jni_runtime::take_handle::<#t>(#w)?),
                         _ => quote!(::prebindgen_jni_runtime::MaybeOwned::Borrowed(
@@ -382,17 +390,16 @@ impl Plan<'_> {
             arms.push(quote!(-1 => ::core::option::Option::None));
         }
         let msg = format!("invalid selector {{}} for `{root}`");
-        let name = &s.param.name;
         let expr = quote!(match #sel {
             #(#arms,)*
             __s => return ::core::result::Result::Err(::std::format!(#msg, __s)),
         });
-        let input = Input::fallible(wires, expr);
-        Ok(match (s.access, s.optional) {
-            (Access::Owned, _) => input,
-            (_, false) => input.with_pass(quote!(&*#name)),
-            (_, true) => input.with_pass(quote!(#name.as_deref())),
-        })
+        // A selector is a tag choosing among the variants.
+        let form = Form {
+            ty: s.param.ty.clone(),
+            kind: FormKind::Sum { tag, alts },
+        };
+        Ok(selector_param(s, form, expr))
     }
 
     /// The typed overloads of a selector-form function, one per combination
@@ -501,5 +508,23 @@ fn nullable(t: String) -> String {
         t
     } else {
         format!("{t}?")
+    }
+}
+
+/// A selector parameter's input over `form`, and how its value is lent.
+fn selector_param(s: &Selector, form: Form<Leaf>, expr: TokenStream) -> Param {
+    let name = &s.param.name;
+    let pass = match (s.access, s.optional) {
+        (Access::Owned, _) => None,
+        (_, false) => Some(quote!(&*#name)),
+        (_, true) => Some(quote!(#name.as_deref())),
+    };
+    Param {
+        input: Input {
+            form,
+            expr,
+            fallible: true,
+        },
+        pass,
     }
 }

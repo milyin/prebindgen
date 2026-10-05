@@ -53,6 +53,13 @@ fn declared_name(ty: &TypeRef) -> Option<&str> {
     bare_declared_name(core)
 }
 
+/// A parameter's input, plus how the wrapper passes the bound value to the
+/// callee when not as is — `&s` for a borrow of a decoded local.
+pub(crate) struct Param {
+    pub input: prebindgen_tools::Input<Leaf>,
+    pub pass: Option<proc_macro2::TokenStream>,
+}
+
 /// Which way a value crosses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Dir {
@@ -241,15 +248,9 @@ impl Plan<'_> {
         })
     }
 
-    /// The representation a converted type crosses as, in one direction.
-    pub(crate) fn conv_repr<'c>(&self, c: &'c Conv, dir: Dir) -> Res<&'c TypeRef> {
-        let stage = match dir {
-            Dir::In => c.resolved.input.as_ref().or(c.resolved.output.as_ref()),
-            Dir::Out => c.resolved.output.as_ref().or(c.resolved.input.as_ref()),
-        };
-        stage
-            .map(|s| &s.repr)
-            .ok_or_else(|| crate::Error(format!("convert!({}) declares no direction", c.name)))
+    /// The representation a converted type crosses as.
+    pub(crate) fn conv_repr<'c>(&self, c: &'c Conv) -> &'c TypeRef {
+        c.resolved.repr()
     }
 
     /// The fields of a data class's struct.
@@ -302,7 +303,7 @@ impl Plan<'_> {
                 _ => return err(format!("`{ty}`: only arrays of primitives cross")),
             },
             Shape::Declared { declaration, .. } => match declaration {
-                Setting::Converted(c) => self.leaves(self.conv_repr(c, dir)?, dir)?,
+                Setting::Converted(c) => self.leaves(self.conv_repr(c), dir)?,
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => vec![Leaf::new(LeafTy::Prim(Prim::J))],
                     ClassKind::Enum => vec![Leaf::new(LeafTy::Prim(Prim::I))],
@@ -377,7 +378,7 @@ impl Plan<'_> {
             },
             Shape::Declared { declaration, .. } => match declaration {
                 Setting::Class(c) => c.fqn(),
-                Setting::Converted(c) => self.kt_type(self.conv_repr(c, Dir::In)?)?,
+                Setting::Converted(c) => self.kt_type(self.conv_repr(c))?,
             },
             Shape::Option(inner) => format!("{}?", self.kt_type(inner)?),
             Shape::Seq { elem, .. } => format!("List<{}>", self.kt_type(elem)?),

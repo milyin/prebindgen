@@ -61,6 +61,7 @@
 mod builder;
 mod lower;
 mod plan;
+mod wire;
 mod write;
 
 use std::path::{Path, PathBuf};
@@ -82,6 +83,12 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<String> for Error {
+    fn from(e: String) -> Self {
+        Error(e)
+    }
+}
 
 /// A generated C binding.
 pub struct Cbindgen {

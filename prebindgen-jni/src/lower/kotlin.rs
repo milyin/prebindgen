@@ -68,7 +68,7 @@ impl Plan<'_> {
             Shape::Seq { elem, .. } if is_u8(elem) => vec![expr.to_string()],
             Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => {
-                    self.kt_encode(self.conv_repr(c, Dir::In)?, expr, nullable, cx, consumed)?
+                    self.kt_encode(self.conv_repr(c), expr, nullable, cx, consumed)?
                 }
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => {
@@ -212,9 +212,7 @@ impl Plan<'_> {
             Shape::Str { .. } | Shape::Array { .. } => bang(&leaves[0]),
             Shape::Seq { elem, .. } if is_u8(elem) => bang(&leaves[0]),
             Shape::Declared { declaration, .. } => match declaration {
-                Setting::Converted(c) => {
-                    self.kt_decode(self.conv_repr(c, Dir::Out)?, leaves, gated, depth)?
-                }
+                Setting::Converted(c) => self.kt_decode(self.conv_repr(c), leaves, gated, depth)?,
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => format!("{}({})", c.fqn(), leaves[0]),
                     ClassKind::Enum => format!("{}.fromInt({})", c.fqn(), leaves[0]),

@@ -97,8 +97,8 @@ impl<'f> Plan<'f> {
         plan.declare_types(b)?;
         for c in &b.conversions {
             let r = c.resolve(flat).map_err(Error)?;
-            let name = named(&r.target)
-                .ok_or_else(|| Error(format!("convert!({}): not a named type", r.target)))?;
+            let name = named(r.target())
+                .ok_or_else(|| Error(format!("convert!({}): not a named type", r.target())))?;
             if plan
                 .types
                 .insert(name.clone(), Setting::Converted(r))
@@ -237,10 +237,8 @@ impl<'f> Plan<'f> {
                     bound.insert(names::bare(message));
                 }
                 Setting::Converted(r) => {
-                    for stage in [&r.input, &r.output].into_iter().flatten() {
-                        if let Some(f) = stage.function() {
-                            bound.insert(names::bare(f.name()));
-                        }
+                    for f in r.functions() {
+                        bound.insert(names::bare(f.name()));
                     }
                 }
                 _ => {}

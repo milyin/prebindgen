@@ -103,8 +103,8 @@ jobs:
       working-directory: prebindgen
       run: |
         for crate in prebindgen prebindgen-c-runtime prebindgen-jni-runtime \
-                     prebindgen-proc-macro prebindgen-flat prebindgen-tools; do
-          # prebindgen-c prebindgen-jni: tools API rewrite (#787 follow-up), not ported yet
+                     prebindgen-proc-macro prebindgen-flat prebindgen-tools \
+                     prebindgen-c prebindgen-jni; do
           echo "== $crate"
           # Unpublished sibling crates make `cargo package` fail on the
           # version lookup, which says nothing about this crate's own

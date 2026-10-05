@@ -3,7 +3,7 @@
 //! extern's parameter list and the declaration cannot disagree.
 
 use prebindgen_flat::flat::{TypeKind, TypeRef};
-use prebindgen_tools::{names, Access, Input, Output, Shape, Wire};
+use prebindgen_tools::{names, Access, Output, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
@@ -16,7 +16,7 @@ use crate::{
         leaf::{method_desc, Leaf, LeafTy, Prim},
         pack,
         select::SigParam,
-        Dir,
+        Dir, Param,
     },
     plan::{err, Binding, Callee, EPlan, PPlan, Placement, Plan, RPlan, Res},
 };
@@ -53,8 +53,8 @@ fn extern_rust(plan: &Plan, b: &Binding) -> Res<TokenStream> {
     let mut args = Vec::new();
     for p in &b.func.params {
         let name = &p.name;
-        let input = cb.param(name)?;
-        params.extend(input.wires.iter().map(Wire::decl));
+        let Param { input, pass } = cb.param(name)?;
+        params.extend(input.wires().into_iter().map(Wire::decl));
         if input.fallible {
             let r = input.result();
             stmts.push(quote!(let #name = match #r {
@@ -65,7 +65,7 @@ fn extern_rust(plan: &Plan, b: &Binding) -> Res<TokenStream> {
             let e = &input.expr;
             stmts.push(quote!(let #name = #e;));
         }
-        args.push(input.pass.clone().unwrap_or_else(|| quote!(#name)));
+        args.push(pass.unwrap_or_else(|| quote!(#name)));
     }
     params.extend(ret.wires.iter().map(Wire::decl));
     params.push(quote!(__error_sink: #jobject));
@@ -93,7 +93,7 @@ fn extern_rust(plan: &Plan, b: &Binding) -> Res<TokenStream> {
 
 struct Return {
     ty: Option<TokenStream>,
-    wires: Vec<Wire>,
+    wires: Vec<Wire<Leaf>>,
     body: TokenStream,
 }
 
@@ -119,14 +119,17 @@ impl RustBoundary<'_, '_> {
             }
         };
         let (ty, default) = ret_wire(&b.ret);
-        let wires = if uses_sink(&b.ret) {
-            vec![Wire::new(
-                format_ident!("__sink"),
-                quote!(::prebindgen_jni_runtime::jni::objects::JObject<'a>),
-            )]
-        } else {
-            Vec::new()
+        // The object a sink, builder or folder result is handed to.
+        let sink = match &b.ret {
+            RPlan::Sink { iface, .. } => Some(iface.clone()),
+            RPlan::Builder { iface, .. } => Some(format!("{iface}Raw")),
+            RPlan::Fold { columns_iface, .. } => Some(columns_iface.clone()),
+            RPlan::Unit | RPlan::Direct { .. } => None,
         };
+        let wires = sink
+            .map(|fqn| Wire::new(format_ident!("__sink"), Leaf::new(LeafTy::Callback(fqn))))
+            .into_iter()
+            .collect();
         let rty = ty.clone().unwrap_or(quote!(()));
         let e = format_ident!("__err");
         Ok(Return {
@@ -147,7 +150,7 @@ impl RustBoundary<'_, '_> {
         })
     }
 
-    fn param(&mut self, name: &syn::Ident) -> Res<Input> {
+    fn param(&mut self, name: &syn::Ident) -> Res<Param> {
         let plan = self.plan;
         let p = self
             .b
@@ -174,7 +177,7 @@ impl RustBoundary<'_, '_> {
             input = pack::pack_input(&root, &leaves, input);
         }
         // A borrowed parameter lends the decoded value.
-        Ok(match plan.shape(&fp.ty)? {
+        let pass = match plan.shape(&fp.ty)? {
             Shape::Str {
                 access: Access::Shared,
                 ..
@@ -186,7 +189,7 @@ impl RustBoundary<'_, '_> {
             | Shape::Ref {
                 access: prebindgen_tools::Access::Shared,
                 ..
-            } => input.with_pass(quote!(&#name)),
+            } => Some(quote!(&#name)),
             Shape::Ref { .. }
             | Shape::Str {
                 access: Access::Exclusive,
@@ -200,8 +203,9 @@ impl RustBoundary<'_, '_> {
                     "`{name}`: a `&mut` value parameter cannot cross from Kotlin"
                 ))
             }
-            _ => input,
-        })
+            _ => None,
+        };
+        Ok(Param { input, pass })
     }
 
     fn fail(&mut self) -> TokenStream {
@@ -245,7 +249,7 @@ fn rust_ret_value(plan: &Plan, ret: &RPlan, value: TokenStream) -> Res<TokenStre
         RPlan::Direct { ty, leaf } => {
             let out = plan.rs_encode(ty, value, "r", 1)?;
             let bind = out.bind();
-            let n = &out.wires[0].name;
+            let n = &out.wires()[0].name;
             let v = if leaf.is_obj() {
                 quote!(#n.into_raw())
             } else {
@@ -283,7 +287,7 @@ fn rust_ret_value(plan: &Plan, ret: &RPlan, value: TokenStream) -> Res<TokenStre
             };
             let e = format_ident!("__x");
             let d = plan.deliver(elem, e.to_token_stream(), "r", "", Some(exp), &[], false, 1)?;
-            let cols = columns(&d.output, leaves, &e, quote!(__items));
+            let cols = columns(t, &d.output, leaves, &e, quote!(__items));
             let mut col_leaves = vec![Leaf::new(LeafTy::Prim(Prim::I))];
             col_leaves.extend(leaves.iter().map(Leaf::column));
             let call = call_sink(&cols, &col_leaves, columns_iface);
@@ -328,16 +332,25 @@ fn unbox(
 }
 
 /// Columns of a sequence of deliveries: a count and one array per leaf.
-fn columns(elem: &Output, leaves: &[Leaf], x: &syn::Ident, items: TokenStream) -> Output {
+fn columns(
+    ty: &TypeRef,
+    elem: &Output<Leaf>,
+    leaves: &[Leaf],
+    x: &syn::Ident,
+    items: TokenStream,
+) -> Output<Leaf> {
     let rt = quote!(::prebindgen_jni_runtime);
     let mut setup = Vec::new();
     let mut pushes = Vec::new();
     let mut finals = vec![quote!(__n as i32)];
-    let mut wires = vec![Wire::new(format_ident!("__cn"), Prim::I.rs())];
-    for (k, (l, w)) in leaves.iter().zip(&elem.wires).enumerate() {
+    let mut wires = vec![Wire::new(
+        format_ident!("__cn"),
+        Leaf::new(LeafTy::Prim(Prim::I)),
+    )];
+    for (k, (l, w)) in leaves.iter().zip(elem.wires()).enumerate() {
         let col = format_ident!("__col{}", k);
         let local = &w.name;
-        wires.push(Wire::new(format_ident!("__colw{}", k), l.column().rs()));
+        wires.push(Wire::new(format_ident!("__colw{}", k), l.column()));
         match l.prim() {
             Some(p) => {
                 let write = format_ident!("{}", p.array_helpers().1);
@@ -353,8 +366,10 @@ fn columns(elem: &Output, leaves: &[Leaf], x: &syn::Ident, items: TokenStream) -
         }
     }
     let bind = elem.bind();
-    Output::fallible(
+    Output::seq(
+        ty,
         wires,
+        elem.form.clone(),
         quote!({
             let __n = #items.len();
             #(#setup)*
@@ -365,6 +380,7 @@ fn columns(elem: &Output, leaves: &[Leaf], x: &syn::Ident, items: TokenStream) -
             (#(#finals),*)
         }),
     )
+    .mark_fallible()
 }
 
 /// What an `Err` does: a message for the binding-error channel, or a
@@ -386,8 +402,8 @@ fn rust_error(plan: &Plan, e: &EPlan) -> Res<TokenStream> {
             let bind = d.output.bind();
             let values = d
                 .output
-                .wires
-                .iter()
+                .wires()
+                .into_iter()
                 .zip(leaves)
                 .map(|(w, l)| l.jvalue(&w.name.to_token_stream()));
             let desc = method_desc(leaves, "V");
@@ -404,11 +420,11 @@ fn rust_error(plan: &Plan, e: &EPlan) -> Res<TokenStream> {
 
 /// Encode `out`'s wires as `jvalue`s and call the sink interface's `run`,
 /// returning its result object.
-fn call_sink(out: &Output, leaves: &[Leaf], iface: &str) -> TokenStream {
+fn call_sink(out: &Output<Leaf>, leaves: &[Leaf], iface: &str) -> TokenStream {
     let bind = out.bind();
     let values = out
-        .wires
-        .iter()
+        .wires()
+        .into_iter()
         .zip(leaves)
         .map(|(w, l)| l.jvalue(&w.name.to_token_stream()));
     let desc = method_desc(leaves, "Ljava/lang/Object;");

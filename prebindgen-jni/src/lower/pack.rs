@@ -97,10 +97,11 @@ fn lower_first(s: &str) -> String {
 
 /// The Rust input over the packed wires: unpack every leaf into the local
 /// the unpacked input reads, then evaluate it.
-pub(crate) fn pack_input(root: &str, leaves: &[Leaf], input: Input) -> Input {
+pub(crate) fn pack_input(root: &str, leaves: &[Leaf], input: Input<Leaf>) -> Input<Leaf> {
     let rt = quote!(::prebindgen_jni_runtime);
     let mut wires = Vec::new();
     let mut stmts: Vec<TokenStream> = Vec::new();
+    let names: Vec<syn::Ident> = input.wires().iter().map(|w| w.name.clone()).collect();
     for (p, idx) in groups(leaves) {
         let packed = prebindgen_tools::names::ident(&group_name(root, p));
         let leaf = Leaf {
@@ -111,7 +112,7 @@ pub(crate) fn pack_input(root: &str, leaves: &[Leaf], input: Input) -> Input {
             },
             nullable: false,
         };
-        wires.push(Wire::new(packed.clone(), leaf.rs()));
+        wires.push(Wire::new(packed.clone(), leaf));
         let expected = idx.len();
         let what = group_name(root, p);
         match p {
@@ -122,24 +123,18 @@ pub(crate) fn pack_input(root: &str, leaves: &[Leaf], input: Input) -> Input {
                 stmts.push(quote!(let #buf = #rt::#read(env, &#packed)?;));
                 stmts.push(quote!(#rt::check_packed(#buf.len(), #expected, #what)?;));
                 for (k, &i) in idx.iter().enumerate() {
-                    let n = &input.wires[i].name;
+                    let n = &names[i];
                     stmts.push(quote!(let #n = #buf[#k];));
                 }
             }
             None => {
                 stmts.push(quote!(#rt::check_packed(#rt::object_array_len(env, &#packed)?, #expected, #what)?;));
                 for (k, &i) in idx.iter().enumerate() {
-                    let n = &input.wires[i].name;
+                    let n = &names[i];
                     stmts.push(quote!(let #n = #rt::object_array_get(env, &#packed, #k)?;));
                 }
             }
         }
     }
-    let e = input.expr;
-    Input {
-        wires,
-        expr: quote!({ #(#stmts)* #e }),
-        fallible: true,
-        pass: input.pass,
-    }
+    Input::packed(wires, quote!(#(#stmts)*), input)
 }

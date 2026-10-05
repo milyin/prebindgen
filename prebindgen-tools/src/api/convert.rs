@@ -210,7 +210,7 @@ impl ResolvedConversion {
     }
 
     /// The source type being converted.
-    pub(crate) fn target(&self) -> &TypeRef {
+    pub fn target(&self) -> &TypeRef {
         &self.target
     }
 
