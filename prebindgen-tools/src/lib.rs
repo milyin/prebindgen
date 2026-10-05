@@ -15,23 +15,33 @@
 //!
 //! ## The model
 //!
-//! A source type at a [`Place`] — parameter `p` of `send`, field `x` of it —
-//! crosses in one of a few ways ([`FormKind`]):
+//! A value crosses in one of two directions:
 //!
-//! * **directly**, as one wire ([`Input::wire`]);
+//! * an [`Input`] turns wires into a source value — for example a parameter
+//!   on its way into the source function;
+//! * an [`Output`] turns a source value into wires — for example a result on
+//!   its way back.
+//!
+//! Each holds the Rust expression that turns one into the other *and* a
+//! [`Form`]: a tree recording how each layer of the type crossed.
+//!
+//! In either direction, a source type at a [`Place`] — parameter `p` of
+//! `send`, field `x` of it — crosses in one of a few ways ([`FormKind`]).
+//! Both directions build every way: [`Input`] and [`Output`] have a
+//! constructor of the same name for each, except a conversion, which has a
+//! method for each direction:
+//!
+//! * **directly**, as one wire (`wire`);
 //! * **converted** to another source type that crosses instead
-//!   ([`ResolvedConversion::decode`], [`ResolvedConversion::encode`]);
+//!   ([`ResolvedConversion::decode`] for an input,
+//!   [`ResolvedConversion::encode`] for an output);
 //! * **taken apart** into parts that cross on their own: a record's fields
-//!   ([`Input::record`]), an optional's presence and value
-//!   ([`Input::optional`]), a sum's tag and alternatives ([`Input::sum`]),
-//!   a sequence ([`Input::seq`]).
+//!   (`record`), an optional's presence and value (`optional`), a sum's tag
+//!   and alternatives (`sum`), a sequence (`seq`).
 //!
-//! For each value that crosses, the adapter builds an [`Input`] (wires →
-//! value) or an [`Output`] (value → wires). Each holds the Rust expression
-//! *and* the [`Form`] tree recording which way each layer of the type
-//! crossed. The foreign-side writer walks that tree,
-//! so it follows the decisions made — defaults and overrides alike — without
-//! making them again; what a single wire means is in the wire's own type.
+//! The foreign-side writer walks the form, so it follows the decisions made
+//! — defaults and overrides alike — without making them again. What a
+//! single wire means is in the wire's own type.
 //!
 //! ## Writing an element
 //!
@@ -41,9 +51,9 @@
 //!    the build script gave one, else the type's default. [`shape()`] does it
 //!    layer by layer when given that lookup.
 //! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
-//!    the layer's [`Shape`], call the matching constructor
-//!    ([`Input::record`], [`Input::optional`], …), and recurse into what the
-//!    layer holds, extending the place as it goes ([`Place::at`]).
+//!    the layer's [`Shape`], call the matching constructor (`record`,
+//!    `optional`, …), and recurse into what the layer holds, extending the
+//!    place as it goes ([`Place::at`]).
 //! 4. Assemble the element from the parts' wires and expressions.
 //!
 //! [`Qualifier`] names source items from the generated crate; [`RustFile`]
