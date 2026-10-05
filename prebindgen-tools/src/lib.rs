@@ -79,8 +79,8 @@
 //! ```
 //! use prebindgen::SourceLocation;
 //! use prebindgen_flat::Flat;
-//! use prebindgen_tools::{Input, Output, Place, Qualifier, Seg, Wire, WireType};
-//! use quote::quote;
+//! use prebindgen_tools::{Input, Output, Qualifier, Wire, WireType};
+//! use quote::{format_ident, quote};
 //!
 //! #[derive(Clone, Debug)]
 //! struct Long;
@@ -94,20 +94,13 @@
 //!     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
 //!     .build().unwrap();
 //! let f = flat.function("twice").unwrap();
-//! let element = Place::new("twice");
 //!
-//! // Each wire is named after where it sits in the element: the place of
-//! // parameter `n` gives the name `n`, the place of the result gives `ret`.
-//! let n_name: syn::Ident = element.at(Seg::Param("n".into())).ident();
-//! let ret_name: syn::Ident = element.at(Seg::Return).ident();
-//!
-//! // Build: one input for the parameter, one output for the result.
-//! let input = Input::wire(
-//!     &f.params[0].ty,
-//!     Wire::new(n_name.clone(), Long),
-//!     quote!(#n_name as u64),
-//! );
-//! let output = Output::wire(&f.ret, Wire::new(ret_name, Long), quote!(__value as i64));
+//! // Build: one input for the parameter, on a wire named like it, and one
+//! // output for the result, on a wire named `ret`.
+//! let n = &f.params[0];
+//! let n_name = &n.name;
+//! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), Long), quote!(#n_name as u64));
+//! let output = Output::wire(&f.ret, Wire::new(format_ident!("ret"), Long), quote!(__value as i64));
 //!
 //! // Use: the wires give the signature, the expressions the body.
 //! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
