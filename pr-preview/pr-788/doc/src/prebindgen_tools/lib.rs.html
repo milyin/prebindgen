@@ -58,348 +58,421 @@
 <a href=#58 id=58 data-nosnippet>58</a>//!    look up decisions and to name wires ([`Place::ident`]).
 <a href=#59 id=59 data-nosnippet>59</a>//! 2. Look up how the part crosses with [`Overrides::get`]: the override
 <a href=#60 id=60 data-nosnippet>60</a>//!    the build script declared for that place, if any, else the default
-<a href=#61 id=61 data-nosnippet>61</a>//!    for the part's type. [`shape()`] does it
-<a href=#62 id=62 data-nosnippet>62</a>//!    layer by layer when given that lookup.
+<a href=#61 id=61 data-nosnippet>61</a>//!    for the part's type. [`shape()`] does the lookup layer by layer when
+<a href=#62 id=62 data-nosnippet>62</a>//!    given it.
 <a href=#63 id=63 data-nosnippet>63</a>//! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
 <a href=#64 id=64 data-nosnippet>64</a>//!    the layer's [`Shape`], call the function the table above gives for
-<a href=#65 id=65 data-nosnippet>65</a>//!    that way of crossing, and recurse into what the layer holds, extending the
-<a href=#66 id=66 data-nosnippet>66</a>//!    place as it goes ([`Place::at`]).
-<a href=#67 id=67 data-nosnippet>67</a>//! 4. Assemble the element from the parts' wires and expressions.
-<a href=#68 id=68 data-nosnippet>68</a>//!
-<a href=#69 id=69 data-nosnippet>69</a>//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
-<a href=#70 id=70 data-nosnippet>70</a>//! collects and writes the generated Rust.
-<a href=#71 id=71 data-nosnippet>71</a>//!
-<a href=#72 id=72 data-nosnippet>72</a>//! Fallible conversions use `Result&lt;_, String&gt;`: an expression may use `?`,
-<a href=#73 id=73 data-nosnippet>73</a>//! and the adapter decides where the error goes ([`Input::result`]).
-<a href=#74 id=74 data-nosnippet>74</a>
-<a href=#75 id=75 data-nosnippet>75</a></span><span class="comment">// Implementation modules are private. The public modules below select every
-<a href=#76 id=76 data-nosnippet>76</a>// exported item explicitly, independently of the implementation layout.
-<a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">mod </span>api;
-<a href=#78 id=78 data-nosnippet>78</a>
-<a href=#79 id=79 data-nosnippet>79</a><span class="comment">// Exported macros must reach syn through this crate, including when an adapter
-<a href=#80 id=80 data-nosnippet>80</a>// re-exports them. Keep this dependency export here with the rest of the API.
-<a href=#81 id=81 data-nosnippet>81</a></span><span class="attr">#[doc(hidden)]
-<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">pub use </span>syn <span class="kw">as </span>__syn;
-<a href=#83 id=83 data-nosnippet>83</a>
-<a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// Custom conversions: a source type that crosses as another type.
-<a href=#85 id=85 data-nosnippet>85</a>///
-<a href=#86 id=86 data-nosnippet>86</a>/// `convert!(Millis).input(fun!(millis_from_raw)).output(fun!(millis_to_raw))`
-<a href=#87 id=87 data-nosnippet>87</a>/// says that `Millis` never crosses as itself: it crosses as `u64` — the
-<a href=#88 id=88 data-nosnippet>88</a>/// **representation** — and these two functions convert.
-<a href=#89 id=89 data-nosnippet>89</a>///
-<a href=#90 id=90 data-nosnippet>90</a>/// Each direction is a function (a flat item, or a binding-local path with a
-<a href=#91 id=91 data-nosnippet>91</a>/// stated signature) or a standard trait impl (`From`, `Into`, `TryFrom`,
-<a href=#92 id=92 data-nosnippet>92</a>/// `TryInto`). A function returning `Result` makes its direction fallible;
-<a href=#93 id=93 data-nosnippet>93</a>/// the error is reported through its `Display`.
-<a href=#94 id=94 data-nosnippet>94</a>///
-<a href=#95 id=95 data-nosnippet>95</a>/// [`Conversion::resolve`] checks the declaration against the model; the
-<a href=#96 id=96 data-nosnippet>96</a>/// adapter does it once, while planning, and keeps the
-<a href=#97 id=97 data-nosnippet>97</a>/// [`ResolvedConversion`] as its declaration for the source type. When it
-<a href=#98 id=98 data-nosnippet>98</a>/// builds a value of that type, it passes the conversion to [`Input::via`]
-<a href=#99 id=99 data-nosnippet>99</a>/// or [`Output::via`], the same way [`Input::record`] takes the flat model's
-<a href=#100 id=100 data-nosnippet>100</a>/// struct. The adapter builds the representation's [`Input`] or [`Output`]
-<a href=#101 id=101 data-nosnippet>101</a>/// as for any other type, inside the closure it passes; the result's
-<a href=#102 id=102 data-nosnippet>102</a>/// [`Form`] is [`FormKind::Via`] over the representation's form.
-<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub mod </span>convert {
-<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::convert::{Conversion, FnRef, ResolvedConversion, Via};
-<a href=#105 id=105 data-nosnippet>105</a>}
-<a href=#106 id=106 data-nosnippet>106</a>
-<a href=#107 id=107 data-nosnippet>107</a><span class="doccomment">/// The generated Rust file.
-<a href=#108 id=108 data-nosnippet>108</a>///
-<a href=#109 id=109 data-nosnippet>109</a>/// [`RustFile`] preserves item order, adds source feature guards with
-<a href=#110 id=110 data-nosnippet>110</a>/// [`RustFile::guards`], formats parseable Rust with [`RustFile::render`],
-<a href=#111 id=111 data-nosnippet>111</a>/// and writes through [`RustFile::write`]. The write operation compares the
-<a href=#112 id=112 data-nosnippet>112</a>/// current bytes before replacing a file so a build script does not trigger
-<a href=#113 id=113 data-nosnippet>113</a>/// another Cargo build merely by regenerating identical output.
-<a href=#114 id=114 data-nosnippet>114</a>///
-<a href=#115 id=115 data-nosnippet>115</a>/// ```
-<a href=#116 id=116 data-nosnippet>116</a>/// use prebindgen_tools::RustFile;
-<a href=#117 id=117 data-nosnippet>117</a>/// use quote::quote;
-<a href=#118 id=118 data-nosnippet>118</a>///
-<a href=#119 id=119 data-nosnippet>119</a>/// let mut file = RustFile::new();
-<a href=#120 id=120 data-nosnippet>120</a>/// file.push(quote!(pub fn answer() -&gt; u32 { 42 }));
-<a href=#121 id=121 data-nosnippet>121</a>/// assert!(file.render().contains("pub fn answer() -&gt; u32"));
-<a href=#122 id=122 data-nosnippet>122</a>/// // In build.rs: file.write("generated.rs")?;
-<a href=#123 id=123 data-nosnippet>123</a>/// ```
-<a href=#124 id=124 data-nosnippet>124</a></span><span class="kw">pub mod </span>file {
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::file::{resolve_out_path, write_if_changed, RustFile};
-<a href=#126 id=126 data-nosnippet>126</a>}
-<a href=#127 id=127 data-nosnippet>127</a>
-<a href=#128 id=128 data-nosnippet>128</a><span class="doccomment">/// Identifier and case helpers shared by every adapter.
-<a href=#129 id=129 data-nosnippet>129</a></span><span class="kw">pub mod </span>names {
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::names::{bare, camel, ident, join, mangle, pascal, snake};
-<a href=#131 id=131 data-nosnippet>131</a>}
-<a href=#132 id=132 data-nosnippet>132</a>
-<a href=#133 id=133 data-nosnippet>133</a><span class="doccomment">/// Naming source items from generated Rust code.
-<a href=#134 id=134 data-nosnippet>134</a>///
-<a href=#135 id=135 data-nosnippet>135</a>/// The flat model identifies a source item by its flat name, such as
-<a href=#136 id=136 data-nosnippet>136</a>/// `Payload` or `make`. A binding's generated Rust usually lives in a
-<a href=#137 id=137 data-nosnippet>137</a>/// different crate, where those names are not automatically in scope.
-<a href=#138 id=138 data-nosnippet>138</a>/// [`Qualifier`] uses each item's source location to spell a path such as
-<a href=#139 id=139 data-nosnippet>139</a>/// `source_crate::Payload` or `source_crate::make`. Use it when a wrapper
-<a href=#140 id=140 data-nosnippet>140</a>/// calls a source function or a conversion names a source type.
-<a href=#141 id=141 data-nosnippet>141</a>///
-<a href=#142 id=142 data-nosnippet>142</a>/// ## Choosing a path
-<a href=#143 id=143 data-nosnippet>143</a>///
-<a href=#144 id=144 data-nosnippet>144</a>/// [`Qualifier::new`] borrows the model. For each known item,
-<a href=#145 id=145 data-nosnippet>145</a>/// [`Qualifier::module_of`] reads the crate name recorded in its
-<a href=#146 id=146 data-nosnippet>146</a>/// [`SourceLocation`](prebindgen::SourceLocation), converting hyphens to
-<a href=#147 id=147 data-nosnippet>147</a>/// underscores for a Rust path. Items captured from different crates can
-<a href=#148 id=148 data-nosnippet>148</a>/// therefore receive different prefixes from the same qualifier.
-<a href=#149 id=149 data-nosnippet>149</a>///
-<a href=#150 id=150 data-nosnippet>150</a>/// [`Qualifier::with_default_module`] supplies a fallback for **known items
-<a href=#151 id=151 data-nosnippet>151</a>/// without a recorded crate name**, for example a model assembled directly
-<a href=#152 id=152 data-nosnippet>152</a>/// from parsed syntax in a test. A recorded crate name takes precedence.
-<a href=#153 id=153 data-nosnippet>153</a>/// A name absent from the model is left unchanged even when a fallback is
-<a href=#154 id=154 data-nosnippet>154</a>/// configured; a known item with neither a crate name nor a fallback also
-<a href=#155 id=155 data-nosnippet>155</a>/// keeps its bare name. The generated crate must be able to resolve the
-<a href=#156 id=156 data-nosnippet>156</a>/// emitted paths: qualification does not add dependencies or imports, or
-<a href=#157 id=157 data-nosnippet>157</a>/// discover Cargo dependency aliases.
+<a href=#65 id=65 data-nosnippet>65</a>//!    that way of crossing, and recurse into what the layer holds, extending
+<a href=#66 id=66 data-nosnippet>66</a>//!    the place as it goes ([`Place::at`]).
+<a href=#67 id=67 data-nosnippet>67</a>//! 4. Assemble the element from the parts' inputs and outputs, as the next
+<a href=#68 id=68 data-nosnippet>68</a>//!    section shows.
+<a href=#69 id=69 data-nosnippet>69</a>//!
+<a href=#70 id=70 data-nosnippet>70</a>//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
+<a href=#71 id=71 data-nosnippet>71</a>//! collects and writes the generated Rust.
+<a href=#72 id=72 data-nosnippet>72</a>//!
+<a href=#73 id=73 data-nosnippet>73</a>//! ## Using an Input or Output
+<a href=#74 id=74 data-nosnippet>74</a>//!
+<a href=#75 id=75 data-nosnippet>75</a>//! An [`Input`] or [`Output`] holds everything the element needs for one
+<a href=#76 id=76 data-nosnippet>76</a>//! value, on both sides of the boundary:
+<a href=#77 id=77 data-nosnippet>77</a>//!
+<a href=#78 id=78 data-nosnippet>78</a>//! * **The element's signature.** [`Input::wires`] and [`Output::wires`]
+<a href=#79 id=79 data-nosnippet>79</a>//!   list the value's wires in order. [`Wire::decl`] writes one wire as
+<a href=#80 id=80 data-nosnippet>80</a>//!   `name: Type` for a parameter list; [`WireType::rust`] gives its Rust
+<a href=#81 id=81 data-nosnippet>81</a>//!   type alone, for a return type or a struct field.
+<a href=#82 id=82 data-nosnippet>82</a>//! * **The Rust code.** An input's `expr` evaluates to the source value:
+<a href=#83 id=83 data-nosnippet>83</a>//!   place it where the value is needed, such as an argument of the source
+<a href=#84 id=84 data-nosnippet>84</a>//!   call. An output's `expr` evaluates to the wire values, one value or a
+<a href=#85 id=85 data-nosnippet>85</a>//!   tuple in [`Output::wires`] order; [`Output::bind`] writes
+<a href=#86 id=86 data-nosnippet>86</a>//!   `let &lt;wires&gt; = expr;`, so each wire becomes a local of its own name.
+<a href=#87 id=87 data-nosnippet>87</a>//! * **Errors.** `fallible` says whether `expr` uses `?` on a
+<a href=#88 id=88 data-nosnippet>88</a>//!   `Result&lt;_, String&gt;`. Place such an expression in a function returning
+<a href=#89 id=89 data-nosnippet>89</a>//!   that type, or take [`Input::result`] / [`Output::result`], a `Result`
+<a href=#90 id=90 data-nosnippet>90</a>//!   value, and route the error yourself.
+<a href=#91 id=91 data-nosnippet>91</a>//! * **The foreign code.** `form` tells the foreign-side writer how to
+<a href=#92 id=92 data-nosnippet>92</a>//!   produce the same wires (for an input) or read them (for an output), in
+<a href=#93 id=93 data-nosnippet>93</a>//!   the same order. What a single wire means is in its [`WireType`]
+<a href=#94 id=94 data-nosnippet>94</a>//!   variant; records, options, sums and sequences are their [`FormKind`].
+<a href=#95 id=95 data-nosnippet>95</a>//!
+<a href=#96 id=96 data-nosnippet>96</a>//! For example, a C-style wrapper for `pub fn twice(n: u64) -&gt; u64`, where
+<a href=#97 id=97 data-nosnippet>97</a>//! both values cross as an `i64` wire:
+<a href=#98 id=98 data-nosnippet>98</a>//!
+<a href=#99 id=99 data-nosnippet>99</a>//! ```
+<a href=#100 id=100 data-nosnippet>100</a>//! use prebindgen::SourceLocation;
+<a href=#101 id=101 data-nosnippet>101</a>//! use prebindgen_flat::Flat;
+<a href=#102 id=102 data-nosnippet>102</a>//! use prebindgen_tools::{Input, Output, Place, Qualifier, Seg, Wire, WireType};
+<a href=#103 id=103 data-nosnippet>103</a>//! use quote::quote;
+<a href=#104 id=104 data-nosnippet>104</a>//!
+<a href=#105 id=105 data-nosnippet>105</a>//! #[derive(Clone, Debug)]
+<a href=#106 id=106 data-nosnippet>106</a>//! struct Long;
+<a href=#107 id=107 data-nosnippet>107</a>//! impl WireType for Long {
+<a href=#108 id=108 data-nosnippet>108</a>//!     fn rust(&amp;self) -&gt; proc_macro2::TokenStream { quote!(i64) }
+<a href=#109 id=109 data-nosnippet>109</a>//!     fn placeholder(&amp;self) -&gt; proc_macro2::TokenStream { quote!(0) }
+<a href=#110 id=110 data-nosnippet>110</a>//! }
+<a href=#111 id=111 data-nosnippet>111</a>//!
+<a href=#112 id=112 data-nosnippet>112</a>//! let source = syn::parse_file("pub fn twice(n: u64) -&gt; u64 { n * 2 }").unwrap();
+<a href=#113 id=113 data-nosnippet>113</a>//! let flat = Flat::builder()
+<a href=#114 id=114 data-nosnippet>114</a>//!     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+<a href=#115 id=115 data-nosnippet>115</a>//!     .build().unwrap();
+<a href=#116 id=116 data-nosnippet>116</a>//! let f = flat.function("twice").unwrap();
+<a href=#117 id=117 data-nosnippet>117</a>//! let element = Place::new("twice");
+<a href=#118 id=118 data-nosnippet>118</a>//!
+<a href=#119 id=119 data-nosnippet>119</a>//! // Build: one input for the parameter, one output for the result.
+<a href=#120 id=120 data-nosnippet>120</a>//! let n = element.at(Seg::Param("n".into())).ident("");
+<a href=#121 id=121 data-nosnippet>121</a>//! let input = Input::wire(&amp;f.params[0].ty, Wire::new(n.clone(), Long), quote!(#n as u64));
+<a href=#122 id=122 data-nosnippet>122</a>//! let ret = element.at(Seg::Return).ident("");
+<a href=#123 id=123 data-nosnippet>123</a>//! let output = Output::wire(&amp;f.ret, Wire::new(ret, Long), quote!(__value as i64));
+<a href=#124 id=124 data-nosnippet>124</a>//!
+<a href=#125 id=125 data-nosnippet>125</a>//! // Use: the wires give the signature, the expressions the body.
+<a href=#126 id=126 data-nosnippet>126</a>//! let params = input.wires().iter().map(|w| w.decl()).collect::&lt;Vec&lt;_&gt;&gt;();
+<a href=#127 id=127 data-nosnippet>127</a>//! let ret_ty = output.wires()[0].ty.rust();
+<a href=#128 id=128 data-nosnippet>128</a>//! let callee = Qualifier::new(&amp;flat).path(&amp;f.name);
+<a href=#129 id=129 data-nosnippet>129</a>//! let (arg, value) = (&amp;input.expr, &amp;output.expr);
+<a href=#130 id=130 data-nosnippet>130</a>//! let wrapper = quote! {
+<a href=#131 id=131 data-nosnippet>131</a>//!     pub extern "C" fn twice_wrapper(#(#params),*) -&gt; #ret_ty {
+<a href=#132 id=132 data-nosnippet>132</a>//!         let __value = #callee(#arg);
+<a href=#133 id=133 data-nosnippet>133</a>//!         #value
+<a href=#134 id=134 data-nosnippet>134</a>//!     }
+<a href=#135 id=135 data-nosnippet>135</a>//! };
+<a href=#136 id=136 data-nosnippet>136</a>//! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+<a href=#137 id=137 data-nosnippet>137</a>//! assert_eq!(
+<a href=#138 id=138 data-nosnippet>138</a>//!     quote!(#wrapper).to_string(),
+<a href=#139 id=139 data-nosnippet>139</a>//!     quote! {
+<a href=#140 id=140 data-nosnippet>140</a>//!         pub extern "C" fn twice_wrapper(n: i64) -&gt; i64 {
+<a href=#141 id=141 data-nosnippet>141</a>//!             let __value = twice(n as u64);
+<a href=#142 id=142 data-nosnippet>142</a>//!             __value as i64
+<a href=#143 id=143 data-nosnippet>143</a>//!         }
+<a href=#144 id=144 data-nosnippet>144</a>//!     }.to_string(),
+<a href=#145 id=145 data-nosnippet>145</a>//! );
+<a href=#146 id=146 data-nosnippet>146</a>//! ```
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a></span><span class="comment">// Implementation modules are private. The public modules below select every
+<a href=#149 id=149 data-nosnippet>149</a>// exported item explicitly, independently of the implementation layout.
+<a href=#150 id=150 data-nosnippet>150</a></span><span class="kw">mod </span>api;
+<a href=#151 id=151 data-nosnippet>151</a>
+<a href=#152 id=152 data-nosnippet>152</a><span class="comment">// Exported macros must reach syn through this crate, including when an adapter
+<a href=#153 id=153 data-nosnippet>153</a>// re-exports them. Keep this dependency export here with the rest of the API.
+<a href=#154 id=154 data-nosnippet>154</a></span><span class="attr">#[doc(hidden)]
+<a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">pub use </span>syn <span class="kw">as </span>__syn;
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a><span class="doccomment">/// Custom conversions: a source type that crosses as another type.
 <a href=#158 id=158 data-nosnippet>158</a>///
-<a href=#159 id=159 data-nosnippet>159</a>/// ## Item paths and type expressions
-<a href=#160 id=160 data-nosnippet>160</a>///
-<a href=#161 id=161 data-nosnippet>161</a>/// * [`Qualifier::path`] qualifies one item name, such as the function the
-<a href=#162 id=162 data-nosnippet>162</a>///   adapter will call.
-<a href=#163 id=163 data-nosnippet>163</a>/// * [`Qualifier::ty`] walks a complete model type. For example,
-<a href=#164 id=164 data-nosnippet>164</a>///   `Option&lt;Vec&lt;Payload&gt;&gt;` becomes
-<a href=#165 id=165 data-nosnippet>165</a>///   `::core::option::Option&lt;::std::vec::Vec&lt;source_crate::Payload&gt;&gt;`.
-<a href=#166 id=166 data-nosnippet>166</a>///   It qualifies named types inside generic arguments and containers, and
-<a href=#167 id=167 data-nosnippet>167</a>///   named constants used as array lengths. Standard containers receive
-<a href=#168 id=168 data-nosnippet>168</a>///   absolute `::core` or `::std` paths; scalar names such as `u32` stay as is.
-<a href=#169 id=169 data-nosnippet>169</a>/// * [`Qualifier::ty_elided`] provides the same naming for positions such as
-<a href=#170 id=170 data-nosnippet>170</a>///   closure arguments that cannot refer to a source lifetime parameter.
-<a href=#171 id=171 data-nosnippet>171</a>///   Its method documentation lists which shapes it elides.
-<a href=#172 id=172 data-nosnippet>172</a>///
-<a href=#173 id=173 data-nosnippet>173</a>/// These methods return Rust tokens for the source value's type or path.
-<a href=#174 id=174 data-nosnippet>174</a>/// The adapter still chooses the wire representation: qualifying
-<a href=#175 id=175 data-nosnippet>175</a>/// `Payload` does not turn it into a pointer, handle, or mirror struct.
-<a href=#176 id=176 data-nosnippet>176</a>///
-<a href=#177 id=177 data-nosnippet>177</a>/// ```
-<a href=#178 id=178 data-nosnippet>178</a>/// use prebindgen::SourceLocation;
-<a href=#179 id=179 data-nosnippet>179</a>/// use prebindgen_flat::Flat;
-<a href=#180 id=180 data-nosnippet>180</a>/// use prebindgen_tools::Qualifier;
-<a href=#181 id=181 data-nosnippet>181</a>/// use quote::quote;
-<a href=#182 id=182 data-nosnippet>182</a>///
-<a href=#183 id=183 data-nosnippet>183</a>/// let source = syn::parse_file(
-<a href=#184 id=184 data-nosnippet>184</a>///     "pub struct Payload; pub fn make() -&gt; Option&lt;Vec&lt;Payload&gt;&gt; { None }",
-<a href=#185 id=185 data-nosnippet>185</a>/// ).unwrap();
-<a href=#186 id=186 data-nosnippet>186</a>/// let location = SourceLocation {
-<a href=#187 id=187 data-nosnippet>187</a>///     crate_name: Some("source-crate".into()), ..Default::default()
-<a href=#188 id=188 data-nosnippet>188</a>/// };
-<a href=#189 id=189 data-nosnippet>189</a>/// let flat = Flat::builder()
-<a href=#190 id=190 data-nosnippet>190</a>///     .items(source.items.into_iter().map(|item| (item, location.clone())))
-<a href=#191 id=191 data-nosnippet>191</a>///     .build().unwrap();
-<a href=#192 id=192 data-nosnippet>192</a>/// let q = Qualifier::new(&amp;flat);
-<a href=#193 id=193 data-nosnippet>193</a>/// let function = flat.function("make").unwrap();
-<a href=#194 id=194 data-nosnippet>194</a>/// assert_eq!(q.path(&amp;function.name).to_string(), quote!(source_crate::make).to_string());
-<a href=#195 id=195 data-nosnippet>195</a>/// let expected: syn::Type = syn::parse_quote!(
-<a href=#196 id=196 data-nosnippet>196</a>///     ::core::option::Option&lt;::std::vec::Vec&lt;source_crate::Payload&gt;&gt;
-<a href=#197 id=197 data-nosnippet>197</a>/// );
-<a href=#198 id=198 data-nosnippet>198</a>/// assert_eq!(syn::parse2::&lt;syn::Type&gt;(q.ty(&amp;function.ret)).unwrap(), expected);
-<a href=#199 id=199 data-nosnippet>199</a>///
-<a href=#200 id=200 data-nosnippet>200</a>/// // The fallback does not override the recorded source crate.
-<a href=#201 id=201 data-nosnippet>201</a>/// let q = q.with_default_module(Some(syn::parse_quote!(crate::source)));
-<a href=#202 id=202 data-nosnippet>202</a>/// assert_eq!(q.path(&amp;function.name).to_string(), quote!(source_crate::make).to_string());
-<a href=#203 id=203 data-nosnippet>203</a>/// // A binding-local helper absent from the model stays unqualified.
-<a href=#204 id=204 data-nosnippet>204</a>/// assert_eq!(q.path(&amp;syn::parse_quote!(local_helper)).to_string(), "local_helper");
-<a href=#205 id=205 data-nosnippet>205</a>/// ```
-<a href=#206 id=206 data-nosnippet>206</a></span><span class="kw">pub mod </span>qualify {
-<a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::qualify::Qualifier;
-<a href=#208 id=208 data-nosnippet>208</a>}
-<a href=#209 id=209 data-nosnippet>209</a>
-<a href=#210 id=210 data-nosnippet>210</a><span class="doccomment">/// Records — structs and the alternatives of a sum — taken apart into their
-<a href=#211 id=211 data-nosnippet>211</a>/// fields and put back together, with the delimiters the source wrote.
-<a href=#212 id=212 data-nosnippet>212</a>/// [`Input::record`] and [`Output::record`] use it; an adapter writing its own
-<a href=#213 id=213 data-nosnippet>213</a>/// mirror does too.
-<a href=#214 id=214 data-nosnippet>214</a></span><span class="kw">pub mod </span>record {
-<a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::record::Record;
-<a href=#216 id=216 data-nosnippet>216</a>}
-<a href=#217 id=217 data-nosnippet>217</a>
-<a href=#218 id=218 data-nosnippet>218</a><span class="doccomment">/// Places in an element, and the decisions made at them.
-<a href=#219 id=219 data-nosnippet>219</a></span><span class="kw">pub mod </span>place {
-<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::place::{Overrides, Place, Seg};
-<a href=#221 id=221 data-nosnippet>221</a>}
-<a href=#222 id=222 data-nosnippet>222</a>
-<a href=#223 id=223 data-nosnippet>223</a><span class="doccomment">/// One level of a type's structure, with any adapter declaration for that type.
-<a href=#224 id=224 data-nosnippet>224</a>///
-<a href=#225 id=225 data-nosnippet>225</a>/// An adapter builds a type's [`Input`] or [`Output`] by recursion: it looks
-<a href=#226 id=226 data-nosnippet>226</a>/// at the outermost layer,
-<a href=#227 id=227 data-nosnippet>227</a>/// decides what that layer becomes on its boundary, and recurses into what
-<a href=#228 id=228 data-nosnippet>228</a>/// the layer holds. [`shape()`] answers the first question the same way for
-<a href=#229 id=229 data-nosnippet>229</a>/// every adapter. It first asks the adapter whether the complete type has a
-<a href=#230 id=230 data-nosnippet>230</a>/// declaration, then returns a built-in shape when it does not. Each adapter
-<a href=#231 id=231 data-nosnippet>231</a>/// recurses with one `match` over [`Shape`].
-<a href=#232 id=232 data-nosnippet>232</a>///
-<a href=#233 id=233 data-nosnippet>233</a>/// For example, `shape(&amp;payload_type, shape_declared)` returns
-<a href=#234 id=234 data-nosnippet>234</a>/// [`Shape::Declared`] when the callback returns a declaration for `Payload`.
-<a href=#235 id=235 data-nosnippet>235</a>/// For `Option&lt;Payload&gt;`, it returns [`Shape::Option`] when the callback has
-<a href=#236 id=236 data-nosnippet>236</a>/// no declaration for the whole option; the adapter then calls [`shape()`]
-<a href=#237 id=237 data-nosnippet>237</a>/// on its inner type.
-<a href=#238 id=238 data-nosnippet>238</a>///
-<a href=#239 id=239 data-nosnippet>239</a>/// A shape describes source structure; the adapter uses it to build an
-<a href=#240 id=240 data-nosnippet>240</a>/// [`Input`] or [`Output`] for its chosen wire representation. An adapter
-<a href=#241 id=241 data-nosnippet>241</a>/// can declare a type such as `Vec&lt;u8&gt;` as a whole, while an undeclared
-<a href=#242 id=242 data-nosnippet>242</a>/// container exposes child types for further calls.
-<a href=#243 id=243 data-nosnippet>243</a>/// [`Access`] describes by-value use or borrowing; [`SequenceKind`] and
-<a href=#244 id=244 data-nosnippet>244</a>/// [`TextKind`] identify the source container independently of access.
-<a href=#245 id=245 data-nosnippet>245</a>/// `Cow` remains an explicit wrapper around its inner type.
-<a href=#246 id=246 data-nosnippet>246</a>///
-<a href=#247 id=247 data-nosnippet>247</a>/// [`shape()`] documents declaration precedence, the handling of common
-<a href=#248 id=248 data-nosnippet>248</a>/// borrows, and which unsupported forms return errors.
-<a href=#249 id=249 data-nosnippet>249</a>/// A successful call only classifies the current layer: an adapter must
-<a href=#250 id=250 data-nosnippet>250</a>/// still handle undeclared names and errors encountered in its children.
-<a href=#251 id=251 data-nosnippet>251</a>///
-<a href=#252 id=252 data-nosnippet>252</a>/// ```
-<a href=#253 id=253 data-nosnippet>253</a>/// use prebindgen::SourceLocation;
-<a href=#254 id=254 data-nosnippet>254</a>/// use prebindgen_flat::{Flat, flat::{TypeKind, TypeRef}};
-<a href=#255 id=255 data-nosnippet>255</a>/// use prebindgen_tools::{shape, Access, Shape};
-<a href=#256 id=256 data-nosnippet>256</a>/// let source = syn::parse_file("pub struct Payload; pub fn send(value: Option&lt;&amp;Payload&gt;) {}").unwrap();
-<a href=#257 id=257 data-nosnippet>257</a>/// let flat = Flat::builder()
-<a href=#258 id=258 data-nosnippet>258</a>///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
-<a href=#259 id=259 data-nosnippet>259</a>///     .build().unwrap();
-<a href=#260 id=260 data-nosnippet>260</a>/// let ty = &amp;flat.function("send").unwrap().params[0].ty;
-<a href=#261 id=261 data-nosnippet>261</a>/// // The callback has no declaration for the whole Option.
-<a href=#262 id=262 data-nosnippet>262</a>/// let Shape::Option(inner) = shape::&lt;&amp;str&gt;(ty, |_| None)
-<a href=#263 id=263 data-nosnippet>263</a>///     .unwrap() else { panic!("expected Option") };
-<a href=#264 id=264 data-nosnippet>264</a>/// // The callback finds Payload inside the borrow; Declared retains &amp;Payload.
-<a href=#265 id=265 data-nosnippet>265</a>/// assert!(matches!(
-<a href=#266 id=266 data-nosnippet>266</a>///     shape(inner, |candidate: &amp;TypeRef| match candidate.kind() {
-<a href=#267 id=267 data-nosnippet>267</a>///         TypeKind::Named { id, .. } if id.name == "Payload" =&gt; Some("handle"),
-<a href=#268 id=268 data-nosnippet>268</a>///         _ =&gt; None,
-<a href=#269 id=269 data-nosnippet>269</a>///     }).unwrap(),
-<a href=#270 id=270 data-nosnippet>270</a>///     Shape::Declared { ty, declaration: "handle" }
-<a href=#271 id=271 data-nosnippet>271</a>///         if std::ptr::eq(ty, inner) &amp;&amp; Access::of(ty) == Access::Shared
-<a href=#272 id=272 data-nosnippet>272</a>/// ));
-<a href=#273 id=273 data-nosnippet>273</a>/// // Missing adapter configuration is a shape the adapter must handle.
-<a href=#274 id=274 data-nosnippet>274</a>/// assert!(matches!(
-<a href=#275 id=275 data-nosnippet>275</a>///     shape::&lt;()&gt;(inner, |_| None).unwrap(),
-<a href=#276 id=276 data-nosnippet>276</a>///     Shape::Undeclared("Payload")
-<a href=#277 id=277 data-nosnippet>277</a>/// ));
+<a href=#159 id=159 data-nosnippet>159</a>/// `convert!(Millis).input(fun!(millis_from_raw)).output(fun!(millis_to_raw))`
+<a href=#160 id=160 data-nosnippet>160</a>/// says that `Millis` never crosses as itself: it crosses as `u64` — the
+<a href=#161 id=161 data-nosnippet>161</a>/// **representation** — and these two functions convert.
+<a href=#162 id=162 data-nosnippet>162</a>///
+<a href=#163 id=163 data-nosnippet>163</a>/// Each direction is a function (a flat item, or a binding-local path with a
+<a href=#164 id=164 data-nosnippet>164</a>/// stated signature) or a standard trait impl (`From`, `Into`, `TryFrom`,
+<a href=#165 id=165 data-nosnippet>165</a>/// `TryInto`). A function returning `Result` makes its direction fallible;
+<a href=#166 id=166 data-nosnippet>166</a>/// the error is reported through its `Display`.
+<a href=#167 id=167 data-nosnippet>167</a>///
+<a href=#168 id=168 data-nosnippet>168</a>/// [`Conversion::resolve`] checks the declaration against the model; the
+<a href=#169 id=169 data-nosnippet>169</a>/// adapter does it once, while planning, and keeps the
+<a href=#170 id=170 data-nosnippet>170</a>/// [`ResolvedConversion`] as its declaration for the source type. When it
+<a href=#171 id=171 data-nosnippet>171</a>/// builds a value of that type, it passes the conversion to [`Input::via`]
+<a href=#172 id=172 data-nosnippet>172</a>/// or [`Output::via`], the same way [`Input::record`] takes the flat model's
+<a href=#173 id=173 data-nosnippet>173</a>/// struct. The adapter builds the representation's [`Input`] or [`Output`]
+<a href=#174 id=174 data-nosnippet>174</a>/// as for any other type, inside the closure it passes; the result's
+<a href=#175 id=175 data-nosnippet>175</a>/// [`Form`] is [`FormKind::Via`] over the representation's form.
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">pub mod </span>convert {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::convert::{Conversion, FnRef, ResolvedConversion, Via};
+<a href=#178 id=178 data-nosnippet>178</a>}
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a><span class="doccomment">/// The generated Rust file.
+<a href=#181 id=181 data-nosnippet>181</a>///
+<a href=#182 id=182 data-nosnippet>182</a>/// [`RustFile`] preserves item order, adds source feature guards with
+<a href=#183 id=183 data-nosnippet>183</a>/// [`RustFile::guards`], formats parseable Rust with [`RustFile::render`],
+<a href=#184 id=184 data-nosnippet>184</a>/// and writes through [`RustFile::write`]. The write operation compares the
+<a href=#185 id=185 data-nosnippet>185</a>/// current bytes before replacing a file so a build script does not trigger
+<a href=#186 id=186 data-nosnippet>186</a>/// another Cargo build merely by regenerating identical output.
+<a href=#187 id=187 data-nosnippet>187</a>///
+<a href=#188 id=188 data-nosnippet>188</a>/// ```
+<a href=#189 id=189 data-nosnippet>189</a>/// use prebindgen_tools::RustFile;
+<a href=#190 id=190 data-nosnippet>190</a>/// use quote::quote;
+<a href=#191 id=191 data-nosnippet>191</a>///
+<a href=#192 id=192 data-nosnippet>192</a>/// let mut file = RustFile::new();
+<a href=#193 id=193 data-nosnippet>193</a>/// file.push(quote!(pub fn answer() -&gt; u32 { 42 }));
+<a href=#194 id=194 data-nosnippet>194</a>/// assert!(file.render().contains("pub fn answer() -&gt; u32"));
+<a href=#195 id=195 data-nosnippet>195</a>/// // In build.rs: file.write("generated.rs")?;
+<a href=#196 id=196 data-nosnippet>196</a>/// ```
+<a href=#197 id=197 data-nosnippet>197</a></span><span class="kw">pub mod </span>file {
+<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::file::{resolve_out_path, write_if_changed, RustFile};
+<a href=#199 id=199 data-nosnippet>199</a>}
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a><span class="doccomment">/// Identifier and case helpers shared by every adapter.
+<a href=#202 id=202 data-nosnippet>202</a></span><span class="kw">pub mod </span>names {
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::names::{bare, camel, ident, join, mangle, pascal, snake};
+<a href=#204 id=204 data-nosnippet>204</a>}
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a><span class="doccomment">/// Naming source items from generated Rust code.
+<a href=#207 id=207 data-nosnippet>207</a>///
+<a href=#208 id=208 data-nosnippet>208</a>/// The flat model identifies a source item by its flat name, such as
+<a href=#209 id=209 data-nosnippet>209</a>/// `Payload` or `make`. A binding's generated Rust usually lives in a
+<a href=#210 id=210 data-nosnippet>210</a>/// different crate, where those names are not automatically in scope.
+<a href=#211 id=211 data-nosnippet>211</a>/// [`Qualifier`] uses each item's source location to spell a path such as
+<a href=#212 id=212 data-nosnippet>212</a>/// `source_crate::Payload` or `source_crate::make`. Use it when a wrapper
+<a href=#213 id=213 data-nosnippet>213</a>/// calls a source function or a conversion names a source type.
+<a href=#214 id=214 data-nosnippet>214</a>///
+<a href=#215 id=215 data-nosnippet>215</a>/// ## Choosing a path
+<a href=#216 id=216 data-nosnippet>216</a>///
+<a href=#217 id=217 data-nosnippet>217</a>/// [`Qualifier::new`] borrows the model. For each known item,
+<a href=#218 id=218 data-nosnippet>218</a>/// [`Qualifier::module_of`] reads the crate name recorded in its
+<a href=#219 id=219 data-nosnippet>219</a>/// [`SourceLocation`](prebindgen::SourceLocation), converting hyphens to
+<a href=#220 id=220 data-nosnippet>220</a>/// underscores for a Rust path. Items captured from different crates can
+<a href=#221 id=221 data-nosnippet>221</a>/// therefore receive different prefixes from the same qualifier.
+<a href=#222 id=222 data-nosnippet>222</a>///
+<a href=#223 id=223 data-nosnippet>223</a>/// [`Qualifier::with_default_module`] supplies a fallback for **known items
+<a href=#224 id=224 data-nosnippet>224</a>/// without a recorded crate name**, for example a model assembled directly
+<a href=#225 id=225 data-nosnippet>225</a>/// from parsed syntax in a test. A recorded crate name takes precedence.
+<a href=#226 id=226 data-nosnippet>226</a>/// A name absent from the model is left unchanged even when a fallback is
+<a href=#227 id=227 data-nosnippet>227</a>/// configured; a known item with neither a crate name nor a fallback also
+<a href=#228 id=228 data-nosnippet>228</a>/// keeps its bare name. The generated crate must be able to resolve the
+<a href=#229 id=229 data-nosnippet>229</a>/// emitted paths: qualification does not add dependencies or imports, or
+<a href=#230 id=230 data-nosnippet>230</a>/// discover Cargo dependency aliases.
+<a href=#231 id=231 data-nosnippet>231</a>///
+<a href=#232 id=232 data-nosnippet>232</a>/// ## Item paths and type expressions
+<a href=#233 id=233 data-nosnippet>233</a>///
+<a href=#234 id=234 data-nosnippet>234</a>/// * [`Qualifier::path`] qualifies one item name, such as the function the
+<a href=#235 id=235 data-nosnippet>235</a>///   adapter will call.
+<a href=#236 id=236 data-nosnippet>236</a>/// * [`Qualifier::ty`] walks a complete model type. For example,
+<a href=#237 id=237 data-nosnippet>237</a>///   `Option&lt;Vec&lt;Payload&gt;&gt;` becomes
+<a href=#238 id=238 data-nosnippet>238</a>///   `::core::option::Option&lt;::std::vec::Vec&lt;source_crate::Payload&gt;&gt;`.
+<a href=#239 id=239 data-nosnippet>239</a>///   It qualifies named types inside generic arguments and containers, and
+<a href=#240 id=240 data-nosnippet>240</a>///   named constants used as array lengths. Standard containers receive
+<a href=#241 id=241 data-nosnippet>241</a>///   absolute `::core` or `::std` paths; scalar names such as `u32` stay as is.
+<a href=#242 id=242 data-nosnippet>242</a>/// * [`Qualifier::ty_elided`] provides the same naming for positions such as
+<a href=#243 id=243 data-nosnippet>243</a>///   closure arguments that cannot refer to a source lifetime parameter.
+<a href=#244 id=244 data-nosnippet>244</a>///   Its method documentation lists which shapes it elides.
+<a href=#245 id=245 data-nosnippet>245</a>///
+<a href=#246 id=246 data-nosnippet>246</a>/// These methods return Rust tokens for the source value's type or path.
+<a href=#247 id=247 data-nosnippet>247</a>/// The adapter still chooses the wire representation: qualifying
+<a href=#248 id=248 data-nosnippet>248</a>/// `Payload` does not turn it into a pointer, handle, or mirror struct.
+<a href=#249 id=249 data-nosnippet>249</a>///
+<a href=#250 id=250 data-nosnippet>250</a>/// ```
+<a href=#251 id=251 data-nosnippet>251</a>/// use prebindgen::SourceLocation;
+<a href=#252 id=252 data-nosnippet>252</a>/// use prebindgen_flat::Flat;
+<a href=#253 id=253 data-nosnippet>253</a>/// use prebindgen_tools::Qualifier;
+<a href=#254 id=254 data-nosnippet>254</a>/// use quote::quote;
+<a href=#255 id=255 data-nosnippet>255</a>///
+<a href=#256 id=256 data-nosnippet>256</a>/// let source = syn::parse_file(
+<a href=#257 id=257 data-nosnippet>257</a>///     "pub struct Payload; pub fn make() -&gt; Option&lt;Vec&lt;Payload&gt;&gt; { None }",
+<a href=#258 id=258 data-nosnippet>258</a>/// ).unwrap();
+<a href=#259 id=259 data-nosnippet>259</a>/// let location = SourceLocation {
+<a href=#260 id=260 data-nosnippet>260</a>///     crate_name: Some("source-crate".into()), ..Default::default()
+<a href=#261 id=261 data-nosnippet>261</a>/// };
+<a href=#262 id=262 data-nosnippet>262</a>/// let flat = Flat::builder()
+<a href=#263 id=263 data-nosnippet>263</a>///     .items(source.items.into_iter().map(|item| (item, location.clone())))
+<a href=#264 id=264 data-nosnippet>264</a>///     .build().unwrap();
+<a href=#265 id=265 data-nosnippet>265</a>/// let q = Qualifier::new(&amp;flat);
+<a href=#266 id=266 data-nosnippet>266</a>/// let function = flat.function("make").unwrap();
+<a href=#267 id=267 data-nosnippet>267</a>/// assert_eq!(q.path(&amp;function.name).to_string(), quote!(source_crate::make).to_string());
+<a href=#268 id=268 data-nosnippet>268</a>/// let expected: syn::Type = syn::parse_quote!(
+<a href=#269 id=269 data-nosnippet>269</a>///     ::core::option::Option&lt;::std::vec::Vec&lt;source_crate::Payload&gt;&gt;
+<a href=#270 id=270 data-nosnippet>270</a>/// );
+<a href=#271 id=271 data-nosnippet>271</a>/// assert_eq!(syn::parse2::&lt;syn::Type&gt;(q.ty(&amp;function.ret)).unwrap(), expected);
+<a href=#272 id=272 data-nosnippet>272</a>///
+<a href=#273 id=273 data-nosnippet>273</a>/// // The fallback does not override the recorded source crate.
+<a href=#274 id=274 data-nosnippet>274</a>/// let q = q.with_default_module(Some(syn::parse_quote!(crate::source)));
+<a href=#275 id=275 data-nosnippet>275</a>/// assert_eq!(q.path(&amp;function.name).to_string(), quote!(source_crate::make).to_string());
+<a href=#276 id=276 data-nosnippet>276</a>/// // A binding-local helper absent from the model stays unqualified.
+<a href=#277 id=277 data-nosnippet>277</a>/// assert_eq!(q.path(&amp;syn::parse_quote!(local_helper)).to_string(), "local_helper");
 <a href=#278 id=278 data-nosnippet>278</a>/// ```
-<a href=#279 id=279 data-nosnippet>279</a></span><span class="kw">pub mod </span>shape {
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
+<a href=#279 id=279 data-nosnippet>279</a></span><span class="kw">pub mod </span>qualify {
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::qualify::Qualifier;
 <a href=#281 id=281 data-nosnippet>281</a>}
 <a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a><span class="doccomment">/// Wires, the forms values take on them, and the conversions between.
-<a href=#284 id=284 data-nosnippet>284</a>///
-<a href=#285 id=285 data-nosnippet>285</a>/// ```
-<a href=#286 id=286 data-nosnippet>286</a>/// use prebindgen::SourceLocation;
-<a href=#287 id=287 data-nosnippet>287</a>/// use prebindgen_flat::Flat;
-<a href=#288 id=288 data-nosnippet>288</a>/// use prebindgen_tools::{Input, Place, Seg, Wire, WireType};
-<a href=#289 id=289 data-nosnippet>289</a>/// use quote::quote;
-<a href=#290 id=290 data-nosnippet>290</a>///
-<a href=#291 id=291 data-nosnippet>291</a>/// // The adapter's closed set of wire types.
-<a href=#292 id=292 data-nosnippet>292</a>/// #[derive(Clone, Debug)]
-<a href=#293 id=293 data-nosnippet>293</a>/// enum W { Long { unsigned: bool } }
-<a href=#294 id=294 data-nosnippet>294</a>/// impl WireType for W {
-<a href=#295 id=295 data-nosnippet>295</a>///     fn rust(&amp;self) -&gt; proc_macro2::TokenStream { quote!(i64) }
-<a href=#296 id=296 data-nosnippet>296</a>///     fn placeholder(&amp;self) -&gt; proc_macro2::TokenStream { quote!(0) }
-<a href=#297 id=297 data-nosnippet>297</a>/// }
-<a href=#298 id=298 data-nosnippet>298</a>///
-<a href=#299 id=299 data-nosnippet>299</a>/// let source = syn::parse_file("pub fn send(n: u64) {}").unwrap();
-<a href=#300 id=300 data-nosnippet>300</a>/// let flat = Flat::builder()
-<a href=#301 id=301 data-nosnippet>301</a>///     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
-<a href=#302 id=302 data-nosnippet>302</a>///     .build().unwrap();
-<a href=#303 id=303 data-nosnippet>303</a>/// let n = &amp;flat.function("send").unwrap().params[0];
-<a href=#304 id=304 data-nosnippet>304</a>/// let place = Place::new("send").at(Seg::Param("n".into()));
-<a href=#305 id=305 data-nosnippet>305</a>/// let w = place.ident("");
-<a href=#306 id=306 data-nosnippet>306</a>/// let input = Input::wire(&amp;n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
-<a href=#307 id=307 data-nosnippet>307</a>///     quote!(#w as u64));
-<a href=#308 id=308 data-nosnippet>308</a>/// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");
-<a href=#309 id=309 data-nosnippet>309</a>/// ```
-<a href=#310 id=310 data-nosnippet>310</a></span><span class="kw">pub mod </span>wire {
-<a href=#311 id=311 data-nosnippet>311</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::wire::{result_expr, Form, FormKind, Input, Output, Wire, WireType};
-<a href=#312 id=312 data-nosnippet>312</a>}
-<a href=#313 id=313 data-nosnippet>313</a>
-<a href=#314 id=314 data-nosnippet>314</a><span class="kw">pub use crate</span>::{
-<a href=#315 id=315 data-nosnippet>315</a>    api::check_supported,
-<a href=#316 id=316 data-nosnippet>316</a>    convert::{Conversion, FnRef, ResolvedConversion, Via},
-<a href=#317 id=317 data-nosnippet>317</a>    file::RustFile,
-<a href=#318 id=318 data-nosnippet>318</a>    place::{Overrides, Place, Seg},
-<a href=#319 id=319 data-nosnippet>319</a>    qualify::Qualifier,
-<a href=#320 id=320 data-nosnippet>320</a>    record::Record,
-<a href=#321 id=321 data-nosnippet>321</a>    shape::{shape, Access, SequenceKind, Shape, TextKind},
-<a href=#322 id=322 data-nosnippet>322</a>    wire::{Form, FormKind, Input, Output, Wire, WireType},
-<a href=#323 id=323 data-nosnippet>323</a>};
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a><span class="doccomment">/// `fun!(name)` / `fun!(crate::local)` — a function reference.
-<a href=#326 id=326 data-nosnippet>326</a></span><span class="attr">#[macro_export]
-<a href=#327 id=327 data-nosnippet>327</a></span><span class="macro">macro_rules!</span> fun {
-<a href=#328 id=328 data-nosnippet>328</a>    ($(<span class="macro-nonterminal">$path</span>:tt)+) =&gt; {
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="macro-nonterminal">$crate::convert::FnRef::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$path</span>)+))
-<a href=#330 id=330 data-nosnippet>330</a>    };
-<a href=#331 id=331 data-nosnippet>331</a>}
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a><span class="doccomment">/// `convert!(Type)` — start a conversion declaration.
-<a href=#334 id=334 data-nosnippet>334</a></span><span class="attr">#[macro_export]
-<a href=#335 id=335 data-nosnippet>335</a></span><span class="macro">macro_rules!</span> convert {
-<a href=#336 id=336 data-nosnippet>336</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; {
-<a href=#337 id=337 data-nosnippet>337</a>        <span class="macro-nonterminal">$crate::convert::Conversion::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+))
-<a href=#338 id=338 data-nosnippet>338</a>    };
-<a href=#339 id=339 data-nosnippet>339</a>}
-<a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a><span class="doccomment">/// `from!(Repr)` — the input stage is `From&lt;Repr&gt;` on the source type.
-<a href=#342 id=342 data-nosnippet>342</a></span><span class="attr">#[macro_export]
-<a href=#343 id=343 data-nosnippet>343</a></span><span class="macro">macro_rules!</span> from {
-<a href=#344 id=344 data-nosnippet>344</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::From</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#345 id=345 data-nosnippet>345</a>}
-<a href=#346 id=346 data-nosnippet>346</a>
-<a href=#347 id=347 data-nosnippet>347</a><span class="doccomment">/// `into!(Repr)` — the output stage is `Into&lt;Repr&gt;` on the source type.
-<a href=#348 id=348 data-nosnippet>348</a></span><span class="attr">#[macro_export]
-<a href=#349 id=349 data-nosnippet>349</a></span><span class="macro">macro_rules!</span> into {
-<a href=#350 id=350 data-nosnippet>350</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::Into</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#351 id=351 data-nosnippet>351</a>}
-<a href=#352 id=352 data-nosnippet>352</a>
-<a href=#353 id=353 data-nosnippet>353</a><span class="doccomment">/// `try_from!(Repr)` — the input stage is `TryFrom&lt;Repr&gt;` on the source type.
-<a href=#354 id=354 data-nosnippet>354</a></span><span class="attr">#[macro_export]
-<a href=#355 id=355 data-nosnippet>355</a></span><span class="macro">macro_rules!</span> try_from {
-<a href=#356 id=356 data-nosnippet>356</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryFrom</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#357 id=357 data-nosnippet>357</a>}
-<a href=#358 id=358 data-nosnippet>358</a>
-<a href=#359 id=359 data-nosnippet>359</a><span class="doccomment">/// `try_into!(Repr)` — the output stage is `TryInto&lt;Repr&gt;` on the source type.
-<a href=#360 id=360 data-nosnippet>360</a></span><span class="attr">#[macro_export]
-<a href=#361 id=361 data-nosnippet>361</a></span><span class="macro">macro_rules!</span> try_into {
-<a href=#362 id=362 data-nosnippet>362</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryInto</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
-<a href=#363 id=363 data-nosnippet>363</a>}
-<a href=#364 id=364 data-nosnippet>364</a>
-<a href=#365 id=365 data-nosnippet>365</a><span class="doccomment">/// `sig!((a: A, b: B) -&gt; R)` — a signature, for a binding-local function.
-<a href=#366 id=366 data-nosnippet>366</a></span><span class="attr">#[macro_export]
-<a href=#367 id=367 data-nosnippet>367</a></span><span class="macro">macro_rules!</span> sig {
-<a href=#368 id=368 data-nosnippet>368</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>:tt)+) =&gt; {
-<a href=#369 id=369 data-nosnippet>369</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>)+)
-<a href=#370 id=370 data-nosnippet>370</a>    };
-<a href=#371 id=371 data-nosnippet>371</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>)) =&gt; {
-<a href=#372 id=372 data-nosnippet>372</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>))
-<a href=#373 id=373 data-nosnippet>373</a>    };
-<a href=#374 id=374 data-nosnippet>374</a>}
-<a href=#375 id=375 data-nosnippet>375</a>
-<a href=#376 id=376 data-nosnippet>376</a><span class="doccomment">/// `ty!(T)` — a `syn::Type`.
-<a href=#377 id=377 data-nosnippet>377</a></span><span class="attr">#[macro_export]
-<a href=#378 id=378 data-nosnippet>378</a></span><span class="macro">macro_rules!</span> ty {
-<a href=#379 id=379 data-nosnippet>379</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__t: <span class="macro-nonterminal">$crate::__syn::Type </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __t } };
-<a href=#380 id=380 data-nosnippet>380</a>}
-<a href=#381 id=381 data-nosnippet>381</a>
-<a href=#382 id=382 data-nosnippet>382</a><span class="doccomment">/// `path!(a::b)` — a `syn::Path`.
-<a href=#383 id=383 data-nosnippet>383</a></span><span class="attr">#[macro_export]
-<a href=#384 id=384 data-nosnippet>384</a></span><span class="macro">macro_rules!</span> path {
-<a href=#385 id=385 data-nosnippet>385</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__p: <span class="macro-nonterminal">$crate::__syn::Path </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __p } };
-<a href=#386 id=386 data-nosnippet>386</a>}
-<a href=#387 id=387 data-nosnippet>387</a>
-<a href=#388 id=388 data-nosnippet>388</a><span class="doccomment">/// `expr!(e)` — a `syn::Expr`.
-<a href=#389 id=389 data-nosnippet>389</a></span><span class="attr">#[macro_export]
-<a href=#390 id=390 data-nosnippet>390</a></span><span class="macro">macro_rules!</span> expr {
-<a href=#391 id=391 data-nosnippet>391</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__e: <span class="macro-nonterminal">$crate::__syn::Expr </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __e } };
-<a href=#392 id=392 data-nosnippet>392</a>}
-<a href=#393 id=393 data-nosnippet>393</a>
-<a href=#394 id=394 data-nosnippet>394</a><span class="doccomment">/// `ident!(name)` — a `syn::Ident`.
-<a href=#395 id=395 data-nosnippet>395</a></span><span class="attr">#[macro_export]
-<a href=#396 id=396 data-nosnippet>396</a></span><span class="macro">macro_rules!</span> ident {
-<a href=#397 id=397 data-nosnippet>397</a>    (<span class="macro-nonterminal">$i</span>:ident) =&gt; {{
-<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">let </span>__i: <span class="macro-nonterminal">$crate::__syn::Ident </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="macro-nonterminal">$i</span>);
-<a href=#399 id=399 data-nosnippet>399</a>        __i
-<a href=#400 id=400 data-nosnippet>400</a>    }};
-<a href=#401 id=401 data-nosnippet>401</a>}
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a><span class="attr">#[cfg(test)]
-<a href=#404 id=404 data-nosnippet>404</a></span><span class="kw">mod </span>tests;
+<a href=#283 id=283 data-nosnippet>283</a><span class="doccomment">/// Records — structs and the alternatives of a sum — taken apart into their
+<a href=#284 id=284 data-nosnippet>284</a>/// fields and put back together, with the delimiters the source wrote.
+<a href=#285 id=285 data-nosnippet>285</a>/// [`Input::record`] and [`Output::record`] use it; an adapter writing its own
+<a href=#286 id=286 data-nosnippet>286</a>/// mirror does too.
+<a href=#287 id=287 data-nosnippet>287</a></span><span class="kw">pub mod </span>record {
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::record::Record;
+<a href=#289 id=289 data-nosnippet>289</a>}
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a><span class="doccomment">/// Places in an element, and the decisions made at them.
+<a href=#292 id=292 data-nosnippet>292</a></span><span class="kw">pub mod </span>place {
+<a href=#293 id=293 data-nosnippet>293</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::place::{Overrides, Place, Seg};
+<a href=#294 id=294 data-nosnippet>294</a>}
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a><span class="doccomment">/// One level of a type's structure, with any adapter declaration for that type.
+<a href=#297 id=297 data-nosnippet>297</a>///
+<a href=#298 id=298 data-nosnippet>298</a>/// An adapter builds a type's [`Input`] or [`Output`] by recursion: it looks
+<a href=#299 id=299 data-nosnippet>299</a>/// at the outermost layer,
+<a href=#300 id=300 data-nosnippet>300</a>/// decides what that layer becomes on its boundary, and recurses into what
+<a href=#301 id=301 data-nosnippet>301</a>/// the layer holds. [`shape()`] answers the first question the same way for
+<a href=#302 id=302 data-nosnippet>302</a>/// every adapter. It first asks the adapter whether the complete type has a
+<a href=#303 id=303 data-nosnippet>303</a>/// declaration, then returns a built-in shape when it does not. Each adapter
+<a href=#304 id=304 data-nosnippet>304</a>/// recurses with one `match` over [`Shape`].
+<a href=#305 id=305 data-nosnippet>305</a>///
+<a href=#306 id=306 data-nosnippet>306</a>/// For example, `shape(&amp;payload_type, shape_declared)` returns
+<a href=#307 id=307 data-nosnippet>307</a>/// [`Shape::Declared`] when the callback returns a declaration for `Payload`.
+<a href=#308 id=308 data-nosnippet>308</a>/// For `Option&lt;Payload&gt;`, it returns [`Shape::Option`] when the callback has
+<a href=#309 id=309 data-nosnippet>309</a>/// no declaration for the whole option; the adapter then calls [`shape()`]
+<a href=#310 id=310 data-nosnippet>310</a>/// on its inner type.
+<a href=#311 id=311 data-nosnippet>311</a>///
+<a href=#312 id=312 data-nosnippet>312</a>/// A shape describes source structure; the adapter uses it to build an
+<a href=#313 id=313 data-nosnippet>313</a>/// [`Input`] or [`Output`] for its chosen wire representation. An adapter
+<a href=#314 id=314 data-nosnippet>314</a>/// can declare a type such as `Vec&lt;u8&gt;` as a whole, while an undeclared
+<a href=#315 id=315 data-nosnippet>315</a>/// container exposes child types for further calls.
+<a href=#316 id=316 data-nosnippet>316</a>/// [`Access`] describes by-value use or borrowing; [`SequenceKind`] and
+<a href=#317 id=317 data-nosnippet>317</a>/// [`TextKind`] identify the source container independently of access.
+<a href=#318 id=318 data-nosnippet>318</a>/// `Cow` remains an explicit wrapper around its inner type.
+<a href=#319 id=319 data-nosnippet>319</a>///
+<a href=#320 id=320 data-nosnippet>320</a>/// [`shape()`] documents declaration precedence, the handling of common
+<a href=#321 id=321 data-nosnippet>321</a>/// borrows, and which unsupported forms return errors.
+<a href=#322 id=322 data-nosnippet>322</a>/// A successful call only classifies the current layer: an adapter must
+<a href=#323 id=323 data-nosnippet>323</a>/// still handle undeclared names and errors encountered in its children.
+<a href=#324 id=324 data-nosnippet>324</a>///
+<a href=#325 id=325 data-nosnippet>325</a>/// ```
+<a href=#326 id=326 data-nosnippet>326</a>/// use prebindgen::SourceLocation;
+<a href=#327 id=327 data-nosnippet>327</a>/// use prebindgen_flat::{Flat, flat::{TypeKind, TypeRef}};
+<a href=#328 id=328 data-nosnippet>328</a>/// use prebindgen_tools::{shape, Access, Shape};
+<a href=#329 id=329 data-nosnippet>329</a>/// let source = syn::parse_file("pub struct Payload; pub fn send(value: Option&lt;&amp;Payload&gt;) {}").unwrap();
+<a href=#330 id=330 data-nosnippet>330</a>/// let flat = Flat::builder()
+<a href=#331 id=331 data-nosnippet>331</a>///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
+<a href=#332 id=332 data-nosnippet>332</a>///     .build().unwrap();
+<a href=#333 id=333 data-nosnippet>333</a>/// let ty = &amp;flat.function("send").unwrap().params[0].ty;
+<a href=#334 id=334 data-nosnippet>334</a>/// // The callback has no declaration for the whole Option.
+<a href=#335 id=335 data-nosnippet>335</a>/// let Shape::Option(inner) = shape::&lt;&amp;str&gt;(ty, |_| None)
+<a href=#336 id=336 data-nosnippet>336</a>///     .unwrap() else { panic!("expected Option") };
+<a href=#337 id=337 data-nosnippet>337</a>/// // The callback finds Payload inside the borrow; Declared retains &amp;Payload.
+<a href=#338 id=338 data-nosnippet>338</a>/// assert!(matches!(
+<a href=#339 id=339 data-nosnippet>339</a>///     shape(inner, |candidate: &amp;TypeRef| match candidate.kind() {
+<a href=#340 id=340 data-nosnippet>340</a>///         TypeKind::Named { id, .. } if id.name == "Payload" =&gt; Some("handle"),
+<a href=#341 id=341 data-nosnippet>341</a>///         _ =&gt; None,
+<a href=#342 id=342 data-nosnippet>342</a>///     }).unwrap(),
+<a href=#343 id=343 data-nosnippet>343</a>///     Shape::Declared { ty, declaration: "handle" }
+<a href=#344 id=344 data-nosnippet>344</a>///         if std::ptr::eq(ty, inner) &amp;&amp; Access::of(ty) == Access::Shared
+<a href=#345 id=345 data-nosnippet>345</a>/// ));
+<a href=#346 id=346 data-nosnippet>346</a>/// // Missing adapter configuration is a shape the adapter must handle.
+<a href=#347 id=347 data-nosnippet>347</a>/// assert!(matches!(
+<a href=#348 id=348 data-nosnippet>348</a>///     shape::&lt;()&gt;(inner, |_| None).unwrap(),
+<a href=#349 id=349 data-nosnippet>349</a>///     Shape::Undeclared("Payload")
+<a href=#350 id=350 data-nosnippet>350</a>/// ));
+<a href=#351 id=351 data-nosnippet>351</a>/// ```
+<a href=#352 id=352 data-nosnippet>352</a></span><span class="kw">pub mod </span>shape {
+<a href=#353 id=353 data-nosnippet>353</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
+<a href=#354 id=354 data-nosnippet>354</a>}
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a><span class="doccomment">/// Wires, the forms values take on them, and the conversions between.
+<a href=#357 id=357 data-nosnippet>357</a>///
+<a href=#358 id=358 data-nosnippet>358</a>/// ```
+<a href=#359 id=359 data-nosnippet>359</a>/// use prebindgen::SourceLocation;
+<a href=#360 id=360 data-nosnippet>360</a>/// use prebindgen_flat::Flat;
+<a href=#361 id=361 data-nosnippet>361</a>/// use prebindgen_tools::{Input, Place, Seg, Wire, WireType};
+<a href=#362 id=362 data-nosnippet>362</a>/// use quote::quote;
+<a href=#363 id=363 data-nosnippet>363</a>///
+<a href=#364 id=364 data-nosnippet>364</a>/// // The adapter's closed set of wire types.
+<a href=#365 id=365 data-nosnippet>365</a>/// #[derive(Clone, Debug)]
+<a href=#366 id=366 data-nosnippet>366</a>/// enum W { Long { unsigned: bool } }
+<a href=#367 id=367 data-nosnippet>367</a>/// impl WireType for W {
+<a href=#368 id=368 data-nosnippet>368</a>///     fn rust(&amp;self) -&gt; proc_macro2::TokenStream { quote!(i64) }
+<a href=#369 id=369 data-nosnippet>369</a>///     fn placeholder(&amp;self) -&gt; proc_macro2::TokenStream { quote!(0) }
+<a href=#370 id=370 data-nosnippet>370</a>/// }
+<a href=#371 id=371 data-nosnippet>371</a>///
+<a href=#372 id=372 data-nosnippet>372</a>/// let source = syn::parse_file("pub fn send(n: u64) {}").unwrap();
+<a href=#373 id=373 data-nosnippet>373</a>/// let flat = Flat::builder()
+<a href=#374 id=374 data-nosnippet>374</a>///     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+<a href=#375 id=375 data-nosnippet>375</a>///     .build().unwrap();
+<a href=#376 id=376 data-nosnippet>376</a>/// let n = &amp;flat.function("send").unwrap().params[0];
+<a href=#377 id=377 data-nosnippet>377</a>/// let place = Place::new("send").at(Seg::Param("n".into()));
+<a href=#378 id=378 data-nosnippet>378</a>/// let w = place.ident("");
+<a href=#379 id=379 data-nosnippet>379</a>/// let input = Input::wire(&amp;n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
+<a href=#380 id=380 data-nosnippet>380</a>///     quote!(#w as u64));
+<a href=#381 id=381 data-nosnippet>381</a>/// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");
+<a href=#382 id=382 data-nosnippet>382</a>/// ```
+<a href=#383 id=383 data-nosnippet>383</a></span><span class="kw">pub mod </span>wire {
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">pub use </span><span class="kw">crate</span>::api::wire::{result_expr, Form, FormKind, Input, Output, Wire, WireType};
+<a href=#385 id=385 data-nosnippet>385</a>}
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a><span class="kw">pub use crate</span>::{
+<a href=#388 id=388 data-nosnippet>388</a>    api::check_supported,
+<a href=#389 id=389 data-nosnippet>389</a>    convert::{Conversion, FnRef, ResolvedConversion, Via},
+<a href=#390 id=390 data-nosnippet>390</a>    file::RustFile,
+<a href=#391 id=391 data-nosnippet>391</a>    place::{Overrides, Place, Seg},
+<a href=#392 id=392 data-nosnippet>392</a>    qualify::Qualifier,
+<a href=#393 id=393 data-nosnippet>393</a>    record::Record,
+<a href=#394 id=394 data-nosnippet>394</a>    shape::{shape, Access, SequenceKind, Shape, TextKind},
+<a href=#395 id=395 data-nosnippet>395</a>    wire::{Form, FormKind, Input, Output, Wire, WireType},
+<a href=#396 id=396 data-nosnippet>396</a>};
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a><span class="doccomment">/// `fun!(name)` / `fun!(crate::local)` — a function reference.
+<a href=#399 id=399 data-nosnippet>399</a></span><span class="attr">#[macro_export]
+<a href=#400 id=400 data-nosnippet>400</a></span><span class="macro">macro_rules!</span> fun {
+<a href=#401 id=401 data-nosnippet>401</a>    ($(<span class="macro-nonterminal">$path</span>:tt)+) =&gt; {
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="macro-nonterminal">$crate::convert::FnRef::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$path</span>)+))
+<a href=#403 id=403 data-nosnippet>403</a>    };
+<a href=#404 id=404 data-nosnippet>404</a>}
+<a href=#405 id=405 data-nosnippet>405</a>
+<a href=#406 id=406 data-nosnippet>406</a><span class="doccomment">/// `convert!(Type)` — start a conversion declaration.
+<a href=#407 id=407 data-nosnippet>407</a></span><span class="attr">#[macro_export]
+<a href=#408 id=408 data-nosnippet>408</a></span><span class="macro">macro_rules!</span> convert {
+<a href=#409 id=409 data-nosnippet>409</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; {
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="macro-nonterminal">$crate::convert::Conversion::new</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+))
+<a href=#411 id=411 data-nosnippet>411</a>    };
+<a href=#412 id=412 data-nosnippet>412</a>}
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a><span class="doccomment">/// `from!(Repr)` — the input stage is `From&lt;Repr&gt;` on the source type.
+<a href=#415 id=415 data-nosnippet>415</a></span><span class="attr">#[macro_export]
+<a href=#416 id=416 data-nosnippet>416</a></span><span class="macro">macro_rules!</span> from {
+<a href=#417 id=417 data-nosnippet>417</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::From</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#418 id=418 data-nosnippet>418</a>}
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a><span class="doccomment">/// `into!(Repr)` — the output stage is `Into&lt;Repr&gt;` on the source type.
+<a href=#421 id=421 data-nosnippet>421</a></span><span class="attr">#[macro_export]
+<a href=#422 id=422 data-nosnippet>422</a></span><span class="macro">macro_rules!</span> into {
+<a href=#423 id=423 data-nosnippet>423</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::Into</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#424 id=424 data-nosnippet>424</a>}
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a><span class="doccomment">/// `try_from!(Repr)` — the input stage is `TryFrom&lt;Repr&gt;` on the source type.
+<a href=#427 id=427 data-nosnippet>427</a></span><span class="attr">#[macro_export]
+<a href=#428 id=428 data-nosnippet>428</a></span><span class="macro">macro_rules!</span> try_from {
+<a href=#429 id=429 data-nosnippet>429</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryFrom</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#430 id=430 data-nosnippet>430</a>}
+<a href=#431 id=431 data-nosnippet>431</a>
+<a href=#432 id=432 data-nosnippet>432</a><span class="doccomment">/// `try_into!(Repr)` — the output stage is `TryInto&lt;Repr&gt;` on the source type.
+<a href=#433 id=433 data-nosnippet>433</a></span><span class="attr">#[macro_export]
+<a href=#434 id=434 data-nosnippet>434</a></span><span class="macro">macro_rules!</span> try_into {
+<a href=#435 id=435 data-nosnippet>435</a>    ($(<span class="macro-nonterminal">$ty</span>:tt)+) =&gt; { <span class="macro-nonterminal">$crate::convert::Via::TryInto</span>(<span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$ty</span>)+)) };
+<a href=#436 id=436 data-nosnippet>436</a>}
+<a href=#437 id=437 data-nosnippet>437</a>
+<a href=#438 id=438 data-nosnippet>438</a><span class="doccomment">/// `sig!((a: A, b: B) -&gt; R)` — a signature, for a binding-local function.
+<a href=#439 id=439 data-nosnippet>439</a></span><span class="attr">#[macro_export]
+<a href=#440 id=440 data-nosnippet>440</a></span><span class="macro">macro_rules!</span> sig {
+<a href=#441 id=441 data-nosnippet>441</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>:tt)+) =&gt; {
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>) -&gt; $(<span class="macro-nonterminal">$ret</span>)+)
+<a href=#443 id=443 data-nosnippet>443</a>    };
+<a href=#444 id=444 data-nosnippet>444</a>    (($(<span class="macro-nonterminal">$args</span>:tt)<span class="kw-2">*</span>)) =&gt; {
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="kw">fn </span>__sig($(<span class="macro-nonterminal">$args</span>)<span class="kw-2">*</span>))
+<a href=#446 id=446 data-nosnippet>446</a>    };
+<a href=#447 id=447 data-nosnippet>447</a>}
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a><span class="doccomment">/// `ty!(T)` — a `syn::Type`.
+<a href=#450 id=450 data-nosnippet>450</a></span><span class="attr">#[macro_export]
+<a href=#451 id=451 data-nosnippet>451</a></span><span class="macro">macro_rules!</span> ty {
+<a href=#452 id=452 data-nosnippet>452</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__t: <span class="macro-nonterminal">$crate::__syn::Type </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __t } };
+<a href=#453 id=453 data-nosnippet>453</a>}
+<a href=#454 id=454 data-nosnippet>454</a>
+<a href=#455 id=455 data-nosnippet>455</a><span class="doccomment">/// `path!(a::b)` — a `syn::Path`.
+<a href=#456 id=456 data-nosnippet>456</a></span><span class="attr">#[macro_export]
+<a href=#457 id=457 data-nosnippet>457</a></span><span class="macro">macro_rules!</span> path {
+<a href=#458 id=458 data-nosnippet>458</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__p: <span class="macro-nonterminal">$crate::__syn::Path </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __p } };
+<a href=#459 id=459 data-nosnippet>459</a>}
+<a href=#460 id=460 data-nosnippet>460</a>
+<a href=#461 id=461 data-nosnippet>461</a><span class="doccomment">/// `expr!(e)` — a `syn::Expr`.
+<a href=#462 id=462 data-nosnippet>462</a></span><span class="attr">#[macro_export]
+<a href=#463 id=463 data-nosnippet>463</a></span><span class="macro">macro_rules!</span> expr {
+<a href=#464 id=464 data-nosnippet>464</a>    ($(<span class="macro-nonterminal">$t</span>:tt)+) =&gt; { { <span class="kw">let </span>__e: <span class="macro-nonterminal">$crate::__syn::Expr </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!($(<span class="macro-nonterminal">$t</span>)+); __e } };
+<a href=#465 id=465 data-nosnippet>465</a>}
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a><span class="doccomment">/// `ident!(name)` — a `syn::Ident`.
+<a href=#468 id=468 data-nosnippet>468</a></span><span class="attr">#[macro_export]
+<a href=#469 id=469 data-nosnippet>469</a></span><span class="macro">macro_rules!</span> ident {
+<a href=#470 id=470 data-nosnippet>470</a>    (<span class="macro-nonterminal">$i</span>:ident) =&gt; {{
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>__i: <span class="macro-nonterminal">$crate::__syn::Ident </span>= <span class="macro-nonterminal">$crate::__syn::parse_quote</span>!(<span class="macro-nonterminal">$i</span>);
+<a href=#472 id=472 data-nosnippet>472</a>        __i
+<a href=#473 id=473 data-nosnippet>473</a>    }};
+<a href=#474 id=474 data-nosnippet>474</a>}
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a><span class="attr">#[cfg(test)]
+<a href=#477 id=477 data-nosnippet>477</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
