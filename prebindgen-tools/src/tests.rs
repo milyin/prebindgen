@@ -332,3 +332,93 @@ fn shape_keeps_cow_as_a_wrapper_and_string_declaration_precedence() {
         );
     }
 }
+
+#[test]
+fn qualifier_overrides_paths_without_changing_provenance() {
+    let mut items = Vec::new();
+    for (crate_name, source) in [
+        (
+            Some("source-crate"),
+            "pub struct Payload; pub const LEN: usize = 2; pub fn make() -> [Payload; LEN] { todo!() }",
+        ),
+        (Some("other"), "pub struct Other;"),
+        (None, "pub struct Local;"),
+    ] {
+        let location = SourceLocation {
+            crate_name: crate_name.map(str::to_owned),
+            ..Default::default()
+        };
+        items.extend(
+            syn::parse_file(source)
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| (item, location.clone())),
+        );
+    }
+    let flat = Flat::builder().items(items).build().unwrap();
+    let q = Qualifier::new(&flat)
+        .with_default_module(Some(syn::parse_quote!(fallback)))
+        .with_crate_path("source-crate", syn::parse_quote!(first))
+        .with_crate_path("source_crate", syn::parse_quote!(crate::renamed));
+    assert_eq!(norm(q.path(&format_ident!("make"))), "crate::renamed::make");
+    let array = &flat.function("make").unwrap().ret;
+    assert_eq!(
+        norm(q.ty(array)),
+        "[crate::renamed::Payload;crate::renamed::LEN]"
+    );
+    assert_eq!(norm(q.path(&format_ident!("Other"))), "other::Other");
+    assert_eq!(norm(q.path(&format_ident!("Local"))), "fallback::Local");
+    assert_eq!(norm(q.path(&format_ident!("unknown"))), "unknown");
+    assert_eq!(
+        flat.function("make")
+            .unwrap()
+            .origin
+            .location
+            .crate_name
+            .as_deref(),
+        Some("source-crate")
+    );
+    let q = q.with_default_module(None);
+    assert_eq!(norm(q.path(&format_ident!("Local"))), "Local");
+}
+
+#[test]
+fn qualifier_elides_lifetimes_in_every_nested_shape() {
+    let flat = model("pub struct Payload;");
+    let q = Qualifier::new(&flat);
+    for (input, expected) in [
+        (
+            "Option<Result<&'a Payload, &'b str>>",
+            quote!(::core::option::Option<::core::result::Result<&src_crate::Payload, &str>>),
+        ),
+        ("[&'a Payload; 2]", quote!([&src_crate::Payload; 2])),
+        (
+            "foreign::Wrapper<'a, &'b Payload>",
+            quote!(foreign::Wrapper<'_, &src_crate::Payload>),
+        ),
+        (
+            "Vec<Box<Cow<'a, [Payload]>>>",
+            quote!(
+                ::std::vec::Vec<::std::boxed::Box<::std::borrow::Cow<'_, [src_crate::Payload]>>>
+            ),
+        ),
+        (
+            "&'a mut MaybeUninit<&'b Payload>",
+            quote!(&mut ::core::mem::MaybeUninit<&src_crate::Payload>),
+        ),
+        (
+            "impl Fn(Result<&'a Payload, &'static str>) + Send + Sync + 'static",
+            quote!(
+                impl Fn(::core::result::Result<&src_crate::Payload, &str>) + Send + Sync + 'static
+            ),
+        ),
+    ] {
+        let ty = flat.classify(&syn::parse_str(input).unwrap()).unwrap();
+        let retained = q.ty(&ty);
+        assert!(retained.to_string().contains("'a"), "{input}: {retained}");
+        let elided = q.ty_elided(&ty);
+        syn::parse2::<syn::Type>(elided.clone()).expect("valid Rust type syntax");
+        assert_eq!(norm(elided), norm(expected), "{input}");
+    }
+}

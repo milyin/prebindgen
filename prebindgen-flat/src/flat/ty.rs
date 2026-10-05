@@ -75,20 +75,13 @@ pub struct TypeRef {
 }
 
 impl fmt::Display for TypeRef {
-    /// The type as the source wrote it, **for a message**.
+    /// The normalized type identity, for a message.
     ///
-    /// Diagnostics are not emission: a panic naming an unsupported type is
-    /// decision code reporting why it decided, and it must not need the
-    /// [`Emit`](crate::flat::emit::Emit) capability to say so. So this is
-    /// ungated where [`spell`](Self::spell) is not.
+    /// Diagnostics render the normalized identity, while [`spell`](Self::spell)
+    /// returns the captured tokens. Both are available to consumers.
     ///
-    /// **The identity, not the spelling** — `TypeKey`, which is
-    /// `canonical_type` rendered. Delegating to `spell()` would have handed the
-    /// captured spelling back out through `format!("{ty}")`, so
-    /// `syn::parse_str(&ty.to_string())` reconstructed it exactly and the
-    /// capability was a suggestion. Rendering the canonical form keeps
-    /// diagnostics readable while making the round trip land on a *normalized*
-    /// type rather than the source's own tokens.
+    /// Uses [`TypeKey`], the rendered canonical type, so diagnostics use a
+    /// consistent name regardless of how the source spelled that type.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key().as_str())
     }
@@ -117,9 +110,11 @@ impl TypeRef {
         &self.kind
     }
 
-    /// The tokens generated Rust must spell. **Spell off this**, never off
-    /// `kind` — re-deriving a spelling from the classification is how
-    /// `Box<Option<T>>` becomes an `E0308`.
+    /// The captured type tokens in the flat namespace.
+    ///
+    /// These retain source lifetimes and bare flat names. Generated code in
+    /// another crate must qualify those names using the item's source location.
+    /// Read [`kind`](Self::kind) when inspecting the type's structure.
     ///
     /// Tokens, not a `syn::Type`: a spelling is for spelling. What the type
     /// *is* has an answer in [`kind`](Self::kind) and in the readings beside
@@ -129,10 +124,8 @@ impl TypeRef {
     }
 
     /// The type as `syn` — **the escape**. See [`Origin::as_syn`].
-    // Test-only as of C7: `Emit` hands out a spelling, never the node, so the
-    // round-trip checks (`syntax_is_recoverable_from_kind`) are the last
-    // callers. That is the correct end state — the check that a kind can
-    // reproduce its own syntax needs both halves.
+    // Keep structural syntax inside the model. Consumers can render through
+    // `spell()` and inspect structure through `kind()`.
     #[allow(dead_code)]
     pub(crate) fn as_syn(&self) -> &syn::Type {
         self.origin.as_syn()
@@ -796,10 +789,9 @@ impl TypeKind {
     ///
     /// # What it is for
     ///
-    /// **Not** for generating code: generated Rust spells
-    /// [`TypeRef::syntax`], the source's own tokens, and always will. This
-    /// exists so that claim can be *checked* — a kind that cannot reproduce the
-    /// syntax it was lowered from has dropped something, and the round-trip test
+    /// Checks reconstruction against the captured tokens returned by
+    /// [`TypeRef::spell`]. A kind that cannot reproduce the syntax it was
+    /// lowered from has dropped something, and the round-trip test
     /// is what says so before a consumer has to discover it.
     ///
     /// Two forms reconstruct up to their own freedom rather than token for
@@ -809,10 +801,8 @@ impl TypeKind {
     /// * a `Group` or `Paren` around a type, which the lowering sees through;
     /// * a [`Callback`](TypeKind::Callback)'s bound *order* — `Send + Sync` and
     ///   `Sync + Send` are one accepted form, and nothing reads the order.
-    // Its whole job is the round-trip check (`syntax_is_recoverable_from_kind`),
-    // and with the spelling sealed nothing in a built crate calls it — which is
-    // the correct end state, not dead code: a kind that cannot reproduce its
-    // own syntax has lost something, and this is what says so.
+    // Used by the model's round-trip check (`syntax_is_recoverable_from_kind`):
+    // a kind that cannot reproduce its own syntax has lost something.
     #[allow(dead_code)]
     pub(crate) fn to_syn(&self) -> syn::Type {
         let opt_lifetime =

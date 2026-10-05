@@ -133,10 +133,17 @@ pub mod names {
 /// ## Choosing a path
 ///
 /// [`Qualifier::new`] borrows the model. For each known item,
-/// [`Qualifier::module_of`] reads the crate name recorded in its
+/// the qualifier reads the crate name recorded in its
 /// [`SourceLocation`](prebindgen::SourceLocation), converting hyphens to
 /// underscores for a Rust path. Items captured from different crates can
 /// therefore receive different prefixes from the same qualifier.
+///
+/// [`Qualifier::with_crate_path`] overrides the generated path for a recorded
+/// source crate without changing its source locations. Use it for Cargo
+/// dependency aliases or modules re-exporting a source API. Explicit paths take
+/// precedence over the recorded crate name. This configures this qualifier's
+/// output only. Adapters that construct their own qualifier continue to use
+/// their `source_named` ingestion API for renamed dependencies.
 ///
 /// [`Qualifier::with_default_module`] supplies a fallback for **known items
 /// without a recorded crate name**, for example a model assembled directly
@@ -145,7 +152,7 @@ pub mod names {
 /// configured; a known item with neither a crate name nor a fallback also
 /// keeps its bare name. The generated crate must be able to resolve the
 /// emitted paths: qualification does not add dependencies or imports, or
-/// discover Cargo dependency aliases.
+/// discover Cargo dependency aliases automatically.
 ///
 /// ## Item paths and type expressions
 ///
@@ -159,7 +166,7 @@ pub mod names {
 ///   absolute `::core` or `::std` paths; scalar names such as `u32` stay as is.
 /// * [`Qualifier::ty_elided`] provides the same naming for positions such as
 ///   closure arguments that cannot refer to a source lifetime parameter.
-///   Its method documentation lists which shapes it elides.
+///   It elides explicit lifetimes recursively in every supported type shape.
 ///
 /// These methods return Rust tokens for the source value's type or path.
 /// The adapter still chooses the wire representation: qualifying
@@ -191,6 +198,10 @@ pub mod names {
 /// // The fallback does not override the recorded source crate.
 /// let q = q.with_default_module(Some(syn::parse_quote!(crate::source)));
 /// assert_eq!(q.path(&function.name).to_string(), quote!(source_crate::make).to_string());
+/// // Explicit paths override recorded crate names without changing the model.
+/// let q = q.with_crate_path("source-crate", syn::parse_quote!(crate::renamed));
+/// assert_eq!(q.path(&function.name).to_string(), quote!(crate::renamed::make).to_string());
+/// assert_eq!(function.origin.location.crate_name.as_deref(), Some("source-crate"));
 /// // A binding-local helper absent from the model stays unqualified.
 /// assert_eq!(q.path(&syn::parse_quote!(local_helper)).to_string(), "local_helper");
 /// ```
