@@ -75,7 +75,7 @@ pub enum Shape<'t, D> {
     },
     /// A vector or slice, by value or borrowed.
     Seq {
-        /// The sequence element to lower recursively.
+        /// The sequence element, for the adapter to visit next.
         elem: &'t TypeRef,
         /// Whether the source names `Vec<T>` or `[T]`.
         kind: SequenceKind,
@@ -84,7 +84,7 @@ pub enum Shape<'t, D> {
     },
     /// `[T; N]`.
     Array {
-        /// The array element to lower recursively.
+        /// The array element, for the adapter to visit next.
         elem: &'t TypeRef,
         /// The fixed number of elements.
         len: usize,
@@ -98,7 +98,7 @@ pub enum Shape<'t, D> {
     /// A borrow of anything [`Shape::Str`], [`Shape::Seq`] and
     /// [`Shape::Declared`] do not cover.
     Ref {
-        /// The referenced type to lower recursively.
+        /// The referenced type, for the adapter to visit next.
         inner: &'t TypeRef,
         /// Shared or exclusive access.
         access: Access,
@@ -116,9 +116,9 @@ pub enum Shape<'t, D> {
     Callback(&'t [TypeRef]),
     /// `Result<T, E>`.
     Result {
-        /// Successful value to lower recursively.
+        /// The success type, for the adapter to visit next.
         ok: &'t TypeRef,
-        /// Error value to lower recursively.
+        /// The error type, for the adapter to visit next.
         err: &'t TypeRef,
     },
     /// `&mut MaybeUninit<T>`: a slot the callee fills.

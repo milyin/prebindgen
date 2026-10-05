@@ -42,7 +42,7 @@ impl FnRef {
     }
 
     /// The function as the model reads it: the flat item, or the stated
-    /// signature lowered against the flat namespace.
+    /// signature read against the flat model's type names.
     pub fn resolve(&self, flat: &Flat) -> Result<Function, String> {
         match &self.sig {
             Some(sig) => {
@@ -178,9 +178,10 @@ impl Conversion {
 /// both. Both directions share the representation, so the foreign side sees
 /// one type for the source type whichever way a value goes.
 ///
-/// The adapter lowers the representation like any other type, inside the
-/// closure it passes to [`Self::decode`] or [`Self::encode`]; the conversion
-/// wraps the result and records it as [`FormKind::Via`].
+/// The adapter builds the representation's [`Input`] or [`Output`] as for
+/// any other type, inside the closure it passes to [`Self::decode`] or
+/// [`Self::encode`]; the conversion wraps the result and records it as
+/// [`FormKind::Via`].
 #[derive(Clone, Debug)]
 pub struct ResolvedConversion {
     target: TypeRef,
@@ -197,9 +198,9 @@ impl ResolvedConversion {
         &self.repr
     }
 
-    /// The source value from its representation. `repr` lowers the
-    /// representation type it is given; its input is converted here.
-    /// Fails when the conversion declares no input.
+    /// The source value from its representation. `repr` builds the
+    /// [`Input`] of the representation type it is given; this wraps it in
+    /// the conversion. Fails when the conversion declares no input.
     pub fn decode<W: WireType, E: From<String>>(
         &self,
         q: &Qualifier<'_>,
@@ -216,10 +217,10 @@ impl ResolvedConversion {
         })
     }
 
-    /// The source `value` sent out as its representation. `repr` lowers the
-    /// representation type it is given, reading the converted value from
-    /// the expression it is given. Fails when the conversion declares no
-    /// output.
+    /// The source `value` sent out as its representation. `repr` builds
+    /// the [`Output`] of the representation type it is given, from the
+    /// converted value in the expression it is given. Fails when the
+    /// conversion declares no output.
     pub fn encode<W: WireType, E: From<String>>(
         &self,
         q: &Qualifier<'_>,

@@ -26,9 +26,10 @@
 //!   ([`Input::optional`]), a sum's tag and alternatives ([`Input::sum`]),
 //!   a sequence ([`Input::seq`]).
 //!
-//! Lowering a value builds an [`Input`] (wires → value) or an [`Output`]
-//! (value → wires): the Rust expression *and* the [`Form`] tree recording
-//! which way each layer crossed. The foreign-side writer walks that tree,
+//! For each value that crosses, the adapter builds an [`Input`] (wires →
+//! value) or an [`Output`] (value → wires). Each holds the Rust expression
+//! *and* the [`Form`] tree recording which way each layer of the type
+//! crossed. The foreign-side writer walks that tree,
 //! so it follows the decisions made — defaults and overrides alike — without
 //! making them again; what a single wire means is in the wire's own type.
 //!
@@ -39,8 +40,10 @@
 //! 2. Look up the decision with [`Overrides::get`]: the place's override if
 //!    the build script gave one, else the type's default. [`shape()`] does it
 //!    layer by layer when given that lookup.
-//! 3. Lower the part by recursion over [`Shape`], one combinator per layer,
-//!    extending the place as it descends ([`Place::at`]).
+//! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
+//!    the layer's [`Shape`], call the matching constructor
+//!    ([`Input::record`], [`Input::optional`], …), and recurse into what the
+//!    layer holds, extending the place as it goes ([`Place::at`]).
 //! 4. Assemble the element from the parts' wires and expressions.
 //!
 //! [`Qualifier`] names source items from the generated crate; [`RustFile`]
@@ -70,8 +73,8 @@ pub use syn as __syn;
 /// the error is reported through its `Display`.
 ///
 /// [`Conversion::resolve`] checks the declaration against the model. The
-/// adapter lowers the representation like any other type, inside the closure
-/// it passes to [`ResolvedConversion::decode`] or
+/// adapter builds the representation's [`Input`] or [`Output`] as for any
+/// other type, inside the closure it passes to [`ResolvedConversion::decode`] or
 /// [`ResolvedConversion::encode`]; the result's [`Form`] is
 /// [`FormKind::Via`] over the representation's form.
 pub mod convert {
@@ -196,7 +199,8 @@ pub mod place {
 
 /// One level of a type's structure, with any adapter declaration for that type.
 ///
-/// An adapter lowers a type by recursion: it looks at the outermost layer,
+/// An adapter builds a type's [`Input`] or [`Output`] by recursion: it looks
+/// at the outermost layer,
 /// decides what that layer becomes on its boundary, and recurses into what
 /// the layer holds. [`shape()`] answers the first question the same way for
 /// every adapter. It first asks the adapter whether the complete type has a

@@ -95,9 +95,9 @@ impl Place {
 /// The adapter's decisions: one per type, replaced at chosen places.
 ///
 /// `R` is the adapter's own declaration — "a handle", "a record", "converted
-/// through these functions". An element's writer asks with the place it is
-/// lowering, so a per-parameter override wins over the type's default without
-/// the writer knowing which one applied.
+/// through these functions". An element's writer asks with the place of the
+/// part it is building, so a per-parameter override wins over the type's
+/// default without the writer knowing which one applied.
 pub struct Overrides<R> {
     types: HashMap<TypeKey, R>,
     places: HashMap<Place, R>,

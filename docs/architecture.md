@@ -67,11 +67,12 @@ boundary to choose its own layout and construction strategy.
 
 ## Recursion
 
-An adapter lowers a whole type by recursing over its structure.
+An adapter builds the `Input` or `Output` of a whole type by recursing over
+its structure.
 `shape(ty, lookup)` reads one layer of a type: a scalar, text, a sequence and
 how it is held, an `Option`, a `Box`, a borrow, a callback, or a named type
 together with the adapter's setting for it and whether it is owned, shared or
-exclusive. Each adapter's lowering is one `match` over `Shape` per place — a
+exclusive. Each adapter's builder is one `match` over `Shape` per place — a
 parameter, a result, a struct field, a callback argument — recursing into
 what the layer holds.
 
@@ -84,8 +85,8 @@ The answers compose:
   decides where the error goes.
 * `Input::wire`, `record`, `optional`, `sum`, `seq` and `parts` (and their
   `Output` counterparts) build one layer each.
-* `ResolvedConversion::decode` / `encode` wrap a representation's lowering in
-  a declared conversion (`convert!`: functions or `From`/`TryFrom` impls).
+* `ResolvedConversion::decode` / `encode` wrap the representation's `Input` or
+  `Output` in a declared conversion (`convert!`: functions or `From`/`TryFrom` impls).
 * `Place` names an occurrence of a type inside a generated element;
   `Overrides` gives a type's default decision, replaced at chosen places.
 * `Qualifier` spells a flat type from the generated crate
