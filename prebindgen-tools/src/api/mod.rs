@@ -1,9 +1,7 @@
 //! Implementation of the API selected in `lib.rs`.
 
-pub(super) mod closure;
 pub(super) mod convert;
 pub(super) mod file;
-pub(super) mod function;
 pub(super) mod names;
 pub(super) mod qualify;
 pub(super) mod record;

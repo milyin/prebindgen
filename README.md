@@ -75,7 +75,7 @@ runtime crate, not the generator.
 | `prebindgen` | Base: reads what `#[prebindgen]` captured and hands out `(syn::Item, SourceLocation)` pairs via `Source` | — |
 | `prebindgen-proc-macro` | The `#[prebindgen]` macro itself | `prebindgen` |
 | `prebindgen-flat` | The flat model: parses the captured stream into one flat namespace | `prebindgen` |
-| `prebindgen-tools` | Building blocks for language adapters: per-element generators, recursion helpers, source qualification, the generated-file writer | `prebindgen-flat`, `prebindgen` |
+| `prebindgen-tools` | Building blocks for language adapters: type inspection, conversion composition, source qualification, generated-file utilities | `prebindgen-flat`, `prebindgen` |
 | `prebindgen-c` | C / cbindgen adapter (`CbindgenBuilder`) | `prebindgen-tools` |
 | `prebindgen-jni` | JNI / Kotlin adapter (`JniGenBuilder`) | `prebindgen-tools` |
 | `prebindgen-c-runtime` | Leaf, no deps — traits the generated C code calls at run time | — |

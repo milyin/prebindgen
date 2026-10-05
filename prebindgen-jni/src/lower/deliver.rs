@@ -9,7 +9,7 @@
 //! fields gated by one presence flag: every one of them `null` when absent.
 
 use prebindgen_flat::flat::{Struct, Type as FlatType, TypeKind, TypeRef};
-use prebindgen_tools::{names, ClosureCallbacks, ClosureWriter, Output, Record, Shape, Wire};
+use prebindgen_tools::{names, Output, Record, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
@@ -451,33 +451,38 @@ impl Plan<'_> {
         let desc = method_desc(&leaves, "V");
         let frame = 32 + leaves.len() as i32 * 2;
         let what = format!("callback {ty}");
-        ClosureWriter::new(args)
-            .setup(quote!(let __up = ::prebindgen_jni_runtime::Upcall::new(env, &#w, "run", #desc, #frame)?;))
-            .on_error(quote!(::prebindgen_jni_runtime::report_callback_error(#what, &__err);))
-            .write(&self.q, &mut CallbackArgs(self), |binds, outs| {
-                let values = outs
-                    .iter()
-                    .flat_map(|o| &o.wires)
-                    .zip(&leaves)
-                    .map(|(wr, l)| l.jvalue(&wr.name.to_token_stream()));
-                quote! {
+        let names: Vec<_> = (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
+        let tys = args.iter().map(|t| self.q.ty_elided(t));
+        let outs = args
+            .iter()
+            .zip(&names)
+            .enumerate()
+            .map(|(i, (ty, n))| {
+                self.callback_arg(i, ty, &n.to_token_stream())
+                    .map(|d| d.output)
+            })
+            .collect::<Res<Vec<_>>>()?;
+        let binds: TokenStream = outs.iter().map(Output::bind).collect();
+        let values = outs
+            .iter()
+            .flat_map(|o| &o.wires)
+            .zip(&leaves)
+            .map(|(wr, l)| l.jvalue(&wr.name.to_token_stream()));
+        Ok(quote! {{
+            let __up = ::prebindgen_jni_runtime::Upcall::new(env, &#w, "run", #desc, #frame)?;
+            move |#(#names: #tys),*| {
+                let __res = (|| -> ::core::result::Result<(), ::std::string::String> {
                     __up.call_void(|env| {
                         #binds
                         ::core::result::Result::Ok(::std::vec![#(#values),*])
                     })?;
+                    ::core::result::Result::Ok(())
+                })();
+                if let ::core::result::Result::Err(__err) = __res {
+                    ::prebindgen_jni_runtime::report_callback_error(#what, &__err);
                 }
-            })
-    }
-}
-
-/// A callback's arguments, each delivered.
-struct CallbackArgs<'p, 'f>(&'p Plan<'f>);
-
-impl ClosureCallbacks for CallbackArgs<'_, '_> {
-    type Error = crate::Error;
-
-    fn arg(&mut self, index: usize, ty: &TypeRef, value: &TokenStream) -> Res<Output> {
-        Ok(self.0.callback_arg(index, ty, value)?.output)
+            }
+        }})
     }
 }
 

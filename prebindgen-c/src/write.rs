@@ -1,13 +1,10 @@
-//! Writing the plan: every element through its generator, in order.
+//! Writing the plan: C definitions and wrappers in declaration order.
 
 use prebindgen_flat::{
     flat::{Field, Function, ScalarKind, Type as FlatType, TypeKind, TypeRef},
     Emit,
 };
-use prebindgen_tools::{
-    function::error_ident, names, Access, FieldCallbacks, FunctionCallbacks, FunctionWriter, Input,
-    Output, Record, Return, RustFile, Shape, StructWriter, SumWriter,
-};
+use prebindgen_tools::{names, record_in, Access, Input, Output, Record, RustFile, Shape, Wire};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
@@ -196,9 +193,7 @@ struct Fields<'p, 'f> {
     wire: fn(&Field) -> syn::Ident,
 }
 
-impl FieldCallbacks for Fields<'_, '_> {
-    type Error = Error;
-
+impl Fields<'_, '_> {
     fn field_in(&mut self, field: &Field) -> Res<Input> {
         let w = (self.wire)(field);
         self.plan
@@ -234,14 +229,17 @@ fn union_mirror(plan: &Plan, t: &CType) -> Res<TokenStream> {
     let c = &t.c;
     let src = plan.source(&t.rust.to_string());
     let allow = allow();
-    let mirror = SumWriter::new(v, &src, c.clone())
-        .attr(quote!(#[repr(C)]))
-        .attr(allow.clone())
-        .write(&mut Fields {
+    let mirror = sum_mirror(
+        v,
+        &src,
+        c,
+        vec![quote!(#[repr(C)]), allow.clone()],
+        &mut Fields {
             plan,
             owner: &t.rust,
             wire: positional_wire,
-        })?;
+        },
+    )?;
     let n = v.alternatives.len() as i64;
     let size_msg = format!(
         "`{c}`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
@@ -334,14 +332,17 @@ fn data_mirror(plan: &Plan, t: &CType) -> Res<TokenStream> {
     let c = &t.c;
     let src = plan.source(&t.rust.to_string());
     let allow = allow();
-    let mirror = StructWriter::new(s, &src, c.clone())
-        .attr(quote!(#[repr(C)]))
-        .attr(allow.clone())
-        .write(&mut Fields {
+    let mirror = struct_mirror(
+        s,
+        &src,
+        c,
+        vec![quote!(#[repr(C)]), allow.clone()],
+        &mut Fields {
             plan,
             owner: &t.rust,
             wire: named_wire,
-        })?;
+        },
+    )?;
     let (fin, fout, frel) = (
         format_ident!("__cbg_in_{}", t.rust),
         format_ident!("__cbg_out_{}", t.rust),
@@ -544,23 +545,51 @@ fn function(plan: &Plan, func: &Function, exported: &syn::Ident, panic: bool) ->
         ));
     }
     let callee = plan.q.path(&func.name);
-    FunctionWriter::new(func, callee)
-        .name(exported.clone())
-        .attr(quote!(#[no_mangle]))
-        .attr(allow())
-        .prologue(prologue)
-        .write(&mut FunctionCb {
-            plan,
-            func,
-            panic,
-            ret,
-        })
+    let mut params = Vec::new();
+    let mut stmts = Vec::new();
+    let mut args = Vec::new();
+    for p in &func.params {
+        let name = &p.name;
+        let input = plan.param(name, &p.ty)?;
+        if input.fallible && ret.on_error.is_none() && !panic {
+            return err(format!(
+                "function `{}`: parameter `{name}` ({}) can fail to convert (a null pointer, an invalid value) and the function has no error channel: declare it `.panic()` or return `Result`",
+                func.name, p.ty
+            ));
+        }
+        params.extend(input.wires.iter().map(Wire::decl));
+        if input.fallible {
+            let r = input.result();
+            stmts.push(quote!(let #name = match #r {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__err) => { #fail }
+            };));
+        } else {
+            let e = &input.expr;
+            stmts.push(quote!(let #name = #e;));
+        }
+        args.push(input.pass.clone().unwrap_or_else(|| quote!(#name)));
+    }
+    params.extend(ret.ret.wires.iter().map(Wire::decl));
+    let body = &ret.ret.body;
+    let ret_ty = ret.ret.ty.as_ref().map(|t| quote!(-> #t));
+    let allow = allow();
+    Ok(quote! {
+        #[no_mangle]
+        #allow
+        pub unsafe extern "C" fn #exported(#(#params),*) #ret_ty {
+            #prologue
+            #(#stmts)*
+            let __result = #callee(#(#args),*);
+            #body
+        }
+    })
 }
 
 /// What a failed input does: report through the error slot and return the
 /// failure value, or abort.
 fn fail(ret: &CRet) -> TokenStream {
-    let e = error_ident();
+    let e = format_ident!("__err");
     match &ret.on_error {
         Some(default) => quote! {{
             if !e.is_null() {
@@ -597,7 +626,7 @@ fn alias_preflight(plan: &Plan, func: &Function, fail: &TokenStream) -> Res<Toke
             handles.push((&p.name, declared_name(ty), Access::of(ty)));
         }
     }
-    let e = error_ident();
+    let e = format_ident!("__err");
     let mut checks = Vec::new();
     for (i, (a, ta, ua)) in handles.iter().enumerate() {
         for (b, tb, ub) in &handles[i + 1..] {
@@ -621,37 +650,142 @@ fn alias_preflight(plan: &Plan, func: &Function, fail: &TokenStream) -> Res<Toke
     Ok(checks.into_iter().collect())
 }
 
-/// The C adapter's answers for one function.
-struct FunctionCb<'p, 'f> {
-    plan: &'p Plan<'f>,
-    func: &'p Function,
-    panic: bool,
-    /// The result's delivery, decided before the wrapper is written: the
-    /// failure route depends on it.
-    ret: CRet,
+fn struct_mirror(
+    source: &prebindgen_flat::flat::Struct,
+    source_path: &TokenStream,
+    name: &syn::Ident,
+    attrs: Vec<TokenStream>,
+    cb: &mut Fields<'_, '_>,
+) -> Res<StructMirror> {
+    let record = Record::Struct(source);
+    let mut ins = Vec::new();
+    let mut outs = Vec::new();
+    let binds = record.binds();
+    for (f, b) in source.fields.iter().zip(&binds) {
+        ins.push(cb.field_in(f)?);
+        outs.push(cb.field_out(f, &b.to_token_stream())?);
+    }
+
+    let wires: Vec<Wire> = ins.iter().flat_map(|i| i.wires.clone()).collect();
+    let decls = wires.iter().map(|w| {
+        let d = w.decl();
+        quote!(pub #d)
+    });
+
+    let def = quote! {
+        #(#attrs)*
+        pub struct #name { #(#decls),* }
+    };
+    let wire_names: Vec<&syn::Ident> = wires.iter().map(|w| &w.name).collect();
+    let head = source_path;
+    let rebuilt = record_in(record, head, ins);
+    let input = Input {
+        wires: Vec::new(),
+        expr: {
+            let e = &rebuilt.expr;
+            quote!({ let #name { #(#wire_names),* } = v; #e })
+        },
+        fallible: rebuilt.fallible,
+        pass: None,
+    };
+    let pat = record.pattern(head, &binds);
+    let fallible = outs.iter().any(|o| o.fallible);
+    let out_binds: Vec<TokenStream> = outs.iter().map(Output::bind).collect();
+    let output = Output {
+        wires: Vec::new(),
+        expr: quote!({ let #pat = v; #(#out_binds)* #name { #(#wire_names),* } }),
+        fallible,
+    };
+    Ok(StructMirror {
+        def,
+        wires,
+        input,
+        output,
+    })
 }
 
-impl FunctionCallbacks for FunctionCb<'_, '_> {
-    type Error = Error;
-
-    fn ret(&mut self, _ret: &TypeRef) -> Res<Return> {
-        Ok(self.ret.ret.clone())
-    }
-
-    fn param(&mut self, name: &syn::Ident, ty: &TypeRef) -> Res<Input> {
-        let input = self.plan.param(name, ty)?;
-        if input.fallible && self.ret.on_error.is_none() && !self.panic {
-            return err(format!(
-                "function `{}`: parameter `{name}` ({ty}) can fail to convert (a null pointer, an \
-                 invalid value) and the function has no error channel: declare it `.panic()` or \
-                 return `Result`",
-                self.func.name
-            ));
+fn sum_mirror(
+    source: &prebindgen_flat::flat::Variant,
+    source_path: &TokenStream,
+    name: &syn::Ident,
+    attrs: Vec<TokenStream>,
+    cb: &mut Fields<'_, '_>,
+) -> Res<SumMirror> {
+    let src = source_path;
+    let mut variants = Vec::new();
+    let mut alternatives = Vec::new();
+    let mut in_arms = Vec::new();
+    let mut out_arms = Vec::new();
+    let mut in_fallible = false;
+    let mut out_fallible = false;
+    for alt in &source.alternatives {
+        let record = Record::Alt(alt);
+        let aname = &alt.name;
+        let binds = record.binds();
+        let mut ins = Vec::new();
+        let mut outs = Vec::new();
+        for (f, b) in alt.fields.iter().zip(&binds) {
+            ins.push(cb.field_in(f)?);
+            outs.push(cb.field_out(f, &b.to_token_stream())?);
         }
-        Ok(input)
+        // A mirror alternative has one mirror field per source field; a
+        // field that needs several wires is kept whole as a tuple would
+        // lose the per-field names C sees, so it is refused here by
+        // construction: the adapter hands one wire per field.
+        let wires: Vec<Wire> = ins.iter().flat_map(|i| i.wires.clone()).collect();
+        let mirror_head = quote!(#name::#aname);
+        let source_head = quote!(#src::#aname);
+        // Declaration: same delimiters as the source, wire types in place.
+        let tys: Vec<TokenStream> = wires.iter().map(|w| w.ty.clone()).collect();
+        let decl = record.construct(&quote!(#aname), &tys);
+        variants.push(decl);
+        // In: match the mirror alternative, binding its wires by name.
+        let wire_binds: Vec<syn::Ident> = wires.iter().map(|w| w.name.clone()).collect();
+        let mirror_pat = record.pattern(&mirror_head, &wire_binds);
+        let rebuilt = record_in(record, &source_head, ins);
+        in_fallible |= rebuilt.fallible;
+        let e = &rebuilt.expr;
+        in_arms.push(quote!(#mirror_pat => #e));
+        // Out: match the source alternative, produce the mirror one.
+        let source_pat = record.pattern(&source_head, &binds);
+        out_fallible |= outs.iter().any(|o| o.fallible);
+        let out_binds: Vec<TokenStream> = outs.iter().map(Output::bind).collect();
+        let values: Vec<TokenStream> = wires.iter().map(|w| w.name.to_token_stream()).collect();
+        let rebuilt_mirror = record.construct(&mirror_head, &values);
+        out_arms.push(quote!(#source_pat => { #(#out_binds)* #rebuilt_mirror }));
+        alternatives.push(wires);
     }
 
-    fn fail(&mut self, _ret: &Return) -> TokenStream {
-        fail(&self.ret)
-    }
+    let def = quote! {
+        #(#attrs)*
+        pub enum #name { #(#variants),* }
+    };
+    Ok(SumMirror {
+        def,
+        alternatives,
+        input: Input {
+            wires: Vec::new(),
+            expr: quote!(match v { #(#in_arms),* }),
+            fallible: in_fallible,
+            pass: None,
+        },
+        output: Output {
+            wires: Vec::new(),
+            expr: quote!(match v { #(#out_arms),* }),
+            fallible: out_fallible,
+        },
+    })
+}
+
+struct StructMirror {
+    def: TokenStream,
+    wires: Vec<Wire>,
+    input: Input,
+    output: Output,
+}
+struct SumMirror {
+    alternatives: Vec<Vec<Wire>>,
+    def: TokenStream,
+    input: Input,
+    output: Output,
 }
