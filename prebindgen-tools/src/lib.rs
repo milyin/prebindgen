@@ -96,11 +96,18 @@
 //! let f = flat.function("twice").unwrap();
 //! let element = Place::new("twice");
 //!
+//! // Each wire is named after where it sits in the element: the place of
+//! // parameter `n` gives the name `n`, the place of the result gives `ret`.
+//! let n_name: syn::Ident = element.at(Seg::Param("n".into())).ident("");
+//! let ret_name: syn::Ident = element.at(Seg::Return).ident("");
+//!
 //! // Build: one input for the parameter, one output for the result.
-//! let n = element.at(Seg::Param("n".into())).ident("");
-//! let input = Input::wire(&f.params[0].ty, Wire::new(n.clone(), Long), quote!(#n as u64));
-//! let ret = element.at(Seg::Return).ident("");
-//! let output = Output::wire(&f.ret, Wire::new(ret, Long), quote!(__value as i64));
+//! let input = Input::wire(
+//!     &f.params[0].ty,
+//!     Wire::new(n_name.clone(), Long),
+//!     quote!(#n_name as u64),
+//! );
+//! let output = Output::wire(&f.ret, Wire::new(ret_name, Long), quote!(__value as i64));
 //!
 //! // Use: the wires give the signature, the expressions the body.
 //! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
