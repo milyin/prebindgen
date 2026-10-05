@@ -85,8 +85,8 @@ both values cross as an <code>i64</code> wire:</p>
 
 <span class="comment">// Each wire is named after where it sits in the element: the place of
 // parameter `n` gives the name `n`, the place of the result gives `ret`.
-</span><span class="kw">let </span>n_name: syn::Ident = element.at(Seg::Param(<span class="string">"n"</span>.into())).ident(<span class="string">""</span>);
-<span class="kw">let </span>ret_name: syn::Ident = element.at(Seg::Return).ident(<span class="string">""</span>);
+</span><span class="kw">let </span>n_name: syn::Ident = element.at(Seg::Param(<span class="string">"n"</span>.into())).ident();
+<span class="kw">let </span>ret_name: syn::Ident = element.at(Seg::Return).ident();
 
 <span class="comment">// Build: one input for the parameter, one output for the result.
 </span><span class="kw">let </span>input = Input::wire(

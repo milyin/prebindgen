@@ -19,7 +19,7 @@
     .build().unwrap();
 <span class="kw">let </span>n = <span class="kw-2">&amp;</span>flat.function(<span class="string">"send"</span>).unwrap().params[<span class="number">0</span>];
 <span class="kw">let </span>place = Place::new(<span class="string">"send"</span>).at(Seg::Param(<span class="string">"n"</span>.into()));
-<span class="kw">let </span>w = place.ident(<span class="string">""</span>);
+<span class="kw">let </span>w = place.ident();
 <span class="kw">let </span>input = Input::wire(<span class="kw-2">&amp;</span>n.ty, Wire::new(w.clone(), W::Long { unsigned: <span class="bool-val">true </span>}),
     <span class="macro">quote!</span>(#w <span class="kw">as </span>u64));
 <span class="macro">assert_eq!</span>(input.wires()[<span class="number">0</span>].decl().to_string(), <span class="string">"n : i64"</span>);</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Form.html" title="struct prebindgen_tools::wire::Form">Form</a></dt><dd>How a source value of <a href="struct.Form.html#structfield.ty" title="field prebindgen_tools::wire::Form::ty"><code>Form::ty</code></a> relates to its wires: the decision the

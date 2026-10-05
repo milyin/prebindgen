@@ -98,8 +98,8 @@
 <a href=#98 id=98 data-nosnippet>98</a>//!
 <a href=#99 id=99 data-nosnippet>99</a>//! // Each wire is named after where it sits in the element: the place of
 <a href=#100 id=100 data-nosnippet>100</a>//! // parameter `n` gives the name `n`, the place of the result gives `ret`.
-<a href=#101 id=101 data-nosnippet>101</a>//! let n_name: syn::Ident = element.at(Seg::Param("n".into())).ident("");
-<a href=#102 id=102 data-nosnippet>102</a>//! let ret_name: syn::Ident = element.at(Seg::Return).ident("");
+<a href=#101 id=101 data-nosnippet>101</a>//! let n_name: syn::Ident = element.at(Seg::Param("n".into())).ident();
+<a href=#102 id=102 data-nosnippet>102</a>//! let ret_name: syn::Ident = element.at(Seg::Return).ident();
 <a href=#103 id=103 data-nosnippet>103</a>//!
 <a href=#104 id=104 data-nosnippet>104</a>//! // Build: one input for the parameter, one output for the result.
 <a href=#105 id=105 data-nosnippet>105</a>//! let input = Input::wire(
@@ -391,7 +391,7 @@
 <a href=#391 id=391 data-nosnippet>391</a>///     .build().unwrap();
 <a href=#392 id=392 data-nosnippet>392</a>/// let n = &amp;flat.function("send").unwrap().params[0];
 <a href=#393 id=393 data-nosnippet>393</a>/// let place = Place::new("send").at(Seg::Param("n".into()));
-<a href=#394 id=394 data-nosnippet>394</a>/// let w = place.ident("");
+<a href=#394 id=394 data-nosnippet>394</a>/// let w = place.ident();
 <a href=#395 id=395 data-nosnippet>395</a>/// let input = Input::wire(&amp;n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
 <a href=#396 id=396 data-nosnippet>396</a>///     quote!(#w as u64));
 <a href=#397 id=397 data-nosnippet>397</a>/// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");
