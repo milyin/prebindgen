@@ -95,9 +95,9 @@
 <a href=#95 id=95 data-nosnippet>95</a><span class="doccomment">/// The adapter's decisions: one per type, replaced at chosen places.
 <a href=#96 id=96 data-nosnippet>96</a>///
 <a href=#97 id=97 data-nosnippet>97</a>/// `R` is the adapter's own declaration — "a handle", "a record", "converted
-<a href=#98 id=98 data-nosnippet>98</a>/// through these functions". An element's writer asks with the place it is
-<a href=#99 id=99 data-nosnippet>99</a>/// lowering, so a per-parameter override wins over the type's default without
-<a href=#100 id=100 data-nosnippet>100</a>/// the writer knowing which one applied.
+<a href=#98 id=98 data-nosnippet>98</a>/// through these functions". An element's writer asks with the place of the
+<a href=#99 id=99 data-nosnippet>99</a>/// part it is building, so a per-parameter override wins over the type's
+<a href=#100 id=100 data-nosnippet>100</a>/// default without the writer knowing which one applied.
 <a href=#101 id=101 data-nosnippet>101</a></span><span class="kw">pub struct </span>Overrides&lt;R&gt; {
 <a href=#102 id=102 data-nosnippet>102</a>    types: HashMap&lt;TypeKey, R&gt;,
 <a href=#103 id=103 data-nosnippet>103</a>    places: HashMap&lt;Place, R&gt;,

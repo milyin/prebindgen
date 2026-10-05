@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>    },
 <a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// A vector or slice, by value or borrowed.
 <a href=#77 id=77 data-nosnippet>77</a>    </span>Seq {
-<a href=#78 id=78 data-nosnippet>78</a>        <span class="doccomment">/// The sequence element to lower recursively.
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="doccomment">/// The sequence element, for the adapter to visit next.
 <a href=#79 id=79 data-nosnippet>79</a>        </span>elem: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>TypeRef,
 <a href=#80 id=80 data-nosnippet>80</a>        <span class="doccomment">/// Whether the source names `Vec&lt;T&gt;` or `[T]`.
 <a href=#81 id=81 data-nosnippet>81</a>        </span>kind: SequenceKind,
@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>    },
 <a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// `[T; N]`.
 <a href=#86 id=86 data-nosnippet>86</a>    </span>Array {
-<a href=#87 id=87 data-nosnippet>87</a>        <span class="doccomment">/// The array element to lower recursively.
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="doccomment">/// The array element, for the adapter to visit next.
 <a href=#88 id=88 data-nosnippet>88</a>        </span>elem: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>TypeRef,
 <a href=#89 id=89 data-nosnippet>89</a>        <span class="doccomment">/// The fixed number of elements.
 <a href=#90 id=90 data-nosnippet>90</a>        </span>len: usize,
@@ -98,7 +98,7 @@
 <a href=#98 id=98 data-nosnippet>98</a>    <span class="doccomment">/// A borrow of anything [`Shape::Str`], [`Shape::Seq`] and
 <a href=#99 id=99 data-nosnippet>99</a>    /// [`Shape::Declared`] do not cover.
 <a href=#100 id=100 data-nosnippet>100</a>    </span>Ref {
-<a href=#101 id=101 data-nosnippet>101</a>        <span class="doccomment">/// The referenced type to lower recursively.
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="doccomment">/// The referenced type, for the adapter to visit next.
 <a href=#102 id=102 data-nosnippet>102</a>        </span>inner: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>TypeRef,
 <a href=#103 id=103 data-nosnippet>103</a>        <span class="doccomment">/// Shared or exclusive access.
 <a href=#104 id=104 data-nosnippet>104</a>        </span>access: Access,
@@ -116,9 +116,9 @@
 <a href=#116 id=116 data-nosnippet>116</a>    </span>Callback(<span class="kw-2">&amp;</span><span class="lifetime">'t </span>[TypeRef]),
 <a href=#117 id=117 data-nosnippet>117</a>    <span class="doccomment">/// `Result&lt;T, E&gt;`.
 <a href=#118 id=118 data-nosnippet>118</a>    </span><span class="prelude-ty">Result </span>{
-<a href=#119 id=119 data-nosnippet>119</a>        <span class="doccomment">/// Successful value to lower recursively.
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="doccomment">/// The success type, for the adapter to visit next.
 <a href=#120 id=120 data-nosnippet>120</a>        </span>ok: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>TypeRef,
-<a href=#121 id=121 data-nosnippet>121</a>        <span class="doccomment">/// Error value to lower recursively.
+<a href=#121 id=121 data-nosnippet>121</a>        <span class="doccomment">/// The error type, for the adapter to visit next.
 <a href=#122 id=122 data-nosnippet>122</a>        </span>err: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>TypeRef,
 <a href=#123 id=123 data-nosnippet>123</a>    },
 <a href=#124 id=124 data-nosnippet>124</a>    <span class="doccomment">/// `&amp;mut MaybeUninit&lt;T&gt;`: a slot the callee fills.
