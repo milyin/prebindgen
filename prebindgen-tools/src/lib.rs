@@ -8,10 +8,11 @@
 //!
 //! An adapter writes *generated elements* — functions, types, constants —
 //! around the elements of the [`Flat`](prebindgen_flat::Flat) model, plus the
-//! foreign code that uses them. Every generated element speaks only in the
-//! adapter's **wire types**: a closed set, one enum per adapter
-//! ([`WireType`]). The tools here are what every adapter needs to get a
-//! source type onto wires and back.
+//! foreign code that uses them. Values cross between the two on **wires**:
+//! the parameters, return values and fields of the generated elements. Wire
+//! types form a closed set, one enum per adapter ([`WireType`]). The tools
+//! here are what every adapter needs to get a source type onto wires and
+//! back.
 //!
 //! ## The model
 //!
@@ -48,27 +49,6 @@
 //! The foreign-side writer walks the form, so it follows what the adapter
 //! decided for each layer without deciding again. What a single wire means
 //! is in the wire's own type.
-//!
-//! ## Writing an element
-//!
-//! 1. For each part of the element (parameter, result, field), take its
-//!    [`Place`]: where the part sits, such as parameter `p` of `send`, or
-//!    field `x` of that parameter. The place is not stored in the [`Input`]
-//!    or [`Output`]; the adapter passes it along while building them, to
-//!    look up decisions and to name wires ([`Place::ident`]).
-//! 2. Look up how the part crosses with [`Overrides::get`]: the override
-//!    the build script declared for that place, if any, else the default
-//!    for the part's type. [`shape()`] does the lookup layer by layer when
-//!    given it.
-//! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
-//!    the layer's [`Shape`], call the function the table above gives for
-//!    that way of crossing, and recurse into what the layer holds, extending
-//!    the place as it goes ([`Place::at`]).
-//! 4. Assemble the element from the parts' inputs and outputs, as the next
-//!    section shows.
-//!
-//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
-//! collects and writes the generated Rust.
 //!
 //! ## Using an Input or Output
 //!
@@ -144,6 +124,35 @@
 //!     }.to_string(),
 //! );
 //! ```
+//!
+//! ## Deciding how each layer crosses
+//!
+//! The example decided by itself that a `u64` crosses as one wire. A real
+//! adapter decides per type, following the build script's declarations, and
+//! a type such as `Option<Point>` needs one decision per layer: the
+//! `Option`, then the `Point`, then each of its fields.
+//!
+//! So the adapter builds an input or output by recursion over the type.
+//! [`shape()`] reads the outermost layer as a [`Shape`] — a scalar, an
+//! `Option`, a borrow, a type the adapter declared, and so on. The adapter
+//! calls the function the table above gives for that layer, and recurses
+//! into what the layer holds.
+//!
+//! The adapter keeps its declarations in [`Overrides`]: a default for each
+//! type, and the replacements the build script declared for single places.
+//! A [`Place`] names where a part sits in the element, such as parameter
+//! `p` of `send`, or field `x` of that parameter. The adapter starts from
+//! the place of each parameter or result and extends it as it recurses
+//! ([`Place::at`]). At each layer it asks [`Overrides::get`] with the
+//! current place and type — passing that lookup to [`shape()`] does it —
+//! and names the layer's wires after the place ([`Place::ident`]). The place
+//! only steers the building; it is not stored in the [`Input`] or
+//! [`Output`].
+//!
+//! ## Other tools
+//!
+//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
+//! collects and writes the generated Rust.
 
 // Implementation modules are private. The public modules below select every
 // exported item explicitly, independently of the implementation layout.
