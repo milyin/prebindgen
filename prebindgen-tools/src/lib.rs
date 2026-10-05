@@ -25,18 +25,20 @@
 //! Each holds the Rust expression that turns one into the other *and* a
 //! [`Form`]: a tree recording how each layer of the type crossed.
 //!
-//! In either direction, a source type crosses in one of a few ways
-//! ([`FormKind`]). Both directions build every way: [`Input`] and [`Output`]
-//! have a constructor of the same name for each, except a conversion, which
-//! has a method for each direction:
+//! A source type crosses in one of the ways below; its form records which,
+//! as a [`FormKind`].
+//! For each way, the table names the function that builds the [`Input`] and
+//! the one that builds the [`Output`]:
 //!
-//! * **directly**, as one wire (`wire`);
-//! * **converted** to another source type that crosses instead
-//!   ([`ResolvedConversion::decode`] for an input,
-//!   [`ResolvedConversion::encode`] for an output);
-//! * **taken apart** into parts that cross on their own: a record's fields
-//!   (`record`), an optional's presence and value (`optional`), a sum's tag
-//!   and alternatives (`sum`), a sequence (`seq`).
+//! | The value crosses… | [`Input`] | [`Output`] |
+//! |---|---|---|
+//! | as one wire | [`Input::wire`] | [`Output::wire`] |
+//! | converted to another source type, which crosses instead | [`ResolvedConversion::decode`] | [`ResolvedConversion::encode`] |
+//! | as a record's fields | [`Input::record`] | [`Output::record`] |
+//! | as an option's presence flag and value | [`Input::optional`] | [`Output::optional`] |
+//! | as a sum's tag and alternatives | [`Input::sum`] | [`Output::sum`] |
+//! | as a sequence | [`Input::seq`] | [`Output::seq`] |
+//! | as any other list of parts | [`Input::parts`] | [`Output::parts`] |
 //!
 //! The foreign-side writer walks the form, so it follows what the adapter
 //! decided for each layer without deciding again. What a single wire means
@@ -54,8 +56,8 @@
 //!    for the part's type. [`shape()`] does it
 //!    layer by layer when given that lookup.
 //! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
-//!    the layer's [`Shape`], call the matching constructor (`record`,
-//!    `optional`, …), and recurse into what the layer holds, extending the
+//!    the layer's [`Shape`], call the function the table above gives for
+//!    that way of crossing, and recurse into what the layer holds, extending the
 //!    place as it goes ([`Place::at`]).
 //! 4. Assemble the element from the parts' wires and expressions.
 //!
