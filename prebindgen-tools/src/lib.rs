@@ -58,19 +58,92 @@
 //!    look up decisions and to name wires ([`Place::ident`]).
 //! 2. Look up how the part crosses with [`Overrides::get`]: the override
 //!    the build script declared for that place, if any, else the default
-//!    for the part's type. [`shape()`] does it
-//!    layer by layer when given that lookup.
+//!    for the part's type. [`shape()`] does the lookup layer by layer when
+//!    given it.
 //! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
 //!    the layer's [`Shape`], call the function the table above gives for
-//!    that way of crossing, and recurse into what the layer holds, extending the
-//!    place as it goes ([`Place::at`]).
-//! 4. Assemble the element from the parts' wires and expressions.
+//!    that way of crossing, and recurse into what the layer holds, extending
+//!    the place as it goes ([`Place::at`]).
+//! 4. Assemble the element from the parts' inputs and outputs, as the next
+//!    section shows.
 //!
 //! [`Qualifier`] names source items from the generated crate; [`RustFile`]
 //! collects and writes the generated Rust.
 //!
-//! Fallible conversions use `Result<_, String>`: an expression may use `?`,
-//! and the adapter decides where the error goes ([`Input::result`]).
+//! ## Using an Input or Output
+//!
+//! An [`Input`] or [`Output`] holds everything the element needs for one
+//! value, on both sides of the boundary:
+//!
+//! * **The element's signature.** [`Input::wires`] and [`Output::wires`]
+//!   list the value's wires in order. [`Wire::decl`] writes one wire as
+//!   `name: Type` for a parameter list; [`WireType::rust`] gives its Rust
+//!   type alone, for a return type or a struct field.
+//! * **The Rust code.** An input's `expr` evaluates to the source value:
+//!   place it where the value is needed, such as an argument of the source
+//!   call. An output's `expr` evaluates to the wire values, one value or a
+//!   tuple in [`Output::wires`] order; [`Output::bind`] writes
+//!   `let <wires> = expr;`, so each wire becomes a local of its own name.
+//! * **Errors.** `fallible` says whether `expr` uses `?` on a
+//!   `Result<_, String>`. Place such an expression in a function returning
+//!   that type, or take [`Input::result`] / [`Output::result`], a `Result`
+//!   value, and route the error yourself.
+//! * **The foreign code.** `form` tells the foreign-side writer how to
+//!   produce the same wires (for an input) or read them (for an output), in
+//!   the same order. What a single wire means is in its [`WireType`]
+//!   variant; records, options, sums and sequences are their [`FormKind`].
+//!
+//! For example, a C-style wrapper for `pub fn twice(n: u64) -> u64`, where
+//! both values cross as an `i64` wire:
+//!
+//! ```
+//! use prebindgen::SourceLocation;
+//! use prebindgen_flat::Flat;
+//! use prebindgen_tools::{Input, Output, Place, Qualifier, Seg, Wire, WireType};
+//! use quote::quote;
+//!
+//! #[derive(Clone, Debug)]
+//! struct Long;
+//! impl WireType for Long {
+//!     fn rust(&self) -> proc_macro2::TokenStream { quote!(i64) }
+//!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
+//! }
+//!
+//! let source = syn::parse_file("pub fn twice(n: u64) -> u64 { n * 2 }").unwrap();
+//! let flat = Flat::builder()
+//!     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+//!     .build().unwrap();
+//! let f = flat.function("twice").unwrap();
+//! let element = Place::new("twice");
+//!
+//! // Build: one input for the parameter, one output for the result.
+//! let n = element.at(Seg::Param("n".into())).ident("");
+//! let input = Input::wire(&f.params[0].ty, Wire::new(n.clone(), Long), quote!(#n as u64));
+//! let ret = element.at(Seg::Return).ident("");
+//! let output = Output::wire(&f.ret, Wire::new(ret, Long), quote!(__value as i64));
+//!
+//! // Use: the wires give the signature, the expressions the body.
+//! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
+//! let ret_ty = output.wires()[0].ty.rust();
+//! let callee = Qualifier::new(&flat).path(&f.name);
+//! let (arg, value) = (&input.expr, &output.expr);
+//! let wrapper = quote! {
+//!     pub extern "C" fn twice_wrapper(#(#params),*) -> #ret_ty {
+//!         let __value = #callee(#arg);
+//!         #value
+//!     }
+//! };
+//! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+//! assert_eq!(
+//!     quote!(#wrapper).to_string(),
+//!     quote! {
+//!         pub extern "C" fn twice_wrapper(n: i64) -> i64 {
+//!             let __value = twice(n as u64);
+//!             __value as i64
+//!         }
+//!     }.to_string(),
+//! );
+//! ```
 
 // Implementation modules are private. The public modules below select every
 // exported item explicitly, independently of the implementation layout.
