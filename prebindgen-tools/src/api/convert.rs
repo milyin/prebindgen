@@ -244,7 +244,7 @@ impl ResolvedConversion {
             .into_iter()
             .flatten()
             .filter_map(|s| match &s.how {
-                How::Call { fun, .. } => Some(fun),
+                How::Call { fun, .. } => Some(&**fun),
                 _ => None,
             })
     }
@@ -281,7 +281,7 @@ struct Stage {
 enum How {
     /// Call a function; `by_ref` when it takes its argument by reference.
     Call {
-        fun: FnRef,
+        fun: Box<FnRef>,
         by_ref: bool,
     },
     From,
@@ -339,7 +339,7 @@ impl Stage {
                 }
                 let by_ref =
                     dir == Direction::Out && matches!(param.ty.kind(), TypeKind::Ref { .. });
-                let fun = fun.clone();
+                let fun = Box::new(fun.clone());
                 (stage(fallible, How::Call { fun, by_ref }), repr)
             }
             Via::From(t) => (stage(false, How::From), classify(t)?),
