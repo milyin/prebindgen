@@ -25,11 +25,10 @@
 //! Each holds the Rust expression that turns one into the other *and* a
 //! [`Form`]: a tree recording how each layer of the type crossed.
 //!
-//! In either direction, a source type at a [`Place`] — parameter `p` of
-//! `send`, field `x` of it — crosses in one of a few ways ([`FormKind`]).
-//! Both directions build every way: [`Input`] and [`Output`] have a
-//! constructor of the same name for each, except a conversion, which has a
-//! method for each direction:
+//! In either direction, a source type crosses in one of a few ways
+//! ([`FormKind`]). Both directions build every way: [`Input`] and [`Output`]
+//! have a constructor of the same name for each, except a conversion, which
+//! has a method for each direction:
 //!
 //! * **directly**, as one wire (`wire`);
 //! * **converted** to another source type that crosses instead
@@ -39,16 +38,20 @@
 //!   (`record`), an optional's presence and value (`optional`), a sum's tag
 //!   and alternatives (`sum`), a sequence (`seq`).
 //!
-//! The foreign-side writer walks the form, so it follows the decisions made
-//! — defaults and overrides alike — without making them again. What a
-//! single wire means is in the wire's own type.
+//! The foreign-side writer walks the form, so it follows what the adapter
+//! decided for each layer without deciding again. What a single wire means
+//! is in the wire's own type.
 //!
 //! ## Writing an element
 //!
 //! 1. For each part of the element (parameter, result, field), take its
-//!    [`Place`].
-//! 2. Look up the decision with [`Overrides::get`]: the place's override if
-//!    the build script gave one, else the type's default. [`shape()`] does it
+//!    [`Place`]: where the part sits, such as parameter `p` of `send`, or
+//!    field `x` of that parameter. The place is not stored in the [`Input`]
+//!    or [`Output`]; the adapter passes it along while building them, to
+//!    look up decisions and to name wires ([`Place::ident`]).
+//! 2. Look up how the part crosses with [`Overrides::get`]: the override
+//!    the build script declared for that place, if any, else the default
+//!    for the part's type. [`shape()`] does it
 //!    layer by layer when given that lookup.
 //! 3. Build the part's [`Input`] or [`Output`] one layer at a time: match
 //!    the layer's [`Shape`], call the matching constructor (`record`,
