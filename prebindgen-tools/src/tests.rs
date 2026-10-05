@@ -68,9 +68,10 @@ fn conversions_resolve_both_directions() {
     let (millis, raw) = (ty("Millis"), ty("u64"));
     assert_eq!(conv.repr().key(), raw.key());
 
-    let input = conv
-        .decode(&q, |r| Ok::<_, String>(Input::wire(r, wire(), quote!(w))))
-        .unwrap();
+    let input = Input::via(&q, &conv, |r| {
+        Ok::<_, String>(Input::wire(r, wire(), quote!(w)))
+    })
+    .unwrap();
     assert!(!input.fallible);
     assert!(matches!(input.form.kind, FormKind::Via(_)));
     assert_eq!(
@@ -78,11 +79,10 @@ fn conversions_resolve_both_directions() {
         "{let__repr=w;src_crate::millis_from(__repr)}"
     );
 
-    let output = conv
-        .encode(&q, &quote!(v), |r, e| {
-            Ok::<_, String>(Output::wire(r, wire(), e))
-        })
-        .unwrap();
+    let output = Output::via(&q, &conv, &quote!(v), |r, e| {
+        Ok::<_, String>(Output::wire(r, wire(), e))
+    })
+    .unwrap();
     assert!(output.fallible, "a Result-returning function is fallible");
     assert_eq!(output.form.ty.key(), millis.key());
     assert!(
@@ -102,11 +102,10 @@ fn conversions_resolve_both_directions() {
         .input(crate::fun!(millis_from))
         .resolve(&flat)
         .unwrap();
-    let e = one_way
-        .encode(&q, &quote!(v), |r, e| {
-            Ok::<_, String>(Output::wire(r, wire(), e))
-        })
-        .expect_err("no output declared");
+    let e = Output::via(&q, &one_way, &quote!(v), |r, e| {
+        Ok::<_, String>(Output::wire(r, wire(), e))
+    })
+    .expect_err("no output declared");
     assert!(e.contains("declares no output"), "{e}");
 }
 

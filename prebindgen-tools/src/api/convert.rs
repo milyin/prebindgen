@@ -5,7 +5,7 @@ use prebindgen_flat::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use crate::{Form, FormKind, Input, Output, Qualifier, WireType};
+use crate::Qualifier;
 
 /// A function a declaration refers to: a flat item by name, or a
 /// binding-local path with its signature stated.
@@ -178,10 +178,9 @@ impl Conversion {
 /// both. Both directions share the representation, so the foreign side sees
 /// one type for the source type whichever way a value goes.
 ///
-/// The adapter builds the representation's [`Input`] or [`Output`] as for
-/// any other type, inside the closure it passes to [`Self::decode`] or
-/// [`Self::encode`]; the conversion wraps the result and records it as
-/// [`FormKind::Via`].
+/// An adapter keeps it as its declaration for the source type, and passes
+/// it to [`Input::via`](crate::Input::via) or
+/// [`Output::via`](crate::Output::via) when it builds a value of that type.
 #[derive(Clone, Debug)]
 pub struct ResolvedConversion {
     target: TypeRef,
@@ -198,46 +197,6 @@ impl ResolvedConversion {
         &self.repr
     }
 
-    /// The source value from its representation. `repr` builds the
-    /// [`Input`] of the representation type it is given; this wraps it in
-    /// the conversion. Fails when the conversion declares no input.
-    pub fn decode<W: WireType, E: From<String>>(
-        &self,
-        q: &Qualifier<'_>,
-        repr: impl FnOnce(&TypeRef) -> Result<Input<W>, E>,
-    ) -> Result<Input<W>, E> {
-        let stage = self.stage(&self.input, "input")?;
-        let repr = repr(&self.repr)?;
-        let applied = stage.apply(q, &self.target, &self.repr, &quote!(__repr));
-        let e = repr.expr;
-        Ok(Input {
-            form: self.via(repr.form),
-            expr: quote!({ let __repr = #e; #applied }),
-            fallible: repr.fallible || stage.fallible,
-        })
-    }
-
-    /// The source `value` sent out as its representation. `repr` builds
-    /// the [`Output`] of the representation type it is given, from the
-    /// converted value in the expression it is given. Fails when the
-    /// conversion declares no output.
-    pub fn encode<W: WireType, E: From<String>>(
-        &self,
-        q: &Qualifier<'_>,
-        value: &TokenStream,
-        repr: impl FnOnce(&TypeRef, TokenStream) -> Result<Output<W>, E>,
-    ) -> Result<Output<W>, E> {
-        let stage = self.stage(&self.output, "output")?;
-        let applied = stage.apply(q, &self.target, &self.repr, value);
-        let repr = repr(&self.repr, quote!(__repr))?;
-        let e = &repr.expr;
-        Ok(Output {
-            expr: quote!({ let __repr = #applied; #e }),
-            fallible: repr.fallible || stage.fallible,
-            form: self.via(repr.form),
-        })
-    }
-
     /// The functions the conversion calls, so an adapter can count them as
     /// used.
     pub fn functions(&self) -> impl Iterator<Item = &FnRef> {
@@ -250,22 +209,36 @@ impl ResolvedConversion {
             })
     }
 
-    fn stage<'s>(&self, stage: &'s Option<Stage>, what: &str) -> Result<&'s Stage, String> {
-        stage
-            .as_ref()
-            .ok_or_else(|| format!("convert!({}) declares no {what}", self.target))
+    /// The source type being converted.
+    pub(crate) fn target(&self) -> &TypeRef {
+        &self.target
     }
 
-    fn via<W>(&self, repr: Form<W>) -> Form<W> {
-        Form {
-            ty: self.target.clone(),
-            kind: FormKind::Via(Box::new(repr)),
-        }
+    /// The conversion call in direction `dir` applied to `value`, and
+    /// whether it can fail. Fails when that direction is not declared.
+    pub(crate) fn apply(
+        &self,
+        dir: Direction,
+        q: &Qualifier<'_>,
+        value: &TokenStream,
+    ) -> Result<(TokenStream, bool), String> {
+        let (stage, what) = match dir {
+            Direction::In => (&self.input, "input"),
+            Direction::Out => (&self.output, "output"),
+        };
+        let stage = stage
+            .as_ref()
+            .ok_or_else(|| format!("convert!({}) declares no {what}", self.target))?;
+        Ok((
+            stage.apply(q, &self.target, &self.repr, value),
+            stage.fallible,
+        ))
     }
 }
 
+/// Which way a conversion runs: into the source type, or out of it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Direction {
+pub(crate) enum Direction {
     In,
     Out,
 }

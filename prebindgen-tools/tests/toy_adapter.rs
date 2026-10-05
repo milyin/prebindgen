@@ -133,7 +133,7 @@ impl Adapter<'_> {
                         Input::sum(&self.q, v, Wire::new(place.ident("tag"), Toy::Int), alts)
                     }
                     Decl::Convert(c) => {
-                        c.decode(&self.q, |repr| self.input(repr, &place.at(Seg::Repr)))?
+                        Input::via(&self.q, c, |repr| self.input(repr, &place.at(Seg::Repr)))?
                     }
                 };
                 match Access::of(dty) {
@@ -190,7 +190,7 @@ impl Adapter<'_> {
                             self.output(&f.ty, &at.at(Seg::field(f)), &b)
                         })?
                     }
-                    Decl::Convert(c) => c.encode(&self.q, v, |repr, r| {
+                    Decl::Convert(c) => Output::via(&self.q, c, v, |repr, r| {
                         self.output(repr, &place.at(Seg::Repr), &r)
                     })?,
                 }

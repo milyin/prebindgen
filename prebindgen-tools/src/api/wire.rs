@@ -4,7 +4,7 @@ use prebindgen_flat::flat::{Alternative, Field, Struct, TypeRef, Variant};
 use proc_macro2::{Literal, TokenStream};
 use quote::{quote, ToTokens};
 
-use crate::{Qualifier, Record, Seg};
+use crate::{api::convert::Direction, Qualifier, Record, ResolvedConversion, Seg};
 
 /// The adapter's closed set of boundary types — one enum per adapter.
 ///
@@ -136,6 +136,25 @@ impl<W: WireType> Input<W> {
             expr: expr.to_token_stream(),
             fallible: false,
         }
+    }
+
+    /// A converted value: it arrives as the conversion's representation
+    /// type, and the conversion turns that into the source type. `repr`
+    /// builds the [`Input`] of the representation type it is given. Fails
+    /// when the conversion declares no input.
+    pub fn via<E: From<String>>(
+        q: &Qualifier<'_>,
+        conversion: &ResolvedConversion,
+        repr: impl FnOnce(&TypeRef) -> Result<Input<W>, E>,
+    ) -> Result<Self, E> {
+        let (applied, fallible) = conversion.apply(Direction::In, q, &quote!(__repr))?;
+        let repr = repr(conversion.repr())?;
+        let e = repr.expr;
+        Ok(Self {
+            form: form(conversion.target(), FormKind::Via(Box::new(repr.form))),
+            expr: quote!({ let __repr = #e; #applied }),
+            fallible: repr.fallible || fallible,
+        })
     }
 
     /// `ty` arrives as parts; `build` gets their values in order.
@@ -298,6 +317,27 @@ impl<W: WireType> Output<W> {
             expr: expr.to_token_stream(),
             fallible: false,
         }
+    }
+
+    /// A converted value: the conversion turns `value` into its
+    /// representation type, which leaves instead. `repr` builds the
+    /// [`Output`] of the representation type it is given, from the
+    /// expression it is given that holds the converted value. Fails when
+    /// the conversion declares no output.
+    pub fn via<E: From<String>>(
+        q: &Qualifier<'_>,
+        conversion: &ResolvedConversion,
+        value: &TokenStream,
+        repr: impl FnOnce(&TypeRef, TokenStream) -> Result<Output<W>, E>,
+    ) -> Result<Self, E> {
+        let (applied, fallible) = conversion.apply(Direction::Out, q, value)?;
+        let repr = repr(conversion.repr(), quote!(__repr))?;
+        let e = &repr.expr;
+        Ok(Self {
+            expr: quote!({ let __repr = #applied; #e }),
+            fallible: repr.fallible || fallible,
+            form: form(conversion.target(), FormKind::Via(Box::new(repr.form))),
+        })
     }
 
     /// Nothing crosses; `value` is dropped.

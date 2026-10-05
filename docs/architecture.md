@@ -83,10 +83,11 @@ The answers compose:
   leaves are the wires, typed by the adapter's own `WireType` enum. A
   fallible expression uses `?` on `Result<_, String>`; whoever places it
   decides where the error goes.
-* `Input::wire`, `record`, `optional`, `sum`, `seq` and `parts` (and their
-  `Output` counterparts) build one layer each.
-* `ResolvedConversion::decode` / `encode` wrap the representation's `Input` or
-  `Output` in a declared conversion (`convert!`: functions or `From`/`TryFrom` impls).
+* `Input::wire`, `via`, `record`, `optional`, `sum`, `seq` and `parts` (and
+  their `Output` counterparts) build one layer each. `via` wraps the
+  representation's `Input` or `Output` in a declared conversion (`convert!`:
+  functions or `From`/`TryFrom` impls), resolved once into a
+  `ResolvedConversion`.
 * `Place` names an occurrence of a type inside a generated element;
   `Overrides` gives a type's default decision, replaced at chosen places.
 * `Qualifier` spells a flat type from the generated crate

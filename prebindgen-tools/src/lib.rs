@@ -33,12 +33,17 @@
 //! | The value crosses… | [`Input`] | [`Output`] |
 //! |---|---|---|
 //! | as one wire | [`Input::wire`] | [`Output::wire`] |
-//! | converted to another source type, which crosses instead | [`ResolvedConversion::decode`] | [`ResolvedConversion::encode`] |
+//! | converted to another source type, which crosses instead | [`Input::via`] | [`Output::via`] |
 //! | as a record's fields | [`Input::record`] | [`Output::record`] |
 //! | as an option's presence flag and value | [`Input::optional`] | [`Output::optional`] |
 //! | as a sum's tag and alternatives | [`Input::sum`] | [`Output::sum`] |
 //! | as a sequence | [`Input::seq`] | [`Output::seq`] |
 //! | as any other list of parts | [`Input::parts`] | [`Output::parts`] |
+//!
+//! Some take a description of the type: `record` takes the flat model's
+//! struct and `sum` its enum, while `via` takes the conversion the build
+//! script declared with `convert!`, resolved once into a
+//! [`ResolvedConversion`].
 //!
 //! The foreign-side writer walks the form, so it follows what the adapter
 //! decided for each layer without deciding again. What a single wire means
@@ -87,11 +92,14 @@ pub use syn as __syn;
 /// `TryInto`). A function returning `Result` makes its direction fallible;
 /// the error is reported through its `Display`.
 ///
-/// [`Conversion::resolve`] checks the declaration against the model. The
-/// adapter builds the representation's [`Input`] or [`Output`] as for any
-/// other type, inside the closure it passes to [`ResolvedConversion::decode`] or
-/// [`ResolvedConversion::encode`]; the result's [`Form`] is
-/// [`FormKind::Via`] over the representation's form.
+/// [`Conversion::resolve`] checks the declaration against the model; the
+/// adapter does it once, while planning, and keeps the
+/// [`ResolvedConversion`] as its declaration for the source type. When it
+/// builds a value of that type, it passes the conversion to [`Input::via`]
+/// or [`Output::via`], the same way [`Input::record`] takes the flat model's
+/// struct. The adapter builds the representation's [`Input`] or [`Output`]
+/// as for any other type, inside the closure it passes; the result's
+/// [`Form`] is [`FormKind::Via`] over the representation's form.
 pub mod convert {
     pub use crate::api::convert::{Conversion, FnRef, ResolvedConversion, Via};
 }
