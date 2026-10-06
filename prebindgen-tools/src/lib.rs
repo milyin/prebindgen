@@ -129,44 +129,59 @@
 //! );
 //! ```
 //!
-//! An output can be composed of others. Here `span` returns a struct, and
-//! [`Output::record`] takes it apart: each field leaves on its own `i64`
-//! wire, converted by its own output, and the wrapper returns the wires as a
-//! tuple. Applied to the call, the record output binds the result once,
-//! destructures it, and applies each field's output to its binding:
+//! An output can be composed of others. Here `sample` returns a struct, and
+//! [`Output::record`] takes it apart. The struct's fields have different
+//! types, so the closure building each field's output asks [`shape()`] what
+//! the field is and chooses its wire and conversion: an `i64` for the `u64`,
+//! the `f64` as is, a `u8` for the `bool`. Applied to the call, the record
+//! output binds the result once, destructures it, and applies each field's
+//! output to its binding; the wrapper returns the wires as a tuple:
 //!
 //! ```
 //! use prebindgen::SourceLocation;
-//! use prebindgen_flat::{flat::Type, Flat};
-//! use prebindgen_tools::{Input, Output, Wire, WireType};
+//! use prebindgen_flat::{flat::{ScalarKind, Type}, Flat};
+//! use prebindgen_tools::{shape, Input, Output, Shape, Wire, WireType};
 //! use quote::{format_ident, quote};
 //!
+//! // The wire types this example's boundary uses.
 //! #[derive(Clone, Debug)]
-//! struct Long;
-//! impl WireType for Long {
-//!     fn rust(&self) -> proc_macro2::TokenStream { quote!(i64) }
+//! enum W { Long, Double, Flag }
+//! impl WireType for W {
+//!     fn rust(&self) -> proc_macro2::TokenStream {
+//!         match self { W::Long => quote!(i64), W::Double => quote!(f64), W::Flag => quote!(u8) }
+//!     }
 //!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
 //! }
 //!
 //! let source = syn::parse_file(
-//!     "pub struct Range { pub lo: u64, pub hi: u64 } \
-//!      pub fn span(n: u64) -> Range { Range { lo: n, hi: n * 2 } }",
+//!     "pub struct Sample { pub id: u64, pub value: f64, pub ok: bool } \
+//!      pub fn sample(n: u64) -> Sample { Sample { id: n, value: n as f64 / 2.0, ok: n > 0 } }",
 //! ).unwrap();
 //! let location = SourceLocation { crate_name: Some("source_crate".into()), ..Default::default() };
 //! let flat = Flat::builder()
 //!     .items(source.items.into_iter().map(|i| (i, location.clone())))
 //!     .build().unwrap();
-//! let f = flat.function("span").unwrap();
-//! let Some(Type::Struct(range)) = flat.declared_type("Range") else { panic!("a struct") };
+//! let f = flat.function("sample").unwrap();
+//! let Some(Type::Struct(sample)) = flat.declared_type("Sample") else { panic!("a struct") };
 //!
-//! // Build: the parameter's input, and the result's record output, whose
-//! // fields each leave on a wire named like the field.
+//! // Build: the parameter's input, and the result's record output. Each
+//! // field leaves on a wire named like it, of the type its own type needs.
 //! let n = &f.params[0];
 //! let n_name = &n.name;
-//! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), Long), quote!(#n_name as u64));
-//! let output = Output::record(range, |field| {
+//! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), W::Long), quote!(#n_name as u64));
+//! let output = Output::record(sample, |field| {
 //!     let name = field.name.clone().expect("a named field");
-//!     Ok::<_, ()>(Output::wire(&field.ty, Wire::new(name, Long), |v| quote!(#v as i64)))
+//!     let wire = |w: W| Wire::new(name.clone(), w);
+//!     Ok(match shape(&field.ty, |_| None::<()>)? {
+//!         Shape::Scalar(ScalarKind::U64) => {
+//!             Output::wire(&field.ty, wire(W::Long), |v| quote!(#v as i64))
+//!         }
+//!         Shape::Scalar(ScalarKind::F64) => Output::wire(&field.ty, wire(W::Double), |v| quote!(#v)),
+//!         Shape::Scalar(ScalarKind::Bool) => {
+//!             Output::wire(&field.ty, wire(W::Flag), |v| quote!(#v as u8))
+//!         }
+//!         other => return Err(format!("`{}`: no wire for {other:?}", field.ty)),
+//!     })
 //! }).unwrap();
 //!
 //! // Use: the output's wires give the return type, its conversion of the
@@ -184,14 +199,15 @@
 //! assert_eq!(
 //!     quote!(#wrapper).to_string(),
 //!     quote! {
-//!         pub fn span_wrapper(n: i64) -> (i64, i64) {
+//!         pub fn sample_wrapper(n: i64) -> (i64, f64, u8) {
 //!             {
-//!                 let __v = source_crate::span(n as u64);
+//!                 let __v = source_crate::sample(n as u64);
 //!                 {
-//!                     let source_crate::Range { lo: __f0, hi: __f1 } = __v;
-//!                     let lo = { let __v = __f0; __v as i64 };
-//!                     let hi = { let __v = __f1; __v as i64 };
-//!                     (lo, hi)
+//!                     let source_crate::Sample { id: __f0, value: __f1, ok: __f2 } = __v;
+//!                     let id = { let __v = __f0; __v as i64 };
+//!                     let value = { let __v = __f1; __v };
+//!                     let ok = { let __v = __f2; __v as u8 };
+//!                     (id, value, ok)
 //!                 }
 //!             }
 //!         }
