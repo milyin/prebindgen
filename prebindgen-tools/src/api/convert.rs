@@ -5,7 +5,7 @@ use prebindgen_flat::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use crate::{Input, Output, Qualifier};
+use crate::Qualifier;
 
 /// A function a declaration refers to: a flat item by name, or a
 /// binding-local path with its signature stated.
@@ -42,7 +42,7 @@ impl FnRef {
     }
 
     /// The function as the model reads it: the flat item, or the stated
-    /// signature lowered against the flat namespace.
+    /// signature read against the flat model's type names.
     pub fn resolve(&self, flat: &Flat) -> Result<Function, String> {
         match &self.sig {
             Some(sig) => {
@@ -132,52 +132,122 @@ impl Conversion {
     }
 
     /// Resolve both directions against the model.
+    ///
+    /// Each declared direction is read first, for how it converts and which
+    /// representation type it names. The directions must name the same one,
+    /// and at least one must be declared; that type is then the conversion's
+    /// representation.
     pub fn resolve(&self, flat: &Flat) -> Result<ResolvedConversion, String> {
         let target = flat
             .classify(&self.ty)
             .map_err(|e| format!("convert!({}): {e}", self.ty.to_token_stream()))?;
-        let input = self
-            .input
-            .as_ref()
-            .map(|v| Stage::resolve(flat, v, &target, Direction::In))
-            .transpose()?;
-        let output = self
-            .output
-            .as_ref()
-            .map(|v| Stage::resolve(flat, v, &target, Direction::Out))
-            .transpose()?;
+        let read = |via: &Option<Via>, dir| {
+            via.as_ref()
+                .map(|v| Stage::resolve(flat, v, &target, dir))
+                .transpose()
+        };
+        let (input, output) = (
+            read(&self.input, Direction::In)?,
+            read(&self.output, Direction::Out)?,
+        );
+        let repr = match (&input, &output) {
+            (Some((_, i)), Some((_, o))) if i.key() != o.key() => {
+                return Err(format!(
+                    "convert!({target}): the input converts from `{i}` but the output \
+                     converts to `{o}`; both directions must use one representation type"
+                ))
+            }
+            (Some((_, r)), _) | (None, Some((_, r))) => r.clone(),
+            (None, None) => {
+                return Err(format!(
+                    "convert!({target}) declares neither `.input(..)` nor `.output(..)`"
+                ))
+            }
+        };
         Ok(ResolvedConversion {
             target,
-            input,
-            output,
+            repr,
+            input: input.map(|(s, _)| s),
+            output: output.map(|(s, _)| s),
         })
     }
 }
 
-/// A conversion resolved against the model.
+/// A conversion resolved against the model: the source type crosses as
+/// its representation type, converted on the way in, on the way out, or
+/// both. Both directions share the representation, so the foreign side sees
+/// one type for the source type whichever way a value goes.
+///
+/// An adapter keeps it as its declaration for the source type, and passes
+/// it to [`Input::via`](crate::Input::via) or
+/// [`Output::via`](crate::Output::via) when it builds a value of that type.
 #[derive(Clone, Debug)]
 pub struct ResolvedConversion {
-    /// The source type being converted.
-    pub target: TypeRef,
+    target: TypeRef,
+    repr: TypeRef,
     /// Representation → source.
-    pub input: Option<Stage>,
+    input: Option<Stage>,
     /// Source → representation.
-    pub output: Option<Stage>,
+    output: Option<Stage>,
 }
 
+impl ResolvedConversion {
+    /// The representation type: what the source type crosses as.
+    pub fn repr(&self) -> &TypeRef {
+        &self.repr
+    }
+
+    /// The functions the conversion calls, so an adapter can count them as
+    /// used.
+    pub fn functions(&self) -> impl Iterator<Item = &FnRef> {
+        [&self.input, &self.output]
+            .into_iter()
+            .flatten()
+            .filter_map(|s| match &s.how {
+                How::Call { fun, .. } => Some(&**fun),
+                _ => None,
+            })
+    }
+
+    /// The source type being converted.
+    pub fn target(&self) -> &TypeRef {
+        &self.target
+    }
+
+    /// The conversion call in direction `dir` applied to `value`, and
+    /// whether it can fail. Fails when that direction is not declared.
+    pub(crate) fn apply(
+        &self,
+        dir: Direction,
+        q: &Qualifier<'_>,
+        value: &TokenStream,
+    ) -> Result<(TokenStream, bool), String> {
+        let (stage, what) = match dir {
+            Direction::In => (&self.input, "input"),
+            Direction::Out => (&self.output, "output"),
+        };
+        let stage = stage
+            .as_ref()
+            .ok_or_else(|| format!("convert!({}) declares no {what}", self.target))?;
+        Ok((
+            stage.apply(q, &self.target, &self.repr, value),
+            stage.fallible,
+        ))
+    }
+}
+
+/// Which way a conversion runs: into the source type, or out of it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Direction {
+pub(crate) enum Direction {
     In,
     Out,
 }
 
-/// One direction of a conversion.
+/// One direction of a conversion: how it converts. The types it converts
+/// between are the conversion's.
 #[derive(Clone, Debug)]
-pub struct Stage {
-    /// The representation type on the boundary side.
-    pub repr: TypeRef,
-    /// Whether the stage can fail.
-    pub fallible: bool,
+struct Stage {
+    fallible: bool,
     how: How,
 }
 
@@ -185,21 +255,29 @@ pub struct Stage {
 enum How {
     /// Call a function; `by_ref` when it takes its argument by reference.
     Call {
-        fun: FnRef,
+        fun: Box<FnRef>,
         by_ref: bool,
     },
-    From(TypeRef),
-    Into(TypeRef),
-    TryFrom(TypeRef),
-    TryInto(TypeRef),
+    From,
+    Into,
+    TryFrom,
+    TryInto,
 }
 
 impl Stage {
-    fn resolve(flat: &Flat, via: &Via, target: &TypeRef, dir: Direction) -> Result<Self, String> {
+    /// Read one declared direction: the stage, and the representation type
+    /// it converts from (input) or to (output).
+    fn resolve(
+        flat: &Flat,
+        via: &Via,
+        target: &TypeRef,
+        dir: Direction,
+    ) -> Result<(Self, TypeRef), String> {
         let classify = |t: &syn::Type| {
             flat.classify(t)
                 .map_err(|e| format!("conversion type `{}`: {e}", t.to_token_stream()))
         };
+        let stage = |fallible, how| Stage { fallible, how };
         Ok(match via {
             Via::Fn(fun) => {
                 let f = fun.resolve(flat)?;
@@ -216,12 +294,12 @@ impl Stage {
                 };
                 // The side facing the converted type must be that type: an
                 // input stage returns it, an output stage takes it (or a
-                // borrow of it).
-                let facing = match dir {
-                    Direction::In => &ret,
+                // borrow of it). The other side is the representation.
+                let (facing, repr) = match dir {
+                    Direction::In => (&ret, param.ty.clone()),
                     Direction::Out => match param.ty.kind() {
-                        TypeKind::Ref { inner, .. } => &**inner,
-                        _ => &param.ty,
+                        TypeKind::Ref { inner, .. } => (&**inner, ret.clone()),
+                        _ => (&param.ty, ret.clone()),
                     },
                 };
                 if facing.key() != target.key() {
@@ -233,69 +311,31 @@ impl Stage {
                         "{what} conversion fn `{name}` must {side} `{target}`, not `{facing}`"
                     ));
                 }
-                match dir {
-                    Direction::In => Stage {
-                        repr: param.ty.clone(),
-                        fallible,
-                        how: How::Call {
-                            fun: fun.clone(),
-                            by_ref: false,
-                        },
-                    },
-                    Direction::Out => {
-                        let by_ref = matches!(param.ty.kind(), TypeKind::Ref { .. });
-                        Stage {
-                            repr: ret,
-                            fallible,
-                            how: How::Call {
-                                fun: fun.clone(),
-                                by_ref,
-                            },
-                        }
-                    }
-                }
+                let by_ref =
+                    dir == Direction::Out && matches!(param.ty.kind(), TypeKind::Ref { .. });
+                let fun = Box::new(fun.clone());
+                (stage(fallible, How::Call { fun, by_ref }), repr)
             }
-            Via::From(t) => {
-                let r = classify(t)?;
-                Stage {
-                    repr: r.clone(),
-                    fallible: false,
-                    how: How::From(r),
-                }
-            }
-            Via::Into(t) => {
-                let r = classify(t)?;
-                Stage {
-                    repr: r.clone(),
-                    fallible: false,
-                    how: How::Into(r),
-                }
-            }
-            Via::TryFrom(t) => {
-                let r = classify(t)?;
-                Stage {
-                    repr: r.clone(),
-                    fallible: true,
-                    how: How::TryFrom(r),
-                }
-            }
-            Via::TryInto(t) => {
-                let r = classify(t)?;
-                Stage {
-                    repr: r.clone(),
-                    fallible: true,
-                    how: How::TryInto(r),
-                }
-            }
+            Via::From(t) => (stage(false, How::From), classify(t)?),
+            Via::Into(t) => (stage(false, How::Into), classify(t)?),
+            Via::TryFrom(t) => (stage(true, How::TryFrom), classify(t)?),
+            Via::TryInto(t) => (stage(true, How::TryInto), classify(t)?),
         })
     }
 
-    /// Apply the stage to `value`. For an input stage `value` is the
-    /// representation and the result the source type; for an output stage
-    /// the other way round. A fallible stage produces an expression using
-    /// `?` on a `Result<_, String>`.
-    pub fn apply(&self, q: &Qualifier<'_>, target: &TypeRef, value: &TokenStream) -> TokenStream {
-        let t = q.ty(target);
+    /// Apply the stage to `value`, between `target` and its representation
+    /// `repr`. For an input stage `value` is the representation and the
+    /// result the source type; for an output stage the other way round. A
+    /// fallible stage produces an expression using `?` on a
+    /// `Result<_, String>`.
+    fn apply(
+        &self,
+        q: &Qualifier<'_>,
+        target: &TypeRef,
+        repr: &TypeRef,
+        value: &TokenStream,
+    ) -> TokenStream {
+        let (t, r) = (q.ty(target), q.ty(repr));
         let call = match &self.how {
             How::Call { fun, by_ref } => {
                 let callee = fun.callee(q);
@@ -305,81 +345,15 @@ impl Stage {
                     quote!(#callee(#value))
                 }
             }
-            How::From(r) => {
-                let r = q.ty(r);
-                quote!(<#t as ::core::convert::From<#r>>::from(#value))
-            }
-            How::Into(r) => {
-                let r = q.ty(r);
-                quote!(<#t as ::core::convert::Into<#r>>::into(#value))
-            }
-            How::TryFrom(r) => {
-                let r = q.ty(r);
-                quote!(<#t as ::core::convert::TryFrom<#r>>::try_from(#value))
-            }
-            How::TryInto(r) => {
-                let r = q.ty(r);
-                quote!(<#t as ::core::convert::TryInto<#r>>::try_into(#value))
-            }
+            How::From => quote!(<#t as ::core::convert::From<#r>>::from(#value)),
+            How::Into => quote!(<#t as ::core::convert::Into<#r>>::into(#value)),
+            How::TryFrom => quote!(<#t as ::core::convert::TryFrom<#r>>::try_from(#value)),
+            How::TryInto => quote!(<#t as ::core::convert::TryInto<#r>>::try_into(#value)),
         };
         if self.fallible {
             quote!(#call.map_err(|__e| ::std::string::ToString::to_string(&__e))?)
         } else {
             call
-        }
-    }
-}
-
-impl Stage {
-    /// The function this stage calls, when it calls one.
-    pub fn function(&self) -> Option<&FnRef> {
-        match &self.how {
-            How::Call { fun, .. } => Some(fun),
-            _ => None,
-        }
-    }
-
-    /// This input stage over its representation's input: the wires `repr`
-    /// reads become the converted value. The representation is bound to `r`
-    /// and `check` (statements, possibly using `?`) runs on it first.
-    pub fn decode(
-        &self,
-        q: &Qualifier<'_>,
-        target: &TypeRef,
-        repr: Input,
-        r: &syn::Ident,
-        check: TokenStream,
-    ) -> Input {
-        let applied = self.apply(q, target, &r.to_token_stream());
-        let fallible = repr.fallible || self.fallible || !check.is_empty();
-        let e = repr.expr;
-        Input {
-            wires: repr.wires,
-            expr: quote!({ let #r = #e; #check #applied }),
-            fallible,
-            pass: None,
-        }
-    }
-
-    /// This output stage ahead of its representation's output: `value`
-    /// becomes the representation, bound to `r`, which `repr` reads. `check`
-    /// runs on it in between.
-    pub fn encode(
-        &self,
-        q: &Qualifier<'_>,
-        target: &TypeRef,
-        value: &TokenStream,
-        r: &syn::Ident,
-        check: TokenStream,
-        repr: Output,
-    ) -> Output {
-        let applied = self.apply(q, target, value);
-        let fallible = repr.fallible || self.fallible || !check.is_empty();
-        let e = &repr.expr;
-        Output {
-            wires: repr.wires.clone(),
-            expr: quote!({ let #r = #applied; #check #e }),
-            fallible,
         }
     }
 }

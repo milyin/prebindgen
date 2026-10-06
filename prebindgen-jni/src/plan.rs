@@ -8,7 +8,7 @@
 //! elements to write — package by package, each package's classes, then
 //! its functions, then its constants — each with every decision about it
 //! already made: its Kotlin and extern names, how each parameter crosses
-//! (a value, packed, a selector), how the result and the error leave. The
+//! (a value or a selector), how the result and the error leave. The
 //! Kotlin support interfaces those decisions need — callback, sink, builder,
 //! folder and error-handler interfaces — are planned alongside, once each.
 //!
@@ -64,7 +64,7 @@ pub(crate) struct Class {
 #[derive(Debug)]
 pub(crate) enum ClassKind {
     Ptr { gc: bool },
-    Data { packed: bool },
+    Data,
     Enum,
     Sealed { renames: HashMap<String, String> },
 }
@@ -110,8 +110,8 @@ pub(crate) enum Callee {
 pub(crate) enum PPlan {
     /// The receiver of a method: `this`.
     Receiver(Param),
-    /// A value; `true` when its leaves travel packed.
-    Value(Param, bool),
+    /// A value.
+    Value(Param),
     /// Built or passed as chosen by a selector; `true` when split into
     /// typed overloads.
     Selector(Selector, bool),
@@ -314,12 +314,7 @@ impl<'f> Plan<'f> {
             for c in &p.classes {
                 let (ty, name, kind, iface) = match c {
                     ClassDecl::Ptr(d) => (&d.ty, &d.name, ClassKind::Ptr { gc: d.gc }, &d.iface),
-                    ClassDecl::Data(d) => (
-                        &d.ty,
-                        &d.name,
-                        ClassKind::Data { packed: d.packed },
-                        &d.iface,
-                    ),
+                    ClassDecl::Data(d) => (&d.ty, &d.name, ClassKind::Data, &d.iface),
                     ClassDecl::Enum(d) => (&d.ty, &d.name, ClassKind::Enum, &d.iface),
                     ClassDecl::Sealed(d) => (
                         &d.ty,
@@ -342,7 +337,7 @@ impl<'f> Plan<'f> {
                 let fits = matches!(
                     (&kind, element),
                     (ClassKind::Ptr { .. }, _)
-                        | (ClassKind::Data { .. }, FlatType::Struct(_))
+                        | (ClassKind::Data, FlatType::Struct(_))
                         | (ClassKind::Enum, FlatType::Enum(_))
                         | (ClassKind::Sealed { .. }, FlatType::Variant(_))
                 );
@@ -353,7 +348,7 @@ impl<'f> Plan<'f> {
                 }
                 let hook = match kind {
                     ClassKind::Ptr { .. } => &b.ptr_hook,
-                    ClassKind::Data { .. } | ClassKind::Sealed { .. } => &b.data_hook,
+                    ClassKind::Data | ClassKind::Sealed { .. } => &b.data_hook,
                     ClassKind::Enum => &b.enum_hook,
                 };
                 let name = match (name, hook) {
@@ -391,9 +386,9 @@ impl<'f> Plan<'f> {
         }
         for c in &b.converts {
             let resolved = c.conversion.resolve(self.flat).map_err(Error)?;
-            let name = match resolved.target.kind() {
+            let name = match resolved.target().kind() {
                 TypeKind::Named { id, .. } => id.name.clone(),
-                _ => return err(format!("convert!({}) must name a type", resolved.target)),
+                _ => return err(format!("convert!({}) must name a type", resolved.target())),
             };
             let conv = Conv {
                 name: name.clone(),
@@ -836,7 +831,7 @@ impl Planner<'_, '_> {
                             Ok(Support::Callback(p.ty.clone()))
                         })?;
                     }
-                    params.push(PPlan::Value(p.clone(), plan.packed(&p.ty)));
+                    params.push(PPlan::Value(p.clone()));
                 }
             }
         }
@@ -849,29 +844,6 @@ impl Planner<'_, '_> {
                     "`{}`: `.split_on_param(\"{s}\")` names no selector parameter",
                     f.name
                 ));
-            }
-        }
-        // The JVM caps a method's arguments at 255 slots (the holder object
-        // is one): pack the largest values until the extern fits.
-        loop {
-            let mut slots = 1 + 3;
-            let mut largest: Option<(usize, usize)> = None;
-            for (i, p) in params.iter().enumerate() {
-                let n: usize = plan.param_leaves(p)?.iter().map(Leaf::slots).sum();
-                slots += n;
-                if let PPlan::Value(_, false) = p {
-                    if largest.is_none_or(|(_, m)| n > m) {
-                        largest = Some((i, n));
-                    }
-                }
-            }
-            match largest {
-                Some((i, _)) if slots > 255 => {
-                    if let PPlan::Value(_, packed) = &mut params[i] {
-                        *packed = true;
-                    }
-                }
-                _ => break,
             }
         }
         Ok(params)
@@ -1060,33 +1032,14 @@ fn simple(fqn: &str) -> String {
 }
 
 impl Plan<'_> {
-    /// Whether a parameter of `ty` crosses packed by declaration.
-    fn packed(&self, ty: &TypeRef) -> bool {
-        let t = ty.borrow_target().unwrap_or(ty);
-        matches!(
-            t.kind(),
-            TypeKind::Named { id, .. }
-                if matches!(self.class(&id.name).map(|c| &c.kind), Some(ClassKind::Data { packed: true }))
-        )
-    }
-
     /// The raw leaves of the extern for one parameter.
     pub(crate) fn param_leaves(&self, p: &PPlan) -> Res<Vec<Leaf>> {
         match p {
-            PPlan::Receiver(fp) | PPlan::Value(fp, false) => Ok(self
+            PPlan::Receiver(fp) | PPlan::Value(fp) => Ok(self
                 .leaves(&fp.ty, Dir::In)?
                 .into_iter()
                 .map(|l| l.under(&names::bare(&fp.name)))
                 .collect()),
-            PPlan::Value(fp, true) => {
-                let root = names::bare(&fp.name);
-                let leaves: Vec<Leaf> = self
-                    .leaves(&fp.ty, Dir::In)?
-                    .into_iter()
-                    .map(|l| l.under(&root))
-                    .collect();
-                Ok(crate::lower::pack::packed_leaves(&root, &leaves))
-            }
             PPlan::Selector(s, _) => self.selector_leaves(s),
         }
     }

@@ -21,13 +21,11 @@
 //!
 //! [`deliver`] hands a value to Kotlin as a list of parameters (a builder's,
 //! a callback's, an error handler's); [`select`] builds a parameter from a
-//! choice of constructors; [`pack`] folds a parameter's leaves into one array
-//! per JNI type.
+//! choice of constructors.
 
 pub(crate) mod deliver;
 pub(crate) mod kotlin;
 pub(crate) mod leaf;
-pub(crate) mod pack;
 pub(crate) mod rust;
 pub(crate) mod select;
 
@@ -51,6 +49,13 @@ fn declared_name(ty: &TypeRef) -> Option<&str> {
         _ => ty,
     };
     bare_declared_name(core)
+}
+
+/// A parameter's input, plus how the wrapper passes the bound value to the
+/// callee when not as is — `&s` for a borrow of a decoded local.
+pub(crate) struct Param {
+    pub input: prebindgen_tools::Input<Leaf>,
+    pub pass: Option<proc_macro2::TokenStream>,
 }
 
 /// Which way a value crosses.
@@ -241,15 +246,9 @@ impl Plan<'_> {
         })
     }
 
-    /// The representation a converted type crosses as, in one direction.
-    pub(crate) fn conv_repr<'c>(&self, c: &'c Conv, dir: Dir) -> Res<&'c TypeRef> {
-        let stage = match dir {
-            Dir::In => c.resolved.input.as_ref().or(c.resolved.output.as_ref()),
-            Dir::Out => c.resolved.output.as_ref().or(c.resolved.input.as_ref()),
-        };
-        stage
-            .map(|s| &s.repr)
-            .ok_or_else(|| crate::Error(format!("convert!({}) declares no direction", c.name)))
+    /// The representation a converted type crosses as.
+    pub(crate) fn conv_repr<'c>(&self, c: &'c Conv) -> &'c TypeRef {
+        c.resolved.repr()
     }
 
     /// The fields of a data class's struct.
@@ -302,11 +301,11 @@ impl Plan<'_> {
                 _ => return err(format!("`{ty}`: only arrays of primitives cross")),
             },
             Shape::Declared { declaration, .. } => match declaration {
-                Setting::Converted(c) => self.leaves(self.conv_repr(c, dir)?, dir)?,
+                Setting::Converted(c) => self.leaves(self.conv_repr(c), dir)?,
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => vec![Leaf::new(LeafTy::Prim(Prim::J))],
                     ClassKind::Enum => vec![Leaf::new(LeafTy::Prim(Prim::I))],
-                    ClassKind::Data { .. } => {
+                    ClassKind::Data => {
                         let mut out = Vec::new();
                         for f in &self.struct_of(c)?.fields {
                             let seg = field_seg(f);
@@ -377,7 +376,7 @@ impl Plan<'_> {
             },
             Shape::Declared { declaration, .. } => match declaration {
                 Setting::Class(c) => c.fqn(),
-                Setting::Converted(c) => self.kt_type(self.conv_repr(c, Dir::In)?)?,
+                Setting::Converted(c) => self.kt_type(self.conv_repr(c))?,
             },
             Shape::Option(inner) => format!("{}?", self.kt_type(inner)?),
             Shape::Seq { elem, .. } => format!("List<{}>", self.kt_type(elem)?),
@@ -399,7 +398,7 @@ impl Plan<'_> {
                 ..
             } => match &c.kind {
                 ClassKind::Ptr { .. } => Access::of(ty) != Access::Exclusive,
-                ClassKind::Data { .. } => {
+                ClassKind::Data => {
                     let mut any = false;
                     for f in &self.struct_of(c)?.fields {
                         any |= self.owns_handle(&f.ty)?;

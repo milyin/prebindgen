@@ -106,6 +106,12 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl From<String> for Error {
+    fn from(e: String) -> Self {
+        Error(e)
+    }
+}
+
 /// The generated binding: the Rust file and the Kotlin sources.
 pub struct Generation {
     rust: RustFile,

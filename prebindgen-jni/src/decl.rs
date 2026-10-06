@@ -373,7 +373,6 @@ pub struct DataClassDecl {
     pub(crate) name: Option<String>,
     pub(crate) methods: Vec<FunctionDecl>,
     pub(crate) constructors: Vec<FunctionDecl>,
-    pub(crate) packed: bool,
     pub(crate) iface: Iface,
 }
 
@@ -384,7 +383,6 @@ impl DataClassDecl {
             name: None,
             methods: Vec::new(),
             constructors: Vec::new(),
-            packed: false,
             iface: Iface::default(),
         }
     }
@@ -402,14 +400,6 @@ impl DataClassDecl {
 
     pub fn constructor(mut self, f: FunctionDecl) -> Self {
         self.constructors.push(f);
-        self
-    }
-
-    /// Cross an input of this class as one packed argument per JNI type
-    /// rather than one argument per field — for values whose fields exceed
-    /// the JVM's method-argument limit.
-    pub fn jobject_input(mut self) -> Self {
-        self.packed = true;
         self
     }
 

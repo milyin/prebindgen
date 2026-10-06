@@ -3,6 +3,7 @@
 pub(super) mod convert;
 pub(super) mod file;
 pub(super) mod names;
+pub(super) mod place;
 pub(super) mod qualify;
 pub(super) mod record;
 pub(super) mod shape;

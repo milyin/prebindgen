@@ -11,9 +11,34 @@ use prebindgen_tools::RustFile;
 use quote::quote;
 
 use crate::{
-    plan::{Item, Plan, Res},
+    plan::{err, Item, Plan, Res},
     Generation,
 };
+
+/// Refuse a JVM method whose parameters would take more than 255 slots, the
+/// JVM's limit (JVMS §4.3.3). Counted from the Kotlin parameter types as
+/// written: a non-null `Long`, `ULong` or `Double` is a JVM `long` or
+/// `double` and takes two slots, any other parameter one. An instance
+/// method's receiver — `this` of a class or interface method, a
+/// constructor, or a companion method — takes one more; a top-level
+/// function is static and has none.
+pub(crate) fn check_slots<T: AsRef<str>>(method: &str, types: &[T], receiver: bool) -> Res<()> {
+    let slots = usize::from(receiver)
+        + types
+            .iter()
+            .map(|t| match t.as_ref() {
+                "Long" | "ULong" | "Double" => 2,
+                _ => 1,
+            })
+            .sum::<usize>();
+    if slots > 255 {
+        return err(format!(
+            "{method} would take {slots} JVM argument slots, more than the JVM's limit of 255: \
+             split the value into smaller parameters or fields"
+        ));
+    }
+    Ok(())
+}
 
 /// What writing produces, as it accumulates.
 pub(crate) struct Out {

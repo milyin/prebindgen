@@ -554,8 +554,8 @@ pub(crate) unsafe fn __cbg_in_Note(
                 }
                 note_t::After(__f0) => {
                     example_flat::Note::After({
-                        let __cbg_repr = __f0;
-                        example_flat::millis_from_raw(__cbg_repr)
+                        let __repr = __f0;
+                        example_flat::millis_from_raw(__repr)
                     })
                 }
                 note_t::Flagged(__f0) => {
@@ -591,8 +591,8 @@ pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<
             }
             example_flat::Note::After(__f0) => {
                 let __f0 = {
-                    let __cbg_value = example_flat::millis_to_raw(&__f0);
-                    __cbg_value
+                    let __repr = example_flat::millis_to_raw(&__f0);
+                    __repr
                 };
                 note_t::After(__f0)
             }

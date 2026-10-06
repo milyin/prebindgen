@@ -5,7 +5,7 @@ use prebindgen_flat::Flat;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::{record_in, record_out, Input, Output, Qualifier, Record, Wire};
+use crate::{FormKind, Input, Output, Qualifier, Wire, WireType};
 
 fn model(src: &str) -> Flat {
     let loc = SourceLocation {
@@ -55,42 +55,6 @@ fn qualifier_names_items_by_their_crate() {
 }
 
 #[test]
-fn records_keep_the_source_delimiters() {
-    let flat = model(SRC);
-    let Some(prebindgen_flat::flat::Type::Struct(payload)) = flat.declared_type("Payload") else {
-        panic!("Payload is a struct");
-    };
-    let parts = payload
-        .fields
-        .iter()
-        .map(|f| Input::identity(Wire::new(format_ident!("w{}", f.index), quote!(u8))))
-        .collect();
-    let input = record_in(Record::Struct(payload), &quote!(Payload), parts);
-    assert_eq!(norm(input.expr), "Payload{id:w0,label:w1}");
-    assert_eq!(input.wires.len(), 2);
-
-    let Some(prebindgen_flat::flat::Type::Variant(shape)) = flat.declared_type("Shape") else {
-        panic!("Shape is a sum");
-    };
-    // A positional alternative is rebuilt positionally.
-    let circle = Record::Alt(&shape.alternatives[1]);
-    let input = record_in(
-        circle,
-        &quote!(Shape::Circle),
-        vec![Input::identity(Wire::new(format_ident!("r"), quote!(f64)))],
-    );
-    assert_eq!(norm(input.expr), "Shape::Circle(r)");
-    let rect = Record::Alt(&shape.alternatives[2]);
-    let out = record_out::<()>(rect, &quote!(Shape::Rect), &quote!(v), |f, b| {
-        let n = format_ident!("o_{}", f.name.as_ref().unwrap());
-        Ok(Output::single(Wire::new(n, quote!(f64)), b.clone()))
-    })
-    .unwrap();
-    assert_eq!(out.wires.len(), 2);
-    assert!(norm(out.expr).starts_with("{letShape::Rect{w:__f0,h:__f1}=v;"));
-}
-
-#[test]
 fn conversions_resolve_both_directions() {
     let flat = model(SRC);
     let conv = crate::convert!(Millis)
@@ -99,16 +63,64 @@ fn conversions_resolve_both_directions() {
         .resolve(&flat)
         .unwrap();
     let q = Qualifier::new(&flat);
-    let input = conv.input.unwrap();
+    let ty = |s: &str| flat.classify(&syn::parse_str(s).unwrap()).unwrap();
+    let wire = || Wire::new(format_ident!("w"), Raw);
+    let (millis, raw) = (ty("Millis"), ty("u64"));
+    assert_eq!(conv.repr().key(), raw.key());
+
+    let input = Input::via(&q, &conv, |r| {
+        Ok::<_, String>(Input::wire(r, wire(), quote!(w)))
+    })
+    .unwrap();
     assert!(!input.fallible);
+    assert!(matches!(input.form.kind, FormKind::Via(_)));
     assert_eq!(
-        norm(input.apply(&q, &conv.target, &quote!(r))),
-        "src_crate::millis_from(r)"
+        norm(input.expr),
+        "{let__repr=w;src_crate::millis_from(__repr)}"
     );
-    let output = conv.output.unwrap();
-    assert!(output.fallible, "a Result-returning stage is fallible");
-    let applied = norm(output.apply(&q, &conv.target, &quote!(v)));
-    assert!(applied.starts_with("src_crate::millis_to(&v)"), "{applied}");
+
+    let output = Output::via(&q, &conv, &quote!(v), |r, e| {
+        Ok::<_, String>(Output::wire(r, wire(), e))
+    })
+    .unwrap();
+    assert!(output.fallible, "a Result-returning function is fallible");
+    assert_eq!(output.form.ty.key(), millis.key());
+    assert!(
+        norm(output.expr.clone()).starts_with("{let__repr=src_crate::millis_to(&v)"),
+        "{}",
+        output.expr
+    );
+    assert_eq!(
+        conv.functions()
+            .map(|f| f.name().to_string())
+            .collect::<Vec<_>>(),
+        ["millis_from", "millis_to"]
+    );
+
+    // A direction the declaration leaves out is an error at use.
+    let one_way = crate::convert!(Millis)
+        .input(crate::fun!(millis_from))
+        .resolve(&flat)
+        .unwrap();
+    let e = Output::via(&q, &one_way, &quote!(v), |r, e| {
+        Ok::<_, String>(Output::wire(r, wire(), e))
+    })
+    .expect_err("no output declared");
+    assert!(e.contains("declares no output"), "{e}");
+}
+
+/// A wire type for tests that only look at expressions.
+#[derive(Clone, Debug)]
+struct Raw;
+
+impl WireType for Raw {
+    fn rust(&self) -> TokenStream {
+        quote!(u64)
+    }
+
+    fn placeholder(&self) -> TokenStream {
+        quote!(0)
+    }
 }
 
 #[test]
@@ -124,6 +136,14 @@ fn conversions_refuse_mismatched_functions() {
     // An output stage that does not take it.
     let e = err(crate::convert!(Millis).output(crate::fun!(millis_raw)));
     assert!(e.contains("must take `Millis`"), "{e}");
+    // The two directions must agree on the representation.
+    let e = err(crate::convert!(Millis)
+        .input(crate::fun!(millis_from))
+        .output(crate::into!(i32)));
+    assert!(e.contains("one representation type"), "{e}");
+    // A conversion with no direction converts nothing.
+    let e = err(crate::convert!(Millis));
+    assert!(e.contains("declares neither"), "{e}");
     // A path outside the flat model needs its signature stated.
     let e = err(crate::convert!(Millis).input(crate::fun!(crate::local::millis_from)));
     assert!(e.contains(".sig("), "{e}");

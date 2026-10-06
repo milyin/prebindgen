@@ -178,15 +178,6 @@ public data class ObjectBoundary64(val left: io.prebindgen.perftest.ObjectBounda
     }
 }
 
-public data class ObjectBoundary64Object(val left: io.prebindgen.perftest.ObjectBoundary32, val right: io.prebindgen.perftest.ObjectBoundary32) {
-
-
-    public companion object {
-        @JvmStatic
-        public fun fromParts(left: io.prebindgen.perftest.ObjectBoundary32, right: io.prebindgen.perftest.ObjectBoundary32): ObjectBoundary64Object = ObjectBoundary64Object(left, right)
-    }
-}
-
 public class Storage(initialPtr: Long) : io.prebindgen.perftest.NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
@@ -355,13 +346,6 @@ public fun largeFlatInputSum(value: io.prebindgen.perftest.ObjectBoundary64, onE
     return __ret
 }
 
-public fun largeObjectInputSum(value: io.prebindgen.perftest.ObjectBoundary64Object, onError: io.prebindgen.perftest.JniErrorHandler<Long>): Long {
-    val __bcap = io.prebindgen.perftest.JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.perftest.JNINative.largeObjectInputSum(longArrayOf(value.left.left.left.left.left.left.value, value.left.left.left.left.left.right.value, value.left.left.left.left.right.left.value, value.left.left.left.left.right.right.value, value.left.left.left.right.left.left.value, value.left.left.left.right.left.right.value, value.left.left.left.right.right.left.value, value.left.left.left.right.right.right.value, value.left.left.right.left.left.left.value, value.left.left.right.left.left.right.value, value.left.left.right.left.right.left.value, value.left.left.right.left.right.right.value, value.left.left.right.right.left.left.value, value.left.left.right.right.left.right.value, value.left.left.right.right.right.left.value, value.left.left.right.right.right.right.value, value.left.right.left.left.left.left.value, value.left.right.left.left.left.right.value, value.left.right.left.left.right.left.value, value.left.right.left.left.right.right.value, value.left.right.left.right.left.left.value, value.left.right.left.right.left.right.value, value.left.right.left.right.right.left.value, value.left.right.left.right.right.right.value, value.left.right.right.left.left.left.value, value.left.right.right.left.left.right.value, value.left.right.right.left.right.left.value, value.left.right.right.left.right.right.value, value.left.right.right.right.left.left.value, value.left.right.right.right.left.right.value, value.left.right.right.right.right.left.value, value.left.right.right.right.right.right.value, value.right.left.left.left.left.left.value, value.right.left.left.left.left.right.value, value.right.left.left.left.right.left.value, value.right.left.left.left.right.right.value, value.right.left.left.right.left.left.value, value.right.left.left.right.left.right.value, value.right.left.left.right.right.left.value, value.right.left.left.right.right.right.value, value.right.left.right.left.left.left.value, value.right.left.right.left.left.right.value, value.right.left.right.left.right.left.value, value.right.left.right.left.right.right.value, value.right.left.right.right.left.left.value, value.right.left.right.right.left.right.value, value.right.left.right.right.right.left.value, value.right.left.right.right.right.right.value, value.right.right.left.left.left.left.value, value.right.right.left.left.left.right.value, value.right.right.left.left.right.left.value, value.right.right.left.left.right.right.value, value.right.right.left.right.left.left.value, value.right.right.left.right.left.right.value, value.right.right.left.right.right.left.value, value.right.right.left.right.right.right.value, value.right.right.right.left.left.left.value, value.right.right.right.left.left.right.value, value.right.right.right.left.right.left.value, value.right.right.right.left.right.right.value, value.right.right.right.right.left.left.value, value.right.right.right.right.left.right.value, value.right.right.right.right.right.left.value, value.right.right.right.right.right.right.value), __bcap)
-    if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
-}
-
 public fun interface __Sink_Option_Payload {
     public fun run(present: Boolean, id: Long, seq: Int, value: Double, flag: Boolean, label: String?): Any?
 }
@@ -420,8 +404,6 @@ internal object JNINative {
     external fun tokenGcNew(value: Long, errorSink: Any): Long
 
     external fun largeFlatInputSum(valueLeftLeftLeftLeftLeftLeftValue: Long, valueLeftLeftLeftLeftLeftRightValue: Long, valueLeftLeftLeftLeftRightLeftValue: Long, valueLeftLeftLeftLeftRightRightValue: Long, valueLeftLeftLeftRightLeftLeftValue: Long, valueLeftLeftLeftRightLeftRightValue: Long, valueLeftLeftLeftRightRightLeftValue: Long, valueLeftLeftLeftRightRightRightValue: Long, valueLeftLeftRightLeftLeftLeftValue: Long, valueLeftLeftRightLeftLeftRightValue: Long, valueLeftLeftRightLeftRightLeftValue: Long, valueLeftLeftRightLeftRightRightValue: Long, valueLeftLeftRightRightLeftLeftValue: Long, valueLeftLeftRightRightLeftRightValue: Long, valueLeftLeftRightRightRightLeftValue: Long, valueLeftLeftRightRightRightRightValue: Long, valueLeftRightLeftLeftLeftLeftValue: Long, valueLeftRightLeftLeftLeftRightValue: Long, valueLeftRightLeftLeftRightLeftValue: Long, valueLeftRightLeftLeftRightRightValue: Long, valueLeftRightLeftRightLeftLeftValue: Long, valueLeftRightLeftRightLeftRightValue: Long, valueLeftRightLeftRightRightLeftValue: Long, valueLeftRightLeftRightRightRightValue: Long, valueLeftRightRightLeftLeftLeftValue: Long, valueLeftRightRightLeftLeftRightValue: Long, valueLeftRightRightLeftRightLeftValue: Long, valueLeftRightRightLeftRightRightValue: Long, valueLeftRightRightRightLeftLeftValue: Long, valueLeftRightRightRightLeftRightValue: Long, valueLeftRightRightRightRightLeftValue: Long, valueLeftRightRightRightRightRightValue: Long, valueRightLeftLeftLeftLeftLeftValue: Long, valueRightLeftLeftLeftLeftRightValue: Long, valueRightLeftLeftLeftRightLeftValue: Long, valueRightLeftLeftLeftRightRightValue: Long, valueRightLeftLeftRightLeftLeftValue: Long, valueRightLeftLeftRightLeftRightValue: Long, valueRightLeftLeftRightRightLeftValue: Long, valueRightLeftLeftRightRightRightValue: Long, valueRightLeftRightLeftLeftLeftValue: Long, valueRightLeftRightLeftLeftRightValue: Long, valueRightLeftRightLeftRightLeftValue: Long, valueRightLeftRightLeftRightRightValue: Long, valueRightLeftRightRightLeftLeftValue: Long, valueRightLeftRightRightLeftRightValue: Long, valueRightLeftRightRightRightLeftValue: Long, valueRightLeftRightRightRightRightValue: Long, valueRightRightLeftLeftLeftLeftValue: Long, valueRightRightLeftLeftLeftRightValue: Long, valueRightRightLeftLeftRightLeftValue: Long, valueRightRightLeftLeftRightRightValue: Long, valueRightRightLeftRightLeftLeftValue: Long, valueRightRightLeftRightLeftRightValue: Long, valueRightRightLeftRightRightLeftValue: Long, valueRightRightLeftRightRightRightValue: Long, valueRightRightRightLeftLeftLeftValue: Long, valueRightRightRightLeftLeftRightValue: Long, valueRightRightRightLeftRightLeftValue: Long, valueRightRightRightLeftRightRightValue: Long, valueRightRightRightRightLeftLeftValue: Long, valueRightRightRightRightLeftRightValue: Long, valueRightRightRightRightRightLeftValue: Long, valueRightRightRightRightRightRightValue: Long, errorSink: Any): Long
-
-    external fun largeObjectInputSum(valuePackJ: LongArray, errorSink: Any): Long
 
     external fun storageNew(errorSink: Any): Long
 

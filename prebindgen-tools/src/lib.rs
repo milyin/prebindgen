@@ -4,29 +4,155 @@
 //! # prebindgen-tools
 //!
 //! Building blocks for a prebindgen **language adapter**. Applications that
-//! only want bindings normally use the `prebindgen-c` or `prebindgen-jni`
-//! adapter crate instead.
+//! only want bindings use the `prebindgen-c` or `prebindgen-jni` adapter.
 //!
-//! An adapter reads the captured [`Flat`](prebindgen_flat::Flat) model,
-//! chooses representations, and generates its own Rust wrappers and foreign
-//! declarations. This crate supplies type inspection and conversion composition;
-//! the adapter owns signatures, layouts, calls, and error handling.
+//! An adapter writes *generated elements* — functions, types, constants —
+//! around the elements of the [`Flat`](prebindgen_flat::Flat) model, plus the
+//! foreign code that uses them. Values cross between the two on **wires**:
+//! the parameters, return values and fields of the generated elements. Wire
+//! types form a closed set, one enum per adapter ([`WireType`]). The tools
+//! here are what every adapter needs to get a source type onto wires and
+//! back.
 //!
-//! * [`shape()`] classifies one layer of a type, including adapter declarations.
-//!   The adapter decides which children to visit recursively.
-//! * [`Qualifier`] names source types and items in generated Rust.
-//! * [`Input`] and [`Output`] carry wires and conversion expressions.
-//!   [`Input::combine`], [`Input::optional`] and [`Output::concat`] compose them.
-//! * [`Record`], [`record_in`] and [`record_out`] construct and destructure
-//!   source structs and enum alternatives while preserving field order.
-//! * [`mod@convert`] resolves declared conversions; [`Stage::decode`] and
-//!   [`Stage::encode`] compose them with their representation's conversion.
-//! * [`RustFile`] collects, formats and writes the adapter's generated items.
+//! ## The model
 //!
-//! Fallible conversions use `Result<_, String>`. The adapter places the
-//! expressions in an error scope and chooses how to report failures. Source
-//! function errors remain part of the source return value and are handled
-//! separately by the adapter.
+//! A value crosses in one of two directions:
+//!
+//! * an [`Input`] turns wires into a source value — for example a parameter
+//!   on its way into the source function;
+//! * an [`Output`] turns a source value into wires — for example a result on
+//!   its way back.
+//!
+//! Each holds the Rust expression that turns one into the other *and* a
+//! [`Form`]: a tree recording how each layer of the type crossed.
+//!
+//! A source type crosses in one of the ways below; its form records which,
+//! as a [`FormKind`].
+//! For each way, the table names the function that builds the [`Input`] and
+//! the one that builds the [`Output`]:
+//!
+//! | The value crosses… | [`Input`] | [`Output`] |
+//! |---|---|---|
+//! | as one wire | [`Input::wire`] | [`Output::wire`] |
+//! | converted to another source type, which crosses instead | [`Input::via`] | [`Output::via`] |
+//! | as a record's fields | [`Input::record`] | [`Output::record`] |
+//! | as an option's presence flag and value | [`Input::optional`] | [`Output::optional`] |
+//! | as a sum's tag and alternatives | [`Input::sum`] | [`Output::sum`] |
+//! | as a sequence | [`Input::seq`] | [`Output::seq`] |
+//! | as any other list of parts | [`Input::parts`] | [`Output::parts`] |
+//!
+//! Some take a description of the type: `record` takes the flat model's
+//! struct and `sum` its enum, while `via` takes the conversion the build
+//! script declared with `convert!`, resolved once into a
+//! [`ResolvedConversion`].
+//!
+//! The foreign-side writer walks the form, so it follows what the adapter
+//! decided for each layer without deciding again. What a single wire means
+//! is in the wire's own type.
+//!
+//! ## Using an Input or Output
+//!
+//! An [`Input`] or [`Output`] holds everything the element needs for one
+//! value, on both sides of the boundary:
+//!
+//! * **The element's signature.** [`Input::wires`] and [`Output::wires`]
+//!   list the value's wires in order. [`Wire::decl`] writes one wire as
+//!   `name: Type` for a parameter list; [`WireType::rust`] gives its Rust
+//!   type alone, for a return type or a struct field.
+//! * **The Rust code.** An input's `expr` evaluates to the source value:
+//!   place it where the value is needed, such as an argument of the source
+//!   call. An output's `expr` evaluates to the wire values, one value or a
+//!   tuple in [`Output::wires`] order; [`Output::bind`] writes
+//!   `let <wires> = expr;`, so each wire becomes a local of its own name.
+//! * **Errors.** `fallible` says whether `expr` uses `?` on a
+//!   `Result<_, String>`. Place such an expression in a function returning
+//!   that type, or take [`Input::result`] / [`Output::result`], a `Result`
+//!   value, and route the error yourself.
+//! * **The foreign code.** `form` tells the foreign-side writer how to
+//!   produce the same wires (for an input) or read them (for an output), in
+//!   the same order. What a single wire means is in its [`WireType`]
+//!   variant; records, options, sums and sequences are their [`FormKind`].
+//!
+//! For example, a C-style wrapper for `pub fn twice(n: u64) -> u64`, where
+//! both values cross as an `i64` wire:
+//!
+//! ```
+//! use prebindgen::SourceLocation;
+//! use prebindgen_flat::Flat;
+//! use prebindgen_tools::{Input, Output, Qualifier, Wire, WireType};
+//! use quote::{format_ident, quote};
+//!
+//! #[derive(Clone, Debug)]
+//! struct Long;
+//! impl WireType for Long {
+//!     fn rust(&self) -> proc_macro2::TokenStream { quote!(i64) }
+//!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
+//! }
+//!
+//! let source = syn::parse_file("pub fn twice(n: u64) -> u64 { n * 2 }").unwrap();
+//! let flat = Flat::builder()
+//!     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+//!     .build().unwrap();
+//! let f = flat.function("twice").unwrap();
+//!
+//! // Build: one input for the parameter, on a wire named like it, and one
+//! // output for the result, on a wire named `ret`.
+//! let n = &f.params[0];
+//! let n_name = &n.name;
+//! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), Long), quote!(#n_name as u64));
+//! let output = Output::wire(&f.ret, Wire::new(format_ident!("ret"), Long), quote!(__value as i64));
+//!
+//! // Use: the wires give the signature, the expressions the body.
+//! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
+//! let ret_ty = output.wires()[0].ty.rust();
+//! let callee = Qualifier::new(&flat).path(&f.name);
+//! let (arg, value) = (&input.expr, &output.expr);
+//! let wrapper = quote! {
+//!     pub extern "C" fn twice_wrapper(#(#params),*) -> #ret_ty {
+//!         let __value = #callee(#arg);
+//!         #value
+//!     }
+//! };
+//! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+//! assert_eq!(
+//!     quote!(#wrapper).to_string(),
+//!     quote! {
+//!         pub extern "C" fn twice_wrapper(n: i64) -> i64 {
+//!             let __value = twice(n as u64);
+//!             __value as i64
+//!         }
+//!     }.to_string(),
+//! );
+//! ```
+//!
+//! ## Deciding how each layer crosses
+//!
+//! The example decided by itself that a `u64` crosses as one wire. A real
+//! adapter decides per type, following the build script's declarations, and
+//! a type such as `Option<Point>` needs one decision per layer: the
+//! `Option`, then the `Point`, then each of its fields.
+//!
+//! So the adapter builds an input or output by recursion over the type.
+//! [`shape()`] reads the outermost layer as a [`Shape`] — a scalar, an
+//! `Option`, a borrow, a type the adapter declared, and so on. The adapter
+//! calls the function the table above gives for that layer, and recurses
+//! into what the layer holds.
+//!
+//! The adapter keeps its declarations in [`Overrides`]: a default for each
+//! type, and the replacements the build script declared for single places.
+//! A [`Place`] names where a part sits in the element, such as parameter
+//! `p` of `send`, or field `x` of that parameter. The adapter starts from
+//! the place of each parameter or result and extends it as it recurses
+//! ([`Place::at`]). At each layer it asks [`Overrides::get`] with the
+//! current place and type — passing that lookup to [`shape()`] does it —
+//! and names the layer's wires after the place ([`Place::ident`]). The place
+//! only steers the building; it is not stored in the [`Input`] or
+//! [`Output`].
+//!
+//! ## Other tools
+//!
+//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
+//! collects and writes the generated Rust.
 
 // Implementation modules are private. The public modules below select every
 // exported item explicitly, independently of the implementation layout.
@@ -41,58 +167,23 @@ pub use syn as __syn;
 ///
 /// `convert!(Millis).input(fun!(millis_from_raw)).output(fun!(millis_to_raw))`
 /// says that `Millis` never crosses as itself: it crosses as `u64` — the
-/// **representation** — and these two functions convert. The adapter lowers
-/// the representation like any other type and wraps the resulting wires in
-/// the conversion's stages ([`Stage::apply`]).
+/// **representation** — and these two functions convert.
 ///
-/// A stage is a function (a flat item, or a binding-local path with a
+/// Each direction is a function (a flat item, or a binding-local path with a
 /// stated signature) or a standard trait impl (`From`, `Into`, `TryFrom`,
-/// `TryInto`). A function returning `Result` makes its stage fallible; the
-/// error is reported through its `Display`.
+/// `TryInto`). A function returning `Result` makes its direction fallible;
+/// the error is reported through its `Display`.
 ///
-/// For example, given source functions `millis_from_raw(u64) -> Millis` and
-/// `millis_to_raw(&Millis) -> Result<u64, String>`, an adapter can resolve
-/// both directions before lowering a use of `Millis`:
-///
-/// ```
-/// use prebindgen::SourceLocation;
-/// use prebindgen_flat::Flat;
-/// use prebindgen_tools::{convert, fun, Input, Output, Qualifier, Wire, ident};
-/// use quote::quote;
-/// let source = syn::parse_file(r#"
-///     pub struct Millis(pub u64);
-///     pub fn millis_from_raw(raw: u64) -> Millis { Millis(raw) }
-///     pub fn millis_to_raw(value: &Millis) -> Result<u64, String> { Ok(value.0) }
-/// "#).unwrap();
-/// let flat = Flat::builder()
-///     .items(source.items.into_iter().map(|item| (item, SourceLocation::default())))
-///     .build().unwrap();
-/// let conversion = convert!(Millis)
-///     .input(fun!(millis_from_raw))
-///     .output(fun!(millis_to_raw))
-///     .resolve(&flat).unwrap();
-/// let input = conversion.input.as_ref().unwrap();
-/// let output = conversion.output.as_ref().unwrap();
-/// // Each stage's `repr` is u64; `output.fallible` is true.
-/// assert_eq!(input.repr.spell().to_string(), "u64");
-/// assert!(output.fallible);
-/// let q = Qualifier::new(&flat);
-/// let decoded = input.decode(&q, &conversion.target,
-///     Input::identity(Wire::new(ident!(raw), quote!(u64))),
-///     &ident!(r), quote!());
-/// assert_eq!(decoded.wires.len(), 1);
-/// let encoded = output.encode(&q, &conversion.target, &quote!(value),
-///     &ident!(r), quote!(),
-///     Output::single(Wire::new(ident!(raw), quote!(u64)), quote!(r)));
-/// assert!(encoded.fallible);
-/// ```
-///
-/// An [`Input`] for `u64` is wrapped with [`Stage::decode`]
-/// before the source call; an [`Output`] for `u64` is wrapped
-/// with [`Stage::encode`] after it. A binding-local function can be named
-/// with [`fun!`](crate::fun!) plus [`FnRef::sig`]. See [`Via`] for trait-based alternatives.
+/// [`Conversion::resolve`] checks the declaration against the model; the
+/// adapter does it once, while planning, and keeps the
+/// [`ResolvedConversion`] as its declaration for the source type. When it
+/// builds a value of that type, it passes the conversion to [`Input::via`]
+/// or [`Output::via`], the same way [`Input::record`] takes the flat model's
+/// struct. The adapter builds the representation's [`Input`] or [`Output`]
+/// as for any other type, inside the closure it passes; the result's
+/// [`Form`] is [`FormKind::Via`] over the representation's form.
 pub mod convert {
-    pub use crate::api::convert::{Conversion, FnRef, ResolvedConversion, Stage, Via};
+    pub use crate::api::convert::{Conversion, FnRef, ResolvedConversion, Via};
 }
 
 /// The generated Rust file.
@@ -199,46 +290,22 @@ pub mod qualify {
 }
 
 /// Records — structs and the alternatives of a sum — taken apart into their
-/// fields and put back together.
-///
-/// The adapter chooses a representation independently of the source shape.
-/// These helpers construct and destructure source values, preserving named or
-/// positional fields, delimiters, and order. Each field may occupy several wires.
-///
-/// ## Example: decompose a record
-///
-/// [`record_in`] combines field inputs in source order and reconstructs the
-/// source's named or tuple form. An adapter normally produces the field
-/// inputs while recursing through [`shape()`](crate::shape()).
-///
-/// ```
-/// use prebindgen::SourceLocation;
-/// use prebindgen_flat::{Flat, flat::Type};
-/// use prebindgen_tools::{Input, Record, Wire,
-///     ident, record_in};
-/// use quote::quote;
-///
-/// let item = syn::parse_quote!(pub struct Point { pub x: i32, pub y: i32 });
-/// let flat = Flat::builder()
-///     .items([(item, SourceLocation::default())])
-///     .build().unwrap();
-/// let Some(Type::Struct(point)) = flat.declared_type("Point") else { panic!() };
-/// let fields = vec![
-///     Input::identity(Wire::new(ident!(x_wire), quote!(i32))),
-///     Input::identity(Wire::new(ident!(y_wire), quote!(i32))),
-/// ];
-/// let input = record_in(Record::Struct(point), &quote!(Point), fields);
-/// assert_eq!(input.wires.len(), 2);
-/// assert_eq!(input.expr.to_string(), "Point { x : x_wire , y : y_wire }");
-///
-/// ```
+/// fields and put back together, with the delimiters the source wrote.
+/// [`Input::record`] and [`Output::record`] use it; an adapter writing its own
+/// mirror does too.
 pub mod record {
-    pub use crate::api::record::{record_in, record_out, Record};
+    pub use crate::api::record::Record;
+}
+
+/// Places in an element, and the decisions made at them.
+pub mod place {
+    pub use crate::api::place::{Overrides, Place, Seg};
 }
 
 /// One level of a type's structure, with any adapter declaration for that type.
 ///
-/// An adapter lowers a type by recursion: it looks at the outermost layer,
+/// An adapter builds a type's [`Input`] or [`Output`] by recursion: it looks
+/// at the outermost layer,
 /// decides what that layer becomes on its boundary, and recurses into what
 /// the layer holds. [`shape()`] answers the first question the same way for
 /// every adapter. It first asks the adapter whether the complete type has a
@@ -295,64 +362,46 @@ pub mod shape {
     pub use crate::api::shape::{shape, Access, SequenceKind, Shape, TextKind};
 }
 
-/// Wires and the conversions between wires and source values.
-///
-/// A **wire** is one parameter, field or return slot of the generated
-/// boundary, typed in the generated Rust file: `jlong`, `*const c_char`,
-/// `payload_t`. A source value crosses as zero or more wires, and which
-/// ones is the adapter's decision; these types only carry the decision and
-/// compose it.
-///
-/// * [`Input`] turns wires into a source value — a parameter on its way into
-///   the source function, a field of a struct arriving from the foreign side.
-/// * [`Output`] turns a source value into wires — a return value, a callback
-///   argument, a field of a struct leaving.
-///
-/// Both carry an expression. A **fallible** one may use `?` on a
-/// `Result<_, String>`; whoever places it decides where the error goes (see
-/// [`Input::result`]). Generated conversion helpers follow the same
-/// convention, so a converter written for one position composes into another.
-///
-/// ## Example: one value on two wires
-///
-/// A `u64` can arrive as two `u32` words. [`Input`] keeps the expression together with
-/// the two [`Wire`] declarations so the adapter
-/// can place and evaluate them in the right order:
+/// Wires, the forms values take on them, and the conversions between.
 ///
 /// ```
-/// use prebindgen_tools::{Input, Output, Wire, ident};
+/// use prebindgen::SourceLocation;
+/// use prebindgen_flat::Flat;
+/// use prebindgen_tools::{Input, Place, Seg, Wire, WireType};
 /// use quote::quote;
 ///
-/// let hi = Wire::new(ident!(hi), quote!(u32));
-/// let lo = Wire::new(ident!(lo), quote!(u32));
-/// let input = Input::new(vec![hi, lo], quote!(((hi as u64) << 32) | lo as u64));
-/// assert_eq!(input.wires.len(), 2);
-/// assert!(input.result().to_string().contains("Ok"));
+/// // The adapter's closed set of wire types.
+/// #[derive(Clone, Debug)]
+/// enum W { Long { unsigned: bool } }
+/// impl WireType for W {
+///     fn rust(&self) -> proc_macro2::TokenStream { quote!(i64) }
+///     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
+/// }
 ///
-/// let output = Output::new(
-///     vec![Wire::new(ident!(hi), quote!(u32)),
-///          Wire::new(ident!(lo), quote!(u32))],
-///     quote!(((value >> 32) as u32, value as u32)),
-/// );
-/// assert_eq!(output.pattern().to_string(), "(hi , lo)");
+/// let source = syn::parse_file("pub fn send(n: u64) {}").unwrap();
+/// let flat = Flat::builder()
+///     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+///     .build().unwrap();
+/// let n = &flat.function("send").unwrap().params[0];
+/// let place = Place::new("send").at(Seg::Param("n".into()));
+/// let w = place.ident();
+/// let input = Input::wire(&n.ty, Wire::new(w.clone(), W::Long { unsigned: true }),
+///     quote!(#w as u64));
+/// assert_eq!(input.wires()[0].decl().to_string(), "n : i64");
 /// ```
-///
-/// For a fallible step, use [`Input::and_then`] or [`Output::fallible`]
-/// and place [`Input::result`] or [`Output::result`] at the point whose
-/// error policy applies. The conversion error type is `String`; the adapter
-/// supplies the fallback or error delivery code.
 pub mod wire {
-    pub use crate::api::wire::{result_expr, Input, Output, Wire};
+    pub use crate::api::wire::{result_expr, Form, FormKind, Input, Output, Wire, WireType};
 }
 
 pub use crate::{
     api::check_supported,
-    convert::{Conversion, FnRef, ResolvedConversion, Stage, Via},
+    convert::{Conversion, FnRef, ResolvedConversion, Via},
     file::RustFile,
+    place::{Overrides, Place, Seg},
     qualify::Qualifier,
-    record::{record_in, record_out, Record},
+    record::Record,
     shape::{shape, Access, SequenceKind, Shape, TextKind},
-    wire::{Input, Output, Wire},
+    wire::{Form, FormKind, Input, Output, Wire, WireType},
 };
 
 /// `fun!(name)` / `fun!(crate::local)` — a function reference.

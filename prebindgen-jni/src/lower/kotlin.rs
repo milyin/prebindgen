@@ -68,7 +68,7 @@ impl Plan<'_> {
             Shape::Seq { elem, .. } if is_u8(elem) => vec![expr.to_string()],
             Shape::Declared { declaration, .. } => match declaration {
                 Setting::Converted(c) => {
-                    self.kt_encode(self.conv_repr(c, Dir::In)?, expr, nullable, cx, consumed)?
+                    self.kt_encode(self.conv_repr(c), expr, nullable, cx, consumed)?
                 }
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => {
@@ -81,7 +81,7 @@ impl Plan<'_> {
                         vec![or_default(access(expr, "ptr"), "0L")]
                     }
                     ClassKind::Enum => vec![or_default(access(expr, "value"), "0")],
-                    ClassKind::Data { .. } => {
+                    ClassKind::Data => {
                         let mut out = Vec::new();
                         for f in &self.struct_of(c)?.fields {
                             let e = access(expr, &kt_prop(f));
@@ -212,13 +212,11 @@ impl Plan<'_> {
             Shape::Str { .. } | Shape::Array { .. } => bang(&leaves[0]),
             Shape::Seq { elem, .. } if is_u8(elem) => bang(&leaves[0]),
             Shape::Declared { declaration, .. } => match declaration {
-                Setting::Converted(c) => {
-                    self.kt_decode(self.conv_repr(c, Dir::Out)?, leaves, gated, depth)?
-                }
+                Setting::Converted(c) => self.kt_decode(self.conv_repr(c), leaves, gated, depth)?,
                 Setting::Class(c) => match &c.kind {
                     ClassKind::Ptr { .. } => format!("{}({})", c.fqn(), leaves[0]),
                     ClassKind::Enum => format!("{}.fromInt({})", c.fqn(), leaves[0]),
-                    ClassKind::Data { .. } => {
+                    ClassKind::Data => {
                         let mut args = Vec::new();
                         let mut at = 0;
                         for f in &self.struct_of(c)?.fields {

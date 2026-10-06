@@ -35,15 +35,6 @@ import io.prebindgen.covertest.model.Arrays
 import io.prebindgen.covertest.model.CacheConfig
 import io.prebindgen.covertest.model.RepliesConfig
 import io.prebindgen.covertest.model.DurationBoundary
-import io.prebindgen.covertest.model.ObjectBoundary
-import io.prebindgen.covertest.model.ObjectBoundary2
-import io.prebindgen.covertest.model.ObjectBoundary4
-import io.prebindgen.covertest.model.ObjectBoundary8
-import io.prebindgen.covertest.model.ObjectBoundary16
-import io.prebindgen.covertest.model.ObjectBoundary32
-import io.prebindgen.covertest.model.ObjectBoundary63
-import io.prebindgen.covertest.model.ObjectBoundary64
-import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Hold
 import io.prebindgen.covertest.model.HoldPolicy
@@ -73,6 +64,8 @@ import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.boxedDurationEcho
 import io.prebindgen.covertest.model.durationOptional
+import io.prebindgen.covertest.model.copyEdgeNew
+import io.prebindgen.covertest.model.copyEdgeSum
 import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.spanHolderNew
 import io.prebindgen.covertest.model.durationEmit
@@ -88,7 +81,6 @@ import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
 import io.prebindgen.covertest.model.cacheConfigWeight
-import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.observationWhich
@@ -276,8 +268,7 @@ fun main() {
         check(boxedDurationEcho(0uL, boom) == 0uL)
 
         // The data-class properties are semantic `ULong` / `ULong?`. The echo's
-        // explicit object input (`.jobject_input()`, packed on the wire) also
-        // executes the complete ULong -> Duration decoder.
+        // input also executes the complete ULong -> Duration decoder.
         //
         // `required` and `delay` take different paths — `delay` rides the
         // `Option<_>` layer, `required` is a bare converted leaf — so both
@@ -1022,11 +1013,9 @@ fun main() {
             "wrong-length array must report a binding error, got: $lenErr"
         }
 
-        // WHOLE-OBJECT input decode (`.jobject_input()`): the decoder reads each
-        // field off the Kotlin object by JVM descriptor. A value-blob field's
-        // slot is the wrapper class, not `[B` — reading the old descriptor threw
-        // `NoSuchFieldError` on the first decode.
-        check(blobValueEcho(b1, boom) == b1) { "jobject-input round trip must preserve the value" }
+        // An input round trip through a value-blob field and a nested data
+        // class.
+        check(blobValueEcho(b1, boom) == b1) { "an input round trip must preserve the value" }
         check(blobValueEcho(blob(0L, ByteArray(0), emptyList()), boom).chunks.isEmpty())
     }
 
@@ -1549,30 +1538,14 @@ fun main() {
         check(cacheConfigWeight(low, boom) == 4)      // weight(LOW)=1 + ttl 3
     }
 
-    section("data_class JVM-slot-limited JObject input boundary") {
-        val leaf = ObjectBoundaryLeaf(1L)
-        val level2 = ObjectBoundary2(leaf, leaf)
-        val level4 = ObjectBoundary4(level2, level2)
-        val level8 = ObjectBoundary8(level4, level4)
-        val level16 = ObjectBoundary16(level8, level8)
-        val level32 = ObjectBoundary32(level16, level16)
-        val level64 = ObjectBoundary64(level32, level32)
-        val level63 = ObjectBoundary63(level32, level16, level8, level4, level2, leaf)
-        check(objectBoundaryValue(ObjectBoundary(level64, level63), boom) == 127L)
-
-        // A packed argument of the wrong length — only reachable by calling
-        // the extern directly — is a binding error, never a native crash.
-        // Both a primitive group and an object group are length-checked.
-        val shortLongs = JniErrorHandlerCapture.acquire()
-        CovNative.objectBoundaryValue(LongArray(3), shortLongs)
-        check(shortLongs.failed && shortLongs.ze0?.contains("expected 127 elements, got 3") == true) {
-            "a short packed primitive group must be a binding error, got: ${shortLongs.ze0}"
-        }
-        val shortObjects = JniErrorHandlerCapture.acquire()
-        CovNative.blobValueEcho(intArrayOf(0), longArrayOf(1L, 0L), arrayOf<Any?>(ByteArray(0)), Any(), shortObjects)
-        check(shortObjects.failed && shortObjects.ze0?.contains("expected 2 elements, got 1") == true) {
-            "a short packed object group must be a binding error, got: ${shortObjects.ze0}"
-        }
+    // A data class at the JVM's argument-slot limit: Kotlin's synthetic
+    // `copy$default` takes the instance, 124 `Long` fields and an `Int`, four
+    // default masks and a marker — 255 slots. Loading the class verifies the
+    // descriptor; `copy` with a named argument calls the method.
+    section("data class at the JVM slot limit (copy with defaults, 255 slots)") {
+        val e = copyEdgeNew(1L, boom)
+        check(copyEdgeSum(e, boom) == 7757L)   // 124 + (0 + … + 123) + 7
+        check(copyEdgeSum(e.copy(f0 = 100L), boom) == 7856L)
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────

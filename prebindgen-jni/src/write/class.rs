@@ -53,7 +53,7 @@ pub(crate) fn class(
             out.rust.push(free_ptr(plan, c));
             ptr_class(plan, c, *gc, &methods, &ctors)
         }
-        ClassKind::Data { .. } => data_class(plan, c, &methods, &ctors)?,
+        ClassKind::Data => data_class(plan, c, &methods, &ctors)?,
         ClassKind::Enum => enum_class(plan, c)?,
         ClassKind::Sealed { .. } => sealed_class(plan, c)?,
     };
@@ -150,6 +150,25 @@ fn ptr_class(plan: &Plan, c: &Class, gc: bool, methods: &[Wrapper], ctors: &[Wra
     )
 }
 
+/// A Kotlin `data class` with fields of `types` fits the JVM's slot limit.
+/// Its widest method is the synthetic `copy$default` Kotlin generates: a
+/// static method taking the instance, every field, one `Int` mask per 32
+/// fields, and a marker object. Its constructor and `fromParts` take less.
+fn check_data_class(name: &str, types: &[String]) -> Res<()> {
+    let mut copy = vec![name.to_string()];
+    copy.extend(types.iter().cloned());
+    copy.extend(std::iter::repeat_n(
+        "Int".to_string(),
+        types.len().div_ceil(32),
+    ));
+    copy.push("Any".to_string());
+    super::check_slots(
+        &format!("`{name}.copy$default`, the copy Kotlin generates,"),
+        &copy,
+        false,
+    )
+}
+
 fn data_class(plan: &Plan, c: &Class, methods: &[Wrapper], ctors: &[Wrapper]) -> Res<String> {
     let s = plan.struct_of(c)?;
     let over = if c.iface.is_some() { "override " } else { "" };
@@ -158,9 +177,11 @@ fn data_class(plan: &Plan, c: &Class, methods: &[Wrapper], ctors: &[Wrapper]) ->
     let mut args = Vec::new();
     let mut closes = Vec::new();
     let mut arrays = Vec::new();
+    let mut types = Vec::new();
     for f in &s.fields {
         let p = kt_prop(f);
         let t = plan.kt_type(&f.ty)?;
+        types.push(t.clone());
         props.push(format!("{over}val {p}: {t}"));
         iface_members.push(format!("val {p}: {t}"));
         args.push(format!("{p}: {t}"));
@@ -168,6 +189,7 @@ fn data_class(plan: &Plan, c: &Class, methods: &[Wrapper], ctors: &[Wrapper]) ->
         arrays.push((p, array_eq(plan, &f.ty)?));
     }
     let name = &c.name;
+    check_data_class(name, &types)?;
     let owns = !closes.is_empty();
     let supers = if owns {
         vec!["AutoCloseable".to_string()]
@@ -325,6 +347,7 @@ fn sealed_class(plan: &Plan, c: &Class) -> Res<String> {
     };
     let mut variants = Vec::new();
     let mut from_params = vec!["tag: Int".to_string()];
+    let mut from_types = vec!["Int".to_string()];
     let mut arms = Vec::new();
     let mut companion_clash = false;
     for (i, alt) in v.alternatives.iter().enumerate() {
@@ -354,8 +377,13 @@ fn sealed_class(plan: &Plan, c: &Class) -> Res<String> {
             arrays.push((p.clone(), array_eq(plan, &f.ty)?));
             let fp = format!("{}_{}", names::snake(&names::bare(&alt.name)), field_seg(f));
             from_params.push(format!("{fp}: {t}"));
+            from_types.push(t);
             args.push(fp);
         }
+        check_data_class(
+            &format!("{name}.{vname}"),
+            &from_types[from_types.len() - alt.fields.len()..],
+        )?;
         let mut members = Vec::new();
         if owns {
             members.push(close_body(closes));
@@ -377,6 +405,8 @@ fn sealed_class(plan: &Plan, c: &Class) -> Res<String> {
     arms.push(format!(
         "else -> throw IllegalArgumentException(\"{name}: invalid tag $tag\")"
     ));
+    // Each alternative's constructor takes a subset of these.
+    super::check_slots(&format!("`{name}.fromParts`"), &from_types, true)?;
     let companion = if companion_clash {
         "companion object Companion_"
     } else {
