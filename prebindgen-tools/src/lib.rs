@@ -89,9 +89,11 @@
 //!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
 //! }
 //!
+//! // `twice`, captured from the crate `source_crate`.
 //! let source = syn::parse_file("pub fn twice(n: u64) -> u64 { n * 2 }").unwrap();
+//! let location = SourceLocation { crate_name: Some("source_crate".into()), ..Default::default() };
 //! let flat = Flat::builder()
-//!     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+//!     .items(source.items.into_iter().map(|i| (i, location.clone())))
 //!     .build().unwrap();
 //! let f = flat.function("twice").unwrap();
 //!
@@ -105,11 +107,13 @@
 //! // Use: the wires give the signature, the expressions the body.
 //! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
 //! let ret_ty = output.wires()[0].ty.rust();
-//! // The model names the source function by its qualified path.
+//! // The source function's name: spliced, the qualified path to call; its
+//! // bare identifier, the base for the wrapper's own name.
 //! let callee = &f.name;
+//! let wrapper_name = format_ident!("{}_wrapper", f.name.ident());
 //! let (arg, value) = (&input.expr, &output.expr);
 //! let wrapper = quote! {
-//!     pub extern "C" fn twice_wrapper(#(#params),*) -> #ret_ty {
+//!     pub extern "C" fn #wrapper_name(#(#params),*) -> #ret_ty {
 //!         let __value = #callee(#arg);
 //!         #value
 //!     }
@@ -119,7 +123,7 @@
 //!     quote!(#wrapper).to_string(),
 //!     quote! {
 //!         pub extern "C" fn twice_wrapper(n: i64) -> i64 {
-//!             let __value = twice(n as u64);
+//!             let __value = source_crate::twice(n as u64);
 //!             __value as i64
 //!         }
 //!     }.to_string(),
