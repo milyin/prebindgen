@@ -186,6 +186,7 @@ use quote::ToTokens;
 mod array_len;
 mod element;
 pub mod emit;
+mod item_name;
 mod key;
 mod origin;
 pub(crate) mod spell;
@@ -204,6 +205,7 @@ pub use self::{
         Alternative, Constant, Element, Enum, EnumValue, Extern, Field, Function, Guard, Param,
         Struct, Type, Unsupported, Variant,
     },
+    item_name::ItemName,
     key::{TypeKey, TypeKeyParseError},
     origin::Origin,
     spelling::{canonical_spelling, canonical_type},
@@ -267,6 +269,7 @@ pub use self::{
 #[derive(Debug, Default, Clone)]
 pub struct FlatBuilder {
     items: Vec<(syn::Item, SourceLocation)>,
+    default_module: Option<syn::Path>,
 }
 
 impl FlatBuilder {
@@ -314,6 +317,14 @@ impl FlatBuilder {
         self.items(source.items_all())
     }
 
+    /// The module generated code reaches an item by when its capture records
+    /// no crate — a stream fed through [`Self::items`] without a stamp. A
+    /// recorded crate, renamed or not, takes precedence. See [`ItemName`].
+    pub fn default_module(mut self, module: syn::Path) -> Self {
+        self.default_module = Some(module);
+        self
+    }
+
     /// Add a captured item stream.
     ///
     /// The general feeder: any `(syn::Item, SourceLocation)` iterator, so
@@ -350,6 +361,7 @@ impl FlatBuilder {
     /// array length and a cross-source mention may each name something declared
     /// later, in this input or another.
     pub fn build(self) -> Result<Flat, ParseError> {
+        let default_module = self.default_module;
         let mut items = self.items;
 
         // Pass 0: normalize every item's types to the canonical flat spelling
@@ -386,9 +398,18 @@ impl FlatBuilder {
         let mut elements: Vec<Element> = Vec::with_capacity(items.len());
         let mut seen: Vec<(syn::Ident, SourceLocation)> = Vec::new();
         for (item, loc) in items {
-            let element = lower_item(item, loc, &consts);
+            // The path generated code reaches the item by: its recorded crate,
+            // else the binding's default.
+            let module = match &loc.crate_name {
+                Some(c) => syn::parse_str::<syn::Path>(&c.replace('-', "_")).ok(),
+                None => default_module.clone(),
+            };
+            let mut element = lower_item(item, loc, &consts);
+            if let Some(name) = element.name_mut() {
+                name.place(module.as_ref());
+            }
             if let Some(name) = element.name() {
-                if let Some((first_name, first)) = seen.iter().find(|(n, _)| n == name) {
+                if let Some((first_name, first)) = seen.iter().find(|(n, _)| name == n) {
                     return Err(ParseError::DuplicateName(Box::new(DuplicateName {
                         name: first_name.clone(),
                         first: first.clone(),
@@ -397,7 +418,7 @@ impl FlatBuilder {
                         second_crate: element.location().crate_name.clone(),
                     })));
                 }
-                seen.push((name.clone(), element.location().clone()));
+                seen.push((name.ident().clone(), element.location().clone()));
             }
             elements.push(element);
         }
@@ -531,6 +552,7 @@ mod sealed {
     impl Sealed for str {}
     impl Sealed for String {}
     impl Sealed for syn::Ident {}
+    impl Sealed for super::ItemName {}
     impl<T: ?Sized + Sealed> Sealed for &T {}
 }
 
@@ -552,6 +574,12 @@ impl Name for syn::Ident {
     }
 }
 
+impl Name for ItemName {
+    fn as_name(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Owned(self.ident().to_string())
+    }
+}
+
 /// So a caller already holding a reference does not have to reborrow.
 impl<T: ?Sized + Name> Name for &T {
     fn as_name(&self) -> std::borrow::Cow<'_, str> {
@@ -562,7 +590,7 @@ impl<T: ?Sized + Name> Name for &T {
 impl Flat {
     /// Start collecting what to parse.
     pub fn builder() -> FlatBuilder {
-        FlatBuilder { items: Vec::new() }
+        FlatBuilder::default()
     }
 
     /// Every element, in the order the sources were fed.
@@ -800,6 +828,8 @@ impl Flat {
     /// field's docs.
     ///
     pub fn add_local_function(&mut self, mut f: Function, crate_name: String) {
+        let module = syn::parse_str::<syn::Path>(&crate_name.replace('-', "_")).ok();
+        f.name.place(module.as_ref());
         f.origin.location = Rc::new(SourceLocation {
             crate_name: Some(crate_name),
             ..SourceLocation::default()
@@ -1194,7 +1224,7 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
             Ok(()) => {
                 let target = Some(t.ty.to_token_stream().to_string());
                 Element::Type(Type::Extern(Extern {
-                    name: t.ident.clone(),
+                    name: ItemName::bare(t.ident.clone()),
                     target,
                     origin: Origin::new(syn::Item::Type(t), at),
                 }))
@@ -1208,7 +1238,7 @@ fn lower_item(item: syn::Item, loc: SourceLocation, consts: &ConstIndex) -> Elem
         }),
         syn::Item::Const(c) => match lower_type(&c.ty, consts, &at) {
             Ok(ty) => Element::Constant(Constant {
-                name: c.ident.clone(),
+                name: ItemName::bare(c.ident.clone()),
                 ty,
                 origin: Origin::new(c, at),
             }),
@@ -1241,7 +1271,7 @@ fn unsupported(
     error: ItemError,
 ) -> Element {
     Element::Unsupported(Unsupported {
-        name: name.into(),
+        name: name.into().map(ItemName::bare),
         error: Box::new(error),
         origin: Origin::new(syntax, Rc::clone(at)),
     })
@@ -1312,7 +1342,7 @@ fn lower_fn(
         }
     };
     Ok(Function {
-        name: f.sig.ident.clone(),
+        name: ItemName::bare(f.sig.ident.clone()),
         params,
         ret,
         origin: Origin::new(f.clone(), Rc::clone(at)),
@@ -1351,7 +1381,7 @@ fn lower_struct(
         // Its contents are not a boundary surface, so nothing is lowered.
         syn::Fields::Unnamed(_) => {
             return Ok(Type::Extern(Extern {
-                name: s.ident.clone(),
+                name: ItemName::bare(s.ident.clone()),
                 // A tuple struct IS the definition; it points at nothing.
                 target: None,
                 origin: Origin::new(syn::Item::Struct(s.clone()), Rc::clone(at)),
@@ -1361,7 +1391,7 @@ fn lower_struct(
     };
     Ok(Type::Struct(Struct {
         reading: TypeRef::named(&s.ident),
-        name: s.ident.clone(),
+        name: ItemName::bare(s.ident.clone()),
         fields,
         origin: Origin::new(s.clone(), Rc::clone(at)),
     }))
@@ -1426,7 +1456,7 @@ fn lower_variant(
     }
     Ok(Variant {
         reading: TypeRef::named(&e.ident),
-        name: e.ident.clone(),
+        name: ItemName::bare(e.ident.clone()),
         alternatives,
         origin: Origin::new(e.clone(), Rc::clone(at)),
     })
@@ -1460,7 +1490,7 @@ fn lower_c_enum(e: &syn::ItemEnum, at: &Rc<SourceLocation>) -> Enum {
     }
     Enum {
         reading: TypeRef::named(&e.ident),
-        name: e.ident.clone(),
+        name: ItemName::bare(e.ident.clone()),
         values,
         origin: Origin::new(e.clone(), Rc::clone(at)),
     }

@@ -13,7 +13,7 @@ use prebindgen_flat::{
     flat::{Function, Type as FlatType, TypeKind, TypeRef},
     Flat,
 };
-use prebindgen_tools::{names, Qualifier, ResolvedConversion};
+use prebindgen_tools::{names, ResolvedConversion};
 use quote::ToTokens;
 
 use crate::{
@@ -74,7 +74,6 @@ pub(crate) enum Item {
 
 pub(crate) struct Plan<'f> {
     pub flat: &'f Flat,
-    pub q: Qualifier<'f>,
     pub free_fn: Option<syn::Ident>,
     /// The setting of each declared type, by name.
     pub types: HashMap<String, Setting>,
@@ -88,7 +87,6 @@ impl<'f> Plan<'f> {
         prebindgen_tools::check_supported(flat).map_err(Error)?;
         let mut plan = Plan {
             flat,
-            q: Qualifier::new(flat).with_default_module(b.source_module.clone()),
             free_fn: b.free_fn.as_deref().map(names::ident),
             types: HashMap::new(),
             closures: HashMap::new(),
@@ -247,7 +245,7 @@ impl<'f> Plan<'f> {
         let mut unbound: Vec<String> = self
             .flat
             .functions()
-            .map(|f| names::bare(&f.name))
+            .map(|f| names::bare(f.name.ident()))
             .filter(|n| !bound.contains(n))
             .collect();
         unbound.sort();

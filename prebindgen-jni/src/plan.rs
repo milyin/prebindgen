@@ -24,7 +24,7 @@ use prebindgen_flat::{
     flat::{Function, Param, Type as FlatType, TypeKind, TypeRef},
     Flat,
 };
-use prebindgen_tools::{names, FnRef, Qualifier, ResolvedConversion};
+use prebindgen_tools::{names, FnRef, ResolvedConversion};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
@@ -234,7 +234,6 @@ pub(crate) enum Support {
 
 pub(crate) struct Plan<'f> {
     pub flat: &'f Flat,
-    pub q: Qualifier<'f>,
     /// The base Kotlin package.
     pub base_pkg: String,
     /// The native-method holder's simple name.
@@ -256,7 +255,6 @@ impl<'f> Plan<'f> {
         prebindgen_tools::check_supported(flat).map_err(Error)?;
         let mut plan = Plan {
             flat,
-            q: Qualifier::new(flat).with_default_module(b.source_module.clone()),
             base_pkg: b.package_prefix.clone(),
             harness: match &b.harness_hook {
                 Some(f) => f("JNINative"),
@@ -298,6 +296,15 @@ impl<'f> Plan<'f> {
 
     pub(crate) fn harness_fqn(&self) -> String {
         format!("{}.{}", self.base_pkg, self.harness)
+    }
+
+    /// How generated code names the source item `name`: its qualified path
+    /// from the model, or the name itself for one the model does not hold.
+    pub(crate) fn source(&self, name: &str) -> proc_macro2::TokenStream {
+        match self.flat.element(name).and_then(|e| e.name()) {
+            Some(n) => n.to_token_stream(),
+            None => names::ident(name).to_token_stream(),
+        }
     }
 
     /// The class a type is bound to.
@@ -531,7 +538,7 @@ impl<'f> Plan<'f> {
         let mut unbound: Vec<String> = self
             .flat
             .functions()
-            .map(|f| names::bare(&f.name))
+            .map(|f| names::bare(f.name.ident()))
             .filter(|n| !bound.contains(n) && !b.ignores.iter().any(|i| (i.0)(n)))
             .collect();
         unbound.sort();
@@ -646,7 +653,7 @@ impl Planner<'_, '_> {
                                 Placement::Method(class.clone())
                             };
                             let (func, callee) = self.resolve_fn(&f.fun)?;
-                            let camel = names::camel(&names::bare(&func.name));
+                            let camel = names::camel(&names::bare(func.name.ident()));
                             let kt_name = match (&f.name, &self.b.method_hook) {
                                 (Some(n), _) => n.clone(),
                                 (None, Some(h)) => h(&class.pkg, &class.name, &camel),
@@ -666,7 +673,7 @@ impl Planner<'_, '_> {
             }
             for f in &p.funs {
                 let (func, callee) = self.resolve_fn(&f.fun)?;
-                let camel = names::camel(&names::bare(&func.name));
+                let camel = names::camel(&names::bare(func.name.ident()));
                 let kt_name = match (&f.name, &self.b.fun_hook) {
                     (Some(n), _) => n.clone(),
                     (None, Some(h)) => h(&pkg, &camel),
@@ -688,7 +695,8 @@ impl Planner<'_, '_> {
 
     fn resolve_fn(&self, f: &FnRef) -> Res<(Function, TokenStream)> {
         let func = f.resolve(self.plan.flat).map_err(Error)?;
-        Ok((func, f.callee(&self.plan.q)))
+        let callee = func.name.to_token_stream();
+        Ok((func, callee))
     }
 
     /// A top-level `val`: a private getter extern and the `val` reading it.
@@ -708,12 +716,12 @@ impl Planner<'_, '_> {
                     .flat
                     .constant(&c.name)
                     .ok_or_else(|| Error(format!("`{vname}` is not a #[prebindgen] const")))?;
-                let path = plan.q.path(&c.name);
+                let path = &k.name;
                 (synthetic(k.ty.clone()), quote!(#path), getter.clone())
             }
             ConstSource::Fun(fd) => {
                 let (f, callee) = self.resolve_fn(&fd.fun)?;
-                let n = names::camel(&names::bare(&f.name));
+                let n = names::camel(&names::bare(f.name.ident()));
                 (f, quote!(#callee()), n)
             }
             ConstSource::With(ty, path) => {
@@ -764,7 +772,7 @@ impl Planner<'_, '_> {
         placement: Placement,
         kt_name: String,
     ) -> Res<Binding> {
-        let camel = names::camel(&names::bare(&func.name));
+        let camel = names::camel(&names::bare(func.name.ident()));
         let base = match &self.b.method_hook {
             Some(h) => h(&self.plan.base_pkg, &self.plan.harness, &camel),
             None => camel,
@@ -897,7 +905,7 @@ impl Planner<'_, '_> {
         }
         let bare = core.borrow_target().unwrap_or(core);
         let expansion = match explicit {
-            None if fallible || self.accessors.contains(&names::bare(&f.name)) => None,
+            None if fallible || self.accessors.contains(&names::bare(f.name.ident())) => None,
             _ => plan.expansion(bare, explicit),
         };
         if let Some(e) = expansion.cloned() {
@@ -907,7 +915,7 @@ impl Planner<'_, '_> {
             let tname = id.name.clone();
             // A function's own expansion gets its own interface.
             let suffix = if explicit.is_some() {
-                names::pascal(&names::bare(&f.name))
+                names::pascal(&names::bare(f.name.ident()))
             } else {
                 String::new()
             };

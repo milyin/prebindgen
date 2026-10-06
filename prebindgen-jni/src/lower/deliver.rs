@@ -256,7 +256,7 @@ impl Plan<'_> {
         gates: &[String],
         depth: usize,
     ) -> Res<Delivery> {
-        let head = self.q.path(&s.name);
+        let head = s.name.to_token_stream();
         let binds: Vec<syn::Ident> = (0..s.fields.len())
             .map(|i| format_ident!("__f{}_{}", depth, i))
             .collect();
@@ -312,9 +312,9 @@ impl Plan<'_> {
             match field {
                 ReturnField::Getter(g) => {
                     let func = g.fun.resolve(self.flat).map_err(crate::Error)?;
-                    let callee = g.fun.callee(&self.q);
+                    let callee = func.name.clone();
                     let fname = g.name.clone().unwrap_or_else(|| {
-                        let n = names::bare(&func.name);
+                        let n = names::bare(func.name.ident());
                         n.strip_prefix(&format!("{type_snake}_"))
                             .unwrap_or(&n)
                             .to_string()
@@ -357,7 +357,7 @@ impl Plan<'_> {
                     let f = self.flat.function(fun).ok_or_else(|| {
                         crate::Error(format!("`{fun}` is not a #[prebindgen] function"))
                     })?;
-                    let callee = self.q.path(fun);
+                    let callee = f.name.clone();
                     let arg = match (consume, borrowed) {
                         (true, true) => quote!(::core::clone::Clone::clone(#v)),
                         (true, false) => quote!(#v),
@@ -472,7 +472,7 @@ impl Plan<'_> {
         let frame = 32 + leaves.len() as i32 * 2;
         let what = format!("callback {ty}");
         let names: Vec<_> = (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
-        let tys = args.iter().map(|t| self.q.ty_elided(t));
+        let tys = prebindgen_tools::callback_arg_types(self.flat, args);
         let outs = args
             .iter()
             .zip(&names)

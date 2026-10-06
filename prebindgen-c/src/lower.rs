@@ -71,7 +71,10 @@ impl<'f> Plan<'f> {
         if name == "String" {
             quote!(::std::string::String)
         } else {
-            self.q.path(&names::ident(name))
+            match self.flat.element(name).and_then(|e| e.name()) {
+                Some(n) => n.to_token_stream(),
+                None => names::ident(name).to_token_stream(),
+            }
         }
     }
 
@@ -115,7 +118,7 @@ impl<'f> Plan<'f> {
             Shape::Declared { declaration, .. } if Access::of(ty) == Access::Owned => {
                 let name = declared_name(ty);
                 match declaration {
-                    Setting::Converted(c) => Input::via(&self.q, c, |repr| self.value_in(repr, w))?,
+                    Setting::Converted(c) => Input::via(c, |repr| self.value_in(repr, w))?,
                     Setting::Type(t) => {
                         let (c, fin) = (&t.c, format_ident!("__cbg_in_{}", t.rust));
                         match &t.kind {
@@ -189,7 +192,7 @@ impl<'f> Plan<'f> {
                 let name = declared_name(ty);
                 match declaration {
                     Setting::Converted(c) => {
-                        Output::via(&self.q, c, v, |repr, r| self.value_out(repr, &r, w))?
+                        Output::via(c, v, |repr, r| self.value_out(repr, &r, w))?
                     }
                     Setting::Type(t) => {
                         let (c, fout) = (&t.c, format_ident!("__cbg_out_{}", t.rust));
@@ -867,7 +870,7 @@ impl<'f> Plan<'f> {
             let __ctx = ::std::sync::Arc::new(__Ctx { context: #name.context, drop: #name.drop });
         };
         let names: Vec<_> = (0..args.len()).map(|i| format_ident!("__a{}", i)).collect();
-        let tys = args.iter().map(|t| self.q.ty_elided(t));
+        let tys = prebindgen_tools::callback_arg_types(self.flat, args);
         let outs = args
             .iter()
             .zip(&names)

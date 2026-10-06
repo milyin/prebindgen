@@ -127,7 +127,7 @@ fn opaque(plan: &Plan, t: &CType) -> TokenStream {
 /// An error type: handed to C as its message.
 fn opaque_error(plan: &Plan, t: &CType, message: &syn::Ident) -> TokenStream {
     let src = plan.source(&t.rust.to_string());
-    let msg = plan.q.path(message);
+    let msg = plan.source(&message.to_string());
     let f = format_ident!("__cbg_out_{}", t.rust);
     let allow = allow();
     quote! {
@@ -547,7 +547,7 @@ fn function(plan: &Plan, func: &Function, exported: &syn::Ident, panic: bool) ->
             func.name
         ));
     }
-    let callee = plan.q.path(&func.name);
+    let callee = &func.name;
     let mut params = Vec::new();
     let mut stmts = Vec::new();
     let mut args = Vec::new();
@@ -687,7 +687,7 @@ fn struct_mirror(
     };
     let wire_names: Vec<&syn::Ident> = wires.iter().map(|w| &w.name).collect();
     let head = source_path;
-    let rebuilt = Input::record(&cb.plan.q, source, ins);
+    let rebuilt = Input::record(source, ins);
     let input = Code {
         expr: {
             let e = &rebuilt.expr;

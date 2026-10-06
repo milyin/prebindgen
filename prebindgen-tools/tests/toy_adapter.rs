@@ -8,7 +8,7 @@ use prebindgen_flat::{
     Flat,
 };
 use prebindgen_tools::{
-    convert, fun, names, shape, Access, Form, FormKind, Input, Output, Overrides, Place, Qualifier,
+    convert, fun, names, shape, Access, Form, FormKind, Input, Output, Overrides, Place,
     ResolvedConversion, Seg, Shape, Wire, WireType,
 };
 use proc_macro2::TokenStream;
@@ -53,7 +53,6 @@ enum Decl {
 
 struct Adapter<'f> {
     flat: &'f Flat,
-    q: Qualifier<'f>,
     decls: Overrides<Decl>,
 }
 
@@ -94,7 +93,7 @@ impl Adapter<'_> {
                 let name = name_of(dty);
                 let input = match declaration {
                     Decl::Handle => {
-                        let t = self.q.path(&names::ident(&name));
+                        let t = self.flat.declared_type(name.as_str()).unwrap().name();
                         let wire = wire(Toy::Handle(name.clone()));
                         return Ok(match Access::of(dty) {
                             Access::Owned => Input::wire(
@@ -114,7 +113,7 @@ impl Adapter<'_> {
                             .iter()
                             .map(|f| self.input(&f.ty, &place.at(Seg::field(f))))
                             .collect::<Result<_, _>>()?;
-                        Input::record(&self.q, s, fields)
+                        Input::record(s, fields)
                     }
                     Decl::Sum => {
                         let Some(Type::Variant(v)) = self.flat.declared_type(name.as_str()) else {
@@ -130,15 +129,10 @@ impl Adapter<'_> {
                                 .collect::<Result<_, _>>()?;
                             alts.push(fields);
                         }
-                        Input::sum(
-                            &self.q,
-                            v,
-                            Wire::new(place.ident_with_suffix("tag"), Toy::Int),
-                            alts,
-                        )
+                        Input::sum(v, Wire::new(place.ident_with_suffix("tag"), Toy::Int), alts)
                     }
                     Decl::Convert(c) => {
-                        Input::via(&self.q, c, |repr| self.input(repr, &place.at(Seg::Repr)))?
+                        Input::via(c, |repr| self.input(repr, &place.at(Seg::Repr)))?
                     }
                 };
                 match Access::of(dty) {
@@ -180,7 +174,7 @@ impl Adapter<'_> {
                         let Some(Type::Struct(s)) = self.flat.declared_type(name.as_str()) else {
                             return Err(format!("`{name}` is not a struct"));
                         };
-                        Output::record(&self.q, s, v, |f, b| {
+                        Output::record(s, v, |f, b| {
                             self.output(&f.ty, &place.at(Seg::field(f)), &b)
                         })?
                     }
@@ -190,14 +184,14 @@ impl Adapter<'_> {
                             return Err(format!("`{name}` is not a sum"));
                         };
                         let tag = Wire::new(place.ident_with_suffix("tag"), Toy::Int);
-                        Output::sum(&self.q, sum, tag, v, |a, f, b| {
+                        Output::sum(sum, tag, v, |a, f, b| {
                             let at = place.at(Seg::Alt(names::bare(&a.name)));
                             self.output(&f.ty, &at.at(Seg::field(f)), &b)
                         })?
                     }
-                    Decl::Convert(c) => Output::via(&self.q, c, v, |repr, r| {
-                        self.output(repr, &place.at(Seg::Repr), &r)
-                    })?,
+                    Decl::Convert(c) => {
+                        Output::via(c, v, |repr, r| self.output(repr, &place.at(Seg::Repr), &r))?
+                    }
                 }
             }
             s => return Err(format!("`{ty}`: no toy form for {s:?}")),
@@ -206,7 +200,7 @@ impl Adapter<'_> {
 
     /// A generated element: one wrapper around one source function.
     fn wrapper(&self, f: &Function) -> Result<TokenStream, String> {
-        let el = Place::new(names::bare(&f.name));
+        let el = Place::new(names::bare(f.name.ident()));
         let mut params = Vec::new();
         let mut args = Vec::new();
         for p in &f.params {
@@ -216,7 +210,9 @@ impl Adapter<'_> {
         }
         let out = self.output(&f.ret, &el.at(Seg::Return), &quote!(__ret))?;
         let ret_tys = out.wires().iter().map(|w| w.ty.rust()).collect::<Vec<_>>();
-        let (name, callee, e) = (&f.name, self.q.path(&f.name), &out.expr);
+        // The wrapper is defined under the function's own name, and calls the
+        // source function by its qualified one.
+        let (name, callee, e) = (f.name.ident(), &f.name, &out.expr);
         Ok(quote! {
             pub unsafe fn #name(#(#params),*) -> ::core::result::Result<(#(#ret_tys,)*), ::std::string::String> {
                 let __ret = #callee(#(#args),*);
@@ -273,7 +269,6 @@ const SRC: &str = r#"
 fn adapter(flat: &Flat) -> Adapter<'_> {
     let mut a = Adapter {
         flat,
-        q: Qualifier::new(flat),
         decls: Overrides::new(),
     };
     let mut decls = Overrides::new();
