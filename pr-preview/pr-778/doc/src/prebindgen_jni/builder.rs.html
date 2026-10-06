@@ -217,12 +217,13 @@
 <a href=#217 id=217 data-nosnippet>217</a>
 <a href=#218 id=218 data-nosnippet>218</a>    <span class="doccomment">/// Parse the sources and generate the binding.
 <a href=#219 id=219 data-nosnippet>219</a>    </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Generation, Error&gt; {
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">let </span>flat = Flat::builder()
-<a href=#221 id=221 data-nosnippet>221</a>            .items(<span class="self">self</span>.items.clone())
-<a href=#222 id=222 data-nosnippet>222</a>            .build()
-<a href=#223 id=223 data-nosnippet>223</a>            .map_err(|e| Error(e.to_string()))<span class="question-mark">?</span>;
-<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">let </span>plan = Plan::new(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">&amp;</span>flat)<span class="question-mark">?</span>;
-<a href=#225 id=225 data-nosnippet>225</a>        write::write(<span class="kw-2">&amp;</span>plan)
-<a href=#226 id=226 data-nosnippet>226</a>    }
-<a href=#227 id=227 data-nosnippet>227</a>}
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = Flat::builder().items(<span class="self">self</span>.items.clone());
+<a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(m) = <span class="kw-2">&amp;</span><span class="self">self</span>.source_module {
+<a href=#222 id=222 data-nosnippet>222</a>            flat = flat.default_module(m.clone());
+<a href=#223 id=223 data-nosnippet>223</a>        }
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">let </span>flat = flat.build().map_err(|e| Error(e.to_string()))<span class="question-mark">?</span>;
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span>plan = Plan::new(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">&amp;</span>flat)<span class="question-mark">?</span>;
+<a href=#226 id=226 data-nosnippet>226</a>        write::write(<span class="kw-2">&amp;</span>plan)
+<a href=#227 id=227 data-nosnippet>227</a>    }
+<a href=#228 id=228 data-nosnippet>228</a>}
 </code></pre></div></section></main></body></html>

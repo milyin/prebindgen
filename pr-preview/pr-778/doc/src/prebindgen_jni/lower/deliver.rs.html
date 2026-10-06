@@ -256,7 +256,7 @@
 <a href=#256 id=256 data-nosnippet>256</a>        gates: <span class="kw-2">&amp;</span>[String],
 <a href=#257 id=257 data-nosnippet>257</a>        depth: usize,
 <a href=#258 id=258 data-nosnippet>258</a>    ) -&gt; Res&lt;Delivery&gt; {
-<a href=#259 id=259 data-nosnippet>259</a>        <span class="kw">let </span>head = <span class="self">self</span>.q.path(<span class="kw-2">&amp;</span>s.name);
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="kw">let </span>head = s.name.to_token_stream();
 <a href=#260 id=260 data-nosnippet>260</a>        <span class="kw">let </span>binds: Vec&lt;syn::Ident&gt; = (<span class="number">0</span>..s.fields.len())
 <a href=#261 id=261 data-nosnippet>261</a>            .map(|i| <span class="macro">format_ident!</span>(<span class="string">"__f{}_{}"</span>, depth, i))
 <a href=#262 id=262 data-nosnippet>262</a>            .collect();
@@ -312,9 +312,9 @@
 <a href=#312 id=312 data-nosnippet>312</a>            <span class="kw">match </span>field {
 <a href=#313 id=313 data-nosnippet>313</a>                ReturnField::Getter(g) =&gt; {
 <a href=#314 id=314 data-nosnippet>314</a>                    <span class="kw">let </span>func = g.fun.resolve(<span class="self">self</span>.flat).map_err(<span class="kw">crate</span>::Error)<span class="question-mark">?</span>;
-<a href=#315 id=315 data-nosnippet>315</a>                    <span class="kw">let </span>callee = g.fun.callee(<span class="kw-2">&amp;</span><span class="self">self</span>.q);
+<a href=#315 id=315 data-nosnippet>315</a>                    <span class="kw">let </span>callee = func.name.clone();
 <a href=#316 id=316 data-nosnippet>316</a>                    <span class="kw">let </span>fname = g.name.clone().unwrap_or_else(|| {
-<a href=#317 id=317 data-nosnippet>317</a>                        <span class="kw">let </span>n = names::bare(<span class="kw-2">&amp;</span>func.name);
+<a href=#317 id=317 data-nosnippet>317</a>                        <span class="kw">let </span>n = names::bare(func.name.ident());
 <a href=#318 id=318 data-nosnippet>318</a>                        n.strip_prefix(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{type_snake}_"</span>))
 <a href=#319 id=319 data-nosnippet>319</a>                            .unwrap_or(<span class="kw-2">&amp;</span>n)
 <a href=#320 id=320 data-nosnippet>320</a>                            .to_string()
@@ -357,7 +357,7 @@
 <a href=#357 id=357 data-nosnippet>357</a>                    <span class="kw">let </span>f = <span class="self">self</span>.flat.function(fun).ok_or_else(|| {
 <a href=#358 id=358 data-nosnippet>358</a>                        <span class="kw">crate</span>::Error(<span class="macro">format!</span>(<span class="string">"`{fun}` is not a #[prebindgen] function"</span>))
 <a href=#359 id=359 data-nosnippet>359</a>                    })<span class="question-mark">?</span>;
-<a href=#360 id=360 data-nosnippet>360</a>                    <span class="kw">let </span>callee = <span class="self">self</span>.q.path(fun);
+<a href=#360 id=360 data-nosnippet>360</a>                    <span class="kw">let </span>callee = f.name.clone();
 <a href=#361 id=361 data-nosnippet>361</a>                    <span class="kw">let </span>arg = <span class="kw">match </span>(consume, borrowed) {
 <a href=#362 id=362 data-nosnippet>362</a>                        (<span class="bool-val">true</span>, <span class="bool-val">true</span>) =&gt; <span class="macro">quote!</span>(::core::clone::Clone::clone(#v)),
 <a href=#363 id=363 data-nosnippet>363</a>                        (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; <span class="macro">quote!</span>(#v),
@@ -472,7 +472,7 @@
 <a href=#472 id=472 data-nosnippet>472</a>        <span class="kw">let </span>frame = <span class="number">32 </span>+ leaves.len() <span class="kw">as </span>i32 * <span class="number">2</span>;
 <a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span>what = <span class="macro">format!</span>(<span class="string">"callback {ty}"</span>);
 <a href=#474 id=474 data-nosnippet>474</a>        <span class="kw">let </span>names: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..args.len()).map(|i| <span class="macro">format_ident!</span>(<span class="string">"__a{}"</span>, i)).collect();
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let </span>tys = args.iter().map(|t| <span class="self">self</span>.q.ty_elided(t));
+<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let </span>tys = prebindgen_tools::callback_arg_types(<span class="self">self</span>.flat, args);
 <a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let </span>outs = args
 <a href=#477 id=477 data-nosnippet>477</a>            .iter()
 <a href=#478 id=478 data-nosnippet>478</a>            .zip(<span class="kw-2">&amp;</span>names)

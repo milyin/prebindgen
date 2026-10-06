@@ -271,14 +271,15 @@
 <a href=#271 id=271 data-nosnippet>271</a>
 <a href=#272 id=272 data-nosnippet>272</a>    <span class="doccomment">/// Parse the sources and generate the binding.
 <a href=#273 id=273 data-nosnippet>273</a>    </span><span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Cbindgen, Error&gt; {
-<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">let </span>flat = Flat::builder()
-<a href=#275 id=275 data-nosnippet>275</a>            .items(<span class="self">self</span>.items.clone())
-<a href=#276 id=276 data-nosnippet>276</a>            .build()
-<a href=#277 id=277 data-nosnippet>277</a>            .map_err(|e| Error(e.to_string()))<span class="question-mark">?</span>;
-<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw">let </span>plan = Plan::new(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">&amp;</span>flat)<span class="question-mark">?</span>;
-<a href=#279 id=279 data-nosnippet>279</a>        <span class="prelude-val">Ok</span>(Cbindgen {
-<a href=#280 id=280 data-nosnippet>280</a>            file: write::write(<span class="kw-2">&amp;</span>plan)<span class="question-mark">?</span>,
-<a href=#281 id=281 data-nosnippet>281</a>        })
-<a href=#282 id=282 data-nosnippet>282</a>    }
-<a href=#283 id=283 data-nosnippet>283</a>}
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">let </span><span class="kw-2">mut </span>flat = Flat::builder().items(<span class="self">self</span>.items.clone());
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(m) = <span class="kw-2">&amp;</span><span class="self">self</span>.source_module {
+<a href=#276 id=276 data-nosnippet>276</a>            flat = flat.default_module(m.clone());
+<a href=#277 id=277 data-nosnippet>277</a>        }
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw">let </span>flat = flat.build().map_err(|e| Error(e.to_string()))<span class="question-mark">?</span>;
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span>plan = Plan::new(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">&amp;</span>flat)<span class="question-mark">?</span>;
+<a href=#280 id=280 data-nosnippet>280</a>        <span class="prelude-val">Ok</span>(Cbindgen {
+<a href=#281 id=281 data-nosnippet>281</a>            file: write::write(<span class="kw-2">&amp;</span>plan)<span class="question-mark">?</span>,
+<a href=#282 id=282 data-nosnippet>282</a>        })
+<a href=#283 id=283 data-nosnippet>283</a>    }
+<a href=#284 id=284 data-nosnippet>284</a>}
 </code></pre></div></section></main></body></html>

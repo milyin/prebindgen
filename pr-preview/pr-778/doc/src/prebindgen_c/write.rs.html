@@ -127,7 +127,7 @@
 <a href=#127 id=127 data-nosnippet>127</a><span class="doccomment">/// An error type: handed to C as its message.
 <a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">fn </span>opaque_error(plan: <span class="kw-2">&amp;</span>Plan, t: <span class="kw-2">&amp;</span>CType, message: <span class="kw-2">&amp;</span>syn::Ident) -&gt; TokenStream {
 <a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">let </span>src = plan.source(<span class="kw-2">&amp;</span>t.rust.to_string());
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>msg = plan.q.path(message);
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>msg = plan.source(<span class="kw-2">&amp;</span>message.to_string());
 <a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">let </span>f = <span class="macro">format_ident!</span>(<span class="string">"__cbg_out_{}"</span>, t.rust);
 <a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">let </span>allow = allow();
 <a href=#133 id=133 data-nosnippet>133</a>    <span class="macro">quote!</span> {
@@ -547,7 +547,7 @@
 <a href=#547 id=547 data-nosnippet>547</a>            func.name
 <a href=#548 id=548 data-nosnippet>548</a>        ));
 <a href=#549 id=549 data-nosnippet>549</a>    }
-<a href=#550 id=550 data-nosnippet>550</a>    <span class="kw">let </span>callee = plan.q.path(<span class="kw-2">&amp;</span>func.name);
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="kw">let </span>callee = <span class="kw-2">&amp;</span>func.name;
 <a href=#551 id=551 data-nosnippet>551</a>    <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
 <a href=#552 id=552 data-nosnippet>552</a>    <span class="kw">let </span><span class="kw-2">mut </span>stmts = Vec::new();
 <a href=#553 id=553 data-nosnippet>553</a>    <span class="kw">let </span><span class="kw-2">mut </span>args = Vec::new();
@@ -687,7 +687,7 @@
 <a href=#687 id=687 data-nosnippet>687</a>    };
 <a href=#688 id=688 data-nosnippet>688</a>    <span class="kw">let </span>wire_names: Vec&lt;<span class="kw-2">&amp;</span>syn::Ident&gt; = wires.iter().map(|w| <span class="kw-2">&amp;</span>w.name).collect();
 <a href=#689 id=689 data-nosnippet>689</a>    <span class="kw">let </span>head = source_path;
-<a href=#690 id=690 data-nosnippet>690</a>    <span class="kw">let </span>rebuilt = Input::record(<span class="kw-2">&amp;</span>cb.plan.q, source, ins);
+<a href=#690 id=690 data-nosnippet>690</a>    <span class="kw">let </span>rebuilt = Input::record(source, ins);
 <a href=#691 id=691 data-nosnippet>691</a>    <span class="kw">let </span>input = Code {
 <a href=#692 id=692 data-nosnippet>692</a>        expr: {
 <a href=#693 id=693 data-nosnippet>693</a>            <span class="kw">let </span>e = <span class="kw-2">&amp;</span>rebuilt.expr;
