@@ -133,14 +133,6 @@ impl Prim {
             Prim::D => "java/lang/Double",
         }
     }
-
-    /// Slots this primitive takes in a JVM method's argument list.
-    pub(crate) fn slots(self) -> usize {
-        match self {
-            Prim::J | Prim::D => 2,
-            _ => 1,
-        }
-    }
 }
 
 /// What a leaf is.
@@ -242,13 +234,6 @@ impl Leaf {
                 quote!(::prebindgen_jni_runtime::jni::sys::jvalue { #f: #v })
             }
             _ => quote!(::prebindgen_jni_runtime::jni::sys::jvalue { l: #v.as_raw() }),
-        }
-    }
-
-    pub(crate) fn slots(&self) -> usize {
-        match &self.ty {
-            LeafTy::Prim(p) => p.slots(),
-            _ => 1,
         }
     }
 

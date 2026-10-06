@@ -443,12 +443,18 @@ fn trailing(b: &Binding) -> Vec<&'static str> {
 
 fn extern_kotlin(plan: &Plan, b: &Binding) -> Res<String> {
     let mut params = Vec::new();
+    let mut types = Vec::new();
     for p in &b.params {
         for l in plan.param_leaves(p)? {
             params.push(format!("{}: {}", raw_name(&l), l.kt_raw()));
+            types.push(l.kt_raw());
         }
     }
-    params.extend(trailing(b).iter().map(|n| format!("{n}: Any")));
+    for n in trailing(b) {
+        params.push(format!("{n}: Any"));
+        types.push("Any".to_string());
+    }
+    super::check_slots(&format!("`{}.{}`", plan.harness, b.ext_name), &types)?;
     let ret = match &b.ret {
         RPlan::Unit => String::new(),
         RPlan::Direct { leaf, .. } => format!(": {}", leaf.kt_raw()),

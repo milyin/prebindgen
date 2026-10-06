@@ -279,42 +279,88 @@ fn sequence_inputs_preserve_supported_access() {
 
 #[test]
 fn methods_over_the_jvm_slot_limit_are_refused() {
-    // A struct of `n` `i64` fields crosses as `2 * n` slots. A native method
-    // adds 4 (the receiver and up to three sinks), a result sink 1.
-    let wide = |name: &str, n: usize| {
-        let fields: Vec<String> = (0..n).map(|i| format!("pub f{i}: i64")).collect();
-        format!("pub struct {name} {{ {} }}", fields.join(", "))
+    // Each `i64` is a Kotlin `Long`: two JVM slots. Every generated method
+    // has a receiver, one more.
+    let fields = |n: usize, prefix: &str| -> String {
+        (0..n)
+            .map(|i| format!("pub {prefix}{i}: i64"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let getters = |n: usize| -> String {
+        (0..n)
+            .map(|i| format!("pub fn row_g{i}(r: &Row) -> i64 {{ todo!() }}"))
+            .collect::<Vec<_>>()
+            .join(" ")
     };
     let src = format!(
-        "{} {} pub fn take_fit(v: Fit) -> i64 {{ todo!() }} \
-         pub fn take_wide(v: Wide) -> i64 {{ todo!() }} pub fn make_wide() -> Wide {{ todo!() }}",
-        wide("Fit", 125),
-        wide("Wide", 128),
+        "pub struct Half64 {{ {} }} pub struct Half63 {{ {} }} \
+         pub struct Fit {{ pub a: Half64, pub b: Half63 }} \
+         pub struct Wide {{ pub a: Half64, pub b: Half64 }} \
+         pub fn take_fit({}, last: i32) -> i64 {{ todo!() }} \
+         pub fn take_over({}) -> i64 {{ todo!() }} \
+         pub fn make_fit() -> Fit {{ todo!() }} pub fn make_wide() -> Wide {{ todo!() }} \
+         pub type Row = inner::Row; {} pub fn row_count(r: &Row) -> i32 {{ todo!() }} \
+         pub fn rows() -> Vec<Row> {{ todo!() }}",
+        fields(64, "f"),
+        fields(63, "f"),
+        fields(126, "a").replace("pub ", ""),
+        fields(127, "a").replace("pub ", ""),
+        getters(127),
     );
-    let build = |f: crate::FunctionDecl| {
+    let build = |f: crate::FunctionDecl, row_getters: usize, row_count: bool| {
         let items = syn::parse_file(&src).unwrap().items.into_iter();
+        let mut row = expand_return!(Row);
+        for i in 0..row_getters {
+            row = row.field(crate::FunctionDecl::new(
+                syn::parse_str(&format!("row_g{i}")).unwrap(),
+            ));
+        }
+        if row_count {
+            row = row.field(fun!(row_count));
+        }
         JniGen::builder()
             .items(items.map(|i| (i, SourceLocation::default())))
             .set_package_prefix("io.test")
+            .expand(row)
             .package(
                 package!()
+                    .class(data_class!(Half64))
+                    .class(data_class!(Half63))
                     .class(data_class!(Fit))
                     .class(data_class!(Wide))
+                    .class(ptr_class!(Row))
                     .fun(f),
             )
             .build()
     };
-    // 4 + 250 = 254 slots: at the limit's edge, still accepted.
-    assert!(build(fun!(take_fit)).is_ok());
-    // 4 + 256 slots as a parameter, 1 + 256 as a result: refused.
-    let err = build(fun!(take_wide)).err().unwrap().0;
-    assert!(
-        err.contains("the native method of `take_wide` would take 260 JVM argument slots"),
-        "{err}"
+    let refused = |r: Result<Generation, crate::Error>, what: &str| {
+        let e = r.err().expect("refused").0;
+        assert!(e.contains(what), "{e}");
+    };
+
+    // The native method: the receiver, the parameters, and only the sinks
+    // it has — here just the error sink. 1 + 252 + 1 + 1 = 255.
+    assert!(build(fun!(take_fit), 0, false).is_ok());
+    // 1 + 254 + 1 = 256.
+    refused(
+        build(fun!(take_over), 0, false),
+        "`JNINative.takeOver` would take 256 JVM argument slots",
     );
-    let err = build(fun!(make_wide)).err().unwrap().0;
-    assert!(
-        err.contains("the result sink of `Wide` would take 257 JVM argument slots"),
-        "{err}"
+
+    // A result sink takes every leaf: 1 + 254 = 255, then 1 + 256 = 257.
+    assert!(build(fun!(make_fit), 0, false).is_ok());
+    refused(
+        build(fun!(make_wide), 0, false),
+        "`__Sink_Wide.run` would take 257 JVM argument slots",
+    );
+
+    // A typed folder takes the accumulator and every field, while its
+    // columns interface takes one array per leaf: 1 + 1 + 252 + 1 = 255 ...
+    assert!(build(fun!(rows), 126, true).is_ok());
+    // ... then 1 + 1 + 254 = 256, though the columns need only 129.
+    refused(
+        build(fun!(rows), 127, false),
+        "Folder.run` would take 256 JVM argument slots",
     );
 }
