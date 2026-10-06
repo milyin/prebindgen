@@ -8,7 +8,7 @@
 <a href=#8 id=8 data-nosnippet>8</a>//! elements to write — package by package, each package's classes, then
 <a href=#9 id=9 data-nosnippet>9</a>//! its functions, then its constants — each with every decision about it
 <a href=#10 id=10 data-nosnippet>10</a>//! already made: its Kotlin and extern names, how each parameter crosses
-<a href=#11 id=11 data-nosnippet>11</a>//! (a value, packed, a selector), how the result and the error leave. The
+<a href=#11 id=11 data-nosnippet>11</a>//! (a value or a selector), how the result and the error leave. The
 <a href=#12 id=12 data-nosnippet>12</a>//! Kotlin support interfaces those decisions need — callback, sink, builder,
 <a href=#13 id=13 data-nosnippet>13</a>//! folder and error-handler interfaces — are planned alongside, once each.
 <a href=#14 id=14 data-nosnippet>14</a>//!
@@ -34,292 +34,292 @@
 <a href=#34 id=34 data-nosnippet>34</a>        ClassDecl, ConstDecl, ConstSource, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
 <a href=#35 id=35 data-nosnippet>35</a>        FunctionDecl, ParamVariant, ReturnField,
 <a href=#36 id=36 data-nosnippet>36</a>    },
-<a href=#37 id=37 data-nosnippet>37</a>    lower::{deliver::DParam, leaf::Leaf, select::Selector, Dir},
-<a href=#38 id=38 data-nosnippet>38</a>    Error,
-<a href=#39 id=39 data-nosnippet>39</a>};
-<a href=#40 id=40 data-nosnippet>40</a>
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>Res&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, Error&gt;;
-<a href=#42 id=42 data-nosnippet>42</a>
-<a href=#43 id=43 data-nosnippet>43</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>err&lt;T&gt;(msg: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; Res&lt;T&gt; {
-<a href=#44 id=44 data-nosnippet>44</a>    <span class="prelude-val">Err</span>(Error(msg.into()))
-<a href=#45 id=45 data-nosnippet>45</a>}
-<a href=#46 id=46 data-nosnippet>46</a>
-<a href=#47 id=47 data-nosnippet>47</a><span class="comment">// ── settings ────────────────────────────────────────────────────────────
-<a href=#48 id=48 data-nosnippet>48</a>
-<a href=#49 id=49 data-nosnippet>49</a></span><span class="doccomment">/// A Kotlin class a source type is bound to.
-<a href=#50 id=50 data-nosnippet>50</a></span><span class="attr">#[derive(Debug)]
-<a href=#51 id=51 data-nosnippet>51</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Class {
-<a href=#52 id=52 data-nosnippet>52</a>    <span class="doccomment">/// The source type's name.
-<a href=#53 id=53 data-nosnippet>53</a>    </span><span class="kw">pub </span>rust: String,
-<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">pub </span>kind: ClassKind,
-<a href=#55 id=55 data-nosnippet>55</a>    <span class="doccomment">/// Kotlin package, fully qualified.
-<a href=#56 id=56 data-nosnippet>56</a>    </span><span class="kw">pub </span>pkg: String,
-<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Kotlin simple name.
-<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">pub </span>name: String,
-<a href=#59 id=59 data-nosnippet>59</a>    <span class="doccomment">/// The `…Api` interface the class implements, when declared.
-<a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">pub </span>iface: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">pub </span>implements: Vec&lt;String&gt;,
-<a href=#62 id=62 data-nosnippet>62</a>}
-<a href=#63 id=63 data-nosnippet>63</a>
-<a href=#64 id=64 data-nosnippet>64</a><span class="attr">#[derive(Debug)]
-<a href=#65 id=65 data-nosnippet>65</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>ClassKind {
-<a href=#66 id=66 data-nosnippet>66</a>    Ptr { gc: bool },
-<a href=#67 id=67 data-nosnippet>67</a>    Data { packed: bool },
-<a href=#68 id=68 data-nosnippet>68</a>    Enum,
-<a href=#69 id=69 data-nosnippet>69</a>    Sealed { renames: HashMap&lt;String, String&gt; },
-<a href=#70 id=70 data-nosnippet>70</a>}
-<a href=#71 id=71 data-nosnippet>71</a>
-<a href=#72 id=72 data-nosnippet>72</a><span class="kw">impl </span>Class {
-<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fqn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-<a href=#74 id=74 data-nosnippet>74</a>        <span class="macro">format!</span>(<span class="string">"{}.{}"</span>, <span class="self">self</span>.pkg, <span class="self">self</span>.name)
-<a href=#75 id=75 data-nosnippet>75</a>    }
-<a href=#76 id=76 data-nosnippet>76</a>}
-<a href=#77 id=77 data-nosnippet>77</a>
-<a href=#78 id=78 data-nosnippet>78</a><span class="doccomment">/// A type crossing as its representation.
-<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Conv {
-<a href=#80 id=80 data-nosnippet>80</a>    <span class="kw">pub </span>name: String,
-<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">pub </span>resolved: ResolvedConversion,
-<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">pub </span>range: <span class="prelude-ty">Option</span>&lt;(u128, u128)&gt;,
-<a href=#83 id=83 data-nosnippet>83</a>}
-<a href=#84 id=84 data-nosnippet>84</a>
-<a href=#85 id=85 data-nosnippet>85</a><span class="doccomment">/// How a declared type crosses.
-<a href=#86 id=86 data-nosnippet>86</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Setting {
-<a href=#87 id=87 data-nosnippet>87</a>    Class(Rc&lt;Class&gt;),
-<a href=#88 id=88 data-nosnippet>88</a>    Converted(Rc&lt;Conv&gt;),
-<a href=#89 id=89 data-nosnippet>89</a>}
-<a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a><span class="comment">// ── items ───────────────────────────────────────────────────────────────
-<a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a></span><span class="doccomment">/// Where a bound function lands in Kotlin.
-<a href=#94 id=94 data-nosnippet>94</a></span><span class="attr">#[derive(Clone)]
-<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Placement {
-<a href=#96 id=96 data-nosnippet>96</a>    Package,
-<a href=#97 id=97 data-nosnippet>97</a>    Method(Rc&lt;Class&gt;),
-<a href=#98 id=98 data-nosnippet>98</a>    Constructor(Rc&lt;Class&gt;),
-<a href=#99 id=99 data-nosnippet>99</a>}
-<a href=#100 id=100 data-nosnippet>100</a>
-<a href=#101 id=101 data-nosnippet>101</a><span class="doccomment">/// How the extern reaches the value.
-<a href=#102 id=102 data-nosnippet>102</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Callee {
-<a href=#103 id=103 data-nosnippet>103</a>    <span class="doccomment">/// Call this path with the arguments.
-<a href=#104 id=104 data-nosnippet>104</a>    </span>Call(TokenStream),
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="doccomment">/// Evaluate this expression: a constant's value.
-<a href=#106 id=106 data-nosnippet>106</a>    </span>Value(TokenStream),
-<a href=#107 id=107 data-nosnippet>107</a>}
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a><span class="doccomment">/// How one source parameter crosses.
-<a href=#110 id=110 data-nosnippet>110</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>PPlan {
-<a href=#111 id=111 data-nosnippet>111</a>    <span class="doccomment">/// The receiver of a method: `this`.
-<a href=#112 id=112 data-nosnippet>112</a>    </span>Receiver(Param),
-<a href=#113 id=113 data-nosnippet>113</a>    <span class="doccomment">/// A value; `true` when its leaves travel packed.
-<a href=#114 id=114 data-nosnippet>114</a>    </span>Value(Param, bool),
-<a href=#115 id=115 data-nosnippet>115</a>    <span class="doccomment">/// Built or passed as chosen by a selector; `true` when split into
-<a href=#116 id=116 data-nosnippet>116</a>    /// typed overloads.
-<a href=#117 id=117 data-nosnippet>117</a>    </span>Selector(Selector, bool),
-<a href=#118 id=118 data-nosnippet>118</a>}
-<a href=#119 id=119 data-nosnippet>119</a>
-<a href=#120 id=120 data-nosnippet>120</a><span class="doccomment">/// How a successful result crosses.
-<a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>RPlan {
-<a href=#122 id=122 data-nosnippet>122</a>    Unit,
-<a href=#123 id=123 data-nosnippet>123</a>    <span class="doccomment">/// One leaf, returned as the extern's own result.
-<a href=#124 id=124 data-nosnippet>124</a>    </span>Direct {
-<a href=#125 id=125 data-nosnippet>125</a>        ty: TypeRef,
-<a href=#126 id=126 data-nosnippet>126</a>        leaf: Leaf,
-<a href=#127 id=127 data-nosnippet>127</a>    },
-<a href=#128 id=128 data-nosnippet>128</a>    <span class="doccomment">/// Several leaves, handed to a sink that assembles the value.
-<a href=#129 id=129 data-nosnippet>129</a>    </span>Sink {
+<a href=#37 id=37 data-nosnippet>37</a>    lower::{
+<a href=#38 id=38 data-nosnippet>38</a>        deliver::DParam,
+<a href=#39 id=39 data-nosnippet>39</a>        leaf::{Leaf, LeafTy, Prim},
+<a href=#40 id=40 data-nosnippet>40</a>        select::Selector,
+<a href=#41 id=41 data-nosnippet>41</a>        Dir,
+<a href=#42 id=42 data-nosnippet>42</a>    },
+<a href=#43 id=43 data-nosnippet>43</a>    Error,
+<a href=#44 id=44 data-nosnippet>44</a>};
+<a href=#45 id=45 data-nosnippet>45</a>
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>Res&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, Error&gt;;
+<a href=#47 id=47 data-nosnippet>47</a>
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>err&lt;T&gt;(msg: <span class="kw">impl </span>Into&lt;String&gt;) -&gt; Res&lt;T&gt; {
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="prelude-val">Err</span>(Error(msg.into()))
+<a href=#50 id=50 data-nosnippet>50</a>}
+<a href=#51 id=51 data-nosnippet>51</a>
+<a href=#52 id=52 data-nosnippet>52</a><span class="comment">// ── settings ────────────────────────────────────────────────────────────
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a></span><span class="doccomment">/// A Kotlin class a source type is bound to.
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="attr">#[derive(Debug)]
+<a href=#56 id=56 data-nosnippet>56</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Class {
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// The source type's name.
+<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">pub </span>rust: String,
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="kw">pub </span>kind: ClassKind,
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="doccomment">/// Kotlin package, fully qualified.
+<a href=#61 id=61 data-nosnippet>61</a>    </span><span class="kw">pub </span>pkg: String,
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="doccomment">/// Kotlin simple name.
+<a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">pub </span>name: String,
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="doccomment">/// The `…Api` interface the class implements, when declared.
+<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">pub </span>iface: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">pub </span>implements: Vec&lt;String&gt;,
+<a href=#67 id=67 data-nosnippet>67</a>}
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a><span class="attr">#[derive(Debug)]
+<a href=#70 id=70 data-nosnippet>70</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>ClassKind {
+<a href=#71 id=71 data-nosnippet>71</a>    Ptr { gc: bool },
+<a href=#72 id=72 data-nosnippet>72</a>    Data,
+<a href=#73 id=73 data-nosnippet>73</a>    Enum,
+<a href=#74 id=74 data-nosnippet>74</a>    Sealed { renames: HashMap&lt;String, String&gt; },
+<a href=#75 id=75 data-nosnippet>75</a>}
+<a href=#76 id=76 data-nosnippet>76</a>
+<a href=#77 id=77 data-nosnippet>77</a><span class="kw">impl </span>Class {
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>fqn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="macro">format!</span>(<span class="string">"{}.{}"</span>, <span class="self">self</span>.pkg, <span class="self">self</span>.name)
+<a href=#80 id=80 data-nosnippet>80</a>    }
+<a href=#81 id=81 data-nosnippet>81</a>}
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a><span class="doccomment">/// A type crossing as its representation.
+<a href=#84 id=84 data-nosnippet>84</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Conv {
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">pub </span>name: String,
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">pub </span>resolved: ResolvedConversion,
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">pub </span>range: <span class="prelude-ty">Option</span>&lt;(u128, u128)&gt;,
+<a href=#88 id=88 data-nosnippet>88</a>}
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a><span class="doccomment">/// How a declared type crosses.
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Setting {
+<a href=#92 id=92 data-nosnippet>92</a>    Class(Rc&lt;Class&gt;),
+<a href=#93 id=93 data-nosnippet>93</a>    Converted(Rc&lt;Conv&gt;),
+<a href=#94 id=94 data-nosnippet>94</a>}
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a><span class="comment">// ── items ───────────────────────────────────────────────────────────────
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="doccomment">/// Where a bound function lands in Kotlin.
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="attr">#[derive(Clone)]
+<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Placement {
+<a href=#101 id=101 data-nosnippet>101</a>    Package,
+<a href=#102 id=102 data-nosnippet>102</a>    Method(Rc&lt;Class&gt;),
+<a href=#103 id=103 data-nosnippet>103</a>    Constructor(Rc&lt;Class&gt;),
+<a href=#104 id=104 data-nosnippet>104</a>}
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a><span class="doccomment">/// How the extern reaches the value.
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Callee {
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="doccomment">/// Call this path with the arguments.
+<a href=#109 id=109 data-nosnippet>109</a>    </span>Call(TokenStream),
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="doccomment">/// Evaluate this expression: a constant's value.
+<a href=#111 id=111 data-nosnippet>111</a>    </span>Value(TokenStream),
+<a href=#112 id=112 data-nosnippet>112</a>}
+<a href=#113 id=113 data-nosnippet>113</a>
+<a href=#114 id=114 data-nosnippet>114</a><span class="doccomment">/// How one source parameter crosses.
+<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>PPlan {
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// The receiver of a method: `this`.
+<a href=#117 id=117 data-nosnippet>117</a>    </span>Receiver(Param),
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="doccomment">/// A value.
+<a href=#119 id=119 data-nosnippet>119</a>    </span>Value(Param),
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="doccomment">/// Built or passed as chosen by a selector; `true` when split into
+<a href=#121 id=121 data-nosnippet>121</a>    /// typed overloads.
+<a href=#122 id=122 data-nosnippet>122</a>    </span>Selector(Selector, bool),
+<a href=#123 id=123 data-nosnippet>123</a>}
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a><span class="doccomment">/// How a successful result crosses.
+<a href=#126 id=126 data-nosnippet>126</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>RPlan {
+<a href=#127 id=127 data-nosnippet>127</a>    Unit,
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="doccomment">/// One leaf, returned as the extern's own result.
+<a href=#129 id=129 data-nosnippet>129</a>    </span>Direct {
 <a href=#130 id=130 data-nosnippet>130</a>        ty: TypeRef,
-<a href=#131 id=131 data-nosnippet>131</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#132 id=132 data-nosnippet>132</a>        iface: String,
-<a href=#133 id=133 data-nosnippet>133</a>        kt_sink: String,
-<a href=#134 id=134 data-nosnippet>134</a>    },
-<a href=#135 id=135 data-nosnippet>135</a>    <span class="doccomment">/// Delivered to a caller-supplied builder (`R`), `null` when absent.
-<a href=#136 id=136 data-nosnippet>136</a>    </span>Builder {
-<a href=#137 id=137 data-nosnippet>137</a>        whole: TypeRef,
-<a href=#138 id=138 data-nosnippet>138</a>        exp: ExpandReturnDecl,
-<a href=#139 id=139 data-nosnippet>139</a>        optional: bool,
-<a href=#140 id=140 data-nosnippet>140</a>        iface: String,
-<a href=#141 id=141 data-nosnippet>141</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#142 id=142 data-nosnippet>142</a>    },
-<a href=#143 id=143 data-nosnippet>143</a>    <span class="doccomment">/// A sequence folded by a caller-supplied folder (`A`), `null` when
-<a href=#144 id=144 data-nosnippet>144</a>    /// absent.
-<a href=#145 id=145 data-nosnippet>145</a>    </span>Fold {
-<a href=#146 id=146 data-nosnippet>146</a>        whole: TypeRef,
-<a href=#147 id=147 data-nosnippet>147</a>        exp: ExpandReturnDecl,
-<a href=#148 id=148 data-nosnippet>148</a>        optional: bool,
-<a href=#149 id=149 data-nosnippet>149</a>        iface: String,
-<a href=#150 id=150 data-nosnippet>150</a>        columns_iface: String,
-<a href=#151 id=151 data-nosnippet>151</a>        params: Vec&lt;DParam&gt;,
-<a href=#152 id=152 data-nosnippet>152</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#153 id=153 data-nosnippet>153</a>    },
-<a href=#154 id=154 data-nosnippet>154</a>}
-<a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a><span class="doccomment">/// How an `Err` crosses.
-<a href=#157 id=157 data-nosnippet>157</a></span><span class="attr">#[allow(clippy::large_enum_variant)] </span><span class="comment">// one per bound function
-<a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>EPlan {
-<a href=#159 id=159 data-nosnippet>159</a>    <span class="prelude-val">None</span>,
-<a href=#160 id=160 data-nosnippet>160</a>    <span class="doccomment">/// Displayed into the binding-error channel.
-<a href=#161 id=161 data-nosnippet>161</a>    </span>Binding,
-<a href=#162 id=162 data-nosnippet>162</a>    <span class="doccomment">/// Delivered to a typed error handler.
-<a href=#163 id=163 data-nosnippet>163</a>    </span>Domain {
-<a href=#164 id=164 data-nosnippet>164</a>        ty: TypeRef,
-<a href=#165 id=165 data-nosnippet>165</a>        handler: String,
-<a href=#166 id=166 data-nosnippet>166</a>        capture: String,
-<a href=#167 id=167 data-nosnippet>167</a>        raw_iface: String,
-<a href=#168 id=168 data-nosnippet>168</a>        params: Vec&lt;DParam&gt;,
-<a href=#169 id=169 data-nosnippet>169</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#170 id=170 data-nosnippet>170</a>    },
-<a href=#171 id=171 data-nosnippet>171</a>}
-<a href=#172 id=172 data-nosnippet>172</a>
-<a href=#173 id=173 data-nosnippet>173</a><span class="doccomment">/// One bound function, every decision made.
-<a href=#174 id=174 data-nosnippet>174</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Binding {
-<a href=#175 id=175 data-nosnippet>175</a>    <span class="kw">pub </span>func: Function,
-<a href=#176 id=176 data-nosnippet>176</a>    <span class="kw">pub </span>callee: Callee,
-<a href=#177 id=177 data-nosnippet>177</a>    <span class="doccomment">/// The Kotlin name.
-<a href=#178 id=178 data-nosnippet>178</a>    </span><span class="kw">pub </span>kt_name: String,
-<a href=#179 id=179 data-nosnippet>179</a>    <span class="doccomment">/// The `external fun` name in the native holder.
-<a href=#180 id=180 data-nosnippet>180</a>    </span><span class="kw">pub </span>ext_name: String,
-<a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">pub </span>placement: Placement,
-<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">pub </span>params: Vec&lt;PPlan&gt;,
-<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">pub </span>ret: RPlan,
-<a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">pub </span>err: EPlan,
-<a href=#185 id=185 data-nosnippet>185</a>}
-<a href=#186 id=186 data-nosnippet>186</a>
-<a href=#187 id=187 data-nosnippet>187</a><span class="doccomment">/// One element of the binding.
-<a href=#188 id=188 data-nosnippet>188</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Item {
-<a href=#189 id=189 data-nosnippet>189</a>    Class {
-<a href=#190 id=190 data-nosnippet>190</a>        class: Rc&lt;Class&gt;,
-<a href=#191 id=191 data-nosnippet>191</a>        methods: Vec&lt;Binding&gt;,
-<a href=#192 id=192 data-nosnippet>192</a>        ctors: Vec&lt;Binding&gt;,
-<a href=#193 id=193 data-nosnippet>193</a>    },
-<a href=#194 id=194 data-nosnippet>194</a>    Function {
-<a href=#195 id=195 data-nosnippet>195</a>        pkg: String,
-<a href=#196 id=196 data-nosnippet>196</a>        binding: Binding,
-<a href=#197 id=197 data-nosnippet>197</a>    },
-<a href=#198 id=198 data-nosnippet>198</a>    Constant {
-<a href=#199 id=199 data-nosnippet>199</a>        pkg: String,
-<a href=#200 id=200 data-nosnippet>200</a>        name: String,
+<a href=#131 id=131 data-nosnippet>131</a>        leaf: Leaf,
+<a href=#132 id=132 data-nosnippet>132</a>    },
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="doccomment">/// Several leaves, handed to a sink that assembles the value.
+<a href=#134 id=134 data-nosnippet>134</a>    </span>Sink {
+<a href=#135 id=135 data-nosnippet>135</a>        ty: TypeRef,
+<a href=#136 id=136 data-nosnippet>136</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#137 id=137 data-nosnippet>137</a>        iface: String,
+<a href=#138 id=138 data-nosnippet>138</a>        kt_sink: String,
+<a href=#139 id=139 data-nosnippet>139</a>    },
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="doccomment">/// Delivered to a caller-supplied builder (`R`), `null` when absent.
+<a href=#141 id=141 data-nosnippet>141</a>    </span>Builder {
+<a href=#142 id=142 data-nosnippet>142</a>        whole: TypeRef,
+<a href=#143 id=143 data-nosnippet>143</a>        exp: ExpandReturnDecl,
+<a href=#144 id=144 data-nosnippet>144</a>        optional: bool,
+<a href=#145 id=145 data-nosnippet>145</a>        iface: String,
+<a href=#146 id=146 data-nosnippet>146</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#147 id=147 data-nosnippet>147</a>    },
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// A sequence folded by a caller-supplied folder (`A`), `null` when
+<a href=#149 id=149 data-nosnippet>149</a>    /// absent.
+<a href=#150 id=150 data-nosnippet>150</a>    </span>Fold {
+<a href=#151 id=151 data-nosnippet>151</a>        whole: TypeRef,
+<a href=#152 id=152 data-nosnippet>152</a>        exp: ExpandReturnDecl,
+<a href=#153 id=153 data-nosnippet>153</a>        optional: bool,
+<a href=#154 id=154 data-nosnippet>154</a>        iface: String,
+<a href=#155 id=155 data-nosnippet>155</a>        columns_iface: String,
+<a href=#156 id=156 data-nosnippet>156</a>        params: Vec&lt;DParam&gt;,
+<a href=#157 id=157 data-nosnippet>157</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#158 id=158 data-nosnippet>158</a>    },
+<a href=#159 id=159 data-nosnippet>159</a>}
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a><span class="doccomment">/// How an `Err` crosses.
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="attr">#[allow(clippy::large_enum_variant)] </span><span class="comment">// one per bound function
+<a href=#163 id=163 data-nosnippet>163</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>EPlan {
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="prelude-val">None</span>,
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="doccomment">/// Displayed into the binding-error channel.
+<a href=#166 id=166 data-nosnippet>166</a>    </span>Binding,
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="doccomment">/// Delivered to a typed error handler.
+<a href=#168 id=168 data-nosnippet>168</a>    </span>Domain {
+<a href=#169 id=169 data-nosnippet>169</a>        ty: TypeRef,
+<a href=#170 id=170 data-nosnippet>170</a>        handler: String,
+<a href=#171 id=171 data-nosnippet>171</a>        capture: String,
+<a href=#172 id=172 data-nosnippet>172</a>        raw_iface: String,
+<a href=#173 id=173 data-nosnippet>173</a>        params: Vec&lt;DParam&gt;,
+<a href=#174 id=174 data-nosnippet>174</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#175 id=175 data-nosnippet>175</a>    },
+<a href=#176 id=176 data-nosnippet>176</a>}
+<a href=#177 id=177 data-nosnippet>177</a>
+<a href=#178 id=178 data-nosnippet>178</a><span class="doccomment">/// One bound function, every decision made.
+<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Binding {
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">pub </span>func: Function,
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">pub </span>callee: Callee,
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="doccomment">/// The Kotlin name.
+<a href=#183 id=183 data-nosnippet>183</a>    </span><span class="kw">pub </span>kt_name: String,
+<a href=#184 id=184 data-nosnippet>184</a>    <span class="doccomment">/// The `external fun` name in the native holder.
+<a href=#185 id=185 data-nosnippet>185</a>    </span><span class="kw">pub </span>ext_name: String,
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">pub </span>placement: Placement,
+<a href=#187 id=187 data-nosnippet>187</a>    <span class="kw">pub </span>params: Vec&lt;PPlan&gt;,
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">pub </span>ret: RPlan,
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">pub </span>err: EPlan,
+<a href=#190 id=190 data-nosnippet>190</a>}
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a><span class="doccomment">/// One element of the binding.
+<a href=#193 id=193 data-nosnippet>193</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Item {
+<a href=#194 id=194 data-nosnippet>194</a>    Class {
+<a href=#195 id=195 data-nosnippet>195</a>        class: Rc&lt;Class&gt;,
+<a href=#196 id=196 data-nosnippet>196</a>        methods: Vec&lt;Binding&gt;,
+<a href=#197 id=197 data-nosnippet>197</a>        ctors: Vec&lt;Binding&gt;,
+<a href=#198 id=198 data-nosnippet>198</a>    },
+<a href=#199 id=199 data-nosnippet>199</a>    Function {
+<a href=#200 id=200 data-nosnippet>200</a>        pkg: String,
 <a href=#201 id=201 data-nosnippet>201</a>        binding: Binding,
 <a href=#202 id=202 data-nosnippet>202</a>    },
-<a href=#203 id=203 data-nosnippet>203</a>}
-<a href=#204 id=204 data-nosnippet>204</a>
-<a href=#205 id=205 data-nosnippet>205</a><span class="doccomment">/// A Kotlin interface the bindings share, written once.
-<a href=#206 id=206 data-nosnippet>206</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Support {
-<a href=#207 id=207 data-nosnippet>207</a>    <span class="doccomment">/// A callback type's user-facing and raw interfaces.
-<a href=#208 id=208 data-nosnippet>208</a>    </span>Callback(TypeRef),
-<a href=#209 id=209 data-nosnippet>209</a>    <span class="doccomment">/// The interface Rust calls with a multi-leaf value, and the singleton
-<a href=#210 id=210 data-nosnippet>210</a>    /// that assembles it.
-<a href=#211 id=211 data-nosnippet>211</a>    </span>Sink { ty: TypeRef, base: String },
-<a href=#212 id=212 data-nosnippet>212</a>    Builder {
-<a href=#213 id=213 data-nosnippet>213</a>        pkg: String,
-<a href=#214 id=214 data-nosnippet>214</a>        name: String,
-<a href=#215 id=215 data-nosnippet>215</a>        params: Vec&lt;DParam&gt;,
-<a href=#216 id=216 data-nosnippet>216</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#217 id=217 data-nosnippet>217</a>    },
-<a href=#218 id=218 data-nosnippet>218</a>    Folder {
-<a href=#219 id=219 data-nosnippet>219</a>        pkg: String,
-<a href=#220 id=220 data-nosnippet>220</a>        name: String,
-<a href=#221 id=221 data-nosnippet>221</a>        columns: String,
-<a href=#222 id=222 data-nosnippet>222</a>        params: Vec&lt;DParam&gt;,
-<a href=#223 id=223 data-nosnippet>223</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#224 id=224 data-nosnippet>224</a>    },
-<a href=#225 id=225 data-nosnippet>225</a>    ErrorHandler {
-<a href=#226 id=226 data-nosnippet>226</a>        pkg: String,
-<a href=#227 id=227 data-nosnippet>227</a>        name: String,
-<a href=#228 id=228 data-nosnippet>228</a>        raw: String,
-<a href=#229 id=229 data-nosnippet>229</a>        capture: String,
-<a href=#230 id=230 data-nosnippet>230</a>        params: Vec&lt;DParam&gt;,
-<a href=#231 id=231 data-nosnippet>231</a>        leaves: Vec&lt;Leaf&gt;,
-<a href=#232 id=232 data-nosnippet>232</a>    },
-<a href=#233 id=233 data-nosnippet>233</a>}
-<a href=#234 id=234 data-nosnippet>234</a>
-<a href=#235 id=235 data-nosnippet>235</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Plan&lt;<span class="lifetime">'f</span>&gt; {
-<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">pub </span>flat: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>Flat,
-<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">pub </span>q: Qualifier&lt;<span class="lifetime">'f</span>&gt;,
-<a href=#238 id=238 data-nosnippet>238</a>    <span class="doccomment">/// The base Kotlin package.
-<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="kw">pub </span>base_pkg: String,
-<a href=#240 id=240 data-nosnippet>240</a>    <span class="doccomment">/// The native-method holder's simple name.
-<a href=#241 id=241 data-nosnippet>241</a>    </span><span class="kw">pub </span>harness: String,
-<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">pub </span>native_init: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">pub </span>handle_locks: bool,
-<a href=#244 id=244 data-nosnippet>244</a>    <span class="doccomment">/// How each declared type crosses, by name.
-<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">pub </span>types: HashMap&lt;String, Setting&gt;,
-<a href=#246 id=246 data-nosnippet>246</a>    <span class="doccomment">/// Each type's default output expansion.
-<a href=#247 id=247 data-nosnippet>247</a>    </span><span class="kw">pub </span>ret_exp: HashMap&lt;String, ExpandReturnDecl&gt;,
-<a href=#248 id=248 data-nosnippet>248</a>    <span class="doccomment">/// Each type's default input expansion.
-<a href=#249 id=249 data-nosnippet>249</a>    </span><span class="kw">pub </span>param_exp: HashMap&lt;String, ExpandParamDecl&gt;,
-<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">pub </span>items: Vec&lt;Item&gt;,
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">pub </span>supports: Vec&lt;Support&gt;,
-<a href=#252 id=252 data-nosnippet>252</a>}
-<a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Plan&lt;<span class="lifetime">'f</span>&gt; {
-<a href=#255 id=255 data-nosnippet>255</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(b: <span class="kw-2">&amp;</span>JniGenBuilder, flat: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>Flat) -&gt; Res&lt;<span class="self">Self</span>&gt; {
-<a href=#256 id=256 data-nosnippet>256</a>        prebindgen_tools::check_supported(flat).map_err(Error)<span class="question-mark">?</span>;
-<a href=#257 id=257 data-nosnippet>257</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = Plan {
-<a href=#258 id=258 data-nosnippet>258</a>            flat,
-<a href=#259 id=259 data-nosnippet>259</a>            q: Qualifier::new(flat).with_default_module(b.source_module.clone()),
-<a href=#260 id=260 data-nosnippet>260</a>            base_pkg: b.package_prefix.clone(),
-<a href=#261 id=261 data-nosnippet>261</a>            harness: <span class="kw">match </span><span class="kw-2">&amp;</span>b.harness_hook {
-<a href=#262 id=262 data-nosnippet>262</a>                <span class="prelude-val">Some</span>(f) =&gt; f(<span class="string">"JNINative"</span>),
-<a href=#263 id=263 data-nosnippet>263</a>                <span class="prelude-val">None </span>=&gt; <span class="string">"JNINative"</span>.to_string(),
-<a href=#264 id=264 data-nosnippet>264</a>            },
-<a href=#265 id=265 data-nosnippet>265</a>            native_init: b.native_init.clone(),
-<a href=#266 id=266 data-nosnippet>266</a>            handle_locks: b.handle_locks,
-<a href=#267 id=267 data-nosnippet>267</a>            types: HashMap::new(),
-<a href=#268 id=268 data-nosnippet>268</a>            ret_exp: HashMap::new(),
-<a href=#269 id=269 data-nosnippet>269</a>            param_exp: HashMap::new(),
-<a href=#270 id=270 data-nosnippet>270</a>            items: Vec::new(),
-<a href=#271 id=271 data-nosnippet>271</a>            supports: Vec::new(),
-<a href=#272 id=272 data-nosnippet>272</a>        };
-<a href=#273 id=273 data-nosnippet>273</a>        plan.declare_types(b)<span class="question-mark">?</span>;
-<a href=#274 id=274 data-nosnippet>274</a>        plan.check_value_forms(b)<span class="question-mark">?</span>;
-<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span><span class="kw-2">mut </span>planner = Planner {
-<a href=#276 id=276 data-nosnippet>276</a>            plan: <span class="kw-2">&amp;</span>plan,
-<a href=#277 id=277 data-nosnippet>277</a>            b,
-<a href=#278 id=278 data-nosnippet>278</a>            ext_names: HashSet::new(),
-<a href=#279 id=279 data-nosnippet>279</a>            supports: Vec::new(),
-<a href=#280 id=280 data-nosnippet>280</a>            seen: HashSet::new(),
-<a href=#281 id=281 data-nosnippet>281</a>            accessors: accessors(b),
-<a href=#282 id=282 data-nosnippet>282</a>        };
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw">let </span>items = planner.items()<span class="question-mark">?</span>;
-<a href=#284 id=284 data-nosnippet>284</a>        <span class="kw">let </span>supports = planner.supports;
-<a href=#285 id=285 data-nosnippet>285</a>        plan.items = items;
-<a href=#286 id=286 data-nosnippet>286</a>        plan.supports = supports;
-<a href=#287 id=287 data-nosnippet>287</a>        plan.warn_unbound(b);
-<a href=#288 id=288 data-nosnippet>288</a>        <span class="prelude-val">Ok</span>(plan)
-<a href=#289 id=289 data-nosnippet>289</a>    }
-<a href=#290 id=290 data-nosnippet>290</a>
-<a href=#291 id=291 data-nosnippet>291</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pkg_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>, sub: <span class="kw-2">&amp;</span>str) -&gt; String {
-<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">match </span>(<span class="self">self</span>.base_pkg.is_empty(), sub.is_empty()) {
-<a href=#293 id=293 data-nosnippet>293</a>            (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; <span class="self">self</span>.base_pkg.clone(),
-<a href=#294 id=294 data-nosnippet>294</a>            (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; sub.to_string(),
-<a href=#295 id=295 data-nosnippet>295</a>            <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"{}.{sub}"</span>, <span class="self">self</span>.base_pkg),
-<a href=#296 id=296 data-nosnippet>296</a>        }
-<a href=#297 id=297 data-nosnippet>297</a>    }
-<a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>harness_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="macro">format!</span>(<span class="string">"{}.{}"</span>, <span class="self">self</span>.base_pkg, <span class="self">self</span>.harness)
-<a href=#301 id=301 data-nosnippet>301</a>    }
-<a href=#302 id=302 data-nosnippet>302</a>
-<a href=#303 id=303 data-nosnippet>303</a>    <span class="doccomment">/// The class a type is bound to.
-<a href=#304 id=304 data-nosnippet>304</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>class(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Rc&lt;Class&gt;&gt; {
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">match </span><span class="self">self</span>.types.get(name) {
-<a href=#306 id=306 data-nosnippet>306</a>            <span class="prelude-val">Some</span>(Setting::Class(c)) =&gt; <span class="prelude-val">Some</span>(c),
-<a href=#307 id=307 data-nosnippet>307</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#308 id=308 data-nosnippet>308</a>        }
-<a href=#309 id=309 data-nosnippet>309</a>    }
-<a href=#310 id=310 data-nosnippet>310</a>
-<a href=#311 id=311 data-nosnippet>311</a>    <span class="kw">fn </span>declare_types(<span class="kw-2">&amp;mut </span><span class="self">self</span>, b: <span class="kw-2">&amp;</span>JniGenBuilder) -&gt; Res&lt;()&gt; {
-<a href=#312 id=312 data-nosnippet>312</a>        <span class="kw">for </span>p <span class="kw">in </span><span class="kw-2">&amp;</span>b.packages {
-<a href=#313 id=313 data-nosnippet>313</a>            <span class="kw">let </span>pkg = <span class="self">self</span>.pkg_fqn(<span class="kw-2">&amp;</span>p.name);
-<a href=#314 id=314 data-nosnippet>314</a>            <span class="kw">for </span>c <span class="kw">in </span><span class="kw-2">&amp;</span>p.classes {
-<a href=#315 id=315 data-nosnippet>315</a>                <span class="kw">let </span>(ty, name, kind, iface) = <span class="kw">match </span>c {
-<a href=#316 id=316 data-nosnippet>316</a>                    ClassDecl::Ptr(d) =&gt; (<span class="kw-2">&amp;</span>d.ty, <span class="kw-2">&amp;</span>d.name, ClassKind::Ptr { gc: d.gc }, <span class="kw-2">&amp;</span>d.iface),
-<a href=#317 id=317 data-nosnippet>317</a>                    ClassDecl::Data(d) =&gt; (
-<a href=#318 id=318 data-nosnippet>318</a>                        <span class="kw-2">&amp;</span>d.ty,
-<a href=#319 id=319 data-nosnippet>319</a>                        <span class="kw-2">&amp;</span>d.name,
-<a href=#320 id=320 data-nosnippet>320</a>                        ClassKind::Data { packed: d.packed },
-<a href=#321 id=321 data-nosnippet>321</a>                        <span class="kw-2">&amp;</span>d.iface,
-<a href=#322 id=322 data-nosnippet>322</a>                    ),
+<a href=#203 id=203 data-nosnippet>203</a>    Constant {
+<a href=#204 id=204 data-nosnippet>204</a>        pkg: String,
+<a href=#205 id=205 data-nosnippet>205</a>        name: String,
+<a href=#206 id=206 data-nosnippet>206</a>        binding: Binding,
+<a href=#207 id=207 data-nosnippet>207</a>    },
+<a href=#208 id=208 data-nosnippet>208</a>}
+<a href=#209 id=209 data-nosnippet>209</a>
+<a href=#210 id=210 data-nosnippet>210</a><span class="doccomment">/// A Kotlin interface the bindings share, written once.
+<a href=#211 id=211 data-nosnippet>211</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>Support {
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="doccomment">/// A callback type's user-facing and raw interfaces.
+<a href=#213 id=213 data-nosnippet>213</a>    </span>Callback(TypeRef),
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="doccomment">/// The interface Rust calls with a multi-leaf value, and the singleton
+<a href=#215 id=215 data-nosnippet>215</a>    /// that assembles it.
+<a href=#216 id=216 data-nosnippet>216</a>    </span>Sink { ty: TypeRef, base: String },
+<a href=#217 id=217 data-nosnippet>217</a>    Builder {
+<a href=#218 id=218 data-nosnippet>218</a>        pkg: String,
+<a href=#219 id=219 data-nosnippet>219</a>        name: String,
+<a href=#220 id=220 data-nosnippet>220</a>        params: Vec&lt;DParam&gt;,
+<a href=#221 id=221 data-nosnippet>221</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#222 id=222 data-nosnippet>222</a>    },
+<a href=#223 id=223 data-nosnippet>223</a>    Folder {
+<a href=#224 id=224 data-nosnippet>224</a>        pkg: String,
+<a href=#225 id=225 data-nosnippet>225</a>        name: String,
+<a href=#226 id=226 data-nosnippet>226</a>        columns: String,
+<a href=#227 id=227 data-nosnippet>227</a>        params: Vec&lt;DParam&gt;,
+<a href=#228 id=228 data-nosnippet>228</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#229 id=229 data-nosnippet>229</a>    },
+<a href=#230 id=230 data-nosnippet>230</a>    ErrorHandler {
+<a href=#231 id=231 data-nosnippet>231</a>        pkg: String,
+<a href=#232 id=232 data-nosnippet>232</a>        name: String,
+<a href=#233 id=233 data-nosnippet>233</a>        raw: String,
+<a href=#234 id=234 data-nosnippet>234</a>        capture: String,
+<a href=#235 id=235 data-nosnippet>235</a>        params: Vec&lt;DParam&gt;,
+<a href=#236 id=236 data-nosnippet>236</a>        leaves: Vec&lt;Leaf&gt;,
+<a href=#237 id=237 data-nosnippet>237</a>    },
+<a href=#238 id=238 data-nosnippet>238</a>}
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>Plan&lt;<span class="lifetime">'f</span>&gt; {
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">pub </span>flat: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>Flat,
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">pub </span>q: Qualifier&lt;<span class="lifetime">'f</span>&gt;,
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="doccomment">/// The base Kotlin package.
+<a href=#244 id=244 data-nosnippet>244</a>    </span><span class="kw">pub </span>base_pkg: String,
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="doccomment">/// The native-method holder's simple name.
+<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="kw">pub </span>harness: String,
+<a href=#247 id=247 data-nosnippet>247</a>    <span class="kw">pub </span>native_init: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#248 id=248 data-nosnippet>248</a>    <span class="kw">pub </span>handle_locks: bool,
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="doccomment">/// How each declared type crosses, by name.
+<a href=#250 id=250 data-nosnippet>250</a>    </span><span class="kw">pub </span>types: HashMap&lt;String, Setting&gt;,
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="doccomment">/// Each type's default output expansion.
+<a href=#252 id=252 data-nosnippet>252</a>    </span><span class="kw">pub </span>ret_exp: HashMap&lt;String, ExpandReturnDecl&gt;,
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="doccomment">/// Each type's default input expansion.
+<a href=#254 id=254 data-nosnippet>254</a>    </span><span class="kw">pub </span>param_exp: HashMap&lt;String, ExpandParamDecl&gt;,
+<a href=#255 id=255 data-nosnippet>255</a>    <span class="kw">pub </span>items: Vec&lt;Item&gt;,
+<a href=#256 id=256 data-nosnippet>256</a>    <span class="kw">pub </span>supports: Vec&lt;Support&gt;,
+<a href=#257 id=257 data-nosnippet>257</a>}
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a><span class="kw">impl</span>&lt;<span class="lifetime">'f</span>&gt; Plan&lt;<span class="lifetime">'f</span>&gt; {
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(b: <span class="kw-2">&amp;</span>JniGenBuilder, flat: <span class="kw-2">&amp;</span><span class="lifetime">'f </span>Flat) -&gt; Res&lt;<span class="self">Self</span>&gt; {
+<a href=#261 id=261 data-nosnippet>261</a>        prebindgen_tools::check_supported(flat).map_err(Error)<span class="question-mark">?</span>;
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span><span class="kw-2">mut </span>plan = Plan {
+<a href=#263 id=263 data-nosnippet>263</a>            flat,
+<a href=#264 id=264 data-nosnippet>264</a>            q: Qualifier::new(flat).with_default_module(b.source_module.clone()),
+<a href=#265 id=265 data-nosnippet>265</a>            base_pkg: b.package_prefix.clone(),
+<a href=#266 id=266 data-nosnippet>266</a>            harness: <span class="kw">match </span><span class="kw-2">&amp;</span>b.harness_hook {
+<a href=#267 id=267 data-nosnippet>267</a>                <span class="prelude-val">Some</span>(f) =&gt; f(<span class="string">"JNINative"</span>),
+<a href=#268 id=268 data-nosnippet>268</a>                <span class="prelude-val">None </span>=&gt; <span class="string">"JNINative"</span>.to_string(),
+<a href=#269 id=269 data-nosnippet>269</a>            },
+<a href=#270 id=270 data-nosnippet>270</a>            native_init: b.native_init.clone(),
+<a href=#271 id=271 data-nosnippet>271</a>            handle_locks: b.handle_locks,
+<a href=#272 id=272 data-nosnippet>272</a>            types: HashMap::new(),
+<a href=#273 id=273 data-nosnippet>273</a>            ret_exp: HashMap::new(),
+<a href=#274 id=274 data-nosnippet>274</a>            param_exp: HashMap::new(),
+<a href=#275 id=275 data-nosnippet>275</a>            items: Vec::new(),
+<a href=#276 id=276 data-nosnippet>276</a>            supports: Vec::new(),
+<a href=#277 id=277 data-nosnippet>277</a>        };
+<a href=#278 id=278 data-nosnippet>278</a>        plan.declare_types(b)<span class="question-mark">?</span>;
+<a href=#279 id=279 data-nosnippet>279</a>        plan.check_value_forms(b)<span class="question-mark">?</span>;
+<a href=#280 id=280 data-nosnippet>280</a>        <span class="kw">let </span><span class="kw-2">mut </span>planner = Planner {
+<a href=#281 id=281 data-nosnippet>281</a>            plan: <span class="kw-2">&amp;</span>plan,
+<a href=#282 id=282 data-nosnippet>282</a>            b,
+<a href=#283 id=283 data-nosnippet>283</a>            ext_names: HashSet::new(),
+<a href=#284 id=284 data-nosnippet>284</a>            supports: Vec::new(),
+<a href=#285 id=285 data-nosnippet>285</a>            seen: HashSet::new(),
+<a href=#286 id=286 data-nosnippet>286</a>            accessors: accessors(b),
+<a href=#287 id=287 data-nosnippet>287</a>        };
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">let </span>items = planner.items()<span class="question-mark">?</span>;
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="kw">let </span>supports = planner.supports;
+<a href=#290 id=290 data-nosnippet>290</a>        plan.items = items;
+<a href=#291 id=291 data-nosnippet>291</a>        plan.supports = supports;
+<a href=#292 id=292 data-nosnippet>292</a>        plan.warn_unbound(b);
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="prelude-val">Ok</span>(plan)
+<a href=#294 id=294 data-nosnippet>294</a>    }
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>pkg_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>, sub: <span class="kw-2">&amp;</span>str) -&gt; String {
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">match </span>(<span class="self">self</span>.base_pkg.is_empty(), sub.is_empty()) {
+<a href=#298 id=298 data-nosnippet>298</a>            (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; <span class="self">self</span>.base_pkg.clone(),
+<a href=#299 id=299 data-nosnippet>299</a>            (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; sub.to_string(),
+<a href=#300 id=300 data-nosnippet>300</a>            <span class="kw">_ </span>=&gt; <span class="macro">format!</span>(<span class="string">"{}.{sub}"</span>, <span class="self">self</span>.base_pkg),
+<a href=#301 id=301 data-nosnippet>301</a>        }
+<a href=#302 id=302 data-nosnippet>302</a>    }
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>harness_fqn(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="macro">format!</span>(<span class="string">"{}.{}"</span>, <span class="self">self</span>.base_pkg, <span class="self">self</span>.harness)
+<a href=#306 id=306 data-nosnippet>306</a>    }
+<a href=#307 id=307 data-nosnippet>307</a>
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="doccomment">/// The class a type is bound to.
+<a href=#309 id=309 data-nosnippet>309</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>class(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Rc&lt;Class&gt;&gt; {
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">match </span><span class="self">self</span>.types.get(name) {
+<a href=#311 id=311 data-nosnippet>311</a>            <span class="prelude-val">Some</span>(Setting::Class(c)) =&gt; <span class="prelude-val">Some</span>(c),
+<a href=#312 id=312 data-nosnippet>312</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#313 id=313 data-nosnippet>313</a>        }
+<a href=#314 id=314 data-nosnippet>314</a>    }
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>    <span class="kw">fn </span>declare_types(<span class="kw-2">&amp;mut </span><span class="self">self</span>, b: <span class="kw-2">&amp;</span>JniGenBuilder) -&gt; Res&lt;()&gt; {
+<a href=#317 id=317 data-nosnippet>317</a>        <span class="kw">for </span>p <span class="kw">in </span><span class="kw-2">&amp;</span>b.packages {
+<a href=#318 id=318 data-nosnippet>318</a>            <span class="kw">let </span>pkg = <span class="self">self</span>.pkg_fqn(<span class="kw-2">&amp;</span>p.name);
+<a href=#319 id=319 data-nosnippet>319</a>            <span class="kw">for </span>c <span class="kw">in </span><span class="kw-2">&amp;</span>p.classes {
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="kw">let </span>(ty, name, kind, iface) = <span class="kw">match </span>c {
+<a href=#321 id=321 data-nosnippet>321</a>                    ClassDecl::Ptr(d) =&gt; (<span class="kw-2">&amp;</span>d.ty, <span class="kw-2">&amp;</span>d.name, ClassKind::Ptr { gc: d.gc }, <span class="kw-2">&amp;</span>d.iface),
+<a href=#322 id=322 data-nosnippet>322</a>                    ClassDecl::Data(d) =&gt; (<span class="kw-2">&amp;</span>d.ty, <span class="kw-2">&amp;</span>d.name, ClassKind::Data, <span class="kw-2">&amp;</span>d.iface),
 <a href=#323 id=323 data-nosnippet>323</a>                    ClassDecl::Enum(d) =&gt; (<span class="kw-2">&amp;</span>d.ty, <span class="kw-2">&amp;</span>d.name, ClassKind::Enum, <span class="kw-2">&amp;</span>d.iface),
 <a href=#324 id=324 data-nosnippet>324</a>                    ClassDecl::Sealed(d) =&gt; (
 <a href=#325 id=325 data-nosnippet>325</a>                        <span class="kw-2">&amp;</span>d.ty,
@@ -342,7 +342,7 @@
 <a href=#342 id=342 data-nosnippet>342</a>                <span class="kw">let </span>fits = <span class="macro">matches!</span>(
 <a href=#343 id=343 data-nosnippet>343</a>                    (<span class="kw-2">&amp;</span>kind, element),
 <a href=#344 id=344 data-nosnippet>344</a>                    (ClassKind::Ptr { .. }, <span class="kw">_</span>)
-<a href=#345 id=345 data-nosnippet>345</a>                        | (ClassKind::Data { .. }, FlatType::Struct(<span class="kw">_</span>))
+<a href=#345 id=345 data-nosnippet>345</a>                        | (ClassKind::Data, FlatType::Struct(<span class="kw">_</span>))
 <a href=#346 id=346 data-nosnippet>346</a>                        | (ClassKind::Enum, FlatType::Enum(<span class="kw">_</span>))
 <a href=#347 id=347 data-nosnippet>347</a>                        | (ClassKind::Sealed { .. }, FlatType::Variant(<span class="kw">_</span>))
 <a href=#348 id=348 data-nosnippet>348</a>                );
@@ -353,7 +353,7 @@
 <a href=#353 id=353 data-nosnippet>353</a>                }
 <a href=#354 id=354 data-nosnippet>354</a>                <span class="kw">let </span>hook = <span class="kw">match </span>kind {
 <a href=#355 id=355 data-nosnippet>355</a>                    ClassKind::Ptr { .. } =&gt; <span class="kw-2">&amp;</span>b.ptr_hook,
-<a href=#356 id=356 data-nosnippet>356</a>                    ClassKind::Data { .. } | ClassKind::Sealed { .. } =&gt; <span class="kw-2">&amp;</span>b.data_hook,
+<a href=#356 id=356 data-nosnippet>356</a>                    ClassKind::Data | ClassKind::Sealed { .. } =&gt; <span class="kw-2">&amp;</span>b.data_hook,
 <a href=#357 id=357 data-nosnippet>357</a>                    ClassKind::Enum =&gt; <span class="kw-2">&amp;</span>b.enum_hook,
 <a href=#358 id=358 data-nosnippet>358</a>                };
 <a href=#359 id=359 data-nosnippet>359</a>                <span class="kw">let </span>name = <span class="kw">match </span>(name, hook) {
@@ -831,201 +831,201 @@
 <a href=#831 id=831 data-nosnippet>831</a>                    params.push(PPlan::Selector(s, split));
 <a href=#832 id=832 data-nosnippet>832</a>                }
 <a href=#833 id=833 data-nosnippet>833</a>                <span class="prelude-val">None </span>=&gt; {
-<a href=#834 id=834 data-nosnippet>834</a>                    <span class="kw">if let </span>TypeKind::Callback { .. } = p.ty.kind() {
-<a href=#835 id=835 data-nosnippet>835</a>                        <span class="self">self</span>.support(plan.callback_fqn(<span class="kw-2">&amp;</span>p.ty)<span class="question-mark">?</span>, || {
-<a href=#836 id=836 data-nosnippet>836</a>                            <span class="prelude-val">Ok</span>(Support::Callback(p.ty.clone()))
-<a href=#837 id=837 data-nosnippet>837</a>                        })<span class="question-mark">?</span>;
-<a href=#838 id=838 data-nosnippet>838</a>                    }
-<a href=#839 id=839 data-nosnippet>839</a>                    params.push(PPlan::Value(p.clone(), plan.packed(<span class="kw-2">&amp;</span>p.ty)));
-<a href=#840 id=840 data-nosnippet>840</a>                }
-<a href=#841 id=841 data-nosnippet>841</a>            }
-<a href=#842 id=842 data-nosnippet>842</a>        }
-<a href=#843 id=843 data-nosnippet>843</a>        <span class="kw">for </span>s <span class="kw">in </span><span class="kw-2">&amp;</span>decl.splits {
-<a href=#844 id=844 data-nosnippet>844</a>            <span class="kw">let </span>named = params.iter().any(
-<a href=#845 id=845 data-nosnippet>845</a>                |p| <span class="macro">matches!</span>(p, PPlan::Selector(sel, <span class="kw">_</span>) <span class="kw">if </span>names::bare(<span class="kw-2">&amp;</span>sel.param.name) == <span class="kw-2">*</span>s),
-<a href=#846 id=846 data-nosnippet>846</a>            );
-<a href=#847 id=847 data-nosnippet>847</a>            <span class="kw">if </span>!named {
-<a href=#848 id=848 data-nosnippet>848</a>                <span class="kw">return </span>err(<span class="macro">format!</span>(
-<a href=#849 id=849 data-nosnippet>849</a>                    <span class="string">"`{}`: `.split_on_param(\"{s}\")` names no selector parameter"</span>,
-<a href=#850 id=850 data-nosnippet>850</a>                    f.name
-<a href=#851 id=851 data-nosnippet>851</a>                ));
-<a href=#852 id=852 data-nosnippet>852</a>            }
-<a href=#853 id=853 data-nosnippet>853</a>        }
-<a href=#854 id=854 data-nosnippet>854</a>        <span class="comment">// The JVM caps a method's arguments at 255 slots (the holder object
-<a href=#855 id=855 data-nosnippet>855</a>        // is one): pack the largest values until the extern fits.
-<a href=#856 id=856 data-nosnippet>856</a>        </span><span class="kw">loop </span>{
-<a href=#857 id=857 data-nosnippet>857</a>            <span class="kw">let </span><span class="kw-2">mut </span>slots = <span class="number">1 </span>+ <span class="number">3</span>;
-<a href=#858 id=858 data-nosnippet>858</a>            <span class="kw">let </span><span class="kw-2">mut </span>largest: <span class="prelude-ty">Option</span>&lt;(usize, usize)&gt; = <span class="prelude-val">None</span>;
-<a href=#859 id=859 data-nosnippet>859</a>            <span class="kw">for </span>(i, p) <span class="kw">in </span>params.iter().enumerate() {
-<a href=#860 id=860 data-nosnippet>860</a>                <span class="kw">let </span>n: usize = plan.param_leaves(p)<span class="question-mark">?</span>.iter().map(Leaf::slots).sum();
-<a href=#861 id=861 data-nosnippet>861</a>                slots += n;
-<a href=#862 id=862 data-nosnippet>862</a>                <span class="kw">if let </span>PPlan::Value(<span class="kw">_</span>, <span class="bool-val">false</span>) = p {
-<a href=#863 id=863 data-nosnippet>863</a>                    <span class="kw">if </span>largest.is_none_or(|(<span class="kw">_</span>, m)| n &gt; m) {
-<a href=#864 id=864 data-nosnippet>864</a>                        largest = <span class="prelude-val">Some</span>((i, n));
-<a href=#865 id=865 data-nosnippet>865</a>                    }
-<a href=#866 id=866 data-nosnippet>866</a>                }
-<a href=#867 id=867 data-nosnippet>867</a>            }
-<a href=#868 id=868 data-nosnippet>868</a>            <span class="kw">match </span>largest {
-<a href=#869 id=869 data-nosnippet>869</a>                <span class="prelude-val">Some</span>((i, <span class="kw">_</span>)) <span class="kw">if </span>slots &gt; <span class="number">255 </span>=&gt; {
-<a href=#870 id=870 data-nosnippet>870</a>                    <span class="kw">if let </span>PPlan::Value(<span class="kw">_</span>, packed) = <span class="kw-2">&amp;mut </span>params[i] {
-<a href=#871 id=871 data-nosnippet>871</a>                        <span class="kw-2">*</span>packed = <span class="bool-val">true</span>;
-<a href=#872 id=872 data-nosnippet>872</a>                    }
-<a href=#873 id=873 data-nosnippet>873</a>                }
-<a href=#874 id=874 data-nosnippet>874</a>                <span class="kw">_ </span>=&gt; <span class="kw">break</span>,
-<a href=#875 id=875 data-nosnippet>875</a>            }
-<a href=#876 id=876 data-nosnippet>876</a>        }
-<a href=#877 id=877 data-nosnippet>877</a>        <span class="prelude-val">Ok</span>(params)
-<a href=#878 id=878 data-nosnippet>878</a>    }
-<a href=#879 id=879 data-nosnippet>879</a>
-<a href=#880 id=880 data-nosnippet>880</a>    <span class="doccomment">/// How the success value leaves. A type's own output expansion applies
-<a href=#881 id=881 data-nosnippet>881</a>    /// to a function returning the type, except to a function returning
-<a href=#882 id=882 data-nosnippet>882</a>    /// `Result` (a fallible factory keeps its handle) and to an accessor
-<a href=#883 id=883 data-nosnippet>883</a>    /// some expansion reads a field through (it is the field).
-<a href=#884 id=884 data-nosnippet>884</a>    </span><span class="kw">fn </span>ret(
-<a href=#885 id=885 data-nosnippet>885</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#886 id=886 data-nosnippet>886</a>        decl: <span class="kw-2">&amp;</span>FunctionDecl,
-<a href=#887 id=887 data-nosnippet>887</a>        f: <span class="kw-2">&amp;</span>Function,
-<a href=#888 id=888 data-nosnippet>888</a>        placement: <span class="kw-2">&amp;</span>Placement,
-<a href=#889 id=889 data-nosnippet>889</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
-<a href=#890 id=890 data-nosnippet>890</a>        fallible: bool,
-<a href=#891 id=891 data-nosnippet>891</a>    ) -&gt; Res&lt;RPlan&gt; {
-<a href=#892 id=892 data-nosnippet>892</a>        <span class="kw">let </span>plan = <span class="self">self</span>.plan;
-<a href=#893 id=893 data-nosnippet>893</a>        <span class="kw">if let </span>TypeKind::Unit = ty.kind() {
-<a href=#894 id=894 data-nosnippet>894</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Unit);
-<a href=#895 id=895 data-nosnippet>895</a>        }
-<a href=#896 id=896 data-nosnippet>896</a>        <span class="kw">let </span>explicit = decl.ret.as_ref();
-<a href=#897 id=897 data-nosnippet>897</a>        <span class="comment">// A constructor returns its own class as itself, never expanded.
-<a href=#898 id=898 data-nosnippet>898</a>        </span><span class="kw">if let </span>Placement::Constructor(c) = placement {
-<a href=#899 id=899 data-nosnippet>899</a>            <span class="kw">let </span>own = <span class="macro">matches!</span>(ty.kind(), TypeKind::Named { id, .. } <span class="kw">if </span>id.name == c.rust);
-<a href=#900 id=900 data-nosnippet>900</a>            <span class="kw">if </span>explicit.is_none() &amp;&amp; own {
-<a href=#901 id=901 data-nosnippet>901</a>                <span class="kw">let </span>leaf = plan.leaves(ty, Dir::Out)<span class="question-mark">?</span>.remove(<span class="number">0</span>);
-<a href=#902 id=902 data-nosnippet>902</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Direct {
-<a href=#903 id=903 data-nosnippet>903</a>                    ty: ty.clone(),
-<a href=#904 id=904 data-nosnippet>904</a>                    leaf,
-<a href=#905 id=905 data-nosnippet>905</a>                });
-<a href=#906 id=906 data-nosnippet>906</a>            }
-<a href=#907 id=907 data-nosnippet>907</a>        }
-<a href=#908 id=908 data-nosnippet>908</a>        <span class="comment">// The layers a builder or folder absorbs: `Box`, `Option`, `Vec`.
-<a href=#909 id=909 data-nosnippet>909</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>core = ty;
-<a href=#910 id=910 data-nosnippet>910</a>        <span class="kw">let </span><span class="kw-2">mut </span>optional = <span class="bool-val">false</span>;
-<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw">let </span><span class="kw-2">mut </span>seq = <span class="bool-val">false</span>;
-<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw">loop </span>{
-<a href=#913 id=913 data-nosnippet>913</a>            <span class="kw">match </span>core.kind() {
-<a href=#914 id=914 data-nosnippet>914</a>                TypeKind::Boxed(t) =&gt; core = t,
-<a href=#915 id=915 data-nosnippet>915</a>                TypeKind::Optional(t) <span class="kw">if </span>!optional &amp;&amp; !seq =&gt; {
-<a href=#916 id=916 data-nosnippet>916</a>                    optional = <span class="bool-val">true</span>;
-<a href=#917 id=917 data-nosnippet>917</a>                    core = t
-<a href=#918 id=918 data-nosnippet>918</a>                }
-<a href=#919 id=919 data-nosnippet>919</a>                TypeKind::Vec(t) <span class="kw">if </span>!seq =&gt; {
-<a href=#920 id=920 data-nosnippet>920</a>                    seq = <span class="bool-val">true</span>;
-<a href=#921 id=921 data-nosnippet>921</a>                    core = t
-<a href=#922 id=922 data-nosnippet>922</a>                }
-<a href=#923 id=923 data-nosnippet>923</a>                <span class="kw">_ </span>=&gt; <span class="kw">break</span>,
-<a href=#924 id=924 data-nosnippet>924</a>            }
-<a href=#925 id=925 data-nosnippet>925</a>        }
-<a href=#926 id=926 data-nosnippet>926</a>        <span class="kw">let </span>bare = core.borrow_target().unwrap_or(core);
-<a href=#927 id=927 data-nosnippet>927</a>        <span class="kw">let </span>expansion = <span class="kw">match </span>explicit {
-<a href=#928 id=928 data-nosnippet>928</a>            <span class="prelude-val">None </span><span class="kw">if </span>fallible || <span class="self">self</span>.accessors.contains(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>f.name)) =&gt; <span class="prelude-val">None</span>,
-<a href=#929 id=929 data-nosnippet>929</a>            <span class="kw">_ </span>=&gt; plan.expansion(bare, explicit),
-<a href=#930 id=930 data-nosnippet>930</a>        };
-<a href=#931 id=931 data-nosnippet>931</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(e) = expansion.cloned() {
-<a href=#932 id=932 data-nosnippet>932</a>            <span class="kw">let </span>TypeKind::Named { id, .. } = bare.kind() <span class="kw">else </span>{
-<a href=#933 id=933 data-nosnippet>933</a>                <span class="kw">return </span>err(<span class="macro">format!</span>(<span class="string">"`{ty}`: an output expansion needs a named type"</span>));
+<a href=#834 id=834 data-nosnippet>834</a>                    <span class="kw">if let </span>TypeKind::Callback { args } = p.ty.kind() {
+<a href=#835 id=835 data-nosnippet>835</a>                        <span class="kw">let </span>leaves: Vec&lt;Leaf&gt; = plan
+<a href=#836 id=836 data-nosnippet>836</a>                            .callback_args(args)<span class="question-mark">?
+<a href=#837 id=837 data-nosnippet>837</a>                            </span>.into_iter()
+<a href=#838 id=838 data-nosnippet>838</a>                            .flat_map(|d| d.leaves)
+<a href=#839 id=839 data-nosnippet>839</a>                            .collect();
+<a href=#840 id=840 data-nosnippet>840</a>                        check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"the callback `{}`"</span>, p.ty), <span class="kw-2">&amp;</span>leaves, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#841 id=841 data-nosnippet>841</a>                        <span class="self">self</span>.support(plan.callback_fqn(<span class="kw-2">&amp;</span>p.ty)<span class="question-mark">?</span>, || {
+<a href=#842 id=842 data-nosnippet>842</a>                            <span class="prelude-val">Ok</span>(Support::Callback(p.ty.clone()))
+<a href=#843 id=843 data-nosnippet>843</a>                        })<span class="question-mark">?</span>;
+<a href=#844 id=844 data-nosnippet>844</a>                    }
+<a href=#845 id=845 data-nosnippet>845</a>                    params.push(PPlan::Value(p.clone()));
+<a href=#846 id=846 data-nosnippet>846</a>                }
+<a href=#847 id=847 data-nosnippet>847</a>            }
+<a href=#848 id=848 data-nosnippet>848</a>        }
+<a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">for </span>s <span class="kw">in </span><span class="kw-2">&amp;</span>decl.splits {
+<a href=#850 id=850 data-nosnippet>850</a>            <span class="kw">let </span>named = params.iter().any(
+<a href=#851 id=851 data-nosnippet>851</a>                |p| <span class="macro">matches!</span>(p, PPlan::Selector(sel, <span class="kw">_</span>) <span class="kw">if </span>names::bare(<span class="kw-2">&amp;</span>sel.param.name) == <span class="kw-2">*</span>s),
+<a href=#852 id=852 data-nosnippet>852</a>            );
+<a href=#853 id=853 data-nosnippet>853</a>            <span class="kw">if </span>!named {
+<a href=#854 id=854 data-nosnippet>854</a>                <span class="kw">return </span>err(<span class="macro">format!</span>(
+<a href=#855 id=855 data-nosnippet>855</a>                    <span class="string">"`{}`: `.split_on_param(\"{s}\")` names no selector parameter"</span>,
+<a href=#856 id=856 data-nosnippet>856</a>                    f.name
+<a href=#857 id=857 data-nosnippet>857</a>                ));
+<a href=#858 id=858 data-nosnippet>858</a>            }
+<a href=#859 id=859 data-nosnippet>859</a>        }
+<a href=#860 id=860 data-nosnippet>860</a>        <span class="comment">// The receiver and up to three sinks join the parameters' leaves.
+<a href=#861 id=861 data-nosnippet>861</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>leaves = Vec::new();
+<a href=#862 id=862 data-nosnippet>862</a>        <span class="kw">for </span>p <span class="kw">in </span><span class="kw-2">&amp;</span>params {
+<a href=#863 id=863 data-nosnippet>863</a>            leaves.extend(plan.param_leaves(p)<span class="question-mark">?</span>);
+<a href=#864 id=864 data-nosnippet>864</a>        }
+<a href=#865 id=865 data-nosnippet>865</a>        check_slots(
+<a href=#866 id=866 data-nosnippet>866</a>            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"the native method of `{}`"</span>, f.name),
+<a href=#867 id=867 data-nosnippet>867</a>            <span class="kw-2">&amp;</span>leaves,
+<a href=#868 id=868 data-nosnippet>868</a>            <span class="number">1 </span>+ <span class="number">3</span>,
+<a href=#869 id=869 data-nosnippet>869</a>        )<span class="question-mark">?</span>;
+<a href=#870 id=870 data-nosnippet>870</a>        <span class="prelude-val">Ok</span>(params)
+<a href=#871 id=871 data-nosnippet>871</a>    }
+<a href=#872 id=872 data-nosnippet>872</a>
+<a href=#873 id=873 data-nosnippet>873</a>    <span class="doccomment">/// How the success value leaves. A type's own output expansion applies
+<a href=#874 id=874 data-nosnippet>874</a>    /// to a function returning the type, except to a function returning
+<a href=#875 id=875 data-nosnippet>875</a>    /// `Result` (a fallible factory keeps its handle) and to an accessor
+<a href=#876 id=876 data-nosnippet>876</a>    /// some expansion reads a field through (it is the field).
+<a href=#877 id=877 data-nosnippet>877</a>    </span><span class="kw">fn </span>ret(
+<a href=#878 id=878 data-nosnippet>878</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#879 id=879 data-nosnippet>879</a>        decl: <span class="kw-2">&amp;</span>FunctionDecl,
+<a href=#880 id=880 data-nosnippet>880</a>        f: <span class="kw-2">&amp;</span>Function,
+<a href=#881 id=881 data-nosnippet>881</a>        placement: <span class="kw-2">&amp;</span>Placement,
+<a href=#882 id=882 data-nosnippet>882</a>        ty: <span class="kw-2">&amp;</span>TypeRef,
+<a href=#883 id=883 data-nosnippet>883</a>        fallible: bool,
+<a href=#884 id=884 data-nosnippet>884</a>    ) -&gt; Res&lt;RPlan&gt; {
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="kw">let </span>plan = <span class="self">self</span>.plan;
+<a href=#886 id=886 data-nosnippet>886</a>        <span class="kw">if let </span>TypeKind::Unit = ty.kind() {
+<a href=#887 id=887 data-nosnippet>887</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Unit);
+<a href=#888 id=888 data-nosnippet>888</a>        }
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">let </span>explicit = decl.ret.as_ref();
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="comment">// A constructor returns its own class as itself, never expanded.
+<a href=#891 id=891 data-nosnippet>891</a>        </span><span class="kw">if let </span>Placement::Constructor(c) = placement {
+<a href=#892 id=892 data-nosnippet>892</a>            <span class="kw">let </span>own = <span class="macro">matches!</span>(ty.kind(), TypeKind::Named { id, .. } <span class="kw">if </span>id.name == c.rust);
+<a href=#893 id=893 data-nosnippet>893</a>            <span class="kw">if </span>explicit.is_none() &amp;&amp; own {
+<a href=#894 id=894 data-nosnippet>894</a>                <span class="kw">let </span>leaf = plan.leaves(ty, Dir::Out)<span class="question-mark">?</span>.remove(<span class="number">0</span>);
+<a href=#895 id=895 data-nosnippet>895</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Direct {
+<a href=#896 id=896 data-nosnippet>896</a>                    ty: ty.clone(),
+<a href=#897 id=897 data-nosnippet>897</a>                    leaf,
+<a href=#898 id=898 data-nosnippet>898</a>                });
+<a href=#899 id=899 data-nosnippet>899</a>            }
+<a href=#900 id=900 data-nosnippet>900</a>        }
+<a href=#901 id=901 data-nosnippet>901</a>        <span class="comment">// The layers a builder or folder absorbs: `Box`, `Option`, `Vec`.
+<a href=#902 id=902 data-nosnippet>902</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>core = ty;
+<a href=#903 id=903 data-nosnippet>903</a>        <span class="kw">let </span><span class="kw-2">mut </span>optional = <span class="bool-val">false</span>;
+<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">let </span><span class="kw-2">mut </span>seq = <span class="bool-val">false</span>;
+<a href=#905 id=905 data-nosnippet>905</a>        <span class="kw">loop </span>{
+<a href=#906 id=906 data-nosnippet>906</a>            <span class="kw">match </span>core.kind() {
+<a href=#907 id=907 data-nosnippet>907</a>                TypeKind::Boxed(t) =&gt; core = t,
+<a href=#908 id=908 data-nosnippet>908</a>                TypeKind::Optional(t) <span class="kw">if </span>!optional &amp;&amp; !seq =&gt; {
+<a href=#909 id=909 data-nosnippet>909</a>                    optional = <span class="bool-val">true</span>;
+<a href=#910 id=910 data-nosnippet>910</a>                    core = t
+<a href=#911 id=911 data-nosnippet>911</a>                }
+<a href=#912 id=912 data-nosnippet>912</a>                TypeKind::Vec(t) <span class="kw">if </span>!seq =&gt; {
+<a href=#913 id=913 data-nosnippet>913</a>                    seq = <span class="bool-val">true</span>;
+<a href=#914 id=914 data-nosnippet>914</a>                    core = t
+<a href=#915 id=915 data-nosnippet>915</a>                }
+<a href=#916 id=916 data-nosnippet>916</a>                <span class="kw">_ </span>=&gt; <span class="kw">break</span>,
+<a href=#917 id=917 data-nosnippet>917</a>            }
+<a href=#918 id=918 data-nosnippet>918</a>        }
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="kw">let </span>bare = core.borrow_target().unwrap_or(core);
+<a href=#920 id=920 data-nosnippet>920</a>        <span class="kw">let </span>expansion = <span class="kw">match </span>explicit {
+<a href=#921 id=921 data-nosnippet>921</a>            <span class="prelude-val">None </span><span class="kw">if </span>fallible || <span class="self">self</span>.accessors.contains(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>f.name)) =&gt; <span class="prelude-val">None</span>,
+<a href=#922 id=922 data-nosnippet>922</a>            <span class="kw">_ </span>=&gt; plan.expansion(bare, explicit),
+<a href=#923 id=923 data-nosnippet>923</a>        };
+<a href=#924 id=924 data-nosnippet>924</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(e) = expansion.cloned() {
+<a href=#925 id=925 data-nosnippet>925</a>            <span class="kw">let </span>TypeKind::Named { id, .. } = bare.kind() <span class="kw">else </span>{
+<a href=#926 id=926 data-nosnippet>926</a>                <span class="kw">return </span>err(<span class="macro">format!</span>(<span class="string">"`{ty}`: an output expansion needs a named type"</span>));
+<a href=#927 id=927 data-nosnippet>927</a>            };
+<a href=#928 id=928 data-nosnippet>928</a>            <span class="kw">let </span>tname = id.name.clone();
+<a href=#929 id=929 data-nosnippet>929</a>            <span class="comment">// A function's own expansion gets its own interface.
+<a href=#930 id=930 data-nosnippet>930</a>            </span><span class="kw">let </span>suffix = <span class="kw">if </span>explicit.is_some() {
+<a href=#931 id=931 data-nosnippet>931</a>                names::pascal(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>f.name))
+<a href=#932 id=932 data-nosnippet>932</a>            } <span class="kw">else </span>{
+<a href=#933 id=933 data-nosnippet>933</a>                String::new()
 <a href=#934 id=934 data-nosnippet>934</a>            };
-<a href=#935 id=935 data-nosnippet>935</a>            <span class="kw">let </span>tname = id.name.clone();
-<a href=#936 id=936 data-nosnippet>936</a>            <span class="comment">// A function's own expansion gets its own interface.
-<a href=#937 id=937 data-nosnippet>937</a>            </span><span class="kw">let </span>suffix = <span class="kw">if </span>explicit.is_some() {
-<a href=#938 id=938 data-nosnippet>938</a>                names::pascal(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>f.name))
-<a href=#939 id=939 data-nosnippet>939</a>            } <span class="kw">else </span>{
-<a href=#940 id=940 data-nosnippet>940</a>                String::new()
-<a href=#941 id=941 data-nosnippet>941</a>            };
-<a href=#942 id=942 data-nosnippet>942</a>            <span class="kw">let </span>d = plan.deliver(core, <span class="macro">quote!</span>(__x), <span class="string">"r"</span>, <span class="string">""</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>e), <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
-<a href=#943 id=943 data-nosnippet>943</a>            <span class="comment">// The interfaces live beside the type's class.
-<a href=#944 id=944 data-nosnippet>944</a>            </span><span class="kw">let </span>base = <span class="kw-2">&amp;</span>plan
-<a href=#945 id=945 data-nosnippet>945</a>                .class(<span class="kw-2">&amp;</span>tname)
-<a href=#946 id=946 data-nosnippet>946</a>                .map_or(plan.base_pkg.clone(), |c| c.pkg.clone());
-<a href=#947 id=947 data-nosnippet>947</a>            <span class="kw">if </span>seq {
-<a href=#948 id=948 data-nosnippet>948</a>                <span class="kw">let </span>iface = <span class="macro">format!</span>(<span class="string">"{base}.{tname}{suffix}Folder"</span>);
-<a href=#949 id=949 data-nosnippet>949</a>                <span class="kw">let </span>columns_iface = <span class="macro">format!</span>(<span class="string">"{base}.{tname}{suffix}FolderColumns"</span>);
-<a href=#950 id=950 data-nosnippet>950</a>                <span class="self">self</span>.support(iface.clone(), || {
-<a href=#951 id=951 data-nosnippet>951</a>                    <span class="prelude-val">Ok</span>(Support::Folder {
-<a href=#952 id=952 data-nosnippet>952</a>                        pkg: base.clone(),
-<a href=#953 id=953 data-nosnippet>953</a>                        name: simple(<span class="kw-2">&amp;</span>iface),
-<a href=#954 id=954 data-nosnippet>954</a>                        columns: simple(<span class="kw-2">&amp;</span>columns_iface),
-<a href=#955 id=955 data-nosnippet>955</a>                        params: d.params.clone(),
-<a href=#956 id=956 data-nosnippet>956</a>                        leaves: d.leaves.clone(),
-<a href=#957 id=957 data-nosnippet>957</a>                    })
-<a href=#958 id=958 data-nosnippet>958</a>                })<span class="question-mark">?</span>;
-<a href=#959 id=959 data-nosnippet>959</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Fold {
-<a href=#960 id=960 data-nosnippet>960</a>                    whole: ty.clone(),
-<a href=#961 id=961 data-nosnippet>961</a>                    exp: e,
-<a href=#962 id=962 data-nosnippet>962</a>                    optional,
-<a href=#963 id=963 data-nosnippet>963</a>                    iface,
-<a href=#964 id=964 data-nosnippet>964</a>                    columns_iface,
-<a href=#965 id=965 data-nosnippet>965</a>                    params: d.params,
-<a href=#966 id=966 data-nosnippet>966</a>                    leaves: d.leaves,
-<a href=#967 id=967 data-nosnippet>967</a>                });
-<a href=#968 id=968 data-nosnippet>968</a>            }
-<a href=#969 id=969 data-nosnippet>969</a>            <span class="kw">let </span>iface = <span class="macro">format!</span>(<span class="string">"{base}.{tname}{suffix}Builder"</span>);
-<a href=#970 id=970 data-nosnippet>970</a>            <span class="self">self</span>.support(iface.clone(), || {
-<a href=#971 id=971 data-nosnippet>971</a>                <span class="prelude-val">Ok</span>(Support::Builder {
-<a href=#972 id=972 data-nosnippet>972</a>                    pkg: base.clone(),
-<a href=#973 id=973 data-nosnippet>973</a>                    name: simple(<span class="kw-2">&amp;</span>iface),
-<a href=#974 id=974 data-nosnippet>974</a>                    params: d.params.clone(),
-<a href=#975 id=975 data-nosnippet>975</a>                    leaves: d.leaves.clone(),
-<a href=#976 id=976 data-nosnippet>976</a>                })
-<a href=#977 id=977 data-nosnippet>977</a>            })<span class="question-mark">?</span>;
-<a href=#978 id=978 data-nosnippet>978</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Builder {
-<a href=#979 id=979 data-nosnippet>979</a>                whole: ty.clone(),
-<a href=#980 id=980 data-nosnippet>980</a>                exp: e,
-<a href=#981 id=981 data-nosnippet>981</a>                optional,
-<a href=#982 id=982 data-nosnippet>982</a>                iface,
-<a href=#983 id=983 data-nosnippet>983</a>                leaves: d.leaves,
-<a href=#984 id=984 data-nosnippet>984</a>            });
-<a href=#985 id=985 data-nosnippet>985</a>        }
-<a href=#986 id=986 data-nosnippet>986</a>        <span class="comment">// A typed value: one leaf returns directly, several go to a sink.
-<a href=#987 id=987 data-nosnippet>987</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>leaves = plan.leaves(ty, Dir::Out)<span class="question-mark">?</span>;
-<a href=#988 id=988 data-nosnippet>988</a>        <span class="kw">if </span>leaves.len() == <span class="number">1 </span>{
-<a href=#989 id=989 data-nosnippet>989</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Direct {
-<a href=#990 id=990 data-nosnippet>990</a>                ty: ty.clone(),
-<a href=#991 id=991 data-nosnippet>991</a>                leaf: leaves.remove(<span class="number">0</span>),
-<a href=#992 id=992 data-nosnippet>992</a>            });
-<a href=#993 id=993 data-nosnippet>993</a>        }
-<a href=#994 id=994 data-nosnippet>994</a>        <span class="kw">let </span>base = names::mangle(ty);
-<a href=#995 id=995 data-nosnippet>995</a>        <span class="kw">let </span>iface = <span class="macro">format!</span>(<span class="string">"{}.__Sink_{base}"</span>, plan.base_pkg);
-<a href=#996 id=996 data-nosnippet>996</a>        <span class="kw">let </span>kt_sink = <span class="macro">format!</span>(<span class="string">"{}.__sink_{base}"</span>, plan.base_pkg);
-<a href=#997 id=997 data-nosnippet>997</a>        <span class="self">self</span>.support(iface.clone(), || {
-<a href=#998 id=998 data-nosnippet>998</a>            <span class="prelude-val">Ok</span>(Support::Sink {
-<a href=#999 id=999 data-nosnippet>999</a>                ty: ty.clone(),
-<a href=#1000 id=1000 data-nosnippet>1000</a>                base: base.clone(),
-<a href=#1001 id=1001 data-nosnippet>1001</a>            })
-<a href=#1002 id=1002 data-nosnippet>1002</a>        })<span class="question-mark">?</span>;
-<a href=#1003 id=1003 data-nosnippet>1003</a>        <span class="prelude-val">Ok</span>(RPlan::Sink {
-<a href=#1004 id=1004 data-nosnippet>1004</a>            ty: ty.clone(),
-<a href=#1005 id=1005 data-nosnippet>1005</a>            leaves,
-<a href=#1006 id=1006 data-nosnippet>1006</a>            iface,
-<a href=#1007 id=1007 data-nosnippet>1007</a>            kt_sink,
-<a href=#1008 id=1008 data-nosnippet>1008</a>        })
-<a href=#1009 id=1009 data-nosnippet>1009</a>    }
-<a href=#1010 id=1010 data-nosnippet>1010</a>
-<a href=#1011 id=1011 data-nosnippet>1011</a>    <span class="kw">fn </span>err(<span class="kw-2">&amp;mut </span><span class="self">self</span>, e: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;EPlan&gt; {
-<a href=#1012 id=1012 data-nosnippet>1012</a>        <span class="kw">let </span>plan = <span class="self">self</span>.plan;
-<a href=#1013 id=1013 data-nosnippet>1013</a>        <span class="kw">let </span>TypeKind::Named { id, .. } = e.kind() <span class="kw">else </span>{
-<a href=#1014 id=1014 data-nosnippet>1014</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(EPlan::Binding);
-<a href=#1015 id=1015 data-nosnippet>1015</a>        };
-<a href=#1016 id=1016 data-nosnippet>1016</a>        <span class="kw">if </span>plan.expansion(e, <span class="prelude-val">None</span>).is_none() {
-<a href=#1017 id=1017 data-nosnippet>1017</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(EPlan::Binding);
-<a href=#1018 id=1018 data-nosnippet>1018</a>        }
-<a href=#1019 id=1019 data-nosnippet>1019</a>        <span class="comment">// An error type with no class is Rust-side only: its handler lives
-<a href=#1020 id=1020 data-nosnippet>1020</a>        // in the base package.
-<a href=#1021 id=1021 data-nosnippet>1021</a>        </span><span class="kw">let </span>pkg = <span class="kw">match </span>plan.class(<span class="kw-2">&amp;</span>id.name) {
-<a href=#1022 id=1022 data-nosnippet>1022</a>            <span class="prelude-val">Some</span>(class) =&gt; class.pkg.clone(),
-<a href=#1023 id=1023 data-nosnippet>1023</a>            <span class="prelude-val">None </span>=&gt; plan.base_pkg.clone(),
-<a href=#1024 id=1024 data-nosnippet>1024</a>        };
-<a href=#1025 id=1025 data-nosnippet>1025</a>        <span class="kw">let </span>handler = <span class="macro">format!</span>(<span class="string">"{pkg}.{}Handler"</span>, id.name);
-<a href=#1026 id=1026 data-nosnippet>1026</a>        <span class="kw">let </span>raw_iface = <span class="macro">format!</span>(<span class="string">"{handler}Raw"</span>);
-<a href=#1027 id=1027 data-nosnippet>1027</a>        <span class="kw">let </span>capture = <span class="macro">format!</span>(<span class="string">"{handler}Capture"</span>);
-<a href=#1028 id=1028 data-nosnippet>1028</a>        <span class="kw">let </span>d = plan.deliver(e, <span class="macro">quote!</span>(__e), <span class="string">"e"</span>, <span class="string">""</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#935 id=935 data-nosnippet>935</a>            <span class="kw">let </span>d = plan.deliver(core, <span class="macro">quote!</span>(__x), <span class="string">"r"</span>, <span class="string">""</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>e), <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#936 id=936 data-nosnippet>936</a>            <span class="comment">// The interfaces live beside the type's class.
+<a href=#937 id=937 data-nosnippet>937</a>            </span><span class="kw">let </span>base = <span class="kw-2">&amp;</span>plan
+<a href=#938 id=938 data-nosnippet>938</a>                .class(<span class="kw-2">&amp;</span>tname)
+<a href=#939 id=939 data-nosnippet>939</a>                .map_or(plan.base_pkg.clone(), |c| c.pkg.clone());
+<a href=#940 id=940 data-nosnippet>940</a>            <span class="kw">if </span>seq {
+<a href=#941 id=941 data-nosnippet>941</a>                <span class="comment">// The folder's columns upcall: a count, then one array per leaf.
+<a href=#942 id=942 data-nosnippet>942</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>columns = <span class="macro">vec!</span>[Leaf::new(LeafTy::Prim(Prim::I))];
+<a href=#943 id=943 data-nosnippet>943</a>                columns.extend(d.leaves.iter().map(Leaf::column));
+<a href=#944 id=944 data-nosnippet>944</a>                check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"the folder of `{ty}`"</span>), <span class="kw-2">&amp;</span>columns, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#945 id=945 data-nosnippet>945</a>                <span class="kw">let </span>iface = <span class="macro">format!</span>(<span class="string">"{base}.{tname}{suffix}Folder"</span>);
+<a href=#946 id=946 data-nosnippet>946</a>                <span class="kw">let </span>columns_iface = <span class="macro">format!</span>(<span class="string">"{base}.{tname}{suffix}FolderColumns"</span>);
+<a href=#947 id=947 data-nosnippet>947</a>                <span class="self">self</span>.support(iface.clone(), || {
+<a href=#948 id=948 data-nosnippet>948</a>                    <span class="prelude-val">Ok</span>(Support::Folder {
+<a href=#949 id=949 data-nosnippet>949</a>                        pkg: base.clone(),
+<a href=#950 id=950 data-nosnippet>950</a>                        name: simple(<span class="kw-2">&amp;</span>iface),
+<a href=#951 id=951 data-nosnippet>951</a>                        columns: simple(<span class="kw-2">&amp;</span>columns_iface),
+<a href=#952 id=952 data-nosnippet>952</a>                        params: d.params.clone(),
+<a href=#953 id=953 data-nosnippet>953</a>                        leaves: d.leaves.clone(),
+<a href=#954 id=954 data-nosnippet>954</a>                    })
+<a href=#955 id=955 data-nosnippet>955</a>                })<span class="question-mark">?</span>;
+<a href=#956 id=956 data-nosnippet>956</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Fold {
+<a href=#957 id=957 data-nosnippet>957</a>                    whole: ty.clone(),
+<a href=#958 id=958 data-nosnippet>958</a>                    exp: e,
+<a href=#959 id=959 data-nosnippet>959</a>                    optional,
+<a href=#960 id=960 data-nosnippet>960</a>                    iface,
+<a href=#961 id=961 data-nosnippet>961</a>                    columns_iface,
+<a href=#962 id=962 data-nosnippet>962</a>                    params: d.params,
+<a href=#963 id=963 data-nosnippet>963</a>                    leaves: d.leaves,
+<a href=#964 id=964 data-nosnippet>964</a>                });
+<a href=#965 id=965 data-nosnippet>965</a>            }
+<a href=#966 id=966 data-nosnippet>966</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"the builder of `{ty}`"</span>), <span class="kw-2">&amp;</span>d.leaves, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#967 id=967 data-nosnippet>967</a>            <span class="kw">let </span>iface = <span class="macro">format!</span>(<span class="string">"{base}.{tname}{suffix}Builder"</span>);
+<a href=#968 id=968 data-nosnippet>968</a>            <span class="self">self</span>.support(iface.clone(), || {
+<a href=#969 id=969 data-nosnippet>969</a>                <span class="prelude-val">Ok</span>(Support::Builder {
+<a href=#970 id=970 data-nosnippet>970</a>                    pkg: base.clone(),
+<a href=#971 id=971 data-nosnippet>971</a>                    name: simple(<span class="kw-2">&amp;</span>iface),
+<a href=#972 id=972 data-nosnippet>972</a>                    params: d.params.clone(),
+<a href=#973 id=973 data-nosnippet>973</a>                    leaves: d.leaves.clone(),
+<a href=#974 id=974 data-nosnippet>974</a>                })
+<a href=#975 id=975 data-nosnippet>975</a>            })<span class="question-mark">?</span>;
+<a href=#976 id=976 data-nosnippet>976</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Builder {
+<a href=#977 id=977 data-nosnippet>977</a>                whole: ty.clone(),
+<a href=#978 id=978 data-nosnippet>978</a>                exp: e,
+<a href=#979 id=979 data-nosnippet>979</a>                optional,
+<a href=#980 id=980 data-nosnippet>980</a>                iface,
+<a href=#981 id=981 data-nosnippet>981</a>                leaves: d.leaves,
+<a href=#982 id=982 data-nosnippet>982</a>            });
+<a href=#983 id=983 data-nosnippet>983</a>        }
+<a href=#984 id=984 data-nosnippet>984</a>        <span class="comment">// A typed value: one leaf returns directly, several go to a sink.
+<a href=#985 id=985 data-nosnippet>985</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>leaves = plan.leaves(ty, Dir::Out)<span class="question-mark">?</span>;
+<a href=#986 id=986 data-nosnippet>986</a>        <span class="kw">if </span>leaves.len() == <span class="number">1 </span>{
+<a href=#987 id=987 data-nosnippet>987</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(RPlan::Direct {
+<a href=#988 id=988 data-nosnippet>988</a>                ty: ty.clone(),
+<a href=#989 id=989 data-nosnippet>989</a>                leaf: leaves.remove(<span class="number">0</span>),
+<a href=#990 id=990 data-nosnippet>990</a>            });
+<a href=#991 id=991 data-nosnippet>991</a>        }
+<a href=#992 id=992 data-nosnippet>992</a>        check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"the result sink of `{ty}`"</span>), <span class="kw-2">&amp;</span>leaves, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#993 id=993 data-nosnippet>993</a>        <span class="kw">let </span>base = names::mangle(ty);
+<a href=#994 id=994 data-nosnippet>994</a>        <span class="kw">let </span>iface = <span class="macro">format!</span>(<span class="string">"{}.__Sink_{base}"</span>, plan.base_pkg);
+<a href=#995 id=995 data-nosnippet>995</a>        <span class="kw">let </span>kt_sink = <span class="macro">format!</span>(<span class="string">"{}.__sink_{base}"</span>, plan.base_pkg);
+<a href=#996 id=996 data-nosnippet>996</a>        <span class="self">self</span>.support(iface.clone(), || {
+<a href=#997 id=997 data-nosnippet>997</a>            <span class="prelude-val">Ok</span>(Support::Sink {
+<a href=#998 id=998 data-nosnippet>998</a>                ty: ty.clone(),
+<a href=#999 id=999 data-nosnippet>999</a>                base: base.clone(),
+<a href=#1000 id=1000 data-nosnippet>1000</a>            })
+<a href=#1001 id=1001 data-nosnippet>1001</a>        })<span class="question-mark">?</span>;
+<a href=#1002 id=1002 data-nosnippet>1002</a>        <span class="prelude-val">Ok</span>(RPlan::Sink {
+<a href=#1003 id=1003 data-nosnippet>1003</a>            ty: ty.clone(),
+<a href=#1004 id=1004 data-nosnippet>1004</a>            leaves,
+<a href=#1005 id=1005 data-nosnippet>1005</a>            iface,
+<a href=#1006 id=1006 data-nosnippet>1006</a>            kt_sink,
+<a href=#1007 id=1007 data-nosnippet>1007</a>        })
+<a href=#1008 id=1008 data-nosnippet>1008</a>    }
+<a href=#1009 id=1009 data-nosnippet>1009</a>
+<a href=#1010 id=1010 data-nosnippet>1010</a>    <span class="kw">fn </span>err(<span class="kw-2">&amp;mut </span><span class="self">self</span>, e: <span class="kw-2">&amp;</span>TypeRef) -&gt; Res&lt;EPlan&gt; {
+<a href=#1011 id=1011 data-nosnippet>1011</a>        <span class="kw">let </span>plan = <span class="self">self</span>.plan;
+<a href=#1012 id=1012 data-nosnippet>1012</a>        <span class="kw">let </span>TypeKind::Named { id, .. } = e.kind() <span class="kw">else </span>{
+<a href=#1013 id=1013 data-nosnippet>1013</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(EPlan::Binding);
+<a href=#1014 id=1014 data-nosnippet>1014</a>        };
+<a href=#1015 id=1015 data-nosnippet>1015</a>        <span class="kw">if </span>plan.expansion(e, <span class="prelude-val">None</span>).is_none() {
+<a href=#1016 id=1016 data-nosnippet>1016</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(EPlan::Binding);
+<a href=#1017 id=1017 data-nosnippet>1017</a>        }
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="comment">// An error type with no class is Rust-side only: its handler lives
+<a href=#1019 id=1019 data-nosnippet>1019</a>        // in the base package.
+<a href=#1020 id=1020 data-nosnippet>1020</a>        </span><span class="kw">let </span>pkg = <span class="kw">match </span>plan.class(<span class="kw-2">&amp;</span>id.name) {
+<a href=#1021 id=1021 data-nosnippet>1021</a>            <span class="prelude-val">Some</span>(class) =&gt; class.pkg.clone(),
+<a href=#1022 id=1022 data-nosnippet>1022</a>            <span class="prelude-val">None </span>=&gt; plan.base_pkg.clone(),
+<a href=#1023 id=1023 data-nosnippet>1023</a>        };
+<a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="kw">let </span>handler = <span class="macro">format!</span>(<span class="string">"{pkg}.{}Handler"</span>, id.name);
+<a href=#1025 id=1025 data-nosnippet>1025</a>        <span class="kw">let </span>raw_iface = <span class="macro">format!</span>(<span class="string">"{handler}Raw"</span>);
+<a href=#1026 id=1026 data-nosnippet>1026</a>        <span class="kw">let </span>capture = <span class="macro">format!</span>(<span class="string">"{handler}Capture"</span>);
+<a href=#1027 id=1027 data-nosnippet>1027</a>        <span class="kw">let </span>d = plan.deliver(e, <span class="macro">quote!</span>(__e), <span class="string">"e"</span>, <span class="string">""</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>[], <span class="bool-val">false</span>, <span class="number">1</span>)<span class="question-mark">?</span>;
+<a href=#1028 id=1028 data-nosnippet>1028</a>        check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"the error handler of `{e}`"</span>), <span class="kw-2">&amp;</span>d.leaves, <span class="number">1</span>)<span class="question-mark">?</span>;
 <a href=#1029 id=1029 data-nosnippet>1029</a>        <span class="self">self</span>.support(handler.clone(), || {
 <a href=#1030 id=1030 data-nosnippet>1030</a>            <span class="prelude-val">Ok</span>(Support::ErrorHandler {
 <a href=#1031 id=1031 data-nosnippet>1031</a>                pkg: pkg.clone(),
@@ -1060,35 +1060,31 @@
 <a href=#1060 id=1060 data-nosnippet>1060</a>}
 <a href=#1061 id=1061 data-nosnippet>1061</a>
 <a href=#1062 id=1062 data-nosnippet>1062</a><span class="kw">impl </span>Plan&lt;<span class="lifetime">'_</span>&gt; {
-<a href=#1063 id=1063 data-nosnippet>1063</a>    <span class="doccomment">/// Whether a parameter of `ty` crosses packed by declaration.
-<a href=#1064 id=1064 data-nosnippet>1064</a>    </span><span class="kw">fn </span>packed(<span class="kw-2">&amp;</span><span class="self">self</span>, ty: <span class="kw-2">&amp;</span>TypeRef) -&gt; bool {
-<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw">let </span>t = ty.borrow_target().unwrap_or(ty);
-<a href=#1066 id=1066 data-nosnippet>1066</a>        <span class="macro">matches!</span>(
-<a href=#1067 id=1067 data-nosnippet>1067</a>            t.kind(),
-<a href=#1068 id=1068 data-nosnippet>1068</a>            TypeKind::Named { id, .. }
-<a href=#1069 id=1069 data-nosnippet>1069</a>                <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>.class(<span class="kw-2">&amp;</span>id.name).map(|c| <span class="kw-2">&amp;</span>c.kind), <span class="prelude-val">Some</span>(ClassKind::Data { packed: <span class="bool-val">true </span>}))
-<a href=#1070 id=1070 data-nosnippet>1070</a>        )
-<a href=#1071 id=1071 data-nosnippet>1071</a>    }
-<a href=#1072 id=1072 data-nosnippet>1072</a>
-<a href=#1073 id=1073 data-nosnippet>1073</a>    <span class="doccomment">/// The raw leaves of the extern for one parameter.
-<a href=#1074 id=1074 data-nosnippet>1074</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>param_leaves(<span class="kw-2">&amp;</span><span class="self">self</span>, p: <span class="kw-2">&amp;</span>PPlan) -&gt; Res&lt;Vec&lt;Leaf&gt;&gt; {
-<a href=#1075 id=1075 data-nosnippet>1075</a>        <span class="kw">match </span>p {
-<a href=#1076 id=1076 data-nosnippet>1076</a>            PPlan::Receiver(fp) | PPlan::Value(fp, <span class="bool-val">false</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="self">self
-<a href=#1077 id=1077 data-nosnippet>1077</a>                </span>.leaves(<span class="kw-2">&amp;</span>fp.ty, Dir::In)<span class="question-mark">?
-<a href=#1078 id=1078 data-nosnippet>1078</a>                </span>.into_iter()
-<a href=#1079 id=1079 data-nosnippet>1079</a>                .map(|l| l.under(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>fp.name)))
-<a href=#1080 id=1080 data-nosnippet>1080</a>                .collect()),
-<a href=#1081 id=1081 data-nosnippet>1081</a>            PPlan::Value(fp, <span class="bool-val">true</span>) =&gt; {
-<a href=#1082 id=1082 data-nosnippet>1082</a>                <span class="kw">let </span>root = names::bare(<span class="kw-2">&amp;</span>fp.name);
-<a href=#1083 id=1083 data-nosnippet>1083</a>                <span class="kw">let </span>leaves: Vec&lt;Leaf&gt; = <span class="self">self
-<a href=#1084 id=1084 data-nosnippet>1084</a>                    </span>.leaves(<span class="kw-2">&amp;</span>fp.ty, Dir::In)<span class="question-mark">?
-<a href=#1085 id=1085 data-nosnippet>1085</a>                    </span>.into_iter()
-<a href=#1086 id=1086 data-nosnippet>1086</a>                    .map(|l| l.under(<span class="kw-2">&amp;</span>root))
-<a href=#1087 id=1087 data-nosnippet>1087</a>                    .collect();
-<a href=#1088 id=1088 data-nosnippet>1088</a>                <span class="prelude-val">Ok</span>(<span class="kw">crate</span>::lower::pack::packed_leaves(<span class="kw-2">&amp;</span>root, <span class="kw-2">&amp;</span>leaves))
-<a href=#1089 id=1089 data-nosnippet>1089</a>            }
-<a href=#1090 id=1090 data-nosnippet>1090</a>            PPlan::Selector(s, <span class="kw">_</span>) =&gt; <span class="self">self</span>.selector_leaves(s),
-<a href=#1091 id=1091 data-nosnippet>1091</a>        }
-<a href=#1092 id=1092 data-nosnippet>1092</a>    }
-<a href=#1093 id=1093 data-nosnippet>1093</a>}
+<a href=#1063 id=1063 data-nosnippet>1063</a>    <span class="doccomment">/// The raw leaves of the extern for one parameter.
+<a href=#1064 id=1064 data-nosnippet>1064</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>param_leaves(<span class="kw-2">&amp;</span><span class="self">self</span>, p: <span class="kw-2">&amp;</span>PPlan) -&gt; Res&lt;Vec&lt;Leaf&gt;&gt; {
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw">match </span>p {
+<a href=#1066 id=1066 data-nosnippet>1066</a>            PPlan::Receiver(fp) | PPlan::Value(fp) =&gt; <span class="prelude-val">Ok</span>(<span class="self">self
+<a href=#1067 id=1067 data-nosnippet>1067</a>                </span>.leaves(<span class="kw-2">&amp;</span>fp.ty, Dir::In)<span class="question-mark">?
+<a href=#1068 id=1068 data-nosnippet>1068</a>                </span>.into_iter()
+<a href=#1069 id=1069 data-nosnippet>1069</a>                .map(|l| l.under(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>fp.name)))
+<a href=#1070 id=1070 data-nosnippet>1070</a>                .collect()),
+<a href=#1071 id=1071 data-nosnippet>1071</a>            PPlan::Selector(s, <span class="kw">_</span>) =&gt; <span class="self">self</span>.selector_leaves(s),
+<a href=#1072 id=1072 data-nosnippet>1072</a>        }
+<a href=#1073 id=1073 data-nosnippet>1073</a>    }
+<a href=#1074 id=1074 data-nosnippet>1074</a>}
+<a href=#1075 id=1075 data-nosnippet>1075</a>
+<a href=#1076 id=1076 data-nosnippet>1076</a><span class="doccomment">/// Refuse a JVM method whose arguments would take more than 255 slots, the
+<a href=#1077 id=1077 data-nosnippet>1077</a>/// JVM's limit (JVMS §4.3.3): a `long` or `double` takes two, any other
+<a href=#1078 id=1078 data-nosnippet>1078</a>/// argument one. `extra` counts the slots beyond `leaves` — the receiver,
+<a href=#1079 id=1079 data-nosnippet>1079</a>/// and for a native method the sinks.
+<a href=#1080 id=1080 data-nosnippet>1080</a></span><span class="kw">fn </span>check_slots(what: <span class="kw-2">&amp;</span>str, leaves: <span class="kw-2">&amp;</span>[Leaf], extra: usize) -&gt; Res&lt;()&gt; {
+<a href=#1081 id=1081 data-nosnippet>1081</a>    <span class="kw">let </span>slots = extra + leaves.iter().map(Leaf::slots).sum::&lt;usize&gt;();
+<a href=#1082 id=1082 data-nosnippet>1082</a>    <span class="kw">if </span>slots &gt; <span class="number">255 </span>{
+<a href=#1083 id=1083 data-nosnippet>1083</a>        <span class="kw">return </span>err(<span class="macro">format!</span>(
+<a href=#1084 id=1084 data-nosnippet>1084</a>            <span class="string">"{what} would take {slots} JVM argument slots, more than the JVM's limit of 255: \
+<a href=#1085 id=1085 data-nosnippet>1085</a>             split the value into smaller parameters or fields"
+<a href=#1086 id=1086 data-nosnippet>1086</a>        </span>));
+<a href=#1087 id=1087 data-nosnippet>1087</a>    }
+<a href=#1088 id=1088 data-nosnippet>1088</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1089 id=1089 data-nosnippet>1089</a>}
 </code></pre></div></section></main></body></html>
