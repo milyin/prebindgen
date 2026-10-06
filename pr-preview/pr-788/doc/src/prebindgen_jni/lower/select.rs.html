@@ -412,7 +412,7 @@
 <a href=#412 id=412 data-nosnippet>412</a>        tail: <span class="kw-2">&amp;</span>[(String, String)],
 <a href=#413 id=413 data-nosnippet>413</a>        ret: <span class="kw-2">&amp;</span>str,
 <a href=#414 id=414 data-nosnippet>414</a>        prefix_names: bool,
-<a href=#415 id=415 data-nosnippet>415</a>    ) -&gt; Res&lt;Vec&lt;String&gt;&gt; {
+<a href=#415 id=415 data-nosnippet>415</a>    ) -&gt; Res&lt;Vec&lt;(String, Vec&lt;String&gt;)&gt;&gt; {
 <a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">let </span><span class="kw-2">mut </span>combos: Vec&lt;Vec&lt;(usize, usize)&gt;&gt; = <span class="macro">vec!</span>[Vec::new()];
 <a href=#417 id=417 data-nosnippet>417</a>        <span class="kw">for </span>(pi, p) <span class="kw">in </span>params.iter().enumerate() {
 <a href=#418 id=418 data-nosnippet>418</a>            <span class="kw">if let </span>SigParam::Split(s) = p {
@@ -430,102 +430,110 @@
 <a href=#430 id=430 data-nosnippet>430</a>        <span class="kw">let </span><span class="kw-2">mut </span>out = Vec::new();
 <a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">for </span>combo <span class="kw">in </span>combos {
 <a href=#432 id=432 data-nosnippet>432</a>            <span class="kw">let </span><span class="kw-2">mut </span>sig = Vec::new();
-<a href=#433 id=433 data-nosnippet>433</a>            <span class="kw">let </span><span class="kw-2">mut </span>args = Vec::new();
-<a href=#434 id=434 data-nosnippet>434</a>            <span class="kw">for </span>(pi, p) <span class="kw">in </span>params.iter().enumerate() {
-<a href=#435 id=435 data-nosnippet>435</a>                <span class="kw">match </span>p {
-<a href=#436 id=436 data-nosnippet>436</a>                    SigParam::Plain(n, t) =&gt; {
-<a href=#437 id=437 data-nosnippet>437</a>                        sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
-<a href=#438 id=438 data-nosnippet>438</a>                        args.push(n.clone());
-<a href=#439 id=439 data-nosnippet>439</a>                    }
-<a href=#440 id=440 data-nosnippet>440</a>                    SigParam::Split(s) =&gt; {
-<a href=#441 id=441 data-nosnippet>441</a>                        <span class="kw">let </span>vi = combo.iter().find(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i == pi).unwrap().<span class="number">1</span>;
-<a href=#442 id=442 data-nosnippet>442</a>                        <span class="kw">let </span>base = kt_ident(<span class="kw-2">&amp;</span>names::camel(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>s.param.name)));
-<a href=#443 id=443 data-nosnippet>443</a>                        args.push(vi.to_string());
-<a href=#444 id=444 data-nosnippet>444</a>                        <span class="kw">for </span>(i, v) <span class="kw">in </span>s.variants.iter().enumerate() {
-<a href=#445 id=445 data-nosnippet>445</a>                            <span class="kw">match </span>v {
-<a href=#446 id=446 data-nosnippet>446</a>                                SelVariant::Build { func, .. } =&gt; {
-<a href=#447 id=447 data-nosnippet>447</a>                                    <span class="kw">for </span>fp <span class="kw">in </span><span class="kw-2">&amp;</span>func.params {
-<a href=#448 id=448 data-nosnippet>448</a>                                        <span class="kw">if </span>i == vi {
-<a href=#449 id=449 data-nosnippet>449</a>                                            <span class="kw">let </span>pn = names::bare(<span class="kw-2">&amp;</span>fp.name);
-<a href=#450 id=450 data-nosnippet>450</a>                                            <span class="kw">let </span>n = <span class="kw">if </span>prefix_names {
-<a href=#451 id=451 data-nosnippet>451</a>                                                kt_ident(<span class="kw-2">&amp;</span>names::camel(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#452 id=452 data-nosnippet>452</a>                                                    <span class="string">"{}_{pn}"</span>,
-<a href=#453 id=453 data-nosnippet>453</a>                                                    names::bare(<span class="kw-2">&amp;</span>s.param.name)
-<a href=#454 id=454 data-nosnippet>454</a>                                                )))
-<a href=#455 id=455 data-nosnippet>455</a>                                            } <span class="kw">else </span>{
-<a href=#456 id=456 data-nosnippet>456</a>                                                kt_ident(<span class="kw-2">&amp;</span>names::camel(<span class="kw-2">&amp;</span>pn))
-<a href=#457 id=457 data-nosnippet>457</a>                                            };
-<a href=#458 id=458 data-nosnippet>458</a>                                            sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {}"</span>, <span class="self">self</span>.kt_type(<span class="kw-2">&amp;</span>fp.ty)<span class="question-mark">?</span>));
-<a href=#459 id=459 data-nosnippet>459</a>                                            args.push(n);
-<a href=#460 id=460 data-nosnippet>460</a>                                        } <span class="kw">else </span>{
-<a href=#461 id=461 data-nosnippet>461</a>                                            args.push(<span class="string">"null"</span>.to_string());
-<a href=#462 id=462 data-nosnippet>462</a>                                        }
-<a href=#463 id=463 data-nosnippet>463</a>                                    }
-<a href=#464 id=464 data-nosnippet>464</a>                                }
-<a href=#465 id=465 data-nosnippet>465</a>                                SelVariant::Handle =&gt; {
-<a href=#466 id=466 data-nosnippet>466</a>                                    <span class="kw">if </span>i == vi {
-<a href=#467 id=467 data-nosnippet>467</a>                                        sig.push(<span class="macro">format!</span>(<span class="string">"{base}: {}"</span>, s.class.fqn()));
-<a href=#468 id=468 data-nosnippet>468</a>                                        args.push(base.clone());
-<a href=#469 id=469 data-nosnippet>469</a>                                    } <span class="kw">else </span>{
-<a href=#470 id=470 data-nosnippet>470</a>                                        args.push(<span class="string">"null"</span>.to_string());
-<a href=#471 id=471 data-nosnippet>471</a>                                    }
-<a href=#472 id=472 data-nosnippet>472</a>                                }
-<a href=#473 id=473 data-nosnippet>473</a>                            }
-<a href=#474 id=474 data-nosnippet>474</a>                        }
-<a href=#475 id=475 data-nosnippet>475</a>                    }
-<a href=#476 id=476 data-nosnippet>476</a>                    SigParam::Selector(s) =&gt; {
-<a href=#477 id=477 data-nosnippet>477</a>                        <span class="kw">for </span>(n, t) <span class="kw">in </span><span class="self">self</span>.selector_params(s)<span class="question-mark">? </span>{
-<a href=#478 id=478 data-nosnippet>478</a>                            sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
-<a href=#479 id=479 data-nosnippet>479</a>                            args.push(n);
-<a href=#480 id=480 data-nosnippet>480</a>                        }
-<a href=#481 id=481 data-nosnippet>481</a>                    }
-<a href=#482 id=482 data-nosnippet>482</a>                }
-<a href=#483 id=483 data-nosnippet>483</a>            }
-<a href=#484 id=484 data-nosnippet>484</a>            <span class="kw">for </span>(n, t) <span class="kw">in </span>tail {
-<a href=#485 id=485 data-nosnippet>485</a>                sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
-<a href=#486 id=486 data-nosnippet>486</a>                args.push(n.clone());
-<a href=#487 id=487 data-nosnippet>487</a>            }
-<a href=#488 id=488 data-nosnippet>488</a>            out.push(<span class="macro">format!</span>(
-<a href=#489 id=489 data-nosnippet>489</a>                <span class="string">"{head}{name}({}): {ret} =\n    {name}({})\n"</span>,
-<a href=#490 id=490 data-nosnippet>490</a>                sig.join(<span class="string">", "</span>),
-<a href=#491 id=491 data-nosnippet>491</a>                args.join(<span class="string">", "</span>)
-<a href=#492 id=492 data-nosnippet>492</a>            ));
-<a href=#493 id=493 data-nosnippet>493</a>        }
-<a href=#494 id=494 data-nosnippet>494</a>        <span class="prelude-val">Ok</span>(out)
-<a href=#495 id=495 data-nosnippet>495</a>    }
-<a href=#496 id=496 data-nosnippet>496</a>}
-<a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a><span class="doccomment">/// A Kotlin wrapper parameter: plain, a selector group, or a selector group
-<a href=#499 id=499 data-nosnippet>499</a>/// that is split into overloads.
-<a href=#500 id=500 data-nosnippet>500</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>SigParam {
-<a href=#501 id=501 data-nosnippet>501</a>    Plain(String, String),
-<a href=#502 id=502 data-nosnippet>502</a>    Selector(Selector),
-<a href=#503 id=503 data-nosnippet>503</a>    Split(Selector),
+<a href=#433 id=433 data-nosnippet>433</a>            <span class="kw">let </span><span class="kw-2">mut </span>types = Vec::new();
+<a href=#434 id=434 data-nosnippet>434</a>            <span class="kw">let </span><span class="kw-2">mut </span>args = Vec::new();
+<a href=#435 id=435 data-nosnippet>435</a>            <span class="kw">for </span>(pi, p) <span class="kw">in </span>params.iter().enumerate() {
+<a href=#436 id=436 data-nosnippet>436</a>                <span class="kw">match </span>p {
+<a href=#437 id=437 data-nosnippet>437</a>                    SigParam::Plain(n, t) =&gt; {
+<a href=#438 id=438 data-nosnippet>438</a>                        sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
+<a href=#439 id=439 data-nosnippet>439</a>                        types.push(t.clone());
+<a href=#440 id=440 data-nosnippet>440</a>                        args.push(n.clone());
+<a href=#441 id=441 data-nosnippet>441</a>                    }
+<a href=#442 id=442 data-nosnippet>442</a>                    SigParam::Split(s) =&gt; {
+<a href=#443 id=443 data-nosnippet>443</a>                        <span class="kw">let </span>vi = combo.iter().find(|(i, <span class="kw">_</span>)| <span class="kw-2">*</span>i == pi).unwrap().<span class="number">1</span>;
+<a href=#444 id=444 data-nosnippet>444</a>                        <span class="kw">let </span>base = kt_ident(<span class="kw-2">&amp;</span>names::camel(<span class="kw-2">&amp;</span>names::bare(<span class="kw-2">&amp;</span>s.param.name)));
+<a href=#445 id=445 data-nosnippet>445</a>                        args.push(vi.to_string());
+<a href=#446 id=446 data-nosnippet>446</a>                        <span class="kw">for </span>(i, v) <span class="kw">in </span>s.variants.iter().enumerate() {
+<a href=#447 id=447 data-nosnippet>447</a>                            <span class="kw">match </span>v {
+<a href=#448 id=448 data-nosnippet>448</a>                                SelVariant::Build { func, .. } =&gt; {
+<a href=#449 id=449 data-nosnippet>449</a>                                    <span class="kw">for </span>fp <span class="kw">in </span><span class="kw-2">&amp;</span>func.params {
+<a href=#450 id=450 data-nosnippet>450</a>                                        <span class="kw">if </span>i == vi {
+<a href=#451 id=451 data-nosnippet>451</a>                                            <span class="kw">let </span>pn = names::bare(<span class="kw-2">&amp;</span>fp.name);
+<a href=#452 id=452 data-nosnippet>452</a>                                            <span class="kw">let </span>n = <span class="kw">if </span>prefix_names {
+<a href=#453 id=453 data-nosnippet>453</a>                                                kt_ident(<span class="kw-2">&amp;</span>names::camel(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#454 id=454 data-nosnippet>454</a>                                                    <span class="string">"{}_{pn}"</span>,
+<a href=#455 id=455 data-nosnippet>455</a>                                                    names::bare(<span class="kw-2">&amp;</span>s.param.name)
+<a href=#456 id=456 data-nosnippet>456</a>                                                )))
+<a href=#457 id=457 data-nosnippet>457</a>                                            } <span class="kw">else </span>{
+<a href=#458 id=458 data-nosnippet>458</a>                                                kt_ident(<span class="kw-2">&amp;</span>names::camel(<span class="kw-2">&amp;</span>pn))
+<a href=#459 id=459 data-nosnippet>459</a>                                            };
+<a href=#460 id=460 data-nosnippet>460</a>                                            <span class="kw">let </span>t = <span class="self">self</span>.kt_type(<span class="kw-2">&amp;</span>fp.ty)<span class="question-mark">?</span>;
+<a href=#461 id=461 data-nosnippet>461</a>                                            sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
+<a href=#462 id=462 data-nosnippet>462</a>                                            types.push(t);
+<a href=#463 id=463 data-nosnippet>463</a>                                            args.push(n);
+<a href=#464 id=464 data-nosnippet>464</a>                                        } <span class="kw">else </span>{
+<a href=#465 id=465 data-nosnippet>465</a>                                            args.push(<span class="string">"null"</span>.to_string());
+<a href=#466 id=466 data-nosnippet>466</a>                                        }
+<a href=#467 id=467 data-nosnippet>467</a>                                    }
+<a href=#468 id=468 data-nosnippet>468</a>                                }
+<a href=#469 id=469 data-nosnippet>469</a>                                SelVariant::Handle =&gt; {
+<a href=#470 id=470 data-nosnippet>470</a>                                    <span class="kw">if </span>i == vi {
+<a href=#471 id=471 data-nosnippet>471</a>                                        sig.push(<span class="macro">format!</span>(<span class="string">"{base}: {}"</span>, s.class.fqn()));
+<a href=#472 id=472 data-nosnippet>472</a>                                        types.push(s.class.fqn());
+<a href=#473 id=473 data-nosnippet>473</a>                                        args.push(base.clone());
+<a href=#474 id=474 data-nosnippet>474</a>                                    } <span class="kw">else </span>{
+<a href=#475 id=475 data-nosnippet>475</a>                                        args.push(<span class="string">"null"</span>.to_string());
+<a href=#476 id=476 data-nosnippet>476</a>                                    }
+<a href=#477 id=477 data-nosnippet>477</a>                                }
+<a href=#478 id=478 data-nosnippet>478</a>                            }
+<a href=#479 id=479 data-nosnippet>479</a>                        }
+<a href=#480 id=480 data-nosnippet>480</a>                    }
+<a href=#481 id=481 data-nosnippet>481</a>                    SigParam::Selector(s) =&gt; {
+<a href=#482 id=482 data-nosnippet>482</a>                        <span class="kw">for </span>(n, t) <span class="kw">in </span><span class="self">self</span>.selector_params(s)<span class="question-mark">? </span>{
+<a href=#483 id=483 data-nosnippet>483</a>                            sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
+<a href=#484 id=484 data-nosnippet>484</a>                            types.push(t);
+<a href=#485 id=485 data-nosnippet>485</a>                            args.push(n);
+<a href=#486 id=486 data-nosnippet>486</a>                        }
+<a href=#487 id=487 data-nosnippet>487</a>                    }
+<a href=#488 id=488 data-nosnippet>488</a>                }
+<a href=#489 id=489 data-nosnippet>489</a>            }
+<a href=#490 id=490 data-nosnippet>490</a>            <span class="kw">for </span>(n, t) <span class="kw">in </span>tail {
+<a href=#491 id=491 data-nosnippet>491</a>                sig.push(<span class="macro">format!</span>(<span class="string">"{n}: {t}"</span>));
+<a href=#492 id=492 data-nosnippet>492</a>                types.push(t.clone());
+<a href=#493 id=493 data-nosnippet>493</a>                args.push(n.clone());
+<a href=#494 id=494 data-nosnippet>494</a>            }
+<a href=#495 id=495 data-nosnippet>495</a>            <span class="kw">let </span>text = <span class="macro">format!</span>(
+<a href=#496 id=496 data-nosnippet>496</a>                <span class="string">"{head}{name}({}): {ret} =\n    {name}({})\n"</span>,
+<a href=#497 id=497 data-nosnippet>497</a>                sig.join(<span class="string">", "</span>),
+<a href=#498 id=498 data-nosnippet>498</a>                args.join(<span class="string">", "</span>)
+<a href=#499 id=499 data-nosnippet>499</a>            );
+<a href=#500 id=500 data-nosnippet>500</a>            out.push((text, types));
+<a href=#501 id=501 data-nosnippet>501</a>        }
+<a href=#502 id=502 data-nosnippet>502</a>        <span class="prelude-val">Ok</span>(out)
+<a href=#503 id=503 data-nosnippet>503</a>    }
 <a href=#504 id=504 data-nosnippet>504</a>}
 <a href=#505 id=505 data-nosnippet>505</a>
-<a href=#506 id=506 data-nosnippet>506</a><span class="kw">fn </span>nullable(t: String) -&gt; String {
-<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">if </span>t.ends_with(<span class="string">'?'</span>) {
-<a href=#508 id=508 data-nosnippet>508</a>        t
-<a href=#509 id=509 data-nosnippet>509</a>    } <span class="kw">else </span>{
-<a href=#510 id=510 data-nosnippet>510</a>        <span class="macro">format!</span>(<span class="string">"{t}?"</span>)
-<a href=#511 id=511 data-nosnippet>511</a>    }
+<a href=#506 id=506 data-nosnippet>506</a><span class="doccomment">/// A Kotlin wrapper parameter: plain, a selector group, or a selector group
+<a href=#507 id=507 data-nosnippet>507</a>/// that is split into overloads.
+<a href=#508 id=508 data-nosnippet>508</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>SigParam {
+<a href=#509 id=509 data-nosnippet>509</a>    Plain(String, String),
+<a href=#510 id=510 data-nosnippet>510</a>    Selector(Selector),
+<a href=#511 id=511 data-nosnippet>511</a>    Split(Selector),
 <a href=#512 id=512 data-nosnippet>512</a>}
 <a href=#513 id=513 data-nosnippet>513</a>
-<a href=#514 id=514 data-nosnippet>514</a><span class="doccomment">/// A selector parameter's input over `form`, and how its value is lent.
-<a href=#515 id=515 data-nosnippet>515</a></span><span class="kw">fn </span>selector_param(s: <span class="kw-2">&amp;</span>Selector, form: Form&lt;Leaf&gt;, expr: TokenStream) -&gt; Param {
-<a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">let </span>name = <span class="kw-2">&amp;</span>s.param.name;
-<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">let </span>pass = <span class="kw">match </span>(s.access, s.optional) {
-<a href=#518 id=518 data-nosnippet>518</a>        (Access::Owned, <span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-<a href=#519 id=519 data-nosnippet>519</a>        (<span class="kw">_</span>, <span class="bool-val">false</span>) =&gt; <span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="kw-2">&amp;*</span>#name)),
-<a href=#520 id=520 data-nosnippet>520</a>        (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; <span class="prelude-val">Some</span>(<span class="macro">quote!</span>(#name.as_deref())),
-<a href=#521 id=521 data-nosnippet>521</a>    };
-<a href=#522 id=522 data-nosnippet>522</a>    Param {
-<a href=#523 id=523 data-nosnippet>523</a>        input: Input {
-<a href=#524 id=524 data-nosnippet>524</a>            form,
-<a href=#525 id=525 data-nosnippet>525</a>            expr,
-<a href=#526 id=526 data-nosnippet>526</a>            fallible: <span class="bool-val">true</span>,
-<a href=#527 id=527 data-nosnippet>527</a>        },
-<a href=#528 id=528 data-nosnippet>528</a>        pass,
-<a href=#529 id=529 data-nosnippet>529</a>    }
-<a href=#530 id=530 data-nosnippet>530</a>}
+<a href=#514 id=514 data-nosnippet>514</a><span class="kw">fn </span>nullable(t: String) -&gt; String {
+<a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">if </span>t.ends_with(<span class="string">'?'</span>) {
+<a href=#516 id=516 data-nosnippet>516</a>        t
+<a href=#517 id=517 data-nosnippet>517</a>    } <span class="kw">else </span>{
+<a href=#518 id=518 data-nosnippet>518</a>        <span class="macro">format!</span>(<span class="string">"{t}?"</span>)
+<a href=#519 id=519 data-nosnippet>519</a>    }
+<a href=#520 id=520 data-nosnippet>520</a>}
+<a href=#521 id=521 data-nosnippet>521</a>
+<a href=#522 id=522 data-nosnippet>522</a><span class="doccomment">/// A selector parameter's input over `form`, and how its value is lent.
+<a href=#523 id=523 data-nosnippet>523</a></span><span class="kw">fn </span>selector_param(s: <span class="kw-2">&amp;</span>Selector, form: Form&lt;Leaf&gt;, expr: TokenStream) -&gt; Param {
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">let </span>name = <span class="kw-2">&amp;</span>s.param.name;
+<a href=#525 id=525 data-nosnippet>525</a>    <span class="kw">let </span>pass = <span class="kw">match </span>(s.access, s.optional) {
+<a href=#526 id=526 data-nosnippet>526</a>        (Access::Owned, <span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#527 id=527 data-nosnippet>527</a>        (<span class="kw">_</span>, <span class="bool-val">false</span>) =&gt; <span class="prelude-val">Some</span>(<span class="macro">quote!</span>(<span class="kw-2">&amp;*</span>#name)),
+<a href=#528 id=528 data-nosnippet>528</a>        (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; <span class="prelude-val">Some</span>(<span class="macro">quote!</span>(#name.as_deref())),
+<a href=#529 id=529 data-nosnippet>529</a>    };
+<a href=#530 id=530 data-nosnippet>530</a>    Param {
+<a href=#531 id=531 data-nosnippet>531</a>        input: Input {
+<a href=#532 id=532 data-nosnippet>532</a>            form,
+<a href=#533 id=533 data-nosnippet>533</a>            expr,
+<a href=#534 id=534 data-nosnippet>534</a>            fallible: <span class="bool-val">true</span>,
+<a href=#535 id=535 data-nosnippet>535</a>        },
+<a href=#536 id=536 data-nosnippet>536</a>        pass,
+<a href=#537 id=537 data-nosnippet>537</a>    }
+<a href=#538 id=538 data-nosnippet>538</a>}
 </code></pre></div></section></main></body></html>

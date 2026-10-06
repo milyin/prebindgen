@@ -129,7 +129,7 @@
 <a href=#129 id=129 data-nosnippet>129</a>        }
 <a href=#130 id=130 data-nosnippet>130</a>        Support::Sink { ty, base: b } =&gt; {
 <a href=#131 id=131 data-nosnippet>131</a>            <span class="kw">let </span>leaves = plan.leaves(ty, Dir::Out)<span class="question-mark">?</span>;
-<a href=#132 id=132 data-nosnippet>132</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`__Sink_{b}.run`"</span>), <span class="kw-2">&amp;</span>raw_types(<span class="kw-2">&amp;</span>leaves))<span class="question-mark">?</span>;
+<a href=#132 id=132 data-nosnippet>132</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`__Sink_{b}.run`"</span>), <span class="kw-2">&amp;</span>raw_types(<span class="kw-2">&amp;</span>leaves), <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#133 id=133 data-nosnippet>133</a>            <span class="kw">let </span>raws: Vec&lt;String&gt; = leaves.iter().map(raw_name).collect();
 <a href=#134 id=134 data-nosnippet>134</a>            <span class="kw">let </span>decode = plan.kt_decode(ty, <span class="kw-2">&amp;</span>raws, <span class="bool-val">false</span>, <span class="number">0</span>)<span class="question-mark">?</span>;
 <a href=#135 id=135 data-nosnippet>135</a>            (
@@ -148,8 +148,8 @@
 <a href=#148 id=148 data-nosnippet>148</a>            params,
 <a href=#149 id=149 data-nosnippet>149</a>            leaves,
 <a href=#150 id=150 data-nosnippet>150</a>        } =&gt; {
-<a href=#151 id=151 data-nosnippet>151</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}Raw.run`"</span>), <span class="kw-2">&amp;</span>raw_types(leaves))<span class="question-mark">?</span>;
-<a href=#152 id=152 data-nosnippet>152</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>kt_types(params))<span class="question-mark">?</span>;
+<a href=#151 id=151 data-nosnippet>151</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}Raw.run`"</span>), <span class="kw-2">&amp;</span>raw_types(leaves), <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+<a href=#152 id=152 data-nosnippet>152</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>kt_types(params), <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#153 id=153 data-nosnippet>153</a>            <span class="kw">let </span>raws: Vec&lt;String&gt; = leaves.iter().map(raw_name).collect();
 <a href=#154 id=154 data-nosnippet>154</a>            <span class="kw">let </span>args = params
 <a href=#155 id=155 data-nosnippet>155</a>                .iter()
@@ -179,10 +179,10 @@
 <a href=#179 id=179 data-nosnippet>179</a>            // columns interface a count before one array per leaf.
 <a href=#180 id=180 data-nosnippet>180</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>typed = <span class="macro">vec!</span>[<span class="string">"A"</span>.to_string()];
 <a href=#181 id=181 data-nosnippet>181</a>            typed.extend(kt_types(params));
-<a href=#182 id=182 data-nosnippet>182</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>typed)<span class="question-mark">?</span>;
+<a href=#182 id=182 data-nosnippet>182</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>typed, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#183 id=183 data-nosnippet>183</a>            <span class="kw">let </span><span class="kw-2">mut </span>cols = <span class="macro">vec!</span>[<span class="string">"Int"</span>.to_string()];
 <a href=#184 id=184 data-nosnippet>184</a>            cols.extend(leaves.iter().map(|l| l.column().kt_raw()));
-<a href=#185 id=185 data-nosnippet>185</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{columns}.run`"</span>), <span class="kw-2">&amp;</span>cols)<span class="question-mark">?</span>;
+<a href=#185 id=185 data-nosnippet>185</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{columns}.run`"</span>), <span class="kw-2">&amp;</span>cols, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#186 id=186 data-nosnippet>186</a>            <span class="kw">let </span>cols = leaves
 <a href=#187 id=187 data-nosnippet>187</a>                .iter()
 <a href=#188 id=188 data-nosnippet>188</a>                .map(|l| <span class="macro">format!</span>(<span class="string">"{}: {}"</span>, raw_name(l), l.column().kt_raw()))
@@ -206,8 +206,8 @@
 <a href=#206 id=206 data-nosnippet>206</a>            params,
 <a href=#207 id=207 data-nosnippet>207</a>            leaves,
 <a href=#208 id=208 data-nosnippet>208</a>        } =&gt; {
-<a href=#209 id=209 data-nosnippet>209</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{raw}.run`"</span>), <span class="kw-2">&amp;</span>raw_types(leaves))<span class="question-mark">?</span>;
-<a href=#210 id=210 data-nosnippet>210</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>kt_types(params))<span class="question-mark">?</span>;
+<a href=#209 id=209 data-nosnippet>209</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{raw}.run`"</span>), <span class="kw-2">&amp;</span>raw_types(leaves), <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+<a href=#210 id=210 data-nosnippet>210</a>            check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>kt_types(params), <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#211 id=211 data-nosnippet>211</a>            <span class="kw">let </span>raws: Vec&lt;String&gt; = leaves.iter().map(raw_name).collect();
 <a href=#212 id=212 data-nosnippet>212</a>            <span class="kw">let </span>fields = leaves
 <a href=#213 id=213 data-nosnippet>213</a>                .iter()
@@ -298,47 +298,51 @@
 <a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">let </span>deliveries = plan.callback_args(args)<span class="question-mark">?</span>;
 <a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">let </span>params: Vec&lt;<span class="kw-2">&amp;</span>DParam&gt; = deliveries.iter().flat_map(|d| <span class="kw-2">&amp;</span>d.params).collect();
 <a href=#300 id=300 data-nosnippet>300</a>    <span class="kw">let </span>leaves: Vec&lt;Leaf&gt; = deliveries.iter().flat_map(|d| d.leaves.clone()).collect();
-<a href=#301 id=301 data-nosnippet>301</a>    check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{raw}.run`"</span>), <span class="kw-2">&amp;</span>raw_types(<span class="kw-2">&amp;</span>leaves))<span class="question-mark">?</span>;
-<a href=#302 id=302 data-nosnippet>302</a>    check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>), <span class="kw-2">&amp;</span>kt_types(params.iter().copied()))<span class="question-mark">?</span>;
-<a href=#303 id=303 data-nosnippet>303</a>    <span class="kw">let </span>raws: Vec&lt;String&gt; = leaves.iter().map(raw_name).collect();
-<a href=#304 id=304 data-nosnippet>304</a>    <span class="kw">let </span>locals: Vec&lt;String&gt; = params
-<a href=#305 id=305 data-nosnippet>305</a>        .iter()
-<a href=#306 id=306 data-nosnippet>306</a>        .enumerate()
-<a href=#307 id=307 data-nosnippet>307</a>        .map(|(i, p)| <span class="macro">format!</span>(<span class="string">"            val __p{i} = {}"</span>, p.decode))
-<a href=#308 id=308 data-nosnippet>308</a>        .collect();
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">let </span>call_args = (<span class="number">0</span>..params.len())
-<a href=#310 id=310 data-nosnippet>310</a>        .map(|i| <span class="macro">format!</span>(<span class="string">"__p{i}"</span>))
-<a href=#311 id=311 data-nosnippet>311</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#312 id=312 data-nosnippet>312</a>        .join(<span class="string">", "</span>);
-<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">let </span>closes: Vec&lt;String&gt; = params
-<a href=#314 id=314 data-nosnippet>314</a>        .iter()
-<a href=#315 id=315 data-nosnippet>315</a>        .enumerate()
-<a href=#316 id=316 data-nosnippet>316</a>        .filter_map(|(i, p)| {
-<a href=#317 id=317 data-nosnippet>317</a>            p.close
-<a href=#318 id=318 data-nosnippet>318</a>                .as_ref()
-<a href=#319 id=319 data-nosnippet>319</a>                .map(|c| c.replacen(<span class="kw-2">&amp;</span>p.name, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"__p{i}"</span>), <span class="number">1</span>))
-<a href=#320 id=320 data-nosnippet>320</a>        })
-<a href=#321 id=321 data-nosnippet>321</a>        .collect();
-<a href=#322 id=322 data-nosnippet>322</a>    <span class="kw">let </span>body = <span class="kw">if </span>closes.is_empty() {
-<a href=#323 id=323 data-nosnippet>323</a>        <span class="macro">format!</span>(<span class="string">"{}\n            run({call_args})"</span>, locals.join(<span class="string">"\n"</span>))
-<a href=#324 id=324 data-nosnippet>324</a>    } <span class="kw">else </span>{
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="macro">format!</span>(
-<a href=#326 id=326 data-nosnippet>326</a>            <span class="string">"{}\n            try {{\n                run({call_args})\n            }} finally {{\n                {}\n            }}"</span>,
-<a href=#327 id=327 data-nosnippet>327</a>            locals.join(<span class="string">"\n"</span>),
-<a href=#328 id=328 data-nosnippet>328</a>            closes.join(<span class="string">"\n                "</span>)
-<a href=#329 id=329 data-nosnippet>329</a>        )
-<a href=#330 id=330 data-nosnippet>330</a>    };
-<a href=#331 id=331 data-nosnippet>331</a>    <span class="kw">let </span>sig = params
-<a href=#332 id=332 data-nosnippet>332</a>        .iter()
-<a href=#333 id=333 data-nosnippet>333</a>        .map(|p| <span class="macro">format!</span>(<span class="string">"{}: {}"</span>, p.name, p.kt))
-<a href=#334 id=334 data-nosnippet>334</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#335 id=335 data-nosnippet>335</a>        .join(<span class="string">", "</span>);
-<a href=#336 id=336 data-nosnippet>336</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
-<a href=#337 id=337 data-nosnippet>337</a>        <span class="string">"public fun interface {raw} {{\n    public fun run({})\n}}\n\n\
-<a href=#338 id=338 data-nosnippet>338</a>         public fun interface {name} {{\n    public fun run({sig})\n\n\
-<a href=#339 id=339 data-nosnippet>339</a>         \x20   public fun asRaw(): {raw} =\n        {raw} {{{}\n    {body}\n        }}\n}}\n"</span>,
-<a href=#340 id=340 data-nosnippet>340</a>        raw_sig(<span class="kw-2">&amp;</span>leaves),
-<a href=#341 id=341 data-nosnippet>341</a>        lambda(<span class="kw-2">&amp;</span>raws)
-<a href=#342 id=342 data-nosnippet>342</a>    ))
-<a href=#343 id=343 data-nosnippet>343</a>}
+<a href=#301 id=301 data-nosnippet>301</a>    check_slots(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{raw}.run`"</span>), <span class="kw-2">&amp;</span>raw_types(<span class="kw-2">&amp;</span>leaves), <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+<a href=#302 id=302 data-nosnippet>302</a>    check_slots(
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"`{name}.run`"</span>),
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw-2">&amp;</span>kt_types(params.iter().copied()),
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="bool-val">true</span>,
+<a href=#306 id=306 data-nosnippet>306</a>    )<span class="question-mark">?</span>;
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">let </span>raws: Vec&lt;String&gt; = leaves.iter().map(raw_name).collect();
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">let </span>locals: Vec&lt;String&gt; = params
+<a href=#309 id=309 data-nosnippet>309</a>        .iter()
+<a href=#310 id=310 data-nosnippet>310</a>        .enumerate()
+<a href=#311 id=311 data-nosnippet>311</a>        .map(|(i, p)| <span class="macro">format!</span>(<span class="string">"            val __p{i} = {}"</span>, p.decode))
+<a href=#312 id=312 data-nosnippet>312</a>        .collect();
+<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">let </span>call_args = (<span class="number">0</span>..params.len())
+<a href=#314 id=314 data-nosnippet>314</a>        .map(|i| <span class="macro">format!</span>(<span class="string">"__p{i}"</span>))
+<a href=#315 id=315 data-nosnippet>315</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#316 id=316 data-nosnippet>316</a>        .join(<span class="string">", "</span>);
+<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">let </span>closes: Vec&lt;String&gt; = params
+<a href=#318 id=318 data-nosnippet>318</a>        .iter()
+<a href=#319 id=319 data-nosnippet>319</a>        .enumerate()
+<a href=#320 id=320 data-nosnippet>320</a>        .filter_map(|(i, p)| {
+<a href=#321 id=321 data-nosnippet>321</a>            p.close
+<a href=#322 id=322 data-nosnippet>322</a>                .as_ref()
+<a href=#323 id=323 data-nosnippet>323</a>                .map(|c| c.replacen(<span class="kw-2">&amp;</span>p.name, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"__p{i}"</span>), <span class="number">1</span>))
+<a href=#324 id=324 data-nosnippet>324</a>        })
+<a href=#325 id=325 data-nosnippet>325</a>        .collect();
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">let </span>body = <span class="kw">if </span>closes.is_empty() {
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="macro">format!</span>(<span class="string">"{}\n            run({call_args})"</span>, locals.join(<span class="string">"\n"</span>))
+<a href=#328 id=328 data-nosnippet>328</a>    } <span class="kw">else </span>{
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="macro">format!</span>(
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="string">"{}\n            try {{\n                run({call_args})\n            }} finally {{\n                {}\n            }}"</span>,
+<a href=#331 id=331 data-nosnippet>331</a>            locals.join(<span class="string">"\n"</span>),
+<a href=#332 id=332 data-nosnippet>332</a>            closes.join(<span class="string">"\n                "</span>)
+<a href=#333 id=333 data-nosnippet>333</a>        )
+<a href=#334 id=334 data-nosnippet>334</a>    };
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">let </span>sig = params
+<a href=#336 id=336 data-nosnippet>336</a>        .iter()
+<a href=#337 id=337 data-nosnippet>337</a>        .map(|p| <span class="macro">format!</span>(<span class="string">"{}: {}"</span>, p.name, p.kt))
+<a href=#338 id=338 data-nosnippet>338</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#339 id=339 data-nosnippet>339</a>        .join(<span class="string">", "</span>);
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="string">"public fun interface {raw} {{\n    public fun run({})\n}}\n\n\
+<a href=#342 id=342 data-nosnippet>342</a>         public fun interface {name} {{\n    public fun run({sig})\n\n\
+<a href=#343 id=343 data-nosnippet>343</a>         \x20   public fun asRaw(): {raw} =\n        {raw} {{{}\n    {body}\n        }}\n}}\n"</span>,
+<a href=#344 id=344 data-nosnippet>344</a>        raw_sig(<span class="kw-2">&amp;</span>leaves),
+<a href=#345 id=345 data-nosnippet>345</a>        lambda(<span class="kw-2">&amp;</span>raws)
+<a href=#346 id=346 data-nosnippet>346</a>    ))
+<a href=#347 id=347 data-nosnippet>347</a>}
 </code></pre></div></section></main></body></html>
