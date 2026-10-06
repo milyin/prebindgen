@@ -19,7 +19,7 @@ use std::rc::Rc;
 use prebindgen_flat::flat::{Function, Param as FlatParam, TypeKind};
 use prebindgen_tools::{names, shape, Access, Form, FormKind, Input, Seg, Shape, Wire};
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 
 use super::{
     kotlin::{HandleSite, KtEnc},
@@ -120,10 +120,13 @@ impl Plan<'_> {
         let mut variants = Vec::new();
         for v in &decl.variants {
             variants.push(match v {
-                ParamVariant::Build(f) => SelVariant::Build {
-                    func: f.fun.resolve(self.flat).map_err(crate::Error)?,
-                    callee: f.fun.callee(&self.q),
-                },
+                ParamVariant::Build(f) => {
+                    let func = f.fun.resolve(self.flat).map_err(crate::Error)?;
+                    SelVariant::Build {
+                        callee: func.name.to_token_stream(),
+                        func,
+                    }
+                }
                 ParamVariant::Handle => SelVariant::Handle,
             });
         }
@@ -326,7 +329,7 @@ impl Plan<'_> {
         }
         let root = names::bare(&s.param.name);
         let sel = leaf_ident(&root, "sel");
-        let t = self.q.path(&names::ident(&s.class.rust));
+        let t = self.source(&s.class.rust);
         let tag = Wire::new(sel.clone(), Leaf::new(LeafTy::Prim(Prim::I)));
         let mut alts = Vec::new();
         let mut arms = Vec::new();

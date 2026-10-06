@@ -868,7 +868,7 @@ fn a_computed_const_is_indexed_but_is_not_a_length() {
             }
         ),
     ]);
-    assert_eq!(as_const(&elements[0]).name, "COMPUTED");
+    assert_eq!(as_const(&elements[0]).name.ident(), "COMPUTED");
     match as_unsupported(&elements[1]) {
         ItemError::FieldType {
             source:
@@ -903,7 +903,7 @@ fn struct_shapes() {
     let tuple = parse_one(syn::parse_quote!(
         pub struct B(SomethingUnexpressible<'_, dyn Trait>);
     ));
-    assert_eq!(as_extern(&tuple).name, "B");
+    assert_eq!(as_extern(&tuple).name.ident(), "B");
 
     let unit = parse_one(syn::parse_quote!(
         pub struct C;
@@ -1020,7 +1020,7 @@ fn field_members_follow_the_addressing() {
 fn consts_carry_their_type_and_value() {
     let element = parse_one(tag_len_const());
     let c = as_const(&element);
-    assert_eq!(c.name, "TAG_LEN");
+    assert_eq!(c.name.ident(), "TAG_LEN");
     assert!(matches!(c.ty.kind, TypeKind::Scalar(ScalarKind::Usize)));
     assert_eq!(tokens(&c.origin.as_syn().expr), "4");
 }
@@ -1074,7 +1074,7 @@ fn a_marked_alias_declares_an_extern() {
         pub type Session = zenoh::Session;
     ));
     let e = as_extern(&element);
-    assert_eq!(e.name, "Session");
+    assert_eq!(e.name.ident(), "Session");
     // What it points at is a modelled fact, so an adapter can recognise a target
     // without taking the syntax apart. Not classified: a std type may hide behind a
     // foreign alias, as `Error = zenoh::Error` does.
@@ -1099,7 +1099,7 @@ fn a_marked_alias_declares_an_extern() {
         pub struct Handle(Whatever);
     ));
     let e = as_extern(&element);
-    assert_eq!(e.name, "Handle");
+    assert_eq!(e.name.ident(), "Handle");
     assert_eq!(e.target, None);
 
     // And it satisfies a reference, which is the point.
@@ -1125,7 +1125,7 @@ fn function_signatures() {
         }
     ));
     let f = as_fn(&element);
-    assert_eq!(f.name, "put");
+    assert_eq!(f.name.ident(), "put");
     assert_eq!(
         f.params
             .iter()
@@ -1169,7 +1169,7 @@ fn function_shapes_outside_the_language() {
         ItemError::UnsupportedAsync
     ));
     // Named, so nothing else can claim the address while it sits inert.
-    assert_eq!(element.name().expect("named"), "ping");
+    assert_eq!(element.name().expect("named").ident(), "ping");
 
     let element = parse_one(syn::parse_quote!(
         pub unsafe extern "C" fn log(fmt: u8, ...) {}
@@ -1342,7 +1342,7 @@ fn an_unsupported_item_is_indexed_not_refused() {
             pub fn usable(x: u8) {}
         ),
     ]);
-    assert_eq!(elements[0].name().expect("named"), "unusable");
+    assert_eq!(elements[0].name().expect("named").ident(), "unusable");
     assert!(matches!(elements[0], Element::Unsupported(_)));
     assert!(matches!(elements[1], Element::Function(_)));
 }
@@ -1421,7 +1421,7 @@ fn a_reference_resolves_to_its_declaration() {
     };
     let target = flat.resolve(id).expect("resolves");
     assert!(matches!(target, Type::Extern(_)));
-    assert_eq!(target.name(), "Session");
+    assert_eq!(target.name().ident(), "Session");
 }
 
 /// Resolution runs once every declaration is in hand, so a reference may point
@@ -1488,7 +1488,7 @@ fn an_undeclared_reference_refuses_the_referencing_item() {
         ItemError::UnresolvedType { name } if name == "Session"
     ));
     // It still holds its name, so nothing else can claim it.
-    assert_eq!(u.name.as_ref().expect("named"), "session_close");
+    assert_eq!(u.name.as_ref().expect("named").ident(), "session_close");
 
     // Reachable through every layer a reference can nest in.
     for ty in [
@@ -1785,7 +1785,7 @@ fn a_generic_alias_is_refused() {
     let element = parse_one(syn::parse_quote!(
         pub type Borrowed<'a> = hidden::Borrowed<'a>;
     ));
-    assert_eq!(as_extern(&element).name, "Borrowed");
+    assert_eq!(as_extern(&element).name.ident(), "Borrowed");
 }
 
 // ── The flat namespace ─────────────────────────────────────────────────

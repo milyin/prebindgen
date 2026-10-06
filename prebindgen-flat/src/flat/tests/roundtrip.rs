@@ -255,7 +255,7 @@ fn struct_delimiters_survive_and_spell() {
     let spell = |item: syn::Item, parts: &[proc_macro2::TokenStream]| {
         let element = parse_one(item);
         let s = as_struct(&element);
-        let name = &s.name;
+        let name = s.name.ident();
         (
             s.fields.len(),
             crate::flat::emit::Emit::for_test()
@@ -300,7 +300,7 @@ fn struct_delimiters_survive_and_spell() {
         pub struct D(Whatever<'_, dyn Trait>);
     ));
     let o = as_extern(&element);
-    assert_eq!(o.name, "D");
+    assert_eq!(o.name.ident(), "D");
     assert!(tokens(o.origin.as_syn()).contains("Whatever"));
 }
 

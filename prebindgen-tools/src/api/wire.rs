@@ -4,7 +4,7 @@ use prebindgen_flat::flat::{Alternative, Field, Struct, TypeRef, Variant};
 use proc_macro2::{Literal, TokenStream};
 use quote::{quote, ToTokens};
 
-use crate::{api::convert::Direction, Qualifier, Record, ResolvedConversion, Seg};
+use crate::{api::convert::Direction, Record, ResolvedConversion, Seg};
 
 /// The adapter's closed set of boundary types — one enum per adapter.
 ///
@@ -143,11 +143,10 @@ impl<W: WireType> Input<W> {
     /// builds the [`Input`] of the representation type it is given. Fails
     /// when the conversion declares no input.
     pub fn via<E: From<String>>(
-        q: &Qualifier<'_>,
         conversion: &ResolvedConversion,
         repr: impl FnOnce(&TypeRef) -> Result<Input<W>, E>,
     ) -> Result<Self, E> {
-        let (applied, fallible) = conversion.apply(Direction::In, q, &quote!(__repr))?;
+        let (applied, fallible) = conversion.apply(Direction::In, &quote!(__repr))?;
         let repr = repr(conversion.repr())?;
         let e = repr.expr;
         Ok(Self {
@@ -176,8 +175,8 @@ impl<W: WireType> Input<W> {
     }
 
     /// A struct rebuilt from its fields' inputs, in field order.
-    pub fn record(q: &Qualifier<'_>, s: &Struct, fields: Vec<Input<W>>) -> Self {
-        let head = q.path(&s.name);
+    pub fn record(s: &Struct, fields: Vec<Input<W>>) -> Self {
+        let head = s.name.to_token_stream();
         let segs = s.fields.iter().map(Seg::field);
         Self::parts(s.type_ref(), segs.zip(fields).collect(), |values| {
             Record::Struct(s).construct(&head, &values)
@@ -208,8 +207,8 @@ impl<W: WireType> Input<W> {
 
     /// A sum rebuilt from the alternative `tag` selects. `alts[i]` holds the
     /// field inputs of alternative `i`; an unknown tag is an error.
-    pub fn sum(q: &Qualifier<'_>, v: &Variant, tag: Wire<W>, alts: Vec<Vec<Input<W>>>) -> Self {
-        let head = q.path(&v.name);
+    pub fn sum(v: &Variant, tag: Wire<W>, alts: Vec<Vec<Input<W>>>) -> Self {
+        let head = v.name.to_token_stream();
         let t = &tag.name;
         let mut arms = Vec::new();
         let mut forms = Vec::new();
@@ -325,12 +324,11 @@ impl<W: WireType> Output<W> {
     /// expression it is given that holds the converted value. Fails when
     /// the conversion declares no output.
     pub fn via<E: From<String>>(
-        q: &Qualifier<'_>,
         conversion: &ResolvedConversion,
         value: &TokenStream,
         repr: impl FnOnce(&TypeRef, TokenStream) -> Result<Output<W>, E>,
     ) -> Result<Self, E> {
-        let (applied, fallible) = conversion.apply(Direction::Out, q, value)?;
+        let (applied, fallible) = conversion.apply(Direction::Out, value)?;
         let repr = repr(conversion.repr(), quote!(__repr))?;
         let e = &repr.expr;
         Ok(Self {
@@ -368,7 +366,6 @@ impl<W: WireType> Output<W> {
     /// A struct taken apart. `field` builds each field's output from the
     /// binding that holds it.
     pub fn record<E>(
-        q: &Qualifier<'_>,
         s: &Struct,
         value: &TokenStream,
         mut field: impl FnMut(&Field, TokenStream) -> Result<Output<W>, E>,
@@ -379,7 +376,7 @@ impl<W: WireType> Output<W> {
         for (f, b) in s.fields.iter().zip(&binds) {
             parts.push((Seg::field(f), field(f, b.to_token_stream())?));
         }
-        let pat = record.pattern(&q.path(&s.name), &binds);
+        let pat = record.pattern(&s.name.to_token_stream(), &binds);
         Ok(Self::parts(s.type_ref(), quote!(let #pat = #value;), parts))
     }
 
@@ -421,13 +418,12 @@ impl<W: WireType> Output<W> {
     /// alternative fills its own, the others hold placeholders. `field`
     /// builds each field's output from the binding that holds it.
     pub fn sum<E>(
-        q: &Qualifier<'_>,
         v: &Variant,
         tag: Wire<W>,
         value: &TokenStream,
         mut field: impl FnMut(&Alternative, &Field, TokenStream) -> Result<Output<W>, E>,
     ) -> Result<Self, E> {
-        let head = q.path(&v.name);
+        let head = v.name.to_token_stream();
         let mut alts = Vec::new();
         for alt in &v.alternatives {
             let record = Record::Alt(alt);

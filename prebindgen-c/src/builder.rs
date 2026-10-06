@@ -271,10 +271,11 @@ impl CbindgenBuilder {
 
     /// Parse the sources and generate the binding.
     pub fn build(self) -> Result<Cbindgen, Error> {
-        let flat = Flat::builder()
-            .items(self.items.clone())
-            .build()
-            .map_err(|e| Error(e.to_string()))?;
+        let mut flat = Flat::builder().items(self.items.clone());
+        if let Some(m) = &self.source_module {
+            flat = flat.default_module(m.clone());
+        }
+        let flat = flat.build().map_err(|e| Error(e.to_string()))?;
         let plan = Plan::new(&self, &flat)?;
         Ok(Cbindgen {
             file: write::write(&plan)?,

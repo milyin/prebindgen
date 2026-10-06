@@ -1,11 +1,11 @@
 use prebindgen_flat::{
-    flat::{Function, TypeKind, TypeRef},
+    flat::{Function, ItemName, TypeKind, TypeRef},
     Flat,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use crate::Qualifier;
+use crate::api::qualify::render;
 
 /// A function a declaration refers to: a flat item by name, or a
 /// binding-local path with its signature stated.
@@ -42,15 +42,19 @@ impl FnRef {
     }
 
     /// The function as the model reads it: the flat item, or the stated
-    /// signature read against the flat model's type names.
+    /// signature read against the flat model's type names. Either way its
+    /// [`name`](Function::name) is the path generated code calls.
     pub fn resolve(&self, flat: &Flat) -> Result<Function, String> {
         match &self.sig {
             Some(sig) => {
                 let mut sig = sig.clone();
                 sig.ident = self.name().clone();
                 let item: syn::ItemFn = syn::parse_quote!(pub #sig { unimplemented!() });
-                flat.lower_signature(&item)
-                    .map_err(|e| format!("`{}`: {e}", path_string(&self.path)))
+                let mut f = flat
+                    .lower_signature(&item)
+                    .map_err(|e| format!("`{}`: {e}", path_string(&self.path)))?;
+                f.name = ItemName::from_path(&self.path);
+                Ok(f)
             }
             None if !self.is_flat() => Err(format!(
                 "`{}` is not a #[prebindgen] function: state its signature with `.sig(sig!(..))`",
@@ -60,15 +64,6 @@ impl FnRef {
                 .function(self.name())
                 .cloned()
                 .ok_or_else(|| format!("`{}` is not a #[prebindgen] function", self.name())),
-        }
-    }
-
-    /// The path generated code calls.
-    pub fn callee(&self, q: &Qualifier<'_>) -> TokenStream {
-        if self.is_flat() {
-            q.path(self.name())
-        } else {
-            self.path.to_token_stream()
         }
     }
 }
@@ -165,6 +160,8 @@ impl Conversion {
             }
         };
         Ok(ResolvedConversion {
+            target_rust: render(flat, &target, false),
+            repr_rust: render(flat, &repr, false),
             target,
             repr,
             input: input.map(|(s, _)| s),
@@ -185,6 +182,9 @@ impl Conversion {
 pub struct ResolvedConversion {
     target: TypeRef,
     repr: TypeRef,
+    /// The two types as generated Rust spells them, for a trait-based stage.
+    target_rust: TokenStream,
+    repr_rust: TokenStream,
     /// Representation → source.
     input: Option<Stage>,
     /// Source → representation.
@@ -219,7 +219,6 @@ impl ResolvedConversion {
     pub(crate) fn apply(
         &self,
         dir: Direction,
-        q: &Qualifier<'_>,
         value: &TokenStream,
     ) -> Result<(TokenStream, bool), String> {
         let (stage, what) = match dir {
@@ -230,7 +229,7 @@ impl ResolvedConversion {
             .as_ref()
             .ok_or_else(|| format!("convert!({}) declares no {what}", self.target))?;
         Ok((
-            stage.apply(q, &self.target, &self.repr, value),
+            stage.apply(&self.target_rust, &self.repr_rust, value),
             stage.fallible,
         ))
     }
@@ -253,9 +252,11 @@ struct Stage {
 
 #[derive(Clone, Debug)]
 enum How {
-    /// Call a function; `by_ref` when it takes its argument by reference.
+    /// Call `callee`, the function `fun` resolves to; `by_ref` when it takes
+    /// its argument by reference.
     Call {
         fun: Box<FnRef>,
+        callee: ItemName,
         by_ref: bool,
     },
     From,
@@ -314,7 +315,18 @@ impl Stage {
                 let by_ref =
                     dir == Direction::Out && matches!(param.ty.kind(), TypeKind::Ref { .. });
                 let fun = Box::new(fun.clone());
-                (stage(fallible, How::Call { fun, by_ref }), repr)
+                let callee = f.name;
+                (
+                    stage(
+                        fallible,
+                        How::Call {
+                            fun,
+                            callee,
+                            by_ref,
+                        },
+                    ),
+                    repr,
+                )
             }
             Via::From(t) => (stage(false, How::From), classify(t)?),
             Via::Into(t) => (stage(false, How::Into), classify(t)?),
@@ -328,17 +340,9 @@ impl Stage {
     /// result the source type; for an output stage the other way round. A
     /// fallible stage produces an expression using `?` on a
     /// `Result<_, String>`.
-    fn apply(
-        &self,
-        q: &Qualifier<'_>,
-        target: &TypeRef,
-        repr: &TypeRef,
-        value: &TokenStream,
-    ) -> TokenStream {
-        let (t, r) = (q.ty(target), q.ty(repr));
+    fn apply(&self, t: &TokenStream, r: &TokenStream, value: &TokenStream) -> TokenStream {
         let call = match &self.how {
-            How::Call { fun, by_ref } => {
-                let callee = fun.callee(q);
+            How::Call { callee, by_ref, .. } => {
                 if *by_ref {
                     quote!(#callee(&#value))
                 } else {

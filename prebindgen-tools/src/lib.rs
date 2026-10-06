@@ -79,7 +79,7 @@
 //! ```
 //! use prebindgen::SourceLocation;
 //! use prebindgen_flat::Flat;
-//! use prebindgen_tools::{Input, Output, Qualifier, Wire, WireType};
+//! use prebindgen_tools::{Input, Output, Wire, WireType};
 //! use quote::{format_ident, quote};
 //!
 //! #[derive(Clone, Debug)]
@@ -89,9 +89,11 @@
 //!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
 //! }
 //!
+//! // `twice`, captured from the crate `source_crate`.
 //! let source = syn::parse_file("pub fn twice(n: u64) -> u64 { n * 2 }").unwrap();
+//! let location = SourceLocation { crate_name: Some("source_crate".into()), ..Default::default() };
 //! let flat = Flat::builder()
-//!     .items(source.items.into_iter().map(|i| (i, SourceLocation::default())))
+//!     .items(source.items.into_iter().map(|i| (i, location.clone())))
 //!     .build().unwrap();
 //! let f = flat.function("twice").unwrap();
 //!
@@ -105,10 +107,13 @@
 //! // Use: the wires give the signature, the expressions the body.
 //! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
 //! let ret_ty = output.wires()[0].ty.rust();
-//! let callee = Qualifier::new(&flat).path(&f.name);
+//! // The source function's name: spliced, the qualified path to call; its
+//! // bare identifier, the base for the wrapper's own name.
+//! let callee = &f.name;
+//! let wrapper_name = format_ident!("{}_wrapper", f.name.ident());
 //! let (arg, value) = (&input.expr, &output.expr);
 //! let wrapper = quote! {
-//!     pub extern "C" fn twice_wrapper(#(#params),*) -> #ret_ty {
+//!     pub extern "C" fn #wrapper_name(#(#params),*) -> #ret_ty {
 //!         let __value = #callee(#arg);
 //!         #value
 //!     }
@@ -118,7 +123,7 @@
 //!     quote!(#wrapper).to_string(),
 //!     quote! {
 //!         pub extern "C" fn twice_wrapper(n: i64) -> i64 {
-//!             let __value = twice(n as u64);
+//!             let __value = source_crate::twice(n as u64);
 //!             __value as i64
 //!         }
 //!     }.to_string(),
@@ -151,8 +156,12 @@
 //!
 //! ## Other tools
 //!
-//! [`Qualifier`] names source items from the generated crate; [`RustFile`]
-//! collects and writes the generated Rust.
+//! Generated code names a source item by its
+//! [`ItemName`](prebindgen_flat::flat::ItemName), which the flat model
+//! qualifies when it is built: splicing a function's `name` writes
+//! `source_crate::make`. A whole source type is never spelled by the adapter,
+//! except through [`callback_arg_types`]. [`RustFile`] collects and writes the
+//! generated Rust.
 
 // Implementation modules are private. The public modules below select every
 // exported item explicitly, independently of the implementation layout.
@@ -212,92 +221,33 @@ pub mod names {
     pub use crate::api::names::{bare, camel, ident, join, mangle, pascal, snake};
 }
 
-/// Naming source items from generated Rust code.
+/// The parameter types of a callback closure.
 ///
-/// The flat model identifies a source item by its flat name, such as
-/// `Payload` or `make`. A binding's generated Rust usually lives in a
-/// different crate, where those names are not automatically in scope.
-/// [`Qualifier`] uses each item's source location to spell a path such as
-/// `source_crate::Payload` or `source_crate::make`. Use it when a wrapper
-/// calls a source function or a conversion names a source type.
-///
-/// ## Choosing a path
-///
-/// [`Qualifier::new`] borrows the model. For each known item,
-/// the qualifier reads the crate name recorded in its
-/// [`SourceLocation`](prebindgen::SourceLocation), converting hyphens to
-/// underscores for a Rust path. Items captured from different crates can
-/// therefore receive different prefixes from the same qualifier.
-///
-/// [`Qualifier::with_crate_path`] overrides the generated path for a recorded
-/// source crate without changing its source locations. Use it for Cargo
-/// dependency aliases or modules re-exporting a source API. Explicit paths take
-/// precedence over the recorded crate name. This configures this qualifier's
-/// output only. Adapters that construct their own qualifier continue to use
-/// their `source_named` ingestion API for renamed dependencies.
-///
-/// [`Qualifier::with_default_module`] supplies a fallback for **known items
-/// without a recorded crate name**, for example a model assembled directly
-/// from parsed syntax in a test. A recorded crate name takes precedence.
-/// A name absent from the model is left unchanged even when a fallback is
-/// configured; a known item with neither a crate name nor a fallback also
-/// keeps its bare name. The generated crate must be able to resolve the
-/// emitted paths: qualification does not add dependencies or imports, or
-/// discover Cargo dependency aliases automatically.
-///
-/// ## Item paths and type expressions
-///
-/// * [`Qualifier::path`] qualifies one item name, such as the function the
-///   adapter will call.
-/// * [`Qualifier::ty`] walks a complete model type. For example,
-///   `Option<Vec<Payload>>` becomes
-///   `::core::option::Option<::std::vec::Vec<source_crate::Payload>>`.
-///   It qualifies named types inside generic arguments and containers, and
-///   named constants used as array lengths. Standard containers receive
-///   absolute `::core` or `::std` paths; scalar names such as `u32` stay as is.
-/// * [`Qualifier::ty_elided`] provides the same naming for positions such as
-///   closure arguments that cannot refer to a source lifetime parameter.
-///   It elides explicit lifetimes recursively in every supported type shape.
-///
-/// These methods return Rust tokens for the source value's type or path.
-/// The adapter still chooses the wire representation: qualifying
-/// `Payload` does not turn it into a pointer, handle, or mirror struct.
+/// An adapter builds a Rust closure for an `impl Fn(..)` parameter, and Rust
+/// needs its parameters annotated to give it the borrowed signature the callee
+/// expects. [`callback_arg_types`] spells those types from the model:
 ///
 /// ```
 /// use prebindgen::SourceLocation;
-/// use prebindgen_flat::Flat;
-/// use prebindgen_tools::Qualifier;
+/// use prebindgen_flat::{flat::TypeKind, Flat};
+/// use prebindgen_tools::callback_arg_types;
 /// use quote::quote;
 ///
 /// let source = syn::parse_file(
-///     "pub struct Payload; pub fn make() -> Option<Vec<Payload>> { None }",
+///     "pub struct Payload; pub fn on(f: impl Fn(&Payload) + Send + Sync + 'static) {}",
 /// ).unwrap();
-/// let location = SourceLocation {
-///     crate_name: Some("source-crate".into()), ..Default::default()
-/// };
+/// let location = SourceLocation { crate_name: Some("src".into()), ..Default::default() };
 /// let flat = Flat::builder()
-///     .items(source.items.into_iter().map(|item| (item, location.clone())))
+///     .items(source.items.into_iter().map(|i| (i, location.clone())))
 ///     .build().unwrap();
-/// let q = Qualifier::new(&flat);
-/// let function = flat.function("make").unwrap();
-/// assert_eq!(q.path(&function.name).to_string(), quote!(source_crate::make).to_string());
-/// let expected: syn::Type = syn::parse_quote!(
-///     ::core::option::Option<::std::vec::Vec<source_crate::Payload>>
-/// );
-/// assert_eq!(syn::parse2::<syn::Type>(q.ty(&function.ret)).unwrap(), expected);
-///
-/// // The fallback does not override the recorded source crate.
-/// let q = q.with_default_module(Some(syn::parse_quote!(crate::source)));
-/// assert_eq!(q.path(&function.name).to_string(), quote!(source_crate::make).to_string());
-/// // Explicit paths override recorded crate names without changing the model.
-/// let q = q.with_crate_path("source-crate", syn::parse_quote!(crate::renamed));
-/// assert_eq!(q.path(&function.name).to_string(), quote!(crate::renamed::make).to_string());
-/// assert_eq!(function.origin.location.crate_name.as_deref(), Some("source-crate"));
-/// // A binding-local helper absent from the model stays unqualified.
-/// assert_eq!(q.path(&syn::parse_quote!(local_helper)).to_string(), "local_helper");
+/// let TypeKind::Callback { args } = flat.function("on").unwrap().params[0].ty.kind() else {
+///     panic!("a callback parameter")
+/// };
+/// let types = callback_arg_types(&flat, args);
+/// assert_eq!(types[0].to_string(), quote!(&src::Payload).to_string());
 /// ```
-pub mod qualify {
-    pub use crate::api::qualify::Qualifier;
+pub mod callback {
+    pub use crate::api::qualify::callback_arg_types;
 }
 
 /// Records — structs and the alternatives of a sum — taken apart into their
@@ -406,10 +356,10 @@ pub mod wire {
 
 pub use crate::{
     api::check_supported,
+    callback::callback_arg_types,
     convert::{Conversion, FnRef, ResolvedConversion, Via},
     file::RustFile,
     place::{Overrides, Place, Seg},
-    qualify::Qualifier,
     record::Record,
     shape::{shape, Access, SequenceKind, Shape, TextKind},
     wire::{Form, FormKind, Input, Output, Wire, WireType},

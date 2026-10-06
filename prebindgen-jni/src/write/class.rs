@@ -64,7 +64,7 @@ pub(crate) fn class(
 /// A handle class's `freePtr`, and the alignment its tag bit relies on.
 fn free_ptr(plan: &Plan, c: &Class) -> proc_macro2::TokenStream {
     let sym = format_ident!("{}", jni_symbol(&c.fqn(), "freePtr"));
-    let t = plan.q.path(&names::ident(&c.rust));
+    let t = plan.source(&c.rust);
     let msg = format!(
         "`{}`: a handle type must have alignment >= 2 (bit 0 is the closed tag)",
         c.rust

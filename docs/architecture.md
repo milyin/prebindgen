@@ -90,8 +90,11 @@ The answers compose:
   `ResolvedConversion`.
 * `Place` names an occurrence of a type inside a generated element;
   `Overrides` gives a type's default decision, replaced at chosen places.
-* `Qualifier` spells a flat type from the generated crate
-  (`Payload` → `perftest_flat::Payload`).
+* A source item's `name` is an `ItemName`, which the flat model qualifies
+  when it is built, so splicing it names the item from the generated crate
+  (`Payload` → `perftest_flat::Payload`). `callback_arg_types` spells the
+  parameter types of a callback closure, the one place an adapter writes a
+  whole source type.
 
 ## The two adapters
 

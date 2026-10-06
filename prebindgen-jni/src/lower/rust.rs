@@ -79,7 +79,7 @@ impl Plan<'_> {
                     .mark_fallible()
             }
             Shape::Declared { declaration, .. } => match declaration {
-                Setting::Converted(c) => Input::via(&self.q, &c.resolved, |repr| {
+                Setting::Converted(c) => Input::via(&c.resolved, |repr| {
                     let repr = self.rs_decode(repr, root, depth)?;
                     Ok::<_, crate::Error>(match domain_check(c, &quote!(__checked)) {
                         Some(check) => {
@@ -89,7 +89,7 @@ impl Plan<'_> {
                     })
                 })?,
                 Setting::Class(c) => {
-                    let t = self.q.path(&names::ident(&c.rust));
+                    let t = self.source(&c.rust);
                     match &c.kind {
                         ClassKind::Ptr { .. } => {
                             let f = match access {
@@ -118,7 +118,7 @@ impl Plan<'_> {
                                     depth,
                                 )?);
                             }
-                            Input::record(&self.q, s, parts)
+                            Input::record(s, parts)
                         }
                         ClassKind::Sealed { .. } => {
                             let v = self.variant_of(c)?;
@@ -136,7 +136,7 @@ impl Plan<'_> {
                                 }
                                 alts.push(parts);
                             }
-                            Input::sum(&self.q, v, tag, alts)
+                            Input::sum(v, tag, alts)
                         }
                     }
                 }
@@ -303,7 +303,7 @@ impl Plan<'_> {
                 )?
             }
             Shape::Declared { declaration, .. } => match declaration {
-                Setting::Converted(c) => Output::via(&self.q, &c.resolved, &value, |repr, r| {
+                Setting::Converted(c) => Output::via(&c.resolved, &value, |repr, r| {
                     let (r, checked) = match domain_check(c, &r) {
                         Some(check) => (quote!({ #check #r }), true),
                         None => (r, false),
@@ -312,7 +312,7 @@ impl Plan<'_> {
                     Ok::<_, crate::Error>(if checked { out.mark_fallible() } else { out })
                 })?,
                 Setting::Class(c) => {
-                    let t = self.q.path(&names::ident(&c.rust));
+                    let t = self.source(&c.rust);
                     match &c.kind {
                         ClassKind::Ptr { .. } => {
                             let e = match access {
@@ -326,17 +326,15 @@ impl Plan<'_> {
                             let pats = arms.iter().map(|(n, d)| quote!(#t::#n => #d));
                             single(quote!((match #value { #(#pats),* } as i32)), false)?
                         }
-                        ClassKind::Data => {
-                            Output::record(&self.q, self.struct_of(c)?, &value, |f, b| {
-                                self.rs_encode(&f.ty, b, &join(root, &field_seg(f)), depth + 1)
-                            })?
-                        }
+                        ClassKind::Data => Output::record(self.struct_of(c)?, &value, |f, b| {
+                            self.rs_encode(&f.ty, b, &join(root, &field_seg(f)), depth + 1)
+                        })?,
                         ClassKind::Sealed { .. } => {
                             let tag = Wire::new(
                                 leaf_ident(root, "_tag"),
                                 Leaf::new(LeafTy::Prim(Prim::I)),
                             );
-                            Output::sum(&self.q, self.variant_of(c)?, tag, &value, |alt, f, b| {
+                            Output::sum(self.variant_of(c)?, tag, &value, |alt, f, b| {
                                 let seg = join(root, &join(&alt_seg(alt), &field_seg(f)));
                                 self.rs_encode(&f.ty, b, &seg, depth + 1)
                             })?

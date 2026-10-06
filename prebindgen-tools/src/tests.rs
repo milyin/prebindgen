@@ -3,9 +3,9 @@
 use prebindgen::SourceLocation;
 use prebindgen_flat::Flat;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 
-use crate::{FormKind, Input, Output, Qualifier, Wire, WireType};
+use crate::{api::qualify::render, FormKind, Input, Output, Wire, WireType};
 
 fn model(src: &str) -> Flat {
     let loc = SourceLocation {
@@ -38,20 +38,20 @@ fn norm(t: TokenStream) -> String {
 }
 
 #[test]
-fn qualifier_names_items_by_their_crate() {
+fn items_are_named_by_their_crate() {
     let flat = model(SRC);
-    let q = Qualifier::new(&flat);
-    let ret = &flat.function("payloads").unwrap().ret;
+    let f = flat.function("payloads").unwrap();
+    assert_eq!(norm(f.name.to_token_stream()), "src_crate::payloads");
+    assert_eq!(f.name.to_string(), "payloads");
     assert_eq!(
-        norm(q.ty(ret)),
+        norm(render(&flat, &f.ret, false)),
         "::core::option::Option<::std::vec::Vec<src_crate::Payload>>"
     );
-    assert_eq!(
-        norm(q.path(&format_ident!("payload_id"))),
-        "src_crate::payload_id"
-    );
-    // A name the model does not know is left alone.
-    assert_eq!(norm(q.path(&format_ident!("elsewhere"))), "elsewhere");
+    // A type the model does not declare is spelled as written.
+    let foreign = flat
+        .classify(&syn::parse_str("foreign::Thing").unwrap())
+        .unwrap();
+    assert_eq!(norm(render(&flat, &foreign, false)), "foreign::Thing");
 }
 
 #[test]
@@ -62,13 +62,12 @@ fn conversions_resolve_both_directions() {
         .output(crate::fun!(millis_to))
         .resolve(&flat)
         .unwrap();
-    let q = Qualifier::new(&flat);
     let ty = |s: &str| flat.classify(&syn::parse_str(s).unwrap()).unwrap();
     let wire = || Wire::new(format_ident!("w"), Raw);
     let (millis, raw) = (ty("Millis"), ty("u64"));
     assert_eq!(conv.repr().key(), raw.key());
 
-    let input = Input::via(&q, &conv, |r| {
+    let input = Input::via(&conv, |r| {
         Ok::<_, String>(Input::wire(r, wire(), quote!(w)))
     })
     .unwrap();
@@ -79,7 +78,7 @@ fn conversions_resolve_both_directions() {
         "{let__repr=w;src_crate::millis_from(__repr)}"
     );
 
-    let output = Output::via(&q, &conv, &quote!(v), |r, e| {
+    let output = Output::via(&conv, &quote!(v), |r, e| {
         Ok::<_, String>(Output::wire(r, wire(), e))
     })
     .unwrap();
@@ -102,7 +101,7 @@ fn conversions_resolve_both_directions() {
         .input(crate::fun!(millis_from))
         .resolve(&flat)
         .unwrap();
-    let e = Output::via(&q, &one_way, &quote!(v), |r, e| {
+    let e = Output::via(&one_way, &quote!(v), |r, e| {
         Ok::<_, String>(Output::wire(r, wire(), e))
     })
     .expect_err("no output declared");
@@ -354,7 +353,7 @@ fn shape_keeps_cow_as_a_wrapper_and_string_declaration_precedence() {
 }
 
 #[test]
-fn qualifier_overrides_paths_without_changing_provenance() {
+fn item_paths_follow_the_recorded_crate_or_the_default_module() {
     let mut items = Vec::new();
     for (crate_name, source) in [
         (
@@ -376,20 +375,30 @@ fn qualifier_overrides_paths_without_changing_provenance() {
                 .map(|item| (item, location.clone())),
         );
     }
-    let flat = Flat::builder().items(items).build().unwrap();
-    let q = Qualifier::new(&flat)
-        .with_default_module(Some(syn::parse_quote!(fallback)))
-        .with_crate_path("source-crate", syn::parse_quote!(first))
-        .with_crate_path("source_crate", syn::parse_quote!(crate::renamed));
-    assert_eq!(norm(q.path(&format_ident!("make"))), "crate::renamed::make");
+    let path = |flat: &Flat, name: &str| {
+        norm(
+            flat.element(name)
+                .unwrap()
+                .name()
+                .unwrap()
+                .to_token_stream(),
+        )
+    };
+    let flat = Flat::builder()
+        .items(items.clone())
+        .default_module(syn::parse_quote!(fallback))
+        .build()
+        .unwrap();
+    assert_eq!(path(&flat, "make"), "source_crate::make");
     let array = &flat.function("make").unwrap().ret;
     assert_eq!(
-        norm(q.ty(array)),
-        "[crate::renamed::Payload;crate::renamed::LEN]"
+        norm(render(&flat, array, false)),
+        "[source_crate::Payload;source_crate::LEN]"
     );
-    assert_eq!(norm(q.path(&format_ident!("Other"))), "other::Other");
-    assert_eq!(norm(q.path(&format_ident!("Local"))), "fallback::Local");
-    assert_eq!(norm(q.path(&format_ident!("unknown"))), "unknown");
+    assert_eq!(path(&flat, "Other"), "other::Other");
+    // The default module serves only items whose capture records no crate.
+    assert_eq!(path(&flat, "Local"), "fallback::Local");
+    // The path does not change the recorded provenance.
     assert_eq!(
         flat.function("make")
             .unwrap()
@@ -399,14 +408,13 @@ fn qualifier_overrides_paths_without_changing_provenance() {
             .as_deref(),
         Some("source-crate")
     );
-    let q = q.with_default_module(None);
-    assert_eq!(norm(q.path(&format_ident!("Local"))), "Local");
+    let flat = Flat::builder().items(items).build().unwrap();
+    assert_eq!(path(&flat, "Local"), "Local");
 }
 
 #[test]
-fn qualifier_elides_lifetimes_in_every_nested_shape() {
+fn rendering_elides_lifetimes_in_every_nested_shape() {
     let flat = model("pub struct Payload;");
-    let q = Qualifier::new(&flat);
     for (input, expected) in [
         (
             "Option<Result<&'a Payload, &'b str>>",
@@ -435,9 +443,9 @@ fn qualifier_elides_lifetimes_in_every_nested_shape() {
         ),
     ] {
         let ty = flat.classify(&syn::parse_str(input).unwrap()).unwrap();
-        let retained = q.ty(&ty);
+        let retained = render(&flat, &ty, false);
         assert!(retained.to_string().contains("'a"), "{input}: {retained}");
-        let elided = q.ty_elided(&ty);
+        let elided = render(&flat, &ty, true);
         syn::parse2::<syn::Type>(elided.clone()).expect("valid Rust type syntax");
         assert_eq!(norm(elided), norm(expected), "{input}");
     }

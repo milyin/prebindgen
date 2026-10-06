@@ -217,10 +217,11 @@ impl JniGenBuilder {
 
     /// Parse the sources and generate the binding.
     pub fn build(self) -> Result<Generation, Error> {
-        let flat = Flat::builder()
-            .items(self.items.clone())
-            .build()
-            .map_err(|e| Error(e.to_string()))?;
+        let mut flat = Flat::builder().items(self.items.clone());
+        if let Some(m) = &self.source_module {
+            flat = flat.default_module(m.clone());
+        }
+        let flat = flat.build().map_err(|e| Error(e.to_string()))?;
         let plan = Plan::new(&self, &flat)?;
         write::write(&plan)
     }
