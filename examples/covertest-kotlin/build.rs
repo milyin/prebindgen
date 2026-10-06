@@ -51,6 +51,7 @@
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
+//! | binding-local fn with explicit generic arguments | `sizeOfLong` ← `crate::size_of_as_i64::<i64>` |
 //! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
 //! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (wrong-length `tag` → binding; bad `secs` → domain) |
@@ -641,6 +642,14 @@ fn main() {
                     fun!(crate::summary_describe)
                         .sig(sig!((s: &Summary, verbose: bool) -> String))
                         .name("describeSummary"),
+                )
+                // A binding-local GENERIC fn with explicit generic arguments:
+                // the generated call must keep the `::<i64>`, since nothing
+                // else determines `T`.
+                .fun(
+                    fun!(crate::size_of_as_i64::<i64>)
+                        .sig(sig!(() -> i64))
+                        .name("sizeOfLong"),
                 )
                 // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
                 // `storageMatchesSummary(count, total, …)` / `(expected, …)`.

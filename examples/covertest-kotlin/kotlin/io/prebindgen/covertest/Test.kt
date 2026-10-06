@@ -15,6 +15,7 @@ import io.prebindgen.covertest.analytics.storageMatchesSummary
 import io.prebindgen.covertest.analytics.storageSummary
 import io.prebindgen.covertest.analytics.storageSummaryProbe
 import io.prebindgen.covertest.analytics.describeSummary
+import io.prebindgen.covertest.analytics.sizeOfLong
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryMerge
@@ -1208,6 +1209,8 @@ fun main() {
         // the same binding-local Rust fn.
         check(describeSummary(0, 2L, 8.0, null, false, boom) == "2/8")
         check(describeSummary(1, null, null, m, true, boom) == "summary of 4 payloads totalling 10")
+        // A binding-local generic fn bound with explicit generic arguments.
+        check(sizeOfLong(boom) == 8L)
         m.close()
     }
 

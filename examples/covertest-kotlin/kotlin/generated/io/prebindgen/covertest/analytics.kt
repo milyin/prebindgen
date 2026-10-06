@@ -131,6 +131,13 @@ public fun describeSummary(sSel: Int, s00: Long?, s01: Double?, s1: io.prebindge
     return __ret
 }
 
+public fun sizeOfLong(onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long {
+    val __bcap = io.prebindgen.covertest.JniErrorHandlerCapture.acquire()
+    val __ret = io.prebindgen.covertest.CovNative.sizeOfAsI64(__bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
 public fun storageMatchesSummary(s: io.prebindgen.covertest.Storage, expectedSel: Int, expected00: Long?, expected01: Double?, expected1: io.prebindgen.covertest.analytics.Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Boolean>): Boolean {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     if (expected1?.isClosed() == true) return onError.run("Operation on a closed native handle.")

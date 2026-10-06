@@ -10695,6 +10695,42 @@ pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_summaryDesc
     dead_code,
     clippy::all
 )]
+pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_sizeOfAsI64<'a>(
+    __env: ::prebindgen_jni_runtime::jni::JNIEnv<'a>,
+    _class: ::prebindgen_jni_runtime::jni::objects::JClass<'a>,
+    __error_sink: ::prebindgen_jni_runtime::jni::objects::JObject<'a>,
+) -> ::prebindgen_jni_runtime::jni::sys::jlong {
+    let mut __env = __env;
+    let env = &mut __env;
+    let __result = crate::size_of_as_i64::<i64>();
+    let __r: ::core::result::Result<
+        ::prebindgen_jni_runtime::jni::sys::jlong,
+        ::std::string::String,
+    > = (|| {
+        let r = (__result as ::prebindgen_jni_runtime::jni::sys::jlong);
+        ::core::result::Result::Ok(r)
+    })();
+    match __r {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__err) => {
+            if !__err.is_empty() {
+                __jni_signal(env, &__error_sink, &__err);
+            }
+            0
+        }
+    }
+}
+#[no_mangle]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    unused_parens,
+    unused_unsafe,
+    dead_code,
+    clippy::all
+)]
 pub unsafe extern "system" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSummary<
     'a,
 >(

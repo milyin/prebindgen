@@ -24,6 +24,9 @@ use quote::{quote, ToTokens};
 pub struct ItemName {
     ident: syn::Ident,
     module: Option<syn::Path>,
+    /// Explicit generic arguments the binding gave the item, such as the
+    /// `::<i64>` of `crate::helpers::make::<i64>`. Empty for a captured item.
+    args: syn::PathArguments,
 }
 
 impl ItemName {
@@ -32,12 +35,14 @@ impl ItemName {
         Self {
             ident,
             module: None,
+            args: syn::PathArguments::None,
         }
     }
 
     /// An item the binding names by its full path, such as a binding-local
     /// function `crate::helpers::label_in`: the last segment is the name, the
-    /// rest the module.
+    /// rest the module. Generic arguments on the last segment are kept, so
+    /// `crate::helpers::make::<i64>` still calls `make::<i64>`.
     pub fn from_path(path: &syn::Path) -> Self {
         let mut module = path.clone();
         let last = module
@@ -53,14 +58,22 @@ impl ItemName {
             }
             m
         });
+        let mut args = last.arguments;
+        // Spliced where an expression is expected, the arguments need the
+        // turbofish: `make::<i64>`, not `make<i64>`.
+        if let syn::PathArguments::AngleBracketed(a) = &mut args {
+            a.colon2_token.get_or_insert_with(Default::default);
+        }
         Self {
             ident: last.ident,
             module,
+            args,
         }
     }
 
-    /// The identifier alone, for a site that defines something under the
-    /// item's own name or derives one from it.
+    /// The identifier alone, without module or generic arguments, for a
+    /// site that defines something under the item's own name or derives one
+    /// from it.
     pub fn ident(&self) -> &syn::Ident {
         &self.ident
     }
@@ -75,10 +88,10 @@ impl ItemName {
 
 impl ToTokens for ItemName {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = &self.ident;
+        let (ident, args) = (&self.ident, &self.args);
         tokens.extend(match &self.module {
-            Some(m) => quote!(#m::#ident),
-            None => quote!(#ident),
+            Some(m) => quote!(#m::#ident #args),
+            None => quote!(#ident #args),
         });
     }
 }
@@ -114,5 +127,15 @@ mod tests {
             (":: other :: f".into(), "f".into())
         );
         assert_eq!(tokens(syn::parse_quote!(f)), ("f".into(), "f".into()));
+        // Explicit generic arguments stay on the path, in turbofish form,
+        // and out of the bare name.
+        assert_eq!(
+            tokens(syn::parse_quote!(crate::helpers::make::<i64>)),
+            ("crate :: helpers :: make :: < i64 >".into(), "make".into())
+        );
+        assert_eq!(
+            tokens(syn::parse_quote!(make<i64>)),
+            ("make :: < i64 >".into(), "make".into())
+        );
     }
 }

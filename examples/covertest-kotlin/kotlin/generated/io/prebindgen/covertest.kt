@@ -891,6 +891,8 @@ internal object CovNative {
 
     external fun summaryDescribe(sSel: Int, s00Present: Boolean, s00: Long, s01Present: Boolean, s01: Double, s1: Long, verbose: Boolean, errorSink: Any): String
 
+    external fun sizeOfAsI64(errorSink: Any): Long
+
     external fun storageMatchesSummary(s: Long, expectedSel: Int, expected00Present: Boolean, expected00: Long, expected01Present: Boolean, expected01: Double, expected1: Long, errorSink: Any): Boolean
 
     external fun storageSummaryHandle(s: Long, errorSink: Any): Long
