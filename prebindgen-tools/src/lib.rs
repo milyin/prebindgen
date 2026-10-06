@@ -129,6 +129,76 @@
 //! );
 //! ```
 //!
+//! An output can be composed of others. Here `span` returns a struct, and
+//! [`Output::record`] takes it apart: each field leaves on its own `i64`
+//! wire, converted by its own output, and the wrapper returns the wires as a
+//! tuple. Applied to the call, the record output binds the result once,
+//! destructures it, and applies each field's output to its binding:
+//!
+//! ```
+//! use prebindgen::SourceLocation;
+//! use prebindgen_flat::{flat::Type, Flat};
+//! use prebindgen_tools::{Input, Output, Wire, WireType};
+//! use quote::{format_ident, quote};
+//!
+//! #[derive(Clone, Debug)]
+//! struct Long;
+//! impl WireType for Long {
+//!     fn rust(&self) -> proc_macro2::TokenStream { quote!(i64) }
+//!     fn placeholder(&self) -> proc_macro2::TokenStream { quote!(0) }
+//! }
+//!
+//! let source = syn::parse_file(
+//!     "pub struct Range { pub lo: u64, pub hi: u64 } \
+//!      pub fn span(n: u64) -> Range { Range { lo: n, hi: n * 2 } }",
+//! ).unwrap();
+//! let location = SourceLocation { crate_name: Some("source_crate".into()), ..Default::default() };
+//! let flat = Flat::builder()
+//!     .items(source.items.into_iter().map(|i| (i, location.clone())))
+//!     .build().unwrap();
+//! let f = flat.function("span").unwrap();
+//! let Some(Type::Struct(range)) = flat.declared_type("Range") else { panic!("a struct") };
+//!
+//! // Build: the parameter's input, and the result's record output, whose
+//! // fields each leave on a wire named like the field.
+//! let n = &f.params[0];
+//! let n_name = &n.name;
+//! let input = Input::wire(&n.ty, Wire::new(n_name.clone(), Long), quote!(#n_name as u64));
+//! let output = Output::record(range, |field| {
+//!     let name = field.name.clone().expect("a named field");
+//!     Ok::<_, ()>(Output::wire(&field.ty, Wire::new(name, Long), |v| quote!(#v as i64)))
+//! }).unwrap();
+//!
+//! // Use: the output's wires give the return type, its conversion of the
+//! // call's result the body.
+//! let params = input.wires().iter().map(|w| w.decl()).collect::<Vec<_>>();
+//! let ret_tys = output.wires().iter().map(|w| w.ty.rust()).collect::<Vec<_>>();
+//! let callee = &f.name;
+//! let wrapper_name = format_ident!("{}_wrapper", f.name.ident());
+//! let arg = &input.expr;
+//! let result = output.apply(quote!(#callee(#arg)));
+//! let wrapper = quote! {
+//!     pub fn #wrapper_name(#(#params),*) -> (#(#ret_tys),*) { #result }
+//! };
+//! let wrapper: syn::ItemFn = syn::parse2(wrapper).unwrap();
+//! assert_eq!(
+//!     quote!(#wrapper).to_string(),
+//!     quote! {
+//!         pub fn span_wrapper(n: i64) -> (i64, i64) {
+//!             {
+//!                 let __v = source_crate::span(n as u64);
+//!                 {
+//!                     let source_crate::Range { lo: __f0, hi: __f1 } = __v;
+//!                     let lo = { let __v = __f0; __v as i64 };
+//!                     let hi = { let __v = __f1; __v as i64 };
+//!                     (lo, hi)
+//!                 }
+//!             }
+//!         }
+//!     }.to_string(),
+//! );
+//! ```
+//!
 //! ## Deciding how each layer crosses
 //!
 //! The example decided by itself that a `u64` crosses as one wire. A real
